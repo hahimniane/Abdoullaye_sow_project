@@ -344,6 +344,136 @@ class S {
     );
   }
 
+  /// `Parking Date & Time`
+  String get parkingDateTime {
+    return Intl.message(
+      'Parking Date & Time',
+      name: 'parkingDateTime',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Select Date & Time`
+  String get selectDateTime {
+    return Intl.message(
+      'Select Date & Time',
+      name: 'selectDateTime',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Receipt generated and sent to printer successfully!`
+  String get receiptGenerated {
+    return Intl.message(
+      'Receipt generated and sent to printer successfully!',
+      name: 'receiptGenerated',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Error generating receipt: {error}`
+  String errorGeneratingReceipt(Object error) {
+    return Intl.message(
+      'Error generating receipt: $error',
+      name: 'errorGeneratingReceipt',
+      desc: '',
+      args: [error],
+    );
+  }
+
+  /// `Please enter the owner name`
+  String get pleaseEnterOwnerName {
+    return Intl.message(
+      'Please enter the owner name',
+      name: 'pleaseEnterOwnerName',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Please enter the car make`
+  String get pleaseEnterCarMake {
+    return Intl.message(
+      'Please enter the car make',
+      name: 'pleaseEnterCarMake',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Please enter the car model`
+  String get pleaseEnterCarModel {
+    return Intl.message(
+      'Please enter the car model',
+      name: 'pleaseEnterCarModel',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Please enter the car year`
+  String get pleaseEnterCarYear {
+    return Intl.message(
+      'Please enter the car year',
+      name: 'pleaseEnterCarYear',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Please enter the VIN number`
+  String get pleaseEnterVinNumber {
+    return Intl.message(
+      'Please enter the VIN number',
+      name: 'pleaseEnterVinNumber',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Done`
+  String get done {
+    return Intl.message('Done', name: 'done', desc: '', args: []);
+  }
+
+  /// `Account`
+  String get account {
+    return Intl.message('Account', name: 'account', desc: '', args: []);
+  }
+
+  /// `Role`
+  String get role {
+    return Intl.message('Role', name: 'role', desc: '', args: []);
+  }
+
+  /// `Logout`
+  String get logout {
+    return Intl.message('Logout', name: 'logout', desc: '', args: []);
+  }
+
+  /// `Sign out of your account`
+  String get signOutOfAccount {
+    return Intl.message(
+      'Sign out of your account',
+      name: 'signOutOfAccount',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Customer`
+  String get customer {
+    return Intl.message('Customer', name: 'customer', desc: '', args: []);
+  }
+
+  /// `Staff`
+  String get staff {
+    return Intl.message('Staff', name: 'staff', desc: '', args: []);
+  }
+
   /// `Barrel Shipping Service`
   String get barrelShippingService {
     return Intl.message(
@@ -632,6 +762,206 @@ class S {
       desc: '',
       args: [],
     );
+  }
+
+  /// `Home`
+  String get home {
+    return Intl.message('Home', name: 'home', desc: '', args: []);
+  }
+
+  /// `Settings`
+  String get settings {
+    return Intl.message('Settings', name: 'settings', desc: '', args: []);
+  }
+
+  /// `App Information`
+  String get appInformation {
+    return Intl.message(
+      'App Information',
+      name: 'appInformation',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `App Version`
+  String get appVersion {
+    return Intl.message('App Version', name: 'appVersion', desc: '', args: []);
+  }
+
+  /// `Company Name`
+  String get companyName {
+    return Intl.message(
+      'Company Name',
+      name: 'companyName',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Contact Us`
+  String get contactUs {
+    return Intl.message('Contact Us', name: 'contactUs', desc: '', args: []);
+  }
+
+  /// `Phone Number`
+  String get phoneNumber {
+    return Intl.message(
+      'Phone Number',
+      name: 'phoneNumber',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Email Address`
+  String get emailAddress {
+    return Intl.message(
+      'Email Address',
+      name: 'emailAddress',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `About`
+  String get about {
+    return Intl.message('About', name: 'about', desc: '', args: []);
+  }
+
+  /// `Privacy Policy`
+  String get privacyPolicy {
+    return Intl.message(
+      'Privacy Policy',
+      name: 'privacyPolicy',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Terms of Service`
+  String get termsOfService {
+    return Intl.message(
+      'Terms of Service',
+      name: 'termsOfService',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Manage Cars`
+  String get manageCars {
+    return Intl.message('Manage Cars', name: 'manageCars', desc: '', args: []);
+  }
+
+  /// `Total Cars`
+  String get totalCars {
+    return Intl.message('Total Cars', name: 'totalCars', desc: '', args: []);
+  }
+
+  /// `Active Cars`
+  String get activeCars {
+    return Intl.message('Active Cars', name: 'activeCars', desc: '', args: []);
+  }
+
+  /// `Inactive Cars`
+  String get inactiveCars {
+    return Intl.message(
+      'Inactive Cars',
+      name: 'inactiveCars',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Active`
+  String get active {
+    return Intl.message('Active', name: 'active', desc: '', args: []);
+  }
+
+  /// `Inactive`
+  String get inactive {
+    return Intl.message('Inactive', name: 'inactive', desc: '', args: []);
+  }
+
+  /// `Add New Car`
+  String get addNewCar {
+    return Intl.message('Add New Car', name: 'addNewCar', desc: '', args: []);
+  }
+
+  /// `Car Title`
+  String get carTitle {
+    return Intl.message('Car Title', name: 'carTitle', desc: '', args: []);
+  }
+
+  /// `Cancel`
+  String get cancel {
+    return Intl.message('Cancel', name: 'cancel', desc: '', args: []);
+  }
+
+  /// `Add`
+  String get add {
+    return Intl.message('Add', name: 'add', desc: '', args: []);
+  }
+
+  /// `Staff Access`
+  String get staffAccess {
+    return Intl.message(
+      'Staff Access',
+      name: 'staffAccess',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Staff Login`
+  String get staffLogin {
+    return Intl.message('Staff Login', name: 'staffLogin', desc: '', args: []);
+  }
+
+  /// `Access staff features and management tools`
+  String get accessStaffFeatures {
+    return Intl.message(
+      'Access staff features and management tools',
+      name: 'accessStaffFeatures',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Invalid email or password`
+  String get invalidCredentials {
+    return Intl.message(
+      'Invalid email or password',
+      name: 'invalidCredentials',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Back to Customer Home`
+  String get backToCustomerHome {
+    return Intl.message(
+      'Back to Customer Home',
+      name: 'backToCustomerHome',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Track Shipment`
+  String get trackShipment {
+    return Intl.message(
+      'Track Shipment',
+      name: 'trackShipment',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Tracking`
+  String get tracking {
+    return Intl.message('Tracking', name: 'tracking', desc: '', args: []);
   }
 }
 

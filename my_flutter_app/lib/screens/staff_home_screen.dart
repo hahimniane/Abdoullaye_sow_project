@@ -1,28 +1,37 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
 import '../widgets/language_toggle.dart';
 import '../generated/l10n.dart';
-import 'sell_cars_screen.dart';
-import 'tracking_screen.dart';
+import 'home_menu.dart';
 import 'settings_screen.dart';
+import 'staff_car_management_screen.dart';
+import 'user_management_screen.dart';
 
-class CustomerHomeScreen extends StatefulWidget {
-  const CustomerHomeScreen({super.key});
+class StaffHomeScreen extends StatefulWidget {
+  const StaffHomeScreen({super.key});
 
   @override
-  State<CustomerHomeScreen> createState() => _CustomerHomeScreenState();
+  State<StaffHomeScreen> createState() => _StaffHomeScreenState();
 }
 
-class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
+class _StaffHomeScreenState extends State<StaffHomeScreen> {
   int _currentIndex = 0;
 
   final List<Widget> _screens = [
-    const SellCarsScreen(),
-    const TrackingScreen(),
+    const HomeMenu(),
+    const StaffCarManagementScreen(),
+    const UserManagementScreen(),
     const SettingsScreen(),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
+    final bool isAdmin =
+        authProvider
+            .isStaff; // Simplified for now, should be a specific admin check
+
     return Scaffold(
       body: _screens[_currentIndex],
       bottomNavigationBar: Container(
@@ -52,14 +61,20 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   index: 0,
                 ),
                 _buildNavItem(
-                  icon: Icons.local_shipping,
-                  label: S.of(context).tracking,
+                  icon: Icons.directions_car,
+                  label: S.of(context).manageCars,
                   index: 1,
                 ),
+                if (isAdmin)
+                  _buildNavItem(
+                    icon: Icons.people,
+                    label: 'Users', // This should be localized
+                    index: 2,
+                  ),
                 _buildNavItem(
                   icon: Icons.settings,
                   label: S.of(context).settings,
-                  index: 2,
+                  index: 3,
                 ),
               ],
             ),

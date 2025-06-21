@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../generated/l10n.dart';
+import '../providers/auth_provider.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -12,7 +14,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
-  bool _isLoading = false;
   bool _isEmailSent = false;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -46,18 +47,27 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
 
   void _handleResetPassword() async {
     if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
-      // Simulate password reset process
-      await Future.delayed(const Duration(seconds: 2));
+      try {
+        final email = _emailController.text.trim();
+        await authProvider.resetPassword(email);
 
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _isEmailSent = true;
-        });
+        if (mounted) {
+          setState(() {
+            _isEmailSent = true;
+          });
+        }
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(error.toString()),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
       }
     }
   }
@@ -216,40 +226,45 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           const SizedBox(height: 32),
 
           // Reset Password Button
-          SizedBox(
-            width: double.infinity,
-            height: 56,
-            child: ElevatedButton(
-              onPressed: _isLoading ? null : _handleResetPassword,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF667eea),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 0,
-                splashFactory: NoSplash.splashFactory,
-              ),
-              child:
-                  _isLoading
-                      ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
+          Consumer<AuthProvider>(
+            builder: (context, authProvider, child) {
+              return SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed:
+                      authProvider.isLoading ? null : _handleResetPassword,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF667eea),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                    splashFactory: NoSplash.splashFactory,
+                  ),
+                  child:
+                      authProvider.isLoading
+                          ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                            ),
+                          )
+                          : Text(
+                            S.of(context).resetPassword,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                      )
-                      : Text(
-                        S.of(context).resetPassword,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-            ),
+                ),
+              );
+            },
           ),
           const SizedBox(height: 24),
 

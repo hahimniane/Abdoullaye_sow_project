@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../widgets/language_toggle.dart';
 import '../generated/l10n.dart';
+import '../providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,7 +17,6 @@ class _LoginScreenState extends State<LoginScreen>
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
-  bool _isLoading = false;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -48,21 +49,38 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   void _handleLogin() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
+    if (!_formKey.currentState!.validate()) return;
 
-      // Simulate login process
-      await Future.delayed(const Duration(seconds: 2));
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
+    try {
+      final email = _emailController.text.trim();
+      final password = _passwordController.text.trim();
+
+      final success = await authProvider.authenticate(email, password);
+
+      if (success && mounted) {
+        // Check if user is staff and navigate accordingly
+        if (authProvider.isStaff) {
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            '/staff-home',
+            (route) => false,
+          );
+        } else {
+          // Regular customer - go to customer home
+          Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+        }
+      }
+    } catch (error) {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-
-        // Navigate to home menu
-        Navigator.pushReplacementNamed(context, '/');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error.toString()),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
     }
   }
@@ -110,7 +128,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 borderRadius: BorderRadius.circular(60),
                               ),
                               child: const Icon(
-                                Icons.business,
+                                Icons.admin_panel_settings,
                                 size: 60,
                                 color: Colors.white,
                               ),
@@ -119,7 +137,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                             // Welcome Text
                             Text(
-                              S.of(context).welcomeBack,
+                              S.of(context).staffLogin,
                               style: const TextStyle(
                                 fontSize: 32,
                                 fontWeight: FontWeight.bold,
@@ -128,7 +146,7 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              S.of(context).signInToAccount,
+                              S.of(context).accessStaffFeatures,
                               style: const TextStyle(
                                 fontSize: 16,
                                 color: Colors.white70,
@@ -270,61 +288,68 @@ class _LoginScreenState extends State<LoginScreen>
                                     const SizedBox(height: 32),
 
                                     // Login Button
-                                    SizedBox(
-                                      width: double.infinity,
-                                      height: 56,
-                                      child: ElevatedButton(
-                                        onPressed:
-                                            _isLoading ? null : _handleLogin,
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(
-                                            0xFF667eea,
-                                          ),
-                                          foregroundColor: Colors.white,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              12,
+                                    Consumer<AuthProvider>(
+                                      builder: (context, authProvider, child) {
+                                        return SizedBox(
+                                          width: double.infinity,
+                                          height: 56,
+                                          child: ElevatedButton(
+                                            onPressed:
+                                                authProvider.isLoading
+                                                    ? null
+                                                    : _handleLogin,
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: const Color(
+                                                0xFF667eea,
+                                              ),
+                                              foregroundColor: Colors.white,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              elevation: 0,
                                             ),
+                                            child:
+                                                authProvider.isLoading
+                                                    ? const SizedBox(
+                                                      width: 24,
+                                                      height: 24,
+                                                      child: CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        valueColor:
+                                                            AlwaysStoppedAnimation<
+                                                              Color
+                                                            >(Colors.white),
+                                                      ),
+                                                    )
+                                                    : Text(
+                                                      S.of(context).signIn,
+                                                      style: const TextStyle(
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
                                           ),
-                                          elevation: 0,
-                                        ),
-                                        child:
-                                            _isLoading
-                                                ? const SizedBox(
-                                                  width: 24,
-                                                  height: 24,
-                                                  child: CircularProgressIndicator(
-                                                    strokeWidth: 2,
-                                                    valueColor:
-                                                        AlwaysStoppedAnimation<
-                                                          Color
-                                                        >(Colors.white),
-                                                  ),
-                                                )
-                                                : Text(
-                                                  S.of(context).signIn,
-                                                  style: const TextStyle(
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                      ),
+                                        );
+                                      },
                                     ),
                                     const SizedBox(height: 24),
 
-                                    // Forgot Password
+                                    // Back to Customer Home
                                     TextButton(
                                       onPressed: () {
-                                        Navigator.pushNamed(
+                                        Navigator.pushNamedAndRemoveUntil(
                                           context,
-                                          '/forgot-password',
+                                          '/',
+                                          (route) => false,
                                         );
                                       },
                                       style: TextButton.styleFrom(
                                         splashFactory: NoSplash.splashFactory,
                                       ),
                                       child: Text(
-                                        S.of(context).forgotPassword,
+                                        S.of(context).backToCustomerHome,
                                         style: const TextStyle(
                                           color: Color(0xFF667eea),
                                           fontSize: 14,

@@ -1,9 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../widgets/language_toggle.dart';
 import '../generated/l10n.dart';
+import '../providers/auth_provider.dart';
+import 'login_screen.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  int _tapCount = 0;
+  bool _showLoginOption = false;
+
+  void _handleVersionTap() {
+    setState(() {
+      _tapCount++;
+      if (_tapCount >= 5) {
+        _showLoginOption = true;
+      }
+    });
+  }
+
+  void _handleLogout() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    await authProvider.logout();
+
+    if (mounted) {
+      Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +84,45 @@ class SettingsScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // User Info Section (if logged in)
+                        Consumer<AuthProvider>(
+                          builder: (context, authProvider, child) {
+                            if (authProvider.isAuthenticated) {
+                              return Column(
+                                children: [
+                                  _buildSection(
+                                    title: S.of(context).account,
+                                    children: [
+                                      _buildSettingItem(
+                                        icon: Icons.person,
+                                        title: S.of(context).email,
+                                        subtitle: authProvider.userEmail ?? '',
+                                      ),
+                                      _buildSettingItem(
+                                        icon: Icons.badge,
+                                        title: S.of(context).role,
+                                        subtitle:
+                                            authProvider.isStaff
+                                                ? S.of(context).staff
+                                                : S.of(context).customer,
+                                      ),
+                                      _buildSettingItem(
+                                        icon: Icons.logout,
+                                        title: S.of(context).logout,
+                                        subtitle:
+                                            S.of(context).signOutOfAccount,
+                                        onTap: _handleLogout,
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 24),
+                                ],
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
+
                         // App Info Section
                         _buildSection(
                           title: S.of(context).appInformation,
@@ -63,6 +131,7 @@ class SettingsScreen extends StatelessWidget {
                               icon: Icons.info_outline,
                               title: S.of(context).appVersion,
                               subtitle: '1.0.0',
+                              onTap: _handleVersionTap,
                             ),
                             _buildSettingItem(
                               icon: Icons.business,
@@ -73,6 +142,29 @@ class SettingsScreen extends StatelessWidget {
                         ),
 
                         const SizedBox(height: 24),
+
+                        // Hidden Login Section (appears after 5 taps on version)
+                        if (_showLoginOption) ...[
+                          _buildSection(
+                            title: S.of(context).staffAccess,
+                            children: [
+                              _buildSettingItem(
+                                icon: Icons.admin_panel_settings,
+                                title: S.of(context).staffLogin,
+                                subtitle: S.of(context).accessStaffFeatures,
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const LoginScreen(),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                        ],
 
                         // Contact Section
                         _buildSection(

@@ -64,10 +64,10 @@ class _SplashScreenState extends State<SplashScreen>
     await Future.delayed(const Duration(milliseconds: 300));
     _textController.forward();
 
-    // Navigate to login screen after animations complete
+    // Navigate to customer home after animations complete
     await Future.delayed(const Duration(milliseconds: 2000));
     if (mounted) {
-      Navigator.pushReplacementNamed(context, '/login');
+      Navigator.pushReplacementNamed(context, '/');
     }
   }
 

@@ -36,13 +36,13 @@ class HomeMenu extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
 
                       // Welcome Section
                       Container(
                         width: double.infinity,
                         padding: EdgeInsets.all(
-                          MediaQuery.of(context).size.width * 0.06,
+                          MediaQuery.of(context).size.width * 0.04,
                         ),
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.2),
@@ -55,23 +55,23 @@ class HomeMenu extends StatelessWidget {
                         child: Column(
                           children: [
                             Container(
-                              width: 80,
-                              height: 80,
+                              width: 60,
+                              height: 60,
                               decoration: BoxDecoration(
                                 color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(40),
+                                borderRadius: BorderRadius.circular(30),
                               ),
                               child: const Icon(
                                 Icons.business,
-                                size: 40,
+                                size: 30,
                                 color: Colors.white,
                               ),
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 12),
                             Text(
                               S.of(context).welcomeToBusinessServices,
                               style: const TextStyle(
-                                fontSize: 24,
+                                fontSize: 20,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
                               ),
@@ -79,11 +79,11 @@ class HomeMenu extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               maxLines: 2,
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             Text(
                               S.of(context).chooseServiceToStart,
                               style: const TextStyle(
-                                fontSize: 16,
+                                fontSize: 14,
                                 color: Colors.white70,
                               ),
                               textAlign: TextAlign.center,
@@ -94,7 +94,7 @@ class HomeMenu extends StatelessWidget {
                         ),
                       ),
 
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 20),
 
                       // Menu Buttons
                       Expanded(
@@ -113,40 +113,47 @@ class HomeMenu extends StatelessWidget {
                               ),
                             ],
                           ),
-                          child: Column(
-                            children: [
-                              _MenuButton(
-                                title: S.of(context).parkACar,
-                                icon: Icons.local_parking,
-                                onTap:
-                                    () => Navigator.pushNamed(context, '/park'),
-                              ),
-                              const SizedBox(height: 16),
-                              _MenuButton(
-                                title: S.of(context).sendBarrelsToGuinea,
-                                icon: Icons.local_shipping,
-                                onTap:
-                                    () =>
-                                        Navigator.pushNamed(context, '/barrel'),
-                              ),
-                              const SizedBox(height: 16),
-                              _MenuButton(
-                                title: S.of(context).transportCarsToGuinea,
-                                icon: Icons.directions_car,
-                                onTap:
-                                    () => Navigator.pushNamed(
-                                      context,
-                                      '/transport',
-                                    ),
-                              ),
-                              const SizedBox(height: 16),
-                              _MenuButton(
-                                title: S.of(context).sellCars,
-                                icon: Icons.sell,
-                                onTap:
-                                    () => Navigator.pushNamed(context, '/sell'),
-                              ),
-                            ],
+                          child: SingleChildScrollView(
+                            child: Column(
+                              children: [
+                                _MenuButton(
+                                  title: S.of(context).parkACar,
+                                  icon: Icons.local_parking,
+                                  onTap:
+                                      () =>
+                                          Navigator.pushNamed(context, '/park'),
+                                ),
+                                const SizedBox(height: 12),
+                                _MenuButton(
+                                  title: S.of(context).sendBarrelsToGuinea,
+                                  icon: Icons.local_shipping,
+                                  onTap:
+                                      () => Navigator.pushNamed(
+                                        context,
+                                        '/barrel',
+                                      ),
+                                ),
+                                const SizedBox(height: 12),
+                                _MenuButton(
+                                  title: S.of(context).transportCarsToGuinea,
+                                  icon: Icons.directions_car,
+                                  onTap:
+                                      () => Navigator.pushNamed(
+                                        context,
+                                        '/transport',
+                                      ),
+                                ),
+                                const SizedBox(height: 12),
+                                _MenuButton(
+                                  title: S.of(context).sellCars,
+                                  icon: Icons.sell,
+                                  onTap:
+                                      () =>
+                                          Navigator.pushNamed(context, '/sell'),
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -175,9 +182,9 @@ class _MenuButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return Container(
       width: double.infinity,
-      height: 70,
+      constraints: const BoxConstraints(minHeight: 60, maxHeight: 80),
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF667eea),
@@ -190,7 +197,7 @@ class _MenuButton extends StatelessWidget {
         ),
         onPressed: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
