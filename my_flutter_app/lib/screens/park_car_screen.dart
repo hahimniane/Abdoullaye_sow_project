@@ -6,7 +6,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 import '../widgets/language_toggle.dart';
-import '../generated/l10n.dart';
+import '../l10n/app_localizations.dart';
 
 class ParkCarScreen extends StatefulWidget {
   const ParkCarScreen({super.key});
@@ -67,11 +67,11 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     CupertinoButton(
-                      child: Text(S.of(context).cancel),
+                      child: Text(AppLocalizations.of(context)!.cancel),
                       onPressed: () => Navigator.pop(context),
                     ),
                     CupertinoButton(
-                      child: Text(S.of(context).done),
+                      child: Text(AppLocalizations.of(context)!.done),
                       onPressed: () {
                         setState(() {
                           _selectedDateTime = tempDateTime;
@@ -352,7 +352,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(S.of(context).receiptGenerated),
+            content: Text(AppLocalizations.of(context)!.receiptGenerated),
             backgroundColor: Colors.green,
           ),
         );
@@ -361,7 +361,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(S.of(context).errorGeneratingReceipt(e.toString())),
+            content: Text(AppLocalizations.of(context)!.errorGeneratingReceipt(e.toString())),
             backgroundColor: Colors.red,
           ),
         );
@@ -426,7 +426,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                     ),
                     Expanded(
                       child: Text(
-                        S.of(context).parkACar,
+                        AppLocalizations.of(context)!.parkACar,
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -480,7 +480,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              S.of(context).carParkingService,
+                              AppLocalizations.of(context)!.carParkingService,
                               style: const TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
@@ -492,7 +492,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              S.of(context).enterCarDetailsToGenerateReceipt,
+                              AppLocalizations.of(context)!.enterCarDetailsToGenerateReceipt,
                               style: const TextStyle(
                                 fontSize: 16,
                                 color: Colors.white70,
@@ -529,10 +529,10 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                             children: [
                               _RoundedTextField(
                                 controller: _nameController,
-                                label: S.of(context).name,
+                                label: AppLocalizations.of(context)!.name,
                                 validator: (value) {
                                   if (value == null || value.isEmpty) {
-                                    return S.of(context).pleaseEnterOwnerName;
+                                    return AppLocalizations.of(context)!.pleaseEnterOwnerName;
                                   }
                                   return null;
                                 },
@@ -540,10 +540,10 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                               const SizedBox(height: 16),
                               _RoundedTextField(
                                 controller: _makeController,
-                                label: S.of(context).make,
+                                label: AppLocalizations.of(context)!.make,
                                 validator: (value) {
                                   if (value == null || value.isEmpty) {
-                                    return S.of(context).pleaseEnterCarMake;
+                                    return AppLocalizations.of(context)!.pleaseEnterCarMake;
                                   }
                                   return null;
                                 },
@@ -551,10 +551,10 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                               const SizedBox(height: 16),
                               _RoundedTextField(
                                 controller: _modelController,
-                                label: S.of(context).model,
+                                label: AppLocalizations.of(context)!.model,
                                 validator: (value) {
                                   if (value == null || value.isEmpty) {
-                                    return S.of(context).pleaseEnterCarModel;
+                                    return AppLocalizations.of(context)!.pleaseEnterCarModel;
                                   }
                                   return null;
                                 },
@@ -562,10 +562,10 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                               const SizedBox(height: 16),
                               _RoundedTextField(
                                 controller: _yearController,
-                                label: S.of(context).year,
+                                label: AppLocalizations.of(context)!.year,
                                 validator: (value) {
                                   if (value == null || value.isEmpty) {
-                                    return S.of(context).pleaseEnterCarYear;
+                                    return AppLocalizations.of(context)!.pleaseEnterCarYear;
                                   }
                                   return null;
                                 },
@@ -573,10 +573,10 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                               const SizedBox(height: 16),
                               _RoundedTextField(
                                 controller: _vinController,
-                                label: S.of(context).vinNumber,
+                                label: AppLocalizations.of(context)!.vinNumber,
                                 validator: (value) {
                                   if (value == null || value.isEmpty) {
-                                    return S.of(context).pleaseEnterVinNumber;
+                                    return AppLocalizations.of(context)!.pleaseEnterVinNumber;
                                   }
                                   return null;
                                 },
@@ -613,7 +613,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              S.of(context).parkingDateTime,
+                                              AppLocalizations.of(context)!.parkingDateTime,
                                               style: TextStyle(
                                                 fontSize: 12,
                                                 color: Colors.grey.shade600,
@@ -679,7 +679,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                               const Icon(Icons.print, size: 20),
                                               const SizedBox(width: 8),
                                               Text(
-                                                S.of(context).printReceipt,
+                                                AppLocalizations.of(context)!.printReceipt,
                                                 style: const TextStyle(
                                                   fontSize: 16,
                                                   fontWeight: FontWeight.w600,

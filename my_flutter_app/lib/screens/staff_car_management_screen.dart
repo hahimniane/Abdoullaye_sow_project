@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/language_toggle.dart';
-import '../generated/l10n.dart';
+import '../l10n/app_localizations.dart';
 
 class StaffCarManagementScreen extends StatefulWidget {
   const StaffCarManagementScreen({super.key});
@@ -59,7 +59,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        S.of(context).manageCars,
+                        AppLocalizations.of(context)!.manageCars,
                         style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -101,7 +101,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                             _buildStatItem(
                               icon: Icons.directions_car,
                               value: _cars.length.toString(),
-                              label: S.of(context).totalCars,
+                              label: AppLocalizations.of(context)!.totalCars,
                             ),
                             _buildStatItem(
                               icon: Icons.check_circle,
@@ -110,7 +110,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                                       .where((car) => car['status'] == 'active')
                                       .length
                                       .toString(),
-                              label: S.of(context).activeCars,
+                              label: AppLocalizations.of(context)!.activeCars,
                             ),
                             _buildStatItem(
                               icon: Icons.pause_circle,
@@ -121,7 +121,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                                       )
                                       .length
                                       .toString(),
-                              label: S.of(context).inactiveCars,
+                              label: AppLocalizations.of(context)!.inactiveCars,
                             ),
                           ],
                         ),
@@ -224,15 +224,15 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${S.of(context).year}: ${car['year']}',
+                  '${AppLocalizations.of(context)!.year}: ${car['year']}',
                   style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
                 ),
                 Text(
-                  '${S.of(context).mileage}: ${car['mileage']}',
+                  '${AppLocalizations.of(context)!.mileage}: ${car['mileage']}',
                   style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
                 ),
                 Text(
-                  '${S.of(context).price}: ${car['price']}',
+                  '${AppLocalizations.of(context)!.price}: ${car['price']}',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -253,7 +253,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  isActive ? S.of(context).active : S.of(context).inactive,
+                  isActive ? AppLocalizations.of(context)!.active : AppLocalizations.of(context)!.inactive,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12,
@@ -292,13 +292,13 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
       context: context,
       builder:
           (context) => AlertDialog(
-            title: Text(S.of(context).addNewCar),
+            title: Text(AppLocalizations.of(context)!.addNewCar),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   decoration: InputDecoration(
-                    labelText: S.of(context).carTitle,
+                    labelText: AppLocalizations.of(context)!.carTitle,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -307,7 +307,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                 const SizedBox(height: 16),
                 TextField(
                   decoration: InputDecoration(
-                    labelText: S.of(context).year,
+                    labelText: AppLocalizations.of(context)!.year,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -316,7 +316,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                 const SizedBox(height: 16),
                 TextField(
                   decoration: InputDecoration(
-                    labelText: S.of(context).mileage,
+                    labelText: AppLocalizations.of(context)!.mileage,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -325,7 +325,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                 const SizedBox(height: 16),
                 TextField(
                   decoration: InputDecoration(
-                    labelText: S.of(context).price,
+                    labelText: AppLocalizations.of(context)!.price,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -336,14 +336,14 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: Text(S.of(context).cancel),
+                child: Text(AppLocalizations.of(context)!.cancel),
               ),
               ElevatedButton(
                 onPressed: () {
                   // Add car logic here
                   Navigator.pop(context);
                 },
-                child: Text(S.of(context).add),
+                child: Text(AppLocalizations.of(context)!.add),
               ),
             ],
           ),

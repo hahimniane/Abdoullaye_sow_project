@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../providers/language_provider.dart';
-import '../generated/l10n.dart';
+import '../l10n/app_localizations.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -145,7 +143,9 @@ class _SplashScreenState extends State<SplashScreen>
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          S.of(context).welcomeToBusinessServices,
+                          AppLocalizations.of(
+                            context,
+                          )!.welcomeToBusinessServices,
                           style: const TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
@@ -164,7 +164,7 @@ class _SplashScreenState extends State<SplashScreen>
                         ),
                         const SizedBox(height: 24),
                         Text(
-                          S.of(context).chooseServiceToStart,
+                          AppLocalizations.of(context)!.chooseServiceToStart,
                           style: TextStyle(
                             fontSize: 16,
                             color: Colors.white.withOpacity(0.8),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/language_toggle.dart';
-import '../generated/l10n.dart';
+import '../l10n/app_localizations.dart';
 
 class SendBarrelScreen extends StatelessWidget {
   const SendBarrelScreen({super.key});
@@ -37,7 +37,7 @@ class SendBarrelScreen extends StatelessWidget {
                     ),
                     Expanded(
                       child: Text(
-                        S.of(context).sendBarrelsToGuinea,
+                        AppLocalizations.of(context)!.sendBarrelsToGuinea,
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -91,7 +91,7 @@ class SendBarrelScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              S.of(context).barrelShippingService,
+                              AppLocalizations.of(context)!.barrelShippingService,
                               style: const TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
@@ -103,7 +103,7 @@ class SendBarrelScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              S.of(context).enterShippingDetailsForGuinea,
+                              AppLocalizations.of(context)!.enterShippingDetailsForGuinea,
                               style: const TextStyle(
                                 fontSize: 16,
                                 color: Colors.white70,
@@ -136,19 +136,19 @@ class SendBarrelScreen extends StatelessWidget {
                         ),
                         child: Column(
                           children: [
-                            _RoundedTextField(label: S.of(context).senderName),
+                            _RoundedTextField(label: AppLocalizations.of(context)!.senderName),
                             const SizedBox(height: 16),
-                            _RoundedTextField(label: S.of(context).address),
+                            _RoundedTextField(label: AppLocalizations.of(context)!.address),
                             const SizedBox(height: 16),
                             _RoundedTextField(
-                              label: S.of(context).receiverName,
+                              label: AppLocalizations.of(context)!.receiverName,
                             ),
                             const SizedBox(height: 16),
                             _RoundedTextField(
-                              label: S.of(context).receiverPhone,
+                              label: AppLocalizations.of(context)!.receiverPhone,
                             ),
                             const SizedBox(height: 16),
-                            _RoundedTextField(label: S.of(context).price),
+                            _RoundedTextField(label: AppLocalizations.of(context)!.price),
                             const SizedBox(height: 32),
                             SizedBox(
                               width: double.infinity,
@@ -165,7 +165,7 @@ class SendBarrelScreen extends StatelessWidget {
                                 ),
                                 onPressed: () {},
                                 child: Text(
-                                  S.of(context).submit,
+                                  AppLocalizations.of(context)!.submit,
                                   style: const TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,

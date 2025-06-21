@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/language_toggle.dart';
-import '../generated/l10n.dart';
+import '../l10n/app_localizations.dart';
 import 'car_details_screen.dart';
 
 class SellCarsScreen extends StatefulWidget {
@@ -42,7 +42,7 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
       CarData(
         imageUrl:
             'https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400',
-        title: S.of(context).toyotaCamry,
+        title: AppLocalizations.of(context)!.toyotaCamry,
         year: '2020',
         mileage: '30,000 miles',
         price: '\$25,500',
@@ -61,7 +61,7 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
       CarData(
         imageUrl:
             'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=400',
-        title: S.of(context).hondaAccord,
+        title: AppLocalizations.of(context)!.hondaAccord,
         year: '2019',
         mileage: '45,000 miles',
         price: '\$22,200',
@@ -80,7 +80,7 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
       CarData(
         imageUrl:
             'https://images.unsplash.com/photo-1544636331-e26879cd4d9b?w=400',
-        title: S.of(context).fordEscape,
+        title: AppLocalizations.of(context)!.fordEscape,
         year: '2021',
         mileage: '26,000 miles',
         price: '\$28,800',
@@ -149,7 +149,7 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
                     ),
                     Expanded(
                       child: Text(
-                        S.of(context).sellCars,
+                        AppLocalizations.of(context)!.sellCars,
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -203,7 +203,7 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              S.of(context).carSalesService,
+                              AppLocalizations.of(context)!.carSalesService,
                               style: const TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
@@ -215,7 +215,7 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              S.of(context).browseAvailableCarsForSale,
+                              AppLocalizations.of(context)!.browseAvailableCarsForSale,
                               style: const TextStyle(
                                 fontSize: 16,
                                 color: Colors.white70,
@@ -249,7 +249,7 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
                         child: TextField(
                           controller: _searchController,
                           decoration: InputDecoration(
-                            hintText: S.of(context).searchCars,
+                            hintText: AppLocalizations.of(context)!.searchCars,
                             prefixIcon: const Icon(Icons.search),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -306,7 +306,7 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
                                         ),
                                         const SizedBox(height: 16),
                                         Text(
-                                          S.of(context).noResultsFound,
+                                          AppLocalizations.of(context)!.noResultsFound,
                                           style: TextStyle(
                                             fontSize: 18,
                                             fontWeight: FontWeight.w500,
@@ -316,7 +316,7 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
                                         ),
                                         const SizedBox(height: 8),
                                         Text(
-                                          S.of(context).tryDifferentSearch,
+                                          AppLocalizations.of(context)!.tryDifferentSearch,
                                           style: TextStyle(
                                             fontSize: 14,
                                             color: Colors.grey.shade500,
@@ -451,13 +451,13 @@ class _CarCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${S.of(context).year}: ${car.year}',
+                    '${AppLocalizations.of(context)!.year}: ${car.year}',
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                   ),
                   Text(
-                    '${S.of(context).mileage}: ${car.mileage}',
+                    '${AppLocalizations.of(context)!.mileage}: ${car.mileage}',
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,

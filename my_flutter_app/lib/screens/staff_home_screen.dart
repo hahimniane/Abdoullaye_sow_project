@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-import '../widgets/language_toggle.dart';
-import '../generated/l10n.dart';
+import '../l10n/app_localizations.dart';
 import 'home_menu.dart';
 import 'settings_screen.dart';
 import 'staff_car_management_screen.dart';
@@ -57,23 +56,23 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
               children: [
                 _buildNavItem(
                   icon: Icons.home,
-                  label: S.of(context).home,
+                  label: AppLocalizations.of(context)!.home,
                   index: 0,
                 ),
                 _buildNavItem(
                   icon: Icons.directions_car,
-                  label: S.of(context).manageCars,
+                  label: AppLocalizations.of(context)!.manageCars,
                   index: 1,
                 ),
                 if (isAdmin)
                   _buildNavItem(
                     icon: Icons.people,
-                    label: 'Users', // This should be localized
+                    label: AppLocalizations.of(context)!.users,
                     index: 2,
                   ),
                 _buildNavItem(
                   icon: Icons.settings,
-                  label: S.of(context).settings,
+                  label: AppLocalizations.of(context)!.settings,
                   index: 3,
                 ),
               ],

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../widgets/language_toggle.dart';
-import '../generated/l10n.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import 'login_screen.dart';
 
@@ -55,7 +55,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        S.of(context).settings,
+                        AppLocalizations.of(context)!.settings,
                         style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -91,26 +91,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               return Column(
                                 children: [
                                   _buildSection(
-                                    title: S.of(context).account,
+                                    title:
+                                        AppLocalizations.of(context)!.account,
                                     children: [
                                       _buildSettingItem(
                                         icon: Icons.person,
-                                        title: S.of(context).email,
+                                        title:
+                                            AppLocalizations.of(context)!.email,
                                         subtitle: authProvider.userEmail ?? '',
                                       ),
                                       _buildSettingItem(
                                         icon: Icons.badge,
-                                        title: S.of(context).role,
+                                        title:
+                                            AppLocalizations.of(context)!.role,
                                         subtitle:
-                                            authProvider.isStaff
-                                                ? S.of(context).staff
-                                                : S.of(context).customer,
+                                            authProvider.isAdmin
+                                                ? AppLocalizations.of(
+                                                  context,
+                                                )!.admin
+                                                : authProvider.isStaff
+                                                ? AppLocalizations.of(
+                                                  context,
+                                                )!.staff
+                                                : AppLocalizations.of(
+                                                  context,
+                                                )!.customer,
                                       ),
                                       _buildSettingItem(
                                         icon: Icons.logout,
-                                        title: S.of(context).logout,
+                                        title:
+                                            AppLocalizations.of(
+                                              context,
+                                            )!.logout,
                                         subtitle:
-                                            S.of(context).signOutOfAccount,
+                                            AppLocalizations.of(
+                                              context,
+                                            )!.signOutOfAccount,
                                         onTap: _handleLogout,
                                       ),
                                     ],
@@ -125,17 +141,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                         // App Info Section
                         _buildSection(
-                          title: S.of(context).appInformation,
+                          title: AppLocalizations.of(context)!.appInformation,
                           children: [
                             _buildSettingItem(
                               icon: Icons.info_outline,
-                              title: S.of(context).appVersion,
+                              title: AppLocalizations.of(context)!.appVersion,
                               subtitle: '1.0.0',
                               onTap: _handleVersionTap,
                             ),
                             _buildSettingItem(
                               icon: Icons.business,
-                              title: S.of(context).companyName,
+                              title: AppLocalizations.of(context)!.companyName,
                               subtitle: 'Business Services',
                             ),
                           ],
@@ -146,12 +162,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         // Hidden Login Section (appears after 5 taps on version)
                         if (_showLoginOption) ...[
                           _buildSection(
-                            title: S.of(context).staffAccess,
+                            title: AppLocalizations.of(context)!.staffAccess,
                             children: [
                               _buildSettingItem(
                                 icon: Icons.admin_panel_settings,
-                                title: S.of(context).staffLogin,
-                                subtitle: S.of(context).accessStaffFeatures,
+                                title: AppLocalizations.of(context)!.staffLogin,
+                                subtitle:
+                                    AppLocalizations.of(
+                                      context,
+                                    )!.accessStaffFeatures,
                                 onTap: () {
                                   Navigator.push(
                                     context,
@@ -168,11 +187,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                         // Contact Section
                         _buildSection(
-                          title: S.of(context).contactUs,
+                          title: AppLocalizations.of(context)!.contactUs,
                           children: [
                             _buildSettingItem(
                               icon: Icons.phone,
-                              title: S.of(context).phoneNumber,
+                              title: AppLocalizations.of(context)!.phoneNumber,
                               subtitle: '+1 (555) 123-4567',
                               onTap: () {
                                 // Handle phone call
@@ -180,7 +199,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             _buildSettingItem(
                               icon: Icons.email,
-                              title: S.of(context).emailAddress,
+                              title: AppLocalizations.of(context)!.emailAddress,
                               subtitle: 'info@businessservices.com',
                               onTap: () {
                                 // Handle email
@@ -193,18 +212,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                         // About Section
                         _buildSection(
-                          title: S.of(context).about,
+                          title: AppLocalizations.of(context)!.about,
                           children: [
                             _buildSettingItem(
                               icon: Icons.description,
-                              title: S.of(context).privacyPolicy,
+                              title:
+                                  AppLocalizations.of(context)!.privacyPolicy,
                               onTap: () {
                                 // Handle privacy policy
                               },
                             ),
                             _buildSettingItem(
                               icon: Icons.description,
-                              title: S.of(context).termsOfService,
+                              title:
+                                  AppLocalizations.of(context)!.termsOfService,
                               onTap: () {
                                 // Handle terms of service
                               },

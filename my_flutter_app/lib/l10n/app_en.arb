@@ -113,5 +113,40 @@
   "invalidCredentials": "Invalid email or password",
   "backToCustomerHome": "Back to Customer Home",
   "trackShipment": "Track Shipment",
-  "tracking": "Tracking"
+  "tracking": "Tracking",
+  "userManagement": "User Management",
+  "setAsCustomer": "Set as Customer",
+  "setAsStaff": "Set as Staff",
+  "setAsAdmin": "Set as Admin",
+  "addStaffMember": "Add Staff Member",
+  "users": "Users",
+  "noUsersFound": "No users found.",
+  "enterStaffEmail": "Enter staff email",
+  "enterTemporaryPassword": "Enter temporary password",
+  "userRoleUpdated": "User role updated to {newRole}",
+  "@userRoleUpdated": {
+    "placeholders": {
+      "newRole": {
+        "type": "String"
+      }
+    }
+  },
+  "failedToUpdateUserRole": "Failed to update user role: {error}",
+  "@failedToUpdateUserRole": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "staffMemberAddedSuccessfully": "Staff member added successfully!",
+  "failedToAddStaffMember": "Failed to add staff member: {error}",
+  "@failedToAddStaffMember": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "admin": "Admin"
 }

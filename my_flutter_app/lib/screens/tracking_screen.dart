@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../widgets/language_toggle.dart';
-import '../generated/l10n.dart';
+import '../l10n/app_localizations.dart';
 
 class TrackingScreen extends StatefulWidget {
   const TrackingScreen({super.key});
@@ -74,7 +74,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                     ),
                     Expanded(
                       child: Text(
-                        S.of(context).trackShipment,
+                        AppLocalizations.of(context)!.trackShipment,
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,

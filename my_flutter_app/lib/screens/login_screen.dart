@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../widgets/language_toggle.dart';
-import '../generated/l10n.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -137,7 +137,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                             // Welcome Text
                             Text(
-                              S.of(context).staffLogin,
+                              AppLocalizations.of(context)!.staffLogin,
                               style: const TextStyle(
                                 fontSize: 32,
                                 fontWeight: FontWeight.bold,
@@ -146,7 +146,7 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              S.of(context).accessStaffFeatures,
+                              AppLocalizations.of(context)!.accessStaffFeatures,
                               style: const TextStyle(
                                 fontSize: 16,
                                 color: Colors.white70,
@@ -177,8 +177,12 @@ class _LoginScreenState extends State<LoginScreen>
                                       controller: _emailController,
                                       keyboardType: TextInputType.emailAddress,
                                       decoration: InputDecoration(
-                                        labelText: S.of(context).email,
-                                        hintText: S.of(context).enterEmail,
+                                        labelText:
+                                            AppLocalizations.of(context)!.email,
+                                        hintText:
+                                            AppLocalizations.of(
+                                              context,
+                                            )!.enterEmail,
                                         prefixIcon: const Icon(
                                           Icons.email_outlined,
                                         ),
@@ -209,14 +213,16 @@ class _LoginScreenState extends State<LoginScreen>
                                       ),
                                       validator: (value) {
                                         if (value == null || value.isEmpty) {
-                                          return S.of(context).pleaseEnterEmail;
+                                          return AppLocalizations.of(
+                                            context,
+                                          )!.pleaseEnterEmail;
                                         }
                                         if (!RegExp(
                                           r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
                                         ).hasMatch(value)) {
-                                          return S
-                                              .of(context)
-                                              .pleaseEnterValidEmail;
+                                          return AppLocalizations.of(
+                                            context,
+                                          )!.pleaseEnterValidEmail;
                                         }
                                         return null;
                                       },
@@ -228,8 +234,14 @@ class _LoginScreenState extends State<LoginScreen>
                                       controller: _passwordController,
                                       obscureText: !_isPasswordVisible,
                                       decoration: InputDecoration(
-                                        labelText: S.of(context).password,
-                                        hintText: S.of(context).enterPassword,
+                                        labelText:
+                                            AppLocalizations.of(
+                                              context,
+                                            )!.password,
+                                        hintText:
+                                            AppLocalizations.of(
+                                              context,
+                                            )!.enterPassword,
                                         prefixIcon: const Icon(
                                           Icons.lock_outlined,
                                         ),
@@ -273,14 +285,14 @@ class _LoginScreenState extends State<LoginScreen>
                                       ),
                                       validator: (value) {
                                         if (value == null || value.isEmpty) {
-                                          return S
-                                              .of(context)
-                                              .pleaseEnterPassword;
+                                          return AppLocalizations.of(
+                                            context,
+                                          )!.pleaseEnterPassword;
                                         }
                                         if (value.length < 6) {
-                                          return S
-                                              .of(context)
-                                              .passwordMinLength;
+                                          return AppLocalizations.of(
+                                            context,
+                                          )!.passwordMinLength;
                                         }
                                         return null;
                                       },
@@ -323,7 +335,9 @@ class _LoginScreenState extends State<LoginScreen>
                                                       ),
                                                     )
                                                     : Text(
-                                                      S.of(context).signIn,
+                                                      AppLocalizations.of(
+                                                        context,
+                                                      )!.signIn,
                                                       style: const TextStyle(
                                                         fontSize: 16,
                                                         fontWeight:
@@ -349,7 +363,9 @@ class _LoginScreenState extends State<LoginScreen>
                                         splashFactory: NoSplash.splashFactory,
                                       ),
                                       child: Text(
-                                        S.of(context).backToCustomerHome,
+                                        AppLocalizations.of(
+                                          context,
+                                        )!.backToCustomerHome,
                                         style: const TextStyle(
                                           color: Color(0xFF667eea),
                                           fontSize: 14,

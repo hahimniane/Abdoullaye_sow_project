@@ -189,7 +189,7 @@ class AuthProvider extends ChangeNotifier {
       // If it's the current user, update the local state
       if (_user?.uid == userId) {
         _isStaff = true;
-        _isAdmin = false;
+        _isAdmin = false; // A user promoted to staff is not an admin by default
         notifyListeners();
       }
     } catch (e) {
@@ -221,6 +221,34 @@ class AuthProvider extends ChangeNotifier {
     } catch (e) {
       print('Error updating user role: $e');
       throw 'Failed to update user role';
+    }
+  }
+
+  // Method to add a new staff user (for admin use)
+  Future<void> addStaffUser(String email, String password) async {
+    try {
+      // Create the user in Firebase Auth
+      final UserCredential userCredential = await _auth
+          .createUserWithEmailAndPassword(email: email, password: password);
+
+      // Add the user to Firestore with the 'staff' role
+      await _firestore.collection('users').doc(userCredential.user!.uid).set({
+        'email': email,
+        'role': 'staff',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseAuthException catch (e) {
+      // Provide more specific error messages
+      if (e.code == 'weak-password') {
+        throw 'The password provided is too weak.';
+      } else if (e.code == 'email-already-in-use') {
+        throw 'The account already exists for that email.';
+      } else {
+        throw 'Failed to create user: ${e.message}';
+      }
+    } catch (e) {
+      print('Error adding staff user: $e');
+      throw 'An unexpected error occurred while adding the staff user.';
     }
   }
 }

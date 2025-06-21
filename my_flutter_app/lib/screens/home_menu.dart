@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/language_toggle.dart';
-import '../generated/l10n.dart';
+import '../l10n/app_localizations.dart';
 
 class HomeMenu extends StatelessWidget {
   const HomeMenu({super.key});
@@ -69,7 +69,7 @@ class HomeMenu extends StatelessWidget {
                             ),
                             const SizedBox(height: 12),
                             Text(
-                              S.of(context).welcomeToBusinessServices,
+                              AppLocalizations.of(context)!.welcomeToBusinessServices,
                               style: const TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
@@ -81,7 +81,7 @@ class HomeMenu extends StatelessWidget {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              S.of(context).chooseServiceToStart,
+                              AppLocalizations.of(context)!.chooseServiceToStart,
                               style: const TextStyle(
                                 fontSize: 14,
                                 color: Colors.white70,
@@ -117,7 +117,7 @@ class HomeMenu extends StatelessWidget {
                             child: Column(
                               children: [
                                 _MenuButton(
-                                  title: S.of(context).parkACar,
+                                  title: AppLocalizations.of(context)!.parkACar,
                                   icon: Icons.local_parking,
                                   onTap:
                                       () =>
@@ -125,7 +125,7 @@ class HomeMenu extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 12),
                                 _MenuButton(
-                                  title: S.of(context).sendBarrelsToGuinea,
+                                  title: AppLocalizations.of(context)!.sendBarrelsToGuinea,
                                   icon: Icons.local_shipping,
                                   onTap:
                                       () => Navigator.pushNamed(
@@ -135,7 +135,7 @@ class HomeMenu extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 12),
                                 _MenuButton(
-                                  title: S.of(context).transportCarsToGuinea,
+                                  title: AppLocalizations.of(context)!.transportCarsToGuinea,
                                   icon: Icons.directions_car,
                                   onTap:
                                       () => Navigator.pushNamed(
@@ -145,7 +145,7 @@ class HomeMenu extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 12),
                                 _MenuButton(
-                                  title: S.of(context).sellCars,
+                                  title: AppLocalizations.of(context)!.sellCars,
                                   icon: Icons.sell,
                                   onTap:
                                       () =>

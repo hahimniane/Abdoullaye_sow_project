@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import '../widgets/language_toggle.dart';
-import '../generated/l10n.dart';
+import '../l10n/app_localizations.dart';
 import 'sell_cars_screen.dart';
 import 'tracking_screen.dart';
 import 'settings_screen.dart';
@@ -48,17 +47,17 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               children: [
                 _buildNavItem(
                   icon: Icons.home,
-                  label: S.of(context).home,
+                  label: AppLocalizations.of(context)!.home,
                   index: 0,
                 ),
                 _buildNavItem(
                   icon: Icons.local_shipping,
-                  label: S.of(context).tracking,
+                  label: AppLocalizations.of(context)!.tracking,
                   index: 1,
                 ),
                 _buildNavItem(
                   icon: Icons.settings,
-                  label: S.of(context).settings,
+                  label: AppLocalizations.of(context)!.settings,
                   index: 2,
                 ),
               ],

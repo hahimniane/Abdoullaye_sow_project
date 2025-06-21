@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../generated/l10n.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -133,7 +133,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
 
                       // Title Text
                       Text(
-                        S.of(context).forgotPasswordTitle,
+                        AppLocalizations.of(context)!.forgotPasswordTitle,
                         style: const TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.bold,
@@ -142,7 +142,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        S.of(context).enterEmailToReset,
+                        AppLocalizations.of(context)!.enterEmailToReset,
                         style: const TextStyle(
                           fontSize: 16,
                           color: Colors.white70,
@@ -191,8 +191,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
             decoration: InputDecoration(
-              labelText: S.of(context).email,
-              hintText: S.of(context).enterEmail,
+              labelText: AppLocalizations.of(context)!.email,
+              hintText: AppLocalizations.of(context)!.enterEmail,
               prefixIcon: const Icon(Icons.email_outlined),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -213,12 +213,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
             ),
             validator: (value) {
               if (value == null || value.isEmpty) {
-                return S.of(context).pleaseEnterEmail;
+                return AppLocalizations.of(context)!.pleaseEnterEmail;
               }
               if (!RegExp(
                 r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
               ).hasMatch(value)) {
-                return S.of(context).pleaseEnterValidEmail;
+                return AppLocalizations.of(context)!.pleaseEnterValidEmail;
               }
               return null;
             },
@@ -256,7 +256,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                             ),
                           )
                           : Text(
-                            S.of(context).resetPassword,
+                            AppLocalizations.of(context)!.resetPassword,
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -273,7 +273,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
             onPressed: _goBackToLogin,
             style: TextButton.styleFrom(splashFactory: NoSplash.splashFactory),
             child: Text(
-              S.of(context).backToLogin,
+              AppLocalizations.of(context)!.backToLogin,
               style: const TextStyle(color: Color(0xFF667eea), fontSize: 14),
             ),
           ),
@@ -299,7 +299,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
 
         // Success Message
         Text(
-          S.of(context).emailSent,
+          AppLocalizations.of(context)!.emailSent,
           style: const TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
@@ -308,7 +308,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
         ),
         const SizedBox(height: 12),
         Text(
-          S.of(context).emailSentMessage,
+          AppLocalizations.of(context)!.emailSentMessage,
           style: const TextStyle(fontSize: 14, color: Colors.black54),
           textAlign: TextAlign.center,
         ),
@@ -330,7 +330,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
               splashFactory: NoSplash.splashFactory,
             ),
             child: Text(
-              S.of(context).backToLogin,
+              AppLocalizations.of(context)!.backToLogin,
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
           ),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/language_toggle.dart';
-import '../generated/l10n.dart';
+import '../l10n/app_localizations.dart';
 
 class CarDetailsScreen extends StatelessWidget {
   final String imageUrl;
@@ -57,7 +57,7 @@ class CarDetailsScreen extends StatelessWidget {
                     ),
                     Expanded(
                       child: Text(
-                        S.of(context).carDetails,
+                        AppLocalizations.of(context)!.carDetails,
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -188,7 +188,7 @@ class CarDetailsScreen extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
-                                  '${S.of(context).year}: $year',
+                                  '${AppLocalizations.of(context)!.year}: $year',
                                   style: const TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w500,
@@ -209,7 +209,7 @@ class CarDetailsScreen extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
-                                  '${S.of(context).mileage}: $mileage',
+                                  '${AppLocalizations.of(context)!.mileage}: $mileage',
                                   style: const TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w500,
@@ -225,7 +225,7 @@ class CarDetailsScreen extends StatelessWidget {
 
                         // Car Description
                         Text(
-                          S.of(context).carDescription,
+                          AppLocalizations.of(context)!.carDescription,
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -245,7 +245,7 @@ class CarDetailsScreen extends StatelessWidget {
 
                         // Features
                         Text(
-                          S.of(context).features,
+                          AppLocalizations.of(context)!.features,
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -292,7 +292,7 @@ class CarDetailsScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                S.of(context).contactInfo,
+                                AppLocalizations.of(context)!.contactInfo,
                                 style: const TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
@@ -336,7 +336,7 @@ class CarDetailsScreen extends StatelessWidget {
                             onPressed: () => _sendWhatsAppMessage(context),
                             icon: const Icon(Icons.message, size: 24),
                             label: Text(
-                              S.of(context).sendWhatsAppMessage,
+                              AppLocalizations.of(context)!.sendWhatsAppMessage,
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -357,7 +357,7 @@ class CarDetailsScreen extends StatelessWidget {
   }
 
   void _sendWhatsAppMessage(BuildContext context) {
-    final message = S.of(context).whatsAppMessage(title, year, price);
+    final message = AppLocalizations.of(context)!.whatsAppMessage(title, year, price);
 
     final whatsappUrl =
         'https://wa.me/$sellerPhone?text=${Uri.encodeComponent(message)}';

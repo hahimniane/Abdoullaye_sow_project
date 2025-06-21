@@ -5,7 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'providers/language_provider.dart';
 import 'providers/auth_provider.dart';
-import 'generated/l10n.dart';
+import 'l10n/app_localizations.dart';
 import 'screens/splash_screen.dart';
 import 'screens/customer_home_screen.dart';
 import 'screens/staff_home_screen.dart';
@@ -19,6 +19,7 @@ import 'screens/login_screen.dart';
 import 'screens/forgot_password_screen.dart';
 import 'screens/car_details_screen.dart';
 import 'screens/user_management_screen.dart';
+import 'screens/add_staff_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,7 +47,7 @@ class MyApp extends StatelessWidget {
               Locale('fr'), // French
             ],
             localizationsDelegates: const [
-              S.delegate,
+              AppLocalizations.delegate,
               GlobalMaterialLocalizations.delegate,
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
@@ -81,6 +82,7 @@ class MyApp extends StatelessWidget {
               '/sell': (context) => const SellCarsScreen(),
               '/tracking': (context) => const TrackingScreen(),
               '/user-management': (context) => const UserManagementScreen(),
+              '/add-staff': (context) => const AddStaffScreen(),
             },
           );
         },
