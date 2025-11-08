@@ -22,6 +22,8 @@ import 'screens/add_staff_screen.dart';
 import 'screens/signup_screen.dart';
 import 'models/parked_car.dart';
 import 'screens/parked_car_details_screen.dart';
+import 'models/barrel_shipment.dart';
+import 'screens/barrel_shipment_details_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -74,6 +76,10 @@ class MyApp extends StatelessWidget {
               '/parked-car-details': (context) {
                 final parkedCar = ModalRoute.of(context)!.settings.arguments as ParkedCar;
                 return ParkedCarDetailsScreen(parkedCar: parkedCar);
+              },
+              '/barrel-shipment-details': (context) {
+                final shipment = ModalRoute.of(context)!.settings.arguments as BarrelShipment;
+                return BarrelShipmentDetailsScreen(shipment: shipment);
               },
 
               // Staff-only routes (hidden from customers)

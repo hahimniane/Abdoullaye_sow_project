@@ -47,6 +47,51 @@
   "pleaseEnterCarModel": "Please enter the car model",
   "pleaseEnterCarYear": "Please enter the car year",
   "pleaseEnterVinNumber": "Please enter the VIN number",
+  "pleaseEnterSenderName": "Please enter the sender name",
+  "pleaseEnterSenderAddress": "Please enter the sender address",
+  "pleaseEnterReceiverName": "Please enter the receiver name",
+  "pleaseEnterReceiverPhone": "Please enter the receiver phone number",
+  "pleaseEnterPrice": "Please enter the price",
+  "pleaseEnterValidNumber": "Please enter a valid number",
+  "shipmentSavedWithTracking": "Shipment saved. Tracking number: {trackingCode}",
+  "@shipmentSavedWithTracking": {
+    "placeholders": {
+      "trackingCode": {}
+    }
+  },
+  "failedToSaveShipment": "Failed to save shipment: {error}",
+  "@failedToSaveShipment": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "parkingSavedWithTracking": "Parking record saved. Tracking number: {trackingCode}",
+  "@parkingSavedWithTracking": {
+    "placeholders": {
+      "trackingCode": {}
+    }
+  },
+  "barrelShipmentDetails": "Barrel Shipment Details",
+  "senderInformation": "Sender Information",
+  "receiverInformation": "Receiver Information",
+  "shipmentSummary": "Shipment Summary",
+  "createdOnLabel": "Created on",
+  "statusLabel": "Status",
+  "updateShipment": "Update Shipment",
+  "reprintReceipt": "Reprint Receipt",
+  "shipmentUpdatedSuccessfully": "Shipment updated successfully!",
+  "failedToUpdateShipment": "Failed to update shipment: {error}",
+  "@failedToUpdateShipment": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "trackingNumber": "Tracking Number",
+  "trackingNumberCopied": "Tracking number copied to clipboard",
+  "shipmentStatusPending": "Pending",
+  "shipmentStatusInTransit": "In Transit",
+  "shipmentStatusCompleted": "Completed",
+  "shipmentStatusCompletedNotice": "This shipment is marked as completed and can no longer be edited.",
   "done": "Done",
   "account": "Account",
   "role": "Role",

@@ -3,30 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/parked_car.dart';
+import '../models/barrel_shipment.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
 
 enum ServiceCategory { all, parking, barrels, transport, sales }
-
-enum ServiceStatus { active, processing, completed }
-
-class ServiceRecord {
-  ServiceRecord({
-    required this.category,
-    required this.title,
-    required this.reference,
-    required this.status,
-    required this.date,
-    required this.details,
-  });
-
-  final ServiceCategory category;
-  final String title;
-  final String reference;
-  final ServiceStatus status;
-  final DateTime date;
-  final String details;
-}
 
 class HomeMenu extends StatefulWidget {
   const HomeMenu({super.key});
@@ -35,11 +16,32 @@ class HomeMenu extends StatefulWidget {
   State<HomeMenu> createState() => _HomeMenuState();
 }
 
+class ActivityRecord {
+  ActivityRecord({
+    required this.category,
+    required this.title,
+    required this.subtitle,
+    required this.date,
+    this.payload,
+  });
+
+  final ServiceCategory category;
+  final String title;
+  final String subtitle;
+  final DateTime date;
+  final Object? payload;
+}
+
 class _HomeMenuState extends State<HomeMenu> {
-  List<dynamic> _records = [];
+  final List<ActivityRecord> _records = [];
+  final List<ParkedCar> _parkedCars = [];
+  final List<BarrelShipment> _barrelShipments = [];
   bool _isLoading = true;
   ServiceCategory _selectedCategory = ServiceCategory.all;
   StreamSubscription<QuerySnapshot>? _parkedCarsSubscription;
+  StreamSubscription<QuerySnapshot>? _barrelShipmentsSubscription;
+  bool _parkedLoaded = false;
+  bool _barrelsLoaded = false;
 
   @override
   void initState() {
@@ -60,39 +62,90 @@ class _HomeMenuState extends State<HomeMenu> {
       (snapshot) {
         final parkedCars =
             snapshot.docs.map((doc) => ParkedCar.fromFirestore(doc)).toList();
-        if (mounted) {
-          setState(() {
-            _records = parkedCars;
-            _isLoading = false;
-          });
-        }
+        _parkedCars
+          ..clear()
+          ..addAll(parkedCars);
+        _parkedLoaded = true;
+        _rebuildActivityRecords();
       },
       onError: (_) {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
+        _parkedLoaded = true;
+        _rebuildActivityRecords();
+      },
+    );
+
+    _barrelShipmentsSubscription = FirebaseFirestore.instance
+        .collection('barrelShipments')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .listen(
+      (snapshot) {
+        final shipments =
+            snapshot.docs.map((doc) => BarrelShipment.fromFirestore(doc)).toList();
+        _barrelShipments
+          ..clear()
+          ..addAll(shipments);
+        _barrelsLoaded = true;
+        _rebuildActivityRecords();
+      },
+      onError: (_) {
+        _barrelsLoaded = true;
+        _rebuildActivityRecords();
       },
     );
   }
 
-  List<dynamic> get _filteredRecords {
-    if (_selectedCategory == ServiceCategory.all) {
-      return _records;
+  void _rebuildActivityRecords() {
+    if (!mounted) return;
+    final combined = <ActivityRecord>[];
+
+    for (final car in _parkedCars) {
+      combined.add(
+        ActivityRecord(
+          category: ServiceCategory.parking,
+          title: '${car.carMake} ${car.carModel}'.trim(),
+          subtitle: '${car.ownerName} • ${car.trackingCode}',
+          date: car.parkingDate,
+          payload: car,
+        ),
+      );
     }
-    return _records.where((record) {
-      if (record is ParkedCar && _selectedCategory == ServiceCategory.parking) {
-        return true;
-      }
-      // Add similar checks for other record types here
-      return false;
-    }).toList();
+
+    for (final shipment in _barrelShipments) {
+      combined.add(
+        ActivityRecord(
+          category: ServiceCategory.barrels,
+          title: '${shipment.receiverName} • ${shipment.trackingCode}',
+          subtitle: shipment.senderName,
+          date: shipment.createdAt,
+          payload: shipment,
+        ),
+      );
+    }
+
+    combined.sort((a, b) => b.date.compareTo(a.date));
+
+    setState(() {
+      _records
+        ..clear()
+        ..addAll(combined);
+      _isLoading = !(_parkedLoaded && _barrelsLoaded);
+    });
+  }
+
+  List<ActivityRecord> get _filteredRecords {
+    if (_selectedCategory == ServiceCategory.all) {
+      return List<ActivityRecord>.from(_records);
+    }
+    return _records
+        .where((record) => record.category == _selectedCategory)
+        .toList();
   }
 
   @override
   void dispose() {
     _parkedCarsSubscription?.cancel();
+    _barrelShipmentsSubscription?.cancel();
     super.dispose();
   }
 
@@ -256,7 +309,7 @@ class _ActivitySection extends StatelessWidget {
   });
 
   final AppLocalizations l10n;
-  final List<dynamic> records;
+  final List<ActivityRecord> records;
   final bool isLoading;
   final ServiceCategory selectedCategory;
   final ValueChanged<ServiceCategory> onCategoryChanged;
@@ -373,31 +426,46 @@ class _ActivitySection extends StatelessWidget {
             ),
           )
         else
-          ...records.map(
-            (record) {
-              if (record is ParkedCar) {
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.pushNamed(
-                      context,
-                      '/parked-car-details',
-                      arguments: record,
-                    );
-                  },
-                  child: _RecordCard(
-                    title: '${record.carMake} ${record.carModel}',
-                    subtitle: record.ownerName,
-                    date: record.parkingDate,
-                    categoryLabel: _categoryLabel(ServiceCategory.parking, l10n),
-                    categoryColor: _categoryColor(ServiceCategory.parking),
-                    categoryIcon: _categoryIcon(ServiceCategory.parking),
-                  ),
+          ...records.map((record) {
+            final card = _RecordCard(
+              title: record.title,
+              subtitle: record.subtitle,
+              date: record.date,
+              categoryLabel: _categoryLabel(record.category, l10n),
+              categoryColor: _categoryColor(record.category),
+              categoryIcon: _categoryIcon(record.category),
+            );
+
+            void Function()? onTap;
+            if (record.category == ServiceCategory.parking &&
+                record.payload is ParkedCar) {
+              final car = record.payload as ParkedCar;
+              onTap = () {
+                Navigator.pushNamed(
+                  context,
+                  '/parked-car-details',
+                  arguments: car,
                 );
-              }
-              // Add similar checks for other record types here
-              return const SizedBox.shrink();
-            },
-          ),
+              };
+            } else if (record.category == ServiceCategory.barrels &&
+                record.payload is BarrelShipment) {
+              final shipment = record.payload as BarrelShipment;
+              onTap = () {
+                Navigator.pushNamed(
+                  context,
+                  '/barrel-shipment-details',
+                  arguments: shipment,
+                );
+              };
+            } else {
+              onTap = null;
+            }
+
+            if (onTap != null) {
+              return GestureDetector(onTap: onTap, child: card);
+            }
+            return card;
+          }),
       ],
     );
   }

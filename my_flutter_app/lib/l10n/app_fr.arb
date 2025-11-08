@@ -48,6 +48,51 @@
   "pleaseEnterCarModel": "Veuillez entrer le modèle de la voiture",
   "pleaseEnterCarYear": "Veuillez entrer l'année de la voiture",
   "pleaseEnterVinNumber": "Veuillez entrer le numéro VIN",
+  "pleaseEnterSenderName": "Veuillez entrer le nom de l'expéditeur",
+  "pleaseEnterSenderAddress": "Veuillez entrer l'adresse de l'expéditeur",
+  "pleaseEnterReceiverName": "Veuillez entrer le nom du destinataire",
+  "pleaseEnterReceiverPhone": "Veuillez entrer le téléphone du destinataire",
+  "pleaseEnterPrice": "Veuillez entrer le prix",
+  "pleaseEnterValidNumber": "Veuillez entrer un nombre valide",
+  "shipmentSavedWithTracking": "Expédition enregistrée. Numéro de suivi : {trackingCode}",
+  "@shipmentSavedWithTracking": {
+    "placeholders": {
+      "trackingCode": {}
+    }
+  },
+  "failedToSaveShipment": "Échec de l'enregistrement de l'expédition : {error}",
+  "@failedToSaveShipment": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "parkingSavedWithTracking": "Stationnement enregistré. Numéro de suivi : {trackingCode}",
+  "@parkingSavedWithTracking": {
+    "placeholders": {
+      "trackingCode": {}
+    }
+  },
+  "barrelShipmentDetails": "Détails de l'expédition de barils",
+  "senderInformation": "Informations sur l'expéditeur",
+  "receiverInformation": "Informations sur le destinataire",
+  "shipmentSummary": "Résumé de l'expédition",
+  "createdOnLabel": "Créé le",
+  "statusLabel": "Statut",
+  "updateShipment": "Mettre à jour l'expédition",
+  "reprintReceipt": "Réimprimer le reçu",
+  "shipmentUpdatedSuccessfully": "Expédition mise à jour avec succès !",
+  "failedToUpdateShipment": "Échec de la mise à jour de l'expédition : {error}",
+  "@failedToUpdateShipment": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "trackingNumber": "Numéro de suivi",
+  "trackingNumberCopied": "Numéro de suivi copié dans le presse-papiers",
+  "shipmentStatusPending": "En attente",
+  "shipmentStatusInTransit": "En transit",
+  "shipmentStatusCompleted": "Terminé",
+  "shipmentStatusCompletedNotice": "Cette expédition est marquée comme terminée et ne peut plus être modifiée.",
   "done": "Terminé",
   "account": "Compte",
   "role": "Rôle",

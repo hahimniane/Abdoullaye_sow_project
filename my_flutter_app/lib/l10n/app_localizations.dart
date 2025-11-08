@@ -386,6 +386,156 @@ abstract class AppLocalizations {
   /// **'Please enter the VIN number'**
   String get pleaseEnterVinNumber;
 
+  /// No description provided for @pleaseEnterSenderName.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter the sender name'**
+  String get pleaseEnterSenderName;
+
+  /// No description provided for @pleaseEnterSenderAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter the sender address'**
+  String get pleaseEnterSenderAddress;
+
+  /// No description provided for @pleaseEnterReceiverName.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter the receiver name'**
+  String get pleaseEnterReceiverName;
+
+  /// No description provided for @pleaseEnterReceiverPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter the receiver phone number'**
+  String get pleaseEnterReceiverPhone;
+
+  /// No description provided for @pleaseEnterPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter the price'**
+  String get pleaseEnterPrice;
+
+  /// No description provided for @pleaseEnterValidNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter a valid number'**
+  String get pleaseEnterValidNumber;
+
+  /// No description provided for @shipmentSavedWithTracking.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipment saved. Tracking number: {trackingCode}'**
+  String shipmentSavedWithTracking(Object trackingCode);
+
+  /// No description provided for @failedToSaveShipment.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to save shipment: {error}'**
+  String failedToSaveShipment(Object error);
+
+  /// No description provided for @parkingSavedWithTracking.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking record saved. Tracking number: {trackingCode}'**
+  String parkingSavedWithTracking(Object trackingCode);
+
+  /// No description provided for @barrelShipmentDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrel Shipment Details'**
+  String get barrelShipmentDetails;
+
+  /// No description provided for @senderInformation.
+  ///
+  /// In en, this message translates to:
+  /// **'Sender Information'**
+  String get senderInformation;
+
+  /// No description provided for @receiverInformation.
+  ///
+  /// In en, this message translates to:
+  /// **'Receiver Information'**
+  String get receiverInformation;
+
+  /// No description provided for @shipmentSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipment Summary'**
+  String get shipmentSummary;
+
+  /// No description provided for @createdOnLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Created on'**
+  String get createdOnLabel;
+
+  /// No description provided for @statusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get statusLabel;
+
+  /// No description provided for @updateShipment.
+  ///
+  /// In en, this message translates to:
+  /// **'Update Shipment'**
+  String get updateShipment;
+
+  /// No description provided for @reprintReceipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Reprint Receipt'**
+  String get reprintReceipt;
+
+  /// No description provided for @shipmentUpdatedSuccessfully.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipment updated successfully!'**
+  String get shipmentUpdatedSuccessfully;
+
+  /// No description provided for @failedToUpdateShipment.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to update shipment: {error}'**
+  String failedToUpdateShipment(Object error);
+
+  /// No description provided for @trackingNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking Number'**
+  String get trackingNumber;
+
+  /// No description provided for @trackingNumberCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking number copied to clipboard'**
+  String get trackingNumberCopied;
+
+  /// No description provided for @shipmentStatusPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get shipmentStatusPending;
+
+  /// No description provided for @shipmentStatusInTransit.
+  ///
+  /// In en, this message translates to:
+  /// **'In Transit'**
+  String get shipmentStatusInTransit;
+
+  /// No description provided for @shipmentStatusCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get shipmentStatusCompleted;
+
+  /// No description provided for @shipmentStatusCompletedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'This shipment is marked as completed and can no longer be edited.'**
+  String get shipmentStatusCompletedNotice;
+
   /// No description provided for @done.
   ///
   /// In en, this message translates to:

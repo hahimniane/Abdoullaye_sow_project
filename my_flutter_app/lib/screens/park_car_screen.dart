@@ -10,6 +10,7 @@ import '../models/parked_car.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../data/car_catalog.dart';
+import '../utils/tracking_code_generator.dart';
 
 class ParkCarScreen extends StatefulWidget {
   const ParkCarScreen({super.key});
@@ -191,9 +192,14 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     });
 
     try {
-      // 1. Save to Firestore
+      final trackingCode = await TrackingCodeGenerator.generateUniqueCode(
+        prefix: 'PC',
+        collectionPath: 'parkedCars',
+      );
+
       final newRecord = ParkedCar(
-        id: '', // Firestore will generate this
+        id: '',
+        trackingCode: trackingCode,
         ownerName: _nameController.text,
         carMake: _selectedMake!,
         carModel: _selectedModel!,
@@ -206,14 +212,17 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
           .collection('parkedCars')
           .add(newRecord.toFirestore());
 
-      // 2. Generate and Print PDF
-      await _generateAndPrintReceipt(docRef.id);
+      final savedRecord = newRecord.copyWith(id: docRef.id);
 
-      // 3. Show success message
+      await _generateAndPrintReceipt(savedRecord);
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context)!.receiptGenerated),
+            content: Text(
+              AppLocalizations.of(context)!
+                  .parkingSavedWithTracking(savedRecord.trackingCode),
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -237,7 +246,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     }
   }
 
-  Future<void> _generateAndPrintReceipt(String receiptId) async {
+  Future<void> _generateAndPrintReceipt(ParkedCar record) async {
     final pdf = pw.Document();
 
     pdf.addPage(
@@ -306,13 +315,17 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
 
                       _buildReceiptRow(
                         'Receipt Number:',
-                        receiptId,
+                        record.id.isEmpty ? record.trackingCode : record.id,
+                      ),
+                      _buildReceiptRow(
+                        'Tracking Number:',
+                        record.trackingCode,
                       ),
                       _buildReceiptRow(
                         'Date & Time:',
                         DateFormat(
                           'MMM dd, yyyy - HH:mm',
-                        ).format(_selectedDateTime),
+                        ).format(record.parkingDate),
                       ),
                       _buildReceiptRow(
                         'Generated On:',

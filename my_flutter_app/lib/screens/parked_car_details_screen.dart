@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -25,6 +26,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
   late TextEditingController _ownerNameController;
   late TextEditingController _costPerDayController;
   late TextEditingController _vinController;
+  late final String _trackingCode;
   DateTime? _parkingEndDate;
   late DateTime _parkingStartDate;
   late String _status;
@@ -44,6 +46,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     _ownerNameController = TextEditingController(text: widget.parkedCar.ownerName);
     _costPerDayController = TextEditingController();
     _vinController = TextEditingController(text: widget.parkedCar.vinNumber);
+    _trackingCode = widget.parkedCar.trackingCode;
     _status = widget.parkedCar.status;
     _parkingStartDate = widget.parkedCar.parkingDate;
     _parkingEndDate = widget.parkedCar.parkingEndDate;
@@ -439,7 +442,8 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                       style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
                     ),
                     pw.SizedBox(height: 15),
-                    _buildPdfRow('Receipt Number:', widget.parkedCar.id),
+                        _buildPdfRow('Receipt Number:', widget.parkedCar.id),
+                        _buildPdfRow('Tracking Number:', _trackingCode),
                     _buildPdfRow('Generated On:', DateFormat('MMM dd, yyyy - HH:mm').format(DateTime.now())),
                     pw.SizedBox(height: 20),
                     pw.Text(
@@ -510,6 +514,18 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
         );
       }
     }
+  }
+
+  Future<void> _copyTrackingNumber() async {
+    await Clipboard.setData(ClipboardData(text: _trackingCode));
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(l10n.trackingNumberCopied),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   pw.Widget _buildPdfRow(String label, String value) {
@@ -599,6 +615,39 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      l10n.trackingNumber,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _trackingCode,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: _copyTrackingNumber,
+                                icon: const Icon(Icons.copy, color: Color(0xFF667eea)),
+                                tooltip: l10n.trackingNumber,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
                           _buildInfoCard(canEdit),
                           const SizedBox(height: 24),
                           _buildBillingCard(l10n, canEdit),

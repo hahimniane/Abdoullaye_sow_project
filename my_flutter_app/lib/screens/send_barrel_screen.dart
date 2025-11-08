@@ -1,9 +1,110 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
+import '../models/barrel_shipment.dart';
+import '../utils/barrel_receipt_generator.dart';
+import '../utils/tracking_code_generator.dart';
 
-class SendBarrelScreen extends StatelessWidget {
+class SendBarrelScreen extends StatefulWidget {
   const SendBarrelScreen({super.key});
+
+  @override
+  State<SendBarrelScreen> createState() => _SendBarrelScreenState();
+}
+
+class _SendBarrelScreenState extends State<SendBarrelScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _senderNameController = TextEditingController();
+  final _senderAddressController = TextEditingController();
+  final _receiverNameController = TextEditingController();
+  final _receiverPhoneController = TextEditingController();
+  final _priceController = TextEditingController();
+  bool _isSubmitting = false;
+
+  @override
+  void dispose() {
+    _senderNameController.dispose();
+    _senderAddressController.dispose();
+    _receiverNameController.dispose();
+    _receiverPhoneController.dispose();
+    _priceController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    final l10n = AppLocalizations.of(context)!;
+
+    final price = double.tryParse(_priceController.text.trim());
+    if (price == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.pleaseEnterValidNumber),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      final trackingCode = await TrackingCodeGenerator.generateUniqueCode(
+        prefix: 'BS',
+        collectionPath: 'barrelShipments',
+      );
+
+      final shipment = BarrelShipment(
+        id: '',
+        trackingCode: trackingCode,
+        senderName: _senderNameController.text.trim(),
+        senderAddress: _senderAddressController.text.trim(),
+        receiverName: _receiverNameController.text.trim(),
+        receiverPhone: _receiverPhoneController.text.trim(),
+        price: price,
+        status: 'pending',
+        createdAt: DateTime.now(),
+      );
+
+      final docRef = await FirebaseFirestore.instance
+          .collection('barrelShipments')
+          .add(shipment.toFirestore());
+
+      final savedShipment =
+          shipment.copyWith(id: docRef.id, trackingCode: shipment.trackingCode);
+      await generateBarrelShipmentReceipt(shipment: savedShipment);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text(l10n.shipmentSavedWithTracking(savedShipment.trackingCode)),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.failedToSaveShipment(e)),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -134,47 +235,107 @@ class SendBarrelScreen extends StatelessWidget {
                             ),
                           ],
                         ),
-                        child: Column(
-                          children: [
-                            _RoundedTextField(label: AppLocalizations.of(context)!.senderName),
-                            const SizedBox(height: 16),
-                            _RoundedTextField(label: AppLocalizations.of(context)!.address),
-                            const SizedBox(height: 16),
-                            _RoundedTextField(
-                              label: AppLocalizations.of(context)!.receiverName,
-                            ),
-                            const SizedBox(height: 16),
-                            _RoundedTextField(
-                              label: AppLocalizations.of(context)!.receiverPhone,
-                            ),
-                            const SizedBox(height: 16),
-                            _RoundedTextField(label: AppLocalizations.of(context)!.price),
-                            const SizedBox(height: 32),
-                            SizedBox(
-                              width: double.infinity,
-                              height: 56,
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF667eea),
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  elevation: 0,
-                                  splashFactory: NoSplash.splashFactory,
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            children: [
+                              _RoundedTextField(
+                                label: AppLocalizations.of(context)!.senderName,
+                                controller: _senderNameController,
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return AppLocalizations.of(context)!.pleaseEnterSenderName;
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              _RoundedTextField(
+                                label: AppLocalizations.of(context)!.address,
+                                controller: _senderAddressController,
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return AppLocalizations.of(context)!.pleaseEnterSenderAddress;
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              _RoundedTextField(
+                                label: AppLocalizations.of(context)!.receiverName,
+                                controller: _receiverNameController,
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return AppLocalizations.of(context)!.pleaseEnterReceiverName;
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              _RoundedTextField(
+                                label: AppLocalizations.of(context)!.receiverPhone,
+                                controller: _receiverPhoneController,
+                                keyboardType: TextInputType.phone,
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return AppLocalizations.of(context)!.pleaseEnterReceiverPhone;
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              _RoundedTextField(
+                                label: AppLocalizations.of(context)!.price,
+                                controller: _priceController,
+                                keyboardType: const TextInputType.numberWithOptions(
+                                  decimal: true,
                                 ),
-                                onPressed: () {},
-                                child: Text(
-                                  AppLocalizations.of(context)!.submit,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return AppLocalizations.of(context)!.pleaseEnterPrice;
+                                  }
+                                  if (double.tryParse(value) == null) {
+                                    return AppLocalizations.of(context)!.pleaseEnterValidNumber;
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 32),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 56,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF667eea),
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    elevation: 0,
+                                    splashFactory: NoSplash.splashFactory,
                                   ),
-                                  overflow: TextOverflow.ellipsis,
+                                  onPressed: _isSubmitting ? null : _submit,
+                                  child: _isSubmitting
+                                      ? const SizedBox(
+                                          height: 24,
+                                          width: 24,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                          ),
+                                        )
+                                      : Text(
+                                          AppLocalizations.of(context)!.submit,
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -190,12 +351,24 @@ class SendBarrelScreen extends StatelessWidget {
 }
 
 class _RoundedTextField extends StatelessWidget {
+  const _RoundedTextField({
+    required this.label,
+    this.controller,
+    this.validator,
+    this.keyboardType,
+  });
+
   final String label;
-  const _RoundedTextField({required this.label});
+  final TextEditingController? controller;
+  final String? Function(String?)? validator;
+  final TextInputType? keyboardType;
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
+    return TextFormField(
+      controller: controller,
+      validator: validator,
+      keyboardType: keyboardType,
       decoration: InputDecoration(
         labelText: label,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -206,6 +379,10 @@ class _RoundedTextField extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFF667eea), width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.red, width: 2),
         ),
         filled: true,
         fillColor: Colors.grey.shade50,

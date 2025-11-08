@@ -158,6 +158,91 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pleaseEnterVinNumber => 'Please enter the VIN number';
 
   @override
+  String get pleaseEnterSenderName => 'Please enter the sender name';
+
+  @override
+  String get pleaseEnterSenderAddress => 'Please enter the sender address';
+
+  @override
+  String get pleaseEnterReceiverName => 'Please enter the receiver name';
+
+  @override
+  String get pleaseEnterReceiverPhone =>
+      'Please enter the receiver phone number';
+
+  @override
+  String get pleaseEnterPrice => 'Please enter the price';
+
+  @override
+  String get pleaseEnterValidNumber => 'Please enter a valid number';
+
+  @override
+  String shipmentSavedWithTracking(Object trackingCode) {
+    return 'Shipment saved. Tracking number: $trackingCode';
+  }
+
+  @override
+  String failedToSaveShipment(Object error) {
+    return 'Failed to save shipment: $error';
+  }
+
+  @override
+  String parkingSavedWithTracking(Object trackingCode) {
+    return 'Parking record saved. Tracking number: $trackingCode';
+  }
+
+  @override
+  String get barrelShipmentDetails => 'Barrel Shipment Details';
+
+  @override
+  String get senderInformation => 'Sender Information';
+
+  @override
+  String get receiverInformation => 'Receiver Information';
+
+  @override
+  String get shipmentSummary => 'Shipment Summary';
+
+  @override
+  String get createdOnLabel => 'Created on';
+
+  @override
+  String get statusLabel => 'Status';
+
+  @override
+  String get updateShipment => 'Update Shipment';
+
+  @override
+  String get reprintReceipt => 'Reprint Receipt';
+
+  @override
+  String get shipmentUpdatedSuccessfully => 'Shipment updated successfully!';
+
+  @override
+  String failedToUpdateShipment(Object error) {
+    return 'Failed to update shipment: $error';
+  }
+
+  @override
+  String get trackingNumber => 'Tracking Number';
+
+  @override
+  String get trackingNumberCopied => 'Tracking number copied to clipboard';
+
+  @override
+  String get shipmentStatusPending => 'Pending';
+
+  @override
+  String get shipmentStatusInTransit => 'In Transit';
+
+  @override
+  String get shipmentStatusCompleted => 'Completed';
+
+  @override
+  String get shipmentStatusCompletedNotice =>
+      'This shipment is marked as completed and can no longer be edited.';
+
+  @override
   String get done => 'Done';
 
   @override

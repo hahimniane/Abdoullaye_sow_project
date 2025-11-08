@@ -161,6 +161,95 @@ class AppLocalizationsFr extends AppLocalizations {
   String get pleaseEnterVinNumber => 'Veuillez entrer le numéro VIN';
 
   @override
+  String get pleaseEnterSenderName => 'Veuillez entrer le nom de l\'expéditeur';
+
+  @override
+  String get pleaseEnterSenderAddress =>
+      'Veuillez entrer l\'adresse de l\'expéditeur';
+
+  @override
+  String get pleaseEnterReceiverName =>
+      'Veuillez entrer le nom du destinataire';
+
+  @override
+  String get pleaseEnterReceiverPhone =>
+      'Veuillez entrer le téléphone du destinataire';
+
+  @override
+  String get pleaseEnterPrice => 'Veuillez entrer le prix';
+
+  @override
+  String get pleaseEnterValidNumber => 'Veuillez entrer un nombre valide';
+
+  @override
+  String shipmentSavedWithTracking(Object trackingCode) {
+    return 'Expédition enregistrée. Numéro de suivi : $trackingCode';
+  }
+
+  @override
+  String failedToSaveShipment(Object error) {
+    return 'Échec de l\'enregistrement de l\'expédition : $error';
+  }
+
+  @override
+  String parkingSavedWithTracking(Object trackingCode) {
+    return 'Stationnement enregistré. Numéro de suivi : $trackingCode';
+  }
+
+  @override
+  String get barrelShipmentDetails => 'Détails de l\'expédition de barils';
+
+  @override
+  String get senderInformation => 'Informations sur l\'expéditeur';
+
+  @override
+  String get receiverInformation => 'Informations sur le destinataire';
+
+  @override
+  String get shipmentSummary => 'Résumé de l\'expédition';
+
+  @override
+  String get createdOnLabel => 'Créé le';
+
+  @override
+  String get statusLabel => 'Statut';
+
+  @override
+  String get updateShipment => 'Mettre à jour l\'expédition';
+
+  @override
+  String get reprintReceipt => 'Réimprimer le reçu';
+
+  @override
+  String get shipmentUpdatedSuccessfully =>
+      'Expédition mise à jour avec succès !';
+
+  @override
+  String failedToUpdateShipment(Object error) {
+    return 'Échec de la mise à jour de l\'expédition : $error';
+  }
+
+  @override
+  String get trackingNumber => 'Numéro de suivi';
+
+  @override
+  String get trackingNumberCopied =>
+      'Numéro de suivi copié dans le presse-papiers';
+
+  @override
+  String get shipmentStatusPending => 'En attente';
+
+  @override
+  String get shipmentStatusInTransit => 'En transit';
+
+  @override
+  String get shipmentStatusCompleted => 'Terminé';
+
+  @override
+  String get shipmentStatusCompletedNotice =>
+      'Cette expédition est marquée comme terminée et ne peut plus être modifiée.';
+
+  @override
   String get done => 'Terminé';
 
   @override
