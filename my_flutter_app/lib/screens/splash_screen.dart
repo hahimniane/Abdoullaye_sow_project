@@ -23,12 +23,9 @@ class _SplashScreenState extends State<SplashScreen> {
 
     _hasNavigated = true;
 
-    final String targetRoute;
-    if (authProvider.isAuthenticated) {
-      targetRoute = authProvider.isStaff ? '/staff-home' : '/customer_home';
-    } else {
-      targetRoute = '/login';
-    }
+    final String targetRoute = authProvider.isAuthenticated
+        ? (authProvider.isStaff ? '/staff-home' : '/customer_home')
+        : '/customer_home';
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {

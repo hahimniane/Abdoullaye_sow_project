@@ -41,7 +41,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 10,
               offset: const Offset(0, -2),
             ),
@@ -98,11 +98,11 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color:
-              isSelected ? Colors.white.withOpacity(0.2) : Colors.transparent,
+              isSelected ? Colors.white.withValues(alpha: 0.2) : Colors.transparent,
           borderRadius: BorderRadius.circular(25),
           border:
               isSelected
-                  ? Border.all(color: Colors.white.withOpacity(0.3), width: 1)
+                  ? Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1)
                   : null,
         ),
         child: Row(

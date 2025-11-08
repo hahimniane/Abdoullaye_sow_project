@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/parked_car.dart';
 import '../models/barrel_shipment.dart';
+import '../models/transport_request.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
 
@@ -36,12 +37,15 @@ class _HomeMenuState extends State<HomeMenu> {
   final List<ActivityRecord> _records = [];
   final List<ParkedCar> _parkedCars = [];
   final List<BarrelShipment> _barrelShipments = [];
+  final List<TransportRequest> _transportRequests = [];
   bool _isLoading = true;
   ServiceCategory _selectedCategory = ServiceCategory.all;
   StreamSubscription<QuerySnapshot>? _parkedCarsSubscription;
   StreamSubscription<QuerySnapshot>? _barrelShipmentsSubscription;
+  StreamSubscription<QuerySnapshot>? _transportRequestsSubscription;
   bool _parkedLoaded = false;
   bool _barrelsLoaded = false;
+  bool _transportLoaded = false;
 
   @override
   void initState() {
@@ -93,6 +97,27 @@ class _HomeMenuState extends State<HomeMenu> {
         _rebuildActivityRecords();
       },
     );
+
+    _transportRequestsSubscription = FirebaseFirestore.instance
+        .collection('transportRequests')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .listen(
+      (snapshot) {
+        final requests = snapshot.docs
+            .map((doc) => TransportRequest.fromFirestore(doc))
+            .toList();
+        _transportRequests
+          ..clear()
+          ..addAll(requests);
+        _transportLoaded = true;
+        _rebuildActivityRecords();
+      },
+      onError: (_) {
+        _transportLoaded = true;
+        _rebuildActivityRecords();
+      },
+    );
   }
 
   void _rebuildActivityRecords() {
@@ -123,13 +148,25 @@ class _HomeMenuState extends State<HomeMenu> {
       );
     }
 
+    for (final request in _transportRequests) {
+      combined.add(
+        ActivityRecord(
+          category: ServiceCategory.transport,
+          title: '${request.carMake} ${request.carModel} • ${request.trackingCode}',
+          subtitle: request.ownerName,
+          date: request.createdAt,
+          payload: request,
+        ),
+      );
+    }
+
     combined.sort((a, b) => b.date.compareTo(a.date));
 
     setState(() {
       _records
         ..clear()
         ..addAll(combined);
-      _isLoading = !(_parkedLoaded && _barrelsLoaded);
+      _isLoading = !(_parkedLoaded && _barrelsLoaded && _transportLoaded);
     });
   }
 
@@ -146,6 +183,7 @@ class _HomeMenuState extends State<HomeMenu> {
   void dispose() {
     _parkedCarsSubscription?.cancel();
     _barrelShipmentsSubscription?.cancel();
+    _transportRequestsSubscription?.cancel();
     super.dispose();
   }
 
@@ -210,9 +248,9 @@ class _WelcomeSection extends StatelessWidget {
       width: double.infinity,
       padding: EdgeInsets.all(width * 0.06),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
+        color: Colors.white.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.25)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
       ),
       child: Column(
         children: [
@@ -220,7 +258,7 @@ class _WelcomeSection extends StatelessWidget {
             width: 70,
             height: 70,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.18),
+              color: Colors.white.withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(24),
             ),
             child: const Icon(Icons.business, color: Colors.white, size: 32),
@@ -262,7 +300,7 @@ class _ServicesSection extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 18,
             offset: const Offset(0, 12),
           ),
@@ -378,6 +416,7 @@ class _ActivitySection extends StatelessWidget {
           child: Row(
             children: ServiceCategory.values.map((category) {
               final isSelected = category == selectedCategory;
+              final chipColor = _categoryColor(category);
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: ChoiceChip(
@@ -387,17 +426,22 @@ class _ActivitySection extends StatelessWidget {
                   avatar: Icon(
                     _categoryIcon(category),
                     size: 18,
-                    color: isSelected ? Colors.white : Colors.white70,
+                    color: isSelected ? Colors.white : chipColor,
                   ),
                   labelStyle: TextStyle(
-                    color: isSelected ? Colors.white : Colors.white70,
+                    color: isSelected ? Colors.white : chipColor,
                     fontWeight: FontWeight.w600,
                   ),
-                  backgroundColor: Colors.white.withOpacity(0.12),
-                  selectedColor: _categoryColor(category),
+                  backgroundColor:
+                      chipColor.withValues(alpha: isSelected ? 0.22 : 0.18),
+                  selectedColor: chipColor,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(color: Colors.white.withOpacity(0.2)),
+                    side: BorderSide(
+                      color: chipColor.withValues(
+                        alpha: isSelected ? 0.55 : 0.35,
+                      ),
+                    ),
                   ),
                 ),
               );
@@ -412,14 +456,14 @@ class _ActivitySection extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.white.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(24),
             ),
             child: Text(
               l10n.noRecordsYet,
               style: TextStyle(
                 fontSize: 15,
-                color: Colors.white.withOpacity(0.7),
+                color: Colors.white.withValues(alpha: 0.7),
                 fontWeight: FontWeight.w600,
               ),
               textAlign: TextAlign.center,
@@ -432,7 +476,6 @@ class _ActivitySection extends StatelessWidget {
               subtitle: record.subtitle,
               date: record.date,
               categoryLabel: _categoryLabel(record.category, l10n),
-              categoryColor: _categoryColor(record.category),
               categoryIcon: _categoryIcon(record.category),
             );
 
@@ -457,6 +500,16 @@ class _ActivitySection extends StatelessWidget {
                   arguments: shipment,
                 );
               };
+            } else if (record.category == ServiceCategory.transport &&
+                record.payload is TransportRequest) {
+              final request = record.payload as TransportRequest;
+              onTap = () {
+                Navigator.pushNamed(
+                  context,
+                  '/transport-request-details',
+                  arguments: request,
+                );
+              };
             } else {
               onTap = null;
             }
@@ -477,7 +530,6 @@ class _RecordCard extends StatelessWidget {
     required this.subtitle,
     required this.date,
     required this.categoryLabel,
-    required this.categoryColor,
     required this.categoryIcon,
   });
 
@@ -485,64 +537,103 @@ class _RecordCard extends StatelessWidget {
   final String subtitle;
   final DateTime date;
   final String categoryLabel;
-  final Color categoryColor;
   final IconData categoryIcon;
 
   @override
   Widget build(BuildContext context) {
     final formatter = DateFormat('MMM dd, yyyy');
+    const baseGradient = [
+      Color(0xFF5C6BC0),
+      Color(0xFF7E57C2),
+    ];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: baseGradient,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF5C6BC0).withValues(alpha: 0.22),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: categoryColor.withOpacity(0.8),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: categoryColor.withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                )
-              ],
-            ),
-            child: Icon(categoryIcon, color: Colors.white, size: 24),
-          ),
-          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Row(
+                  children: [
+                    Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(categoryIcon,
+                              color: Colors.white, size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            categoryLabel,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      formatter.format(date),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white.withValues(alpha: 0.7),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 Text(
                   title,
                   style: const TextStyle(
-                    fontSize: 15,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 Text(
-                  '$subtitle • ${formatter.format(date)}',
+                  subtitle,
                   style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.white.withOpacity(0.8),
+                    fontSize: 14,
+                    color: Colors.white.withValues(alpha: 0.85),
                   ),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 12),
-          Icon(Icons.arrow_forward_ios, color: Colors.white.withOpacity(0.6), size: 16),
+          Icon(
+            Icons.arrow_forward_ios,
+            color: Colors.white.withValues(alpha: 0.55),
+            size: 16,
+          ),
         ],
       ),
     );

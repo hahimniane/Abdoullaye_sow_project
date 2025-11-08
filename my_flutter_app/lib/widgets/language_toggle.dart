@@ -11,9 +11,9 @@ class LanguageToggle extends StatelessWidget {
       builder: (context, languageProvider, child) {
         return Container(
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.2),
+            color: Colors.white.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1),
           ),
           child: Material(
             color: Colors.transparent,

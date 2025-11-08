@@ -45,5 +45,11 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We need access to your photo library to choose car images.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>We add selected car images to your library.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>We use the camera to capture car photos.</string>
 </dict>
 </plist>

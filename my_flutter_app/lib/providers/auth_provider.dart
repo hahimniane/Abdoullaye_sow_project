@@ -47,14 +47,14 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _checkUserRole() async {
     if (_user != null) {
       try {
-        print('🔍 Fetching user document from Firestore...');
+        debugPrint('🔍 Fetching user document from Firestore...');
         final userDoc =
             await _firestore.collection('users').doc(_user!.uid).get();
         if (userDoc.exists) {
           final role = userDoc.data()?['role'];
           _isStaff = role == 'staff' || role == 'admin';
           _isAdmin = role == 'admin';
-          print(
+          debugPrint(
             '👥 User role: ${_isStaff
                 ? 'staff'
                 : _isAdmin
@@ -62,13 +62,13 @@ class AuthProvider extends ChangeNotifier {
                 : 'customer'}',
           );
         } else {
-          print('📄 User document not found, creating new profile...');
+          debugPrint('📄 User document not found, creating new profile...');
           // Create user profile if it doesn't exist
           await _createUserProfile();
         }
         // No longer need to notify here, _onAuthStateChanged will do it.
       } catch (e) {
-        print('❌ Error checking user role: $e');
+        debugPrint('❌ Error checking user role: $e');
         _isStaff = false;
         _isAdmin = false;
       }
@@ -78,7 +78,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _createUserProfile() async {
     if (_user != null) {
       try {
-        print('📝 Creating new user profile in Firestore...');
+        debugPrint('📝 Creating new user profile in Firestore...');
         await _firestore.collection('users').doc(_user!.uid).set({
           'email': _user!.email,
           'role': 'customer', // Default role
@@ -86,9 +86,9 @@ class AuthProvider extends ChangeNotifier {
         });
         _isStaff = false;
         _isAdmin = false;
-        print('✅ User profile created successfully with customer role');
+        debugPrint('✅ User profile created successfully with customer role');
       } catch (e) {
-        print('❌ Error creating user profile: $e');
+        debugPrint('❌ Error creating user profile: $e');
         // Re-throw the error so the caller knows the profile creation failed
         rethrow;
       }
@@ -96,36 +96,36 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<bool> authenticate(String email, String password) async {
-    print('🔐 Starting authentication for email: $email');
+    debugPrint('🔐 Starting authentication for email: $email');
     _isLoading = true;
     notifyListeners();
 
     try {
-      print('📡 Attempting Firebase authentication...');
+      debugPrint('📡 Attempting Firebase authentication...');
       final userCredential = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      print('✅ Firebase authentication successful!');
-      print('👤 User ID: ${userCredential.user?.uid}');
-      print('📧 User Email: ${userCredential.user?.email}');
+      debugPrint('✅ Firebase authentication successful!');
+      debugPrint('👤 User ID: ${userCredential.user?.uid}');
+      debugPrint('📧 User Email: ${userCredential.user?.email}');
 
       _user = userCredential.user;
       _userEmail = userCredential.user?.email;
 
       // Check if user profile exists, if not create one
       if (_user != null) {
-        print('🔍 Checking user role in Firestore...');
+        debugPrint('🔍 Checking user role in Firestore...');
         await _checkUserRole();
       }
 
       _isLoading = false;
       notifyListeners();
-      print('🎉 Authentication completed successfully!');
+      debugPrint('🎉 Authentication completed successfully!');
       return true;
     } on FirebaseAuthException catch (e) {
-      print('❌ Firebase Auth Exception: ${e.code} - ${e.message}');
+      debugPrint('❌ Firebase Auth Exception: ${e.code} - ${e.message}');
       _isLoading = false;
       notifyListeners();
 
@@ -150,10 +150,10 @@ class AuthProvider extends ChangeNotifier {
           errorMessage = 'Authentication failed: ${e.message}';
       }
 
-      print('🚨 Throwing error: $errorMessage');
+      debugPrint('🚨 Throwing error: $errorMessage');
       throw errorMessage;
     } catch (e) {
-      print('💥 Unexpected error during authentication: $e');
+      debugPrint('💥 Unexpected error during authentication: $e');
       _isLoading = false;
       notifyListeners();
       throw 'An unexpected error occurred: $e';
@@ -169,19 +169,19 @@ class AuthProvider extends ChangeNotifier {
       _userEmail = null;
       notifyListeners();
     } catch (e) {
-      print('Error during logout: $e');
+      debugPrint('Error during logout: $e');
     }
   }
 
   Future<bool> signUp(String email, String password) async {
-    print('📝 Starting sign up for email: $email');
+    debugPrint('📝 Starting sign up for email: $email');
     _isLoading = true;
     notifyListeners();
 
     User? createdUser;
 
     try {
-      print('📡 Creating new user with Firebase Auth...');
+      debugPrint('📡 Creating new user with Firebase Auth...');
       final userCredential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
@@ -193,15 +193,15 @@ class AuthProvider extends ChangeNotifier {
         throw 'User creation returned null. Please check Firebase configuration.';
       }
 
-      print('✅ Firebase Auth user created successfully!');
-      print('👤 User ID: ${createdUser.uid}');
-      print('📧 User Email: ${createdUser.email}');
+      debugPrint('✅ Firebase Auth user created successfully!');
+      debugPrint('👤 User ID: ${createdUser.uid}');
+      debugPrint('📧 User Email: ${createdUser.email}');
 
       _user = createdUser;
       _userEmail = createdUser.email;
 
       // Create user profile in Firestore with customer role
-      print('📝 Creating user profile in Firestore...');
+      debugPrint('📝 Creating user profile in Firestore...');
       try {
         await _firestore.collection('users').doc(createdUser.uid).set({
           'email': createdUser.email,
@@ -210,21 +210,21 @@ class AuthProvider extends ChangeNotifier {
         });
         _isStaff = false;
         _isAdmin = false;
-        print('✅ Firestore user profile created successfully with customer role');
+        debugPrint('✅ Firestore user profile created successfully with customer role');
       } catch (firestoreError) {
-        print('❌ Firestore Error: $firestoreError');
+        debugPrint('❌ Firestore Error: $firestoreError');
         // If Firestore fails, delete the auth user to keep things consistent
-        print('⚠️ Rolling back Firebase Auth user due to Firestore error...');
+        debugPrint('⚠️ Rolling back Firebase Auth user due to Firestore error...');
         await createdUser.delete();
         throw 'Failed to create user profile in database: $firestoreError';
       }
 
       _isLoading = false;
       notifyListeners();
-      print('🎉 Sign up completed successfully!');
+      debugPrint('🎉 Sign up completed successfully!');
       return true;
     } on FirebaseAuthException catch (e) {
-      print('❌ Firebase Auth Exception: ${e.code} - ${e.message}');
+      debugPrint('❌ Firebase Auth Exception: ${e.code} - ${e.message}');
       _isLoading = false;
       notifyListeners();
 
@@ -249,20 +249,20 @@ class AuthProvider extends ChangeNotifier {
           errorMessage = 'Sign up failed: ${e.message}';
       }
 
-      print('🚨 Throwing error: $errorMessage');
+      debugPrint('🚨 Throwing error: $errorMessage');
       throw errorMessage;
     } catch (e) {
-      print('💥 Unexpected error during sign up: $e');
+      debugPrint('💥 Unexpected error during sign up: $e');
       _isLoading = false;
       notifyListeners();
 
       // If we created a user but hit an error, try to clean up
       if (createdUser != null) {
         try {
-          print('⚠️ Cleaning up created user due to error...');
+          debugPrint('⚠️ Cleaning up created user due to error...');
           await createdUser.delete();
         } catch (deleteError) {
-          print('❌ Failed to clean up user: $deleteError');
+          debugPrint('❌ Failed to clean up user: $deleteError');
         }
       }
 
@@ -304,7 +304,7 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
-      print('Error promoting user to staff: $e');
+      debugPrint('Error promoting user to staff: $e');
       throw 'Failed to promote user to staff';
     }
   }
@@ -317,7 +317,7 @@ class AuthProvider extends ChangeNotifier {
     }
 
     try {
-      print('📡 Calling Cloud Function to update user role...');
+      debugPrint('📡 Calling Cloud Function to update user role...');
       
       // Call the Cloud Function to update the user role
       final HttpsCallable callable = _functions.httpsCallable('updateUserRole');
@@ -327,10 +327,10 @@ class AuthProvider extends ChangeNotifier {
       });
 
       // Log the result
-      print('✅ Cloud Function response: ${result.data}');
+      debugPrint('✅ Cloud Function response: ${result.data}');
       
       if (result.data['success'] == true) {
-        print('🎉 User role updated successfully to: ${result.data['newRole']}');
+        debugPrint('🎉 User role updated successfully to: ${result.data['newRole']}');
         
         // If it's the current user, update the local state
         if (_user?.uid == userId) {
@@ -343,7 +343,7 @@ class AuthProvider extends ChangeNotifier {
         throw 'Failed to update user role: ${result.data['message'] ?? 'Unknown error'}';
       }
     } on FirebaseFunctionsException catch (e) {
-      print('❌ Firebase Functions Exception: ${e.code} - ${e.message}');
+      debugPrint('❌ Firebase Functions Exception: ${e.code} - ${e.message}');
       
       // Handle specific Firebase Functions errors
       switch (e.code) {
@@ -361,7 +361,7 @@ class AuthProvider extends ChangeNotifier {
           throw e.message ?? 'Failed to update user role: ${e.code}';
       }
     } catch (e) {
-      print('❌ Unexpected error calling Cloud Function: $e');
+      debugPrint('❌ Unexpected error calling Cloud Function: $e');
       throw 'Failed to update user role';
     }
   }
@@ -369,7 +369,7 @@ class AuthProvider extends ChangeNotifier {
   // Method to add a new staff user (for admin use)
   Future<void> addStaffUser(String email, String password) async {
     try {
-      print('📡 Calling Cloud Function to create staff user...');
+      debugPrint('📡 Calling Cloud Function to create staff user...');
       
       // Call the Cloud Function to create the user
       final HttpsCallable callable = _functions.httpsCallable('createStaffUser');
@@ -379,15 +379,15 @@ class AuthProvider extends ChangeNotifier {
       });
 
       // Log the result
-      print('✅ Cloud Function response: ${result.data}');
+      debugPrint('✅ Cloud Function response: ${result.data}');
       
       if (result.data['success'] == true) {
-        print('🎉 Staff user created successfully: ${result.data['email']}');
+        debugPrint('🎉 Staff user created successfully: ${result.data['email']}');
       } else {
         throw 'Failed to create staff user: ${result.data['message'] ?? 'Unknown error'}';
       }
     } on FirebaseFunctionsException catch (e) {
-      print('❌ Firebase Functions Exception: ${e.code} - ${e.message}');
+      debugPrint('❌ Firebase Functions Exception: ${e.code} - ${e.message}');
       
       // Handle specific Firebase Functions errors
       switch (e.code) {
@@ -407,7 +407,7 @@ class AuthProvider extends ChangeNotifier {
           throw e.message ?? 'Failed to create user: ${e.code}';
       }
     } catch (e) {
-      print('❌ Unexpected error calling Cloud Function: $e');
+      debugPrint('❌ Unexpected error calling Cloud Function: $e');
       throw 'An unexpected error occurred while adding the staff user.';
     }
   }
@@ -415,7 +415,7 @@ class AuthProvider extends ChangeNotifier {
   // Method to delete a user (for admin use)
   Future<void> deleteUser(String userId) async {
     try {
-      print('📡 Calling Cloud Function to delete user...');
+      debugPrint('📡 Calling Cloud Function to delete user...');
       
       // Call the Cloud Function to delete the user
       final HttpsCallable callable = _functions.httpsCallable('deleteUser');
@@ -424,15 +424,15 @@ class AuthProvider extends ChangeNotifier {
       });
 
       // Log the result
-      print('✅ Cloud Function response: ${result.data}');
+      debugPrint('✅ Cloud Function response: ${result.data}');
       
       if (result.data['success'] == true) {
-        print('🎉 User deleted successfully: ${result.data['userId']}');
+        debugPrint('🎉 User deleted successfully: ${result.data['userId']}');
       } else {
         throw 'Failed to delete user: ${result.data['message'] ?? 'Unknown error'}';
       }
     } on FirebaseFunctionsException catch (e) {
-      print('❌ Firebase Functions Exception: ${e.code} - ${e.message}');
+      debugPrint('❌ Firebase Functions Exception: ${e.code} - ${e.message}');
       
       // Handle specific Firebase Functions errors
       switch (e.code) {
@@ -450,7 +450,7 @@ class AuthProvider extends ChangeNotifier {
           throw e.message ?? 'Failed to delete user: ${e.code}';
       }
     } catch (e) {
-      print('❌ Unexpected error calling Cloud Function: $e');
+      debugPrint('❌ Unexpected error calling Cloud Function: $e');
       throw 'An unexpected error occurred while deleting the user.';
     }
   }

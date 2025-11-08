@@ -15,6 +15,13 @@ class AppLocalizationsFr extends AppLocalizations {
   String get signInToAccount => 'Connectez-vous à votre compte';
 
   @override
+  String get accountLoginTitle => 'Connexion au compte';
+
+  @override
+  String get accountLoginSubtitle =>
+      'Connectez-vous pour accéder à vos reçus enregistrés, suivre votre activité et gérer les outils du personnel.';
+
+  @override
   String get email => 'Email';
 
   @override
@@ -265,6 +272,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get signOutOfAccount => 'Se déconnecter de votre compte';
 
   @override
+  String get accountOptionalMessage =>
+      'Créez un compte (optionnel) pour enregistrer vos reçus et synchroniser votre activité sur tous vos appareils.';
+
+  @override
   String get customer => 'Client';
 
   @override
@@ -479,16 +490,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get add => 'Ajouter';
 
   @override
-  String get staffAccess => 'Accès Personnel';
-
-  @override
-  String get staffLogin => 'Connexion Personnel';
-
-  @override
-  String get accessStaffFeatures =>
-      'Accéder aux fonctionnalités et outils de gestion du personnel';
-
-  @override
   String get invalidCredentials => 'Email ou mot de passe invalide';
 
   @override
@@ -580,7 +581,8 @@ class AppLocalizationsFr extends AppLocalizations {
   String get createAccount => 'Créer un Compte';
 
   @override
-  String get signUpToGetStarted => 'Inscrivez-vous pour commencer';
+  String get signUpToGetStarted =>
+      'Créez un compte gratuit pour enregistrer vos reçus et synchroniser votre activité.';
 
   @override
   String get confirmPassword => 'Confirmer le Mot de Passe';
@@ -602,4 +604,192 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get accountCreatedSuccessfully => 'Compte créé avec succès !';
+
+  @override
+  String transportRequestSavedWithTracking(Object trackingCode) {
+    return 'Demande de transport enregistrée avec le code de suivi : $trackingCode';
+  }
+
+  @override
+  String failedToSaveTransport(Object error) {
+    return 'Échec de l\'enregistrement de la demande de transport : $error';
+  }
+
+  @override
+  String get transportUpdatedSuccessfully =>
+      'Demande de transport mise à jour avec succès !';
+
+  @override
+  String failedToUpdateTransport(Object error) {
+    return 'Échec de la mise à jour de la demande de transport : $error';
+  }
+
+  @override
+  String get updateTransport => 'Mettre à jour le Transport';
+
+  @override
+  String get transportStatusCompletedNotice =>
+      'Cette demande de transport est marquée comme terminée et ne peut plus être modifiée.';
+
+  @override
+  String get transportRequestDetails =>
+      'Détails de la Demande de Transport de Voiture';
+
+  @override
+  String operationFailed(Object error) {
+    return 'Une erreur s\'est produite : $error';
+  }
+
+  @override
+  String get activate => 'Activer';
+
+  @override
+  String get deactivate => 'Désactiver';
+
+  @override
+  String get activateSuccess => 'Statut de la voiture défini sur actif.';
+
+  @override
+  String get deactivateSuccess => 'Statut de la voiture défini sur inactif.';
+
+  @override
+  String get carCreated => 'Voiture ajoutée avec succès !';
+
+  @override
+  String get carUpdated => 'Voiture mise à jour avec succès !';
+
+  @override
+  String get saleRecorded => 'Informations de vente enregistrées.';
+
+  @override
+  String get requiredField => 'Ce champ est obligatoire';
+
+  @override
+  String get soldCars => 'Voitures vendues';
+
+  @override
+  String get markAsSold => 'Marquer comme vendu';
+
+  @override
+  String get sold => 'Vendu';
+
+  @override
+  String get carMileage => 'Kilométrage';
+
+  @override
+  String get sellingPrice => 'Prix affiché';
+
+  @override
+  String get carFeaturesHint => 'Caractéristiques (séparées par des virgules)';
+
+  @override
+  String get carImagesHint => 'URL d\'images (séparées par des virgules)';
+
+  @override
+  String get contactName => 'Nom du contact';
+
+  @override
+  String get contactPhone => 'Téléphone du contact';
+
+  @override
+  String get contactEmail => 'Email du contact';
+
+  @override
+  String get saveCar => 'Enregistrer la voiture';
+
+  @override
+  String get updateCar => 'Mettre à jour la voiture';
+
+  @override
+  String get editCar => 'Modifier la voiture';
+
+  @override
+  String get addCar => 'Ajouter une voiture';
+
+  @override
+  String get customerName => 'Nom du client';
+
+  @override
+  String get customerPhone => 'Téléphone du client';
+
+  @override
+  String get customerEmail => 'Email du client';
+
+  @override
+  String get customerEmailOptional => 'Email du client (optionnel)';
+
+  @override
+  String get customerAddressOptional => 'Adresse du client (optionnelle)';
+
+  @override
+  String get salePrice => 'Montant de la vente';
+
+  @override
+  String get saleDate => 'Date de vente';
+
+  @override
+  String get additionalNotes => 'Notes supplémentaires';
+
+  @override
+  String get confirmSale => 'Confirmer la vente';
+
+  @override
+  String get noCarsFound => 'Aucune voiture pour le moment';
+
+  @override
+  String get addYourFirstCar =>
+      'Ajoutez votre première voiture pour commencer.';
+
+  @override
+  String get noCarsAvailable =>
+      'Aucune voiture n\'est disponible pour le moment.';
+
+  @override
+  String get checkBackSoon =>
+      'Revenez bientôt pour découvrir notre inventaire.';
+
+  @override
+  String get contactUnavailable => 'Contact non disponible';
+
+  @override
+  String get noDescriptionAvailable => 'Aucune description disponible.';
+
+  @override
+  String get noFeaturesAvailable => 'Aucune caractéristique listée.';
+
+  @override
+  String get soldInfo => 'Détails de la vente';
+
+  @override
+  String soldTo(Object name) {
+    return 'Vendu à $name';
+  }
+
+  @override
+  String soldOn(Object date) {
+    return 'Vendu le $date';
+  }
+
+  @override
+  String soldPriceLabel(Object price) {
+    return 'Prix de vente : $price';
+  }
+
+  @override
+  String get imagesLabel => 'Images';
+
+  @override
+  String get addImages => 'Ajouter des images';
+
+  @override
+  String get noImagesSelected => 'Aucune image sélectionnée pour le moment.';
+
+  @override
+  String get addImagesPrompt => 'Veuillez ajouter au moins une image.';
+
+  @override
+  String get coverLabel => 'Couverture';
+
+  @override
+  String get setAsCover => 'Définir comme couverture';
 }

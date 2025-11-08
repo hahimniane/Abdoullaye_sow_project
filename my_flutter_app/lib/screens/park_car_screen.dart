@@ -516,10 +516,10 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                           MediaQuery.of(context).size.width * 0.06,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.3),
+                            color: Colors.white.withValues(alpha: 0.3),
                             width: 1,
                           ),
                         ),
@@ -529,7 +529,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                               width: 80,
                               height: 80,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
+                                color: Colors.white.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(40),
                               ),
                               child: const Icon(
@@ -577,7 +577,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
+                              color: Colors.black.withValues(alpha: 0.1),
                               blurRadius: 20,
                               offset: const Offset(0, 10),
                             ),

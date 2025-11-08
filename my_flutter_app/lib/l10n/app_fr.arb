@@ -2,6 +2,8 @@
   "@@locale": "fr",
   "welcomeBack": "Bon Retour",
   "signInToAccount": "Connectez-vous à votre compte",
+  "accountLoginTitle": "Connexion au compte",
+  "accountLoginSubtitle": "Connectez-vous pour accéder à vos reçus enregistrés, suivre votre activité et gérer les outils du personnel.",
   "email": "Email",
   "enterEmail": "Entrez votre email",
   "password": "Mot de passe",
@@ -98,6 +100,7 @@
   "role": "Rôle",
   "logout": "Déconnexion",
   "signOutOfAccount": "Se déconnecter de votre compte",
+  "accountOptionalMessage": "Créez un compte (optionnel) pour enregistrer vos reçus et synchroniser votre activité sur tous vos appareils.",
   "customer": "Client",
   "staff": "Personnel",
   "barrelShippingService": "Service d'Expédition de Barils",
@@ -166,9 +169,6 @@
   "carTitle": "Titre de la Voiture",
   "cancel": "Annuler",
   "add": "Ajouter",
-  "staffAccess": "Accès Personnel",
-  "staffLogin": "Connexion Personnel",
-  "accessStaffFeatures": "Accéder aux fonctionnalités et outils de gestion du personnel",
   "invalidCredentials": "Email ou mot de passe invalide",
   "backToCustomerHome": "Retour à l'Accueil Client",
   "trackShipment": "Suivre l'Expédition",
@@ -206,7 +206,7 @@
   "admin": "Administrateur",
   "signUp": "S'inscrire",
   "createAccount": "Créer un Compte",
-  "signUpToGetStarted": "Inscrivez-vous pour commencer",
+  "signUpToGetStarted": "Créez un compte gratuit pour enregistrer vos reçus et synchroniser votre activité.",
   "confirmPassword": "Confirmer le Mot de Passe",
   "reEnterPassword": "Entrez à nouveau votre mot de passe",
   "pleaseConfirmPassword": "Veuillez confirmer votre mot de passe",
@@ -235,5 +235,96 @@
     "placeholders": {
       "error": {}
     }
-  }
+  },
+  "transportRequestSavedWithTracking": "Demande de transport enregistrée avec le code de suivi : {trackingCode}",
+  "@transportRequestSavedWithTracking": {
+    "placeholders": {
+      "trackingCode": {}
+    }
+  },
+  "failedToSaveTransport": "Échec de l'enregistrement de la demande de transport : {error}",
+  "@failedToSaveTransport": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "transportUpdatedSuccessfully": "Demande de transport mise à jour avec succès !",
+  "failedToUpdateTransport": "Échec de la mise à jour de la demande de transport : {error}",
+  "@failedToUpdateTransport": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "updateTransport": "Mettre à jour le Transport",
+  "transportStatusCompletedNotice": "Cette demande de transport est marquée comme terminée et ne peut plus être modifiée.",
+  "transportRequestDetails": "Détails de la Demande de Transport de Voiture",
+  "operationFailed": "Une erreur s'est produite : {error}",
+  "@operationFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "activate": "Activer",
+  "deactivate": "Désactiver",
+  "activateSuccess": "Statut de la voiture défini sur actif.",
+  "deactivateSuccess": "Statut de la voiture défini sur inactif.",
+  "carCreated": "Voiture ajoutée avec succès !",
+  "carUpdated": "Voiture mise à jour avec succès !",
+  "saleRecorded": "Informations de vente enregistrées.",
+  "requiredField": "Ce champ est obligatoire",
+  "soldCars": "Voitures vendues",
+  "markAsSold": "Marquer comme vendu",
+  "sold": "Vendu",
+  "carMileage": "Kilométrage",
+  "sellingPrice": "Prix affiché",
+  "carFeaturesHint": "Caractéristiques (séparées par des virgules)",
+  "carImagesHint": "URL d'images (séparées par des virgules)",
+  "contactName": "Nom du contact",
+  "contactPhone": "Téléphone du contact",
+  "contactEmail": "Email du contact",
+  "saveCar": "Enregistrer la voiture",
+  "updateCar": "Mettre à jour la voiture",
+  "editCar": "Modifier la voiture",
+  "addCar": "Ajouter une voiture",
+  "customerName": "Nom du client",
+  "customerPhone": "Téléphone du client",
+  "customerEmail": "Email du client",
+  "customerEmailOptional": "Email du client (optionnel)",
+  "customerAddressOptional": "Adresse du client (optionnelle)",
+  "salePrice": "Montant de la vente",
+  "saleDate": "Date de vente",
+  "additionalNotes": "Notes supplémentaires",
+  "confirmSale": "Confirmer la vente",
+  "noCarsFound": "Aucune voiture pour le moment",
+  "addYourFirstCar": "Ajoutez votre première voiture pour commencer.",
+  "noCarsAvailable": "Aucune voiture n'est disponible pour le moment.",
+  "checkBackSoon": "Revenez bientôt pour découvrir notre inventaire.",
+  "contactUnavailable": "Contact non disponible",
+  "noDescriptionAvailable": "Aucune description disponible.",
+  "noFeaturesAvailable": "Aucune caractéristique listée.",
+  "soldInfo": "Détails de la vente",
+  "soldTo": "Vendu à {name}",
+  "@soldTo": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "soldOn": "Vendu le {date}",
+  "@soldOn": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "soldPriceLabel": "Prix de vente : {price}",
+  "@soldPriceLabel": {
+    "placeholders": {
+      "price": {}
+    }
+  },
+  "imagesLabel": "Images",
+  "addImages": "Ajouter des images",
+  "noImagesSelected": "Aucune image sélectionnée pour le moment.",
+  "addImagesPrompt": "Veuillez ajouter au moins une image.",
+  "coverLabel": "Couverture",
+  "setAsCover": "Définir comme couverture"
 } 

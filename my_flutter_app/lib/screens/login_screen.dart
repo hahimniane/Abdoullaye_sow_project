@@ -57,32 +57,32 @@ class _LoginScreenState extends State<LoginScreen>
       final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
 
-      print('🔵 LoginScreen: Attempting login for: $email');
-      print('🔵 LoginScreen: Calling authProvider.authenticate()...');
+      debugPrint('🔵 LoginScreen: Attempting login for: $email');
+      debugPrint('🔵 LoginScreen: Calling authProvider.authenticate()...');
 
       final success = await authProvider.authenticate(email, password);
 
-      print('🔵 LoginScreen: Authentication result: $success');
-      print('🔵 LoginScreen: isStaff: ${authProvider.isStaff}');
-      print('🔵 LoginScreen: isAdmin: ${authProvider.isAdmin}');
+      debugPrint('🔵 LoginScreen: Authentication result: $success');
+      debugPrint('🔵 LoginScreen: isStaff: ${authProvider.isStaff}');
+      debugPrint('🔵 LoginScreen: isAdmin: ${authProvider.isAdmin}');
 
       if (success && mounted) {
         // Check if user is staff and navigate accordingly
         if (authProvider.isStaff) {
-          print('🔵 LoginScreen: Navigating to staff home');
+          debugPrint('🔵 LoginScreen: Navigating to staff home');
           Navigator.pushNamedAndRemoveUntil(
             context,
             '/staff-home',
             (route) => false,
           );
         } else {
-          print('🔵 LoginScreen: Navigating to customer home');
+          debugPrint('🔵 LoginScreen: Navigating to customer home');
           // Regular customer - go to customer home
           Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
         }
       }
     } catch (error) {
-      print('🔴 LoginScreen: Login error: $error');
+      debugPrint('🔴 LoginScreen: Login error: $error');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -134,11 +134,11 @@ class _LoginScreenState extends State<LoginScreen>
                               width: 120,
                               height: 120,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
+                                color: Colors.white.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(60),
                               ),
                               child: const Icon(
-                                Icons.admin_panel_settings,
+                                Icons.lock_outline,
                                 size: 60,
                                 color: Colors.white,
                               ),
@@ -147,7 +147,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                             // Welcome Text
                             Text(
-                              AppLocalizations.of(context)!.staffLogin,
+                              AppLocalizations.of(context)!.accountLoginTitle,
                               style: const TextStyle(
                                 fontSize: 32,
                                 fontWeight: FontWeight.bold,
@@ -156,11 +156,12 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              AppLocalizations.of(context)!.accessStaffFeatures,
+                              AppLocalizations.of(context)!.accountLoginSubtitle,
                               style: const TextStyle(
                                 fontSize: 16,
                                 color: Colors.white70,
                               ),
+                              textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 48),
 
@@ -172,7 +173,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 borderRadius: BorderRadius.circular(20),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
+                                    color: Colors.black.withValues(alpha: 0.1),
                                     blurRadius: 20,
                                     offset: const Offset(0, 10),
                                   ),

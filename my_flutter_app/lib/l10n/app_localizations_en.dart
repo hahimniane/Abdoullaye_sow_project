@@ -15,6 +15,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signInToAccount => 'Sign in to your account';
 
   @override
+  String get accountLoginTitle => 'Account Login';
+
+  @override
+  String get accountLoginSubtitle =>
+      'Sign in to access saved receipts, track activity, and manage staff tools.';
+
+  @override
   String get email => 'Email';
 
   @override
@@ -258,6 +265,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signOutOfAccount => 'Sign out of your account';
 
   @override
+  String get accountOptionalMessage =>
+      'Create an optional account to save receipts and sync your activity across devices.';
+
+  @override
   String get customer => 'Customer';
 
   @override
@@ -471,16 +482,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get add => 'Add';
 
   @override
-  String get staffAccess => 'Staff Access';
-
-  @override
-  String get staffLogin => 'Staff Login';
-
-  @override
-  String get accessStaffFeatures =>
-      'Access staff features and management tools';
-
-  @override
   String get invalidCredentials => 'Invalid email or password';
 
   @override
@@ -571,7 +572,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get createAccount => 'Create Account';
 
   @override
-  String get signUpToGetStarted => 'Sign up to get started';
+  String get signUpToGetStarted =>
+      'Create a free account to save receipts and sync your activity.';
 
   @override
   String get confirmPassword => 'Confirm Password';
@@ -593,4 +595,188 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get accountCreatedSuccessfully => 'Account created successfully!';
+
+  @override
+  String transportRequestSavedWithTracking(Object trackingCode) {
+    return 'Transport request saved with tracking code: $trackingCode';
+  }
+
+  @override
+  String failedToSaveTransport(Object error) {
+    return 'Failed to save transport request: $error';
+  }
+
+  @override
+  String get transportUpdatedSuccessfully =>
+      'Transport request updated successfully!';
+
+  @override
+  String failedToUpdateTransport(Object error) {
+    return 'Failed to update transport request: $error';
+  }
+
+  @override
+  String get updateTransport => 'Update Transport';
+
+  @override
+  String get transportStatusCompletedNotice =>
+      'This transport request is marked as completed and can no longer be edited.';
+
+  @override
+  String get transportRequestDetails => 'Car Transport Details';
+
+  @override
+  String operationFailed(Object error) {
+    return 'Something went wrong: $error';
+  }
+
+  @override
+  String get activate => 'Activate';
+
+  @override
+  String get deactivate => 'Deactivate';
+
+  @override
+  String get activateSuccess => 'Car status set to active.';
+
+  @override
+  String get deactivateSuccess => 'Car status set to inactive.';
+
+  @override
+  String get carCreated => 'Car added successfully!';
+
+  @override
+  String get carUpdated => 'Car updated successfully!';
+
+  @override
+  String get saleRecorded => 'Sale information saved.';
+
+  @override
+  String get requiredField => 'This field is required';
+
+  @override
+  String get soldCars => 'Sold Cars';
+
+  @override
+  String get markAsSold => 'Mark as Sold';
+
+  @override
+  String get sold => 'Sold';
+
+  @override
+  String get carMileage => 'Mileage';
+
+  @override
+  String get sellingPrice => 'Listing Price';
+
+  @override
+  String get carFeaturesHint => 'Features (comma separated)';
+
+  @override
+  String get carImagesHint => 'Image URLs (comma separated)';
+
+  @override
+  String get contactName => 'Contact Name';
+
+  @override
+  String get contactPhone => 'Contact Phone';
+
+  @override
+  String get contactEmail => 'Contact Email';
+
+  @override
+  String get saveCar => 'Save Car';
+
+  @override
+  String get updateCar => 'Update Car';
+
+  @override
+  String get editCar => 'Edit Car';
+
+  @override
+  String get addCar => 'Add Car';
+
+  @override
+  String get customerName => 'Customer Name';
+
+  @override
+  String get customerPhone => 'Customer Phone';
+
+  @override
+  String get customerEmail => 'Customer Email';
+
+  @override
+  String get customerEmailOptional => 'Customer Email (optional)';
+
+  @override
+  String get customerAddressOptional => 'Customer Address (optional)';
+
+  @override
+  String get salePrice => 'Sale Price';
+
+  @override
+  String get saleDate => 'Sale Date';
+
+  @override
+  String get additionalNotes => 'Additional Notes';
+
+  @override
+  String get confirmSale => 'Confirm Sale';
+
+  @override
+  String get noCarsFound => 'No cars yet';
+
+  @override
+  String get addYourFirstCar => 'Add your first car to get started.';
+
+  @override
+  String get noCarsAvailable => 'No cars are currently available.';
+
+  @override
+  String get checkBackSoon => 'Check back soon for new inventory.';
+
+  @override
+  String get contactUnavailable => 'Contact unavailable';
+
+  @override
+  String get noDescriptionAvailable => 'No description available.';
+
+  @override
+  String get noFeaturesAvailable => 'No features listed.';
+
+  @override
+  String get soldInfo => 'Sale Details';
+
+  @override
+  String soldTo(Object name) {
+    return 'Sold to $name';
+  }
+
+  @override
+  String soldOn(Object date) {
+    return 'Sold on $date';
+  }
+
+  @override
+  String soldPriceLabel(Object price) {
+    return 'Sale price: $price';
+  }
+
+  @override
+  String get imagesLabel => 'Images';
+
+  @override
+  String get addImages => 'Add Images';
+
+  @override
+  String get noImagesSelected => 'No images selected yet.';
+
+  @override
+  String get addImagesPrompt => 'Please add at least one image.';
+
+  @override
+  String get coverLabel => 'Cover';
+
+  @override
+  String get setAsCover => 'Set as cover';
 }

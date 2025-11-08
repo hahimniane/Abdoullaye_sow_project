@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
-import 'login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -13,18 +12,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  int _tapCount = 0;
-  bool _showLoginOption = false;
-
-  void _handleVersionTap() {
-    setState(() {
-      _tapCount++;
-      if (_tapCount >= 5) {
-        _showLoginOption = true;
-      }
-    });
-  }
-
   void _handleLogout() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     await authProvider.logout();
@@ -36,6 +23,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+    final l10n = AppLocalizations.of(context)!;
+
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -84,74 +74,83 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // User Info Section (if logged in)
-                        Consumer<AuthProvider>(
-                          builder: (context, authProvider, child) {
-                            if (authProvider.isAuthenticated) {
-                              return Column(
-                                children: [
-                                  _buildSection(
-                                    title:
-                                        AppLocalizations.of(context)!.account,
-                                    children: [
-                                      _buildSettingItem(
-                                        icon: Icons.person,
-                                        title:
-                                            AppLocalizations.of(context)!.email,
-                                        subtitle: authProvider.userEmail ?? '',
-                                      ),
-                                      _buildSettingItem(
-                                        icon: Icons.badge,
-                                        title:
-                                            AppLocalizations.of(context)!.role,
-                                        subtitle:
-                                            authProvider.isAdmin
-                                                ? AppLocalizations.of(
-                                                  context,
-                                                )!.admin
-                                                : authProvider.isStaff
-                                                ? AppLocalizations.of(
-                                                  context,
-                                                )!.staff
-                                                : AppLocalizations.of(
-                                                  context,
-                                                )!.customer,
-                                      ),
-                                      _buildSettingItem(
-                                        icon: Icons.logout,
-                                        title:
-                                            AppLocalizations.of(
-                                              context,
-                                            )!.logout,
-                                        subtitle:
-                                            AppLocalizations.of(
-                                              context,
-                                            )!.signOutOfAccount,
-                                        onTap: _handleLogout,
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 24),
-                                ],
-                              );
-                            }
-                            return const SizedBox.shrink();
-                          },
-                        ),
+                        if (authProvider.isAuthenticated) ...[
+                          _buildSection(
+                            title: l10n.account,
+                            children: [
+                              _buildSettingItem(
+                                icon: Icons.person,
+                                title: l10n.email,
+                                subtitle: authProvider.userEmail ?? '',
+                              ),
+                              _buildSettingItem(
+                                icon: Icons.badge,
+                                title: l10n.role,
+                                subtitle: authProvider.isAdmin
+                                    ? l10n.admin
+                                    : authProvider.isStaff
+                                        ? l10n.staff
+                                        : l10n.customer,
+                              ),
+                              _buildSettingItem(
+                                icon: Icons.logout,
+                                title: l10n.logout,
+                                subtitle: l10n.signOutOfAccount,
+                                onTap: _handleLogout,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                        ] else ...[
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: Text(
+                              l10n.accountOptionalMessage,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ),
+                          _buildSection(
+                            title: l10n.account,
+                            children: [
+                              _buildSettingItem(
+                                icon: Icons.login,
+                                title: l10n.signIn,
+                                subtitle: l10n.signInToAccount,
+                                onTap: () => Navigator.pushNamed(
+                                  context,
+                                  '/login',
+                                ),
+                              ),
+                              const Divider(height: 1),
+                              _buildSettingItem(
+                                icon: Icons.person_add_alt,
+                                title: l10n.signUp,
+                                subtitle: l10n.signUpToGetStarted,
+                                onTap: () => Navigator.pushNamed(
+                                  context,
+                                  '/signup',
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                        ],
 
                         // App Info Section
                         _buildSection(
-                          title: AppLocalizations.of(context)!.appInformation,
+                          title: l10n.appInformation,
                           children: [
                             _buildSettingItem(
                               icon: Icons.info_outline,
-                              title: AppLocalizations.of(context)!.appVersion,
+                              title: l10n.appVersion,
                               subtitle: '1.0.0',
-                              onTap: _handleVersionTap,
                             ),
                             _buildSettingItem(
                               icon: Icons.business,
-                              title: AppLocalizations.of(context)!.companyName,
+                              title: l10n.companyName,
                               subtitle: 'Business Services',
                             ),
                           ],
@@ -159,39 +158,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                         const SizedBox(height: 24),
 
-                        // Hidden Login Section (appears after 5 taps on version)
-                        if (_showLoginOption) ...[
-                          _buildSection(
-                            title: AppLocalizations.of(context)!.staffAccess,
-                            children: [
-                              _buildSettingItem(
-                                icon: Icons.admin_panel_settings,
-                                title: AppLocalizations.of(context)!.staffLogin,
-                                subtitle:
-                                    AppLocalizations.of(
-                                      context,
-                                    )!.accessStaffFeatures,
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => const LoginScreen(),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
-                        ],
-
                         // Contact Section
                         _buildSection(
-                          title: AppLocalizations.of(context)!.contactUs,
+                          title: l10n.contactUs,
                           children: [
                             _buildSettingItem(
                               icon: Icons.phone,
-                              title: AppLocalizations.of(context)!.phoneNumber,
+                              title: l10n.phoneNumber,
                               subtitle: '+1 (555) 123-4567',
                               onTap: () {
                                 // Handle phone call
@@ -199,7 +172,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             _buildSettingItem(
                               icon: Icons.email,
-                              title: AppLocalizations.of(context)!.emailAddress,
+                              title: l10n.emailAddress,
                               subtitle: 'info@businessservices.com',
                               onTap: () {
                                 // Handle email
@@ -212,20 +185,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                         // About Section
                         _buildSection(
-                          title: AppLocalizations.of(context)!.about,
+                          title: l10n.about,
                           children: [
                             _buildSettingItem(
                               icon: Icons.description,
-                              title:
-                                  AppLocalizations.of(context)!.privacyPolicy,
+                              title: l10n.privacyPolicy,
                               onTap: () {
                                 // Handle privacy policy
                               },
                             ),
                             _buildSettingItem(
                               icon: Icons.description,
-                              title:
-                                  AppLocalizations.of(context)!.termsOfService,
+                              title: l10n.termsOfService,
                               onTap: () {
                                 // Handle terms of service
                               },
@@ -289,7 +260,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: const Color(0xFF667eea).withOpacity(0.1),
+                color: const Color(0xFF667eea).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: const Color(0xFF667eea), size: 20),

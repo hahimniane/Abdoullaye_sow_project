@@ -1,12 +1,163 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../widgets/language_toggle.dart';
-import '../l10n/app_localizations.dart';
+import 'package:intl/intl.dart';
 
-class TransportCarScreen extends StatelessWidget {
+import '../data/car_catalog.dart';
+import '../l10n/app_localizations.dart';
+import '../models/transport_request.dart';
+import '../utils/tracking_code_generator.dart';
+import '../utils/transport_receipt_generator.dart';
+import '../widgets/language_toggle.dart';
+
+class TransportCarScreen extends StatefulWidget {
   const TransportCarScreen({super.key});
 
   @override
+  State<TransportCarScreen> createState() => _TransportCarScreenState();
+}
+
+class _TransportCarScreenState extends State<TransportCarScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _ownerController = TextEditingController();
+  final _vinController = TextEditingController();
+  final _priceController = TextEditingController();
+
+  String? _selectedMake;
+  String? _selectedModel;
+  String? _selectedYear;
+
+  List<String> _makeOptions = [];
+  List<String> _modelOptions = [];
+  List<String> _yearOptions = [];
+
+  DateTime _transportDate = DateTime.now();
+  bool _isCatalogLoading = true;
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCatalog();
+  }
+
+  Future<void> _loadCatalog() async {
+    final catalog = CarCatalog.instance;
+    await catalog.load();
+    setState(() {
+      _makeOptions = catalog.getMakes();
+      _isCatalogLoading = false;
+    });
+  }
+
+  @override
+  void dispose() {
+    _ownerController.dispose();
+    _vinController.dispose();
+    _priceController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickTransportDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _transportDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF667eea),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() => _transportDate = picked);
+    }
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    final l10n = AppLocalizations.of(context)!;
+    final price = double.tryParse(_priceController.text.trim());
+    if (price == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.pleaseEnterValidNumber),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final trackingCode = await TrackingCodeGenerator.generateUniqueCode(
+        prefix: 'TR',
+        collectionPath: 'transportRequests',
+      );
+
+      final request = TransportRequest(
+        id: '',
+        trackingCode: trackingCode,
+        ownerName: _ownerController.text.trim(),
+        carMake: _selectedMake!,
+        carModel: _selectedModel!,
+        carYear: _selectedYear!,
+        vinNumber: _vinController.text.trim(),
+        transportDate: _transportDate,
+        price: price,
+        status: 'pending',
+        createdAt: DateTime.now(),
+      );
+
+      final docRef = await FirebaseFirestore.instance
+          .collection('transportRequests')
+          .add(request.toFirestore());
+
+      final savedRequest = request.copyWith(id: docRef.id);
+      await generateTransportReceipt(request: savedRequest);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            l10n.transportRequestSavedWithTracking(savedRequest.trackingCode),
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.failedToSaveTransport(e.toString())),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final l10n = AppLocalizations.of(context)!;
+
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -19,60 +170,42 @@ class TransportCarScreen extends StatelessWidget {
         child: SafeArea(
           child: Column(
             children: [
-              // Header with back button and language toggle
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
                   children: [
                     IconButton(
                       onPressed: () => Navigator.pop(context),
-                      style: IconButton.styleFrom(
-                        splashFactory: NoSplash.splashFactory,
-                      ),
-                      icon: const Icon(
-                        Icons.arrow_back_ios,
-                        color: Colors.white,
-                        size: 24,
-                      ),
+                      icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
                     ),
                     Expanded(
                       child: Text(
-                        AppLocalizations.of(context)!.transportCarsToGuinea,
+                        l10n.transportCarsToGuinea,
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
                         textAlign: TextAlign.center,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     const LanguageToggle(),
                   ],
                 ),
               ),
-              // Main content
               Expanded(
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.all(
-                    MediaQuery.of(context).size.width * 0.06,
-                  ),
+                  padding: EdgeInsets.all(width * 0.06),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Header Section
                       Container(
                         width: double.infinity,
-                        padding: EdgeInsets.all(
-                          MediaQuery.of(context).size.width * 0.06,
-                        ),
+                        padding: EdgeInsets.all(width * 0.06),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.3),
-                            width: 1,
-                          ),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
                         ),
                         child: Column(
                           children: [
@@ -80,103 +213,200 @@ class TransportCarScreen extends StatelessWidget {
                               width: 80,
                               height: 80,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
+                                color: Colors.white.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(40),
                               ),
-                              child: const Icon(
-                                Icons.directions_car,
-                                size: 40,
-                                color: Colors.white,
-                              ),
+                              child: const Icon(Icons.directions_car,
+                                  size: 40, color: Colors.white),
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              AppLocalizations.of(context)!.carTransportService,
+                              l10n.carTransportService,
                               style: const TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
                               ),
                               textAlign: TextAlign.center,
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 2,
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              AppLocalizations.of(context)!.enterCarTransportDetailsForGuinea,
+                              l10n.enterCarTransportDetailsForGuinea,
                               style: const TextStyle(
                                 fontSize: 16,
                                 color: Colors.white70,
                               ),
                               textAlign: TextAlign.center,
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 3,
                             ),
                           ],
                         ),
                       ),
-
                       const SizedBox(height: 32),
-
-                      // Form Section
                       Container(
-                        padding: EdgeInsets.all(
-                          MediaQuery.of(context).size.width * 0.06,
-                        ),
+                        padding: EdgeInsets.all(width * 0.06),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
+                              color: Colors.black.withValues(alpha: 0.1),
                               blurRadius: 20,
                               offset: const Offset(0, 10),
                             ),
                           ],
                         ),
-                        child: Column(
-                          children: [
-                            _RoundedTextField(label: AppLocalizations.of(context)!.ownerName),
-                            const SizedBox(height: 16),
-                            _RoundedTextField(label: AppLocalizations.of(context)!.carMake),
-                            const SizedBox(height: 16),
-                            _RoundedTextField(label: AppLocalizations.of(context)!.carModel),
-                            const SizedBox(height: 16),
-                            _RoundedTextField(label: AppLocalizations.of(context)!.carYear),
-                            const SizedBox(height: 16),
-                            _RoundedTextField(label: AppLocalizations.of(context)!.vinNumber),
-                            const SizedBox(height: 16),
-                            _RoundedTextField(
-                              label: AppLocalizations.of(context)!.transportDate,
-                            ),
-                            const SizedBox(height: 16),
-                            _RoundedTextField(label: AppLocalizations.of(context)!.price),
-                            const SizedBox(height: 32),
-                            SizedBox(
-                              width: double.infinity,
-                              height: 56,
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF667eea),
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  elevation: 0,
-                                  splashFactory: NoSplash.splashFactory,
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            children: [
+                              _RoundedTextField(
+                                label: l10n.ownerName,
+                                controller: _ownerController,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return l10n.pleaseEnterOwnerName;
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              if (_isCatalogLoading)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 24.0),
+                                  child: Center(child: CircularProgressIndicator()),
+                                )
+                              else ...[
+                                _RoundedDropdownField(
+                                  label: l10n.carMake,
+                                  value: _selectedMake,
+                                  items: _makeOptions,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _selectedMake = value;
+                                      _selectedModel = null;
+                                      _selectedYear = null;
+                                      _modelOptions = value == null
+                                          ? <String>[]
+                                          : CarCatalog.instance.getModels(value);
+                                      _yearOptions = <String>[];
+                                    });
+                                  },
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return l10n.pleaseEnterCarMake;
+                                    }
+                                    return null;
+                                  },
                                 ),
-                                onPressed: () {},
-                                child: Text(
-                                  AppLocalizations.of(context)!.submit,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
+                                const SizedBox(height: 16),
+                                _RoundedDropdownField(
+                                  label: l10n.carModel,
+                                  value: _selectedModel,
+                                  items: _modelOptions,
+                                  enabled: _selectedMake != null,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _selectedModel = value;
+                                      if (_selectedMake != null && value != null) {
+                                        _yearOptions = CarCatalog.instance
+                                            .getYears(_selectedMake!, value);
+                                      } else {
+                                        _yearOptions = <String>[];
+                                      }
+                                      _selectedYear = null;
+                                    });
+                                  },
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return l10n.pleaseEnterCarModel;
+                                    }
+                                    return null;
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                _RoundedDropdownField(
+                                  label: l10n.carYear,
+                                  value: _selectedYear,
+                                  items: _yearOptions,
+                                  enabled: _selectedModel != null,
+                                  onChanged: (value) => setState(() => _selectedYear = value),
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return l10n.pleaseEnterCarYear;
+                                    }
+                                    return null;
+                                  },
+                                ),
+                              ],
+                              const SizedBox(height: 16),
+                              _RoundedTextField(
+                                label: l10n.vinNumber,
+                                controller: _vinController,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return l10n.pleaseEnterVinNumber;
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              _DatePickerTile(
+                                label: l10n.transportDate,
+                                value: DateFormat.yMMMd().format(_transportDate),
+                                onTap: _pickTransportDate,
+                              ),
+                              const SizedBox(height: 16),
+                              _RoundedTextField(
+                                label: l10n.price,
+                                controller: _priceController,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(decimal: true),
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return l10n.pleaseEnterPrice;
+                                  }
+                                  if (double.tryParse(value.trim()) == null) {
+                                    return l10n.pleaseEnterValidNumber;
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 32),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 56,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF667eea),
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    elevation: 0,
+                                    splashFactory: NoSplash.splashFactory,
                                   ),
-                                  overflow: TextOverflow.ellipsis,
+                                  onPressed: _isSubmitting ? null : _submit,
+                                  child: _isSubmitting
+                                      ? const SizedBox(
+                                          width: 22,
+                                          height: 22,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(Colors.white),
+                                          ),
+                                        )
+                                      : Text(
+                                          l10n.submit,
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -192,12 +422,24 @@ class TransportCarScreen extends StatelessWidget {
 }
 
 class _RoundedTextField extends StatelessWidget {
+  const _RoundedTextField({
+    required this.label,
+    this.controller,
+    this.validator,
+    this.keyboardType,
+  });
+
   final String label;
-  const _RoundedTextField({required this.label});
+  final TextEditingController? controller;
+  final String? Function(String?)? validator;
+  final TextInputType? keyboardType;
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
+    return TextFormField(
+      controller: controller,
+      validator: validator,
+      keyboardType: keyboardType,
       decoration: InputDecoration(
         labelText: label,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -209,8 +451,90 @@ class _RoundedTextField extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFF667eea), width: 2),
         ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.red, width: 2),
+        ),
         filled: true,
         fillColor: Colors.grey.shade50,
+      ),
+    );
+  }
+}
+
+class _RoundedDropdownField extends StatelessWidget {
+  const _RoundedDropdownField({
+    required this.label,
+    required this.items,
+    this.value,
+    this.onChanged,
+    this.validator,
+    this.enabled = true,
+  });
+
+  final String label;
+  final List<String> items;
+  final String? value;
+  final ValueChanged<String?>? onChanged;
+  final String? Function(String?)? validator;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveItems = List<String>.from(items);
+    if (value != null && value!.isNotEmpty && !effectiveItems.contains(value)) {
+      effectiveItems.insert(0, value!);
+    }
+
+    final selectedValue =
+        enabled && effectiveItems.contains(value) ? value : null;
+
+    return DropdownButtonFormField<String>(
+      key: ValueKey<String?>(selectedValue),
+      initialValue: selectedValue,
+      items: effectiveItems
+          .map(
+            (item) => DropdownMenuItem<String>(
+              value: item,
+              child: Text(item),
+            ),
+          )
+          .toList(),
+      onChanged: enabled ? onChanged : null,
+      validator: validator,
+      decoration: InputDecoration(
+        labelText: label,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+}
+
+class _DatePickerTile extends StatelessWidget {
+  const _DatePickerTile({
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(label),
+      subtitle: Text(
+        value,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      trailing: const Icon(Icons.calendar_today, color: Color(0xFF667eea)),
+      onTap: onTap,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade300),
       ),
     );
   }

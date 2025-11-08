@@ -165,14 +165,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     horizontal: 16,
                     vertical: 8,
                   ),
-                  color: Colors.white.withOpacity(0.15),
+                  color: Colors.white.withValues(alpha: 0.15),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
                   elevation: 0,
                   child: ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: Colors.white.withOpacity(0.9),
+                      backgroundColor: Colors.white.withValues(alpha: 0.9),
                       child: Text(
                         userData['email']?.substring(0, 1).toUpperCase() ?? 'U',
                         style: const TextStyle(
@@ -190,7 +190,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     ),
                     subtitle: Text(
                       '${AppLocalizations.of(context)!.role}: $userRole',
-                      style: TextStyle(color: Colors.white.withOpacity(0.8)),
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
                     ),
                     trailing: PopupMenuButton<String>(
                       onSelected: (String value) {

@@ -32,7 +32,7 @@ class _BarrelShipmentDetailsScreenState
   late final TextEditingController _priceController;
 
   late BarrelShipment _currentShipment;
-  late String _status;
+  late String _statusDraft;
   bool _isSaving = false;
 
   StreamSubscription<DocumentSnapshot>? _subscription;
@@ -76,17 +76,25 @@ class _BarrelShipmentDetailsScreenState
     if (!mounted) return;
 
     setState(() {
+      final shouldSync = !_isSaving && !hasLocalChanges;
       _applyShipment(
         latest,
-        updateFields: !_isSaving && !hasLocalChanges,
+        updateFields: shouldSync,
+        syncStatus: shouldSync,
       );
       _isSaving = false;
     });
   }
 
-  void _applyShipment(BarrelShipment shipment, {bool updateFields = false}) {
+  void _applyShipment(
+    BarrelShipment shipment, {
+    bool updateFields = false,
+    bool syncStatus = true,
+  }) {
     _currentShipment = shipment;
-    _status = shipment.status;
+    if (syncStatus) {
+      _statusDraft = shipment.status;
+    }
     if (updateFields) {
       _senderNameController.text = shipment.senderName;
       _senderAddressController.text = shipment.senderAddress;
@@ -103,10 +111,10 @@ class _BarrelShipmentDetailsScreenState
         _receiverNameController.text.trim() != shipment.receiverName ||
         _receiverPhoneController.text.trim() != shipment.receiverPhone ||
         _parsePrice(_priceController.text.trim()) != shipment.price ||
-        _status != shipment.status;
+        _statusDraft != shipment.status;
   }
 
-  bool get _isCompleted => _status == 'completed';
+  bool get _isCompleted => _currentShipment.status == 'completed';
 
   String _formatPrice(double value) {
     if (value % 1 == 0) {
@@ -159,7 +167,7 @@ class _BarrelShipmentDetailsScreenState
       receiverName: _receiverNameController.text.trim(),
       receiverPhone: _receiverPhoneController.text.trim(),
       price: price,
-      status: _status,
+      status: _statusDraft,
     );
 
     try {
@@ -268,7 +276,7 @@ class _BarrelShipmentDetailsScreenState
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
+                          color: Colors.black.withValues(alpha: 0.1),
                           blurRadius: 20,
                           offset: const Offset(0, 10),
                         ),
@@ -382,7 +390,8 @@ class _BarrelShipmentDetailsScreenState
                           ),
                           const SizedBox(height: 16),
                           DropdownButtonFormField<String>(
-                            value: _status,
+                            key: ValueKey<String>(_statusDraft),
+                            initialValue: _statusDraft,
                             decoration: InputDecoration(
                               labelText: l10n.statusLabel,
                             ),
@@ -398,7 +407,7 @@ class _BarrelShipmentDetailsScreenState
                                 ? (value) {
                                     if (value != null) {
                                       setState(() {
-                                        _status = value;
+                                        _statusDraft = value;
                                       });
                                     }
                                   }

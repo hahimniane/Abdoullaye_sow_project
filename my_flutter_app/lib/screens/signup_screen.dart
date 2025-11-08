@@ -60,9 +60,9 @@ class _SignUpScreenState extends State<SignUpScreen>
       final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
 
-      print('🔵 SignUpScreen: Starting sign up for: $email');
+      debugPrint('🔵 SignUpScreen: Starting sign up for: $email');
       final success = await authProvider.signUp(email, password);
-      print('🔵 SignUpScreen: Sign up returned: $success');
+      debugPrint('🔵 SignUpScreen: Sign up returned: $success');
 
       if (success && mounted) {
         // Show success message
@@ -89,7 +89,7 @@ class _SignUpScreenState extends State<SignUpScreen>
         );
       }
     } catch (error) {
-      print('🔴 SignUpScreen: Error caught: $error');
+      debugPrint('🔴 SignUpScreen: Error caught: $error');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -141,7 +141,7 @@ class _SignUpScreenState extends State<SignUpScreen>
                               width: 120,
                               height: 120,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
+                                color: Colors.white.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(60),
                               ),
                               child: const Icon(
@@ -169,7 +169,21 @@ class _SignUpScreenState extends State<SignUpScreen>
                                 color: Colors.white70,
                               ),
                             ),
-                            const SizedBox(height: 48),
+                            const SizedBox(height: 12),
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
+                              child: Text(
+                                AppLocalizations.of(context)!
+                                    .accountOptionalMessage,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white70,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            const SizedBox(height: 36),
 
                             // Sign Up Form
                             Container(
@@ -179,7 +193,7 @@ class _SignUpScreenState extends State<SignUpScreen>
                                 borderRadius: BorderRadius.circular(20),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
+                                    color: Colors.black.withValues(alpha: 0.1),
                                     blurRadius: 20,
                                     offset: const Offset(0, 10),
                                   ),

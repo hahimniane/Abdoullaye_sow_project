@@ -110,6 +110,18 @@ abstract class AppLocalizations {
   /// **'Sign in to your account'**
   String get signInToAccount;
 
+  /// No description provided for @accountLoginTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Account Login'**
+  String get accountLoginTitle;
+
+  /// No description provided for @accountLoginSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to access saved receipts, track activity, and manage staff tools.'**
+  String get accountLoginSubtitle;
+
   /// No description provided for @email.
   ///
   /// In en, this message translates to:
@@ -566,6 +578,12 @@ abstract class AppLocalizations {
   /// **'Sign out of your account'**
   String get signOutOfAccount;
 
+  /// No description provided for @accountOptionalMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Create an optional account to save receipts and sync your activity across devices.'**
+  String get accountOptionalMessage;
+
   /// No description provided for @customer.
   ///
   /// In en, this message translates to:
@@ -974,24 +992,6 @@ abstract class AppLocalizations {
   /// **'Add'**
   String get add;
 
-  /// No description provided for @staffAccess.
-  ///
-  /// In en, this message translates to:
-  /// **'Staff Access'**
-  String get staffAccess;
-
-  /// No description provided for @staffLogin.
-  ///
-  /// In en, this message translates to:
-  /// **'Staff Login'**
-  String get staffLogin;
-
-  /// No description provided for @accessStaffFeatures.
-  ///
-  /// In en, this message translates to:
-  /// **'Access staff features and management tools'**
-  String get accessStaffFeatures;
-
   /// No description provided for @invalidCredentials.
   ///
   /// In en, this message translates to:
@@ -1151,7 +1151,7 @@ abstract class AppLocalizations {
   /// No description provided for @signUpToGetStarted.
   ///
   /// In en, this message translates to:
-  /// **'Sign up to get started'**
+  /// **'Create a free account to save receipts and sync your activity.'**
   String get signUpToGetStarted;
 
   /// No description provided for @confirmPassword.
@@ -1195,6 +1195,342 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Account created successfully!'**
   String get accountCreatedSuccessfully;
+
+  /// No description provided for @transportRequestSavedWithTracking.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport request saved with tracking code: {trackingCode}'**
+  String transportRequestSavedWithTracking(Object trackingCode);
+
+  /// No description provided for @failedToSaveTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to save transport request: {error}'**
+  String failedToSaveTransport(Object error);
+
+  /// No description provided for @transportUpdatedSuccessfully.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport request updated successfully!'**
+  String get transportUpdatedSuccessfully;
+
+  /// No description provided for @failedToUpdateTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to update transport request: {error}'**
+  String failedToUpdateTransport(Object error);
+
+  /// No description provided for @updateTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Update Transport'**
+  String get updateTransport;
+
+  /// No description provided for @transportStatusCompletedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'This transport request is marked as completed and can no longer be edited.'**
+  String get transportStatusCompletedNotice;
+
+  /// No description provided for @transportRequestDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Car Transport Details'**
+  String get transportRequestDetails;
+
+  /// No description provided for @operationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong: {error}'**
+  String operationFailed(Object error);
+
+  /// No description provided for @activate.
+  ///
+  /// In en, this message translates to:
+  /// **'Activate'**
+  String get activate;
+
+  /// No description provided for @deactivate.
+  ///
+  /// In en, this message translates to:
+  /// **'Deactivate'**
+  String get deactivate;
+
+  /// No description provided for @activateSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Car status set to active.'**
+  String get activateSuccess;
+
+  /// No description provided for @deactivateSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Car status set to inactive.'**
+  String get deactivateSuccess;
+
+  /// No description provided for @carCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Car added successfully!'**
+  String get carCreated;
+
+  /// No description provided for @carUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Car updated successfully!'**
+  String get carUpdated;
+
+  /// No description provided for @saleRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale information saved.'**
+  String get saleRecorded;
+
+  /// No description provided for @requiredField.
+  ///
+  /// In en, this message translates to:
+  /// **'This field is required'**
+  String get requiredField;
+
+  /// No description provided for @soldCars.
+  ///
+  /// In en, this message translates to:
+  /// **'Sold Cars'**
+  String get soldCars;
+
+  /// No description provided for @markAsSold.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as Sold'**
+  String get markAsSold;
+
+  /// No description provided for @sold.
+  ///
+  /// In en, this message translates to:
+  /// **'Sold'**
+  String get sold;
+
+  /// No description provided for @carMileage.
+  ///
+  /// In en, this message translates to:
+  /// **'Mileage'**
+  String get carMileage;
+
+  /// No description provided for @sellingPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing Price'**
+  String get sellingPrice;
+
+  /// No description provided for @carFeaturesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Features (comma separated)'**
+  String get carFeaturesHint;
+
+  /// No description provided for @carImagesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Image URLs (comma separated)'**
+  String get carImagesHint;
+
+  /// No description provided for @contactName.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact Name'**
+  String get contactName;
+
+  /// No description provided for @contactPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact Phone'**
+  String get contactPhone;
+
+  /// No description provided for @contactEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact Email'**
+  String get contactEmail;
+
+  /// No description provided for @saveCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Save Car'**
+  String get saveCar;
+
+  /// No description provided for @updateCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Update Car'**
+  String get updateCar;
+
+  /// No description provided for @editCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Car'**
+  String get editCar;
+
+  /// No description provided for @addCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Car'**
+  String get addCar;
+
+  /// No description provided for @customerName.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer Name'**
+  String get customerName;
+
+  /// No description provided for @customerPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer Phone'**
+  String get customerPhone;
+
+  /// No description provided for @customerEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer Email'**
+  String get customerEmail;
+
+  /// No description provided for @customerEmailOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer Email (optional)'**
+  String get customerEmailOptional;
+
+  /// No description provided for @customerAddressOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer Address (optional)'**
+  String get customerAddressOptional;
+
+  /// No description provided for @salePrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale Price'**
+  String get salePrice;
+
+  /// No description provided for @saleDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale Date'**
+  String get saleDate;
+
+  /// No description provided for @additionalNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Additional Notes'**
+  String get additionalNotes;
+
+  /// No description provided for @confirmSale.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm Sale'**
+  String get confirmSale;
+
+  /// No description provided for @noCarsFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No cars yet'**
+  String get noCarsFound;
+
+  /// No description provided for @addYourFirstCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Add your first car to get started.'**
+  String get addYourFirstCar;
+
+  /// No description provided for @noCarsAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No cars are currently available.'**
+  String get noCarsAvailable;
+
+  /// No description provided for @checkBackSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Check back soon for new inventory.'**
+  String get checkBackSoon;
+
+  /// No description provided for @contactUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact unavailable'**
+  String get contactUnavailable;
+
+  /// No description provided for @noDescriptionAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No description available.'**
+  String get noDescriptionAvailable;
+
+  /// No description provided for @noFeaturesAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No features listed.'**
+  String get noFeaturesAvailable;
+
+  /// No description provided for @soldInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale Details'**
+  String get soldInfo;
+
+  /// No description provided for @soldTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Sold to {name}'**
+  String soldTo(Object name);
+
+  /// No description provided for @soldOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Sold on {date}'**
+  String soldOn(Object date);
+
+  /// No description provided for @soldPriceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale price: {price}'**
+  String soldPriceLabel(Object price);
+
+  /// No description provided for @imagesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Images'**
+  String get imagesLabel;
+
+  /// No description provided for @addImages.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Images'**
+  String get addImages;
+
+  /// No description provided for @noImagesSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'No images selected yet.'**
+  String get noImagesSelected;
+
+  /// No description provided for @addImagesPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Please add at least one image.'**
+  String get addImagesPrompt;
+
+  /// No description provided for @coverLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cover'**
+  String get coverLabel;
+
+  /// No description provided for @setAsCover.
+  ///
+  /// In en, this message translates to:
+  /// **'Set as cover'**
+  String get setAsCover;
 }
 
 class _AppLocalizationsDelegate

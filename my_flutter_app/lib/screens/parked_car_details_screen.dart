@@ -29,7 +29,8 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
   late final String _trackingCode;
   DateTime? _parkingEndDate;
   late DateTime _parkingStartDate;
-  late String _status;
+  late String _statusDraft;
+  late String _persistedStatus;
   double _totalCost = 0.0;
   int _totalDays = 0;
   String? _selectedMake;
@@ -47,7 +48,8 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     _costPerDayController = TextEditingController();
     _vinController = TextEditingController(text: widget.parkedCar.vinNumber);
     _trackingCode = widget.parkedCar.trackingCode;
-    _status = widget.parkedCar.status;
+    _persistedStatus = widget.parkedCar.status;
+    _statusDraft = _persistedStatus;
     _parkingStartDate = widget.parkedCar.parkingDate;
     _parkingEndDate = widget.parkedCar.parkingEndDate;
     _totalCost = widget.parkedCar.totalCost ?? 0.0;
@@ -288,7 +290,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       'carYear': _selectedYear ?? '',
       'vinNumber': _vinController.text.trim(),
       'parkingDate': Timestamp.fromDate(normalizedStart),
-      'status': _status,
+      'status': _statusDraft,
     };
 
     if (_parkingEndDate != null) {
@@ -314,6 +316,12 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
           .collection('parkedCars')
           .doc(widget.parkedCar.id)
           .update(updateData);
+
+      if (mounted) {
+        setState(() {
+          _persistedStatus = _statusDraft;
+        });
+      }
 
       if (showSuccess && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -479,10 +487,10 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     try {
       await Printing.layoutPdf(onLayout: (format) async => pdf.save());
 
-      final previousStatus = _status;
-      if (_status != 'completed') {
+      final previousStatus = _statusDraft;
+      if (_statusDraft != 'completed') {
         setState(() {
-          _status = 'completed';
+          _statusDraft = 'completed';
         });
       }
 
@@ -490,7 +498,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       if (!saved) {
         if (mounted) {
           setState(() {
-            _status = previousStatus;
+            _statusDraft = previousStatus;
           });
         }
         return;
@@ -557,7 +565,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     final l10n = AppLocalizations.of(context)!;
     final authProvider = context.watch<AuthProvider>();
     final bool isAdmin = authProvider.isAdmin;
-    final bool canEdit = isAdmin && _status != 'completed';
+    final bool canEdit = isAdmin && _persistedStatus != 'completed';
 
     return Scaffold(
       body: Container(
@@ -604,7 +612,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
+                          color: Colors.black.withValues(alpha: 0.1),
                           blurRadius: 20,
                           offset: const Offset(0, 10),
                         ),
@@ -701,7 +709,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.85),
+        color: Colors.white.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -808,7 +816,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.85),
+        color: Colors.white.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -841,8 +849,8 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
-            key: ValueKey<String>(_status),
-            initialValue: _status,
+            key: ValueKey<String>(_statusDraft),
+            initialValue: _statusDraft,
             decoration: const InputDecoration(labelText: 'Status'),
             items: ['active', 'completed']
                 .map((label) => DropdownMenuItem(value: label, child: Text(label)))
@@ -851,7 +859,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                 ? (value) {
                     if (value != null) {
                       setState(() {
-                        _status = value;
+                        _statusDraft = value;
                       });
                     }
                   }
@@ -889,7 +897,6 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     return DropdownButtonFormField<String>(
       key: ValueKey<String?>(selectedValue),
       initialValue: selectedValue,
-      value: selectedValue,
       items: effectiveItems
           .map(
             (item) => DropdownMenuItem<String>(

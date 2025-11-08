@@ -1,6 +1,8 @@
 {
   "welcomeBack": "Welcome Back",
   "signInToAccount": "Sign in to your account",
+  "accountLoginTitle": "Account Login",
+  "accountLoginSubtitle": "Sign in to access saved receipts, track activity, and manage staff tools.",
   "email": "Email",
   "enterEmail": "Enter your email",
   "password": "Password",
@@ -97,6 +99,7 @@
   "role": "Role",
   "logout": "Logout",
   "signOutOfAccount": "Sign out of your account",
+  "accountOptionalMessage": "Create an optional account to save receipts and sync your activity across devices.",
   "customer": "Customer",
   "staff": "Staff",
   "barrelShippingService": "Barrel Shipping Service",
@@ -165,9 +168,6 @@
   "carTitle": "Car Title",
   "cancel": "Cancel",
   "add": "Add",
-  "staffAccess": "Staff Access",
-  "staffLogin": "Staff Login",
-  "accessStaffFeatures": "Access staff features and management tools",
   "invalidCredentials": "Invalid email or password",
   "backToCustomerHome": "Back to Customer Home",
   "trackShipment": "Track Shipment",
@@ -227,12 +227,103 @@
   "admin": "Admin",
   "signUp": "Sign Up",
   "createAccount": "Create Account",
-  "signUpToGetStarted": "Sign up to get started",
+  "signUpToGetStarted": "Create a free account to save receipts and sync your activity.",
   "confirmPassword": "Confirm Password",
   "reEnterPassword": "Re-enter your password",
   "pleaseConfirmPassword": "Please confirm your password",
   "passwordsDoNotMatch": "Passwords do not match",
   "alreadyHaveAccount": "Already have an account?",
   "dontHaveAccount": "Don't have an account?",
-  "accountCreatedSuccessfully": "Account created successfully!"
+  "accountCreatedSuccessfully": "Account created successfully!",
+  "transportRequestSavedWithTracking": "Transport request saved with tracking code: {trackingCode}",
+  "@transportRequestSavedWithTracking": {
+    "placeholders": {
+      "trackingCode": {}
+    }
+  },
+  "failedToSaveTransport": "Failed to save transport request: {error}",
+  "@failedToSaveTransport": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "transportUpdatedSuccessfully": "Transport request updated successfully!",
+  "failedToUpdateTransport": "Failed to update transport request: {error}",
+  "@failedToUpdateTransport": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "updateTransport": "Update Transport",
+  "transportStatusCompletedNotice": "This transport request is marked as completed and can no longer be edited.",
+  "transportRequestDetails": "Car Transport Details",
+  "operationFailed": "Something went wrong: {error}",
+  "@operationFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "activate": "Activate",
+  "deactivate": "Deactivate",
+  "activateSuccess": "Car status set to active.",
+  "deactivateSuccess": "Car status set to inactive.",
+  "carCreated": "Car added successfully!",
+  "carUpdated": "Car updated successfully!",
+  "saleRecorded": "Sale information saved.",
+  "requiredField": "This field is required",
+  "soldCars": "Sold Cars",
+  "markAsSold": "Mark as Sold",
+  "sold": "Sold",
+  "carMileage": "Mileage",
+  "sellingPrice": "Listing Price",
+  "carFeaturesHint": "Features (comma separated)",
+  "carImagesHint": "Image URLs (comma separated)",
+  "contactName": "Contact Name",
+  "contactPhone": "Contact Phone",
+  "contactEmail": "Contact Email",
+  "saveCar": "Save Car",
+  "updateCar": "Update Car",
+  "editCar": "Edit Car",
+  "addCar": "Add Car",
+  "customerName": "Customer Name",
+  "customerPhone": "Customer Phone",
+  "customerEmail": "Customer Email",
+  "customerEmailOptional": "Customer Email (optional)",
+  "customerAddressOptional": "Customer Address (optional)",
+  "salePrice": "Sale Price",
+  "saleDate": "Sale Date",
+  "additionalNotes": "Additional Notes",
+  "confirmSale": "Confirm Sale",
+  "noCarsFound": "No cars yet",
+  "addYourFirstCar": "Add your first car to get started.",
+  "noCarsAvailable": "No cars are currently available.",
+  "checkBackSoon": "Check back soon for new inventory.",
+  "contactUnavailable": "Contact unavailable",
+  "noDescriptionAvailable": "No description available.",
+  "noFeaturesAvailable": "No features listed.",
+  "soldInfo": "Sale Details",
+  "soldTo": "Sold to {name}",
+  "@soldTo": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "soldOn": "Sold on {date}",
+  "@soldOn": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "soldPriceLabel": "Sale price: {price}",
+  "@soldPriceLabel": {
+    "placeholders": {
+      "price": {}
+    }
+  },
+  "imagesLabel": "Images",
+  "addImages": "Add Images",
+  "noImagesSelected": "No images selected yet.",
+  "addImagesPrompt": "Please add at least one image.",
+  "coverLabel": "Cover",
+  "setAsCover": "Set as cover"
 }
