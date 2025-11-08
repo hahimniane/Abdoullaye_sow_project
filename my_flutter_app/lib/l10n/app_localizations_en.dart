@@ -60,7 +60,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get emailSent => 'Email Sent!';
 
   @override
-  String get emailSentMessage => 'We\'ve sent a password reset link to your email address. Please check your inbox and follow the instructions.';
+  String get emailSentMessage =>
+      'We\'ve sent a password reset link to your email address. Please check your inbox and follow the instructions.';
 
   @override
   String get language => 'Language';
@@ -78,6 +79,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chooseServiceToStart => 'Choose a service to get started';
 
   @override
+  String get servicesTab => 'Services';
+
+  @override
+  String get activityTab => 'Activity';
+
+  @override
+  String get serviceOverview => 'Service Overview';
+
+  @override
   String get parkACar => 'Park a Car';
 
   @override
@@ -93,7 +103,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get carParkingService => 'Car Parking Service';
 
   @override
-  String get enterCarDetailsToGenerateReceipt => 'Enter car details to generate receipt';
+  String get enterCarDetailsToGenerateReceipt =>
+      'Enter car details to generate receipt';
 
   @override
   String get printReceipt => 'Print Receipt';
@@ -123,7 +134,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get selectDateTime => 'Select Date & Time';
 
   @override
-  String get receiptGenerated => 'Receipt generated and sent to printer successfully!';
+  String get receiptGenerated =>
+      'Receipt generated and sent to printer successfully!';
 
   @override
   String errorGeneratingReceipt(Object error) {
@@ -170,7 +182,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get barrelShippingService => 'Barrel Shipping Service';
 
   @override
-  String get enterShippingDetailsForGuinea => 'Enter shipping details for Guinea';
+  String get enterShippingDetailsForGuinea =>
+      'Enter shipping details for Guinea';
 
   @override
   String get submit => 'Submit';
@@ -194,7 +207,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get carTransportService => 'Car Transport Service';
 
   @override
-  String get enterCarTransportDetailsForGuinea => 'Enter car transport details for Guinea';
+  String get enterCarTransportDetailsForGuinea =>
+      'Enter car transport details for Guinea';
 
   @override
   String get ownerName => 'Owner Name';
@@ -314,6 +328,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get manageCars => 'Manage Cars';
 
   @override
+  String get recentActivity => 'Recent Activity';
+
+  @override
+  String get filterAll => 'All';
+
+  @override
+  String get filterParking => 'Parked Cars';
+
+  @override
+  String get filterBarrels => 'Barrel Shipments';
+
+  @override
+  String get filterTransport => 'Car Transport';
+
+  @override
+  String get filterSales => 'Car Sales';
+
+  @override
   String get totalCars => 'Total Cars';
 
   @override
@@ -321,6 +353,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get inactiveCars => 'Inactive Cars';
+
+  @override
+  String get processing => 'Processing';
+
+  @override
+  String get completed => 'Completed';
+
+  @override
+  String get noRecordsYet =>
+      'No records yet. Start logging activities to see them here.';
+
+  @override
+  String get recordReference => 'Reference';
 
   @override
   String get active => 'Active';
@@ -347,7 +392,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get staffLogin => 'Staff Login';
 
   @override
-  String get accessStaffFeatures => 'Access staff features and management tools';
+  String get accessStaffFeatures =>
+      'Access staff features and management tools';
 
   @override
   String get invalidCredentials => 'Invalid email or password';
@@ -389,13 +435,37 @@ class AppLocalizationsEn extends AppLocalizations {
   String get enterTemporaryPassword => 'Enter temporary password';
 
   @override
-  String userRoleUpdated(String newRole) {
-    return 'User role updated to $newRole';
+  String userRoleUpdated(Object role) {
+    return 'User role updated to $role';
   }
 
   @override
-  String failedToUpdateUserRole(String error) {
+  String failedToUpdateUserRole(Object error) {
     return 'Failed to update user role: $error';
+  }
+
+  @override
+  String get deleteUser => 'Delete User';
+
+  @override
+  String get confirmDeletion => 'Confirm Deletion';
+
+  @override
+  String confirmDeleteUser(Object email) {
+    return 'Are you sure you want to delete the user $email?';
+  }
+
+  @override
+  String get delete => 'Delete';
+
+  @override
+  String userDeleted(Object email) {
+    return 'User $email deleted successfully';
+  }
+
+  @override
+  String failedToDeleteUser(Object error) {
+    return 'Failed to delete user: $error';
   }
 
   @override
@@ -408,4 +478,34 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get admin => 'Admin';
+
+  @override
+  String get signUp => 'Sign Up';
+
+  @override
+  String get createAccount => 'Create Account';
+
+  @override
+  String get signUpToGetStarted => 'Sign up to get started';
+
+  @override
+  String get confirmPassword => 'Confirm Password';
+
+  @override
+  String get reEnterPassword => 'Re-enter your password';
+
+  @override
+  String get pleaseConfirmPassword => 'Please confirm your password';
+
+  @override
+  String get passwordsDoNotMatch => 'Passwords do not match';
+
+  @override
+  String get alreadyHaveAccount => 'Already have an account?';
+
+  @override
+  String get dontHaveAccount => 'Don\'t have an account?';
+
+  @override
+  String get accountCreatedSuccessfully => 'Account created successfully!';
 }

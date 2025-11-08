@@ -369,6 +369,7 @@ class CarDetailsScreen extends StatelessWidget {
           backgroundColor: Colors.red,
         ),
       );
+      return false;
     });
   }
 }

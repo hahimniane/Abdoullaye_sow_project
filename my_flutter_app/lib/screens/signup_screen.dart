@@ -4,19 +4,21 @@ import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class SignUpScreen extends StatefulWidget {
+  const SignUpScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<SignUpScreen> createState() => _SignUpScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen>
+class _SignUpScreenState extends State<SignUpScreen>
     with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _isPasswordVisible = false;
+  bool _isConfirmPasswordVisible = false;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -45,10 +47,11 @@ class _LoginScreenState extends State<LoginScreen>
     _animationController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  void _handleLogin() async {
+  void _handleSignUp() async {
     if (!_formKey.currentState!.validate()) return;
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -57,32 +60,36 @@ class _LoginScreenState extends State<LoginScreen>
       final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
 
-      print('🔵 LoginScreen: Attempting login for: $email');
-      print('🔵 LoginScreen: Calling authProvider.authenticate()...');
-
-      final success = await authProvider.authenticate(email, password);
-
-      print('🔵 LoginScreen: Authentication result: $success');
-      print('🔵 LoginScreen: isStaff: ${authProvider.isStaff}');
-      print('🔵 LoginScreen: isAdmin: ${authProvider.isAdmin}');
+      print('🔵 SignUpScreen: Starting sign up for: $email');
+      final success = await authProvider.signUp(email, password);
+      print('🔵 SignUpScreen: Sign up returned: $success');
 
       if (success && mounted) {
-        // Check if user is staff and navigate accordingly
-        if (authProvider.isStaff) {
-          print('🔵 LoginScreen: Navigating to staff home');
-          Navigator.pushNamedAndRemoveUntil(
-            context,
-            '/staff-home',
-            (route) => false,
-          );
-        } else {
-          print('🔵 LoginScreen: Navigating to customer home');
-          // Regular customer - go to customer home
-          Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
-        }
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context)!.accountCreatedSuccessfully,
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        // Navigate to customer home
+        Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+      } else if (!success && mounted) {
+        // If success is false, show error
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Sign up failed. Please try again.'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
     } catch (error) {
-      print('🔴 LoginScreen: Login error: $error');
+      print('🔴 SignUpScreen: Error caught: $error');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -138,7 +145,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 borderRadius: BorderRadius.circular(60),
                               ),
                               child: const Icon(
-                                Icons.admin_panel_settings,
+                                Icons.person_add,
                                 size: 60,
                                 color: Colors.white,
                               ),
@@ -147,7 +154,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                             // Welcome Text
                             Text(
-                              AppLocalizations.of(context)!.staffLogin,
+                              AppLocalizations.of(context)!.createAccount,
                               style: const TextStyle(
                                 fontSize: 32,
                                 fontWeight: FontWeight.bold,
@@ -156,7 +163,7 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              AppLocalizations.of(context)!.accessStaffFeatures,
+                              AppLocalizations.of(context)!.signUpToGetStarted,
                               style: const TextStyle(
                                 fontSize: 16,
                                 color: Colors.white70,
@@ -164,7 +171,7 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                             const SizedBox(height: 48),
 
-                            // Login Form
+                            // Sign Up Form
                             Container(
                               padding: const EdgeInsets.all(24),
                               decoration: BoxDecoration(
@@ -307,9 +314,77 @@ class _LoginScreenState extends State<LoginScreen>
                                         return null;
                                       },
                                     ),
+                                    const SizedBox(height: 20),
+
+                                    // Confirm Password Field
+                                    TextFormField(
+                                      controller: _confirmPasswordController,
+                                      obscureText: !_isConfirmPasswordVisible,
+                                      decoration: InputDecoration(
+                                        labelText: AppLocalizations.of(
+                                          context,
+                                        )!.confirmPassword,
+                                        hintText: AppLocalizations.of(
+                                          context,
+                                        )!.reEnterPassword,
+                                        prefixIcon: const Icon(
+                                          Icons.lock_outlined,
+                                        ),
+                                        suffixIcon: IconButton(
+                                          icon: Icon(
+                                            _isConfirmPasswordVisible
+                                                ? Icons.visibility_off
+                                                : Icons.visibility,
+                                          ),
+                                          onPressed: () {
+                                            setState(() {
+                                              _isConfirmPasswordVisible =
+                                                  !_isConfirmPasswordVisible;
+                                            });
+                                          },
+                                        ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          borderSide: BorderSide(
+                                            color: Colors.grey.shade300,
+                                          ),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          borderSide: const BorderSide(
+                                            color: Color(0xFF667eea),
+                                            width: 2,
+                                          ),
+                                        ),
+                                        filled: true,
+                                        fillColor: Colors.grey.shade50,
+                                      ),
+                                      validator: (value) {
+                                        if (value == null || value.isEmpty) {
+                                          return AppLocalizations.of(
+                                            context,
+                                          )!.pleaseConfirmPassword;
+                                        }
+                                        if (value != _passwordController.text) {
+                                          return AppLocalizations.of(
+                                            context,
+                                          )!.passwordsDoNotMatch;
+                                        }
+                                        return null;
+                                      },
+                                    ),
                                     const SizedBox(height: 32),
 
-                                    // Login Button
+                                    // Sign Up Button
                                     Consumer<AuthProvider>(
                                       builder: (context, authProvider, child) {
                                         return SizedBox(
@@ -319,7 +394,7 @@ class _LoginScreenState extends State<LoginScreen>
                                             onPressed:
                                                 authProvider.isLoading
                                                     ? null
-                                                    : _handleLogin,
+                                                    : _handleSignUp,
                                             style: ElevatedButton.styleFrom(
                                               backgroundColor: const Color(
                                                 0xFF667eea,
@@ -347,7 +422,7 @@ class _LoginScreenState extends State<LoginScreen>
                                                     : Text(
                                                       AppLocalizations.of(
                                                         context,
-                                                      )!.signIn,
+                                                      )!.signUp,
                                                       style: const TextStyle(
                                                         fontSize: 16,
                                                         fontWeight:
@@ -358,46 +433,16 @@ class _LoginScreenState extends State<LoginScreen>
                                         );
                                       },
                                     ),
-                                    const SizedBox(height: 16),
+                                    const SizedBox(height: 24),
 
-                                    // Forgot Password
-                                    TextButton(
-                                      onPressed: () {
-                                        Navigator.pushNamed(
-                                          context,
-                                          '/forgot-password',
-                                        );
-                                      },
-                                      style: TextButton.styleFrom(
-                                        splashFactory: NoSplash.splashFactory,
-                                      ),
-                                      child: Text(
-                                        AppLocalizations.of(
-                                          context,
-                                        )!.forgotPassword,
-                                        style: const TextStyle(
-                                          color: Color(0xFF667eea),
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-
-                                    // Divider
-                                    Divider(
-                                      color: Colors.grey.shade300,
-                                      thickness: 1,
-                                    ),
-                                    const SizedBox(height: 8),
-
-                                    // Don't have account - Sign Up (for customers)
+                                    // Already have account - Sign In
                                     Row(
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
                                         Text(
                                           AppLocalizations.of(
                                             context,
-                                          )!.dontHaveAccount,
+                                          )!.alreadyHaveAccount,
                                           style: TextStyle(
                                             color: Colors.grey.shade600,
                                             fontSize: 14,
@@ -407,7 +452,7 @@ class _LoginScreenState extends State<LoginScreen>
                                           onPressed: () {
                                             Navigator.pushNamed(
                                               context,
-                                              '/signup',
+                                              '/login',
                                             );
                                           },
                                           style: TextButton.styleFrom(
@@ -416,7 +461,7 @@ class _LoginScreenState extends State<LoginScreen>
                                           child: Text(
                                             AppLocalizations.of(
                                               context,
-                                            )!.signUp,
+                                            )!.signIn,
                                             style: const TextStyle(
                                               color: Color(0xFF667eea),
                                               fontSize: 14,
@@ -425,30 +470,6 @@ class _LoginScreenState extends State<LoginScreen>
                                           ),
                                         ),
                                       ],
-                                    ),
-                                    const SizedBox(height: 8),
-
-                                    // Back to Customer Home
-                                    TextButton(
-                                      onPressed: () {
-                                        Navigator.pushNamedAndRemoveUntil(
-                                          context,
-                                          '/',
-                                          (route) => false,
-                                        );
-                                      },
-                                      style: TextButton.styleFrom(
-                                        splashFactory: NoSplash.splashFactory,
-                                      ),
-                                      child: Text(
-                                        AppLocalizations.of(
-                                          context,
-                                        )!.backToCustomerHome,
-                                        style: const TextStyle(
-                                          color: Color(0xFF667eea),
-                                          fontSize: 14,
-                                        ),
-                                      ),
                                     ),
                                   ],
                                 ),

@@ -23,6 +23,9 @@
   "french": "Français",
   "welcomeToBusinessServices": "Bienvenue aux Services d'Entreprise",
   "chooseServiceToStart": "Choisissez un service pour commencer",
+  "servicesTab": "Services",
+  "activityTab": "Activité",
+  "serviceOverview": "Aperçu des services",
   "parkACar": "Garer une Voiture",
   "sendBarrelsToGuinea": "Envoyer des Barils en Guinée",
   "transportCarsToGuinea": "Transporter des Voitures en Guinée",
@@ -99,11 +102,21 @@
   "privacyPolicy": "Politique de Confidentialité",
   "termsOfService": "Conditions d'Utilisation",
   "manageCars": "Gérer les Voitures",
+  "recentActivity": "Activité récente",
+  "filterAll": "Tous",
+  "filterParking": "Voitures garées",
+  "filterBarrels": "Envois de barils",
+  "filterTransport": "Transport de voitures",
+  "filterSales": "Ventes de voitures",
   "totalCars": "Total des Voitures",
   "activeCars": "Voitures Actives",
   "inactiveCars": "Voitures Inactives",
   "active": "Actif",
   "inactive": "Inactif",
+  "processing": "En cours",
+  "completed": "Terminé",
+  "noRecordsYet": "Aucun enregistrement pour le moment. Commencez à enregistrer vos activités ici.",
+  "recordReference": "Référence",
   "addNewCar": "Ajouter une Nouvelle Voiture",
   "carTitle": "Titre de la Voiture",
   "cancel": "Annuler",
@@ -124,20 +137,16 @@
   "noUsersFound": "Aucun utilisateur trouvé.",
   "enterStaffEmail": "Entrez l'email du personnel",
   "enterTemporaryPassword": "Entrez le mot de passe temporaire",
-  "userRoleUpdated": "Rôle utilisateur mis à jour vers {newRole}",
+  "userRoleUpdated": "Rôle utilisateur mis à jour vers {role}",
   "@userRoleUpdated": {
     "placeholders": {
-      "newRole": {
-        "type": "String"
-      }
+      "role": {}
     }
   },
-  "failedToUpdateUserRole": "Échec de la mise à jour du rôle utilisateur : {error}",
+  "failedToUpdateUserRole": "Échec de la mise à jour du rôle de l'utilisateur : {error}",
   "@failedToUpdateUserRole": {
     "placeholders": {
-      "error": {
-        "type": "String"
-      }
+      "error": {}
     }
   },
   "staffMemberAddedSuccessfully": "Membre du personnel ajouté avec succès !",
@@ -149,5 +158,37 @@
       }
     }
   },
-  "admin": "Administrateur"
+  "admin": "Administrateur",
+  "signUp": "S'inscrire",
+  "createAccount": "Créer un Compte",
+  "signUpToGetStarted": "Inscrivez-vous pour commencer",
+  "confirmPassword": "Confirmer le Mot de Passe",
+  "reEnterPassword": "Entrez à nouveau votre mot de passe",
+  "pleaseConfirmPassword": "Veuillez confirmer votre mot de passe",
+  "passwordsDoNotMatch": "Les mots de passe ne correspondent pas",
+  "alreadyHaveAccount": "Vous avez déjà un compte ?",
+  "dontHaveAccount": "Vous n'avez pas de compte ?",
+  "accountCreatedSuccessfully": "Compte créé avec succès !",
+  "deleteUser": "Supprimer l'utilisateur",
+  "confirmDeletion": "Confirmer la suppression",
+  "confirmDeleteUser": "Êtes-vous sûr de vouloir supprimer l'utilisateur {email} ?",
+  "@confirmDeleteUser": {
+    "placeholders": {
+      "email": {}
+    }
+  },
+  "cancel": "Annuler",
+  "delete": "Supprimer",
+  "userDeleted": "Utilisateur {email} supprimé avec succès",
+  "@userDeleted": {
+    "placeholders": {
+      "email": {}
+    }
+  },
+  "failedToDeleteUser": "Échec de la suppression de l'utilisateur : {error}",
+  "@failedToDeleteUser": {
+    "placeholders": {
+      "error": {}
+    }
+  }
 } 

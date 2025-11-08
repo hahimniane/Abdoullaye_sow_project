@@ -1,0 +1,1958 @@
+[
+  {
+    "brand": "Acura",
+    "model": "Legend",
+    "startYear": 1986,
+    "endYear": 1995
+  },
+  {
+    "brand": "Acura",
+    "model": "Integra",
+    "startYear": 1985,
+    "endYear": 2006
+  },
+  {
+    "brand": "Acura",
+    "model": "NSX",
+    "startYear": 1990,
+    "endYear": 2005
+  },
+  {
+    "brand": "Acura",
+    "model": "NSX",
+    "startYear": 2016,
+    "endYear": 2022
+  },
+  {
+    "brand": "Acura",
+    "model": "TL",
+    "startYear": 1995,
+    "endYear": 2014
+  },
+  {
+    "brand": "Acura",
+    "model": "MDX",
+    "startYear": 2000,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Aston Martin",
+    "model": "DB5",
+    "startYear": 1963,
+    "endYear": 1965
+  },
+  {
+    "brand": "Aston Martin",
+    "model": "DB6",
+    "startYear": 1965,
+    "endYear": 1970
+  },
+  {
+    "brand": "Aston Martin",
+    "model": "V8 Vantage",
+    "startYear": 1977,
+    "endYear": 1989
+  },
+  {
+    "brand": "Aston Martin",
+    "model": "DB9",
+    "startYear": 2004,
+    "endYear": 2016
+  },
+  {
+    "brand": "Aston Martin",
+    "model": "Vantage",
+    "startYear": 2005,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Audi",
+    "model": "80/4000",
+    "startYear": 1972,
+    "endYear": 1995
+  },
+  {
+    "brand": "Audi",
+    "model": "100/200",
+    "startYear": 1968,
+    "endYear": 1994
+  },
+  {
+    "brand": "Audi",
+    "model": "A4",
+    "startYear": 1994,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Audi",
+    "model": "A6",
+    "startYear": 1994,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Audi",
+    "model": "Quattro (Ur-Quattro)",
+    "startYear": 1980,
+    "endYear": 1991
+  },
+  {
+    "brand": "Audi",
+    "model": "TT",
+    "startYear": 1998,
+    "endYear": "Present"
+  },
+  {
+    "brand": "AvtoVAZ (Lada)",
+    "model": "2101 \"Zhiguli\" (Classic)",
+    "startYear": 1970,
+    "endYear": 1988
+  },
+  {
+    "brand": "AvtoVAZ (Lada)",
+    "model": "Samara (2108/2109/21099)",
+    "startYear": 1984,
+    "endYear": 2013
+  },
+  {
+    "brand": "AvtoVAZ (Lada)",
+    "model": "Niva (4x4)",
+    "startYear": 1977,
+    "endYear": "Present"
+  },
+  {
+    "brand": "AvtoVAZ (Lada)",
+    "model": "Granta",
+    "startYear": 2011,
+    "endYear": "Present"
+  },
+  {
+    "brand": "AvtoVAZ (Lada)",
+    "model": "Vesta",
+    "startYear": 2015,
+    "endYear": "Present"
+  },
+  {
+    "brand": "BAIC",
+    "model": "Senova D50",
+    "startYear": 2014,
+    "endYear": "Present"
+  },
+  {
+    "brand": "BAIC",
+    "model": "X25",
+    "startYear": 2015,
+    "endYear": "Present"
+  },
+  {
+    "brand": "BAIC",
+    "model": "BJ212",
+    "startYear": 1965,
+    "endYear": "Present"
+  },
+  {
+    "brand": "BMW",
+    "model": "3 Series",
+    "startYear": 1975,
+    "endYear": "Present"
+  },
+  {
+    "brand": "BMW",
+    "model": "5 Series",
+    "startYear": 1972,
+    "endYear": "Present"
+  },
+  {
+    "brand": "BMW",
+    "model": "7 Series",
+    "startYear": 1977,
+    "endYear": "Present"
+  },
+  {
+    "brand": "BMW",
+    "model": "X5",
+    "startYear": 1999,
+    "endYear": "Present"
+  },
+  {
+    "brand": "BMW",
+    "model": "Z3",
+    "startYear": 1995,
+    "endYear": 2002
+  },
+  {
+    "brand": "BMW",
+    "model": "Isetta (under license)",
+    "startYear": 1955,
+    "endYear": 1962
+  },
+  {
+    "brand": "Bugatti",
+    "model": "Type 35",
+    "startYear": 1924,
+    "endYear": 1930
+  },
+  {
+    "brand": "Bugatti",
+    "model": "Type 57",
+    "startYear": 1934,
+    "endYear": 1940
+  },
+  {
+    "brand": "Bugatti",
+    "model": "EB110",
+    "startYear": 1991,
+    "endYear": 1995
+  },
+  {
+    "brand": "Bugatti",
+    "model": "Veyron",
+    "startYear": 2005,
+    "endYear": 2015
+  },
+  {
+    "brand": "Bugatti",
+    "model": "Chiron",
+    "startYear": 2016,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Buick",
+    "model": "Special",
+    "startYear": 1936,
+    "endYear": 1958
+  },
+  {
+    "brand": "Buick",
+    "model": "Roadmaster",
+    "startYear": 1936,
+    "endYear": 1996
+  },
+  {
+    "brand": "Buick",
+    "model": "LeSabre",
+    "startYear": 1959,
+    "endYear": 2005
+  },
+  {
+    "brand": "Buick",
+    "model": "Regal",
+    "startYear": 1973,
+    "endYear": 2020
+  },
+  {
+    "brand": "Buick",
+    "model": "Enclave",
+    "startYear": 2007,
+    "endYear": "Present"
+  },
+  {
+    "brand": "BYD",
+    "model": "F3",
+    "startYear": 2005,
+    "endYear": "Present"
+  },
+  {
+    "brand": "BYD",
+    "model": "Qin",
+    "startYear": 2014,
+    "endYear": "Present"
+  },
+  {
+    "brand": "BYD",
+    "model": "Han",
+    "startYear": 2020,
+    "endYear": "Present"
+  },
+  {
+    "brand": "BYD",
+    "model": "e6",
+    "startYear": 2010,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Changan",
+    "model": "BenBen",
+    "startYear": 2006,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Changan",
+    "model": "CS75",
+    "startYear": 2013,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Changan",
+    "model": "Eado",
+    "startYear": 2012,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Chery",
+    "model": "QQ (QQ3)",
+    "startYear": 2003,
+    "endYear": 2015
+  },
+  {
+    "brand": "Chery",
+    "model": "Tiggo 5",
+    "startYear": 2013,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Chery",
+    "model": "Arrizo 5",
+    "startYear": 2016,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Chery",
+    "model": "Eastar",
+    "startYear": 2003,
+    "endYear": 2010
+  },
+  {
+    "brand": "Chevrolet",
+    "model": "Series C Classic Six",
+    "startYear": 1911,
+    "endYear": 1914
+  },
+  {
+    "brand": "Chevrolet",
+    "model": "Bel Air",
+    "startYear": 1950,
+    "endYear": 1975
+  },
+  {
+    "brand": "Chevrolet",
+    "model": "Impala",
+    "startYear": 1958,
+    "endYear": 2020
+  },
+  {
+    "brand": "Chevrolet",
+    "model": "Corvette",
+    "startYear": 1953,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Chevrolet",
+    "model": "Suburban",
+    "startYear": 1935,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Chevrolet",
+    "model": "Camaro",
+    "startYear": 1967,
+    "endYear": 2002
+  },
+  {
+    "brand": "Chevrolet",
+    "model": "Camaro",
+    "startYear": 2010,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Chevrolet",
+    "model": "Bolt EV",
+    "startYear": 2016,
+    "endYear": 2023
+  },
+  {
+    "brand": "Chrysler",
+    "model": "Airflow",
+    "startYear": 1934,
+    "endYear": 1937
+  },
+  {
+    "brand": "Chrysler",
+    "model": "Imperial",
+    "startYear": 1926,
+    "endYear": 1975
+  },
+  {
+    "brand": "Chrysler",
+    "model": "Newport",
+    "startYear": 1961,
+    "endYear": 1981
+  },
+  {
+    "brand": "Chrysler",
+    "model": "300/300C",
+    "startYear": 1955,
+    "endYear": 2023
+  },
+  {
+    "brand": "Chrysler",
+    "model": "Voyager (Minivan)",
+    "startYear": 1988,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Citroën",
+    "model": "2CV",
+    "startYear": 1948,
+    "endYear": 1990
+  },
+  {
+    "brand": "Citroën",
+    "model": "DS",
+    "startYear": 1955,
+    "endYear": 1975
+  },
+  {
+    "brand": "Citroën",
+    "model": "CX",
+    "startYear": 1974,
+    "endYear": 1991
+  },
+  {
+    "brand": "Citroën",
+    "model": "XM",
+    "startYear": 1989,
+    "endYear": 2000
+  },
+  {
+    "brand": "Citroën",
+    "model": "C3",
+    "startYear": 2002,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Dacia",
+    "model": "1300",
+    "startYear": 1969,
+    "endYear": 2004
+  },
+  {
+    "brand": "Dacia",
+    "model": "Duster",
+    "startYear": 2010,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Dacia",
+    "model": "Logan",
+    "startYear": 2004,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Dacia",
+    "model": "Sandero",
+    "startYear": 2008,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Daimler (UK)",
+    "model": "DB18",
+    "startYear": 1939,
+    "endYear": 1953
+  },
+  {
+    "brand": "Daimler (UK)",
+    "model": "Sovereign",
+    "startYear": 1966,
+    "endYear": 1983
+  },
+  {
+    "brand": "Daimler (UK)",
+    "model": "DS420 Limousine",
+    "startYear": 1968,
+    "endYear": 1992
+  },
+  {
+    "brand": "Dodge",
+    "model": "Custom Series (D19)",
+    "startYear": 1941,
+    "endYear": 1942
+  },
+  {
+    "brand": "Dodge",
+    "model": "Coronet",
+    "startYear": 1949,
+    "endYear": 1976
+  },
+  {
+    "brand": "Dodge",
+    "model": "Charger",
+    "startYear": 1966,
+    "endYear": 1978
+  },
+  {
+    "brand": "Dodge",
+    "model": "Charger",
+    "startYear": 2006,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Dodge",
+    "model": "Caravan",
+    "startYear": 1984,
+    "endYear": 2020
+  },
+  {
+    "brand": "Dodge",
+    "model": "Ram (Pickup)",
+    "startYear": 1981,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Dongfeng",
+    "model": "Fengshen S30",
+    "startYear": 2009,
+    "endYear": 2017
+  },
+  {
+    "brand": "Dongfeng",
+    "model": "A9",
+    "startYear": 2016,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Dongfeng",
+    "model": "Warrior (EQ2050)",
+    "startYear": 2002,
+    "endYear": "Present"
+  },
+  {
+    "brand": "FAW",
+    "model": "Hongqi CA770",
+    "startYear": 1963,
+    "endYear": 1981
+  },
+  {
+    "brand": "FAW",
+    "model": "Hongqi H5",
+    "startYear": 2017,
+    "endYear": "Present"
+  },
+  {
+    "brand": "FAW",
+    "model": "Bestune B70",
+    "startYear": 2006,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Ferrari",
+    "model": "250 GTO",
+    "startYear": 1962,
+    "endYear": 1964
+  },
+  {
+    "brand": "Ferrari",
+    "model": "365 GTB/4 \"Daytona\"",
+    "startYear": 1968,
+    "endYear": 1973
+  },
+  {
+    "brand": "Ferrari",
+    "model": "F40",
+    "startYear": 1987,
+    "endYear": 1992
+  },
+  {
+    "brand": "Ferrari",
+    "model": "Enzo",
+    "startYear": 2002,
+    "endYear": 2004
+  },
+  {
+    "brand": "Ferrari",
+    "model": "488 GTB",
+    "startYear": 2015,
+    "endYear": 2019
+  },
+  {
+    "brand": "Ferrari",
+    "model": "SF90 Stradale",
+    "startYear": 2019,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Fiat",
+    "model": "500 (Nuova)",
+    "startYear": 1957,
+    "endYear": 1975
+  },
+  {
+    "brand": "Fiat",
+    "model": "124 Spider",
+    "startYear": 1966,
+    "endYear": 1985
+  },
+  {
+    "brand": "Fiat",
+    "model": "Uno",
+    "startYear": 1983,
+    "endYear": 2013
+  },
+  {
+    "brand": "Fiat",
+    "model": "Panda",
+    "startYear": 1980,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Fiat",
+    "model": "Punto",
+    "startYear": 1993,
+    "endYear": 2018
+  },
+  {
+    "brand": "Fiat",
+    "model": "500 (modern)",
+    "startYear": 2007,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Ford",
+    "model": "Model A",
+    "startYear": 1903,
+    "endYear": 1904
+  },
+  {
+    "brand": "Ford",
+    "model": "Model T",
+    "startYear": 1908,
+    "endYear": 1927
+  },
+  {
+    "brand": "Ford",
+    "model": "F-Series (Pickup)",
+    "startYear": 1948,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Ford",
+    "model": "Thunderbird",
+    "startYear": 1955,
+    "endYear": 2005
+  },
+  {
+    "brand": "Ford",
+    "model": "Mustang",
+    "startYear": 1964,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Ford",
+    "model": "Escort (Europe)",
+    "startYear": 1968,
+    "endYear": 2004
+  },
+  {
+    "brand": "Ford",
+    "model": "Fiesta",
+    "startYear": 1976,
+    "endYear": 2023
+  },
+  {
+    "brand": "Ford",
+    "model": "Falcon (USA)",
+    "startYear": 1960,
+    "endYear": 1970
+  },
+  {
+    "brand": "Ford",
+    "model": "Crown Victoria",
+    "startYear": 1992,
+    "endYear": 2012
+  },
+  {
+    "brand": "Ford",
+    "model": "Explorer",
+    "startYear": 1990,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Geely",
+    "model": "CK (Otaka)",
+    "startYear": 2005,
+    "endYear": 2016
+  },
+  {
+    "brand": "Geely",
+    "model": "Emgrand EC7",
+    "startYear": 2009,
+    "endYear": 2016
+  },
+  {
+    "brand": "Geely",
+    "model": "Emgrand GT (GC9)",
+    "startYear": 2015,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Geely",
+    "model": "Atlas (Boyue)",
+    "startYear": 2016,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Genesis",
+    "model": "G80",
+    "startYear": 2016,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Genesis",
+    "model": "G90",
+    "startYear": 2015,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Genesis",
+    "model": "GV80",
+    "startYear": 2020,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Geo",
+    "model": "Metro",
+    "startYear": 1989,
+    "endYear": 2001
+  },
+  {
+    "brand": "Geo",
+    "model": "Prizm",
+    "startYear": 1989,
+    "endYear": 2002
+  },
+  {
+    "brand": "Geo",
+    "model": "Tracker",
+    "startYear": 1989,
+    "endYear": 1997
+  },
+  {
+    "brand": "Great Wall",
+    "model": "Hover (Haval H5)",
+    "startYear": 2005,
+    "endYear": 2018
+  },
+  {
+    "brand": "Great Wall",
+    "model": "Wingle (Pickup)",
+    "startYear": 2006,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Great Wall",
+    "model": "Haval H6",
+    "startYear": 2011,
+    "endYear": "Present"
+  },
+  {
+    "brand": "HIMA (Huawei/Changan)",
+    "model": "Luxeed S7",
+    "startYear": 2023,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Holden",
+    "model": "Kingswood",
+    "startYear": 1968,
+    "endYear": 1984
+  },
+  {
+    "brand": "Holden",
+    "model": "Monaro",
+    "startYear": 1968,
+    "endYear": 2005
+  },
+  {
+    "brand": "Holden",
+    "model": "Commodore",
+    "startYear": 1978,
+    "endYear": 2020
+  },
+  {
+    "brand": "Holden",
+    "model": "Torana",
+    "startYear": 1967,
+    "endYear": 1979
+  },
+  {
+    "brand": "Holden",
+    "model": "Cruze (JG)",
+    "startYear": 2009,
+    "endYear": 2016
+  },
+  {
+    "brand": "Honda",
+    "model": "Civic",
+    "startYear": 1972,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Honda",
+    "model": "Accord",
+    "startYear": 1976,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Honda",
+    "model": "Prelude",
+    "startYear": 1978,
+    "endYear": 2001
+  },
+  {
+    "brand": "Honda",
+    "model": "CR-X/Del Sol",
+    "startYear": 1983,
+    "endYear": 1997
+  },
+  {
+    "brand": "Honda",
+    "model": "Odyssey",
+    "startYear": 1994,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Honda",
+    "model": "CR-V",
+    "startYear": 1995,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Hyundai",
+    "model": "Pony",
+    "startYear": 1975,
+    "endYear": 1990
+  },
+  {
+    "brand": "Hyundai",
+    "model": "Excel",
+    "startYear": 1985,
+    "endYear": 2000
+  },
+  {
+    "brand": "Hyundai",
+    "model": "Elantra",
+    "startYear": 1990,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Hyundai",
+    "model": "Sonata",
+    "startYear": 1985,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Hyundai",
+    "model": "Santa Fe",
+    "startYear": 2000,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Infiniti",
+    "model": "Q45",
+    "startYear": 1989,
+    "endYear": 2006
+  },
+  {
+    "brand": "Infiniti",
+    "model": "G35/G37 (Q40)",
+    "startYear": 2002,
+    "endYear": 2015
+  },
+  {
+    "brand": "Infiniti",
+    "model": "FX (QX70)",
+    "startYear": 2003,
+    "endYear": 2017
+  },
+  {
+    "brand": "Infiniti",
+    "model": "Q50",
+    "startYear": 2013,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Iran Khodro",
+    "model": "Paykan",
+    "startYear": 1967,
+    "endYear": 2005
+  },
+  {
+    "brand": "Iran Khodro",
+    "model": "Samand",
+    "startYear": 2003,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Iran Khodro",
+    "model": "Dena",
+    "startYear": 2015,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Isuzu",
+    "model": "Bellel",
+    "startYear": 1961,
+    "endYear": 1967
+  },
+  {
+    "brand": "Isuzu",
+    "model": "117 Coupé",
+    "startYear": 1968,
+    "endYear": 1981
+  },
+  {
+    "brand": "Isuzu",
+    "model": "Trooper",
+    "startYear": 1981,
+    "endYear": 2005
+  },
+  {
+    "brand": "Isuzu",
+    "model": "D-Max",
+    "startYear": 2002,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Kia",
+    "model": "Brisa",
+    "startYear": 1974,
+    "endYear": 1981
+  },
+  {
+    "brand": "Kia",
+    "model": "Pride",
+    "startYear": 1986,
+    "endYear": 2000
+  },
+  {
+    "brand": "Kia",
+    "model": "Sportage",
+    "startYear": 1993,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Kia",
+    "model": "Sorento",
+    "startYear": 2002,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Kia",
+    "model": "EV6",
+    "startYear": 2021,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Lamborghini",
+    "model": "Miura",
+    "startYear": 1966,
+    "endYear": 1973
+  },
+  {
+    "brand": "Lamborghini",
+    "model": "Countach",
+    "startYear": 1974,
+    "endYear": 1990
+  },
+  {
+    "brand": "Lamborghini",
+    "model": "Diablo",
+    "startYear": 1990,
+    "endYear": 2001
+  },
+  {
+    "brand": "Lamborghini",
+    "model": "Gallardo",
+    "startYear": 2003,
+    "endYear": 2013
+  },
+  {
+    "brand": "Lamborghini",
+    "model": "Aventador",
+    "startYear": 2011,
+    "endYear": 2022
+  },
+  {
+    "brand": "Lamborghini",
+    "model": "Urus",
+    "startYear": 2018,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Lexus",
+    "model": "LS",
+    "startYear": 1989,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Lexus",
+    "model": "ES",
+    "startYear": 1989,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Lexus",
+    "model": "SC",
+    "startYear": 1991,
+    "endYear": 2010
+  },
+  {
+    "brand": "Lexus",
+    "model": "RX",
+    "startYear": 1998,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Lexus",
+    "model": "LFA",
+    "startYear": 2010,
+    "endYear": 2012
+  },
+  {
+    "brand": "Lincoln",
+    "model": "Continental",
+    "startYear": 1940,
+    "endYear": 2020
+  },
+  {
+    "brand": "Lincoln",
+    "model": "Town Car",
+    "startYear": 1981,
+    "endYear": 2011
+  },
+  {
+    "brand": "Lincoln",
+    "model": "Navigator",
+    "startYear": 1997,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Lincoln",
+    "model": "MKZ (Zephyr)",
+    "startYear": 2006,
+    "endYear": 2020
+  },
+  {
+    "brand": "Maserati",
+    "model": "3500 GT",
+    "startYear": 1957,
+    "endYear": 1964
+  },
+  {
+    "brand": "Maserati",
+    "model": "Quattroporte",
+    "startYear": 1963,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Maserati",
+    "model": "Biturbo",
+    "startYear": 1981,
+    "endYear": 1994
+  },
+  {
+    "brand": "Maserati",
+    "model": "Ghibli",
+    "startYear": 1967,
+    "endYear": 1973
+  },
+  {
+    "brand": "Maserati",
+    "model": "Ghibli",
+    "startYear": 1992,
+    "endYear": 1998
+  },
+  {
+    "brand": "Maserati",
+    "model": "Ghibli",
+    "startYear": 2013,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Mazda",
+    "model": "R360",
+    "startYear": 1960,
+    "endYear": 1966
+  },
+  {
+    "brand": "Mazda",
+    "model": "Cosmo Sport",
+    "startYear": 1967,
+    "endYear": 1972
+  },
+  {
+    "brand": "Mazda",
+    "model": "RX-7",
+    "startYear": 1978,
+    "endYear": 2002
+  },
+  {
+    "brand": "Mazda",
+    "model": "MX-5 Miata",
+    "startYear": 1989,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Mazda",
+    "model": "Protegé/323",
+    "startYear": 1963,
+    "endYear": 2003
+  },
+  {
+    "brand": "Mazda",
+    "model": "CX-5",
+    "startYear": 2012,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Mercury",
+    "model": "Eight",
+    "startYear": 1939,
+    "endYear": 1951
+  },
+  {
+    "brand": "Mercury",
+    "model": "Cougar",
+    "startYear": 1967,
+    "endYear": 2002
+  },
+  {
+    "brand": "Mercury",
+    "model": "Grand Marquis",
+    "startYear": 1975,
+    "endYear": 2011
+  },
+  {
+    "brand": "Mercury",
+    "model": "Sable",
+    "startYear": 1986,
+    "endYear": 2005
+  },
+  {
+    "brand": "Mercury",
+    "model": "Mariner",
+    "startYear": 2005,
+    "endYear": 2010
+  },
+  {
+    "brand": "MG",
+    "model": "T-Type (TC)",
+    "startYear": 1945,
+    "endYear": 1950
+  },
+  {
+    "brand": "MG",
+    "model": "MGB",
+    "startYear": 1962,
+    "endYear": 1980
+  },
+  {
+    "brand": "MG",
+    "model": "Rover-based range (ZT/ZT-T)",
+    "startYear": 2001,
+    "endYear": 2005
+  },
+  {
+    "brand": "MG",
+    "model": "TF (revival)",
+    "startYear": 2002,
+    "endYear": 2011
+  },
+  {
+    "brand": "MG",
+    "model": "HS",
+    "startYear": 2018,
+    "endYear": "Present"
+  },
+  {
+    "brand": "MG",
+    "model": "4 EV",
+    "startYear": 2022,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Mitsubishi",
+    "model": "Model A",
+    "startYear": 1917,
+    "endYear": 1921
+  },
+  {
+    "brand": "Mitsubishi",
+    "model": "500",
+    "startYear": 1960,
+    "endYear": 1962
+  },
+  {
+    "brand": "Mitsubishi",
+    "model": "Galant",
+    "startYear": 1969,
+    "endYear": 2012
+  },
+  {
+    "brand": "Mitsubishi",
+    "model": "Lancer (Evolution)",
+    "startYear": 1973,
+    "endYear": 2017
+  },
+  {
+    "brand": "Mitsubishi",
+    "model": "Pajero/Montero",
+    "startYear": 1982,
+    "endYear": 2021
+  },
+  {
+    "brand": "Mitsubishi",
+    "model": "Outlander",
+    "startYear": 2001,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Moskvitch",
+    "model": "400/401",
+    "startYear": 1946,
+    "endYear": 1954
+  },
+  {
+    "brand": "Moskvitch",
+    "model": "408/412",
+    "startYear": 1964,
+    "endYear": 1976
+  },
+  {
+    "brand": "Moskvitch",
+    "model": "2140",
+    "startYear": 1976,
+    "endYear": 1988
+  },
+  {
+    "brand": "Moskvitch",
+    "model": "Aleko (2141)",
+    "startYear": 1986,
+    "endYear": 2001
+  },
+  {
+    "brand": "Nio",
+    "model": "EP9",
+    "startYear": 2016,
+    "endYear": 2016
+  },
+  {
+    "brand": "Nio",
+    "model": "ES8",
+    "startYear": 2018,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Nio",
+    "model": "ES6",
+    "startYear": 2019,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Nio",
+    "model": "ET7",
+    "startYear": 2022,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Nissan",
+    "model": "Bluebird",
+    "startYear": 1957,
+    "endYear": 2001
+  },
+  {
+    "brand": "Nissan",
+    "model": "President",
+    "startYear": 1965,
+    "endYear": 2010
+  },
+  {
+    "brand": "Nissan",
+    "model": "Silvia",
+    "startYear": 1965,
+    "endYear": 2002
+  },
+  {
+    "brand": "Nissan",
+    "model": "Skyline GT-R",
+    "startYear": 1969,
+    "endYear": 2002
+  },
+  {
+    "brand": "Nissan",
+    "model": "Sunny",
+    "startYear": 1966,
+    "endYear": 2006
+  },
+  {
+    "brand": "Nissan",
+    "model": "300ZX (Z32)",
+    "startYear": 1990,
+    "endYear": 1999
+  },
+  {
+    "brand": "Nissan",
+    "model": "Altima",
+    "startYear": 1992,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Nissan",
+    "model": "Maxima",
+    "startYear": 1980,
+    "endYear": 2023
+  },
+  {
+    "brand": "Nissan",
+    "model": "Leaf",
+    "startYear": 2010,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Nissan",
+    "model": "GT-R",
+    "startYear": 2007,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Oldsmobile",
+    "model": "Curved Dash",
+    "startYear": 1901,
+    "endYear": 1907
+  },
+  {
+    "brand": "Oldsmobile",
+    "model": "88 (Eighty-Eight)",
+    "startYear": 1949,
+    "endYear": 1999
+  },
+  {
+    "brand": "Oldsmobile",
+    "model": "Toronado",
+    "startYear": 1966,
+    "endYear": 1992
+  },
+  {
+    "brand": "Oldsmobile",
+    "model": "Cutlass",
+    "startYear": 1961,
+    "endYear": 1999
+  },
+  {
+    "brand": "Oldsmobile",
+    "model": "Aurora",
+    "startYear": 1995,
+    "endYear": 2003
+  },
+  {
+    "brand": "Opel",
+    "model": "Olympia",
+    "startYear": 1935,
+    "endYear": 1970
+  },
+  {
+    "brand": "Opel",
+    "model": "Kadett",
+    "startYear": 1936,
+    "endYear": 1940
+  },
+  {
+    "brand": "Opel",
+    "model": "Kadett",
+    "startYear": 1962,
+    "endYear": 1991
+  },
+  {
+    "brand": "Opel",
+    "model": "Corsa",
+    "startYear": 1982,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Opel",
+    "model": "Astra",
+    "startYear": 1991,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Opel",
+    "model": "Manta",
+    "startYear": 1970,
+    "endYear": 1988
+  },
+  {
+    "brand": "Packard",
+    "model": "Twin Six",
+    "startYear": 1916,
+    "endYear": 1923
+  },
+  {
+    "brand": "Packard",
+    "model": "Eight",
+    "startYear": 1930,
+    "endYear": 1938
+  },
+  {
+    "brand": "Packard",
+    "model": "Super Eight",
+    "startYear": 1948,
+    "endYear": 1950
+  },
+  {
+    "brand": "Packard",
+    "model": "Patrician",
+    "startYear": 1951,
+    "endYear": 1956
+  },
+  {
+    "brand": "Packard",
+    "model": "Caribbean",
+    "startYear": 1953,
+    "endYear": 1956
+  },
+  {
+    "brand": "Plymouth",
+    "model": "De Luxe",
+    "startYear": 1933,
+    "endYear": 1942
+  },
+  {
+    "brand": "Plymouth",
+    "model": "Fury",
+    "startYear": 1956,
+    "endYear": 1978
+  },
+  {
+    "brand": "Plymouth",
+    "model": "Valiant",
+    "startYear": 1960,
+    "endYear": 1976
+  },
+  {
+    "brand": "Plymouth",
+    "model": "Barracuda",
+    "startYear": 1964,
+    "endYear": 1974
+  },
+  {
+    "brand": "Plymouth",
+    "model": "Voyager",
+    "startYear": 1984,
+    "endYear": 2000
+  },
+  {
+    "brand": "Pontiac",
+    "model": "Chieftain",
+    "startYear": 1949,
+    "endYear": 1958
+  },
+  {
+    "brand": "Pontiac",
+    "model": "GTO",
+    "startYear": 1964,
+    "endYear": 1974
+  },
+  {
+    "brand": "Pontiac",
+    "model": "Firebird",
+    "startYear": 1967,
+    "endYear": 2002
+  },
+  {
+    "brand": "Pontiac",
+    "model": "Bonneville",
+    "startYear": 1957,
+    "endYear": 2005
+  },
+  {
+    "brand": "Pontiac",
+    "model": "Grand Am",
+    "startYear": 1973,
+    "endYear": 2005
+  },
+  {
+    "brand": "Pontiac",
+    "model": "Aztek",
+    "startYear": 2001,
+    "endYear": 2005
+  },
+  {
+    "brand": "Porsche",
+    "model": "356",
+    "startYear": 1948,
+    "endYear": 1965
+  },
+  {
+    "brand": "Porsche",
+    "model": "911",
+    "startYear": 1963,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Porsche",
+    "model": "944",
+    "startYear": 1982,
+    "endYear": 1991
+  },
+  {
+    "brand": "Porsche",
+    "model": "918 Spyder",
+    "startYear": 2013,
+    "endYear": 2015
+  },
+  {
+    "brand": "Porsche",
+    "model": "Cayenne",
+    "startYear": 2002,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Renault",
+    "model": "4CV",
+    "startYear": 1947,
+    "endYear": 1961
+  },
+  {
+    "brand": "Renault",
+    "model": "Dauphine",
+    "startYear": 1956,
+    "endYear": 1967
+  },
+  {
+    "brand": "Renault",
+    "model": "4",
+    "startYear": 1961,
+    "endYear": 1994
+  },
+  {
+    "brand": "Renault",
+    "model": "5",
+    "startYear": 1972,
+    "endYear": 1996
+  },
+  {
+    "brand": "Renault",
+    "model": "12",
+    "startYear": 1969,
+    "endYear": 2000
+  },
+  {
+    "brand": "Renault",
+    "model": "Espace",
+    "startYear": 1984,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Renault",
+    "model": "Clio",
+    "startYear": 1990,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Suzuki",
+    "model": "Suzulight",
+    "startYear": 1955,
+    "endYear": 1969
+  },
+  {
+    "brand": "Suzuki",
+    "model": "Fronte",
+    "startYear": 1962,
+    "endYear": 1988
+  },
+  {
+    "brand": "Suzuki",
+    "model": "Alto",
+    "startYear": 1979,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Suzuki",
+    "model": "Swift",
+    "startYear": 1983,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Suzuki",
+    "model": "Vitara (Escudo)",
+    "startYear": 1988,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Saab",
+    "model": "92",
+    "startYear": 1949,
+    "endYear": 1956
+  },
+  {
+    "brand": "Saab",
+    "model": "96",
+    "startYear": 1960,
+    "endYear": 1980
+  },
+  {
+    "brand": "Saab",
+    "model": "900",
+    "startYear": 1978,
+    "endYear": 1998
+  },
+  {
+    "brand": "Saab",
+    "model": "9-3",
+    "startYear": 1998,
+    "endYear": 2014
+  },
+  {
+    "brand": "Saab",
+    "model": "9-5",
+    "startYear": 1997,
+    "endYear": 2012
+  },
+  {
+    "brand": "Saturn",
+    "model": "S-Series",
+    "startYear": 1990,
+    "endYear": 2002
+  },
+  {
+    "brand": "Saturn",
+    "model": "L-Series",
+    "startYear": 2000,
+    "endYear": 2005
+  },
+  {
+    "brand": "Saturn",
+    "model": "Vue",
+    "startYear": 2002,
+    "endYear": 2010
+  },
+  {
+    "brand": "Saturn",
+    "model": "Ion",
+    "startYear": 2003,
+    "endYear": 2007
+  },
+  {
+    "brand": "SEAT",
+    "model": "1400",
+    "startYear": 1953,
+    "endYear": 1964
+  },
+  {
+    "brand": "SEAT",
+    "model": "600",
+    "startYear": 1957,
+    "endYear": 1973
+  },
+  {
+    "brand": "SEAT",
+    "model": "Ibiza",
+    "startYear": 1984,
+    "endYear": "Present"
+  },
+  {
+    "brand": "SEAT",
+    "model": "León",
+    "startYear": 1999,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Škoda",
+    "model": "440 \"Spartak\"",
+    "startYear": 1955,
+    "endYear": 1959
+  },
+  {
+    "brand": "Škoda",
+    "model": "Octavia (original)",
+    "startYear": 1959,
+    "endYear": 1971
+  },
+  {
+    "brand": "Škoda",
+    "model": "1000 MB",
+    "startYear": 1964,
+    "endYear": 1969
+  },
+  {
+    "brand": "Škoda",
+    "model": "Favorit",
+    "startYear": 1987,
+    "endYear": 1995
+  },
+  {
+    "brand": "Škoda",
+    "model": "Octavia",
+    "startYear": 1996,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Škoda",
+    "model": "Fabia",
+    "startYear": 1999,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Subaru",
+    "model": "360",
+    "startYear": 1958,
+    "endYear": 1971
+  },
+  {
+    "brand": "Subaru",
+    "model": "Leone",
+    "startYear": 1971,
+    "endYear": 1994
+  },
+  {
+    "brand": "Subaru",
+    "model": "Legacy",
+    "startYear": 1989,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Subaru",
+    "model": "Impreza",
+    "startYear": 1992,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Subaru",
+    "model": "Forester",
+    "startYear": 1997,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Toyota",
+    "model": "AA",
+    "startYear": 1936,
+    "endYear": 1943
+  },
+  {
+    "brand": "Toyota",
+    "model": "AB",
+    "startYear": 1936,
+    "endYear": 1943
+  },
+  {
+    "brand": "Toyota",
+    "model": "AC",
+    "startYear": 1943,
+    "endYear": 1947
+  },
+  {
+    "brand": "Toyota",
+    "model": "Crown",
+    "startYear": 1955,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Toyota",
+    "model": "Corona",
+    "startYear": 1957,
+    "endYear": 2000
+  },
+  {
+    "brand": "Toyota",
+    "model": "Corolla",
+    "startYear": 1966,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Toyota",
+    "model": "2000GT",
+    "startYear": 1967,
+    "endYear": 1970
+  },
+  {
+    "brand": "Toyota",
+    "model": "Hilux",
+    "startYear": 1968,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Toyota",
+    "model": "Celica",
+    "startYear": 1970,
+    "endYear": 2006
+  },
+  {
+    "brand": "Toyota",
+    "model": "Carina",
+    "startYear": 1970,
+    "endYear": 2000
+  },
+  {
+    "brand": "Toyota",
+    "model": "Land Cruiser",
+    "startYear": 1951,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Toyota",
+    "model": "Camry",
+    "startYear": 1982,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Toyota",
+    "model": "4Runner",
+    "startYear": 1984,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Toyota",
+    "model": "Prius",
+    "startYear": 1997,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Toyota",
+    "model": "Yaris (Vitz)",
+    "startYear": 1999,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Vauxhall",
+    "model": "10 (H-Type)",
+    "startYear": 1937,
+    "endYear": 1947
+  },
+  {
+    "brand": "Vauxhall",
+    "model": "Cresta",
+    "startYear": 1954,
+    "endYear": 1972
+  },
+  {
+    "brand": "Vauxhall",
+    "model": "Viva",
+    "startYear": 1963,
+    "endYear": 1979
+  },
+  {
+    "brand": "Vauxhall",
+    "model": "Astra",
+    "startYear": 1980,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Vauxhall",
+    "model": "Corsa",
+    "startYear": 1993,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Volkswagen",
+    "model": "Beetle (Type 1)",
+    "startYear": 1938,
+    "endYear": 2003
+  },
+  {
+    "brand": "Volkswagen",
+    "model": "Type 2 (Bus)",
+    "startYear": 1950,
+    "endYear": 2013
+  },
+  {
+    "brand": "Volkswagen",
+    "model": "Golf",
+    "startYear": 1974,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Volkswagen",
+    "model": "Passat",
+    "startYear": 1973,
+    "endYear": 2022
+  },
+  {
+    "brand": "Volkswagen",
+    "model": "Polo",
+    "startYear": 1975,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Volkswagen",
+    "model": "Tiguan",
+    "startYear": 2007,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Volvo",
+    "model": "PV444/544",
+    "startYear": 1947,
+    "endYear": 1966
+  },
+  {
+    "brand": "Volvo",
+    "model": "Amazon (122)",
+    "startYear": 1956,
+    "endYear": 1970
+  },
+  {
+    "brand": "Volvo",
+    "model": "240 Series",
+    "startYear": 1974,
+    "endYear": 1993
+  },
+  {
+    "brand": "Volvo",
+    "model": "850",
+    "startYear": 1991,
+    "endYear": 1997
+  },
+  {
+    "brand": "Volvo",
+    "model": "XC90",
+    "startYear": 2002,
+    "endYear": "Present"
+  },
+  {
+    "brand": "Wolseley",
+    "model": "4/44",
+    "startYear": 1952,
+    "endYear": 1956
+  },
+  {
+    "brand": "Wolseley",
+    "model": "6/110",
+    "startYear": 1959,
+    "endYear": 1968
+  },
+  {
+    "brand": "Wolseley",
+    "model": "Hornet (Mini)",
+    "startYear": 1961,
+    "endYear": 1969
+  },
+  {
+    "brand": "Wolseley",
+    "model": "Princess",
+    "startYear": 1947,
+    "endYear": 1956
+  },
+  {
+    "brand": "ZiL",
+    "model": "ZIS-110",
+    "startYear": 1946,
+    "endYear": 1958
+  },
+  {
+    "brand": "ZiL",
+    "model": "111/111G",
+    "startYear": 1958,
+    "endYear": 1967
+  },
+  {
+    "brand": "ZiL",
+    "model": "114",
+    "startYear": 1967,
+    "endYear": 1978
+  },
+  {
+    "brand": "ZiL",
+    "model": "4104",
+    "startYear": 1978,
+    "endYear": 2002
+  }
+]

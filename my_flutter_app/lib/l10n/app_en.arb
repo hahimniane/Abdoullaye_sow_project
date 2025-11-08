@@ -22,6 +22,9 @@
   "french": "French",
   "welcomeToBusinessServices": "Welcome to Business Services",
   "chooseServiceToStart": "Choose a service to get started",
+  "servicesTab": "Services",
+  "activityTab": "Activity",
+  "serviceOverview": "Service Overview",
   "parkACar": "Park a Car",
   "sendBarrelsToGuinea": "Send Barrels to Guinea",
   "transportCarsToGuinea": "Transport Cars to Guinea",
@@ -98,9 +101,19 @@
   "privacyPolicy": "Privacy Policy",
   "termsOfService": "Terms of Service",
   "manageCars": "Manage Cars",
+  "recentActivity": "Recent Activity",
+  "filterAll": "All",
+  "filterParking": "Parked Cars",
+  "filterBarrels": "Barrel Shipments",
+  "filterTransport": "Car Transport",
+  "filterSales": "Car Sales",
   "totalCars": "Total Cars",
   "activeCars": "Active Cars",
   "inactiveCars": "Inactive Cars",
+  "processing": "Processing",
+  "completed": "Completed",
+  "noRecordsYet": "No records yet. Start logging activities to see them here.",
+  "recordReference": "Reference",
   "active": "Active",
   "inactive": "Inactive",
   "addNewCar": "Add New Car",
@@ -123,20 +136,38 @@
   "noUsersFound": "No users found.",
   "enterStaffEmail": "Enter staff email",
   "enterTemporaryPassword": "Enter temporary password",
-  "userRoleUpdated": "User role updated to {newRole}",
+  "userRoleUpdated": "User role updated to {role}",
   "@userRoleUpdated": {
     "placeholders": {
-      "newRole": {
-        "type": "String"
-      }
+      "role": {}
     }
   },
   "failedToUpdateUserRole": "Failed to update user role: {error}",
   "@failedToUpdateUserRole": {
     "placeholders": {
-      "error": {
-        "type": "String"
-      }
+      "error": {}
+    }
+  },
+  "deleteUser": "Delete User",
+  "confirmDeletion": "Confirm Deletion",
+  "confirmDeleteUser": "Are you sure you want to delete the user {email}?",
+  "@confirmDeleteUser": {
+    "placeholders": {
+      "email": {}
+    }
+  },
+  "cancel": "Cancel",
+  "delete": "Delete",
+  "userDeleted": "User {email} deleted successfully",
+  "@userDeleted": {
+    "placeholders": {
+      "email": {}
+    }
+  },
+  "failedToDeleteUser": "Failed to delete user: {error}",
+  "@failedToDeleteUser": {
+    "placeholders": {
+      "error": {}
     }
   },
   "staffMemberAddedSuccessfully": "Staff member added successfully!",
@@ -148,5 +179,15 @@
       }
     }
   },
-  "admin": "Admin"
+  "admin": "Admin",
+  "signUp": "Sign Up",
+  "createAccount": "Create Account",
+  "signUpToGetStarted": "Sign up to get started",
+  "confirmPassword": "Confirm Password",
+  "reEnterPassword": "Re-enter your password",
+  "pleaseConfirmPassword": "Please confirm your password",
+  "passwordsDoNotMatch": "Passwords do not match",
+  "alreadyHaveAccount": "Already have an account?",
+  "dontHaveAccount": "Don't have an account?",
+  "accountCreatedSuccessfully": "Account created successfully!"
 }

@@ -15,16 +15,16 @@ class UserManagementScreen extends StatefulWidget {
 class _UserManagementScreenState extends State<UserManagementScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Future<void> _updateUserRole(String userId, String newRole) async {
+  Future<void> _updateUserRole(String userId, String role) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
     try {
-      await authProvider.updateUserRole(userId, newRole);
+      await authProvider.updateUserRole(userId, role);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              AppLocalizations.of(context)!.userRoleUpdated(newRole),
+              AppLocalizations.of(context)!.userRoleUpdated(role),
             ),
             backgroundColor: Colors.green,
           ),
@@ -42,6 +42,58 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             backgroundColor: Colors.red,
           ),
         );
+      }
+    }
+  }
+
+  Future<void> _deleteUser(String userId, String userEmail) async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final localizations = AppLocalizations.of(context)!;
+
+    // Show a confirmation dialog before deleting
+    final bool confirm = await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(localizations.confirmDeletion),
+          content: Text(localizations.confirmDeleteUser(userEmail)),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(localizations.cancel),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(
+                localizations.delete,
+                style: const TextStyle(color: Colors.red),
+              ),
+            ),
+          ],
+        );
+      },
+    ) ?? false;
+
+    if (confirm) {
+      try {
+        await authProvider.deleteUser(userId);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(localizations.userDeleted(userEmail)),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(localizations.failedToDeleteUser(e.toString())),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
@@ -106,6 +158,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 final user = users[index];
                 final userData = user.data() as Map<String, dynamic>;
                 final userRole = userData['role'] ?? 'customer';
+                final userEmail = userData['email'] ?? 'No email';
 
                 return Card(
                   margin: const EdgeInsets.symmetric(
@@ -140,8 +193,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       style: TextStyle(color: Colors.white.withOpacity(0.8)),
                     ),
                     trailing: PopupMenuButton<String>(
-                      onSelected: (String newRole) {
-                        _updateUserRole(user.id, newRole);
+                      onSelected: (String value) {
+                        if (value == 'delete') {
+                          _deleteUser(user.id, userEmail);
+                        } else {
+                          _updateUserRole(user.id, value);
+                        }
                       },
                       itemBuilder:
                           (BuildContext context) => <PopupMenuEntry<String>>[
@@ -161,6 +218,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               value: 'admin',
                               child: Text(
                                 AppLocalizations.of(context)!.setAsAdmin,
+                              ),
+                            ),
+                            const PopupMenuDivider(),
+                            PopupMenuItem<String>(
+                              value: 'delete',
+                              child: Text(
+                                AppLocalizations.of(context)!.deleteUser,
+                                style: const TextStyle(color: Colors.red),
                               ),
                             ),
                           ],

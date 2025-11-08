@@ -28,8 +28,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final bool isAdmin =
-        authProvider
-            .isStaff; // Simplified for now, should be a specific admin check
+        authProvider.isAdmin;
 
     return Scaffold(
       body: _screens[_currentIndex],

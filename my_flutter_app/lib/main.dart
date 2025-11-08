@@ -17,9 +17,11 @@ import 'screens/sell_cars_screen.dart';
 import 'screens/tracking_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/forgot_password_screen.dart';
-import 'screens/car_details_screen.dart';
 import 'screens/user_management_screen.dart';
 import 'screens/add_staff_screen.dart';
+import 'screens/signup_screen.dart';
+import 'models/parked_car.dart';
+import 'screens/parked_car_details_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -61,26 +63,22 @@ class MyApp extends StatelessWidget {
               '/splash': (context) => const SplashScreen(),
               '/': (context) => const CustomerHomeScreen(),
               '/login': (context) => const LoginScreen(),
+              '/signup': (context) => const SignUpScreen(),
               '/forgot-password': (context) => const ForgotPasswordScreen(),
-              '/car-details':
-                  (context) => const CarDetailsScreen(
-                    imageUrl: '',
-                    title: '',
-                    year: '',
-                    mileage: '',
-                    price: '',
-                    description: '',
-                    features: [],
-                    sellerPhone: '',
-                  ),
-              // Staff-only routes (hidden from customers)
-              '/staff-home': (context) => const StaffHomeScreen(),
-              '/home-menu': (context) => const HomeMenu(),
+              '/customer_home': (context) => const CustomerHomeScreen(),
               '/park': (context) => const ParkCarScreen(),
               '/barrel': (context) => const SendBarrelScreen(),
               '/transport': (context) => const TransportCarScreen(),
               '/sell': (context) => const SellCarsScreen(),
               '/tracking': (context) => const TrackingScreen(),
+              '/parked-car-details': (context) {
+                final parkedCar = ModalRoute.of(context)!.settings.arguments as ParkedCar;
+                return ParkedCarDetailsScreen(parkedCar: parkedCar);
+              },
+
+              // Staff-only routes (hidden from customers)
+              '/staff-home': (context) => const StaffHomeScreen(),
+              '/home-menu': (context) => const HomeMenu(),
               '/user-management': (context) => const UserManagementScreen(),
               '/add-staff': (context) => const AddStaffScreen(),
             },

@@ -5,8 +5,11 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/parked_car.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
+import '../data/car_catalog.dart';
 
 class ParkCarScreen extends StatefulWidget {
   const ParkCarScreen({super.key});
@@ -18,20 +21,44 @@ class ParkCarScreen extends StatefulWidget {
 class _ParkCarScreenState extends State<ParkCarScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _makeController = TextEditingController();
-  final _modelController = TextEditingController();
-  final _yearController = TextEditingController();
   final _vinController = TextEditingController();
+
+  String? _selectedMake;
+  String? _selectedModel;
+  String? _selectedYear;
 
   DateTime _selectedDateTime = DateTime.now();
   bool _isLoading = false;
+  bool _isCatalogLoading = true;
+  List<String> _makeOptions = [];
+  List<String> _modelOptions = [];
+  List<String> _yearOptions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCatalog();
+  }
+
+  Future<void> _loadCatalog() async {
+    final catalog = CarCatalog.instance;
+    await catalog.load();
+    final makes = catalog.getMakes();
+    setState(() {
+      _makeOptions = makes;
+      if (_selectedMake != null) {
+        _modelOptions = catalog.getModels(_selectedMake!);
+        if (_selectedModel != null) {
+          _yearOptions = catalog.getYears(_selectedMake!, _selectedModel!);
+        }
+      }
+      _isCatalogLoading = false;
+    });
+  }
 
   @override
   void dispose() {
     _nameController.dispose();
-    _makeController.dispose();
-    _modelController.dispose();
-    _yearController.dispose();
     _vinController.dispose();
     super.dispose();
   }
@@ -154,7 +181,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     }
   }
 
-  Future<void> _generateAndPrintReceipt() async {
+  Future<void> _saveAndPrintReceipt() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -164,10 +191,56 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     });
 
     try {
-      // Generate PDF
-      final pdf = pw.Document();
+      // 1. Save to Firestore
+      final newRecord = ParkedCar(
+        id: '', // Firestore will generate this
+        ownerName: _nameController.text,
+        carMake: _selectedMake!,
+        carModel: _selectedModel!,
+        carYear: _selectedYear!,
+        vinNumber: _vinController.text,
+        parkingDate: _selectedDateTime,
+      );
 
-      pdf.addPage(
+      final docRef = await FirebaseFirestore.instance
+          .collection('parkedCars')
+          .add(newRecord.toFirestore());
+
+      // 2. Generate and Print PDF
+      await _generateAndPrintReceipt(docRef.id);
+
+      // 3. Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.receiptGenerated),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.errorGeneratingReceipt(e.toString())),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _generateAndPrintReceipt(String receiptId) async {
+    final pdf = pw.Document();
+
+    pdf.addPage(
         pw.Page(
           pageFormat: PdfPageFormat.a4,
           build: (pw.Context context) {
@@ -233,7 +306,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
 
                       _buildReceiptRow(
                         'Receipt Number:',
-                        'RCP-${DateTime.now().millisecondsSinceEpoch}',
+                        receiptId,
                       ),
                       _buildReceiptRow(
                         'Date & Time:',
@@ -260,9 +333,9 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                       pw.SizedBox(height: 15),
 
                       _buildReceiptRow('Owner Name:', _nameController.text),
-                      _buildReceiptRow('Car Make:', _makeController.text),
-                      _buildReceiptRow('Car Model:', _modelController.text),
-                      _buildReceiptRow('Year:', _yearController.text),
+                      _buildReceiptRow('Car Make:', _selectedMake ?? ''),
+                      _buildReceiptRow('Car Model:', _selectedModel ?? ''),
+                      _buildReceiptRow('Year:', _selectedYear ?? ''),
                       _buildReceiptRow('VIN Number:', _vinController.text),
 
                       pw.SizedBox(height: 20),
@@ -347,32 +420,6 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
         onLayout: (PdfPageFormat format) async => pdf.save(),
         name: 'Car_Parking_Receipt_${DateTime.now().millisecondsSinceEpoch}',
       );
-
-      // Show success message
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context)!.receiptGenerated),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context)!.errorGeneratingReceipt(e.toString())),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
   }
 
   pw.Widget _buildReceiptRow(String label, String value) {
@@ -538,38 +585,86 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                 },
                               ),
                               const SizedBox(height: 16),
-                              _RoundedTextField(
-                                controller: _makeController,
-                                label: AppLocalizations.of(context)!.make,
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return AppLocalizations.of(context)!.pleaseEnterCarMake;
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 16),
-                              _RoundedTextField(
-                                controller: _modelController,
-                                label: AppLocalizations.of(context)!.model,
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return AppLocalizations.of(context)!.pleaseEnterCarModel;
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 16),
-                              _RoundedTextField(
-                                controller: _yearController,
-                                label: AppLocalizations.of(context)!.year,
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return AppLocalizations.of(context)!.pleaseEnterCarYear;
-                                  }
-                                  return null;
-                                },
-                              ),
+                              if (_isCatalogLoading)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 24.0),
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                )
+                              else ...[
+                                _RoundedDropdownField(
+                                  label: AppLocalizations.of(context)!.make,
+                                  value: _selectedMake,
+                                  items: _makeOptions,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _selectedMake = value;
+                                      _selectedModel = null;
+                                      _selectedYear = null;
+                                      _modelOptions = [];
+                                      _yearOptions = [];
+                                    });
+                                    if (value != null) {
+                                      final models = CarCatalog.instance.getModels(value);
+                                      setState(() {
+                                        _modelOptions = models;
+                                      });
+                                    }
+                                  },
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return AppLocalizations.of(context)!.pleaseEnterCarMake;
+                                    }
+                                    return null;
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                _RoundedDropdownField(
+                                  label: AppLocalizations.of(context)!.model,
+                                  value: _selectedModel,
+                                  items: _modelOptions,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _selectedModel = value;
+                                      _selectedYear = null;
+                                      _yearOptions = [];
+                                    });
+                                    if (_selectedMake != null && value != null) {
+                                      final years = CarCatalog.instance
+                                          .getYears(_selectedMake!, value);
+                                      setState(() {
+                                        _yearOptions = years;
+                                      });
+                                    }
+                                  },
+                                  enabled: _selectedMake != null,
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return AppLocalizations.of(context)!.pleaseEnterCarModel;
+                                    }
+                                    return null;
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                _RoundedDropdownField(
+                                  label: AppLocalizations.of(context)!.year,
+                                  value: _selectedYear,
+                                  items: _yearOptions,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _selectedYear = value;
+                                    });
+                                  },
+                                  enabled: _selectedModel != null,
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return AppLocalizations.of(context)!.pleaseEnterCarYear;
+                                    }
+                                    return null;
+                                  },
+                                ),
+                              ],
                               const SizedBox(height: 16),
                               _RoundedTextField(
                                 controller: _vinController,
@@ -656,9 +751,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                     splashFactory: NoSplash.splashFactory,
                                   ),
                                   onPressed:
-                                      _isLoading
-                                          ? null
-                                          : _generateAndPrintReceipt,
+                                      _isLoading ? null : _saveAndPrintReceipt,
                                   child:
                                       _isLoading
                                           ? const SizedBox(
@@ -740,6 +833,57 @@ class _RoundedTextField extends StatelessWidget {
         filled: true,
         fillColor: Colors.grey.shade50,
       ),
+    );
+  }
+}
+
+class _RoundedDropdownField extends StatelessWidget {
+  final String label;
+  final String? value;
+  final List<String> items;
+  final ValueChanged<String?>? onChanged;
+  final String? Function(String?)? validator;
+  final bool enabled;
+
+  const _RoundedDropdownField({
+    required this.label,
+    required this.items,
+    this.value,
+    this.onChanged,
+    this.validator,
+    this.enabled = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String>(
+      key: ValueKey<String?>(enabled ? value : null),
+      initialValue: enabled ? value : null,
+      onChanged: enabled ? onChanged : null,
+      validator: validator,
+      isExpanded: true,
+      items:
+          items.map((item) => DropdownMenuItem<String>(value: item, child: Text(item))).toList(),
+      decoration: InputDecoration(
+        labelText: label,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF667eea), width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.red, width: 2),
+        ),
+        filled: true,
+        fillColor: Colors.grey.shade50,
+      ),
+      icon: const Icon(Icons.arrow_drop_down),
+      dropdownColor: Colors.white,
     );
   }
 }

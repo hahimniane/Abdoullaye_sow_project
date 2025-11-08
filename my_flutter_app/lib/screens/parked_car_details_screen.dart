@@ -1,0 +1,865 @@
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:provider/provider.dart';
+import '../models/parked_car.dart';
+import '../l10n/app_localizations.dart';
+import '../providers/auth_provider.dart';
+import '../data/car_catalog.dart';
+
+class ParkedCarDetailsScreen extends StatefulWidget {
+  final ParkedCar parkedCar;
+
+  const ParkedCarDetailsScreen({super.key, required this.parkedCar});
+
+  @override
+  State<ParkedCarDetailsScreen> createState() => _ParkedCarDetailsScreenState();
+}
+
+class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _ownerNameController;
+  late TextEditingController _costPerDayController;
+  late TextEditingController _vinController;
+  DateTime? _parkingEndDate;
+  late DateTime _parkingStartDate;
+  late String _status;
+  double _totalCost = 0.0;
+  int _totalDays = 0;
+  String? _selectedMake;
+  String? _selectedModel;
+  String? _selectedYear;
+  List<String> _makeOptions = [];
+  List<String> _modelOptions = [];
+  List<String> _yearOptions = [];
+  bool _isCatalogLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _ownerNameController = TextEditingController(text: widget.parkedCar.ownerName);
+    _costPerDayController = TextEditingController();
+    _vinController = TextEditingController(text: widget.parkedCar.vinNumber);
+    _status = widget.parkedCar.status;
+    _parkingStartDate = widget.parkedCar.parkingDate;
+    _parkingEndDate = widget.parkedCar.parkingEndDate;
+    _totalCost = widget.parkedCar.totalCost ?? 0.0;
+    _selectedMake = widget.parkedCar.carMake.isNotEmpty ? widget.parkedCar.carMake : null;
+    _selectedModel = widget.parkedCar.carModel.isNotEmpty ? widget.parkedCar.carModel : null;
+    _selectedYear = widget.parkedCar.carYear.isNotEmpty ? widget.parkedCar.carYear : null;
+
+    if (_parkingEndDate != null) {
+      final startDate = DateTime(
+        _parkingStartDate.year,
+        _parkingStartDate.month,
+        _parkingStartDate.day,
+      );
+      final endDate = DateTime(
+        _parkingEndDate!.year,
+        _parkingEndDate!.month,
+        _parkingEndDate!.day,
+      );
+      final duration = endDate.difference(startDate).inDays;
+      _totalDays = duration >= 0 ? duration + 1 : 0;
+      if (_totalDays > 0 && _totalCost > 0) {
+        final inferredCostPerDay = _totalCost / _totalDays;
+        _costPerDayController.text = inferredCostPerDay.toStringAsFixed(2);
+      }
+    }
+
+    _initializeCatalog();
+  }
+
+  @override
+  void dispose() {
+    _ownerNameController.dispose();
+    _costPerDayController.dispose();
+    _vinController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initializeCatalog() async {
+    final catalog = CarCatalog.instance;
+    await catalog.load();
+
+    List<String> makes = List<String>.from(catalog.getMakes());
+    List<String> modelOptions = <String>[];
+    List<String> yearOptions = <String>[];
+
+    if (_selectedMake != null) {
+      modelOptions = catalog.getModels(_selectedMake!);
+      if (_selectedModel != null) {
+        if (modelOptions.contains(_selectedModel)) {
+          yearOptions = catalog.getYears(_selectedMake!, _selectedModel!);
+        } else {
+          modelOptions = [_selectedModel!, ...modelOptions];
+        }
+      }
+    }
+
+    if (_selectedYear != null && !yearOptions.contains(_selectedYear)) {
+      yearOptions = [_selectedYear!, ...yearOptions];
+    }
+
+    if (_selectedMake != null && !makes.contains(_selectedMake)) {
+      makes.insert(0, _selectedMake!);
+    }
+
+    setState(() {
+      _makeOptions = makes;
+      _modelOptions = modelOptions;
+      _yearOptions = yearOptions;
+      _isCatalogLoading = false;
+    });
+  }
+
+  void _calculateTotalCost() {
+    if (_parkingEndDate != null && _costPerDayController.text.isNotEmpty) {
+      final costPerDay = double.tryParse(_costPerDayController.text);
+      if (costPerDay != null) {
+        final startDate = DateTime(
+          _parkingStartDate.year,
+          _parkingStartDate.month,
+          _parkingStartDate.day,
+        );
+        final endDate = DateTime(
+          _parkingEndDate!.year,
+          _parkingEndDate!.month,
+          _parkingEndDate!.day,
+        );
+        final duration = endDate.difference(startDate).inDays;
+        final totalDays = duration >= 0 ? duration + 1 : 0;
+        setState(() {
+          _totalDays = totalDays;
+          _totalCost = totalDays > 0 ? totalDays * costPerDay : 0;
+        });
+      } else {
+        setState(() {
+          _totalDays = 0;
+          _totalCost = 0;
+        });
+      }
+    } else {
+      setState(() {
+        _totalDays = 0;
+        _totalCost = 0;
+      });
+    }
+  }
+
+  Future<void> _selectEndDate() async {
+    final minDate = DateTime(
+      _parkingStartDate.year,
+      _parkingStartDate.month,
+      _parkingStartDate.day,
+    );
+    DateTime tempDateTime = _parkingEndDate ?? DateTime.now();
+
+    await showCupertinoModalPopup<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return Container(
+          height: 300,
+          color: CupertinoColors.systemBackground.resolveFrom(context),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  CupertinoButton(
+                    child: Text(AppLocalizations.of(context)!.cancel),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  CupertinoButton(
+                    child: Text(AppLocalizations.of(context)!.done),
+                    onPressed: () {
+                      setState(() {
+                        _parkingEndDate = tempDateTime;
+                      });
+                      _calculateTotalCost();
+                      Navigator.pop(context);
+                    },
+                  ),
+                ],
+              ),
+              Expanded(
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.date,
+                  initialDateTime: _parkingEndDate ?? minDate,
+                  minimumDate: minDate,
+                  onDateTimeChanged: (DateTime newDateTime) {
+                    tempDateTime = newDateTime;
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _selectStartDate() async {
+    DateTime tempDateTime = _parkingStartDate;
+
+    await showCupertinoModalPopup<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return Container(
+          height: 300,
+          color: CupertinoColors.systemBackground.resolveFrom(context),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  CupertinoButton(
+                    child: Text(AppLocalizations.of(context)!.cancel),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  CupertinoButton(
+                    child: Text(AppLocalizations.of(context)!.done),
+                    onPressed: () {
+                      setState(() {
+                        _parkingStartDate = tempDateTime;
+                        if (_parkingEndDate != null &&
+                            _parkingEndDate!.isBefore(_parkingStartDate)) {
+                          _parkingEndDate = null;
+                        }
+                      });
+                      _calculateTotalCost();
+                      Navigator.pop(context);
+                    },
+                  ),
+                ],
+              ),
+              Expanded(
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.date,
+                  initialDateTime: _parkingStartDate,
+                  maximumDate: DateTime.now().add(const Duration(days: 365)),
+                  minimumDate: DateTime.now().subtract(const Duration(days: 365 * 5)),
+                  onDateTimeChanged: (DateTime newDateTime) {
+                    tempDateTime = newDateTime;
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<bool> _persistChanges({bool showSuccess = true}) async {
+    if (!_formKey.currentState!.validate()) {
+      return false;
+    }
+
+    if (_selectedMake == null || _selectedModel == null || _selectedYear == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please make sure car make, model, and year are selected.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return false;
+    }
+
+    final normalizedStart = DateTime(
+      _parkingStartDate.year,
+      _parkingStartDate.month,
+      _parkingStartDate.day,
+    );
+
+    final updateData = <String, dynamic>{
+      'ownerName': _ownerNameController.text.trim(),
+      'carMake': _selectedMake ?? '',
+      'carModel': _selectedModel ?? '',
+      'carYear': _selectedYear ?? '',
+      'vinNumber': _vinController.text.trim(),
+      'parkingDate': Timestamp.fromDate(normalizedStart),
+      'status': _status,
+    };
+
+    if (_parkingEndDate != null) {
+      updateData['parkingEndDate'] = Timestamp.fromDate(
+        DateTime(
+          _parkingEndDate!.year,
+          _parkingEndDate!.month,
+          _parkingEndDate!.day,
+        ),
+      );
+    } else {
+      updateData['parkingEndDate'] = FieldValue.delete();
+    }
+
+    if (_totalCost > 0) {
+      updateData['totalCost'] = _totalCost;
+    } else {
+      updateData['totalCost'] = FieldValue.delete();
+    }
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('parkedCars')
+          .doc(widget.parkedCar.id)
+          .update(updateData);
+
+      if (showSuccess && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Record updated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+      return true;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update record: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return false;
+    }
+  }
+
+  Future<void> _updateRecord() async {
+    final success = await _persistChanges();
+    if (success && mounted) {
+      Navigator.pop(context);
+    }
+  }
+
+  Future<void> _generateFinalReceipt() async {
+    if (_parkingEndDate == null || _costPerDayController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add an end date and daily cost first.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (_selectedMake == null || _selectedModel == null || _selectedYear == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Car make, model, and year must be set before generating a receipt.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final pdf = pw.Document();
+
+    final startDate = DateTime(
+      _parkingStartDate.year,
+      _parkingStartDate.month,
+      _parkingStartDate.day,
+    );
+    final endDate = DateTime(
+      _parkingEndDate!.year,
+      _parkingEndDate!.month,
+      _parkingEndDate!.day,
+    );
+
+    if (endDate.isBefore(startDate)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('End date cannot be before start date.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    final totalDays = endDate.difference(startDate).inDays + 1;
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Container(
+                width: double.infinity,
+                padding: const pw.EdgeInsets.all(20),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.blue,
+                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
+                ),
+                child: pw.Column(
+                  children: [
+                    pw.Text(
+                      'CAR PARKING RECEIPT',
+                      style: pw.TextStyle(
+                        fontSize: 24,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.white,
+                      ),
+                    ),
+                    pw.SizedBox(height: 10),
+                    pw.Text(
+                      'Business Services',
+                      style: pw.TextStyle(
+                        fontSize: 16,
+                        color: PdfColors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 20),
+              pw.Container(
+                padding: const pw.EdgeInsets.all(20),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey),
+                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      'Receipt Details',
+                      style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+                    ),
+                    pw.SizedBox(height: 15),
+                    _buildPdfRow('Receipt Number:', widget.parkedCar.id),
+                    _buildPdfRow('Generated On:', DateFormat('MMM dd, yyyy - HH:mm').format(DateTime.now())),
+                    pw.SizedBox(height: 20),
+                    pw.Text(
+                      'Car Information',
+                      style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+                    ),
+                    pw.SizedBox(height: 15),
+                    _buildPdfRow('Owner Name:', _ownerNameController.text),
+                    _buildPdfRow('Car Make:', _selectedMake ?? ''),
+                    _buildPdfRow('Car Model:', _selectedModel ?? ''),
+                    _buildPdfRow('Year:', _selectedYear ?? ''),
+                    _buildPdfRow('VIN Number:', _vinController.text),
+                    _buildPdfRow('Parking Start:', DateFormat('MMM dd, yyyy').format(_parkingStartDate)),
+                    _buildPdfRow('Parking End:', DateFormat('MMM dd, yyyy').format(_parkingEndDate!)),
+                    _buildPdfRow('Total Days:', totalDays.toString()),
+                    pw.SizedBox(height: 20),
+                    pw.Text(
+                      'Billing Summary',
+                      style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+                    ),
+                    pw.SizedBox(height: 12),
+                    _buildPdfRow('Cost per Day:', '\$${_costPerDayController.text}'),
+                    _buildPdfRow('Total Cost:', '\$${_totalCost.toStringAsFixed(2)}'),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    try {
+      await Printing.layoutPdf(onLayout: (format) async => pdf.save());
+
+      final previousStatus = _status;
+      if (_status != 'completed') {
+        setState(() {
+          _status = 'completed';
+        });
+      }
+
+      final saved = await _persistChanges(showSuccess: false);
+      if (!saved) {
+        if (mounted) {
+          setState(() {
+            _status = previousStatus;
+          });
+        }
+        return;
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Final receipt generated and status set to completed.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to generate receipt: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  pw.Widget _buildPdfRow(String label, String value) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 4),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.SizedBox(
+            width: 140,
+            child: pw.Text(
+              label,
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
+            ),
+          ),
+          pw.Expanded(
+            child: pw.Text(
+              value,
+              style: const pw.TextStyle(fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final authProvider = context.watch<AuthProvider>();
+    final bool isAdmin = authProvider.isAdmin;
+    final bool canEdit = isAdmin && _status != 'completed';
+
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                    ),
+                    Expanded(
+                      child: Text(
+                        l10n.carDetails,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(width: 48),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.06),
+                  child: Container(
+                    padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.05),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildInfoCard(canEdit),
+                          const SizedBox(height: 24),
+                          _buildBillingCard(l10n, canEdit),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    minimumSize: const Size.fromHeight(52),
+                                    foregroundColor: const Color(0xFF667eea),
+                                    side: const BorderSide(color: Color(0xFF667eea)),
+                                  ),
+                                  onPressed: canEdit ? _updateRecord : null,
+                                  child: const Text('Update Record'),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    minimumSize: const Size.fromHeight(52),
+                                    backgroundColor: const Color(0xFF28A745),
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  onPressed: _generateFinalReceipt,
+                                  child: const Text('Generate Final Receipt'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoCard(bool canEdit) {
+    final dropdownEnabled = canEdit && !_isCatalogLoading;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_isCatalogLoading)
+            const LinearProgressIndicator(minHeight: 2),
+          if (_isCatalogLoading) const SizedBox(height: 16),
+          TextFormField(
+            controller: _ownerNameController,
+            readOnly: !canEdit,
+            decoration: const InputDecoration(labelText: 'Owner Name'),
+            validator: (value) {
+              if (!canEdit) return null;
+              return value == null || value.isEmpty ? 'Please enter owner name' : null;
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildDropdownField(
+            label: 'Car Make',
+            value: _selectedMake,
+            items: _makeOptions,
+            enabled: dropdownEnabled,
+            validator: (val) => !canEdit || (val != null && val.isNotEmpty) ? null : 'Please select car make',
+            onChanged: (value) {
+              if (!dropdownEnabled) return;
+              setState(() {
+                _selectedMake = value;
+                _selectedModel = null;
+                _selectedYear = null;
+                if (value != null) {
+                  _modelOptions = CarCatalog.instance.getModels(value);
+                } else {
+                  _modelOptions = <String>[];
+                }
+                _yearOptions = <String>[];
+              });
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildDropdownField(
+            label: 'Car Model',
+            value: _selectedModel,
+            items: _modelOptions,
+            enabled: dropdownEnabled && _selectedMake != null,
+            validator: (val) => !canEdit || (val != null && val.isNotEmpty) ? null : 'Please select car model',
+            onChanged: (value) {
+              if (!dropdownEnabled) return;
+              setState(() {
+                _selectedModel = value;
+                _selectedYear = null;
+                if (_selectedMake != null && value != null) {
+                  _yearOptions = CarCatalog.instance.getYears(_selectedMake!, value);
+                } else {
+                  _yearOptions = <String>[];
+                }
+              });
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildDropdownField(
+            label: 'Year',
+            value: _selectedYear,
+            items: _yearOptions,
+            enabled: dropdownEnabled && _selectedModel != null,
+            validator: (val) => !canEdit || (val != null && val.isNotEmpty) ? null : 'Please select year',
+            onChanged: (value) {
+              if (!dropdownEnabled) return;
+              setState(() {
+                _selectedYear = value;
+              });
+            },
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _vinController,
+            readOnly: !canEdit,
+            decoration: const InputDecoration(labelText: 'VIN Number'),
+            validator: (value) {
+              if (!canEdit) return null;
+              return value == null || value.isEmpty ? 'Please enter VIN number' : null;
+            },
+          ),
+          const SizedBox(height: 16),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Parking Start Date'),
+            subtitle: Text(
+              DateFormat.yMMMd().format(_parkingStartDate),
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            trailing: Icon(
+              Icons.calendar_today,
+              color: canEdit ? const Color(0xFF667eea) : Colors.grey,
+            ),
+            onTap: canEdit ? _selectStartDate : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBillingCard(AppLocalizations l10n, bool canEdit) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Parking End Date'),
+            subtitle: Text(
+              _parkingEndDate == null ? 'Select a date' : DateFormat.yMMMd().format(_parkingEndDate!),
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            trailing: Icon(
+              Icons.calendar_today,
+              color: canEdit ? const Color(0xFF667eea) : Colors.grey,
+            ),
+            onTap: canEdit ? _selectEndDate : null,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _costPerDayController,
+            readOnly: !canEdit,
+            decoration: const InputDecoration(labelText: 'Cost Per Day (\$)'),
+            keyboardType: TextInputType.number,
+            onChanged: (_) => _calculateTotalCost(),
+            validator: (value) {
+              if (!canEdit) return null;
+              return value == null || value.isEmpty ? 'Please enter cost per day' : null;
+            },
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<String>(
+            key: ValueKey<String>(_status),
+            initialValue: _status,
+            decoration: const InputDecoration(labelText: 'Status'),
+            items: ['active', 'completed']
+                .map((label) => DropdownMenuItem(value: label, child: Text(label)))
+                .toList(),
+            onChanged: canEdit
+                ? (value) {
+                    if (value != null) {
+                      setState(() {
+                        _status = value;
+                      });
+                    }
+                  }
+                : null,
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Total Days: ${_totalDays > 0 ? _totalDays : '-'}',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Total Cost: \$${_totalCost.toStringAsFixed(2)}',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDropdownField({
+    required String label,
+    required String? value,
+    required List<String> items,
+    required bool enabled,
+    String? Function(String?)? validator,
+    ValueChanged<String?>? onChanged,
+  }) {
+    final effectiveItems = List<String>.from(items);
+    if (value != null && !effectiveItems.contains(value)) {
+      effectiveItems.insert(0, value);
+    }
+    final selectedValue =
+        value != null && effectiveItems.contains(value) ? value : null;
+    return DropdownButtonFormField<String>(
+      key: ValueKey<String?>(selectedValue),
+      initialValue: selectedValue,
+      value: selectedValue,
+      items: effectiveItems
+          .map(
+            (item) => DropdownMenuItem<String>(
+              value: item,
+              child: Text(item),
+            ),
+          )
+          .toList(),
+      onChanged: enabled
+          ? (newValue) {
+              if (onChanged != null) {
+                onChanged(newValue);
+              }
+            }
+          : null,
+      validator: validator,
+      decoration: InputDecoration(labelText: label),
+      isExpanded: true,
+    );
+  }
+
+}
