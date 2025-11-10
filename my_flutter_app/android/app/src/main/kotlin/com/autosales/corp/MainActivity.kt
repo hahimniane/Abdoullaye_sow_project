@@ -1,5 +1,6 @@
-package com.autosales.my_flutter_app
+package com.autosales.corp
 
 import io.flutter.embedding.android.FlutterActivity
 
 class MainActivity : FlutterActivity()
+

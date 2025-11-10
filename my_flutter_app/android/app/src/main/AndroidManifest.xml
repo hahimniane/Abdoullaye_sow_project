@@ -4,7 +4,7 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <application
-        android:label="my_flutter_app"
+        android:label="TAAO"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
