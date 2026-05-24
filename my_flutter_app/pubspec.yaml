@@ -19,7 +19,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+2
 
 environment:
-  sdk: ^3.7.2
+  sdk: ^3.8.0
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -51,6 +51,9 @@ dependencies:
   pdf: ^3.11.3
   printing: ^5.13.1
   intl: ^0.20.2
+  google_fonts: ^6.2.1
+  shared_preferences: ^2.5.3
+  flutter_stripe: ^12.6.0
 
 dev_dependencies:
   flutter_test:
@@ -124,4 +127,3 @@ flutter_native_splash:
   android_12:
     image: assets/images/logo.JPG
     color: "#FFFFFF"
-

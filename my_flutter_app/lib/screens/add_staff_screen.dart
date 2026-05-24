@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../l10n/app_localizations.dart';
+import '../theme/app_colors.dart';
 
 class AddStaffScreen extends StatefulWidget {
   const AddStaffScreen({super.key});
@@ -70,11 +71,7 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-        ),
+        gradient: AppColors.headerGradient,
       ),
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -128,7 +125,7 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: const BorderSide(
-                            color: Color(0xFF667eea),
+                            color: AppColors.brandRed,
                             width: 2,
                           ),
                         ),
@@ -168,7 +165,7 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: const BorderSide(
-                            color: Color(0xFF667eea),
+                            color: AppColors.brandRed,
                             width: 2,
                           ),
                         ),
@@ -192,7 +189,7 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
                       child: ElevatedButton(
                         onPressed: _isLoading ? null : _addStaffMember,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF667eea),
+                          backgroundColor: AppColors.brandRed,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),

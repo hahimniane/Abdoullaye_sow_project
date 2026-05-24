@@ -1531,6 +1531,198 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Set as cover'**
   String get setAsCover;
+
+  /// No description provided for @themeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get themeLabel;
+
+  /// No description provided for @darkMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark mode'**
+  String get darkMode;
+
+  /// No description provided for @lightMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Light mode'**
+  String get lightMode;
+
+  /// No description provided for @reserved.
+  ///
+  /// In en, this message translates to:
+  /// **'Reserved'**
+  String get reserved;
+
+  /// No description provided for @reserveWithDeposit.
+  ///
+  /// In en, this message translates to:
+  /// **'Reserve with \$500 Deposit'**
+  String get reserveWithDeposit;
+
+  /// No description provided for @loginRequiredForDeposit.
+  ///
+  /// In en, this message translates to:
+  /// **'Please sign in before paying a deposit.'**
+  String get loginRequiredForDeposit;
+
+  /// No description provided for @reserveThisCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Reserve this car'**
+  String get reserveThisCar;
+
+  /// No description provided for @depositSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'A refundable reservation deposit of {amount} is required to hold this vehicle.'**
+  String depositSummary(Object amount);
+
+  /// No description provided for @payDeposit.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay Deposit'**
+  String get payDeposit;
+
+  /// No description provided for @reservationComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Deposit received. Your reservation is now active.'**
+  String get reservationComplete;
+
+  /// No description provided for @destinationCountry.
+  ///
+  /// In en, this message translates to:
+  /// **'Destination Country'**
+  String get destinationCountry;
+
+  /// No description provided for @sendBarrels.
+  ///
+  /// In en, this message translates to:
+  /// **'Send Barrels'**
+  String get sendBarrels;
+
+  /// No description provided for @enterShippingDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter shipping details'**
+  String get enterShippingDetails;
+
+  /// No description provided for @transportCars.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport Cars'**
+  String get transportCars;
+
+  /// No description provided for @enterCarTransportDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter car transport details'**
+  String get enterCarTransportDetails;
+
+  /// No description provided for @cars.
+  ///
+  /// In en, this message translates to:
+  /// **'Cars'**
+  String get cars;
+
+  /// No description provided for @myPurchases.
+  ///
+  /// In en, this message translates to:
+  /// **'My Purchases'**
+  String get myPurchases;
+
+  /// No description provided for @noPurchasesYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No car purchases yet.'**
+  String get noPurchasesYet;
+
+  /// No description provided for @depositPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Deposit: {amount} ({status})'**
+  String depositPaid(Object amount, Object status);
+
+  /// No description provided for @purchases.
+  ///
+  /// In en, this message translates to:
+  /// **'Purchases'**
+  String get purchases;
+
+  /// No description provided for @purchaseReservations.
+  ///
+  /// In en, this message translates to:
+  /// **'Purchase Reservations'**
+  String get purchaseReservations;
+
+  /// No description provided for @purchaseUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Purchase updated.'**
+  String get purchaseUpdated;
+
+  /// No description provided for @cancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get cancelled;
+
+  /// No description provided for @refunded.
+  ///
+  /// In en, this message translates to:
+  /// **'Refunded'**
+  String get refunded;
+
+  /// No description provided for @staffTools.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff Tools'**
+  String get staffTools;
+
+  /// No description provided for @destinationCountries.
+  ///
+  /// In en, this message translates to:
+  /// **'Destination Countries'**
+  String get destinationCountries;
+
+  /// No description provided for @manageDestinationCountries.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage countries available in customer forms.'**
+  String get manageDestinationCountries;
+
+  /// No description provided for @countriesSeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Default countries added.'**
+  String get countriesSeeded;
+
+  /// No description provided for @countryName.
+  ///
+  /// In en, this message translates to:
+  /// **'Country Name'**
+  String get countryName;
+
+  /// No description provided for @countryCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Country Code'**
+  String get countryCode;
+
+  /// No description provided for @seedDefaultCountries.
+  ///
+  /// In en, this message translates to:
+  /// **'Seed Default Countries'**
+  String get seedDefaultCountries;
+
+  /// No description provided for @save.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get save;
 }
 
 class _AppLocalizationsDelegate

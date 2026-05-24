@@ -325,5 +325,48 @@
   "noImagesSelected": "No images selected yet.",
   "addImagesPrompt": "Please add at least one image.",
   "coverLabel": "Cover",
-  "setAsCover": "Set as cover"
+  "setAsCover": "Set as cover",
+  "themeLabel": "Appearance",
+  "darkMode": "Dark mode",
+  "lightMode": "Light mode",
+  "reserved": "Reserved",
+  "reserveWithDeposit": "Reserve with $500 Deposit",
+  "loginRequiredForDeposit": "Please sign in before paying a deposit.",
+  "reserveThisCar": "Reserve this car",
+  "depositSummary": "A refundable reservation deposit of {amount} is required to hold this vehicle.",
+  "@depositSummary": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "payDeposit": "Pay Deposit",
+  "reservationComplete": "Deposit received. Your reservation is now active.",
+  "destinationCountry": "Destination Country",
+  "sendBarrels": "Send Barrels",
+  "enterShippingDetails": "Enter shipping details",
+  "transportCars": "Transport Cars",
+  "enterCarTransportDetails": "Enter car transport details",
+  "cars": "Cars",
+  "myPurchases": "My Purchases",
+  "noPurchasesYet": "No car purchases yet.",
+  "depositPaid": "Deposit: {amount} ({status})",
+  "@depositPaid": {
+    "placeholders": {
+      "amount": {},
+      "status": {}
+    }
+  },
+  "purchases": "Purchases",
+  "purchaseReservations": "Purchase Reservations",
+  "purchaseUpdated": "Purchase updated.",
+  "cancelled": "Cancelled",
+  "refunded": "Refunded",
+  "staffTools": "Staff Tools",
+  "destinationCountries": "Destination Countries",
+  "manageDestinationCountries": "Manage countries available in customer forms.",
+  "countriesSeeded": "Default countries added.",
+  "countryName": "Country Name",
+  "countryCode": "Country Code",
+  "seedDefaultCountries": "Seed Default Countries",
+  "save": "Save"
 }

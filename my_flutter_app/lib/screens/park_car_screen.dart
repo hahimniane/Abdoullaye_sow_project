@@ -11,6 +11,7 @@ import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../data/car_catalog.dart';
 import '../utils/tracking_code_generator.dart';
+import '../theme/app_colors.dart';
 
 class ParkCarScreen extends StatefulWidget {
   const ParkCarScreen({super.key});
@@ -138,7 +139,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFF667eea),
+              primary: AppColors.brandRed,
               onPrimary: Colors.white,
               surface: Colors.white,
               onSurface: Colors.black,
@@ -157,7 +158,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
           return Theme(
             data: Theme.of(context).copyWith(
               colorScheme: const ColorScheme.light(
-                primary: Color(0xFF667eea),
+                primary: AppColors.brandRed,
                 onPrimary: Colors.white,
                 surface: Colors.white,
                 onSurface: Colors.black,
@@ -459,11 +460,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-          ),
+          gradient: AppColors.headerGradient,
         ),
         child: SafeArea(
           child: Column(
@@ -755,7 +752,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                 height: 56,
                                 child: ElevatedButton(
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF667eea),
+                                    backgroundColor: AppColors.brandRed,
                                     foregroundColor: Colors.white,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
@@ -837,7 +834,7 @@ class _RoundedTextField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF667eea), width: 2),
+          borderSide: const BorderSide(color: AppColors.brandRed, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -886,7 +883,7 @@ class _RoundedDropdownField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF667eea), width: 2),
+          borderSide: const BorderSide(color: AppColors.brandRed, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

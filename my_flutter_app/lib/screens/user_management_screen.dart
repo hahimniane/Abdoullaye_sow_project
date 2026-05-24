@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import 'add_staff_screen.dart';
 import '../l10n/app_localizations.dart';
+import '../theme/app_colors.dart';
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -102,11 +103,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-        ),
+        gradient: AppColors.headerGradient,
       ),
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -176,7 +173,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       child: Text(
                         userData['email']?.substring(0, 1).toUpperCase() ?? 'U',
                         style: const TextStyle(
-                          color: Color(0xFF667eea),
+                          color: AppColors.brandRed,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -245,7 +242,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             );
           },
           backgroundColor: Colors.white,
-          child: const Icon(Icons.add, color: Color(0xFF667eea)),
+          child: const Icon(Icons.add, color: AppColors.brandRed),
         ),
       ),
     );

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
+import '../theme/app_colors.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -107,11 +108,7 @@ class _SignUpScreenState extends State<SignUpScreen>
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-          ),
+          gradient: AppColors.headerGradient,
         ),
         child: SafeArea(
           child: Column(
@@ -235,7 +232,7 @@ class _SignUpScreenState extends State<SignUpScreen>
                                             12,
                                           ),
                                           borderSide: const BorderSide(
-                                            color: Color(0xFF667eea),
+                                            color: AppColors.brandRed,
                                             width: 2,
                                           ),
                                         ),
@@ -307,7 +304,7 @@ class _SignUpScreenState extends State<SignUpScreen>
                                             12,
                                           ),
                                           borderSide: const BorderSide(
-                                            color: Color(0xFF667eea),
+                                            color: AppColors.brandRed,
                                             width: 2,
                                           ),
                                         ),
@@ -375,7 +372,7 @@ class _SignUpScreenState extends State<SignUpScreen>
                                             12,
                                           ),
                                           borderSide: const BorderSide(
-                                            color: Color(0xFF667eea),
+                                            color: AppColors.brandRed,
                                             width: 2,
                                           ),
                                         ),
@@ -410,9 +407,7 @@ class _SignUpScreenState extends State<SignUpScreen>
                                                     ? null
                                                     : _handleSignUp,
                                             style: ElevatedButton.styleFrom(
-                                              backgroundColor: const Color(
-                                                0xFF667eea,
-                                              ),
+                                              backgroundColor: AppColors.brandRed,
                                               foregroundColor: Colors.white,
                                               shape: RoundedRectangleBorder(
                                                 borderRadius:
@@ -477,7 +472,7 @@ class _SignUpScreenState extends State<SignUpScreen>
                                               context,
                                             )!.signIn,
                                             style: const TextStyle(
-                                              color: Color(0xFF667eea),
+                                              color: AppColors.brandRed,
                                               fontSize: 14,
                                               fontWeight: FontWeight.w600,
                                             ),

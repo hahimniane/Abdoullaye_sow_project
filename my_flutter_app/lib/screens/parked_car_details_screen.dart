@@ -11,6 +11,7 @@ import '../models/parked_car.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../data/car_catalog.dart';
+import '../theme/app_colors.dart';
 
 class ParkedCarDetailsScreen extends StatefulWidget {
   final ParkedCar parkedCar;
@@ -570,11 +571,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-          ),
+          gradient: AppColors.headerGradient,
         ),
         child: SafeArea(
           child: Column(
@@ -650,7 +647,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                               ),
                               IconButton(
                                 onPressed: _copyTrackingNumber,
-                                icon: const Icon(Icons.copy, color: Color(0xFF667eea)),
+                                icon: const Icon(Icons.copy, color: AppColors.brandRed),
                                 tooltip: l10n.trackingNumber,
                               ),
                             ],
@@ -666,8 +663,8 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                                 child: OutlinedButton(
                                   style: OutlinedButton.styleFrom(
                                     minimumSize: const Size.fromHeight(52),
-                                    foregroundColor: const Color(0xFF667eea),
-                                    side: const BorderSide(color: Color(0xFF667eea)),
+                                    foregroundColor: AppColors.brandRed,
+                                    side: const BorderSide(color: AppColors.brandRed),
                                   ),
                                   onPressed: canEdit ? _updateRecord : null,
                                   child: const Text('Update Record'),
@@ -803,7 +800,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
             ),
             trailing: Icon(
               Icons.calendar_today,
-              color: canEdit ? const Color(0xFF667eea) : Colors.grey,
+              color: canEdit ? AppColors.brandRed : Colors.grey,
             ),
             onTap: canEdit ? _selectStartDate : null,
           ),
@@ -831,7 +828,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
             ),
             trailing: Icon(
               Icons.calendar_today,
-              color: canEdit ? const Color(0xFF667eea) : Colors.grey,
+              color: canEdit ? AppColors.brandRed : Colors.grey,
             ),
             onTap: canEdit ? _selectEndDate : null,
           ),

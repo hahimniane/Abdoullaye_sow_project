@@ -3,8 +3,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../models/barrel_shipment.dart';
+import '../models/destination_country.dart';
 import '../utils/barrel_receipt_generator.dart';
 import '../utils/tracking_code_generator.dart';
+import '../widgets/destination_country_field.dart';
+import '../theme/app_colors.dart';
 
 class SendBarrelScreen extends StatefulWidget {
   const SendBarrelScreen({super.key});
@@ -20,6 +23,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen> {
   final _receiverNameController = TextEditingController();
   final _receiverPhoneController = TextEditingController();
   final _priceController = TextEditingController();
+  DestinationCountry? _selectedCountry;
   bool _isSubmitting = false;
 
   @override
@@ -67,6 +71,10 @@ class _SendBarrelScreenState extends State<SendBarrelScreen> {
         senderAddress: _senderAddressController.text.trim(),
         receiverName: _receiverNameController.text.trim(),
         receiverPhone: _receiverPhoneController.text.trim(),
+        destinationCountryId:
+            _selectedCountry?.id ?? DestinationCountry.fallback.id,
+        destinationCountryName:
+            _selectedCountry?.name ?? DestinationCountry.fallback.name,
         price: price,
         status: 'pending',
         createdAt: DateTime.now(),
@@ -76,15 +84,18 @@ class _SendBarrelScreenState extends State<SendBarrelScreen> {
           .collection('barrelShipments')
           .add(shipment.toFirestore());
 
-      final savedShipment =
-          shipment.copyWith(id: docRef.id, trackingCode: shipment.trackingCode);
+      final savedShipment = shipment.copyWith(
+        id: docRef.id,
+        trackingCode: shipment.trackingCode,
+      );
       await generateBarrelShipmentReceipt(shipment: savedShipment);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text(l10n.shipmentSavedWithTracking(savedShipment.trackingCode)),
+          content: Text(
+            l10n.shipmentSavedWithTracking(savedShipment.trackingCode),
+          ),
           backgroundColor: Colors.green,
         ),
       );
@@ -110,13 +121,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-          ),
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.headerGradient),
         child: SafeArea(
           child: Column(
             children: [
@@ -138,7 +143,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen> {
                     ),
                     Expanded(
                       child: Text(
-                        AppLocalizations.of(context)!.sendBarrelsToGuinea,
+                        AppLocalizations.of(context)!.sendBarrels,
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -192,7 +197,9 @@ class _SendBarrelScreenState extends State<SendBarrelScreen> {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              AppLocalizations.of(context)!.barrelShippingService,
+                              AppLocalizations.of(
+                                context,
+                              )!.barrelShippingService,
                               style: const TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
@@ -204,7 +211,9 @@ class _SendBarrelScreenState extends State<SendBarrelScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              AppLocalizations.of(context)!.enterShippingDetailsForGuinea,
+                              AppLocalizations.of(
+                                context,
+                              )!.enterShippingDetails,
                               style: const TextStyle(
                                 fontSize: 16,
                                 color: Colors.white70,
@@ -244,7 +253,9 @@ class _SendBarrelScreenState extends State<SendBarrelScreen> {
                                 controller: _senderNameController,
                                 validator: (value) {
                                   if (value == null || value.isEmpty) {
-                                    return AppLocalizations.of(context)!.pleaseEnterSenderName;
+                                    return AppLocalizations.of(
+                                      context,
+                                    )!.pleaseEnterSenderName;
                                   }
                                   return null;
                                 },
@@ -255,47 +266,75 @@ class _SendBarrelScreenState extends State<SendBarrelScreen> {
                                 controller: _senderAddressController,
                                 validator: (value) {
                                   if (value == null || value.isEmpty) {
-                                    return AppLocalizations.of(context)!.pleaseEnterSenderAddress;
+                                    return AppLocalizations.of(
+                                      context,
+                                    )!.pleaseEnterSenderAddress;
                                   }
                                   return null;
                                 },
                               ),
                               const SizedBox(height: 16),
                               _RoundedTextField(
-                                label: AppLocalizations.of(context)!.receiverName,
+                                label: AppLocalizations.of(
+                                  context,
+                                )!.receiverName,
                                 controller: _receiverNameController,
                                 validator: (value) {
                                   if (value == null || value.isEmpty) {
-                                    return AppLocalizations.of(context)!.pleaseEnterReceiverName;
+                                    return AppLocalizations.of(
+                                      context,
+                                    )!.pleaseEnterReceiverName;
                                   }
                                   return null;
                                 },
                               ),
                               const SizedBox(height: 16),
                               _RoundedTextField(
-                                label: AppLocalizations.of(context)!.receiverPhone,
+                                label: AppLocalizations.of(
+                                  context,
+                                )!.receiverPhone,
                                 controller: _receiverPhoneController,
                                 keyboardType: TextInputType.phone,
                                 validator: (value) {
                                   if (value == null || value.isEmpty) {
-                                    return AppLocalizations.of(context)!.pleaseEnterReceiverPhone;
+                                    return AppLocalizations.of(
+                                      context,
+                                    )!.pleaseEnterReceiverPhone;
                                   }
                                   return null;
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              DestinationCountryField(
+                                value: _selectedCountry,
+                                label: AppLocalizations.of(
+                                  context,
+                                )!.destinationCountry,
+                                requiredMessage: AppLocalizations.of(
+                                  context,
+                                )!.requiredField,
+                                onChanged: (country) {
+                                  setState(() => _selectedCountry = country);
                                 },
                               ),
                               const SizedBox(height: 16),
                               _RoundedTextField(
                                 label: AppLocalizations.of(context)!.price,
                                 controller: _priceController,
-                                keyboardType: const TextInputType.numberWithOptions(
-                                  decimal: true,
-                                ),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
                                 validator: (value) {
                                   if (value == null || value.isEmpty) {
-                                    return AppLocalizations.of(context)!.pleaseEnterPrice;
+                                    return AppLocalizations.of(
+                                      context,
+                                    )!.pleaseEnterPrice;
                                   }
                                   if (double.tryParse(value) == null) {
-                                    return AppLocalizations.of(context)!.pleaseEnterValidNumber;
+                                    return AppLocalizations.of(
+                                      context,
+                                    )!.pleaseEnterValidNumber;
                                   }
                                   return null;
                                 },
@@ -306,7 +345,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen> {
                                 height: 56,
                                 child: ElevatedButton(
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF667eea),
+                                    backgroundColor: AppColors.brandRed,
                                     foregroundColor: Colors.white,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
@@ -321,7 +360,10 @@ class _SendBarrelScreenState extends State<SendBarrelScreen> {
                                           width: 24,
                                           child: CircularProgressIndicator(
                                             strokeWidth: 2,
-                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                  Colors.white,
+                                                ),
                                           ),
                                         )
                                       : Text(
@@ -378,7 +420,7 @@ class _RoundedTextField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF667eea), width: 2),
+          borderSide: const BorderSide(color: AppColors.brandRed, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

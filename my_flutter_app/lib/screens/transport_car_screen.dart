@@ -4,10 +4,13 @@ import 'package:intl/intl.dart';
 
 import '../data/car_catalog.dart';
 import '../l10n/app_localizations.dart';
+import '../models/destination_country.dart';
 import '../models/transport_request.dart';
 import '../utils/tracking_code_generator.dart';
 import '../utils/transport_receipt_generator.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/destination_country_field.dart';
+import '../theme/app_colors.dart';
 
 class TransportCarScreen extends StatefulWidget {
   const TransportCarScreen({super.key});
@@ -25,6 +28,7 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
   String? _selectedMake;
   String? _selectedModel;
   String? _selectedYear;
+  DestinationCountry? _selectedCountry;
 
   List<String> _makeOptions = [];
   List<String> _modelOptions = [];
@@ -67,7 +71,7 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFF667eea),
+              primary: AppColors.brandRed,
               onPrimary: Colors.white,
               surface: Colors.white,
               onSurface: Colors.black,
@@ -115,6 +119,10 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
         carModel: _selectedModel!,
         carYear: _selectedYear!,
         vinNumber: _vinController.text.trim(),
+        destinationCountryId:
+            _selectedCountry?.id ?? DestinationCountry.fallback.id,
+        destinationCountryName:
+            _selectedCountry?.name ?? DestinationCountry.fallback.name,
         transportDate: _transportDate,
         price: price,
         status: 'pending',
@@ -160,13 +168,7 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-          ),
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.headerGradient),
         child: SafeArea(
           child: Column(
             children: [
@@ -176,11 +178,14 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
                   children: [
                     IconButton(
                       onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                      icon: const Icon(
+                        Icons.arrow_back_ios,
+                        color: Colors.white,
+                      ),
                     ),
                     Expanded(
                       child: Text(
-                        l10n.transportCarsToGuinea,
+                        l10n.transportCars,
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -205,7 +210,9 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.3),
+                          ),
                         ),
                         child: Column(
                           children: [
@@ -216,8 +223,11 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
                                 color: Colors.white.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(40),
                               ),
-                              child: const Icon(Icons.directions_car,
-                                  size: 40, color: Colors.white),
+                              child: const Icon(
+                                Icons.directions_car,
+                                size: 40,
+                                color: Colors.white,
+                              ),
                             ),
                             const SizedBox(height: 16),
                             Text(
@@ -231,7 +241,7 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              l10n.enterCarTransportDetailsForGuinea,
+                              l10n.enterCarTransportDetails,
                               style: const TextStyle(
                                 fontSize: 16,
                                 color: Colors.white70,
@@ -273,7 +283,9 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
                               if (_isCatalogLoading)
                                 const Padding(
                                   padding: EdgeInsets.symmetric(vertical: 24.0),
-                                  child: Center(child: CircularProgressIndicator()),
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
                                 )
                               else ...[
                                 _RoundedDropdownField(
@@ -287,7 +299,9 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
                                       _selectedYear = null;
                                       _modelOptions = value == null
                                           ? <String>[]
-                                          : CarCatalog.instance.getModels(value);
+                                          : CarCatalog.instance.getModels(
+                                              value,
+                                            );
                                       _yearOptions = <String>[];
                                     });
                                   },
@@ -307,7 +321,8 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
                                   onChanged: (value) {
                                     setState(() {
                                       _selectedModel = value;
-                                      if (_selectedMake != null && value != null) {
+                                      if (_selectedMake != null &&
+                                          value != null) {
                                         _yearOptions = CarCatalog.instance
                                             .getYears(_selectedMake!, value);
                                       } else {
@@ -329,7 +344,8 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
                                   value: _selectedYear,
                                   items: _yearOptions,
                                   enabled: _selectedModel != null,
-                                  onChanged: (value) => setState(() => _selectedYear = value),
+                                  onChanged: (value) =>
+                                      setState(() => _selectedYear = value),
                                   validator: (value) {
                                     if (value == null || value.isEmpty) {
                                       return l10n.pleaseEnterCarYear;
@@ -350,9 +366,20 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
                                 },
                               ),
                               const SizedBox(height: 16),
+                              DestinationCountryField(
+                                value: _selectedCountry,
+                                label: l10n.destinationCountry,
+                                requiredMessage: l10n.requiredField,
+                                onChanged: (country) {
+                                  setState(() => _selectedCountry = country);
+                                },
+                              ),
+                              const SizedBox(height: 16),
                               _DatePickerTile(
                                 label: l10n.transportDate,
-                                value: DateFormat.yMMMd().format(_transportDate),
+                                value: DateFormat.yMMMd().format(
+                                  _transportDate,
+                                ),
                                 onTap: _pickTransportDate,
                               ),
                               const SizedBox(height: 16),
@@ -360,7 +387,9 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
                                 label: l10n.price,
                                 controller: _priceController,
                                 keyboardType:
-                                    const TextInputType.numberWithOptions(decimal: true),
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
                                 validator: (value) {
                                   if (value == null || value.trim().isEmpty) {
                                     return l10n.pleaseEnterPrice;
@@ -377,7 +406,7 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
                                 height: 56,
                                 child: ElevatedButton(
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF667eea),
+                                    backgroundColor: AppColors.brandRed,
                                     foregroundColor: Colors.white,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
@@ -393,7 +422,9 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
                                           child: CircularProgressIndicator(
                                             strokeWidth: 2,
                                             valueColor:
-                                                AlwaysStoppedAnimation<Color>(Colors.white),
+                                                AlwaysStoppedAnimation<Color>(
+                                                  Colors.white,
+                                                ),
                                           ),
                                         )
                                       : Text(
@@ -449,7 +480,7 @@ class _RoundedTextField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF667eea), width: 2),
+          borderSide: const BorderSide(color: AppColors.brandRed, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -486,18 +517,16 @@ class _RoundedDropdownField extends StatelessWidget {
       effectiveItems.insert(0, value!);
     }
 
-    final selectedValue =
-        enabled && effectiveItems.contains(value) ? value : null;
+    final selectedValue = enabled && effectiveItems.contains(value)
+        ? value
+        : null;
 
     return DropdownButtonFormField<String>(
       key: ValueKey<String?>(selectedValue),
       initialValue: selectedValue,
       items: effectiveItems
           .map(
-            (item) => DropdownMenuItem<String>(
-              value: item,
-              child: Text(item),
-            ),
+            (item) => DropdownMenuItem<String>(value: item, child: Text(item)),
           )
           .toList(),
       onChanged: enabled ? onChanged : null,
@@ -530,7 +559,7 @@ class _DatePickerTile extends StatelessWidget {
         value,
         style: const TextStyle(fontWeight: FontWeight.w600),
       ),
-      trailing: const Icon(Icons.calendar_today, color: Color(0xFF667eea)),
+      trailing: const Icon(Icons.calendar_today, color: AppColors.brandRed),
       onTap: onTap,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),

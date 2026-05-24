@@ -12,6 +12,7 @@ import '../models/transport_request.dart';
 import '../providers/auth_provider.dart';
 import '../utils/transport_receipt_generator.dart';
 import '../widgets/language_toggle.dart';
+import '../theme/app_colors.dart';
 
 class TransportRequestDetailsScreen extends StatefulWidget {
   const TransportRequestDetailsScreen({super.key, required this.request});
@@ -147,7 +148,7 @@ class _TransportRequestDetailsScreenState
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFF667eea),
+              primary: AppColors.brandRed,
               onPrimary: Colors.white,
               surface: Colors.white,
               onSurface: Colors.black,
@@ -246,11 +247,7 @@ class _TransportRequestDetailsScreenState
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-          ),
+          gradient: AppColors.headerGradient,
         ),
         child: SafeArea(
           child: Column(
@@ -326,7 +323,7 @@ class _TransportRequestDetailsScreenState
                               ),
                               IconButton(
                                 onPressed: _copyTrackingNumber,
-                                icon: const Icon(Icons.copy, color: Color(0xFF667eea)),
+                                icon: const Icon(Icons.copy, color: AppColors.brandRed),
                                 tooltip: l10n.trackingNumber,
                               ),
                             ],
@@ -473,7 +470,7 @@ class _TransportRequestDetailsScreenState
                                 child: OutlinedButton(
                                   onPressed: _reprintReceipt,
                                   style: OutlinedButton.styleFrom(
-                                    foregroundColor: const Color(0xFF667eea),
+                                    foregroundColor: AppColors.brandRed,
                                     minimumSize: const Size.fromHeight(52),
                                   ),
                                   child: Text(l10n.reprintReceipt),
@@ -636,7 +633,7 @@ class _DatePickerTile extends StatelessWidget {
         value,
         style: const TextStyle(fontWeight: FontWeight.w600),
       ),
-      trailing: const Icon(Icons.calendar_today, color: Color(0xFF667eea)),
+      trailing: const Icon(Icons.calendar_today, color: AppColors.brandRed),
       onTap: enabled ? onTap : null,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),

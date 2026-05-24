@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/car.dart';
+import '../models/destination_country.dart';
+import '../providers/auth_provider.dart';
+import '../services/car_purchase_service.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/destination_country_field.dart';
+import '../theme/app_colors.dart';
 
 class CarDetailsScreen extends StatelessWidget {
   CarDetailsScreen({super.key, required this.car});
@@ -28,20 +34,17 @@ class CarDetailsScreen extends StatelessWidget {
           return l10n.inactive;
         case 'sold':
           return l10n.sold;
+        case 'reserved':
+          return l10n.reserved;
         default:
           return car.status;
       }
     }();
+    final canReserve = car.status == 'active';
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-          ),
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.headerGradient),
         child: SafeArea(
           child: Column(
             children: [
@@ -100,7 +103,7 @@ class CarDetailsScreen extends StatelessWidget {
                                 style: const TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF667eea),
+                                  color: AppColors.brandRed,
                                 ),
                               ),
                             ),
@@ -109,7 +112,7 @@ class CarDetailsScreen extends StatelessWidget {
                               style: const TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF667eea),
+                                color: AppColors.brandRed,
                               ),
                             ),
                           ],
@@ -124,8 +127,7 @@ class CarDetailsScreen extends StatelessWidget {
                               icon: Icons.directions_car,
                             ),
                             _InfoChip(
-                              label:
-                                  '${l10n.year}: ${car.year}',
+                              label: '${l10n.year}: ${car.year}',
                               icon: Icons.calendar_today,
                             ),
                             _InfoChip(
@@ -177,13 +179,14 @@ class CarDetailsScreen extends StatelessWidget {
                           Column(
                             children: car.features.map((feature) {
                               return Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                ),
                                 child: Row(
                                   children: [
                                     const Icon(
                                       Icons.check_circle,
-                                      color: Color(0xFF667eea),
+                                      color: AppColors.brandRed,
                                       size: 20,
                                     ),
                                     const SizedBox(width: 12),
@@ -211,7 +214,7 @@ class CarDetailsScreen extends StatelessWidget {
                           height: 56,
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF25D366),
+                              backgroundColor: AppColors.brandRed,
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -219,17 +222,29 @@ class CarDetailsScreen extends StatelessWidget {
                               elevation: 0,
                               splashFactory: NoSplash.splashFactory,
                             ),
-                            onPressed: canContact
-                                ? () => _sendWhatsAppMessage(context, priceText)
+                            onPressed: canReserve
+                                ? () => _showReservationSheet(context)
                                 : null,
-                            icon: const Icon(Icons.message, size: 24),
+                            icon: const Icon(Icons.lock_clock, size: 24),
                             label: Text(
-                              l10n.sendWhatsAppMessage,
+                              l10n.reserveWithDeposit,
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: OutlinedButton.icon(
+                            onPressed: canContact
+                                ? () => _sendWhatsAppMessage(context, priceText)
+                                : null,
+                            icon: const Icon(Icons.message, size: 22),
+                            label: Text(l10n.sendWhatsAppMessage),
                           ),
                         ),
                       ],
@@ -242,6 +257,167 @@ class CarDetailsScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _showReservationSheet(BuildContext context) async {
+    final authProvider = context.read<AuthProvider>();
+    final l10n = AppLocalizations.of(context)!;
+    if (!authProvider.isAuthenticated) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.loginRequiredForDeposit)));
+      await Navigator.pushNamed(context, '/login');
+      return;
+    }
+
+    final buyerNameController = TextEditingController();
+    final buyerPhoneController = TextEditingController();
+    DestinationCountry? selectedCountry;
+    var isSubmitting = false;
+    final formKey = GlobalKey<FormState>();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+            return Padding(
+              padding: EdgeInsets.only(bottom: bottomInset),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              l10n.reserveThisCar,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: isSubmitting
+                                ? null
+                                : () => Navigator.pop(context),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        l10n.depositSummary('\$500 USD'),
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 20),
+                      TextFormField(
+                        controller: buyerNameController,
+                        decoration: InputDecoration(
+                          labelText: l10n.customerName,
+                        ),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                            ? l10n.requiredField
+                            : null,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: buyerPhoneController,
+                        decoration: InputDecoration(
+                          labelText: l10n.customerPhone,
+                        ),
+                        keyboardType: TextInputType.phone,
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                            ? l10n.requiredField
+                            : null,
+                      ),
+                      const SizedBox(height: 16),
+                      DestinationCountryField(
+                        value: selectedCountry,
+                        label: l10n.destinationCountry,
+                        requiredMessage: l10n.requiredField,
+                        onChanged: (country) {
+                          setModalState(() => selectedCountry = country);
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: isSubmitting
+                              ? null
+                              : () async {
+                                  if (!formKey.currentState!.validate() ||
+                                      selectedCountry == null) {
+                                    return;
+                                  }
+                                  setModalState(() => isSubmitting = true);
+                                  try {
+                                    await CarPurchaseService()
+                                        .reserveWithDeposit(
+                                          car: car,
+                                          destinationCountry: selectedCountry!,
+                                          buyerName: buyerNameController.text
+                                              .trim(),
+                                          buyerPhone: buyerPhoneController.text
+                                              .trim(),
+                                        );
+                                    if (!context.mounted) return;
+                                    Navigator.pop(context);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(l10n.reservationComplete),
+                                        backgroundColor: Colors.green,
+                                      ),
+                                    );
+                                  } catch (e) {
+                                    if (!context.mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          l10n.operationFailed(e.toString()),
+                                        ),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  } finally {
+                                    if (context.mounted) {
+                                      setModalState(() => isSubmitting = false);
+                                    }
+                                  }
+                                },
+                          child: isSubmitting
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Text(l10n.payDeposit),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    buyerNameController.dispose();
+    buyerPhoneController.dispose();
   }
 
   void _sendWhatsAppMessage(BuildContext context, String formattedPrice) {
@@ -257,10 +433,14 @@ class CarDetailsScreen extends StatelessWidget {
       );
       return;
     }
-    final message =
-        localizations.whatsAppMessage(car.title, car.year, formattedPrice);
-    final uri =
-        Uri.parse('https://wa.me/$phone?text=${Uri.encodeComponent(message)}');
+    final message = localizations.whatsAppMessage(
+      car.title,
+      car.year,
+      formattedPrice,
+    );
+    final uri = Uri.parse(
+      'https://wa.me/$phone?text=${Uri.encodeComponent(message)}',
+    );
 
     launchUrl(uri).catchError((error) {
       messenger?.showSnackBar(
@@ -331,11 +511,7 @@ class _ImageGallery extends StatelessWidget {
 }
 
 class _InfoChip extends StatelessWidget {
-  const _InfoChip({
-    required this.label,
-    this.value,
-    required this.icon,
-  });
+  const _InfoChip({required this.label, this.value, required this.icon});
 
   final String label;
   final String? value;
@@ -352,7 +528,7 @@ class _InfoChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: const Color(0xFF667eea)),
+          Icon(icon, size: 18, color: AppColors.brandRed),
           const SizedBox(width: 8),
           Text(
             value != null ? '$label: $value' : label,
@@ -391,10 +567,7 @@ class _ContactCard extends StatelessWidget {
         children: [
           Text(
             l10n.contactInfo,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           if (contactName != null && contactName!.isNotEmpty)
@@ -402,7 +575,7 @@ class _ContactCard extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 6),
               child: Row(
                 children: [
-                  const Icon(Icons.person, color: Color(0xFF667eea), size: 20),
+                  const Icon(Icons.person, color: AppColors.brandRed, size: 20),
                   const SizedBox(width: 12),
                   Text(contactName!, style: const TextStyle(fontSize: 16)),
                 ],
@@ -410,7 +583,7 @@ class _ContactCard extends StatelessWidget {
             ),
           Row(
             children: [
-              const Icon(Icons.phone, color: Color(0xFF667eea), size: 20),
+              const Icon(Icons.phone, color: AppColors.brandRed, size: 20),
               const SizedBox(width: 12),
               Text(
                 phone.isNotEmpty ? phone : l10n.contactUnavailable,
@@ -422,7 +595,7 @@ class _ContactCard extends StatelessWidget {
             const SizedBox(height: 6),
             Row(
               children: [
-                const Icon(Icons.email, color: Color(0xFF667eea), size: 20),
+                const Icon(Icons.email, color: AppColors.brandRed, size: 20),
                 const SizedBox(width: 12),
                 Text(contactEmail!, style: const TextStyle(fontSize: 16)),
               ],

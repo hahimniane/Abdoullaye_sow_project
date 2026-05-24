@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
+import '../theme/app_colors.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -100,11 +101,7 @@ class _LoginScreenState extends State<LoginScreen>
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-          ),
+          gradient: AppColors.headerGradient,
         ),
         child: SafeArea(
           child: Column(
@@ -129,18 +126,19 @@ class _LoginScreenState extends State<LoginScreen>
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            // Logo/Icon
-                            Container(
-                              width: 120,
-                              height: 120,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(60),
-                              ),
-                              child: const Icon(
-                                Icons.lock_outline,
-                                size: 60,
-                                color: Colors.white,
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Image.asset(
+                                'assets/images/keren_logo.jpg',
+                                width: 160,
+                                height: 120,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => Image.asset(
+                                  'assets/images/logo.JPG',
+                                  width: 160,
+                                  height: 120,
+                                  fit: BoxFit.contain,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 32),
@@ -215,7 +213,7 @@ class _LoginScreenState extends State<LoginScreen>
                                             12,
                                           ),
                                           borderSide: const BorderSide(
-                                            color: Color(0xFF667eea),
+                                            color: AppColors.brandRed,
                                             width: 2,
                                           ),
                                         ),
@@ -287,7 +285,7 @@ class _LoginScreenState extends State<LoginScreen>
                                             12,
                                           ),
                                           borderSide: const BorderSide(
-                                            color: Color(0xFF667eea),
+                                            color: AppColors.brandRed,
                                             width: 2,
                                           ),
                                         ),
@@ -322,9 +320,7 @@ class _LoginScreenState extends State<LoginScreen>
                                                     ? null
                                                     : _handleLogin,
                                             style: ElevatedButton.styleFrom(
-                                              backgroundColor: const Color(
-                                                0xFF667eea,
-                                              ),
+                                              backgroundColor: AppColors.brandRed,
                                               foregroundColor: Colors.white,
                                               shape: RoundedRectangleBorder(
                                                 borderRadius:
@@ -377,7 +373,7 @@ class _LoginScreenState extends State<LoginScreen>
                                           context,
                                         )!.forgotPassword,
                                         style: const TextStyle(
-                                          color: Color(0xFF667eea),
+                                          color: AppColors.brandRed,
                                           fontSize: 14,
                                         ),
                                       ),
@@ -419,7 +415,7 @@ class _LoginScreenState extends State<LoginScreen>
                                               context,
                                             )!.signUp,
                                             style: const TextStyle(
-                                              color: Color(0xFF667eea),
+                                              color: AppColors.brandRed,
                                               fontSize: 14,
                                               fontWeight: FontWeight.w600,
                                             ),
@@ -446,7 +442,7 @@ class _LoginScreenState extends State<LoginScreen>
                                           context,
                                         )!.backToCustomerHome,
                                         style: const TextStyle(
-                                          color: Color(0xFF667eea),
+                                          color: AppColors.brandRed,
                                           fontSize: 14,
                                         ),
                                       ),

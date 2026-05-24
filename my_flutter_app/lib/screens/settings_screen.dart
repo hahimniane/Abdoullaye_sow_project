@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/theme_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
+import '../theme/app_colors.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -28,33 +30,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-          ),
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.headerGradient),
         child: SafeArea(
           child: Column(
             children: [
               // Header
               Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: Row(
+                child: Column(
                   children: [
-                    Expanded(
-                      child: Text(
-                        AppLocalizations.of(context)!.settings,
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
+                    Text(
+                      l10n.settings,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.displaySmall?.copyWith(color: Colors.white),
+                      textAlign: TextAlign.center,
                     ),
-                    const LanguageToggle(),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        LanguageToggle(),
+                        SizedBox(width: 12),
+                        ThemeToggle(),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -62,9 +62,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // Settings content
               Expanded(
                 child: Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.only(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: const BorderRadius.only(
                       topLeft: Radius.circular(30),
                       topRight: Radius.circular(30),
                     ),
@@ -89,8 +89,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 subtitle: authProvider.isAdmin
                                     ? l10n.admin
                                     : authProvider.isStaff
-                                        ? l10n.staff
-                                        : l10n.customer,
+                                    ? l10n.staff
+                                    : l10n.customer,
                               ),
                               _buildSettingItem(
                                 icon: Icons.logout,
@@ -119,19 +119,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 icon: Icons.login,
                                 title: l10n.signIn,
                                 subtitle: l10n.signInToAccount,
-                                onTap: () => Navigator.pushNamed(
-                                  context,
-                                  '/login',
-                                ),
+                                onTap: () =>
+                                    Navigator.pushNamed(context, '/login'),
                               ),
                               const Divider(height: 1),
                               _buildSettingItem(
                                 icon: Icons.person_add_alt,
                                 title: l10n.signUp,
                                 subtitle: l10n.signUpToGetStarted,
+                                onTap: () =>
+                                    Navigator.pushNamed(context, '/signup'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                        ],
+
+                        _buildSection(
+                          title: l10n.themeLabel,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.palette_outlined,
+                                    color: AppColors.brandRed,
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Text(
+                                      l10n.themeLabel,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleMedium,
+                                    ),
+                                  ),
+                                  const ThemeToggle(onDarkBackground: false),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        if (authProvider.isStaff) ...[
+                          _buildSection(
+                            title: l10n.staffTools,
+                            children: [
+                              _buildSettingItem(
+                                icon: Icons.public,
+                                title: l10n.destinationCountries,
+                                subtitle: l10n.manageDestinationCountries,
                                 onTap: () => Navigator.pushNamed(
                                   context,
-                                  '/signup',
+                                  '/destination-countries',
                                 ),
                               ),
                             ],
@@ -151,7 +194,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             _buildSettingItem(
                               icon: Icons.business,
                               title: l10n.companyName,
-                              subtitle: 'Business Services',
+                              subtitle: 'Keren Auto Sales LLC',
                             ),
                           ],
                         ),
@@ -227,15 +270,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: Color(0xFF667eea),
+            color: AppColors.brandRed,
           ),
         ),
         const SizedBox(height: 12),
         Container(
           decoration: BoxDecoration(
-            color: Colors.grey.shade50,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade200),
+            border: Border.all(
+              color: Theme.of(
+                context,
+              ).colorScheme.outline.withValues(alpha: 0.5),
+            ),
           ),
           child: Column(children: children),
         ),
@@ -260,10 +307,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: const Color(0xFF667eea).withValues(alpha: 0.1),
+                color: AppColors.brandRed.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: const Color(0xFF667eea), size: 20),
+              child: Icon(icon, color: AppColors.brandRed, size: 20),
             ),
             const SizedBox(width: 16),
             Expanded(

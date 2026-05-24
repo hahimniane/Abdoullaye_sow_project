@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
+import '../theme/app_colors.dart';
 
 class TrackingScreen extends StatefulWidget {
   const TrackingScreen({super.key});
@@ -47,11 +48,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-          ),
+          gradient: AppColors.headerGradient,
         ),
         child: SafeArea(
           child: Column(
@@ -117,7 +114,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                                 children: [
                                   CircularProgressIndicator(
                                     valueColor: AlwaysStoppedAnimation<Color>(
-                                      Color(0xFF667eea),
+                                      AppColors.brandRed,
                                     ),
                                   ),
                                   SizedBox(height: 16),
@@ -125,7 +122,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                                     'Loading Maersk Tracking...',
                                     style: TextStyle(
                                       fontSize: 16,
-                                      color: Color(0xFF667eea),
+                                      color: AppColors.brandRed,
                                     ),
                                   ),
                                 ],

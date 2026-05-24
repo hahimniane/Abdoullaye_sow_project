@@ -779,4 +779,107 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get setAsCover => 'Set as cover';
+
+  @override
+  String get themeLabel => 'Appearance';
+
+  @override
+  String get darkMode => 'Dark mode';
+
+  @override
+  String get lightMode => 'Light mode';
+
+  @override
+  String get reserved => 'Reserved';
+
+  @override
+  String get reserveWithDeposit => 'Reserve with \$500 Deposit';
+
+  @override
+  String get loginRequiredForDeposit =>
+      'Please sign in before paying a deposit.';
+
+  @override
+  String get reserveThisCar => 'Reserve this car';
+
+  @override
+  String depositSummary(Object amount) {
+    return 'A refundable reservation deposit of $amount is required to hold this vehicle.';
+  }
+
+  @override
+  String get payDeposit => 'Pay Deposit';
+
+  @override
+  String get reservationComplete =>
+      'Deposit received. Your reservation is now active.';
+
+  @override
+  String get destinationCountry => 'Destination Country';
+
+  @override
+  String get sendBarrels => 'Send Barrels';
+
+  @override
+  String get enterShippingDetails => 'Enter shipping details';
+
+  @override
+  String get transportCars => 'Transport Cars';
+
+  @override
+  String get enterCarTransportDetails => 'Enter car transport details';
+
+  @override
+  String get cars => 'Cars';
+
+  @override
+  String get myPurchases => 'My Purchases';
+
+  @override
+  String get noPurchasesYet => 'No car purchases yet.';
+
+  @override
+  String depositPaid(Object amount, Object status) {
+    return 'Deposit: $amount ($status)';
+  }
+
+  @override
+  String get purchases => 'Purchases';
+
+  @override
+  String get purchaseReservations => 'Purchase Reservations';
+
+  @override
+  String get purchaseUpdated => 'Purchase updated.';
+
+  @override
+  String get cancelled => 'Cancelled';
+
+  @override
+  String get refunded => 'Refunded';
+
+  @override
+  String get staffTools => 'Staff Tools';
+
+  @override
+  String get destinationCountries => 'Destination Countries';
+
+  @override
+  String get manageDestinationCountries =>
+      'Manage countries available in customer forms.';
+
+  @override
+  String get countriesSeeded => 'Default countries added.';
+
+  @override
+  String get countryName => 'Country Name';
+
+  @override
+  String get countryCode => 'Country Code';
+
+  @override
+  String get seedDefaultCountries => 'Seed Default Countries';
+
+  @override
+  String get save => 'Save';
 }

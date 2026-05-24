@@ -7,6 +7,7 @@ import '../models/barrel_shipment.dart';
 import '../models/transport_request.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
+import '../theme/app_colors.dart';
 
 enum ServiceCategory { all, parking, barrels, transport, sales }
 
@@ -63,61 +64,63 @@ class _HomeMenuState extends State<HomeMenu> {
         .orderBy('parkingDate', descending: true)
         .snapshots()
         .listen(
-      (snapshot) {
-        final parkedCars =
-            snapshot.docs.map((doc) => ParkedCar.fromFirestore(doc)).toList();
-        _parkedCars
-          ..clear()
-          ..addAll(parkedCars);
-        _parkedLoaded = true;
-        _rebuildActivityRecords();
-      },
-      onError: (_) {
-        _parkedLoaded = true;
-        _rebuildActivityRecords();
-      },
-    );
+          (snapshot) {
+            final parkedCars = snapshot.docs
+                .map((doc) => ParkedCar.fromFirestore(doc))
+                .toList();
+            _parkedCars
+              ..clear()
+              ..addAll(parkedCars);
+            _parkedLoaded = true;
+            _rebuildActivityRecords();
+          },
+          onError: (_) {
+            _parkedLoaded = true;
+            _rebuildActivityRecords();
+          },
+        );
 
     _barrelShipmentsSubscription = FirebaseFirestore.instance
         .collection('barrelShipments')
         .orderBy('createdAt', descending: true)
         .snapshots()
         .listen(
-      (snapshot) {
-        final shipments =
-            snapshot.docs.map((doc) => BarrelShipment.fromFirestore(doc)).toList();
-        _barrelShipments
-          ..clear()
-          ..addAll(shipments);
-        _barrelsLoaded = true;
-        _rebuildActivityRecords();
-      },
-      onError: (_) {
-        _barrelsLoaded = true;
-        _rebuildActivityRecords();
-      },
-    );
+          (snapshot) {
+            final shipments = snapshot.docs
+                .map((doc) => BarrelShipment.fromFirestore(doc))
+                .toList();
+            _barrelShipments
+              ..clear()
+              ..addAll(shipments);
+            _barrelsLoaded = true;
+            _rebuildActivityRecords();
+          },
+          onError: (_) {
+            _barrelsLoaded = true;
+            _rebuildActivityRecords();
+          },
+        );
 
     _transportRequestsSubscription = FirebaseFirestore.instance
         .collection('transportRequests')
         .orderBy('createdAt', descending: true)
         .snapshots()
         .listen(
-      (snapshot) {
-        final requests = snapshot.docs
-            .map((doc) => TransportRequest.fromFirestore(doc))
-            .toList();
-        _transportRequests
-          ..clear()
-          ..addAll(requests);
-        _transportLoaded = true;
-        _rebuildActivityRecords();
-      },
-      onError: (_) {
-        _transportLoaded = true;
-        _rebuildActivityRecords();
-      },
-    );
+          (snapshot) {
+            final requests = snapshot.docs
+                .map((doc) => TransportRequest.fromFirestore(doc))
+                .toList();
+            _transportRequests
+              ..clear()
+              ..addAll(requests);
+            _transportLoaded = true;
+            _rebuildActivityRecords();
+          },
+          onError: (_) {
+            _transportLoaded = true;
+            _rebuildActivityRecords();
+          },
+        );
   }
 
   void _rebuildActivityRecords() {
@@ -152,7 +155,8 @@ class _HomeMenuState extends State<HomeMenu> {
       combined.add(
         ActivityRecord(
           category: ServiceCategory.transport,
-          title: '${request.carMake} ${request.carModel} • ${request.trackingCode}',
+          title:
+              '${request.carMake} ${request.carModel} • ${request.trackingCode}',
           subtitle: request.ownerName,
           date: request.createdAt,
           payload: request,
@@ -194,13 +198,7 @@ class _HomeMenuState extends State<HomeMenu> {
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-          ),
-        ),
+        decoration: const BoxDecoration(color: AppColors.cream),
         child: SafeArea(
           child: SingleChildScrollView(
             padding: EdgeInsets.all(width * 0.06),
@@ -248,36 +246,49 @@ class _WelcomeSection extends StatelessWidget {
       width: double.infinity,
       padding: EdgeInsets.all(width * 0.06),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+        color: AppColors.paper,
+        border: Border.all(color: AppColors.rule),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 70,
-            height: 70,
+            width: 56,
+            height: 56,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(24),
+              color: AppColors.parchment,
+              border: Border.all(color: AppColors.rule),
             ),
-            child: const Icon(Icons.business, color: Colors.white, size: 32),
+            child: const Icon(
+              Icons.business,
+              color: AppColors.cobalt,
+              size: 28,
+            ),
           ),
           const SizedBox(height: 16),
-          Text(
-            l10n.welcomeToBusinessServices,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+          RichText(
+            text: TextSpan(
+              style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                fontSize: 40,
+                height: 1,
+                color: AppColors.ink,
+              ),
+              children: const [
+                TextSpan(text: 'Keren'),
+                TextSpan(
+                  text: '.',
+                  style: TextStyle(color: AppColors.cobalt),
+                ),
+              ],
             ),
-            textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 10),
           Text(
             l10n.chooseServiceToStart,
-            style: const TextStyle(fontSize: 14, color: Colors.white70),
-            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppColors.muted,
+              height: 1.5,
+            ),
           ),
         ],
       ),
@@ -296,15 +307,8 @@ class _ServicesSection extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(width * 0.06),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 12),
-          ),
-        ],
+        color: AppColors.paper,
+        border: Border.all(color: AppColors.rule),
       ),
       child: Column(
         children: [
@@ -315,13 +319,13 @@ class _ServicesSection extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _MenuButton(
-            title: l10n.sendBarrelsToGuinea,
+            title: l10n.sendBarrels,
             icon: Icons.local_shipping,
             onTap: () => Navigator.pushNamed(context, '/barrel'),
           ),
           const SizedBox(height: 12),
           _MenuButton(
-            title: l10n.transportCarsToGuinea,
+            title: l10n.transportCars,
             icon: Icons.directions_car,
             onTap: () => Navigator.pushNamed(context, '/transport'),
           ),
@@ -355,15 +359,15 @@ class _ActivitySection extends StatelessWidget {
   Color _categoryColor(ServiceCategory category) {
     switch (category) {
       case ServiceCategory.parking:
-        return const Color(0xFF667eea);
+        return AppColors.sage;
       case ServiceCategory.barrels:
-        return const Color(0xFF9364f4);
+        return AppColors.cobalt;
       case ServiceCategory.transport:
-        return const Color(0xFF5ED5A8);
+        return AppColors.sage;
       case ServiceCategory.sales:
-        return const Color(0xFFF7A24B);
+        return AppColors.saffron;
       case ServiceCategory.all:
-        return const Color(0xFF667eea);
+        return AppColors.ink;
     }
   }
 
@@ -405,7 +409,7 @@ class _ActivitySection extends StatelessWidget {
         Text(
           l10n.recentActivity,
           style: const TextStyle(
-            color: Colors.white,
+            color: AppColors.ink,
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
@@ -426,21 +430,18 @@ class _ActivitySection extends StatelessWidget {
                   avatar: Icon(
                     _categoryIcon(category),
                     size: 18,
-                    color: isSelected ? Colors.white : chipColor,
+                    color: isSelected ? AppColors.paper : chipColor,
                   ),
                   labelStyle: TextStyle(
-                    color: isSelected ? Colors.white : chipColor,
+                    color: isSelected ? AppColors.paper : chipColor,
                     fontWeight: FontWeight.w600,
                   ),
-                  backgroundColor:
-                      chipColor.withValues(alpha: isSelected ? 0.22 : 0.18),
+                  backgroundColor: AppColors.paper,
                   selectedColor: chipColor,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.zero,
                     side: BorderSide(
-                      color: chipColor.withValues(
-                        alpha: isSelected ? 0.55 : 0.35,
-                      ),
+                      color: chipColor.withValues(alpha: isSelected ? 1 : 0.5),
                     ),
                   ),
                 ),
@@ -450,20 +451,20 @@ class _ActivitySection extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         if (isLoading)
-          const Center(child: CircularProgressIndicator(color: Colors.white))
+          const Center(child: CircularProgressIndicator())
         else if (records.isEmpty)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(24),
+              color: AppColors.paper,
+              border: Border.all(color: AppColors.rule),
             ),
             child: Text(
               l10n.noRecordsYet,
               style: TextStyle(
                 fontSize: 15,
-                color: Colors.white.withValues(alpha: 0.7),
+                color: AppColors.muted,
                 fontWeight: FontWeight.w600,
               ),
               textAlign: TextAlign.center,
@@ -542,29 +543,13 @@ class _RecordCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final formatter = DateFormat('MMM dd, yyyy');
-    const baseGradient = [
-      Color(0xFF5C6BC0),
-      Color(0xFF7E57C2),
-    ];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: baseGradient,
-        ),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF5C6BC0).withValues(alpha: 0.22),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        color: AppColors.paper,
+        border: Border.all(color: AppColors.rule),
       ),
       child: Row(
         children: [
@@ -575,23 +560,24 @@ class _RecordCard extends StatelessWidget {
                 Row(
                   children: [
                     Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(16),
+                        color: AppColors.parchment,
+                        border: Border.all(color: AppColors.rule),
                       ),
                       child: Row(
                         children: [
-                          Icon(categoryIcon,
-                              color: Colors.white, size: 16),
+                          Icon(categoryIcon, color: AppColors.cobalt, size: 16),
                           const SizedBox(width: 6),
                           Text(
                             categoryLabel,
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
-                              color: Colors.white,
+                              color: AppColors.ink,
                             ),
                           ),
                         ],
@@ -602,7 +588,7 @@ class _RecordCard extends StatelessWidget {
                       formatter.format(date),
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.white.withValues(alpha: 0.7),
+                        color: AppColors.muted,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -614,26 +600,19 @@ class _RecordCard extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: AppColors.ink,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   subtitle,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.white.withValues(alpha: 0.85),
-                  ),
+                  style: TextStyle(fontSize: 14, color: AppColors.muted),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 12),
-          Icon(
-            Icons.arrow_forward_ios,
-            color: Colors.white.withValues(alpha: 0.55),
-            size: 16,
-          ),
+          Icon(Icons.arrow_forward_ios, color: AppColors.muted, size: 16),
         ],
       ),
     );
@@ -658,10 +637,11 @@ class _MenuButton extends StatelessWidget {
       constraints: const BoxConstraints(minHeight: 60, maxHeight: 80),
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF667eea),
-          foregroundColor: Colors.white,
+          backgroundColor: AppColors.paper,
+          foregroundColor: AppColors.ink,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.zero,
+            side: const BorderSide(color: AppColors.rule),
           ),
           elevation: 0,
           splashFactory: NoSplash.splashFactory,

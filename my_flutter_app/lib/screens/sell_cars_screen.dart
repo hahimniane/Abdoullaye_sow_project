@@ -8,6 +8,7 @@ import '../l10n/app_localizations.dart';
 import '../models/car.dart';
 import '../widgets/language_toggle.dart';
 import 'car_details_screen.dart';
+import '../theme/app_colors.dart';
 
 class SellCarsScreen extends StatefulWidget {
   const SellCarsScreen({super.key});
@@ -97,11 +98,7 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-          ),
+          gradient: AppColors.headerGradient,
         ),
         child: SafeArea(
           child: Column(
@@ -327,7 +324,7 @@ class _SearchField extends StatelessWidget {
           focusedBorder: const OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(12)),
             borderSide: BorderSide(
-              color: Color(0xFF667eea),
+              color: AppColors.brandRed,
               width: 2,
             ),
           ),
@@ -468,7 +465,7 @@ class _CarListTile extends StatelessWidget {
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 18,
-                color: Color(0xFF667eea),
+                color: AppColors.brandRed,
               ),
               overflow: TextOverflow.ellipsis,
               maxLines: 1,

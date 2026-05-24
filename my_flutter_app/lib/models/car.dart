@@ -40,6 +40,7 @@ class Car {
   final CarSaleInfo? soldInfo;
 
   bool get isSold => status.toLowerCase() == 'sold';
+  bool get isReserved => status.toLowerCase() == 'reserved';
 
   factory Car.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? <String, dynamic>{};
@@ -166,4 +167,3 @@ class CarSaleInfo {
     );
   }
 }
-

@@ -11,6 +11,7 @@ import '../models/barrel_shipment.dart';
 import '../providers/auth_provider.dart';
 import '../utils/barrel_receipt_generator.dart';
 import '../widgets/language_toggle.dart';
+import '../theme/app_colors.dart';
 
 class BarrelShipmentDetailsScreen extends StatefulWidget {
   const BarrelShipmentDetailsScreen({super.key, required this.shipment});
@@ -233,11 +234,7 @@ class _BarrelShipmentDetailsScreenState
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-          ),
+          gradient: AppColors.headerGradient,
         ),
         child: SafeArea(
           child: Column(
@@ -299,7 +296,7 @@ class _BarrelShipmentDetailsScreenState
                               IconButton(
                                 onPressed: _copyTrackingNumber,
                                 icon: const Icon(Icons.copy),
-                                color: const Color(0xFF667eea),
+                                color: AppColors.brandRed,
                                 tooltip: l10n.trackingNumber,
                               ),
                             ],
@@ -420,7 +417,7 @@ class _BarrelShipmentDetailsScreenState
                                 child: OutlinedButton(
                                   onPressed: _reprintReceipt,
                                   style: OutlinedButton.styleFrom(
-                                    foregroundColor: const Color(0xFF667eea),
+                                    foregroundColor: AppColors.brandRed,
                                     minimumSize: const Size.fromHeight(52),
                                   ),
                                   child: Text(l10n.reprintReceipt),
@@ -491,7 +488,7 @@ class _SectionTitle extends StatelessWidget {
       style: const TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.w700,
-        color: Color(0xFF667eea),
+        color: AppColors.brandRed,
       ),
     );
   }

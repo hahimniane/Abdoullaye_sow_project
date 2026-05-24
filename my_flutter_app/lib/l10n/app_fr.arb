@@ -326,5 +326,48 @@
   "noImagesSelected": "Aucune image sélectionnée pour le moment.",
   "addImagesPrompt": "Veuillez ajouter au moins une image.",
   "coverLabel": "Couverture",
-  "setAsCover": "Définir comme couverture"
-} 
+  "setAsCover": "Définir comme couverture",
+  "themeLabel": "Apparence",
+  "darkMode": "Mode sombre",
+  "lightMode": "Mode clair",
+  "reserved": "Réservé",
+  "reserveWithDeposit": "Réserver avec un acompte de 500 $",
+  "loginRequiredForDeposit": "Veuillez vous connecter avant de payer un acompte.",
+  "reserveThisCar": "Réserver cette voiture",
+  "depositSummary": "Un acompte de réservation remboursable de {amount} est requis pour retenir ce véhicule.",
+  "@depositSummary": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "payDeposit": "Payer l'acompte",
+  "reservationComplete": "Acompte reçu. Votre réservation est maintenant active.",
+  "destinationCountry": "Pays de destination",
+  "sendBarrels": "Envoyer des barils",
+  "enterShippingDetails": "Entrez les détails d'expédition",
+  "transportCars": "Transporter des voitures",
+  "enterCarTransportDetails": "Entrez les détails du transport de voiture",
+  "cars": "Voitures",
+  "myPurchases": "Mes achats",
+  "noPurchasesYet": "Aucun achat de voiture pour le moment.",
+  "depositPaid": "Acompte : {amount} ({status})",
+  "@depositPaid": {
+    "placeholders": {
+      "amount": {},
+      "status": {}
+    }
+  },
+  "purchases": "Achats",
+  "purchaseReservations": "Réservations d'achat",
+  "purchaseUpdated": "Achat mis à jour.",
+  "cancelled": "Annulé",
+  "refunded": "Remboursé",
+  "staffTools": "Outils du personnel",
+  "destinationCountries": "Pays de destination",
+  "manageDestinationCountries": "Gérer les pays disponibles dans les formulaires client.",
+  "countriesSeeded": "Pays par défaut ajoutés.",
+  "countryName": "Nom du pays",
+  "countryCode": "Code du pays",
+  "seedDefaultCountries": "Ajouter les pays par défaut",
+  "save": "Enregistrer"
+}

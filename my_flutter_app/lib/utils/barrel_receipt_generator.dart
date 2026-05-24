@@ -119,6 +119,7 @@ Future<void> generateBarrelShipmentReceipt({
                   pw.SizedBox(height: 10),
                   buildRow('Receiver Name', shipment.receiverName),
                   buildRow('Receiver Phone', shipment.receiverPhone),
+                  buildRow('Destination', shipment.destinationCountryName),
                   pw.SizedBox(height: 20),
                   pw.Text(
                     'Billing Summary',
@@ -147,4 +148,3 @@ Future<void> generateBarrelShipmentReceipt({
     name: 'Barrel_Shipment_${shipment.trackingCode}',
   );
 }
-

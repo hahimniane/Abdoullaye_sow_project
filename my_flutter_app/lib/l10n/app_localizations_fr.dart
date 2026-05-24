@@ -792,4 +792,108 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get setAsCover => 'Définir comme couverture';
+
+  @override
+  String get themeLabel => 'Apparence';
+
+  @override
+  String get darkMode => 'Mode sombre';
+
+  @override
+  String get lightMode => 'Mode clair';
+
+  @override
+  String get reserved => 'Réservé';
+
+  @override
+  String get reserveWithDeposit => 'Réserver avec un acompte de 500 \$';
+
+  @override
+  String get loginRequiredForDeposit =>
+      'Veuillez vous connecter avant de payer un acompte.';
+
+  @override
+  String get reserveThisCar => 'Réserver cette voiture';
+
+  @override
+  String depositSummary(Object amount) {
+    return 'Un acompte de réservation remboursable de $amount est requis pour retenir ce véhicule.';
+  }
+
+  @override
+  String get payDeposit => 'Payer l\'acompte';
+
+  @override
+  String get reservationComplete =>
+      'Acompte reçu. Votre réservation est maintenant active.';
+
+  @override
+  String get destinationCountry => 'Pays de destination';
+
+  @override
+  String get sendBarrels => 'Envoyer des barils';
+
+  @override
+  String get enterShippingDetails => 'Entrez les détails d\'expédition';
+
+  @override
+  String get transportCars => 'Transporter des voitures';
+
+  @override
+  String get enterCarTransportDetails =>
+      'Entrez les détails du transport de voiture';
+
+  @override
+  String get cars => 'Voitures';
+
+  @override
+  String get myPurchases => 'Mes achats';
+
+  @override
+  String get noPurchasesYet => 'Aucun achat de voiture pour le moment.';
+
+  @override
+  String depositPaid(Object amount, Object status) {
+    return 'Acompte : $amount ($status)';
+  }
+
+  @override
+  String get purchases => 'Achats';
+
+  @override
+  String get purchaseReservations => 'Réservations d\'achat';
+
+  @override
+  String get purchaseUpdated => 'Achat mis à jour.';
+
+  @override
+  String get cancelled => 'Annulé';
+
+  @override
+  String get refunded => 'Remboursé';
+
+  @override
+  String get staffTools => 'Outils du personnel';
+
+  @override
+  String get destinationCountries => 'Pays de destination';
+
+  @override
+  String get manageDestinationCountries =>
+      'Gérer les pays disponibles dans les formulaires client.';
+
+  @override
+  String get countriesSeeded => 'Pays par défaut ajoutés.';
+
+  @override
+  String get countryName => 'Nom du pays';
+
+  @override
+  String get countryCode => 'Code du pays';
+
+  @override
+  String get seedDefaultCountries => 'Ajouter les pays par défaut';
+
+  @override
+  String get save => 'Enregistrer';
 }

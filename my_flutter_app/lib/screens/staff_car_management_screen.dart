@@ -9,6 +9,7 @@ import '../data/car_catalog.dart';
 import '../l10n/app_localizations.dart';
 import '../models/car.dart';
 import '../widgets/language_toggle.dart';
+import '../theme/app_colors.dart';
 
 class StaffCarManagementScreen extends StatefulWidget {
   const StaffCarManagementScreen({super.key});
@@ -34,7 +35,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
   }
 
   Future<void> _toggleCarStatus(Car car) async {
-    if (car.isSold) {
+    if (car.isSold || car.isReserved) {
       return;
     }
     final newStatus = car.status == 'active' ? 'inactive' : 'active';
@@ -88,7 +89,8 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
 
   Future<void> _updateCar(Car car, _CarFormResult result) async {
     final data = result.toFirestoreMap();
-    final statusToPersist = car.isSold ? 'sold' : result.status;
+    final statusToPersist =
+        car.isSold || car.isReserved ? car.status : result.status;
     final imageUrls = await _uploadImages(
       carId: car.id,
       images: result.images,
@@ -251,6 +253,8 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
         return Colors.orange;
       case 'sold':
         return Colors.purple;
+      case 'reserved':
+        return Colors.blue;
       default:
         return Colors.blueGrey;
     }
@@ -264,6 +268,8 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
         return l10n.inactive;
       case 'sold':
         return l10n.sold;
+      case 'reserved':
+        return l10n.reserved;
       default:
         return status;
     }
@@ -275,11 +281,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-          ),
+          gradient: AppColors.headerGradient,
         ),
         child: SafeArea(
           child: Column(
@@ -344,6 +346,8 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                           cars.where((car) => car.status == 'inactive').length;
                       final sold =
                           cars.where((car) => car.status == 'sold').length;
+                      final reserved =
+                          cars.where((car) => car.status == 'reserved').length;
 
                       return Column(
                           children: [
@@ -352,6 +356,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                             active: active,
                             inactive: inactive,
                             sold: sold,
+                            reserved: reserved,
                             l10n: l10n,
                           ),
                       Expanded(
@@ -372,6 +377,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                                   isProcessing: isProcessing,
                                   onEdit: () => _showCarForm(car: car),
                                   onToggleStatus: car.isSold
+                                      || car.isReserved
                                       ? null
                                       : () => _toggleCarStatus(car),
                                   onMarkSold: car.isSold
@@ -393,7 +399,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showCarForm(),
-        backgroundColor: const Color(0xFF667eea),
+        backgroundColor: AppColors.brandRed,
         child: const Icon(Icons.add, color: Colors.white),
       ),
     );
@@ -406,6 +412,7 @@ class _StatsBanner extends StatelessWidget {
     required this.active,
     required this.inactive,
     required this.sold,
+    required this.reserved,
     required this.l10n,
   });
 
@@ -413,6 +420,7 @@ class _StatsBanner extends StatelessWidget {
   final int active;
   final int inactive;
   final int sold;
+  final int reserved;
   final AppLocalizations l10n;
 
   @override
@@ -422,7 +430,7 @@ class _StatsBanner extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF667eea), Color(0xFF764ba2)],
+          colors: [AppColors.brandRed, AppColors.brandRedDark],
         ),
         borderRadius: BorderRadius.circular(20),
       ),
@@ -449,6 +457,11 @@ class _StatsBanner extends StatelessWidget {
             icon: Icons.sell,
             value: sold.toString(),
             label: l10n.soldCars,
+          ),
+          _StatItem(
+            icon: Icons.lock_clock,
+            value: reserved.toString(),
+            label: l10n.reserved,
           ),
         ],
       ),
@@ -622,7 +635,7 @@ class _CarCard extends StatelessWidget {
                   style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF667eea),
+                          color: AppColors.brandRed,
                         ),
                       ),
                     ],
@@ -1245,7 +1258,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
                           onPressed: _catalogLoading ? null : _submit,
                           style: ElevatedButton.styleFrom(
                             minimumSize: const Size.fromHeight(52),
-                            backgroundColor: const Color(0xFF667eea),
+                            backgroundColor: AppColors.brandRed,
                             foregroundColor: Colors.white,
                           ),
                           child: Text(
@@ -1455,7 +1468,7 @@ class _MarkAsSoldSheetState extends State<_MarkAsSoldSheet> {
                         onPressed: _submit,
                         style: ElevatedButton.styleFrom(
                           minimumSize: const Size.fromHeight(52),
-                          backgroundColor: const Color(0xFF667eea),
+                          backgroundColor: AppColors.brandRed,
                           foregroundColor: Colors.white,
                         ),
                         child: Text(l10n.confirmSale),
@@ -1676,7 +1689,7 @@ class _EmptyCarsState extends StatelessWidget {
           icon: const Icon(Icons.add),
           label: Text(l10n.addCar),
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF667eea),
+            backgroundColor: AppColors.brandRed,
             foregroundColor: Colors.white,
           ),
         ),
@@ -1790,5 +1803,4 @@ class SoldCarResult {
     return map;
   }
 }
-
 

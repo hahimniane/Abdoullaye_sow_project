@@ -1,9 +1,85 @@
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
+const {defineSecret} = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const logger = require("firebase-functions/logger");
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
+
+const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
+const DEPOSIT_AMOUNT_CENTS = 50000;
+const DEPOSIT_CURRENCY = "usd";
+const SEED_COUNTRIES = [
+  {id: "guinea", name: "Guinea", code: "GN", sortOrder: 0},
+  {id: "senegal", name: "Senegal", code: "SN", sortOrder: 1},
+  {id: "sierra-leone", name: "Sierra Leone", code: "SL", sortOrder: 2},
+  {id: "liberia", name: "Liberia", code: "LR", sortOrder: 3},
+  {id: "mali", name: "Mali", code: "ML", sortOrder: 4},
+  {id: "guinea-bissau", name: "Guinea-Bissau", code: "GW", sortOrder: 5},
+  {id: "ivory-coast", name: "Ivory Coast", code: "CI", sortOrder: 6},
+];
+
+async function getUserRole(uid) {
+  const doc = await admin.firestore().collection("users").doc(uid).get();
+  if (!doc.exists) {
+    throw new HttpsError("permission-denied", "User profile not found");
+  }
+  return doc.data().role;
+}
+
+function requireAuth(request) {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required");
+  }
+  return request.auth.uid;
+}
+
+async function requireStaffOrAdmin(uid) {
+  const role = await getUserRole(uid);
+  if (role !== "staff" && role !== "admin") {
+    throw new HttpsError("permission-denied", "Staff access required");
+  }
+  return role;
+}
+
+async function stripeRequest(path, options = {}) {
+  const response = await fetch(`https://api.stripe.com/v1${path}`, {
+    ...options,
+    headers: {
+      "Authorization": `Bearer ${stripeSecretKey.value()}`,
+      "Stripe-Version": "2024-12-18.acacia",
+      ...(options.headers || {}),
+    },
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    logger.error("Stripe request failed", data);
+    throw new HttpsError(
+        "internal",
+        data.error?.message || "Stripe request failed",
+    );
+  }
+  return data;
+}
+
+async function createStripePaymentIntent(params) {
+  const body = new URLSearchParams();
+  body.set("amount", String(params.amount));
+  body.set("currency", params.currency);
+  body.set("automatic_payment_methods[enabled]", "true");
+  Object.entries(params.metadata).forEach(([key, value]) => {
+    body.set(`metadata[${key}]`, value);
+  });
+  return stripeRequest("/payment_intents", {
+    method: "POST",
+    headers: {"Content-Type": "application/x-www-form-urlencoded"},
+    body,
+  });
+}
+
+async function retrieveStripePaymentIntent(paymentIntentId) {
+  return stripeRequest(`/payment_intents/${paymentIntentId}`);
+}
 
 /**
  * Cloud Function to create a new user account
@@ -347,5 +423,216 @@ exports.deleteUser = onCall(
             "An error occurred while deleting the user",
         );
       }
+    },
+);
+
+exports.seedDestinationCountries = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      await requireStaffOrAdmin(callerUid);
+
+      const batch = admin.firestore().batch();
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      SEED_COUNTRIES.forEach((country) => {
+        const ref = admin
+            .firestore()
+            .collection("destinationCountries")
+            .doc(country.id);
+        batch.set(
+            ref,
+            {
+              name: country.name,
+              code: country.code,
+              sortOrder: country.sortOrder,
+              isActive: true,
+              updatedAt: now,
+            },
+            {merge: true},
+        );
+      });
+      await batch.commit();
+
+      return {
+        success: true,
+        count: SEED_COUNTRIES.length,
+      };
+    },
+);
+
+exports.createCarDepositPaymentIntent = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const buyerUid = requireAuth(request);
+      const {
+        carId,
+        destinationCountryId,
+        buyerName,
+        buyerPhone,
+      } = request.data || {};
+
+      if (!carId || !destinationCountryId || !buyerName || !buyerPhone) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Car, destination, name, and phone are required",
+        );
+      }
+
+      const db = admin.firestore();
+      const carRef = db.collection("cars").doc(carId);
+      const countryRef = db
+          .collection("destinationCountries")
+          .doc(destinationCountryId);
+      const [carDoc, countryDoc, userRecord] = await Promise.all([
+        carRef.get(),
+        countryRef.get(),
+        admin.auth().getUser(buyerUid),
+      ]);
+
+      if (!carDoc.exists) {
+        throw new HttpsError("not-found", "Car not found");
+      }
+      const car = carDoc.data();
+      if (car.status !== "active") {
+        throw new HttpsError(
+            "failed-precondition",
+            "This car is not available for reservation",
+        );
+      }
+      if (!countryDoc.exists || countryDoc.data().isActive === false) {
+        throw new HttpsError("invalid-argument", "Destination is unavailable");
+      }
+
+      const existing = await db
+          .collection("carPurchases")
+          .where("carId", "==", carId)
+          .where("purchaseStatus", "in", ["pending", "reserved"])
+          .limit(1)
+          .get();
+      if (!existing.empty) {
+        throw new HttpsError(
+            "already-exists",
+            "This car already has an active reservation",
+        );
+      }
+
+      const purchaseRef = db.collection("carPurchases").doc();
+      const country = countryDoc.data();
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      await purchaseRef.set({
+        carId,
+        carTitle: car.title || `${car.make || ""} ${car.model || ""}`.trim(),
+        buyerUid,
+        buyerEmail: userRecord.email || "",
+        buyerName: String(buyerName).trim(),
+        buyerPhone: String(buyerPhone).trim(),
+        destinationCountryId,
+        destinationCountryName: country.name || "Guinea",
+        depositAmount: DEPOSIT_AMOUNT_CENTS / 100,
+        depositCurrency: DEPOSIT_CURRENCY.toUpperCase(),
+        paymentStatus: "pending",
+        purchaseStatus: "pending",
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      const paymentIntent = await createStripePaymentIntent({
+        amount: DEPOSIT_AMOUNT_CENTS,
+        currency: DEPOSIT_CURRENCY,
+        metadata: {
+          carId,
+          buyerUid,
+          destinationCountryId,
+          purchaseId: purchaseRef.id,
+        },
+      });
+
+      await purchaseRef.update({
+        stripePaymentIntentId: paymentIntent.id,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      return {
+        purchaseId: purchaseRef.id,
+        clientSecret: paymentIntent.client_secret,
+      };
+    },
+);
+
+exports.completeCarDepositReservation = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const buyerUid = requireAuth(request);
+      const {purchaseId} = request.data || {};
+
+      if (!purchaseId) {
+        throw new HttpsError("invalid-argument", "Purchase ID is required");
+      }
+
+      const db = admin.firestore();
+      const purchaseRef = db.collection("carPurchases").doc(purchaseId);
+      const purchaseDoc = await purchaseRef.get();
+      if (!purchaseDoc.exists) {
+        throw new HttpsError("not-found", "Purchase not found");
+      }
+      const purchase = purchaseDoc.data();
+      if (purchase.buyerUid !== buyerUid) {
+        throw new HttpsError("permission-denied", "Purchase access denied");
+      }
+
+      const intent = await retrieveStripePaymentIntent(
+          purchase.stripePaymentIntentId);
+      if (intent.status !== "succeeded") {
+        await purchaseRef.update({
+          paymentStatus: intent.status,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        throw new HttpsError(
+            "failed-precondition",
+            `Payment is ${intent.status}`,
+        );
+      }
+
+      const carRef = db.collection("cars").doc(purchase.carId);
+      await db.runTransaction(async (transaction) => {
+        const carDoc = await transaction.get(carRef);
+        if (!carDoc.exists) {
+          throw new HttpsError("not-found", "Car not found");
+        }
+        const car = carDoc.data();
+        if (car.status !== "active" && car.status !== "reserved") {
+          throw new HttpsError(
+              "failed-precondition",
+              "This car is no longer available",
+          );
+        }
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        transaction.update(purchaseRef, {
+          paymentStatus: "succeeded",
+          purchaseStatus: "reserved",
+          updatedAt: now,
+        });
+        transaction.update(carRef, {
+          status: "reserved",
+          reservedPurchaseId: purchaseId,
+          updatedAt: now,
+        });
+      });
+
+      return {
+        success: true,
+        purchaseId,
+      };
     },
 );

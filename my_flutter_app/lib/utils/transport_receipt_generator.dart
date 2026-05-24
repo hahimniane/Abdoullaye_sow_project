@@ -106,6 +106,7 @@ Future<void> generateTransportReceipt({
                   buildRow('Car Model', request.carModel),
                   buildRow('Year', request.carYear),
                   buildRow('VIN Number', request.vinNumber),
+                  buildRow('Destination', request.destinationCountryName),
                   buildRow('Transport Date',
                       DateFormat('MMM dd, yyyy').format(request.transportDate)),
                   pw.SizedBox(height: 20),
@@ -136,4 +137,3 @@ Future<void> generateTransportReceipt({
     name: 'Transport_${request.trackingCode}',
   );
 }
-

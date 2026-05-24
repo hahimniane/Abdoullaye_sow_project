@@ -8,6 +8,8 @@ class BarrelShipment {
     required this.senderAddress,
     required this.receiverName,
     required this.receiverPhone,
+    this.destinationCountryId = 'guinea',
+    this.destinationCountryName = 'Guinea',
     required this.price,
     required this.status,
     required this.createdAt,
@@ -19,6 +21,8 @@ class BarrelShipment {
   final String senderAddress;
   final String receiverName;
   final String receiverPhone;
+  final String destinationCountryId;
+  final String destinationCountryName;
   final double price;
   final String status;
   final DateTime createdAt;
@@ -34,6 +38,10 @@ class BarrelShipment {
       senderAddress: (data['senderAddress'] ?? '') as String,
       receiverName: (data['receiverName'] ?? '') as String,
       receiverPhone: (data['receiverPhone'] ?? '') as String,
+      destinationCountryId:
+          (data['destinationCountryId'] ?? 'guinea') as String,
+      destinationCountryName:
+          (data['destinationCountryName'] ?? 'Guinea') as String,
       price: (data['price'] as num?)?.toDouble() ?? 0,
       status: (data['status'] ?? 'pending') as String,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -47,6 +55,8 @@ class BarrelShipment {
     String? senderAddress,
     String? receiverName,
     String? receiverPhone,
+    String? destinationCountryId,
+    String? destinationCountryName,
     double? price,
     String? status,
     DateTime? createdAt,
@@ -58,6 +68,9 @@ class BarrelShipment {
       senderAddress: senderAddress ?? this.senderAddress,
       receiverName: receiverName ?? this.receiverName,
       receiverPhone: receiverPhone ?? this.receiverPhone,
+      destinationCountryId: destinationCountryId ?? this.destinationCountryId,
+      destinationCountryName:
+          destinationCountryName ?? this.destinationCountryName,
       price: price ?? this.price,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
@@ -71,11 +84,11 @@ class BarrelShipment {
       'senderAddress': senderAddress,
       'receiverName': receiverName,
       'receiverPhone': receiverPhone,
+      'destinationCountryId': destinationCountryId,
+      'destinationCountryName': destinationCountryName,
       'price': price,
       'status': status,
       'createdAt': Timestamp.fromDate(createdAt),
     };
   }
 }
-
-

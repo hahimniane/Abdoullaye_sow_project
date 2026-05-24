@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'firebase_options.dart';
 import 'providers/language_provider.dart';
 import 'providers/auth_provider.dart';
+import 'providers/theme_provider.dart';
+import 'theme/app_theme.dart';
 import 'l10n/app_localizations.dart';
 import 'screens/splash_screen.dart';
 import 'screens/customer_home_screen.dart';
@@ -20,6 +23,9 @@ import 'screens/forgot_password_screen.dart';
 import 'screens/user_management_screen.dart';
 import 'screens/add_staff_screen.dart';
 import 'screens/signup_screen.dart';
+import 'screens/my_purchases_screen.dart';
+import 'screens/staff_purchase_management_screen.dart';
+import 'screens/destination_countries_screen.dart';
 import 'models/parked_car.dart';
 import 'screens/parked_car_details_screen.dart';
 import 'models/barrel_shipment.dart';
@@ -30,6 +36,13 @@ import 'screens/transport_request_details_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  const stripePublishableKey = String.fromEnvironment(
+    'STRIPE_PUBLISHABLE_KEY',
+  );
+  if (stripePublishableKey.isNotEmpty) {
+    Stripe.publishableKey = stripePublishableKey;
+    await Stripe.instance.applySettings();
+  }
   runApp(const MyApp());
 }
 
@@ -42,15 +55,16 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (context) => LanguageProvider()),
         ChangeNotifierProvider(create: (context) => AuthProvider()),
+        ChangeNotifierProvider(create: (context) => ThemeProvider()),
       ],
-      child: Consumer2<LanguageProvider, AuthProvider>(
-        builder: (context, languageProvider, authProvider, child) {
+      child: Consumer3<LanguageProvider, AuthProvider, ThemeProvider>(
+        builder: (context, languageProvider, authProvider, themeProvider, child) {
           return MaterialApp(
-            title: 'Business Services',
+            title: 'Keren Auto Sales',
             locale: languageProvider.currentLocale,
             supportedLocales: const [
-              Locale('en'), // English
-              Locale('fr'), // French
+              Locale('en'),
+              Locale('fr'),
             ],
             localizationsDelegates: const [
               AppLocalizations.delegate,
@@ -58,10 +72,9 @@ class MyApp extends StatelessWidget {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
-            theme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepOrange),
-              useMaterial3: true,
-            ),
+            theme: AppTheme.light,
+            darkTheme: AppTheme.dark,
+            themeMode: themeProvider.themeMode,
             initialRoute: '/splash',
             routes: {
               '/splash': (context) => const SplashScreen(),
@@ -75,20 +88,27 @@ class MyApp extends StatelessWidget {
               '/transport': (context) => const TransportCarScreen(),
               '/sell': (context) => const SellCarsScreen(),
               '/tracking': (context) => const TrackingScreen(),
+              '/my-purchases': (context) => const MyPurchasesScreen(),
+              '/purchase-management': (context) =>
+                  const StaffPurchaseManagementScreen(),
+              '/destination-countries': (context) =>
+                  const DestinationCountriesScreen(),
               '/parked-car-details': (context) {
-                final parkedCar = ModalRoute.of(context)!.settings.arguments as ParkedCar;
+                final parkedCar =
+                    ModalRoute.of(context)!.settings.arguments as ParkedCar;
                 return ParkedCarDetailsScreen(parkedCar: parkedCar);
               },
               '/barrel-shipment-details': (context) {
-                final shipment = ModalRoute.of(context)!.settings.arguments as BarrelShipment;
+                final shipment =
+                    ModalRoute.of(context)!.settings.arguments as BarrelShipment;
                 return BarrelShipmentDetailsScreen(shipment: shipment);
               },
               '/transport-request-details': (context) {
-                final request = ModalRoute.of(context)!.settings.arguments as TransportRequest;
+                final request =
+                    ModalRoute.of(context)!.settings.arguments
+                        as TransportRequest;
                 return TransportRequestDetailsScreen(request: request);
               },
-
-              // Staff-only routes (hidden from customers)
               '/staff-home': (context) => const StaffHomeScreen(),
               '/home-menu': (context) => const HomeMenu(),
               '/user-management': (context) => const UserManagementScreen(),
