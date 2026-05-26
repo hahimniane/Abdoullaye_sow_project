@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/destination_country.dart';
 import '../services/destination_country_service.dart';
 
@@ -22,6 +23,7 @@ class DestinationCountryField extends StatelessWidget {
     return StreamBuilder<List<DestinationCountry>>(
       stream: DestinationCountryService().activeCountries(),
       builder: (context, snapshot) {
+        final l10n = AppLocalizations.of(context)!;
         final countries = snapshot.data ?? <DestinationCountry>[];
         final currentValue =
             value != null && countries.any((country) => country.id == value!.id)
@@ -29,7 +31,41 @@ class DestinationCountryField extends StatelessWidget {
             : null;
 
         if (snapshot.hasError) {
-          return Text(snapshot.error.toString());
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Theme.of(
+                context,
+              ).colorScheme.errorContainer.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Theme.of(
+                  context,
+                ).colorScheme.error.withValues(alpha: 0.18),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    l10n.destinationCountriesUnavailable,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onErrorContainer,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
         }
 
         if (!snapshot.hasData) {

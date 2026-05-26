@@ -21,14 +21,10 @@ Future<void> generateBarrelShipmentReceipt({
             width: 140,
             child: pw.Text(
               '$label:',
-              style: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold,
-              ),
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
             ),
           ),
-          pw.Expanded(
-            child: pw.Text(value),
-          ),
+          pw.Expanded(child: pw.Text(value)),
         ],
       ),
     );
@@ -62,10 +58,7 @@ Future<void> generateBarrelShipmentReceipt({
                   pw.SizedBox(height: 6),
                   pw.Text(
                     'Business Services',
-                    style: pw.TextStyle(
-                      fontSize: 16,
-                      color: PdfColors.white,
-                    ),
+                    style: pw.TextStyle(fontSize: 16, color: PdfColors.white),
                   ),
                 ],
               ),
@@ -89,14 +82,8 @@ Future<void> generateBarrelShipmentReceipt({
                   ),
                   pw.SizedBox(height: 12),
                   buildRow('Tracking Number', shipment.trackingCode),
-                  buildRow(
-                    'Created At',
-                    dateFormat.format(shipment.createdAt),
-                  ),
-                  buildRow(
-                    'Generated On',
-                    dateFormat.format(DateTime.now()),
-                  ),
+                  buildRow('Created At', dateFormat.format(shipment.createdAt)),
+                  buildRow('Generated On', dateFormat.format(DateTime.now())),
                   pw.SizedBox(height: 20),
                   pw.Text(
                     'Sender Information',
@@ -107,7 +94,23 @@ Future<void> generateBarrelShipmentReceipt({
                   ),
                   pw.SizedBox(height: 10),
                   buildRow('Sender Name', shipment.senderName),
-                  buildRow('Sender Address', shipment.senderAddress),
+                  buildRow(
+                    shipment.pickupRequested
+                        ? 'Pickup Address'
+                        : 'Drop-off Office',
+                    shipment.senderAddress,
+                  ),
+                  buildRow(
+                    'Pickup Service',
+                    shipment.pickupRequested
+                        ? '${shipment.pickupBorough} pickup'
+                        : 'Customer drop-off',
+                  ),
+                  if (shipment.pickupDateTime != null)
+                    buildRow(
+                      'Pickup Time',
+                      dateFormat.format(shipment.pickupDateTime!),
+                    ),
                   pw.SizedBox(height: 20),
                   pw.Text(
                     'Receiver Information',
@@ -130,10 +133,21 @@ Future<void> generateBarrelShipmentReceipt({
                   ),
                   pw.SizedBox(height: 10),
                   buildRow(
-                    'Price',
+                    'Shipping Fee',
+                    NumberFormat.simpleCurrency().format(shipment.shippingFee),
+                  ),
+                  buildRow(
+                    'Pickup Fee',
+                    NumberFormat.simpleCurrency().format(shipment.pickupFee),
+                  ),
+                  buildRow(
+                    shipment.pricingPendingReview
+                        ? 'Estimated Total'
+                        : 'Total Price',
                     NumberFormat.simpleCurrency().format(shipment.price),
                   ),
                   buildRow('Status', shipment.status.toUpperCase()),
+                  buildRow('Payment', shipment.paymentStatus.toUpperCase()),
                 ],
               ),
             ),

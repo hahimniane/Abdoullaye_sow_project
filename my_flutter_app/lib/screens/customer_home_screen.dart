@@ -5,6 +5,7 @@ import 'sell_cars_screen.dart';
 import 'tracking_screen.dart';
 import 'settings_screen.dart';
 import 'my_purchases_screen.dart';
+import 'send_barrel_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -18,6 +19,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   final List<Widget> _screens = [
     const SellCarsScreen(),
+    const SendBarrelScreen(showBackButton: false),
     const MyPurchasesScreen(),
     const TrackingScreen(),
     const SettingsScreen(),
@@ -33,6 +35,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         onTap: (index) => setState(() => _currentIndex = index),
         items: [
           AppBottomNavItem(icon: Icons.directions_car, label: l10n.cars),
+          AppBottomNavItem(icon: Icons.local_shipping, label: l10n.sendBarrels),
           AppBottomNavItem(icon: Icons.receipt_long, label: l10n.myPurchases),
           AppBottomNavItem(icon: Icons.local_shipping, label: l10n.tracking),
           AppBottomNavItem(icon: Icons.settings, label: l10n.settings),

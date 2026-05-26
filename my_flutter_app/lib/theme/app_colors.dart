@@ -1,27 +1,28 @@
 import 'package:flutter/material.dart';
 
 /// Brand and semantic colors for Keren Auto Sales.
+///
+/// This palette follows the Wouri app direction: deep teal foundations,
+/// warm amber highlights, and clean slate/white surfaces.
 abstract final class AppColors {
-  // Keren Atelier foundations from the handoff.
-  static const Color ink = Color(0xFF15110C);
-  static const Color cream = Color(0xFFF4EDDF);
-  static const Color paper = Color(0xFFFAF6EC);
-  static const Color parchment = Color(0xFFEDE3CE);
-  static const Color mist = Color(0xFFE6DECE);
-  static const Color rule = Color(0xFFD8CFBC);
-  static const Color muted = Color(0xFF7A6E5C);
-  static const Color cobalt = Color(0xFF293C7E);
-  static const Color cobaltDeep = Color(0xFF1D2858);
-  static const Color saffron = Color(0xFFD89A2F);
-  static const Color sage = Color(0xFF4F6B4A);
-  static const Color warn = Color(0xFFA66A00);
+  static const Color ink = Color(0xFF0F172A);
+  static const Color cream = Color(0xFFF8FAFC);
+  static const Color paper = Color(0xFFFFFFFF);
+  static const Color parchment = Color(0xFFF1F5F9);
+  static const Color mist = Color(0xFFCCFBF1);
+  static const Color rule = Color(0xFFE2E8F0);
+  static const Color muted = Color(0xFF64748B);
+  static const Color cobalt = Color(0xFF0D9488);
+  static const Color cobaltDeep = Color(0xFF0B3B38);
+  static const Color cobaltMid = Color(0xFF14B8A6);
+  static const Color saffron = Color(0xFFF59E0B);
+  static const Color sage = Color(0xFF059669);
+  static const Color warn = Color(0xFFD97706);
 
-  // The handoff called this accent "oxblood"; map it to cobalt so no brand
-  // surface reads red while preserving existing component references.
+  // Compatibility aliases used by existing screens.
   static const Color oxblood = cobalt;
   static const Color oxdeep = cobaltDeep;
 
-  // Compatibility aliases used by existing screens.
   static const Color brandRed = cobalt;
   static const Color brandRedDark = cobaltDeep;
   static const Color chrome = mist;
@@ -32,11 +33,11 @@ abstract final class AppColors {
 
   // Dark theme semantic
   static const Color darkBg = ink;
-  static const Color darkSurface = Color(0xFF211A12);
-  static const Color darkSurfaceVariant = Color(0xFF2B2218);
-  static const Color darkOutline = Color(0xFF4B3E2F);
-  static const Color darkOnSurface = cream;
-  static const Color darkMuted = Color(0xFFC5B89E);
+  static const Color darkSurface = Color(0xFF1E293B);
+  static const Color darkSurfaceVariant = Color(0xFF25344A);
+  static const Color darkOutline = Color(0xFF334155);
+  static const Color darkOnSurface = Color(0xFFF8FAFC);
+  static const Color darkMuted = Color(0xFF94A3B8);
 
   // Light theme semantic
   static const Color lightBg = cream;
@@ -46,11 +47,11 @@ abstract final class AppColors {
   static const Color lightOnSurface = ink;
   static const Color lightMuted = muted;
 
-  /// Existing screens still expect a header fill; use cobalt, not red.
+  /// Existing screens still expect a header fill; use Wouri's teal gradient.
   static const LinearGradient headerGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [cobalt, cobaltDeep],
+    colors: [cobaltDeep, cobalt, cobaltMid],
   );
 
   /// Service category accent colors.

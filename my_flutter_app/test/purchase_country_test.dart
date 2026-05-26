@@ -33,6 +33,53 @@ void main() {
     expect(purchase.purchaseStatus, 'reserved');
   });
 
+  test('direct purchase deserializes completed full payment records', () {
+    final purchase = CarPurchase.fromMap('purchase-2', {
+      'carId': 'car-2',
+      'carTitle': 'Honda Accord',
+      'buyerUid': 'user-2',
+      'buyerEmail': 'buyer2@example.com',
+      'buyerName': 'Direct Buyer',
+      'buyerPhone': '555-0120',
+      'destinationCountryId': 'guinea',
+      'destinationCountryName': 'Guinea',
+      'depositAmount': 24000,
+      'depositCurrency': 'USD',
+      'paymentStatus': 'succeeded',
+      'purchaseStatus': 'completed',
+      'paymentType': 'full_purchase',
+    });
+
+    expect(purchase.depositAmount, 24000);
+    expect(purchase.paymentStatus, 'succeeded');
+    expect(purchase.purchaseStatus, 'completed');
+  });
+
+  test('viewing reservation deserializes appointment details', () {
+    final appointment = DateTime(2026, 6, 2, 14);
+    final purchase = CarPurchase.fromMap('purchase-3', {
+      'carId': 'car-3',
+      'carTitle': 'Nissan Rogue',
+      'buyerUid': 'user-3',
+      'buyerEmail': 'buyer3@example.com',
+      'buyerName': 'Viewing Buyer',
+      'buyerPhone': '555-0130',
+      'destinationCountryId': 'guinea',
+      'destinationCountryName': 'Guinea',
+      'depositAmount': 0,
+      'depositCurrency': 'USD',
+      'paymentStatus': 'not_required',
+      'purchaseStatus': 'reserved',
+      'paymentType': 'viewing_reservation',
+      'appointmentStart': appointment,
+      'appointmentLabel': 'Tue, Jun 2 - 2:00 PM',
+    });
+
+    expect(purchase.paymentType, 'viewing_reservation');
+    expect(purchase.appointmentStart, appointment);
+    expect(purchase.appointmentLabel, 'Tue, Jun 2 - 2:00 PM');
+  });
+
   test('car status lifecycle includes reserved', () {
     final car = Car(
       id: 'car-1',

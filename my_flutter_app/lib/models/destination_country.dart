@@ -7,6 +7,7 @@ class DestinationCountry {
     this.code,
     this.isActive = true,
     this.sortOrder = 0,
+    this.barrelShippingPrice = 0,
   });
 
   static const fallback = DestinationCountry(
@@ -22,6 +23,7 @@ class DestinationCountry {
   final String? code;
   final bool isActive;
   final int sortOrder;
+  final double barrelShippingPrice;
 
   factory DestinationCountry.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? <String, dynamic>{};
@@ -31,6 +33,8 @@ class DestinationCountry {
       code: data['code'] as String?,
       isActive: data['isActive'] != false,
       sortOrder: (data['sortOrder'] as num?)?.toInt() ?? 0,
+      barrelShippingPrice:
+          (data['barrelShippingPrice'] as num?)?.toDouble() ?? 0,
     );
   }
 
@@ -40,6 +44,7 @@ class DestinationCountry {
       if (code != null && code!.isNotEmpty) 'code': code,
       'isActive': isActive,
       'sortOrder': sortOrder,
+      'barrelShippingPrice': barrelShippingPrice,
       'updatedAt': FieldValue.serverTimestamp(),
     };
   }

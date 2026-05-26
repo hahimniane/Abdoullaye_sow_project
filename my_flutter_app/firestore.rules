@@ -21,7 +21,8 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.uid == userId;
       
       // Allow users to create their own user document
-      allow create: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId &&
+                      request.resource.data.role == 'customer';
 
       // Allow admins to read any user's data
       allow read: if request.auth != null && isAdmin(request.auth.uid);
@@ -33,7 +34,9 @@ service cloud.firestore {
 
       // Prevent users from updating their own role directly
       allow update: if request.auth != null && request.auth.uid == userId &&
-                      !('role' in request.resource.data);
+                      request.resource.data.diff(resource.data)
+                        .affectedKeys()
+                        .hasOnly(['fullName', 'phone', 'updatedAt']);
     }
 
     // Rules for the 'parkedCars' collection
@@ -44,6 +47,8 @@ service cloud.firestore {
 
     match /barrelShipments/{shipmentId} {
       allow read, write: if request.auth != null && isStaffOrAdmin(request.auth.uid);
+      allow read: if request.auth != null &&
+        resource.data.customerUid == request.auth.uid;
     }
 
     match /transportRequests/{requestId} {
@@ -60,12 +65,18 @@ service cloud.firestore {
       allow write: if request.auth != null && isStaffOrAdmin(request.auth.uid);
     }
 
+    match /shipmentPricing/{pricingId} {
+      allow read: if true;
+      allow write: if request.auth != null && isStaffOrAdmin(request.auth.uid);
+    }
+
     match /carPurchases/{purchaseId} {
       allow create: if request.auth != null &&
         request.resource.data.buyerUid == request.auth.uid;
       allow read: if request.auth != null &&
-        (resource.data.buyerUid == request.auth.uid ||
-         isStaffOrAdmin(request.auth.uid));
+        resource.data.buyerUid == request.auth.uid;
+      allow read: if request.auth != null &&
+        isStaffOrAdmin(request.auth.uid);
       allow update: if request.auth != null && isStaffOrAdmin(request.auth.uid);
       allow delete: if request.auth != null && isStaffOrAdmin(request.auth.uid);
     }

@@ -32,12 +32,13 @@ class _LoginScreenState extends State<LoginScreen>
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
-    );
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
     _animationController.forward();
   }
 
@@ -68,6 +69,14 @@ class _LoginScreenState extends State<LoginScreen>
       debugPrint('🔵 LoginScreen: isAdmin: ${authProvider.isAdmin}');
 
       if (success && mounted) {
+        final routeArgs = ModalRoute.of(context)?.settings.arguments;
+        final shouldReturn =
+            routeArgs is Map && routeArgs['returnToPrevious'] == true;
+        if (shouldReturn) {
+          Navigator.pop(context, true);
+          return;
+        }
+
         // Check if user is staff and navigate accordingly
         if (authProvider.isStaff) {
           debugPrint('🔵 LoginScreen: Navigating to staff home');
@@ -100,9 +109,7 @@ class _LoginScreenState extends State<LoginScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.headerGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.headerGradient),
         child: SafeArea(
           child: Column(
             children: [
@@ -154,7 +161,9 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              AppLocalizations.of(context)!.accountLoginSubtitle,
+                              AppLocalizations.of(
+                                context,
+                              )!.accountLoginSubtitle,
                               style: const TextStyle(
                                 fontSize: 16,
                                 color: Colors.white70,
@@ -186,12 +195,12 @@ class _LoginScreenState extends State<LoginScreen>
                                       controller: _emailController,
                                       keyboardType: TextInputType.emailAddress,
                                       decoration: InputDecoration(
-                                        labelText:
-                                            AppLocalizations.of(context)!.email,
-                                        hintText:
-                                            AppLocalizations.of(
-                                              context,
-                                            )!.enterEmail,
+                                        labelText: AppLocalizations.of(
+                                          context,
+                                        )!.email,
+                                        hintText: AppLocalizations.of(
+                                          context,
+                                        )!.enterEmail,
                                         prefixIcon: const Icon(
                                           Icons.email_outlined,
                                         ),
@@ -243,14 +252,12 @@ class _LoginScreenState extends State<LoginScreen>
                                       controller: _passwordController,
                                       obscureText: !_isPasswordVisible,
                                       decoration: InputDecoration(
-                                        labelText:
-                                            AppLocalizations.of(
-                                              context,
-                                            )!.password,
-                                        hintText:
-                                            AppLocalizations.of(
-                                              context,
-                                            )!.enterPassword,
+                                        labelText: AppLocalizations.of(
+                                          context,
+                                        )!.password,
+                                        hintText: AppLocalizations.of(
+                                          context,
+                                        )!.enterPassword,
                                         prefixIcon: const Icon(
                                           Icons.lock_outlined,
                                         ),
@@ -315,12 +322,12 @@ class _LoginScreenState extends State<LoginScreen>
                                           width: double.infinity,
                                           height: 56,
                                           child: ElevatedButton(
-                                            onPressed:
-                                                authProvider.isLoading
-                                                    ? null
-                                                    : _handleLogin,
+                                            onPressed: authProvider.isLoading
+                                                ? null
+                                                : _handleLogin,
                                             style: ElevatedButton.styleFrom(
-                                              backgroundColor: AppColors.brandRed,
+                                              backgroundColor:
+                                                  AppColors.brandRed,
                                               foregroundColor: Colors.white,
                                               shape: RoundedRectangleBorder(
                                                 borderRadius:
@@ -328,29 +335,28 @@ class _LoginScreenState extends State<LoginScreen>
                                               ),
                                               elevation: 0,
                                             ),
-                                            child:
-                                                authProvider.isLoading
-                                                    ? const SizedBox(
-                                                      width: 24,
-                                                      height: 24,
-                                                      child: CircularProgressIndicator(
-                                                        strokeWidth: 2,
-                                                        valueColor:
-                                                            AlwaysStoppedAnimation<
-                                                              Color
-                                                            >(Colors.white),
-                                                      ),
-                                                    )
-                                                    : Text(
-                                                      AppLocalizations.of(
-                                                        context,
-                                                      )!.signIn,
-                                                      style: const TextStyle(
-                                                        fontSize: 16,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
+                                            child: authProvider.isLoading
+                                                ? const SizedBox(
+                                                    width: 24,
+                                                    height: 24,
+                                                    child: CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      valueColor:
+                                                          AlwaysStoppedAnimation<
+                                                            Color
+                                                          >(Colors.white),
                                                     ),
+                                                  )
+                                                : Text(
+                                                    AppLocalizations.of(
+                                                      context,
+                                                    )!.signIn,
+                                                    style: const TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
                                           ),
                                         );
                                       },
@@ -389,7 +395,8 @@ class _LoginScreenState extends State<LoginScreen>
 
                                     // Don't have account - Sign Up (for customers)
                                     Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       children: [
                                         Text(
                                           AppLocalizations.of(
@@ -402,13 +409,31 @@ class _LoginScreenState extends State<LoginScreen>
                                         ),
                                         TextButton(
                                           onPressed: () {
+                                            final routeArgs = ModalRoute.of(
+                                              context,
+                                            )?.settings.arguments;
+                                            final shouldReturn =
+                                                routeArgs is Map &&
+                                                routeArgs['returnToPrevious'] ==
+                                                    true;
+                                            if (shouldReturn) {
+                                              Navigator.pushReplacementNamed(
+                                                context,
+                                                '/signup',
+                                                arguments: const {
+                                                  'returnToPrevious': true,
+                                                },
+                                              );
+                                              return;
+                                            }
                                             Navigator.pushNamed(
                                               context,
                                               '/signup',
                                             );
                                           },
                                           style: TextButton.styleFrom(
-                                            splashFactory: NoSplash.splashFactory,
+                                            splashFactory:
+                                                NoSplash.splashFactory,
                                           ),
                                           child: Text(
                                             AppLocalizations.of(
@@ -428,6 +453,17 @@ class _LoginScreenState extends State<LoginScreen>
                                     // Back to Customer Home
                                     TextButton(
                                       onPressed: () {
+                                        final routeArgs = ModalRoute.of(
+                                          context,
+                                        )?.settings.arguments;
+                                        final shouldReturn =
+                                            routeArgs is Map &&
+                                            routeArgs['returnToPrevious'] ==
+                                                true;
+                                        if (shouldReturn) {
+                                          Navigator.pop(context, false);
+                                          return;
+                                        }
                                         Navigator.pushNamedAndRemoveUntil(
                                           context,
                                           '/',

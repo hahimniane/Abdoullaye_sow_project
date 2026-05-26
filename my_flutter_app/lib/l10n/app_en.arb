@@ -118,6 +118,29 @@
   "carYear": "Car Year",
   "transportDate": "Transport Date",
   "carSalesService": "Car Sales Service",
+  "availableCars": "Available Cars",
+  "browsePurchaseReserve": "Browse inventory, reserve a viewing time, or buy directly from the app.",
+  "inStock": "In stock",
+  "viewings": "Viewings",
+  "byAppointment": "By appointment",
+  "filters": "Filters",
+  "clearFilters": "Clear",
+  "applyFilters": "Apply Filters",
+  "filteredResults": "{count} filters active",
+  "@filteredResults": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "yearRange": "Year range",
+  "minYear": "Min year",
+  "maxYear": "Max year",
+  "maxPrice": "Max price",
+  "sortBy": "Sort by",
+  "newestYear": "Newest year",
+  "oldestYear": "Oldest year",
+  "priceLowToHigh": "Price: low to high",
+  "priceHighToLow": "Price: high to low",
   "browseAvailableCarsForSale": "Browse available cars for sale",
   "searchCars": "Search cars...",
   "chatWithSeller": "Chat with Seller",
@@ -227,7 +250,12 @@
   "admin": "Admin",
   "signUp": "Sign Up",
   "createAccount": "Create Account",
-  "signUpToGetStarted": "Create a free account to save receipts and sync your activity.",
+  "signUpToGetStarted": "Create a free account with the details we need to reserve viewings and record purchases.",
+  "fullName": "Full Name",
+  "enterFullName": "Enter your full name",
+  "pleaseEnterFullName": "Please enter your full name",
+  "enterPhoneNumber": "Enter your phone number",
+  "pleaseEnterPhoneNumber": "Please enter a valid phone number",
   "confirmPassword": "Confirm Password",
   "reEnterPassword": "Re-enter your password",
   "pleaseConfirmPassword": "Please confirm your password",
@@ -341,7 +369,37 @@
   },
   "payDeposit": "Pay Deposit",
   "reservationComplete": "Deposit received. Your reservation is now active.",
+  "loginRequiredForPurchase": "Please sign in before purchasing this car.",
+  "purchaseThisCar": "Purchase this car",
+  "reserveViewing": "Reserve a viewing",
+  "reserveViewingSummary": "Choose an available time to come view this vehicle. We will hold the car for your appointment.",
+  "selectViewingTime": "Available viewing times",
+  "selectViewingTimeRequired": "Please select a viewing time.",
+  "confirmViewingReservation": "Confirm Viewing",
+  "viewingReservationComplete": "Your viewing is reserved for {time}.",
+  "@viewingReservationComplete": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "accountRequiredTitle": "Sign in to continue",
+  "accountRequiredReserveMessage": "Create an account or sign in so we can save your viewing appointment and keep the car reserved for you.",
+  "accountRequiredPurchaseMessage": "Create an account or sign in so we can securely record your purchase and show it in My Purchases.",
+  "phoneRequiredForReservation": "Phone number required to continue",
+  "purchaseSummary": "You will pay the full vehicle price of {amount} with secure checkout.",
+  "@purchaseSummary": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "secureStripeCheckout": "Secure Stripe checkout. Your purchase is recorded after payment succeeds.",
+  "payNow": "Pay Now",
+  "purchaseComplete": "Payment received. This car is now purchased.",
+  "checkoutUnavailable": "We could not start checkout right now. Please try again in a moment.",
+  "carAlreadyReserved": "This car already has an active reservation.",
+  "carNoLongerAvailable": "This car is no longer available.",
   "destinationCountry": "Destination Country",
+  "destinationCountriesUnavailable": "Destination options are not available right now. Please try again in a moment.",
   "sendBarrels": "Send Barrels",
   "enterShippingDetails": "Enter shipping details",
   "transportCars": "Transport Cars",
@@ -349,7 +407,8 @@
   "cars": "Cars",
   "myPurchases": "My Purchases",
   "noPurchasesYet": "No car purchases yet.",
-  "depositPaid": "Deposit: {amount} ({status})",
+  "purchaseHistoryUnavailable": "We could not load your purchase history right now. Please try again after your account finishes syncing.",
+  "depositPaid": "Payment: {amount} ({status})",
   "@depositPaid": {
     "placeholders": {
       "amount": {},
@@ -357,7 +416,7 @@
     }
   },
   "purchases": "Purchases",
-  "purchaseReservations": "Purchase Reservations",
+  "purchaseReservations": "Car Purchases",
   "purchaseUpdated": "Purchase updated.",
   "cancelled": "Cancelled",
   "refunded": "Refunded",

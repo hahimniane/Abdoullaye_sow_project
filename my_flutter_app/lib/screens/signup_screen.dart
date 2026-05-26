@@ -15,6 +15,8 @@ class SignUpScreen extends StatefulWidget {
 class _SignUpScreenState extends State<SignUpScreen>
     with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
+  final _fullNameController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -34,18 +36,21 @@ class _SignUpScreenState extends State<SignUpScreen>
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
-    );
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
     _animationController.forward();
   }
 
   @override
   void dispose() {
     _animationController.dispose();
+    _fullNameController.dispose();
+    _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -60,9 +65,16 @@ class _SignUpScreenState extends State<SignUpScreen>
     try {
       final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
+      final fullName = _fullNameController.text.trim();
+      final phone = _phoneController.text.trim();
 
       debugPrint('🔵 SignUpScreen: Starting sign up for: $email');
-      final success = await authProvider.signUp(email, password);
+      final success = await authProvider.signUp(
+        email: email,
+        password: password,
+        fullName: fullName,
+        phone: phone,
+      );
       debugPrint('🔵 SignUpScreen: Sign up returned: $success');
 
       if (success && mounted) {
@@ -76,6 +88,14 @@ class _SignUpScreenState extends State<SignUpScreen>
             duration: const Duration(seconds: 2),
           ),
         );
+
+        final routeArgs = ModalRoute.of(context)?.settings.arguments;
+        final shouldReturn =
+            routeArgs is Map && routeArgs['returnToPrevious'] == true;
+        if (shouldReturn) {
+          Navigator.pop(context, true);
+          return;
+        }
 
         // Navigate to customer home
         Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
@@ -107,9 +127,7 @@ class _SignUpScreenState extends State<SignUpScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.headerGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.headerGradient),
         child: SafeArea(
           child: Column(
             children: [
@@ -168,11 +186,13 @@ class _SignUpScreenState extends State<SignUpScreen>
                             ),
                             const SizedBox(height: 12),
                             Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
                               child: Text(
-                                AppLocalizations.of(context)!
-                                    .accountOptionalMessage,
+                                AppLocalizations.of(
+                                  context,
+                                )!.accountOptionalMessage,
                                 style: const TextStyle(
                                   fontSize: 14,
                                   color: Colors.white70,
@@ -202,15 +222,124 @@ class _SignUpScreenState extends State<SignUpScreen>
                                   children: [
                                     // Email Field
                                     TextFormField(
+                                      controller: _fullNameController,
+                                      textCapitalization:
+                                          TextCapitalization.words,
+                                      decoration: InputDecoration(
+                                        labelText: AppLocalizations.of(
+                                          context,
+                                        )!.fullName,
+                                        hintText: AppLocalizations.of(
+                                          context,
+                                        )!.enterFullName,
+                                        prefixIcon: const Icon(
+                                          Icons.person_outline,
+                                        ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          borderSide: BorderSide(
+                                            color: Colors.grey.shade300,
+                                          ),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          borderSide: const BorderSide(
+                                            color: AppColors.brandRed,
+                                            width: 2,
+                                          ),
+                                        ),
+                                        filled: true,
+                                        fillColor: Colors.grey.shade50,
+                                      ),
+                                      validator: (value) {
+                                        if (value == null ||
+                                            value.trim().isEmpty) {
+                                          return AppLocalizations.of(
+                                            context,
+                                          )!.pleaseEnterFullName;
+                                        }
+                                        if (value.trim().length < 2) {
+                                          return AppLocalizations.of(
+                                            context,
+                                          )!.pleaseEnterFullName;
+                                        }
+                                        return null;
+                                      },
+                                    ),
+                                    const SizedBox(height: 20),
+                                    TextFormField(
+                                      controller: _phoneController,
+                                      keyboardType: TextInputType.phone,
+                                      decoration: InputDecoration(
+                                        labelText: AppLocalizations.of(
+                                          context,
+                                        )!.phoneNumber,
+                                        hintText: AppLocalizations.of(
+                                          context,
+                                        )!.enterPhoneNumber,
+                                        prefixIcon: const Icon(
+                                          Icons.phone_outlined,
+                                        ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          borderSide: BorderSide(
+                                            color: Colors.grey.shade300,
+                                          ),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          borderSide: const BorderSide(
+                                            color: AppColors.brandRed,
+                                            width: 2,
+                                          ),
+                                        ),
+                                        filled: true,
+                                        fillColor: Colors.grey.shade50,
+                                      ),
+                                      validator: (value) {
+                                        final digits =
+                                            value?.replaceAll(
+                                              RegExp(r'\D'),
+                                              '',
+                                            ) ??
+                                            '';
+                                        if (digits.length < 7) {
+                                          return AppLocalizations.of(
+                                            context,
+                                          )!.pleaseEnterPhoneNumber;
+                                        }
+                                        return null;
+                                      },
+                                    ),
+                                    const SizedBox(height: 20),
+                                    TextFormField(
                                       controller: _emailController,
                                       keyboardType: TextInputType.emailAddress,
                                       decoration: InputDecoration(
-                                        labelText:
-                                            AppLocalizations.of(context)!.email,
-                                        hintText:
-                                            AppLocalizations.of(
-                                              context,
-                                            )!.enterEmail,
+                                        labelText: AppLocalizations.of(
+                                          context,
+                                        )!.email,
+                                        hintText: AppLocalizations.of(
+                                          context,
+                                        )!.enterEmail,
                                         prefixIcon: const Icon(
                                           Icons.email_outlined,
                                         ),
@@ -262,14 +391,12 @@ class _SignUpScreenState extends State<SignUpScreen>
                                       controller: _passwordController,
                                       obscureText: !_isPasswordVisible,
                                       decoration: InputDecoration(
-                                        labelText:
-                                            AppLocalizations.of(
-                                              context,
-                                            )!.password,
-                                        hintText:
-                                            AppLocalizations.of(
-                                              context,
-                                            )!.enterPassword,
+                                        labelText: AppLocalizations.of(
+                                          context,
+                                        )!.password,
+                                        hintText: AppLocalizations.of(
+                                          context,
+                                        )!.enterPassword,
                                         prefixIcon: const Icon(
                                           Icons.lock_outlined,
                                         ),
@@ -402,12 +529,12 @@ class _SignUpScreenState extends State<SignUpScreen>
                                           width: double.infinity,
                                           height: 56,
                                           child: ElevatedButton(
-                                            onPressed:
-                                                authProvider.isLoading
-                                                    ? null
-                                                    : _handleSignUp,
+                                            onPressed: authProvider.isLoading
+                                                ? null
+                                                : _handleSignUp,
                                             style: ElevatedButton.styleFrom(
-                                              backgroundColor: AppColors.brandRed,
+                                              backgroundColor:
+                                                  AppColors.brandRed,
                                               foregroundColor: Colors.white,
                                               shape: RoundedRectangleBorder(
                                                 borderRadius:
@@ -415,29 +542,28 @@ class _SignUpScreenState extends State<SignUpScreen>
                                               ),
                                               elevation: 0,
                                             ),
-                                            child:
-                                                authProvider.isLoading
-                                                    ? const SizedBox(
-                                                      width: 24,
-                                                      height: 24,
-                                                      child: CircularProgressIndicator(
-                                                        strokeWidth: 2,
-                                                        valueColor:
-                                                            AlwaysStoppedAnimation<
-                                                              Color
-                                                            >(Colors.white),
-                                                      ),
-                                                    )
-                                                    : Text(
-                                                      AppLocalizations.of(
-                                                        context,
-                                                      )!.signUp,
-                                                      style: const TextStyle(
-                                                        fontSize: 16,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
+                                            child: authProvider.isLoading
+                                                ? const SizedBox(
+                                                    width: 24,
+                                                    height: 24,
+                                                    child: CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      valueColor:
+                                                          AlwaysStoppedAnimation<
+                                                            Color
+                                                          >(Colors.white),
                                                     ),
+                                                  )
+                                                : Text(
+                                                    AppLocalizations.of(
+                                                      context,
+                                                    )!.signUp,
+                                                    style: const TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
                                           ),
                                         );
                                       },
@@ -446,7 +572,8 @@ class _SignUpScreenState extends State<SignUpScreen>
 
                                     // Already have account - Sign In
                                     Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       children: [
                                         Text(
                                           AppLocalizations.of(
@@ -459,13 +586,31 @@ class _SignUpScreenState extends State<SignUpScreen>
                                         ),
                                         TextButton(
                                           onPressed: () {
+                                            final routeArgs = ModalRoute.of(
+                                              context,
+                                            )?.settings.arguments;
+                                            final shouldReturn =
+                                                routeArgs is Map &&
+                                                routeArgs['returnToPrevious'] ==
+                                                    true;
+                                            if (shouldReturn) {
+                                              Navigator.pushReplacementNamed(
+                                                context,
+                                                '/login',
+                                                arguments: const {
+                                                  'returnToPrevious': true,
+                                                },
+                                              );
+                                              return;
+                                            }
                                             Navigator.pushNamed(
                                               context,
                                               '/login',
                                             );
                                           },
                                           style: TextButton.styleFrom(
-                                            splashFactory: NoSplash.splashFactory,
+                                            splashFactory:
+                                                NoSplash.splashFactory,
                                           ),
                                           child: Text(
                                             AppLocalizations.of(

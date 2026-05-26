@@ -325,6 +325,63 @@ class AppLocalizationsEn extends AppLocalizations {
   String get carSalesService => 'Car Sales Service';
 
   @override
+  String get availableCars => 'Available Cars';
+
+  @override
+  String get browsePurchaseReserve =>
+      'Browse inventory, reserve a viewing time, or buy directly from the app.';
+
+  @override
+  String get inStock => 'In stock';
+
+  @override
+  String get viewings => 'Viewings';
+
+  @override
+  String get byAppointment => 'By appointment';
+
+  @override
+  String get filters => 'Filters';
+
+  @override
+  String get clearFilters => 'Clear';
+
+  @override
+  String get applyFilters => 'Apply Filters';
+
+  @override
+  String filteredResults(Object count) {
+    return '$count filters active';
+  }
+
+  @override
+  String get yearRange => 'Year range';
+
+  @override
+  String get minYear => 'Min year';
+
+  @override
+  String get maxYear => 'Max year';
+
+  @override
+  String get maxPrice => 'Max price';
+
+  @override
+  String get sortBy => 'Sort by';
+
+  @override
+  String get newestYear => 'Newest year';
+
+  @override
+  String get oldestYear => 'Oldest year';
+
+  @override
+  String get priceLowToHigh => 'Price: low to high';
+
+  @override
+  String get priceHighToLow => 'Price: high to low';
+
+  @override
   String get browseAvailableCarsForSale => 'Browse available cars for sale';
 
   @override
@@ -573,7 +630,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get signUpToGetStarted =>
-      'Create a free account to save receipts and sync your activity.';
+      'Create a free account with the details we need to reserve viewings and record purchases.';
+
+  @override
+  String get fullName => 'Full Name';
+
+  @override
+  String get enterFullName => 'Enter your full name';
+
+  @override
+  String get pleaseEnterFullName => 'Please enter your full name';
+
+  @override
+  String get enterPhoneNumber => 'Enter your phone number';
+
+  @override
+  String get pleaseEnterPhoneNumber => 'Please enter a valid phone number';
 
   @override
   String get confirmPassword => 'Confirm Password';
@@ -815,7 +887,79 @@ class AppLocalizationsEn extends AppLocalizations {
       'Deposit received. Your reservation is now active.';
 
   @override
+  String get loginRequiredForPurchase =>
+      'Please sign in before purchasing this car.';
+
+  @override
+  String get purchaseThisCar => 'Purchase this car';
+
+  @override
+  String get reserveViewing => 'Reserve a viewing';
+
+  @override
+  String get reserveViewingSummary =>
+      'Choose an available time to come view this vehicle. We will hold the car for your appointment.';
+
+  @override
+  String get selectViewingTime => 'Available viewing times';
+
+  @override
+  String get selectViewingTimeRequired => 'Please select a viewing time.';
+
+  @override
+  String get confirmViewingReservation => 'Confirm Viewing';
+
+  @override
+  String viewingReservationComplete(Object time) {
+    return 'Your viewing is reserved for $time.';
+  }
+
+  @override
+  String get accountRequiredTitle => 'Sign in to continue';
+
+  @override
+  String get accountRequiredReserveMessage =>
+      'Create an account or sign in so we can save your viewing appointment and keep the car reserved for you.';
+
+  @override
+  String get accountRequiredPurchaseMessage =>
+      'Create an account or sign in so we can securely record your purchase and show it in My Purchases.';
+
+  @override
+  String get phoneRequiredForReservation => 'Phone number required to continue';
+
+  @override
+  String purchaseSummary(Object amount) {
+    return 'You will pay the full vehicle price of $amount with secure checkout.';
+  }
+
+  @override
+  String get secureStripeCheckout =>
+      'Secure Stripe checkout. Your purchase is recorded after payment succeeds.';
+
+  @override
+  String get payNow => 'Pay Now';
+
+  @override
+  String get purchaseComplete => 'Payment received. This car is now purchased.';
+
+  @override
+  String get checkoutUnavailable =>
+      'We could not start checkout right now. Please try again in a moment.';
+
+  @override
+  String get carAlreadyReserved =>
+      'This car already has an active reservation.';
+
+  @override
+  String get carNoLongerAvailable => 'This car is no longer available.';
+
+  @override
   String get destinationCountry => 'Destination Country';
+
+  @override
+  String get destinationCountriesUnavailable =>
+      'Destination options are not available right now. Please try again in a moment.';
 
   @override
   String get sendBarrels => 'Send Barrels';
@@ -839,15 +983,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noPurchasesYet => 'No car purchases yet.';
 
   @override
+  String get purchaseHistoryUnavailable =>
+      'We could not load your purchase history right now. Please try again after your account finishes syncing.';
+
+  @override
   String depositPaid(Object amount, Object status) {
-    return 'Deposit: $amount ($status)';
+    return 'Payment: $amount ($status)';
   }
 
   @override
   String get purchases => 'Purchases';
 
   @override
-  String get purchaseReservations => 'Purchase Reservations';
+  String get purchaseReservations => 'Car Purchases';
 
   @override
   String get purchaseUpdated => 'Purchase updated.';

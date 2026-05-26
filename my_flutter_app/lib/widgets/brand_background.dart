@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
-/// Full-page paper background.
+/// Full-page Wouri-style screen background.
 class BrandBackground extends StatelessWidget {
   const BrandBackground({super.key, required this.child});
 
@@ -10,7 +10,7 @@ class BrandBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(color: AppColors.cream),
+      decoration: const BoxDecoration(color: AppColors.lightBg),
       child: child,
     );
   }

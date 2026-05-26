@@ -27,292 +27,224 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
     final l10n = AppLocalizations.of(context)!;
+    final roleLabel = authProvider.isAdmin
+        ? l10n.admin
+        : authProvider.isStaff
+        ? l10n.staff
+        : l10n.customer;
 
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppColors.headerGradient),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    Text(
+      backgroundColor: AppColors.lightBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
                       l10n.settings,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.displaySmall?.copyWith(color: Colors.white),
-                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w900),
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        LanguageToggle(),
-                        SizedBox(width: 12),
-                        ThemeToggle(),
+                  ),
+                  const LanguageToggle(),
+                ],
+              ),
+            ),
+
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                children: [
+                  if (authProvider.isAuthenticated)
+                    _AccountPanel(
+                      title: authProvider.customerName?.isNotEmpty == true
+                          ? authProvider.customerName!
+                          : authProvider.userEmail ?? l10n.account,
+                      subtitle: authProvider.userEmail ?? '',
+                      role: roleLabel,
+                    )
+                  else
+                    _SignedOutPanel(
+                      message: l10n.accountOptionalMessage,
+                      onSignIn: () => Navigator.pushNamed(context, '/login'),
+                      onSignUp: () => Navigator.pushNamed(context, '/signup'),
+                    ),
+
+                  const SizedBox(height: 14),
+                  _SettingsGroup(
+                    children: [
+                      _SettingRow(
+                        icon: Icons.dark_mode_outlined,
+                        title: l10n.themeLabel,
+                        trailing: const ThemeToggle(onDarkBackground: false),
+                      ),
+                    ],
+                  ),
+
+                  if (authProvider.isStaff) ...[
+                    const SizedBox(height: 14),
+                    _SettingsGroup(
+                      children: [
+                        _SettingRow(
+                          icon: Icons.public,
+                          title: l10n.destinationCountries,
+                          subtitle: l10n.manageDestinationCountries,
+                          onTap: () => Navigator.pushNamed(
+                            context,
+                            '/destination-countries',
+                          ),
+                        ),
                       ],
                     ),
                   ],
-                ),
-              ),
 
-              // Settings content
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(30),
-                      topRight: Radius.circular(30),
-                    ),
-                  ),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  if (authProvider.isAuthenticated) ...[
+                    const SizedBox(height: 14),
+                    _SettingsGroup(
                       children: [
-                        if (authProvider.isAuthenticated) ...[
-                          _buildSection(
-                            title: l10n.account,
-                            children: [
-                              _buildSettingItem(
-                                icon: Icons.person,
-                                title: l10n.email,
-                                subtitle: authProvider.userEmail ?? '',
-                              ),
-                              _buildSettingItem(
-                                icon: Icons.badge,
-                                title: l10n.role,
-                                subtitle: authProvider.isAdmin
-                                    ? l10n.admin
-                                    : authProvider.isStaff
-                                    ? l10n.staff
-                                    : l10n.customer,
-                              ),
-                              _buildSettingItem(
-                                icon: Icons.logout,
-                                title: l10n.logout,
-                                subtitle: l10n.signOutOfAccount,
-                                onTap: _handleLogout,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
-                        ] else ...[
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: Text(
-                              l10n.accountOptionalMessage,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                          ),
-                          _buildSection(
-                            title: l10n.account,
-                            children: [
-                              _buildSettingItem(
-                                icon: Icons.login,
-                                title: l10n.signIn,
-                                subtitle: l10n.signInToAccount,
-                                onTap: () =>
-                                    Navigator.pushNamed(context, '/login'),
-                              ),
-                              const Divider(height: 1),
-                              _buildSettingItem(
-                                icon: Icons.person_add_alt,
-                                title: l10n.signUp,
-                                subtitle: l10n.signUpToGetStarted,
-                                onTap: () =>
-                                    Navigator.pushNamed(context, '/signup'),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
-                        ],
-
-                        _buildSection(
-                          title: l10n.themeLabel,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.palette_outlined,
-                                    color: AppColors.brandRed,
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Text(
-                                      l10n.themeLabel,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.titleMedium,
-                                    ),
-                                  ),
-                                  const ThemeToggle(onDarkBackground: false),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 24),
-
-                        if (authProvider.isStaff) ...[
-                          _buildSection(
-                            title: l10n.staffTools,
-                            children: [
-                              _buildSettingItem(
-                                icon: Icons.public,
-                                title: l10n.destinationCountries,
-                                subtitle: l10n.manageDestinationCountries,
-                                onTap: () => Navigator.pushNamed(
-                                  context,
-                                  '/destination-countries',
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
-                        ],
-
-                        // App Info Section
-                        _buildSection(
-                          title: l10n.appInformation,
-                          children: [
-                            _buildSettingItem(
-                              icon: Icons.info_outline,
-                              title: l10n.appVersion,
-                              subtitle: '1.0.0',
-                            ),
-                            _buildSettingItem(
-                              icon: Icons.business,
-                              title: l10n.companyName,
-                              subtitle: 'Keren Auto Sales LLC',
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 24),
-
-                        // Contact Section
-                        _buildSection(
-                          title: l10n.contactUs,
-                          children: [
-                            _buildSettingItem(
-                              icon: Icons.phone,
-                              title: l10n.phoneNumber,
-                              subtitle: '+1 (555) 123-4567',
-                              onTap: () {
-                                // Handle phone call
-                              },
-                            ),
-                            _buildSettingItem(
-                              icon: Icons.email,
-                              title: l10n.emailAddress,
-                              subtitle: 'info@businessservices.com',
-                              onTap: () {
-                                // Handle email
-                              },
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 24),
-
-                        // About Section
-                        _buildSection(
-                          title: l10n.about,
-                          children: [
-                            _buildSettingItem(
-                              icon: Icons.description,
-                              title: l10n.privacyPolicy,
-                              onTap: () {
-                                // Handle privacy policy
-                              },
-                            ),
-                            _buildSettingItem(
-                              icon: Icons.description,
-                              title: l10n.termsOfService,
-                              onTap: () {
-                                // Handle terms of service
-                              },
-                            ),
-                          ],
+                        _SettingRow(
+                          icon: Icons.logout,
+                          title: l10n.logout,
+                          subtitle: l10n.signOutOfAccount,
+                          onTap: _handleLogout,
                         ),
                       ],
                     ),
-                  ),
-                ),
+                  ],
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildSection({
-    required String title,
-    required List<Widget> children,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+class _AccountPanel extends StatelessWidget {
+  const _AccountPanel({
+    required this.title,
+    required this.subtitle,
+    required this.role,
+  });
+
+  final String title;
+  final String subtitle;
+  final String role;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SettingsGroup(
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: AppColors.brandRed,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: Theme.of(
-                context,
-              ).colorScheme.outline.withValues(alpha: 0.5),
-            ),
-          ),
-          child: Column(children: children),
+        _SettingRow(
+          icon: Icons.person_outline,
+          title: title,
+          subtitle: subtitle,
+          trailing: _RolePill(label: role),
         ),
       ],
     );
   }
+}
 
-  Widget _buildSettingItem({
-    required IconData icon,
-    required String title,
-    String? subtitle,
-    VoidCallback? onTap,
-  }) {
+class _SignedOutPanel extends StatelessWidget {
+  const _SignedOutPanel({
+    required this.message,
+    required this.onSignIn,
+    required this.onSignUp,
+  });
+
+  final String message;
+  final VoidCallback onSignIn;
+  final VoidCallback onSignUp;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return _SettingsGroup(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+          child: Text(
+            message,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.lightMuted),
+          ),
+        ),
+        _SettingRow(
+          icon: Icons.login,
+          title: l10n.signIn,
+          subtitle: l10n.signInToAccount,
+          onTap: onSignIn,
+        ),
+        const Divider(height: 1),
+        _SettingRow(
+          icon: Icons.person_add_alt,
+          title: l10n.signUp,
+          subtitle: l10n.signUpToGetStarted,
+          onTap: onSignUp,
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingsGroup extends StatelessWidget {
+  const _SettingsGroup({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.lightSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.lightOutline),
+      ),
+      child: Column(children: children),
+    );
+  }
+}
+
+class _SettingRow extends StatelessWidget {
+  const _SettingRow({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(14),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           children: [
             Container(
-              width: 40,
-              height: 40,
+              width: 34,
+              height: 34,
               decoration: BoxDecoration(
                 color: AppColors.brandRed.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, color: AppColors.brandRed, size: 20),
+              child: Icon(icon, color: AppColors.brandRed, size: 18),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -320,30 +252,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Text(
                     title,
                     style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   if (subtitle != null) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
-                      subtitle,
+                      subtitle!,
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 12,
                         color: Colors.grey.shade600,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ],
               ),
             ),
-            if (onTap != null)
+            if (trailing != null) trailing!,
+            if (trailing == null && onTap != null)
               Icon(
                 Icons.arrow_forward_ios,
                 color: Colors.grey.shade400,
-                size: 16,
+                size: 14,
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RolePill extends StatelessWidget {
+  const _RolePill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.brandRed.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: AppColors.brandRed,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );

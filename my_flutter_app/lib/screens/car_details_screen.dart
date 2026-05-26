@@ -41,6 +41,7 @@ class CarDetailsScreen extends StatelessWidget {
       }
     }();
     final canReserve = car.status == 'active';
+    final canPurchase = car.status == 'active' && car.price > 0;
 
     return Scaffold(
       body: Container(
@@ -82,7 +83,7 @@ class CarDetailsScreen extends StatelessWidget {
               Expanded(
                 child: Container(
                   decoration: const BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.lightBg,
                     borderRadius: BorderRadius.only(
                       topLeft: Radius.circular(30),
                       topRight: Radius.circular(30),
@@ -212,6 +213,34 @@ class CarDetailsScreen extends StatelessWidget {
                         SizedBox(
                           width: double.infinity,
                           height: 56,
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.brandRed,
+                              side: const BorderSide(
+                                color: AppColors.brandRed,
+                                width: 1.4,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onPressed: canReserve
+                                ? () => _showReservationSheet(context)
+                                : null,
+                            icon: const Icon(Icons.event_available, size: 24),
+                            label: Text(
+                              l10n.reserveViewing,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 56,
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.brandRed,
@@ -222,12 +251,12 @@ class CarDetailsScreen extends StatelessWidget {
                               elevation: 0,
                               splashFactory: NoSplash.splashFactory,
                             ),
-                            onPressed: canReserve
-                                ? () => _showReservationSheet(context)
+                            onPressed: canPurchase
+                                ? () => _showPurchaseSheet(context, priceText)
                                 : null,
-                            icon: const Icon(Icons.lock_clock, size: 24),
+                            icon: const Icon(Icons.shopping_bag, size: 24),
                             label: Text(
-                              l10n.reserveWithDeposit,
+                              l10n.purchaseThisCar,
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -259,19 +288,308 @@ class CarDetailsScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _showReservationSheet(BuildContext context) async {
-    final authProvider = context.read<AuthProvider>();
-    final l10n = AppLocalizations.of(context)!;
-    if (!authProvider.isAuthenticated) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.loginRequiredForDeposit)));
-      await Navigator.pushNamed(context, '/login');
-      return;
-    }
+  Future<bool> _ensureCustomerAccount(
+    BuildContext context, {
+    required String title,
+    required String message,
+  }) async {
+    if (context.read<AuthProvider>().isAuthenticated) return true;
+    final route = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      builder: (context) {
+        final l10n = AppLocalizations.of(context)!;
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: AppColors.brandRed.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.person_outline,
+                  color: AppColors.brandRed,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(title, style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text(message, style: Theme.of(context).textTheme.bodyMedium),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () => Navigator.pop(context, '/login'),
+                  icon: const Icon(Icons.login),
+                  label: Text(l10n.signIn),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.pop(context, '/signup'),
+                  icon: const Icon(Icons.person_add_outlined),
+                  label: Text(l10n.createAccount),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (route == null || !context.mounted) return false;
+    final result = await Navigator.pushNamed(
+      context,
+      route,
+      arguments: const {'returnToPrevious': true},
+    );
+    if (!context.mounted) return false;
+    return result == true && context.read<AuthProvider>().isAuthenticated;
+  }
 
-    final buyerNameController = TextEditingController();
-    final buyerPhoneController = TextEditingController();
+  Future<void> _showReservationSheet(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final isReady = await _ensureCustomerAccount(
+      context,
+      title: l10n.accountRequiredTitle,
+      message: l10n.accountRequiredReserveMessage,
+    );
+    if (!isReady || !context.mounted) return;
+
+    final authProvider = context.read<AuthProvider>();
+    final buyerName = authProvider.buyerName;
+    final profilePhone = authProvider.customerPhone?.trim() ?? '';
+    final buyerPhoneController = TextEditingController(text: profilePhone);
+    final needsPhone = profilePhone.isEmpty;
+    final slots = _ViewingSlot.available();
+    DestinationCountry? selectedCountry;
+    _ViewingSlot? selectedSlot;
+    var isSubmitting = false;
+    final formKey = GlobalKey<FormState>();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+            return Padding(
+              padding: EdgeInsets.only(bottom: bottomInset),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              l10n.reserveViewing,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: isSubmitting
+                                ? null
+                                : () => Navigator.pop(context),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        l10n.reserveViewingSummary,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 20),
+                      _AccountSummary(name: buyerName, phone: profilePhone),
+                      if (needsPhone) ...[
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: buyerPhoneController,
+                          decoration: InputDecoration(
+                            labelText: l10n.customerPhone,
+                          ),
+                          keyboardType: TextInputType.phone,
+                          validator: (value) {
+                            final digits =
+                                value?.replaceAll(RegExp(r'\D'), '') ?? '';
+                            return digits.length < 7
+                                ? l10n.requiredField
+                                : null;
+                          },
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      DestinationCountryField(
+                        value: selectedCountry,
+                        label: l10n.destinationCountry,
+                        requiredMessage: l10n.requiredField,
+                        onChanged: (country) {
+                          setModalState(() => selectedCountry = country);
+                        },
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        l10n.selectViewingTime,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: slots.map((slot) {
+                          final isSelected = selectedSlot == slot;
+                          return ChoiceChip(
+                            selected: isSelected,
+                            avatar: Icon(
+                              Icons.schedule,
+                              size: 18,
+                              color: isSelected
+                                  ? Colors.white
+                                  : AppColors.brandRed,
+                            ),
+                            label: Text(slot.label),
+                            selectedColor: AppColors.brandRed,
+                            labelStyle: TextStyle(
+                              color: isSelected
+                                  ? Colors.white
+                                  : AppColors.lightOnSurface,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            onSelected: isSubmitting
+                                ? null
+                                : (_) {
+                                    setModalState(() => selectedSlot = slot);
+                                  },
+                          );
+                        }).toList(),
+                      ),
+                      if (selectedSlot == null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          l10n.selectViewingTimeRequired,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: isSubmitting
+                              ? null
+                              : () async {
+                                  if (!formKey.currentState!.validate() ||
+                                      selectedCountry == null ||
+                                      selectedSlot == null) {
+                                    return;
+                                  }
+                                  setModalState(() => isSubmitting = true);
+                                  try {
+                                    if (needsPhone) {
+                                      authProvider
+                                          .updateCustomerPhone(
+                                            buyerPhoneController.text.trim(),
+                                          )
+                                          .catchError((error) {
+                                            debugPrint(
+                                              'Could not save customer phone: $error',
+                                            );
+                                          });
+                                    }
+                                    await CarPurchaseService().reserveViewing(
+                                      car: car,
+                                      destinationCountry: selectedCountry!,
+                                      buyerName: buyerName,
+                                      buyerPhone: buyerPhoneController.text
+                                          .trim(),
+                                      appointmentStart: selectedSlot!.start,
+                                      appointmentLabel: selectedSlot!.label,
+                                    );
+                                    if (!context.mounted) return;
+                                    Navigator.pop(context);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          l10n.viewingReservationComplete(
+                                            selectedSlot!.label,
+                                          ),
+                                        ),
+                                        backgroundColor: Colors.green,
+                                      ),
+                                    );
+                                  } catch (e) {
+                                    if (!context.mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(_checkoutError(l10n, e)),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  } finally {
+                                    if (context.mounted) {
+                                      setModalState(() => isSubmitting = false);
+                                    }
+                                  }
+                                },
+                          child: isSubmitting
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Text(l10n.confirmViewingReservation),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    buyerPhoneController.dispose();
+  }
+
+  Future<void> _showPurchaseSheet(
+    BuildContext context,
+    String formattedPrice,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final isReady = await _ensureCustomerAccount(
+      context,
+      title: l10n.accountRequiredTitle,
+      message: l10n.accountRequiredPurchaseMessage,
+    );
+    if (!isReady || !context.mounted) return;
+
+    final authProvider = context.read<AuthProvider>();
+    final buyerName = authProvider.buyerName;
+    final profilePhone = authProvider.customerPhone?.trim() ?? '';
+    final buyerPhoneController = TextEditingController(text: profilePhone);
+    final needsPhone = profilePhone.isEmpty;
     DestinationCountry? selectedCountry;
     var isSubmitting = false;
     final formKey = GlobalKey<FormState>();
@@ -298,7 +616,7 @@ class CarDetailsScreen extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              l10n.reserveThisCar,
+                              l10n.purchaseThisCar,
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
                           ),
@@ -312,32 +630,66 @@ class CarDetailsScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        l10n.depositSummary('\$500 USD'),
+                        l10n.purchaseSummary(formattedPrice),
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
-                      const SizedBox(height: 20),
-                      TextFormField(
-                        controller: buyerNameController,
-                        decoration: InputDecoration(
-                          labelText: l10n.customerName,
-                        ),
-                        validator: (value) =>
-                            value == null || value.trim().isEmpty
-                            ? l10n.requiredField
-                            : null,
-                      ),
                       const SizedBox(height: 16),
-                      TextFormField(
-                        controller: buyerPhoneController,
-                        decoration: InputDecoration(
-                          labelText: l10n.customerPhone,
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.chrome.withValues(alpha: 0.55),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: AppColors.brandRed.withValues(alpha: 0.18),
+                          ),
                         ),
-                        keyboardType: TextInputType.phone,
-                        validator: (value) =>
-                            value == null || value.trim().isEmpty
-                            ? l10n.requiredField
-                            : null,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: AppColors.brandRed.withValues(
+                                  alpha: 0.12,
+                                ),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: const Icon(
+                                Icons.verified_user_outlined,
+                                color: AppColors.brandRed,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Text(
+                                l10n.secureStripeCheckout,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(height: 20),
+                      _AccountSummary(name: buyerName, phone: profilePhone),
+                      if (needsPhone) ...[
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: buyerPhoneController,
+                          decoration: InputDecoration(
+                            labelText: l10n.customerPhone,
+                          ),
+                          keyboardType: TextInputType.phone,
+                          validator: (value) {
+                            final digits =
+                                value?.replaceAll(RegExp(r'\D'), '') ?? '';
+                            return digits.length < 7
+                                ? l10n.requiredField
+                                : null;
+                          },
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       DestinationCountryField(
                         value: selectedCountry,
@@ -361,20 +713,29 @@ class CarDetailsScreen extends StatelessWidget {
                                   }
                                   setModalState(() => isSubmitting = true);
                                   try {
-                                    await CarPurchaseService()
-                                        .reserveWithDeposit(
-                                          car: car,
-                                          destinationCountry: selectedCountry!,
-                                          buyerName: buyerNameController.text
-                                              .trim(),
-                                          buyerPhone: buyerPhoneController.text
-                                              .trim(),
-                                        );
+                                    if (needsPhone) {
+                                      authProvider
+                                          .updateCustomerPhone(
+                                            buyerPhoneController.text.trim(),
+                                          )
+                                          .catchError((error) {
+                                            debugPrint(
+                                              'Could not save customer phone: $error',
+                                            );
+                                          });
+                                    }
+                                    await CarPurchaseService().purchaseCar(
+                                      car: car,
+                                      destinationCountry: selectedCountry!,
+                                      buyerName: buyerName,
+                                      buyerPhone: buyerPhoneController.text
+                                          .trim(),
+                                    );
                                     if (!context.mounted) return;
                                     Navigator.pop(context);
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text(l10n.reservationComplete),
+                                        content: Text(l10n.purchaseComplete),
                                         backgroundColor: Colors.green,
                                       ),
                                     );
@@ -382,9 +743,7 @@ class CarDetailsScreen extends StatelessWidget {
                                     if (!context.mounted) return;
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text(
-                                          l10n.operationFailed(e.toString()),
-                                        ),
+                                        content: Text(_checkoutError(l10n, e)),
                                         backgroundColor: Colors.red,
                                       ),
                                     );
@@ -403,7 +762,7 @@ class CarDetailsScreen extends StatelessWidget {
                                     color: Colors.white,
                                   ),
                                 )
-                              : Text(l10n.payDeposit),
+                              : Text(l10n.payNow),
                         ),
                       ),
                     ],
@@ -416,7 +775,6 @@ class CarDetailsScreen extends StatelessWidget {
       },
     );
 
-    buyerNameController.dispose();
     buyerPhoneController.dispose();
   }
 
@@ -451,6 +809,109 @@ class CarDetailsScreen extends StatelessWidget {
       );
       return false;
     });
+  }
+
+  String _checkoutError(AppLocalizations l10n, Object error) {
+    final value = error.toString().toLowerCase();
+    if (value.contains('permission-denied') ||
+        value.contains('permission denied')) {
+      return l10n.checkoutUnavailable;
+    }
+    if (value.contains('already-exists')) {
+      return l10n.carAlreadyReserved;
+    }
+    if (value.contains('failed-precondition')) {
+      return l10n.carNoLongerAvailable;
+    }
+    return l10n.checkoutUnavailable;
+  }
+}
+
+class _AccountSummary extends StatelessWidget {
+  const _AccountSummary({required this.name, required this.phone});
+
+  final String name;
+  final String phone;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.lightSurfaceVariant,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.lightOutline),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.brandRed.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.person, color: AppColors.brandRed),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  phone.isEmpty ? l10n.phoneRequiredForReservation : phone,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppColors.lightMuted),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ViewingSlot {
+  const _ViewingSlot({required this.start, required this.label});
+
+  final DateTime start;
+  final String label;
+
+  static List<_ViewingSlot> available() {
+    final now = DateTime.now();
+    final earliest = now.add(const Duration(hours: 2));
+    final dateFormat = DateFormat('EEE, MMM d');
+    final timeFormat = DateFormat.jm();
+    final slots = <_ViewingSlot>[];
+    var day = DateTime(now.year, now.month, now.day);
+
+    while (slots.length < 8) {
+      day = day.add(const Duration(days: 1));
+      if (day.weekday == DateTime.sunday) continue;
+      for (final hour in const [10, 12, 14, 16]) {
+        final start = DateTime(day.year, day.month, day.day, hour);
+        if (start.isBefore(earliest)) continue;
+        slots.add(
+          _ViewingSlot(
+            start: start,
+            label: '${dateFormat.format(start)} - ${timeFormat.format(start)}',
+          ),
+        );
+        if (slots.length == 8) break;
+      }
+    }
+    return slots;
   }
 }
 

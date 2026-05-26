@@ -31,7 +31,7 @@ class StaffPurchaseManagementScreen extends StatelessWidget {
           'customerEmail': purchase.buyerEmail,
           'amount': purchase.depositAmount,
           'soldDate': FieldValue.serverTimestamp(),
-          'notes': 'Deposit paid through app',
+          'notes': 'Payment completed through app',
         },
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -139,6 +139,11 @@ class _StaffPurchaseCard extends StatelessWidget {
                 purchase.paymentStatus,
               ),
             ),
+            if (purchase.appointmentStart != null)
+              Text(
+                '${l10n.selectViewingTime}: '
+                '${purchase.appointmentLabel ?? DateFormat.yMMMd().add_jm().format(purchase.appointmentStart!)}',
+              ),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,

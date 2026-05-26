@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 
-/// Paper header with optional back button, title, and actions.
+/// Wouri-style header with optional back button, title, and actions.
 class GradientHeader extends StatelessWidget {
   const GradientHeader({
     super.key,
@@ -21,7 +21,7 @@ class GradientHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color: AppColors.paper,
+        gradient: AppColors.headerGradient,
         border: Border(bottom: BorderSide(color: AppColors.rule)),
       ),
       child: SafeArea(
@@ -35,7 +35,7 @@ class GradientHeader extends StatelessWidget {
             children: [
               if (showBack)
                 IconButton(
-                  icon: const Icon(Icons.arrow_back, color: AppColors.ink),
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
                   onPressed: onBack ?? () => Navigator.maybePop(context),
                 )
               else
@@ -45,7 +45,7 @@ class GradientHeader extends StatelessWidget {
                   title,
                   style: Theme.of(
                     context,
-                  ).textTheme.displaySmall?.copyWith(color: AppColors.ink),
+                  ).textTheme.displaySmall?.copyWith(color: Colors.white),
                   textAlign: TextAlign.center,
                 ),
               ),

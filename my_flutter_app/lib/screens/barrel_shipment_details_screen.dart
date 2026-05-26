@@ -38,7 +38,13 @@ class _BarrelShipmentDetailsScreenState
 
   StreamSubscription<DocumentSnapshot>? _subscription;
 
-  static const _statusOptions = ['pending', 'in_transit', 'completed'];
+  static const _statusOptions = [
+    'pending_payment',
+    'pending',
+    'in_transit',
+    'completed',
+    'cancelled',
+  ];
 
   @override
   void initState() {
@@ -78,11 +84,7 @@ class _BarrelShipmentDetailsScreenState
 
     setState(() {
       final shouldSync = !_isSaving && !hasLocalChanges;
-      _applyShipment(
-        latest,
-        updateFields: shouldSync,
-        syncStatus: shouldSync,
-      );
+      _applyShipment(latest, updateFields: shouldSync, syncStatus: shouldSync);
       _isSaving = false;
     });
   }
@@ -132,10 +134,14 @@ class _BarrelShipmentDetailsScreenState
     switch (status) {
       case 'pending':
         return l10n.shipmentStatusPending;
+      case 'pending_payment':
+        return 'Pending payment';
       case 'in_transit':
         return l10n.shipmentStatusInTransit;
       case 'completed':
         return l10n.shipmentStatusCompleted;
+      case 'cancelled':
+        return 'Cancelled';
       default:
         return status;
     }
@@ -204,22 +210,16 @@ class _BarrelShipmentDetailsScreenState
   }
 
   Future<void> _reprintReceipt() async {
-    await generateBarrelShipmentReceipt(
-      shipment: _currentShipment,
-    );
+    await generateBarrelShipmentReceipt(shipment: _currentShipment);
   }
 
   Future<void> _copyTrackingNumber() async {
-    await Clipboard.setData(
-      ClipboardData(text: _currentShipment.trackingCode),
-    );
+    await Clipboard.setData(ClipboardData(text: _currentShipment.trackingCode));
     if (!mounted) return;
     final l10n = AppLocalizations.of(context)!;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(l10n.trackingNumberCopied),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.trackingNumberCopied)));
   }
 
   @override
@@ -228,14 +228,13 @@ class _BarrelShipmentDetailsScreenState
     final auth = Provider.of<AuthProvider>(context);
     final canEdit = auth.isAdmin && !_isCompleted;
     final width = MediaQuery.of(context).size.width;
-    final dateLabel =
-        DateFormat('MMM dd, yyyy - HH:mm').format(_currentShipment.createdAt);
+    final dateLabel = DateFormat(
+      'MMM dd, yyyy - HH:mm',
+    ).format(_currentShipment.createdAt);
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.headerGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.headerGradient),
         child: SafeArea(
           child: Column(
             children: [
@@ -245,7 +244,10 @@ class _BarrelShipmentDetailsScreenState
                   children: [
                     IconButton(
                       onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                      icon: const Icon(
+                        Icons.arrow_back_ios,
+                        color: Colors.white,
+                      ),
                     ),
                     Expanded(
                       child: Text(
@@ -318,7 +320,9 @@ class _BarrelShipmentDetailsScreenState
                           const SizedBox(height: 16),
                           _DetailTextField(
                             controller: _senderAddressController,
-                            label: l10n.address,
+                            label: _currentShipment.pickupRequested
+                                ? 'Pickup address'
+                                : 'Drop-off office',
                             readOnly: !canEdit,
                             validator: (value) {
                               if (!canEdit) return null;
@@ -328,6 +332,22 @@ class _BarrelShipmentDetailsScreenState
                               return null;
                             },
                           ),
+                          const SizedBox(height: 12),
+                          _InfoRow(
+                            label: 'Pickup service',
+                            value: _currentShipment.pickupRequested
+                                ? '${_currentShipment.pickupBorough} pickup'
+                                : 'Customer brings barrel to office',
+                          ),
+                          if (_currentShipment.pickupDateTime != null) ...[
+                            const SizedBox(height: 12),
+                            _InfoRow(
+                              label: 'Pickup time',
+                              value: DateFormat(
+                                'MMM dd, yyyy - h:mm a',
+                              ).format(_currentShipment.pickupDateTime!),
+                            ),
+                          ],
                           const SizedBox(height: 24),
                           _SectionTitle(label: l10n.receiverInformation),
                           _DetailTextField(
@@ -363,11 +383,44 @@ class _BarrelShipmentDetailsScreenState
                             value: dateLabel,
                           ),
                           const SizedBox(height: 12),
+                          _InfoRow(
+                            label: 'Destination',
+                            value: _currentShipment.destinationCountryName,
+                          ),
+                          const SizedBox(height: 12),
+                          _InfoRow(
+                            label: 'Shipping fee',
+                            value: NumberFormat.simpleCurrency().format(
+                              _currentShipment.shippingFee,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          _InfoRow(
+                            label: 'Pickup fee',
+                            value:
+                                '${NumberFormat.simpleCurrency().format(_currentShipment.pickupFee)}'
+                                ' (${_currentShipment.pickupMiles.toStringAsFixed(0)} miles)',
+                          ),
+                          const SizedBox(height: 12),
+                          _InfoRow(
+                            label: 'Payment',
+                            value: _currentShipment.paymentStatus,
+                          ),
+                          if (_currentShipment.pricingPendingReview) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              'Pricing needs staff review.',
+                              style: TextStyle(
+                                color: Colors.orange.shade800,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 12),
                           TextFormField(
                             controller: _priceController,
                             readOnly: !canEdit,
-                            keyboardType:
-                                const TextInputType.numberWithOptions(
+                            keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
                             decoration: InputDecoration(
@@ -442,8 +495,8 @@ class _BarrelShipmentDetailsScreenState
                                             strokeWidth: 2,
                                             valueColor:
                                                 AlwaysStoppedAnimation<Color>(
-                                              Colors.white,
-                                            ),
+                                                  Colors.white,
+                                                ),
                                           ),
                                         )
                                       : Text(l10n.updateShipment),
@@ -507,18 +560,12 @@ class _InfoRow extends StatelessWidget {
       children: [
         Text(
           label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey.shade600,
-          ),
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
         ),
         const SizedBox(height: 4),
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
       ],
     );
@@ -551,4 +598,3 @@ class _DetailTextField extends StatelessWidget {
     );
   }
 }
-

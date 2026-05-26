@@ -119,6 +119,29 @@
   "carYear": "Année de la Voiture",
   "transportDate": "Date de Transport",
   "carSalesService": "Service de Vente de Voitures",
+  "availableCars": "Voitures disponibles",
+  "browsePurchaseReserve": "Parcourez l'inventaire, réservez une visite ou achetez directement dans l'application.",
+  "inStock": "En stock",
+  "viewings": "Visites",
+  "byAppointment": "Sur rendez-vous",
+  "filters": "Filtres",
+  "clearFilters": "Effacer",
+  "applyFilters": "Appliquer",
+  "filteredResults": "{count} filtres actifs",
+  "@filteredResults": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "yearRange": "Années",
+  "minYear": "Année min.",
+  "maxYear": "Année max.",
+  "maxPrice": "Prix max.",
+  "sortBy": "Trier par",
+  "newestYear": "Année récente",
+  "oldestYear": "Année ancienne",
+  "priceLowToHigh": "Prix : croissant",
+  "priceHighToLow": "Prix : décroissant",
   "browseAvailableCarsForSale": "Parcourir les voitures disponibles à la vente",
   "searchCars": "Rechercher des voitures...",
   "chatWithSeller": "Discuter avec le Vendeur",
@@ -206,7 +229,12 @@
   "admin": "Administrateur",
   "signUp": "S'inscrire",
   "createAccount": "Créer un Compte",
-  "signUpToGetStarted": "Créez un compte gratuit pour enregistrer vos reçus et synchroniser votre activité.",
+  "signUpToGetStarted": "Créez un compte gratuit avec les détails nécessaires pour réserver une visite et enregistrer vos achats.",
+  "fullName": "Nom complet",
+  "enterFullName": "Entrez votre nom complet",
+  "pleaseEnterFullName": "Veuillez entrer votre nom complet",
+  "enterPhoneNumber": "Entrez votre numéro de téléphone",
+  "pleaseEnterPhoneNumber": "Veuillez entrer un numéro de téléphone valide",
   "confirmPassword": "Confirmer le Mot de Passe",
   "reEnterPassword": "Entrez à nouveau votre mot de passe",
   "pleaseConfirmPassword": "Veuillez confirmer votre mot de passe",
@@ -342,7 +370,37 @@
   },
   "payDeposit": "Payer l'acompte",
   "reservationComplete": "Acompte reçu. Votre réservation est maintenant active.",
+  "loginRequiredForPurchase": "Veuillez vous connecter avant d'acheter cette voiture.",
+  "purchaseThisCar": "Acheter cette voiture",
+  "reserveViewing": "Réserver une visite",
+  "reserveViewingSummary": "Choisissez une heure disponible pour venir voir ce véhicule. Nous garderons la voiture pour votre rendez-vous.",
+  "selectViewingTime": "Heures de visite disponibles",
+  "selectViewingTimeRequired": "Veuillez sélectionner une heure de visite.",
+  "confirmViewingReservation": "Confirmer la visite",
+  "viewingReservationComplete": "Votre visite est réservée pour {time}.",
+  "@viewingReservationComplete": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "accountRequiredTitle": "Connectez-vous pour continuer",
+  "accountRequiredReserveMessage": "Créez un compte ou connectez-vous afin que nous puissions enregistrer votre rendez-vous et garder la voiture pour vous.",
+  "accountRequiredPurchaseMessage": "Créez un compte ou connectez-vous afin que nous puissions enregistrer votre achat en toute sécurité et l'afficher dans Mes achats.",
+  "phoneRequiredForReservation": "Numéro de téléphone requis pour continuer",
+  "purchaseSummary": "Vous paierez le prix total du véhicule, soit {amount}, avec un paiement sécurisé.",
+  "@purchaseSummary": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "secureStripeCheckout": "Paiement sécurisé avec Stripe. Votre achat est enregistré une fois le paiement réussi.",
+  "payNow": "Payer maintenant",
+  "purchaseComplete": "Paiement reçu. Cette voiture est maintenant achetée.",
+  "checkoutUnavailable": "Nous n'avons pas pu lancer le paiement pour le moment. Veuillez réessayer dans un instant.",
+  "carAlreadyReserved": "Cette voiture a déjà une réservation active.",
+  "carNoLongerAvailable": "Cette voiture n'est plus disponible.",
   "destinationCountry": "Pays de destination",
+  "destinationCountriesUnavailable": "Les options de destination ne sont pas disponibles pour le moment. Veuillez réessayer dans un instant.",
   "sendBarrels": "Envoyer des barils",
   "enterShippingDetails": "Entrez les détails d'expédition",
   "transportCars": "Transporter des voitures",
@@ -350,7 +408,8 @@
   "cars": "Voitures",
   "myPurchases": "Mes achats",
   "noPurchasesYet": "Aucun achat de voiture pour le moment.",
-  "depositPaid": "Acompte : {amount} ({status})",
+  "purchaseHistoryUnavailable": "Nous n'avons pas pu charger votre historique d'achats pour le moment. Veuillez réessayer après la synchronisation de votre compte.",
+  "depositPaid": "Paiement : {amount} ({status})",
   "@depositPaid": {
     "placeholders": {
       "amount": {},
@@ -358,7 +417,7 @@
     }
   },
   "purchases": "Achats",
-  "purchaseReservations": "Réservations d'achat",
+  "purchaseReservations": "Achats de voitures",
   "purchaseUpdated": "Achat mis à jour.",
   "cancelled": "Annulé",
   "refunded": "Remboursé",

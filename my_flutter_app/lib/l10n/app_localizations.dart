@@ -692,6 +692,114 @@ abstract class AppLocalizations {
   /// **'Car Sales Service'**
   String get carSalesService;
 
+  /// No description provided for @availableCars.
+  ///
+  /// In en, this message translates to:
+  /// **'Available Cars'**
+  String get availableCars;
+
+  /// No description provided for @browsePurchaseReserve.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse inventory, reserve a viewing time, or buy directly from the app.'**
+  String get browsePurchaseReserve;
+
+  /// No description provided for @inStock.
+  ///
+  /// In en, this message translates to:
+  /// **'In stock'**
+  String get inStock;
+
+  /// No description provided for @viewings.
+  ///
+  /// In en, this message translates to:
+  /// **'Viewings'**
+  String get viewings;
+
+  /// No description provided for @byAppointment.
+  ///
+  /// In en, this message translates to:
+  /// **'By appointment'**
+  String get byAppointment;
+
+  /// No description provided for @filters.
+  ///
+  /// In en, this message translates to:
+  /// **'Filters'**
+  String get filters;
+
+  /// No description provided for @clearFilters.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get clearFilters;
+
+  /// No description provided for @applyFilters.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply Filters'**
+  String get applyFilters;
+
+  /// No description provided for @filteredResults.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} filters active'**
+  String filteredResults(Object count);
+
+  /// No description provided for @yearRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Year range'**
+  String get yearRange;
+
+  /// No description provided for @minYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Min year'**
+  String get minYear;
+
+  /// No description provided for @maxYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Max year'**
+  String get maxYear;
+
+  /// No description provided for @maxPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Max price'**
+  String get maxPrice;
+
+  /// No description provided for @sortBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort by'**
+  String get sortBy;
+
+  /// No description provided for @newestYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Newest year'**
+  String get newestYear;
+
+  /// No description provided for @oldestYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Oldest year'**
+  String get oldestYear;
+
+  /// No description provided for @priceLowToHigh.
+  ///
+  /// In en, this message translates to:
+  /// **'Price: low to high'**
+  String get priceLowToHigh;
+
+  /// No description provided for @priceHighToLow.
+  ///
+  /// In en, this message translates to:
+  /// **'Price: high to low'**
+  String get priceHighToLow;
+
   /// No description provided for @browseAvailableCarsForSale.
   ///
   /// In en, this message translates to:
@@ -1151,8 +1259,38 @@ abstract class AppLocalizations {
   /// No description provided for @signUpToGetStarted.
   ///
   /// In en, this message translates to:
-  /// **'Create a free account to save receipts and sync your activity.'**
+  /// **'Create a free account with the details we need to reserve viewings and record purchases.'**
   String get signUpToGetStarted;
+
+  /// No description provided for @fullName.
+  ///
+  /// In en, this message translates to:
+  /// **'Full Name'**
+  String get fullName;
+
+  /// No description provided for @enterFullName.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your full name'**
+  String get enterFullName;
+
+  /// No description provided for @pleaseEnterFullName.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter your full name'**
+  String get pleaseEnterFullName;
+
+  /// No description provided for @enterPhoneNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your phone number'**
+  String get enterPhoneNumber;
+
+  /// No description provided for @pleaseEnterPhoneNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter a valid phone number'**
+  String get pleaseEnterPhoneNumber;
 
   /// No description provided for @confirmPassword.
   ///
@@ -1592,11 +1730,131 @@ abstract class AppLocalizations {
   /// **'Deposit received. Your reservation is now active.'**
   String get reservationComplete;
 
+  /// No description provided for @loginRequiredForPurchase.
+  ///
+  /// In en, this message translates to:
+  /// **'Please sign in before purchasing this car.'**
+  String get loginRequiredForPurchase;
+
+  /// No description provided for @purchaseThisCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Purchase this car'**
+  String get purchaseThisCar;
+
+  /// No description provided for @reserveViewing.
+  ///
+  /// In en, this message translates to:
+  /// **'Reserve a viewing'**
+  String get reserveViewing;
+
+  /// No description provided for @reserveViewingSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an available time to come view this vehicle. We will hold the car for your appointment.'**
+  String get reserveViewingSummary;
+
+  /// No description provided for @selectViewingTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Available viewing times'**
+  String get selectViewingTime;
+
+  /// No description provided for @selectViewingTimeRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please select a viewing time.'**
+  String get selectViewingTimeRequired;
+
+  /// No description provided for @confirmViewingReservation.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm Viewing'**
+  String get confirmViewingReservation;
+
+  /// No description provided for @viewingReservationComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Your viewing is reserved for {time}.'**
+  String viewingReservationComplete(Object time);
+
+  /// No description provided for @accountRequiredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to continue'**
+  String get accountRequiredTitle;
+
+  /// No description provided for @accountRequiredReserveMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Create an account or sign in so we can save your viewing appointment and keep the car reserved for you.'**
+  String get accountRequiredReserveMessage;
+
+  /// No description provided for @accountRequiredPurchaseMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Create an account or sign in so we can securely record your purchase and show it in My Purchases.'**
+  String get accountRequiredPurchaseMessage;
+
+  /// No description provided for @phoneRequiredForReservation.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone number required to continue'**
+  String get phoneRequiredForReservation;
+
+  /// No description provided for @purchaseSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'You will pay the full vehicle price of {amount} with secure checkout.'**
+  String purchaseSummary(Object amount);
+
+  /// No description provided for @secureStripeCheckout.
+  ///
+  /// In en, this message translates to:
+  /// **'Secure Stripe checkout. Your purchase is recorded after payment succeeds.'**
+  String get secureStripeCheckout;
+
+  /// No description provided for @payNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay Now'**
+  String get payNow;
+
+  /// No description provided for @purchaseComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment received. This car is now purchased.'**
+  String get purchaseComplete;
+
+  /// No description provided for @checkoutUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not start checkout right now. Please try again in a moment.'**
+  String get checkoutUnavailable;
+
+  /// No description provided for @carAlreadyReserved.
+  ///
+  /// In en, this message translates to:
+  /// **'This car already has an active reservation.'**
+  String get carAlreadyReserved;
+
+  /// No description provided for @carNoLongerAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This car is no longer available.'**
+  String get carNoLongerAvailable;
+
   /// No description provided for @destinationCountry.
   ///
   /// In en, this message translates to:
   /// **'Destination Country'**
   String get destinationCountry;
+
+  /// No description provided for @destinationCountriesUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Destination options are not available right now. Please try again in a moment.'**
+  String get destinationCountriesUnavailable;
 
   /// No description provided for @sendBarrels.
   ///
@@ -1640,10 +1898,16 @@ abstract class AppLocalizations {
   /// **'No car purchases yet.'**
   String get noPurchasesYet;
 
+  /// No description provided for @purchaseHistoryUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not load your purchase history right now. Please try again after your account finishes syncing.'**
+  String get purchaseHistoryUnavailable;
+
   /// No description provided for @depositPaid.
   ///
   /// In en, this message translates to:
-  /// **'Deposit: {amount} ({status})'**
+  /// **'Payment: {amount} ({status})'**
   String depositPaid(Object amount, Object status);
 
   /// No description provided for @purchases.
@@ -1655,7 +1919,7 @@ abstract class AppLocalizations {
   /// No description provided for @purchaseReservations.
   ///
   /// In en, this message translates to:
-  /// **'Purchase Reservations'**
+  /// **'Car Purchases'**
   String get purchaseReservations;
 
   /// No description provided for @purchaseUpdated.

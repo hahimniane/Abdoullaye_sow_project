@@ -17,6 +17,9 @@ class CarPurchase {
     required this.purchaseStatus,
     required this.createdAt,
     this.stripePaymentIntentId,
+    this.paymentType,
+    this.appointmentStart,
+    this.appointmentLabel,
     this.staffNotes,
     this.updatedAt,
   });
@@ -39,6 +42,9 @@ class CarPurchase {
   final String purchaseStatus;
   final DateTime createdAt;
   final String? stripePaymentIntentId;
+  final String? paymentType;
+  final DateTime? appointmentStart;
+  final String? appointmentLabel;
   final String? staffNotes;
   final DateTime? updatedAt;
 
@@ -67,6 +73,9 @@ class CarPurchase {
       purchaseStatus: (data['purchaseStatus'] ?? 'pending') as String,
       createdAt: _toDateTime(data['createdAt']) ?? DateTime.now(),
       stripePaymentIntentId: data['stripePaymentIntentId'] as String?,
+      paymentType: data['paymentType'] as String?,
+      appointmentStart: _toDateTime(data['appointmentStart']),
+      appointmentLabel: data['appointmentLabel'] as String?,
       staffNotes: data['staffNotes'] as String?,
       updatedAt: _toDateTime(data['updatedAt']),
     );
