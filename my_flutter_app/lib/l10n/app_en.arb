@@ -423,9 +423,9 @@
   "staffTools": "Staff Tools",
   "destinationCountries": "Destination Countries",
   "manageDestinationCountries": "Manage countries available in customer forms.",
-  "countriesSeeded": "Default countries added.",
+  "countriesSeeded": "Country catalog added.",
   "countryName": "Country Name",
   "countryCode": "Country Code",
-  "seedDefaultCountries": "Seed Default Countries",
+  "seedDefaultCountries": "Seed All Countries",
   "save": "Save"
 }

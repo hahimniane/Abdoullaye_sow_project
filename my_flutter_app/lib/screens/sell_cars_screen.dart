@@ -149,9 +149,13 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _BrowseHeader(l10n: l10n),
+            _BrowseHeader(
+              l10n: l10n,
+              totalCars: _allCars.length,
+              visibleCars: _filteredCars.length,
+            ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
               child: Row(
                 children: [
                   Expanded(
@@ -414,12 +418,28 @@ class _FilterSheetState extends State<_FilterSheet> {
     final l10n = AppLocalizations.of(context)!;
     final currency = NumberFormat.simpleCurrency();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        10,
+        20,
+        24 + MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Center(
+              child: Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.lightOutline,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
@@ -594,9 +614,15 @@ class _FilterSheetState extends State<_FilterSheet> {
 }
 
 class _BrowseHeader extends StatelessWidget {
-  const _BrowseHeader({required this.l10n});
+  const _BrowseHeader({
+    required this.l10n,
+    required this.totalCars,
+    required this.visibleCars,
+  });
 
   final AppLocalizations l10n;
+  final int totalCars;
+  final int visibleCars;
 
   @override
   Widget build(BuildContext context) {
@@ -610,37 +636,135 @@ class _BrowseHeader extends StatelessWidget {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Text(
-                    l10n.availableCars,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0,
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.18),
                     ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.asset(
+                      'assets/images/keren_logo.jpg',
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          const Icon(Icons.directions_car, color: Colors.white),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.availableCars,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0,
+                          height: 1.05,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        l10n.browsePurchaseReserve,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.78),
+                          fontSize: 14,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const LanguageToggle(),
               ],
             ),
-            const SizedBox(height: 10),
-            Text(
-              l10n.browsePurchaseReserve,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.76),
-                fontSize: 14,
-                height: 1.35,
-              ),
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _HeaderMetric(
+                  icon: Icons.garage,
+                  label: l10n.availableCars,
+                  value: '$visibleCars',
+                ),
+                _HeaderMetric(
+                  icon: Icons.inventory_2_outlined,
+                  label: l10n.cars,
+                  value: '$totalCars',
+                ),
+                _HeaderMetric(
+                  icon: Icons.verified_user_outlined,
+                  label: l10n.reserveViewing,
+                  value: '24/7',
+                ),
+              ],
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _HeaderMetric extends StatelessWidget {
+  const _HeaderMetric({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: AppColors.mist),
+          const SizedBox(width: 6),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.72),
+              fontWeight: FontWeight.w600,
+              fontSize: 11,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -657,7 +781,7 @@ class _SearchField extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.lightOutline),
         boxShadow: [
           BoxShadow(
@@ -669,6 +793,7 @@ class _SearchField extends StatelessWidget {
       ),
       child: TextField(
         controller: controller,
+        textInputAction: TextInputAction.search,
         decoration: InputDecoration(
           hintText: l10n.searchCars,
           prefixIcon: const Icon(Icons.search, color: AppColors.brandRed),
@@ -695,7 +820,8 @@ class _EmptyState extends StatelessWidget {
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.lightOutline),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -741,14 +867,14 @@ class _CarListTile extends StatelessWidget {
     final imageUrl = car.imageUrls.isNotEmpty ? car.imageUrls.first : null;
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(8),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(8),
         child: Container(
-          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
             border: Border.all(color: AppColors.lightOutline),
             boxShadow: [
               BoxShadow(
@@ -758,85 +884,129 @@ class _CarListTile extends StatelessWidget {
               ),
             ],
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: imageUrl != null
-                    ? Image.network(
-                        imageUrl,
-                        width: 108,
-                        height: 112,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return const _ImagePlaceholder();
-                        },
-                      )
-                    : const _ImagePlaceholder(),
+              Stack(
+                children: [
+                  imageUrl != null
+                      ? Image.network(
+                          imageUrl,
+                          width: double.infinity,
+                          height: 176,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const _ImagePlaceholder(
+                              width: double.infinity,
+                              height: 176,
+                            );
+                          },
+                        )
+                      : const _ImagePlaceholder(
+                          width: double.infinity,
+                          height: 176,
+                        ),
+                  Positioned(
+                    left: 12,
+                    top: 12,
+                    child: _StatusPill(label: car.status.toUpperCase()),
+                  ),
+                  Positioned(
+                    right: 12,
+                    bottom: 12,
+                    child: _PriceBadge(priceText: priceText),
+                  ),
+                ],
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: SizedBox(
-                  height: 112,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+              Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            car.title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 19,
+                              height: 1.15,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 2,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: AppColors.mist,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.arrow_forward,
+                            size: 18,
+                            color: AppColors.cobaltDeep,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.directions_car_filled_outlined,
+                          size: 16,
+                          color: AppColors.lightMuted,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            '${car.make} ${car.model} - ${car.year}',
+                            style: const TextStyle(
+                              color: AppColors.lightMuted,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _SpecChip(icon: Icons.speed, label: car.mileage),
+                        _SpecChip(icon: Icons.event, label: car.year),
+                        _SpecChip(
+                          icon: Icons.verified_outlined,
+                          label: l10n.reserveViewing,
+                          emphasized: true,
+                        ),
+                      ],
+                    ),
+                    if (car.features.isNotEmpty) ...[
+                      const SizedBox(height: 12),
                       Text(
-                        car.title,
+                        car.features.take(2).join('  /  '),
                         style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
+                          color: AppColors.lightMuted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          height: 1.4,
                         ),
                         overflow: TextOverflow.ellipsis,
                         maxLines: 2,
                       ),
-                      const SizedBox(height: 5),
-                      Text(
-                        '${car.make} ${car.model} - ${car.year}',
-                        style: TextStyle(
-                          color: AppColors.lightMuted,
-                          fontSize: 14,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                      const Spacer(),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          _SpecChip(icon: Icons.speed, label: car.mileage),
-                          _SpecChip(
-                            icon: Icons.event_available,
-                            label: l10n.reserveViewing,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              priceText,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 18,
-                                color: AppColors.brandRed,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                            ),
-                          ),
-                          const Icon(
-                            Icons.arrow_forward_ios,
-                            size: 16,
-                            color: AppColors.brandRed,
-                          ),
-                        ],
-                      ),
                     ],
-                  ),
+                  ],
                 ),
               ),
             ],
@@ -848,23 +1018,32 @@ class _CarListTile extends StatelessWidget {
 }
 
 class _SpecChip extends StatelessWidget {
-  const _SpecChip({required this.icon, required this.label});
+  const _SpecChip({
+    required this.icon,
+    required this.label,
+    this.emphasized = false,
+  });
 
   final IconData icon;
   final String label;
+  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: AppColors.lightSurfaceVariant,
-        borderRadius: BorderRadius.circular(9),
+        color: emphasized ? AppColors.mist : AppColors.lightSurfaceVariant,
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: AppColors.brandRed),
+          Icon(
+            icon,
+            size: 13,
+            color: emphasized ? AppColors.cobaltDeep : AppColors.brandRed,
+          ),
           const SizedBox(width: 4),
           Flexible(
             child: Text(
@@ -884,21 +1063,81 @@ class _SpecChip extends StatelessWidget {
 }
 
 class _ImagePlaceholder extends StatelessWidget {
-  const _ImagePlaceholder();
+  const _ImagePlaceholder({this.width = 108, this.height = 112});
+
+  final double width;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 108,
-      height: 112,
-      decoration: BoxDecoration(
-        color: AppColors.lightSurfaceVariant,
-        borderRadius: BorderRadius.circular(16),
-      ),
+      width: width,
+      height: height,
+      decoration: BoxDecoration(color: AppColors.lightSurfaceVariant),
       child: const Icon(
         Icons.directions_car,
         size: 42,
         color: AppColors.lightMuted,
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.cobaltDeep.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0,
+        ),
+      ),
+    );
+  }
+}
+
+class _PriceBadge extends StatelessWidget {
+  const _PriceBadge({required this.priceText});
+
+  final String priceText;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.16),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Text(
+        priceText,
+        style: const TextStyle(
+          fontWeight: FontWeight.w900,
+          fontSize: 17,
+          color: AppColors.cobaltDeep,
+        ),
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
       ),
     );
   }

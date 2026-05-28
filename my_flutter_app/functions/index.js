@@ -2,6 +2,7 @@ const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {defineSecret} = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const logger = require("firebase-functions/logger");
+const {ALL_COUNTRIES} = require("./country_catalog");
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
@@ -12,16 +13,6 @@ const DEPOSIT_AMOUNT_CENTS = 50000;
 const DEPOSIT_CURRENCY = "usd";
 const PURCHASE_CURRENCY = "usd";
 const SHIPMENT_CURRENCY = "usd";
-const SEED_COUNTRIES = [
-  {id: "guinea", name: "Guinea", code: "GN", sortOrder: 0},
-  {id: "senegal", name: "Senegal", code: "SN", sortOrder: 1},
-  {id: "sierra-leone", name: "Sierra Leone", code: "SL", sortOrder: 2},
-  {id: "liberia", name: "Liberia", code: "LR", sortOrder: 3},
-  {id: "mali", name: "Mali", code: "ML", sortOrder: 4},
-  {id: "guinea-bissau", name: "Guinea-Bissau", code: "GW", sortOrder: 5},
-  {id: "ivory-coast", name: "Ivory Coast", code: "CI", sortOrder: 6},
-];
-
 async function getUserRole(uid) {
   const doc = await admin.firestore().collection("users").doc(uid).get();
   if (!doc.exists) {
@@ -145,38 +136,48 @@ async function generateTrackingCode(prefix, collectionPath) {
 function barrelPickupPricingFromData(data) {
   const defaults = {
     officeAddress: "Bronx, NY",
-    basePickupFee: 20,
-    perMileFee: 4,
-    minimumPickupFee: 35,
-    boroughMiles: {
-      Bronx: 5,
-      Manhattan: 11,
-      Queens: 16,
-      Brooklyn: 22,
-      "Staten Island": 32,
+    boroughPrices: {
+      Bronx: 40,
+      Manhattan: 64,
+      Queens: 84,
+      Brooklyn: 108,
+      "Staten Island": 148,
     },
   };
   const pricing = data || {};
+  const legacyPrices = boroughPricesFromLegacyMileage(pricing);
   return {
     officeAddress: pricing.officeAddress || defaults.officeAddress,
-    basePickupFee: Number(pricing.basePickupFee ?? defaults.basePickupFee),
-    perMileFee: Number(pricing.perMileFee ?? defaults.perMileFee),
-    minimumPickupFee: Number(
-        pricing.minimumPickupFee ?? defaults.minimumPickupFee,
-    ),
-    boroughMiles: {
-      ...defaults.boroughMiles,
-      ...(pricing.boroughMiles || {}),
+    boroughPrices: {
+      ...defaults.boroughPrices,
+      ...legacyPrices,
+      ...(pricing.boroughPrices || {}),
     },
   };
 }
 
+function boroughPricesFromLegacyMileage(pricing) {
+  if (!pricing || !pricing.boroughMiles) return {};
+  const basePickupFee = Number(pricing.basePickupFee ?? 20);
+  const perMileFee = Number(pricing.perMileFee ?? 4);
+  const minimumPickupFee = Number(pricing.minimumPickupFee ?? 35);
+  return Object.entries(pricing.boroughMiles).reduce(
+      (prices, [borough, miles]) => {
+        const calculated = basePickupFee + Number(miles || 0) * perMileFee;
+        prices[borough] = Math.max(calculated, minimumPickupFee);
+        return prices;
+      },
+      {},
+  );
+}
+
 function pickupFeeForBorough(pricing, borough) {
-  const miles = Number(pricing.boroughMiles[borough] || 0);
-  const calculated = pricing.basePickupFee + miles * pricing.perMileFee;
+  const fee = Number(
+      pricing.boroughPrices[borough] || pricing.boroughPrices.Bronx || 0,
+  );
   return {
-    miles,
-    fee: Math.max(calculated, pricing.minimumPickupFee),
+    miles: 0,
+    fee,
   };
 }
 
@@ -534,20 +535,26 @@ exports.seedDestinationCountries = onCall(
       const callerUid = requireAuth(request);
       await requireStaffOrAdmin(callerUid);
 
-      const batch = admin.firestore().batch();
+      const db = admin.firestore();
+      const refs = ALL_COUNTRIES.map((country) =>
+        db.collection("destinationCountries").doc(country.id),
+      );
+      const existingDocs = await db.getAll(...refs);
+      const batch = db.batch();
       const now = admin.firestore.FieldValue.serverTimestamp();
-      SEED_COUNTRIES.forEach((country) => {
-        const ref = admin
-            .firestore()
-            .collection("destinationCountries")
-            .doc(country.id);
+      ALL_COUNTRIES.forEach((country, index) => {
+        const existingData = existingDocs[index].data() || {};
         batch.set(
-            ref,
+            refs[index],
             {
               name: country.name,
               code: country.code,
               sortOrder: country.sortOrder,
-              isActive: true,
+              isActive: existingData.isActive === true,
+              barrelShippingPrice:
+                typeof existingData.barrelShippingPrice === "number" ?
+                  existingData.barrelShippingPrice :
+                  0,
               updatedAt: now,
             },
             {merge: true},
@@ -557,7 +564,7 @@ exports.seedDestinationCountries = onCall(
 
       return {
         success: true,
-        count: SEED_COUNTRIES.length,
+        count: ALL_COUNTRIES.length,
       };
     },
 );
@@ -571,7 +578,7 @@ exports.suggestPickupAddresses = onCall(
     async (request) => {
       requireAuth(request);
       const input = String(request.data?.input || "").trim();
-      if (input.length < 3) {
+      if (input.isEmpty) {
         return [];
       }
 
@@ -634,7 +641,10 @@ exports.createBarrelShipmentPaymentIntent = onCall(
       }
 
       const wantsPickup = pickupRequested === true;
-      if (wantsPickup && (!pickupAddress || !pickupBorough || !pickupDateTime)) {
+      if (
+        wantsPickup &&
+        (!pickupAddress || !pickupBorough || !pickupDateTime)
+      ) {
         throw new HttpsError(
             "invalid-argument",
             "Pickup address, borough, date, and time are required",

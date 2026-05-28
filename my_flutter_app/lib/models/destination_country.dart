@@ -5,7 +5,7 @@ class DestinationCountry {
     required this.id,
     required this.name,
     this.code,
-    this.isActive = true,
+    this.isActive = false,
     this.sortOrder = 0,
     this.barrelShippingPrice = 0,
   });
@@ -25,13 +25,27 @@ class DestinationCountry {
   final int sortOrder;
   final double barrelShippingPrice;
 
+  String get displayCode => (code ?? '').trim().toUpperCase();
+
+  String get flagEmoji {
+    final countryCode = displayCode;
+    if (!RegExp(r'^[A-Z]{2}$').hasMatch(countryCode)) return '🏳️';
+    final first = countryCode.codeUnitAt(0) - 0x41 + 0x1F1E6;
+    final second = countryCode.codeUnitAt(1) - 0x41 + 0x1F1E6;
+    return String.fromCharCodes([first, second]);
+  }
+
+  String get displayNameWithCode {
+    return displayCode.isEmpty ? name : '$name ($displayCode)';
+  }
+
   factory DestinationCountry.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? <String, dynamic>{};
     return DestinationCountry(
       id: doc.id,
       name: (data['name'] ?? doc.id) as String,
       code: data['code'] as String?,
-      isActive: data['isActive'] != false,
+      isActive: data['isActive'] == true,
       sortOrder: (data['sortOrder'] as num?)?.toInt() ?? 0,
       barrelShippingPrice:
           (data['barrelShippingPrice'] as num?)?.toDouble() ?? 0,

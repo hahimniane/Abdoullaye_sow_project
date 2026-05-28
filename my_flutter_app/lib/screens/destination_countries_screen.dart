@@ -2,22 +2,62 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
+import '../data/country_catalog.dart';
 import '../l10n/app_localizations.dart';
 import '../models/destination_country.dart';
 import '../services/barrel_pricing_service.dart';
 import '../widgets/language_toggle.dart';
 
-class DestinationCountriesScreen extends StatelessWidget {
+class DestinationCountriesScreen extends StatefulWidget {
   const DestinationCountriesScreen({super.key});
 
+  @override
+  State<DestinationCountriesScreen> createState() =>
+      _DestinationCountriesScreenState();
+}
+
+class _DestinationCountriesScreenState
+    extends State<DestinationCountriesScreen> {
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _seed(BuildContext context) async {
-    await FirebaseFunctions.instance
-        .httpsCallable('seedDestinationCountries')
-        .call();
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(AppLocalizations.of(context)!.countriesSeeded)),
-    );
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('seedDestinationCountries')
+          .call();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.countriesSeeded)));
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_friendlyError(l10n, error))));
+    }
+  }
+
+  String _friendlyError(AppLocalizations l10n, Object error) {
+    if (error is FirebaseException) {
+      return l10n.operationFailed(error.message ?? error.code);
+    }
+    return l10n.operationFailed(error);
+  }
+
+  bool _isPermissionDenied(Object? error) {
+    return error is FirebaseException && error.code == 'permission-denied';
+  }
+
+  String _permissionMessage() {
+    return 'Firebase denied access. Deploy the local Firestore rules and functions, then seed the country catalog.';
   }
 
   Future<void> _showForm(
@@ -132,17 +172,8 @@ class DestinationCountriesScreen extends StatelessWidget {
     final latest = await service.pickupPricing().first;
     if (!context.mounted) return;
     final officeController = TextEditingController(text: latest.officeAddress);
-    final baseController = TextEditingController(
-      text: latest.basePickupFee.toStringAsFixed(0),
-    );
-    final perMileController = TextEditingController(
-      text: latest.perMileFee.toStringAsFixed(2),
-    );
-    final minimumController = TextEditingController(
-      text: latest.minimumPickupFee.toStringAsFixed(0),
-    );
-    final mileControllers = {
-      for (final entry in latest.boroughMiles.entries)
+    final priceControllers = {
+      for (final entry in latest.boroughPrices.entries)
         entry.key: TextEditingController(text: entry.value.toStringAsFixed(0)),
     };
     final formKey = GlobalKey<FormState>();
@@ -180,47 +211,12 @@ class DestinationCountriesScreen extends StatelessWidget {
                         : null,
                   ),
                   const SizedBox(height: 12),
-                  TextFormField(
-                    controller: baseController,
-                    decoration: const InputDecoration(
-                      labelText: 'Base pickup fee',
-                      prefixText: r'$',
-                    ),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    validator: _numberValidator(l10n),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: perMileController,
-                    decoration: const InputDecoration(
-                      labelText: 'Per mile fee',
-                      prefixText: r'$',
-                    ),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    validator: _numberValidator(l10n),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: minimumController,
-                    decoration: const InputDecoration(
-                      labelText: 'Minimum pickup fee',
-                      prefixText: r'$',
-                    ),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    validator: _numberValidator(l10n),
-                  ),
-                  const SizedBox(height: 16),
-                  for (final entry in mileControllers.entries) ...[
+                  for (final entry in priceControllers.entries) ...[
                     TextFormField(
                       controller: entry.value,
                       decoration: InputDecoration(
-                        labelText: '${entry.key} miles to office',
+                        labelText: '${entry.key} pickup price',
+                        prefixText: r'$',
                       ),
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
@@ -248,11 +244,8 @@ class DestinationCountriesScreen extends StatelessWidget {
       await service.savePickupPricing(
         BarrelPickupPricing(
           officeAddress: officeController.text.trim(),
-          basePickupFee: double.parse(baseController.text.trim()),
-          perMileFee: double.parse(perMileController.text.trim()),
-          minimumPickupFee: double.parse(minimumController.text.trim()),
-          boroughMiles: {
-            for (final entry in mileControllers.entries)
+          boroughPrices: {
+            for (final entry in priceControllers.entries)
               entry.key: double.parse(entry.value.text.trim()),
           },
         ),
@@ -260,10 +253,7 @@ class DestinationCountriesScreen extends StatelessWidget {
     }
 
     officeController.dispose();
-    baseController.dispose();
-    perMileController.dispose();
-    minimumController.dispose();
-    for (final controller in mileControllers.values) {
+    for (final controller in priceControllers.values) {
       controller.dispose();
     }
   }
@@ -275,6 +265,172 @@ class DestinationCountriesScreen extends StatelessWidget {
           ? l10n.pleaseEnterValidNumber
           : null;
     };
+  }
+
+  List<Widget> _actions(BuildContext context, AppLocalizations l10n) {
+    return [
+      OutlinedButton.icon(
+        onPressed: () => _seed(context),
+        icon: const Icon(Icons.public),
+        label: Text(l10n.seedDefaultCountries),
+      ),
+      const SizedBox(height: 12),
+      OutlinedButton.icon(
+        onPressed: () => _showPickupPricingForm(context),
+        icon: const Icon(Icons.local_shipping),
+        label: const Text('Barrel pickup pricing'),
+      ),
+    ];
+  }
+
+  Widget _searchField() {
+    return TextField(
+      controller: _searchController,
+      textInputAction: TextInputAction.search,
+      decoration: const InputDecoration(
+        prefixIcon: Icon(Icons.search),
+        hintText: 'Search countries, codes, or flags',
+      ),
+      onChanged: (value) => setState(() => _searchQuery = value.trim()),
+    );
+  }
+
+  Widget _stateMessage(BuildContext context, Widget child) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 96),
+      child: Center(child: child),
+    );
+  }
+
+  List<Widget> _countryContent(
+    BuildContext context,
+    AsyncSnapshot<QuerySnapshot> snapshot,
+    AppLocalizations l10n,
+  ) {
+    if (snapshot.hasError) {
+      if (_isPermissionDenied(snapshot.error)) {
+        return [
+          _stateMessage(
+            context,
+            Text(_permissionMessage(), textAlign: TextAlign.center),
+          ),
+          ..._countryTiles(
+            context,
+            _orderedCountries(_filterCountries(CountryCatalog.all)),
+            canEdit: false,
+          ),
+        ];
+      }
+      return [
+        _stateMessage(
+          context,
+          Text(
+            _friendlyError(l10n, snapshot.error ?? ''),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ];
+    }
+
+    if (!snapshot.hasData) {
+      return [_stateMessage(context, const CircularProgressIndicator())];
+    }
+
+    final countries = snapshot.data!.docs
+        .map(DestinationCountry.fromFirestore)
+        .toList();
+    final filteredCountries = _orderedCountries(_filterCountries(countries));
+
+    if (countries.isEmpty) {
+      return [
+        _stateMessage(
+          context,
+          const Text(
+            'Seed the full country catalog, then search and activate the destinations you serve.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ];
+    }
+
+    if (filteredCountries.isEmpty) {
+      return [
+        _stateMessage(
+          context,
+          Text(l10n.noResultsFound, textAlign: TextAlign.center),
+        ),
+      ];
+    }
+
+    return _countryTiles(context, filteredCountries, canEdit: true);
+  }
+
+  List<DestinationCountry> _filterCountries(
+    List<DestinationCountry> countries,
+  ) {
+    final query = _searchQuery.toLowerCase();
+    if (query.isEmpty) return countries;
+    return countries.where((country) {
+      final code = country.code?.toLowerCase() ?? '';
+      return country.name.toLowerCase().contains(query) ||
+          code.contains(query) ||
+          country.flagEmoji.contains(_searchQuery);
+    }).toList();
+  }
+
+  List<DestinationCountry> _orderedCountries(
+    List<DestinationCountry> countries,
+  ) {
+    return [...countries]..sort((a, b) {
+      if (a.isActive != b.isActive) return a.isActive ? -1 : 1;
+      final order = a.sortOrder.compareTo(b.sortOrder);
+      return order != 0 ? order : a.name.compareTo(b.name);
+    });
+  }
+
+  List<Widget> _countryTiles(
+    BuildContext context,
+    List<DestinationCountry> countries, {
+    required bool canEdit,
+  }) {
+    final l10n = AppLocalizations.of(context)!;
+    return [
+      for (final country in countries)
+        Card(
+          child: ListTile(
+            leading: Text(
+              country.flagEmoji,
+              style: const TextStyle(fontSize: 28),
+            ),
+            title: Text(country.name),
+            subtitle: Text(
+              [
+                if (country.displayCode.isNotEmpty) country.displayCode,
+                'Barrel: \$${country.barrelShippingPrice.toStringAsFixed(0)}',
+              ].whereType<String>().join(' • '),
+            ),
+            trailing: Switch(
+              value: country.isActive,
+              onChanged: canEdit
+                  ? (value) async {
+                      try {
+                        await FirebaseFirestore.instance
+                            .collection('destinationCountries')
+                            .doc(country.id)
+                            .update({'isActive': value});
+                      } catch (error) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(_friendlyError(l10n, error))),
+                        );
+                      }
+                    }
+                  : null,
+            ),
+            onTap: canEdit ? () => _showForm(context, country: country) : null,
+          ),
+        ),
+    ];
   }
 
   @override
@@ -290,56 +446,17 @@ class DestinationCountriesScreen extends StatelessWidget {
             .collection('destinationCountries')
             .snapshots(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final countries =
-              snapshot.data!.docs.map(DestinationCountry.fromFirestore).toList()
-                ..sort((a, b) => a.name.compareTo(b.name));
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              OutlinedButton.icon(
-                onPressed: () => _seed(context),
-                icon: const Icon(Icons.public),
-                label: Text(l10n.seedDefaultCountries),
-              ),
+              ..._actions(context, l10n),
               const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: () => _showPickupPricingForm(context),
-                icon: const Icon(Icons.local_shipping),
-                label: const Text('Barrel pickup pricing'),
-              ),
+              _searchField(),
               const SizedBox(height: 12),
-              for (final country in countries)
-                Card(
-                  child: ListTile(
-                    title: Text(country.name),
-                    subtitle: Text(
-                      [
-                        if ((country.code ?? '').isNotEmpty) country.code,
-                        'Barrel: \$${country.barrelShippingPrice.toStringAsFixed(0)}',
-                      ].whereType<String>().join(' • '),
-                    ),
-                    trailing: Switch(
-                      value: country.isActive,
-                      onChanged: (value) {
-                        FirebaseFirestore.instance
-                            .collection('destinationCountries')
-                            .doc(country.id)
-                            .update({'isActive': value});
-                      },
-                    ),
-                    onTap: () => _showForm(context, country: country),
-                  ),
-                ),
+              ..._countryContent(context, snapshot, l10n),
             ],
           );
         },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showForm(context),
-        child: const Icon(Icons.add),
       ),
     );
   }

@@ -424,9 +424,9 @@
   "staffTools": "Outils du personnel",
   "destinationCountries": "Pays de destination",
   "manageDestinationCountries": "Gérer les pays disponibles dans les formulaires client.",
-  "countriesSeeded": "Pays par défaut ajoutés.",
+  "countriesSeeded": "Catalogue des pays ajouté.",
   "countryName": "Nom du pays",
   "countryCode": "Code du pays",
-  "seedDefaultCountries": "Ajouter les pays par défaut",
+  "seedDefaultCountries": "Ajouter tous les pays",
   "save": "Enregistrer"
 }

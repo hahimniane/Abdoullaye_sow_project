@@ -1961,7 +1961,7 @@ abstract class AppLocalizations {
   /// No description provided for @countriesSeeded.
   ///
   /// In en, this message translates to:
-  /// **'Default countries added.'**
+  /// **'Country catalog added.'**
   String get countriesSeeded;
 
   /// No description provided for @countryName.
@@ -1979,7 +1979,7 @@ abstract class AppLocalizations {
   /// No description provided for @seedDefaultCountries.
   ///
   /// In en, this message translates to:
-  /// **'Seed Default Countries'**
+  /// **'Seed All Countries'**
   String get seedDefaultCountries;
 
   /// No description provided for @save.

@@ -78,7 +78,7 @@ class DestinationCountryField extends StatelessWidget {
               .map(
                 (country) => DropdownMenuItem<String>(
                   value: country.id,
-                  child: Text(country.name),
+                  child: _CountryOption(country: country),
                 ),
               )
               .toList(),
@@ -91,6 +91,29 @@ class DestinationCountryField extends StatelessWidget {
           validator: (id) => id == null ? requiredMessage : null,
         );
       },
+    );
+  }
+}
+
+class _CountryOption extends StatelessWidget {
+  const _CountryOption({required this.country});
+
+  final DestinationCountry country;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(country.flagEmoji, style: const TextStyle(fontSize: 20)),
+        const SizedBox(width: 10),
+        Flexible(
+          child: Text(
+            country.displayNameWithCode,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 }

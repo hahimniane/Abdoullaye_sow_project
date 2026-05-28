@@ -6,8 +6,8 @@ abstract final class AppSpacing {
   static const double lg = 16;
   static const double xl = 24;
 
-  static const double radiusSm = 0;
-  static const double radiusMd = 0;
-  static const double radiusLg = 0;
-  static const double radiusXl = 0;
+  static const double radiusSm = 6;
+  static const double radiusMd = 8;
+  static const double radiusLg = 8;
+  static const double radiusXl = 8;
 }

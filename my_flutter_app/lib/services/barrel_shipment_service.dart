@@ -34,7 +34,7 @@ class BarrelShipmentService {
 
   Future<List<BarrelAddressSuggestion>> addressSuggestions(String input) async {
     final trimmed = input.trim();
-    if (trimmed.length < 3) return [];
+    if (trimmed.isEmpty) return [];
 
     final response = await _functions
         .httpsCallable('suggestPickupAddresses')

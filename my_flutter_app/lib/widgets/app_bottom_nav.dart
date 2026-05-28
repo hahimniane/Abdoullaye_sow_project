@@ -24,12 +24,20 @@ class AppBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: colorScheme.surface,
         border: Border(
-          top: BorderSide(color: Theme.of(context).colorScheme.outline),
+          top: BorderSide(color: colorScheme.outline.withValues(alpha: 0.75)),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 18,
+            offset: const Offset(0, -8),
+          ),
+        ],
       ),
       child: SafeArea(
         child: Padding(
@@ -44,41 +52,52 @@ class AppBottomNav extends StatelessWidget {
               return Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: InkWell(
-                    onTap: () => onTap(index),
-                    child: SizedBox(
-                      height: 58,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            item.icon,
-                            color: isSelected ? AppColors.ink : AppColors.muted,
-                            size: 20,
+                  child: Semantics(
+                    selected: isSelected,
+                    button: true,
+                    child: InkWell(
+                      onTap: () => onTap(index),
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        curve: Curves.easeOut,
+                        height: 58,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.mist.withValues(alpha: 0.82)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(
+                            AppSpacing.radiusMd,
                           ),
-                          const SizedBox(height: 5),
-                          Text(
-                            item.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              item.icon,
                               color: isSelected
-                                  ? AppColors.ink
+                                  ? AppColors.cobaltDeep
                                   : AppColors.muted,
-                              fontFamily: 'JetBrains Mono',
-                              fontWeight: FontWeight.w600,
-                              fontSize: 9,
-                              letterSpacing: 1.1,
+                              size: isSelected ? 22 : 20,
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            width: isSelected ? 16 : 0,
-                            height: 2,
-                            color: AppColors.oxblood,
-                          ),
-                        ],
+                            const SizedBox(height: 5),
+                            Text(
+                              item.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: isSelected
+                                    ? AppColors.cobaltDeep
+                                    : AppColors.muted,
+                                fontFamily: 'JetBrains Mono',
+                                fontWeight: FontWeight.w700,
+                                fontSize: 9,
+                                letterSpacing: 0,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),

@@ -1035,7 +1035,7 @@ class AppLocalizationsFr extends AppLocalizations {
       'Gérer les pays disponibles dans les formulaires client.';
 
   @override
-  String get countriesSeeded => 'Pays par défaut ajoutés.';
+  String get countriesSeeded => 'Catalogue des pays ajouté.';
 
   @override
   String get countryName => 'Nom du pays';
@@ -1044,7 +1044,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get countryCode => 'Code du pays';
 
   @override
-  String get seedDefaultCountries => 'Ajouter les pays par défaut';
+  String get seedDefaultCountries => 'Ajouter tous les pays';
 
   @override
   String get save => 'Enregistrer';

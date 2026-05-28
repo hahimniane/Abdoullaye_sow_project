@@ -1017,7 +1017,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Manage countries available in customer forms.';
 
   @override
-  String get countriesSeeded => 'Default countries added.';
+  String get countriesSeeded => 'Country catalog added.';
 
   @override
   String get countryName => 'Country Name';
@@ -1026,7 +1026,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get countryCode => 'Country Code';
 
   @override
-  String get seedDefaultCountries => 'Seed Default Countries';
+  String get seedDefaultCountries => 'Seed All Countries';
 
   @override
   String get save => 'Save';

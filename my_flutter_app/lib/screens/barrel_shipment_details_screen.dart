@@ -397,9 +397,12 @@ class _BarrelShipmentDetailsScreenState
                           const SizedBox(height: 12),
                           _InfoRow(
                             label: 'Pickup fee',
-                            value:
-                                '${NumberFormat.simpleCurrency().format(_currentShipment.pickupFee)}'
-                                ' (${_currentShipment.pickupMiles.toStringAsFixed(0)} miles)',
+                            value: _currentShipment.pickupMiles > 0
+                                ? '${NumberFormat.simpleCurrency().format(_currentShipment.pickupFee)}'
+                                      ' (${_currentShipment.pickupMiles.toStringAsFixed(0)} miles)'
+                                : NumberFormat.simpleCurrency().format(
+                                    _currentShipment.pickupFee,
+                                  ),
                           ),
                           const SizedBox(height: 12),
                           _InfoRow(
