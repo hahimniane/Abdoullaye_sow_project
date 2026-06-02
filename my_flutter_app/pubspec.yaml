@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+2
+version: 1.0.0+3
 
 environment:
   sdk: ^3.8.0
@@ -119,8 +119,30 @@ flutter:
 
 # Flutter Native Splash configuration
 flutter_native_splash:
-  color: "#FFFFFF"
+  color: "#052B46"
+  image: assets/images/veyra_logo.png
   android: true
   ios: true
   android_12:
-    color: "#FFFFFF"
+    color: "#052B46"
+    image: assets/images/veyra_logo.png
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/images/veyra_logo.png
+  min_sdk_android: 23
+  adaptive_icon_background: "#052B46"
+  adaptive_icon_foreground: assets/images/veyra_logo.png
+  web:
+    generate: true
+    image_path: assets/images/veyra_logo.png
+    background_color: "#052B46"
+    theme_color: "#052B46"
+  windows:
+    generate: true
+    image_path: assets/images/veyra_logo.png
+    icon_size: 48
+  macos:
+    generate: true
+    image_path: assets/images/veyra_logo.png

@@ -1,11 +1,11 @@
 {
-    "name": "Services",
-    "short_name": "Services",
+    "name": "Veyra",
+    "short_name": "Veyra",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A services marketplace.",
+    "background_color": "#052B46",
+    "theme_color": "#052B46",
+    "description": "Vehicle transport, car sales, barrel shipping, and tracking.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

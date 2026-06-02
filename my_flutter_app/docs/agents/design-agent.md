@@ -6,7 +6,7 @@ Protect and improve the visual quality, usability, and product feel of the Flutt
 
 ## Current Product Context
 
-- App name: Keren Auto Sales.
+- App name: Veyra.
 - Domain: car sales, parking, transport, barrel shipping, account and staff workflows.
 - Stack: Flutter Material 3 with shared theme files under `lib/theme/`.
 - Current palette uses deep teal foundations, clean slate/white surfaces, warm amber highlights, and semantic green/red states.

@@ -1448,7 +1448,7 @@ class _AddressAutocompleteFieldState extends State<_AddressAutocompleteField> {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 7);
     try {
       final req = await client.getUrl(uri);
-      req.headers.set(HttpHeaders.userAgentHeader, 'TAAO-App/1.0');
+      req.headers.set(HttpHeaders.userAgentHeader, 'Veyra-App/1.0');
       req.headers.set(HttpHeaders.acceptLanguageHeader, 'en-US,en;q=0.9');
       final res = await req.close();
       if (res.statusCode != 200) return const [];

@@ -7,7 +7,7 @@
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 		<key>CFBundleDisplayName</key>
-		<string>TAAO</string>
+		<string>Veyra</string>
 		<key>CFBundleExecutable</key>
 		<string>$(EXECUTABLE_NAME)</string>
 		<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 		<key>CFBundleInfoDictionaryVersion</key>
 		<string>6.0</string>
 		<key>CFBundleName</key>
-		<string>TAAO</string>
+		<string>Veyra</string>
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
@@ -26,14 +26,16 @@
 		<string>$(FLUTTER_BUILD_NUMBER)</string>
 		<key>LSRequiresIPhoneOS</key>
 		<true/>
-	<key>NSCameraUsageDescription</key>
-	<string>We use the camera to scan VIN numbers and capture car photos.</string>
+		<key>NSCameraUsageDescription</key>
+		<string>We use the camera to scan VIN numbers and capture car photos.</string>
 		<key>NSPhotoLibraryAddUsageDescription</key>
 		<string>We add selected car images to your library.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
 		<string>We need access to your photo library to choose car images.</string>
 		<key>NSLocationWhenInUseUsageDescription</key>
 		<string>We use your location to auto-fill your pickup address.</string>
+		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+		<string>We use your location to help auto-fill pickup and delivery addresses for your transport requests.</string>
 		<key>UIApplicationSceneManifest</key>
 		<dict>
 			<key>UIApplicationSupportsMultipleScenes</key>

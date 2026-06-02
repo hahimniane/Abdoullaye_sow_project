@@ -67,7 +67,7 @@ class MyApp extends StatelessWidget {
         builder:
             (context, languageProvider, authProvider, themeProvider, child) {
               return MaterialApp(
-                title: 'Keren Auto Sales',
+                title: 'Veyra',
                 locale: languageProvider.currentLocale,
                 supportedLocales: const [Locale('en'), Locale('fr')],
                 localizationsDelegates: const [
