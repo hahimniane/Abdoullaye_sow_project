@@ -3,9 +3,14 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/car.dart';
+import '../models/car_purchase.dart';
+import '../models/business_service.dart';
+import '../providers/auth_provider.dart';
+import '../services/car_purchase_service.dart';
 import '../widgets/language_toggle.dart';
 import 'car_details_screen.dart';
 import '../theme/app_colors.dart';
@@ -45,6 +50,14 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
           (snapshot) {
             final cars = snapshot.docs
                 .map((doc) => Car.fromFirestore(doc))
+                .where(
+                  (car) =>
+                      car.businessStatus == 'approved' &&
+                      hasBusinessService(
+                        car.enabledServices,
+                        BusinessServiceKey.carSales,
+                      ),
+                )
                 .toList();
             if (!mounted) return;
             setState(() {
@@ -76,6 +89,8 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
     final lower = query.toLowerCase();
     final filtered = cars.where((car) {
       final priceString = _currency.format(car.price).toLowerCase();
+      final location = car.locationLabel.toLowerCase();
+      final featureText = car.allFeatures.join(' ').toLowerCase();
       final matchesQuery =
           query.isEmpty ||
           car.title.toLowerCase().contains(lower) ||
@@ -83,8 +98,17 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
           car.model.toLowerCase().contains(lower) ||
           car.year.toLowerCase().contains(lower) ||
           car.mileage.toLowerCase().contains(lower) ||
+          car.businessName.toLowerCase().contains(lower) ||
+          car.condition.toLowerCase().contains(lower) ||
+          car.bodyType.toLowerCase().contains(lower) ||
+          car.transmission.toLowerCase().contains(lower) ||
+          car.fuelType.toLowerCase().contains(lower) ||
+          car.drivetrain.toLowerCase().contains(lower) ||
+          location.contains(lower) ||
+          featureText.contains(lower) ||
           priceString.contains(lower);
-      final year = int.tryParse(car.year);
+      final year = car.yearNumber;
+      final mileage = car.mileageNumber;
       return matchesQuery &&
           (_filters.make == null || car.make == _filters.make) &&
           (_filters.model == null || car.model == _filters.model) &&
@@ -92,7 +116,25 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
               (year != null && year >= _filters.minYear!)) &&
           (_filters.maxYear == null ||
               (year != null && year <= _filters.maxYear!)) &&
-          (_filters.maxPrice == null || car.price <= _filters.maxPrice!);
+          (_filters.minPrice == null || car.price >= _filters.minPrice!) &&
+          (_filters.maxPrice == null || car.price <= _filters.maxPrice!) &&
+          (_filters.minMileage == null ||
+              (mileage != null && mileage >= _filters.minMileage!)) &&
+          (_filters.maxMileage == null ||
+              (mileage != null && mileage <= _filters.maxMileage!)) &&
+          (_filters.condition == null || car.condition == _filters.condition) &&
+          (_filters.bodyType == null || car.bodyType == _filters.bodyType) &&
+          (_filters.transmission == null ||
+              car.transmission == _filters.transmission) &&
+          (_filters.fuelType == null || car.fuelType == _filters.fuelType) &&
+          (_filters.drivetrain == null ||
+              car.drivetrain == _filters.drivetrain) &&
+          (_filters.businessName == null ||
+              car.businessName == _filters.businessName) &&
+          (_filters.location == null ||
+              car.locationLabel == _filters.location) &&
+          (_filters.feature == null ||
+              car.allFeatures.contains(_filters.feature));
     }).toList();
 
     filtered.sort((a, b) {
@@ -101,14 +143,20 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
           return a.price.compareTo(b.price);
         case _CarSort.priceHigh:
           return b.price.compareTo(a.price);
+        case _CarSort.mileageLow:
+          return (a.mileageNumber ?? 1 << 30).compareTo(
+            b.mileageNumber ?? 1 << 30,
+          );
+        case _CarSort.mileageHigh:
+          return (b.mileageNumber ?? -1).compareTo(a.mileageNumber ?? -1);
+        case _CarSort.newest:
+          return (b.createdAt ?? DateTime(1970)).compareTo(
+            a.createdAt ?? DateTime(1970),
+          );
         case _CarSort.yearNew:
-          return (int.tryParse(b.year) ?? 0).compareTo(
-            int.tryParse(a.year) ?? 0,
-          );
+          return (b.yearNumber ?? 0).compareTo(a.yearNumber ?? 0);
         case _CarSort.yearOld:
-          return (int.tryParse(a.year) ?? 0).compareTo(
-            int.tryParse(b.year) ?? 0,
-          );
+          return (a.yearNumber ?? 0).compareTo(b.yearNumber ?? 0);
       }
     });
     return filtered;
@@ -134,6 +182,17 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
     final values =
         _allCars
             .map(selector)
+            .where((value) => value.trim().isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+    return values;
+  }
+
+  List<String> _listValuesFor(Iterable<String> Function(Car car) selector) {
+    final values =
+        _allCars
+            .expand(selector)
             .where((value) => value.trim().isNotEmpty)
             .toSet()
             .toList()
@@ -177,6 +236,14 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
                           initialFilters: _filters,
                           makes: _valuesFor((car) => car.make),
                           models: _valuesFor((car) => car.model),
+                          conditions: _valuesFor((car) => car.condition),
+                          bodyTypes: _valuesFor((car) => car.bodyType),
+                          transmissions: _valuesFor((car) => car.transmission),
+                          fuelTypes: _valuesFor((car) => car.fuelType),
+                          drivetrains: _valuesFor((car) => car.drivetrain),
+                          businesses: _valuesFor((car) => car.businessName),
+                          locations: _valuesFor((car) => car.locationLabel),
+                          features: _listValuesFor((car) => car.allFeatures),
                         ),
                       );
                       if (filters != null) _updateFilters(filters);
@@ -221,20 +288,64 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
     if (_filteredCars.isEmpty) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
-        child: _EmptyState(l10n: l10n),
+        child: _EmptyState(l10n: l10n, filtered: _filters.isActive),
       );
     }
 
+    final user = context.watch<AuthProvider>().user;
+    if (user == null) {
+      return _CarList(
+        cars: _filteredCars,
+        currency: _currency,
+        l10n: l10n,
+        reservationsByCarId: const <String, CarPurchase>{},
+      );
+    }
+
+    return StreamBuilder<List<CarPurchase>>(
+      stream: CarPurchaseService().activeViewingReservationsForUser(user.uid),
+      builder: (context, snapshot) {
+        final reservationsByCarId = <String, CarPurchase>{};
+        for (final reservation in snapshot.data ?? const <CarPurchase>[]) {
+          reservationsByCarId.putIfAbsent(reservation.carId, () => reservation);
+        }
+        return _CarList(
+          cars: _filteredCars,
+          currency: _currency,
+          l10n: l10n,
+          reservationsByCarId: reservationsByCarId,
+        );
+      },
+    );
+  }
+}
+
+class _CarList extends StatelessWidget {
+  const _CarList({
+    required this.cars,
+    required this.currency,
+    required this.l10n,
+    required this.reservationsByCarId,
+  });
+
+  final List<Car> cars;
+  final NumberFormat currency;
+  final AppLocalizations l10n;
+  final Map<String, CarPurchase> reservationsByCarId;
+
+  @override
+  Widget build(BuildContext context) {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(20, 2, 20, 24),
-      itemCount: _filteredCars.length,
+      itemCount: cars.length,
       separatorBuilder: (_, __) => const SizedBox(height: 14),
       itemBuilder: (context, index) {
-        final car = _filteredCars[index];
+        final car = cars[index];
         return _CarListTile(
           car: car,
-          priceText: _currency.format(car.price),
+          priceText: currency.format(car.price),
           l10n: l10n,
+          activeViewing: reservationsByCarId[car.id],
           onTap: () {
             Navigator.push(
               context,
@@ -247,7 +358,15 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
   }
 }
 
-enum _CarSort { yearNew, priceLow, priceHigh, yearOld }
+enum _CarSort {
+  newest,
+  yearNew,
+  yearOld,
+  priceLow,
+  priceHigh,
+  mileageLow,
+  mileageHigh,
+}
 
 class _CarFilters {
   const _CarFilters({
@@ -255,15 +374,37 @@ class _CarFilters {
     this.model,
     this.minYear,
     this.maxYear,
+    this.minPrice,
     this.maxPrice,
-    this.sort = _CarSort.yearNew,
+    this.minMileage,
+    this.maxMileage,
+    this.condition,
+    this.bodyType,
+    this.transmission,
+    this.fuelType,
+    this.drivetrain,
+    this.businessName,
+    this.location,
+    this.feature,
+    this.sort = _CarSort.newest,
   });
 
   final String? make;
   final String? model;
   final int? minYear;
   final int? maxYear;
+  final double? minPrice;
   final double? maxPrice;
+  final int? minMileage;
+  final int? maxMileage;
+  final String? condition;
+  final String? bodyType;
+  final String? transmission;
+  final String? fuelType;
+  final String? drivetrain;
+  final String? businessName;
+  final String? location;
+  final String? feature;
   final _CarSort sort;
 
   bool get isActive =>
@@ -271,16 +412,38 @@ class _CarFilters {
       model != null ||
       minYear != null ||
       maxYear != null ||
+      minPrice != null ||
       maxPrice != null ||
-      sort != _CarSort.yearNew;
+      minMileage != null ||
+      maxMileage != null ||
+      condition != null ||
+      bodyType != null ||
+      transmission != null ||
+      fuelType != null ||
+      drivetrain != null ||
+      businessName != null ||
+      location != null ||
+      feature != null ||
+      sort != _CarSort.newest;
 
   int get activeCount => [
     make,
     model,
     minYear,
     maxYear,
+    minPrice,
     maxPrice,
-    if (sort != _CarSort.yearNew) sort,
+    minMileage,
+    maxMileage,
+    condition,
+    bodyType,
+    transmission,
+    fuelType,
+    drivetrain,
+    businessName,
+    location,
+    feature,
+    if (sort != _CarSort.newest) sort,
   ].where((value) => value != null).length;
 
   _CarFilters copyWith({
@@ -288,20 +451,57 @@ class _CarFilters {
     String? model,
     int? minYear,
     int? maxYear,
+    double? minPrice,
     double? maxPrice,
+    int? minMileage,
+    int? maxMileage,
+    String? condition,
+    String? bodyType,
+    String? transmission,
+    String? fuelType,
+    String? drivetrain,
+    String? businessName,
+    String? location,
+    String? feature,
     _CarSort? sort,
     bool clearMake = false,
     bool clearModel = false,
     bool clearMinYear = false,
     bool clearMaxYear = false,
+    bool clearMinPrice = false,
     bool clearMaxPrice = false,
+    bool clearMinMileage = false,
+    bool clearMaxMileage = false,
+    bool clearCondition = false,
+    bool clearBodyType = false,
+    bool clearTransmission = false,
+    bool clearFuelType = false,
+    bool clearDrivetrain = false,
+    bool clearBusinessName = false,
+    bool clearLocation = false,
+    bool clearFeature = false,
   }) {
     return _CarFilters(
       make: clearMake ? null : make ?? this.make,
       model: clearModel ? null : model ?? this.model,
       minYear: clearMinYear ? null : minYear ?? this.minYear,
       maxYear: clearMaxYear ? null : maxYear ?? this.maxYear,
+      minPrice: clearMinPrice ? null : minPrice ?? this.minPrice,
       maxPrice: clearMaxPrice ? null : maxPrice ?? this.maxPrice,
+      minMileage: clearMinMileage ? null : minMileage ?? this.minMileage,
+      maxMileage: clearMaxMileage ? null : maxMileage ?? this.maxMileage,
+      condition: clearCondition ? null : condition ?? this.condition,
+      bodyType: clearBodyType ? null : bodyType ?? this.bodyType,
+      transmission: clearTransmission
+          ? null
+          : transmission ?? this.transmission,
+      fuelType: clearFuelType ? null : fuelType ?? this.fuelType,
+      drivetrain: clearDrivetrain ? null : drivetrain ?? this.drivetrain,
+      businessName: clearBusinessName
+          ? null
+          : businessName ?? this.businessName,
+      location: clearLocation ? null : location ?? this.location,
+      feature: clearFeature ? null : feature ?? this.feature,
       sort: sort ?? this.sort,
     );
   }
@@ -397,14 +597,109 @@ class _FilterSheet extends StatefulWidget {
     required this.initialFilters,
     required this.makes,
     required this.models,
+    required this.conditions,
+    required this.bodyTypes,
+    required this.transmissions,
+    required this.fuelTypes,
+    required this.drivetrains,
+    required this.businesses,
+    required this.locations,
+    required this.features,
   });
 
   final _CarFilters initialFilters;
   final List<String> makes;
   final List<String> models;
+  final List<String> conditions;
+  final List<String> bodyTypes;
+  final List<String> transmissions;
+  final List<String> fuelTypes;
+  final List<String> drivetrains;
+  final List<String> businesses;
+  final List<String> locations;
+  final List<String> features;
 
   @override
   State<_FilterSheet> createState() => _FilterSheetState();
+}
+
+String _carBrowserOptionLabel(AppLocalizations l10n, String value) {
+  switch (value) {
+    case 'new':
+      return l10n.conditionNew;
+    case 'used':
+      return l10n.conditionUsed;
+    case 'certified':
+      return l10n.conditionCertified;
+    case 'salvage':
+      return l10n.conditionSalvage;
+    case 'sedan':
+      return l10n.bodySedan;
+    case 'suv':
+      return l10n.bodySuv;
+    case 'truck':
+      return l10n.bodyTruck;
+    case 'van':
+      return l10n.bodyVan;
+    case 'coupe':
+      return l10n.bodyCoupe;
+    case 'hatchback':
+      return l10n.bodyHatchback;
+    case 'wagon':
+      return l10n.bodyWagon;
+    case 'convertible':
+      return l10n.bodyConvertible;
+    case 'automatic':
+      return l10n.transmissionAutomatic;
+    case 'manual':
+      return l10n.transmissionManual;
+    case 'cvt':
+      return l10n.transmissionCvt;
+    case 'gas':
+      return l10n.fuelGas;
+    case 'diesel':
+      return l10n.fuelDiesel;
+    case 'hybrid':
+      return l10n.fuelHybrid;
+    case 'electric':
+      return l10n.fuelElectric;
+    case 'plug_in_hybrid':
+      return l10n.fuelPlugInHybrid;
+    case 'fwd':
+      return l10n.drivetrainFwd;
+    case 'rwd':
+      return l10n.drivetrainRwd;
+    case 'awd':
+      return l10n.drivetrainAwd;
+    case '4wd':
+      return l10n.drivetrainFourWd;
+    case 'backup_camera':
+      return l10n.featureBackupCamera;
+    case 'bluetooth':
+      return l10n.featureBluetooth;
+    case 'leather_seats':
+      return l10n.featureLeatherSeats;
+    case 'sunroof':
+      return l10n.featureSunroof;
+    case 'navigation':
+      return l10n.featureNavigation;
+    case 'heated_seats':
+      return l10n.featureHeatedSeats;
+    case 'apple_carplay':
+      return l10n.featureAppleCarPlay;
+    case 'android_auto':
+      return l10n.featureAndroidAuto;
+    case 'blind_spot':
+      return l10n.featureBlindSpot;
+    case 'third_row':
+      return l10n.featureThirdRow;
+    case 'remote_start':
+      return l10n.featureRemoteStart;
+    case 'keyless_entry':
+      return l10n.featureKeylessEntry;
+    default:
+      return value;
+  }
 }
 
 class _FilterSheetState extends State<_FilterSheet> {
@@ -412,6 +707,29 @@ class _FilterSheetState extends State<_FilterSheet> {
 
   static const _years = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2018, 2016];
   static const _prices = <double>[10000, 15000, 20000, 30000, 50000, 75000];
+  static const _mileages = <int>[25000, 50000, 75000, 100000, 150000];
+
+  DropdownButtonFormField<T> _dropdown<T>({
+    required String label,
+    required T? value,
+    required List<T> values,
+    required ValueChanged<T?> onChanged,
+    String Function(T value)? display,
+  }) {
+    return DropdownButtonFormField<T>(
+      initialValue: value != null && values.contains(value) ? value : null,
+      decoration: InputDecoration(labelText: label),
+      items: values
+          .map(
+            (item) => DropdownMenuItem<T>(
+              value: item,
+              child: Text(display == null ? '$item' : display(item)),
+            ),
+          )
+          .toList(),
+      onChanged: onChanged,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -455,15 +773,10 @@ class _FilterSheetState extends State<_FilterSheet> {
               ],
             ),
             const SizedBox(height: 14),
-            DropdownButtonFormField<String>(
-              key: ValueKey('make-${_filters.make}'),
-              initialValue: _filters.make,
-              decoration: InputDecoration(labelText: l10n.make),
-              items: widget.makes
-                  .map(
-                    (make) => DropdownMenuItem(value: make, child: Text(make)),
-                  )
-                  .toList(),
+            _dropdown<String>(
+              label: l10n.make,
+              value: _filters.make,
+              values: widget.makes,
               onChanged: (value) {
                 setState(() {
                   _filters = _filters.copyWith(make: value, clearModel: true);
@@ -471,16 +784,10 @@ class _FilterSheetState extends State<_FilterSheet> {
               },
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              key: ValueKey('model-${_filters.model}'),
-              initialValue: _filters.model,
-              decoration: InputDecoration(labelText: l10n.model),
-              items: widget.models
-                  .map(
-                    (model) =>
-                        DropdownMenuItem(value: model, child: Text(model)),
-                  )
-                  .toList(),
+            _dropdown<String>(
+              label: l10n.model,
+              value: _filters.model,
+              values: widget.models,
               onChanged: (value) {
                 setState(() {
                   _filters = _filters.copyWith(model: value);
@@ -493,18 +800,10 @@ class _FilterSheetState extends State<_FilterSheet> {
             Row(
               children: [
                 Expanded(
-                  child: DropdownButtonFormField<int>(
-                    key: ValueKey('min-year-${_filters.minYear}'),
-                    initialValue: _filters.minYear,
-                    decoration: InputDecoration(labelText: l10n.minYear),
-                    items: _years
-                        .map(
-                          (year) => DropdownMenuItem(
-                            value: year,
-                            child: Text('$year'),
-                          ),
-                        )
-                        .toList(),
+                  child: _dropdown<int>(
+                    label: l10n.minYear,
+                    value: _filters.minYear,
+                    values: _years,
                     onChanged: (value) {
                       setState(() {
                         _filters = _filters.copyWith(minYear: value);
@@ -514,18 +813,10 @@ class _FilterSheetState extends State<_FilterSheet> {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: DropdownButtonFormField<int>(
-                    key: ValueKey('max-year-${_filters.maxYear}'),
-                    initialValue: _filters.maxYear,
-                    decoration: InputDecoration(labelText: l10n.maxYear),
-                    items: _years
-                        .map(
-                          (year) => DropdownMenuItem(
-                            value: year,
-                            child: Text('$year'),
-                          ),
-                        )
-                        .toList(),
+                  child: _dropdown<int>(
+                    label: l10n.maxYear,
+                    value: _filters.maxYear,
+                    values: _years,
                     onChanged: (value) {
                       setState(() {
                         _filters = _filters.copyWith(maxYear: value);
@@ -534,6 +825,26 @@ class _FilterSheetState extends State<_FilterSheet> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 18),
+            Text(l10n.minPrice, style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _prices.map((price) {
+                return ChoiceChip(
+                  selected: _filters.minPrice == price,
+                  label: Text(currency.format(price)),
+                  onSelected: (_) {
+                    setState(() {
+                      _filters = _filters.minPrice == price
+                          ? _filters.copyWith(clearMinPrice: true)
+                          : _filters.copyWith(minPrice: price);
+                    });
+                  },
+                );
+              }).toList(),
             ),
             const SizedBox(height: 18),
             Text(l10n.maxPrice, style: Theme.of(context).textTheme.titleSmall),
@@ -554,6 +865,126 @@ class _FilterSheetState extends State<_FilterSheet> {
                   },
                 );
               }).toList(),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              l10n.minMileage,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _mileages.map((mileage) {
+                return ChoiceChip(
+                  selected: _filters.minMileage == mileage,
+                  label: Text(NumberFormat.decimalPattern().format(mileage)),
+                  onSelected: (_) {
+                    setState(() {
+                      _filters = _filters.minMileage == mileage
+                          ? _filters.copyWith(clearMinMileage: true)
+                          : _filters.copyWith(minMileage: mileage);
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              l10n.maxMileage,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _mileages.map((mileage) {
+                return ChoiceChip(
+                  selected: _filters.maxMileage == mileage,
+                  label: Text(NumberFormat.decimalPattern().format(mileage)),
+                  onSelected: (_) {
+                    setState(() {
+                      _filters = _filters.maxMileage == mileage
+                          ? _filters.copyWith(clearMaxMileage: true)
+                          : _filters.copyWith(maxMileage: mileage);
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 18),
+            _dropdown<String>(
+              label: l10n.condition,
+              value: _filters.condition,
+              values: widget.conditions,
+              display: (value) => _carBrowserOptionLabel(l10n, value),
+              onChanged: (value) => setState(
+                () => _filters = _filters.copyWith(condition: value),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _dropdown<String>(
+              label: l10n.bodyType,
+              value: _filters.bodyType,
+              values: widget.bodyTypes,
+              display: (value) => _carBrowserOptionLabel(l10n, value),
+              onChanged: (value) =>
+                  setState(() => _filters = _filters.copyWith(bodyType: value)),
+            ),
+            const SizedBox(height: 12),
+            _dropdown<String>(
+              label: l10n.transmission,
+              value: _filters.transmission,
+              values: widget.transmissions,
+              display: (value) => _carBrowserOptionLabel(l10n, value),
+              onChanged: (value) => setState(
+                () => _filters = _filters.copyWith(transmission: value),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _dropdown<String>(
+              label: l10n.fuelType,
+              value: _filters.fuelType,
+              values: widget.fuelTypes,
+              display: (value) => _carBrowserOptionLabel(l10n, value),
+              onChanged: (value) =>
+                  setState(() => _filters = _filters.copyWith(fuelType: value)),
+            ),
+            const SizedBox(height: 12),
+            _dropdown<String>(
+              label: l10n.drivetrain,
+              value: _filters.drivetrain,
+              values: widget.drivetrains,
+              display: (value) => _carBrowserOptionLabel(l10n, value),
+              onChanged: (value) => setState(
+                () => _filters = _filters.copyWith(drivetrain: value),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _dropdown<String>(
+              label: l10n.dealer,
+              value: _filters.businessName,
+              values: widget.businesses,
+              onChanged: (value) => setState(
+                () => _filters = _filters.copyWith(businessName: value),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _dropdown<String>(
+              label: l10n.location,
+              value: _filters.location,
+              values: widget.locations,
+              onChanged: (value) =>
+                  setState(() => _filters = _filters.copyWith(location: value)),
+            ),
+            const SizedBox(height: 12),
+            _dropdown<String>(
+              label: l10n.features,
+              value: _filters.feature,
+              values: widget.features,
+              display: (value) => _carBrowserOptionLabel(l10n, value),
+              onChanged: (value) =>
+                  setState(() => _filters = _filters.copyWith(feature: value)),
             ),
             const SizedBox(height: 18),
             Text(l10n.sortBy, style: Theme.of(context).textTheme.titleSmall),
@@ -601,14 +1032,20 @@ class _FilterSheetState extends State<_FilterSheet> {
 
   String _sortLabel(AppLocalizations l10n, _CarSort sort) {
     switch (sort) {
+      case _CarSort.newest:
+        return l10n.newestListings;
       case _CarSort.yearNew:
         return l10n.newestYear;
+      case _CarSort.yearOld:
+        return l10n.oldestYear;
       case _CarSort.priceLow:
         return l10n.priceLowToHigh;
       case _CarSort.priceHigh:
         return l10n.priceHighToLow;
-      case _CarSort.yearOld:
-        return l10n.oldestYear;
+      case _CarSort.mileageLow:
+        return l10n.mileageLowToHigh;
+      case _CarSort.mileageHigh:
+        return l10n.mileageHighToLow;
     }
   }
 }
@@ -653,15 +1090,7 @@ class _BrowseHeader extends StatelessWidget {
                       color: Colors.white.withValues(alpha: 0.18),
                     ),
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.asset(
-                      'assets/images/keren_logo.jpg',
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          const Icon(Icons.directions_car, color: Colors.white),
-                    ),
-                  ),
+                  child: const Icon(Icons.directions_car, color: Colors.white),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -810,9 +1239,10 @@ class _SearchField extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.l10n});
+  const _EmptyState({required this.l10n, required this.filtered});
 
   final AppLocalizations l10n;
+  final bool filtered;
 
   @override
   Widget build(BuildContext context) {
@@ -829,7 +1259,7 @@ class _EmptyState extends StatelessWidget {
           Icon(Icons.directions_car, size: 72, color: Colors.grey.shade400),
           const SizedBox(height: 20),
           Text(
-            l10n.noCarsAvailable,
+            filtered ? l10n.noFilterResults : l10n.noCarsAvailable,
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -839,7 +1269,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            l10n.checkBackSoon,
+            filtered ? l10n.clearFiltersToSeeCars : l10n.checkBackSoon,
             style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
             textAlign: TextAlign.center,
           ),
@@ -855,16 +1285,20 @@ class _CarListTile extends StatelessWidget {
     required this.priceText,
     required this.l10n,
     required this.onTap,
+    this.activeViewing,
   });
 
   final Car car;
   final String priceText;
   final AppLocalizations l10n;
   final VoidCallback onTap;
+  final CarPurchase? activeViewing;
 
   @override
   Widget build(BuildContext context) {
     final imageUrl = car.imageUrls.isNotEmpty ? car.imageUrls.first : null;
+    final location = car.locationLabel;
+    final featurePreview = car.allFeatures.take(3).toList();
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(8),
@@ -959,6 +1393,28 @@ class _CarListTile extends StatelessWidget {
                     Row(
                       children: [
                         const Icon(
+                          Icons.storefront_outlined,
+                          size: 16,
+                          color: AppColors.cobaltDeep,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            car.businessName,
+                            style: const TextStyle(
+                              color: AppColors.cobaltDeep,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(
                           Icons.directions_car_filled_outlined,
                           size: 16,
                           color: AppColors.lightMuted,
@@ -985,6 +1441,35 @@ class _CarListTile extends StatelessWidget {
                       children: [
                         _SpecChip(icon: Icons.speed, label: car.mileage),
                         _SpecChip(icon: Icons.event, label: car.year),
+                        if (car.condition.isNotEmpty)
+                          _SpecChip(
+                            icon: Icons.verified_outlined,
+                            label: _carBrowserOptionLabel(l10n, car.condition),
+                          ),
+                        if (car.transmission.isNotEmpty)
+                          _SpecChip(
+                            icon: Icons.settings_suggest_outlined,
+                            label: _carBrowserOptionLabel(
+                              l10n,
+                              car.transmission,
+                            ),
+                          ),
+                        if (car.fuelType.isNotEmpty)
+                          _SpecChip(
+                            icon: Icons.local_gas_station_outlined,
+                            label: _carBrowserOptionLabel(l10n, car.fuelType),
+                          ),
+                        if (location.isNotEmpty)
+                          _SpecChip(
+                            icon: Icons.location_on_outlined,
+                            label: location,
+                          ),
+                        if (car.isNegotiable)
+                          _SpecChip(
+                            icon: Icons.handshake_outlined,
+                            label: l10n.priceNegotiable,
+                            emphasized: true,
+                          ),
                         _SpecChip(
                           icon: Icons.verified_outlined,
                           label: l10n.reserveViewing,
@@ -992,10 +1477,12 @@ class _CarListTile extends StatelessWidget {
                         ),
                       ],
                     ),
-                    if (car.features.isNotEmpty) ...[
+                    if (featurePreview.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       Text(
-                        car.features.take(2).join('  /  '),
+                        featurePreview
+                            .map((item) => _carBrowserOptionLabel(l10n, item))
+                            .join('  /  '),
                         style: const TextStyle(
                           color: AppColors.lightMuted,
                           fontSize: 12,
@@ -1006,12 +1493,88 @@ class _CarListTile extends StatelessWidget {
                         maxLines: 2,
                       ),
                     ],
+                    if (activeViewing != null) ...[
+                      const SizedBox(height: 12),
+                      _ActiveViewingBanner(
+                        l10n: l10n,
+                        reservation: activeViewing!,
+                      ),
+                    ],
                   ],
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ActiveViewingBanner extends StatelessWidget {
+  const _ActiveViewingBanner({required this.l10n, required this.reservation});
+
+  final AppLocalizations l10n;
+  final CarPurchase reservation;
+
+  @override
+  Widget build(BuildContext context) {
+    final appointment = reservation.appointmentStart;
+    final label =
+        reservation.appointmentLabel ??
+        (appointment == null
+            ? l10n.viewingScheduled
+            : DateFormat.yMMMd().add_jm().format(appointment));
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.brandRed.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.brandRed.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.event_available_outlined,
+              color: AppColors.brandRed,
+              size: 19,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.youHaveViewingReserved,
+                  style: const TextStyle(
+                    color: AppColors.brandRed,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppColors.lightOnSurface,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

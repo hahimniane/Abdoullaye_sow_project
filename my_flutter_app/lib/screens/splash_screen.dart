@@ -21,7 +21,9 @@ class _SplashScreenState extends State<SplashScreen> {
 
     _hasNavigated = true;
     final targetRoute = authProvider.isAuthenticated
-        ? (authProvider.isStaff ? '/staff-home' : '/customer_home')
+        ? (authProvider.hasBusinessDashboardAccess
+              ? '/staff-home'
+              : '/customer_home')
         : '/customer_home';
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -49,7 +51,7 @@ class _SplashScreenState extends State<SplashScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _SplashCaption('KR · ATELIER'),
+                        _SplashCaption('MARKETPLACE'),
                         _SplashCaption('MMXXVI'),
                       ],
                     ),
@@ -68,7 +70,7 @@ class _SplashScreenState extends State<SplashScreen> {
                                   color: AppColors.ink,
                                 ),
                             children: const [
-                              TextSpan(text: 'Keren'),
+                              TextSpan(text: 'Services'),
                               TextSpan(
                                 text: '.',
                                 style: TextStyle(color: AppColors.oxblood),
@@ -78,7 +80,7 @@ class _SplashScreenState extends State<SplashScreen> {
                         ),
                         const SizedBox(height: 18),
                         Text(
-                          'Concierge of motorcars, barrels & passage.',
+                          'Motorcars, barrels & passage in one place.',
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(color: AppColors.muted, height: 1.55),
                         ),

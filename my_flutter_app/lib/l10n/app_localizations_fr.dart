@@ -135,6 +135,66 @@ class AppLocalizationsFr extends AppLocalizations {
   String get vinNumber => 'Numéro VIN';
 
   @override
+  String get scanVin => 'Scanner le VIN';
+
+  @override
+  String get decodeVin => 'Décoder le VIN';
+
+  @override
+  String get scanVinText => 'Scanner le texte VIN';
+
+  @override
+  String get scanVinInstructions =>
+      'Alignez le code-barres VIN dans le cadre. S’il n’y a pas de code-barres, utilisez le scan de texte.';
+
+  @override
+  String get useManualEntry => 'Saisie manuelle';
+
+  @override
+  String get vinScanNoResult =>
+      'Aucun VIN trouvé. Réessayez ou saisissez-le manuellement.';
+
+  @override
+  String get vinScanFailed =>
+      'Le scan du VIN a échoué. Réessayez ou saisissez-le manuellement.';
+
+  @override
+  String get vinCameraUnavailable =>
+      'La caméra est indisponible. Vous pouvez toujours saisir le VIN manuellement.';
+
+  @override
+  String get invalidVinNumber =>
+      'Saisissez un VIN valide de 17 caractères sans I, O ni Q.';
+
+  @override
+  String get vinDecodeFailed =>
+      'Le VIN n’a pas pu être décodé. Vous pouvez toujours saisir les détails du véhicule manuellement.';
+
+  @override
+  String get vinDecoded => 'VIN décodé.';
+
+  @override
+  String vinDecodedVehicle(Object vehicle) {
+    return 'VIN décodé : $vehicle';
+  }
+
+  @override
+  String get vinMatchReview =>
+      'Vérifiez les détails décodés et complétez les champs qui ne correspondent pas au catalogue.';
+
+  @override
+  String get decodedVinDetails => 'Détails VIN décodés';
+
+  @override
+  String get vehicle => 'Véhicule';
+
+  @override
+  String get bodyStyle => 'Carrosserie';
+
+  @override
+  String get engine => 'Moteur';
+
+  @override
   String get parkingDate => 'Date de Stationnement';
 
   @override
@@ -459,6 +519,30 @@ class AppLocalizationsFr extends AppLocalizations {
   String get settings => 'Paramètres';
 
   @override
+  String get navHome => 'Accueil';
+
+  @override
+  String get navCars => 'Voitures';
+
+  @override
+  String get navBarrels => 'Barils';
+
+  @override
+  String get navPurchases => 'Achats';
+
+  @override
+  String get navTracking => 'Suivi';
+
+  @override
+  String get navBusiness => 'Entreprise';
+
+  @override
+  String get navUsers => 'Utilisateurs';
+
+  @override
+  String get navSettings => 'Réglages';
+
+  @override
   String get appInformation => 'Informations sur l\'Application';
 
   @override
@@ -510,7 +594,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get totalCars => 'Total des Voitures';
 
   @override
-  String get activeCars => 'Voitures Actives';
+  String get activeCars => 'Voitures actives';
 
   @override
   String get inactiveCars => 'Voitures Inactives';
@@ -562,10 +646,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get userManagement => 'Gestion des Utilisateurs';
 
   @override
-  String get setAsCustomer => 'Définir comme Client';
+  String get setAsCustomer => 'Définir comme client';
 
   @override
-  String get setAsStaff => 'Définir comme Personnel';
+  String get setAsStaff => 'Définir comme personnel';
 
   @override
   String get setAsAdmin => 'Définir comme Administrateur';
@@ -596,7 +680,7 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get deleteUser => 'Supprimer l\'utilisateur';
+  String get deleteUser => 'Supprimer l’utilisateur';
 
   @override
   String get confirmDeletion => 'Confirmer la suppression';
@@ -879,7 +963,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get reserved => 'Réservé';
 
   @override
-  String get reserveWithDeposit => 'Réserver avec un acompte de 500 \$';
+  String get reserveWithDeposit => 'Réserver avec acompte';
+
+  @override
+  String get reserveWithPaidHold => 'Réserver avec retenue payante';
 
   @override
   String get loginRequiredForDeposit =>
@@ -928,6 +1015,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String viewingReservationComplete(Object time) {
     return 'Votre visite est réservée pour $time.';
   }
+
+  @override
+  String get youHaveViewingReserved => 'Vous avez déjà réservé une visite';
+
+  @override
+  String get currentViewingTime => 'Heure de visite actuelle';
+
+  @override
+  String get changeOrCancelViewingToBookNew =>
+      'Pour planifier une autre visite pour cette annonce, modifiez l’heure actuelle ou annulez d’abord cette visite.';
 
   @override
   String get accountRequiredTitle => 'Connectez-vous pour continuer';
@@ -1048,4 +1145,1568 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get save => 'Enregistrer';
+
+  @override
+  String get signOutQuestion => 'Se déconnecter ?';
+
+  @override
+  String get signOutConfirmMessage =>
+      'Vous devrez vous reconnecter avant de gérer les expéditions, le portefeuille, les achats ou les outils professionnels.';
+
+  @override
+  String get confirmSignOut => 'Se déconnecter';
+
+  @override
+  String get walletTitle => 'Portefeuille';
+
+  @override
+  String get walletSubtitle =>
+      'Consulter les crédits et retourner l’argent sur la carte';
+
+  @override
+  String get businesses => 'Entreprises';
+
+  @override
+  String get businessesSubtitle =>
+      'Approuver et gérer les entreprises de la plateforme';
+
+  @override
+  String get businessProfile => 'Profil de l’entreprise';
+
+  @override
+  String get businessProfileSubtitle =>
+      'Gérer le profil, les services, les destinations et l’équipe';
+
+  @override
+  String get businessAdmin => 'Administrateur d’entreprise';
+
+  @override
+  String get chooseAtLeastOneService => 'Choisissez au moins un service.';
+
+  @override
+  String get businessProfileSaved => 'Profil de l’entreprise enregistré.';
+
+  @override
+  String get noBusinessProfileAssigned =>
+      'Aucun profil d’entreprise n’est attribué.';
+
+  @override
+  String get businessProfileNotFound => 'Profil de l’entreprise introuvable.';
+
+  @override
+  String get destinationsAndShippingFees =>
+      'Destinations et frais d’expédition';
+
+  @override
+  String get team => 'Équipe';
+
+  @override
+  String get addStaffMemberButton => 'Ajouter un membre du personnel';
+
+  @override
+  String get noTeamMembersYet => 'Aucun membre du personnel pour le moment.';
+
+  @override
+  String get details => 'Détails';
+
+  @override
+  String get businessName => 'Nom de l’entreprise';
+
+  @override
+  String get businessPhone => 'Téléphone de l’entreprise';
+
+  @override
+  String get businessEmail => 'Email de l’entreprise';
+
+  @override
+  String get website => 'Site web';
+
+  @override
+  String get serviceNote => 'Note de service';
+
+  @override
+  String get noServicesEnabledYet =>
+      'Aucun service n’est activé pour le moment.';
+
+  @override
+  String get requestReturnToCard => 'Demander le retour sur la carte';
+
+  @override
+  String get keepInWallet => 'Garder dans le portefeuille';
+
+  @override
+  String couldNotRequestRefund(Object error) {
+    return 'Impossible de demander le remboursement : $error';
+  }
+
+  @override
+  String get returnWalletBalance => 'Retourner le solde du portefeuille';
+
+  @override
+  String walletReturnMessage(Object amount) {
+    return '$amount sera demandé vers la carte d’origine. Le solde de votre portefeuille passera en remboursement en attente.';
+  }
+
+  @override
+  String returnToCardRequested(Object amount) {
+    return 'Retour de $amount vers la carte demandé.';
+  }
+
+  @override
+  String get walletBusinessBlocked =>
+      'Les portefeuilles servent aux crédits de remboursement des clients. Les outils financiers d’entreprise sont disponibles dans le tableau de bord de la plateforme.';
+
+  @override
+  String get availableBalance => 'Solde disponible';
+
+  @override
+  String pendingReturnToCard(Object amount) {
+    return '$amount en attente de retour vers la carte';
+  }
+
+  @override
+  String get requestingReturn => 'Demande en cours';
+
+  @override
+  String get returnMoneyToCard => 'Retourner l’argent sur la carte';
+
+  @override
+  String get walletCreditsInfoWithBalance =>
+      'Les crédits du portefeuille proviennent des différences de prix d’expédition. Vous pouvez garder le crédit ici ou demander son retour sur votre carte d’origine.';
+
+  @override
+  String get walletCreditsInfoEmpty =>
+      'Les crédits de remboursement des prochains changements d’expédition apparaîtront ici.';
+
+  @override
+  String get activity => 'Activité';
+
+  @override
+  String get destinationRefund => 'Remboursement de destination';
+
+  @override
+  String destinationRefundWithCode(Object trackingCode) {
+    return 'Remboursement de destination • $trackingCode';
+  }
+
+  @override
+  String get returnToCardRequestedStatus => 'Retour vers la carte demandé';
+
+  @override
+  String get returnedToCard => 'Retourné vers la carte';
+
+  @override
+  String get noWalletActivityYet =>
+      'Aucune activité de portefeuille pour le moment.';
+
+  @override
+  String get signInToViewWallet =>
+      'Connectez-vous pour voir votre portefeuille.';
+
+  @override
+  String get decline => 'Refuser';
+
+  @override
+  String get accept => 'Accepter';
+
+  @override
+  String get saveShipmentChangesQuestion =>
+      'Enregistrer les modifications de l’expédition ?';
+
+  @override
+  String get saveShipmentChangesMessage =>
+      'Cela mettra à jour les détails de l’expédition. Les changements de destination peuvent ajuster le portefeuille du client ou les montants de paiement.';
+
+  @override
+  String get saveChanges => 'Enregistrer les modifications';
+
+  @override
+  String get sender => 'Expéditeur';
+
+  @override
+  String get senderQuestion => 'Qui envoie le baril ?';
+
+  @override
+  String get pickup => 'Ramassage';
+
+  @override
+  String get pickupAddress => 'Adresse de ramassage';
+
+  @override
+  String get receiver => 'Destinataire';
+
+  @override
+  String get receiverQuestion => 'Qui doit le recevoir à l’étranger ?';
+
+  @override
+  String get destination => 'Destination';
+
+  @override
+  String get staffControls => 'Contrôles du personnel';
+
+  @override
+  String get shippingBusiness => 'Entreprise d’expédition';
+
+  @override
+  String get currentBusiness => 'Entreprise actuelle';
+
+  @override
+  String get newRoute => 'Nouvel itinéraire';
+
+  @override
+  String get copyTrackingNumber => 'Copier le numéro de suivi';
+
+  @override
+  String get receipt => 'Reçu';
+
+  @override
+  String get dropOffOffice => 'Bureau de dépôt';
+
+  @override
+  String get requestBarrelShipmentQuestion =>
+      'Demander l’expédition du baril ?';
+
+  @override
+  String get requestBarrelShipmentMessage =>
+      'Cela créera l’expédition et lancera le paiement du total estimé.';
+
+  @override
+  String get payAndRequest => 'Payer et demander';
+
+  @override
+  String get pickUp => 'Ramassage';
+
+  @override
+  String get bringToOffice => 'Apporter au bureau';
+
+  @override
+  String get locationPermissionDenied =>
+      'Autorisation de localisation refusée.';
+
+  @override
+  String get couldNotGetLocation =>
+      'Impossible d’obtenir la position. Réessayez.';
+
+  @override
+  String get pickupAddressInNyc => 'Adresse de ramassage à New York';
+
+  @override
+  String get submitTransportRequestQuestion =>
+      'Soumettre la demande de transport ?';
+
+  @override
+  String get submitTransportRequestMessage =>
+      'Cela créera une demande de transport à gérer et suivre par le personnel.';
+
+  @override
+  String get submitRequest => 'Soumettre la demande';
+
+  @override
+  String get barrelShippingPrice => 'Prix d’expédition du baril';
+
+  @override
+  String get minDeliveryDays => 'Jours de livraison min.';
+
+  @override
+  String get maxDeliveryDays => 'Jours de livraison max.';
+
+  @override
+  String get officeAddress => 'Adresse du bureau';
+
+  @override
+  String get barrelPickupPricing => 'Tarifs de ramassage des barils';
+
+  @override
+  String get searchCountriesCodesFlags =>
+      'Rechercher des pays, codes ou drapeaux';
+
+  @override
+  String get business => 'Entreprise';
+
+  @override
+  String migrationComplete(Object count) {
+    return 'Migration terminée : $count écritures.';
+  }
+
+  @override
+  String migrationFailed(Object error) {
+    return 'Échec de la migration : $error';
+  }
+
+  @override
+  String get status => 'Statut';
+
+  @override
+  String get pending => 'En attente';
+
+  @override
+  String get approved => 'Approuvé';
+
+  @override
+  String get suspended => 'Suspendu';
+
+  @override
+  String get saveBusiness => 'Enregistrer l’entreprise';
+
+  @override
+  String get migrateKerenData => 'Migrer les données Keren';
+
+  @override
+  String get addBusiness => 'Ajouter une entreprise';
+
+  @override
+  String get updatePurchaseStatusQuestion =>
+      'Mettre à jour le statut de l’achat ?';
+
+  @override
+  String updatePurchaseStatusMessage(Object carTitle, Object status) {
+    return 'Cela marquera $carTitle comme $status et mettra à jour la voiture liée.';
+  }
+
+  @override
+  String get updateStatus => 'Mettre à jour le statut';
+
+  @override
+  String get accountProfile => 'Profil du compte';
+
+  @override
+  String get profileSaved => 'Profil enregistré.';
+
+  @override
+  String get phone => 'Téléphone';
+
+  @override
+  String get addPlatformManager => 'Ajouter un gestionnaire de plateforme';
+
+  @override
+  String get createAdminSubtitle =>
+      'Créer un autre administrateur qui peut gérer la plateforme';
+
+  @override
+  String get addBusinessStaff => 'Ajouter du personnel d’entreprise';
+
+  @override
+  String get createStaffSubtitle =>
+      'Créer un identifiant personnel sous une entreprise';
+
+  @override
+  String get noUsersMatch => 'Aucun utilisateur ne correspond à cette vue.';
+
+  @override
+  String get manager => 'Gestionnaire';
+
+  @override
+  String get managers => 'Gestionnaires';
+
+  @override
+  String get owners => 'Propriétaires';
+
+  @override
+  String get all => 'Tous';
+
+  @override
+  String get businessStaff => 'Personnel d’entreprise';
+
+  @override
+  String get searchUsersHint => 'Rechercher nom, email, téléphone, entreprise';
+
+  @override
+  String get userActions => 'Actions utilisateur';
+
+  @override
+  String get setAsPlatformManager => 'Définir comme responsable de plateforme';
+
+  @override
+  String get userId => 'ID utilisateur';
+
+  @override
+  String get chooseStaffBusiness => 'Choisissez une entreprise';
+
+  @override
+  String get ownerAccount => 'Compte propriétaire';
+
+  @override
+  String get ownerFullName => 'Nom complet du propriétaire';
+
+  @override
+  String get ownerPhone => 'Téléphone du propriétaire';
+
+  @override
+  String get ownerEmail => 'Email du propriétaire';
+
+  @override
+  String get servicesYouOffer => 'Services proposés';
+
+  @override
+  String get submitBusinessApplicationQuestion =>
+      'Soumettre la demande d’entreprise ?';
+
+  @override
+  String get submitBusinessApplicationMessage =>
+      'Cela créera votre demande de compte entreprise et ouvrira la configuration du tableau de bord pour les services sélectionnés.';
+
+  @override
+  String get submitApplication => 'Soumettre la demande';
+
+  @override
+  String get chooseAtLeastOneBusinessService =>
+      'Choisissez au moins un service d’entreprise.';
+
+  @override
+  String get reserveViewingQuestion => 'Réserver une visite ?';
+
+  @override
+  String get reserveViewingConfirmMessage =>
+      'Cela réservera l’heure de visite choisie pour cette voiture.';
+
+  @override
+  String get purchaseCarQuestion => 'Acheter cette voiture ?';
+
+  @override
+  String get purchaseCarConfirmMessage =>
+      'Cela lancera le paiement et créera un dossier d’achat pour cette voiture.';
+
+  @override
+  String get continueToPayment => 'Continuer vers le paiement';
+
+  @override
+  String get signUpFailedTryAgain =>
+      'L’inscription a échoué. Veuillez réessayer.';
+
+  @override
+  String get noApprovedDestinationsAvailable =>
+      'Aucune destination active d’entreprise approuvée n’est disponible.';
+
+  @override
+  String get carrierTracking => 'Suivi transporteur';
+
+  @override
+  String get couldNotOpenCarrierTracking =>
+      'Impossible d’ouvrir le suivi du transporteur.';
+
+  @override
+  String get trackingNumberCopiedShort => 'Numéro de suivi copié.';
+
+  @override
+  String get copy => 'Copier';
+
+  @override
+  String get activeShort => 'Actifs';
+
+  @override
+  String get pickupShort => 'Ramassage';
+
+  @override
+  String get doneShort => 'Terminés';
+
+  @override
+  String get platformDashboard => 'Tableau de bord de la plateforme';
+
+  @override
+  String get platformDashboardSubtitle =>
+      'Demandes, entreprises, opérations, remboursements et état de la plateforme.';
+
+  @override
+  String get pendingBusinesses => 'Entreprises en attente';
+
+  @override
+  String get approvedBusinesses => 'Entreprises approuvées';
+
+  @override
+  String get customers => 'Clients';
+
+  @override
+  String get openShipments => 'Expéditions ouvertes';
+
+  @override
+  String get pendingPurchases => 'Achats en attente';
+
+  @override
+  String get refundRequests => 'Demandes de remboursement';
+
+  @override
+  String get refundRequest => 'Demande de remboursement';
+
+  @override
+  String amountLabel(Object amount) {
+    return 'Montant : $amount';
+  }
+
+  @override
+  String customerLabel(Object customer) {
+    return 'Client : $customer';
+  }
+
+  @override
+  String statusLabelValue(Object status) {
+    return 'Statut : $status';
+  }
+
+  @override
+  String businessLabel(Object business) {
+    return 'Entreprise : $business';
+  }
+
+  @override
+  String get close => 'Fermer';
+
+  @override
+  String get platformManagerCreated => 'Gestionnaire de plateforme créé.';
+
+  @override
+  String get temporaryPassword => 'Mot de passe temporaire';
+
+  @override
+  String get actionQueue => 'File d’actions';
+
+  @override
+  String get review => 'Examiner';
+
+  @override
+  String get businessManagement => 'Gestion des entreprises';
+
+  @override
+  String get openFullList => 'Ouvrir la liste complète';
+
+  @override
+  String get financeReadiness => 'Préparation financière';
+
+  @override
+  String get recentOperations => 'Opérations récentes';
+
+  @override
+  String get businessReviewSaved => 'Examen de l’entreprise enregistré.';
+
+  @override
+  String get reviewAction => 'Action d’examen';
+
+  @override
+  String get approve => 'Approuver';
+
+  @override
+  String get suspend => 'Suspendre';
+
+  @override
+  String get reject => 'Rejeter';
+
+  @override
+  String get requestChanges => 'Demander des modifications';
+
+  @override
+  String get reviewNote => 'Note d’examen';
+
+  @override
+  String requestId(Object id) {
+    return 'ID de demande : $id';
+  }
+
+  @override
+  String get finalReceiptGenerated =>
+      'Reçu final généré et statut défini comme terminé.';
+
+  @override
+  String get updateRecord => 'Mettre à jour le dossier';
+
+  @override
+  String get generateFinalReceipt => 'Générer le reçu final';
+
+  @override
+  String get parkingStartDate => 'Date de début du stationnement';
+
+  @override
+  String get parkingEndDate => 'Date de fin du stationnement';
+
+  @override
+  String get costPerDay => 'Coût par jour (\$)';
+
+  @override
+  String get selectCountriesAddFees =>
+      'Sélectionnez les pays desservis par cette entreprise et ajoutez les frais d’expédition pour chaque destination.';
+
+  @override
+  String activeDestinationsHaveFees(Object priced, Object total) {
+    return '$priced destination(s) active(s) sur $total ont des frais d’expédition.';
+  }
+
+  @override
+  String get selectDestinationCountries =>
+      'Sélectionner les pays de destination';
+
+  @override
+  String get manageDestinationsFees => 'Gérer les destinations et les frais';
+
+  @override
+  String get businessNameRequired => 'Le nom de l’entreprise est requis';
+
+  @override
+  String get businessPhoneRequired => 'Le téléphone de l’entreprise est requis';
+
+  @override
+  String get validBusinessPhoneRequired =>
+      'Veuillez entrer un téléphone d’entreprise valide';
+
+  @override
+  String get pickupCollectNyc =>
+      'Nous le récupérerons à une adresse à New York.';
+
+  @override
+  String get pickupBringOffice => 'Vous l’apporterez au bureau.';
+
+  @override
+  String get pleaseEnterPickupAddress =>
+      'Veuillez entrer l’adresse de ramassage';
+
+  @override
+  String get pleaseIncludeNycBoroughZip =>
+      'Veuillez inclure l’arrondissement de New York ou le code postal';
+
+  @override
+  String get pleaseChoosePickupDateTime =>
+      'Veuillez choisir la date et l’heure de ramassage';
+
+  @override
+  String get pickupTimeFuture => 'L’heure de ramassage doit être dans le futur';
+
+  @override
+  String get destinationSubtitleEstimateRoute =>
+      'Choisissez le pays afin que nous puissions estimer l’itinéraire.';
+
+  @override
+  String get pickupAddressNycHint => 'ex. 3184 Webster Ave, Bronx, NY 10467';
+
+  @override
+  String get pleaseAskStaffSetBarrelPrice =>
+      'Veuillez demander au personnel de définir un prix d’expédition de baril pour cette destination avant d’enregistrer.';
+
+  @override
+  String get staffControlsSubtitle =>
+      'Mettre à jour le statut interne et le prix final.';
+
+  @override
+  String get officeDropOff => 'Dépôt au bureau';
+
+  @override
+  String deliveryWithLabel(Object label) {
+    return 'Livraison $label';
+  }
+
+  @override
+  String get addBarrelFeeBeforeActivating =>
+      'Ajoutez des frais d’expédition de baril avant d’activer.';
+
+  @override
+  String get activeDestinationsNeedFee =>
+      'Les destinations actives doivent avoir des frais d’expédition de baril supérieurs à 0.';
+
+  @override
+  String get addMinimumDeliveryDays =>
+      'Ajoutez le nombre minimum de jours de livraison.';
+
+  @override
+  String get addMaximumDeliveryDays =>
+      'Ajoutez le nombre maximum de jours de livraison.';
+
+  @override
+  String get useWholeCalendarDays => 'Utilisez des jours calendaires entiers.';
+
+  @override
+  String get deliveryDaysGreaterThanZero =>
+      'Les jours de livraison doivent être supérieurs à 0.';
+
+  @override
+  String get maxDaysAtLeastMin =>
+      'Le nombre maximum de jours doit être au moins égal au minimum.';
+
+  @override
+  String get firebaseDeniedDeployRules =>
+      'Firebase a refusé l’accès. Déployez les règles Firestore et les fonctions locales, puis ajoutez le catalogue des pays.';
+
+  @override
+  String get optionalDeliveryEstimateNote =>
+      'Estimation optionnelle en jours calendaires affichée aux clients.';
+
+  @override
+  String pickupPriceLabel(Object borough) {
+    return 'Prix de ramassage - $borough';
+  }
+
+  @override
+  String get editBusiness => 'Modifier l’entreprise';
+
+  @override
+  String get nameLabel => 'Nom';
+
+  @override
+  String get businessesEmpty => 'Aucune entreprise pour le moment.';
+
+  @override
+  String get chooseStaffBusinessMessage =>
+      'Choisissez l’entreprise à laquelle ce membre du personnel appartient.';
+
+  @override
+  String get phoneNumberRequired => 'Veuillez saisir un numéro de téléphone';
+
+  @override
+  String get pleaseSelectCarMake =>
+      'Veuillez sélectionner la marque de la voiture';
+
+  @override
+  String get pleaseSelectCarModel =>
+      'Veuillez sélectionner le modèle de la voiture';
+
+  @override
+  String get pleaseSelectYear => 'Veuillez sélectionner l’année';
+
+  @override
+  String get ownerNameRequired => 'Veuillez saisir le nom du propriétaire';
+
+  @override
+  String get carIdentityRequired =>
+      'Veuillez vérifier que la marque, le modèle et l’année de la voiture sont sélectionnés.';
+
+  @override
+  String get recordUpdated => 'Dossier mis à jour avec succès.';
+
+  @override
+  String failedToUpdateRecord(Object error) {
+    return 'Échec de la mise à jour du dossier : $error';
+  }
+
+  @override
+  String get addParkingEndAndDailyCost =>
+      'Veuillez ajouter une date de fin et un coût journalier.';
+
+  @override
+  String get carIdentityReceiptRequired =>
+      'La marque, le modèle et l’année doivent être définis avant de générer un reçu.';
+
+  @override
+  String get endDateBeforeStart =>
+      'La date de fin ne peut pas être antérieure à la date de début.';
+
+  @override
+  String get finalReceiptGeneratedCompleted =>
+      'Reçu final généré et statut défini comme terminé.';
+
+  @override
+  String failedToGenerateReceipt(Object error) {
+    return 'Échec de la génération du reçu : $error';
+  }
+
+  @override
+  String get costPerDayCurrency => 'Coût par jour (\$)';
+
+  @override
+  String get carParkingReceipt => 'REÇU DE STATIONNEMENT';
+
+  @override
+  String get businessServices => 'Services professionnels';
+
+  @override
+  String get receiptDetails => 'Détails du reçu';
+
+  @override
+  String get receiptNumber => 'Numéro du reçu :';
+
+  @override
+  String get trackingNumberPdf => 'Numéro de suivi :';
+
+  @override
+  String get generatedOn => 'Généré le :';
+
+  @override
+  String get carInformation => 'Informations sur la voiture';
+
+  @override
+  String get ownerNamePdf => 'Nom du propriétaire :';
+
+  @override
+  String get carMakePdf => 'Marque :';
+
+  @override
+  String get carModelPdf => 'Modèle :';
+
+  @override
+  String get yearPdf => 'Année :';
+
+  @override
+  String get vinNumberPdf => 'Numéro VIN :';
+
+  @override
+  String get parkingStartPdf => 'Début du stationnement :';
+
+  @override
+  String get parkingEndPdf => 'Fin du stationnement :';
+
+  @override
+  String get totalDaysPdf => 'Nombre total de jours :';
+
+  @override
+  String get billingSummary => 'Récapitulatif de facturation';
+
+  @override
+  String get costPerDayPdf => 'Coût par jour :';
+
+  @override
+  String get totalCostPdf => 'Coût total :';
+
+  @override
+  String get peopleAndAccess => 'Personnes et accès';
+
+  @override
+  String get peopleAndAccessSubtitle =>
+      'Gérez les responsables de plateforme, les équipes d’entreprise et les comptes clients.';
+
+  @override
+  String get platformManagers => 'Responsables de plateforme';
+
+  @override
+  String platformManagersCount(Object count) {
+    return '$count personnes avec un accès complet à la plateforme';
+  }
+
+  @override
+  String get businessTeam => 'Équipe de l’entreprise';
+
+  @override
+  String businessTeamCount(Object count) {
+    return '$count comptes propriétaire/personnel';
+  }
+
+  @override
+  String customerAccountsCount(Object count) {
+    return '$count comptes clients partagés du marketplace';
+  }
+
+  @override
+  String get noEmail => 'Aucun e-mail';
+
+  @override
+  String get platformManager => 'Responsable de plateforme';
+
+  @override
+  String get businessOwner => 'Propriétaire d’entreprise';
+
+  @override
+  String get unassignedBusiness => 'Entreprise non attribuée';
+
+  @override
+  String currentDestinationShipping(Object amount) {
+    return 'Expédition actuelle vers la destination : $amount.';
+  }
+
+  @override
+  String destinationChangeCollect(Object amount) {
+    return '$amount sera encaissé pour le changement de destination.';
+  }
+
+  @override
+  String destinationChangeCredit(Object amount) {
+    return '$amount sera crédité dans votre portefeuille.';
+  }
+
+  @override
+  String newRouteValue(Object business, Object country) {
+    return '$business vers $country';
+  }
+
+  @override
+  String get noMatchingBusinesses => 'Aucune entreprise correspondante.';
+
+  @override
+  String get noOpenShipments => 'Aucun envoi ouvert.';
+
+  @override
+  String get noPendingRefundRequests =>
+      'Aucune demande de remboursement en attente.';
+
+  @override
+  String get refundCredits => 'Crédits de remboursement';
+
+  @override
+  String get cardReturnRequest => 'Demande de retour sur carte';
+
+  @override
+  String get customerRefundRequest => 'Demande de remboursement client';
+
+  @override
+  String get noBusinessApplicationsWaiting =>
+      'Aucune demande d’entreprise en attente.';
+
+  @override
+  String get noPendingWalletCardReturns =>
+      'Aucune demande de retour portefeuille vers carte en attente.';
+
+  @override
+  String get stripeConnectPlaceholders =>
+      'Les emplacements Stripe Connect sont prêts pour les futurs comptes connectés, paiements et suivis des litiges.';
+
+  @override
+  String get creating => 'Création';
+
+  @override
+  String get createManager => 'Créer un responsable';
+
+  @override
+  String get fullNameRequired => 'Le nom complet est requis';
+
+  @override
+  String get emailRequired => 'L’e-mail est requis';
+
+  @override
+  String get validEmailRequired => 'Veuillez saisir une adresse e-mail valide';
+
+  @override
+  String get phoneRequired => 'Le téléphone est requis';
+
+  @override
+  String get passwordRequired => 'Le mot de passe est requis';
+
+  @override
+  String get services => 'Services';
+
+  @override
+  String get businessIdentitySubtitle =>
+      'Comment les clients et l’équipe identifient cette entreprise.';
+
+  @override
+  String get businessDefaultAddressSubtitle =>
+      'Utilisée comme adresse par défaut pour les annonces de véhicules.';
+
+  @override
+  String get paidHoldPricing => 'Tarif de retenue payante';
+
+  @override
+  String get paidHoldPricingSubtitle =>
+      'Définissez la règle d’acompte par défaut pour retenir les voitures.';
+
+  @override
+  String get flatFee => 'Frais fixe';
+
+  @override
+  String get perDay => 'Par jour';
+
+  @override
+  String get flatHoldFee => 'Frais fixe de retenue';
+
+  @override
+  String get dailyHoldRate => 'Tarif journalier';
+
+  @override
+  String get maxDays => 'Jours max.';
+
+  @override
+  String get holdMaxDaysHelper => '1 à 30 jours';
+
+  @override
+  String get businessServicesSubtitle =>
+      'Choisissez ce que cette entreprise peut offrir aux clients.';
+
+  @override
+  String businessServicesCount(Object count) {
+    return '$count services';
+  }
+
+  @override
+  String get businessProfileApprovalSubtitle =>
+      'Les clients verront ces informations après l’approbation de la plateforme.';
+
+  @override
+  String get ownerSignedInSubtitle =>
+      'Cette entreprise sera liée à votre compte connecté.';
+
+  @override
+  String get ownerCreateLoginSubtitle =>
+      'Créez le compte propriétaire pour cette entreprise.';
+
+  @override
+  String get servicesOfferSubtitle =>
+      'Votre tableau de bord affichera les pages de ces services.';
+
+  @override
+  String get ownerPhoneRequired => 'Le téléphone du propriétaire est requis';
+
+  @override
+  String get walletBalance => 'Solde du portefeuille';
+
+  @override
+  String toReceiverInCountry(Object receiver, Object country) {
+    return 'À $receiver en $country';
+  }
+
+  @override
+  String pickupRequestedWithDate(Object date) {
+    return 'Collecte demandée • $date';
+  }
+
+  @override
+  String get pickupRequested => 'Collecte demandée';
+
+  @override
+  String get customerDropOffAtOffice => 'Dépôt client au bureau';
+
+  @override
+  String get pendingPayment => 'Paiement en attente';
+
+  @override
+  String get requested => 'Demandé';
+
+  @override
+  String get inTransit => 'En transit';
+
+  @override
+  String get paid => 'Payé';
+
+  @override
+  String get paymentPending => 'Paiement en attente';
+
+  @override
+  String get paymentCancelled => 'Paiement annulé';
+
+  @override
+  String get signInToTrackShipments =>
+      'Connectez-vous pour voir vos demandes d’envoi de barils, vos reçus et le statut de collecte.';
+
+  @override
+  String get shipmentsLoadError =>
+      'Nous ne pouvons pas charger vos demandes d’envoi pour le moment. Veuillez réessayer bientôt.';
+
+  @override
+  String get shipmentsAppearAfterPayment =>
+      'Vos demandes d’envoi de barils apparaîtront ici une fois le paiement terminé.';
+
+  @override
+  String get registerYourBusiness => 'Inscrire votre entreprise';
+
+  @override
+  String get submittingApplication => 'Envoi de la demande';
+
+  @override
+  String get submitBusinessApplication => 'Envoyer la demande d’entreprise';
+
+  @override
+  String get ownerNameRequiredShort => 'Le nom du propriétaire est requis';
+
+  @override
+  String get unknown => 'Inconnu';
+
+  @override
+  String get cardReturnsSimulatedNotice =>
+      'Les retours sur carte sont simulés pour le moment. Gardez cette demande en attente jusqu’à la connexion des vrais remboursements Stripe.';
+
+  @override
+  String get noBusinessesYet => 'Aucune entreprise pour le moment.';
+
+  @override
+  String get saving => 'Enregistrement';
+
+  @override
+  String get saveReview => 'Enregistrer l’avis';
+
+  @override
+  String get open => 'Ouvert';
+
+  @override
+  String errorDetails(Object error) {
+    return 'Erreur : $error';
+  }
+
+  @override
+  String get carInventoryBasics => 'Bases';
+
+  @override
+  String get carInventoryPricing => 'Prix';
+
+  @override
+  String get carInventoryDetails => 'Détails';
+
+  @override
+  String get carInventoryFeatures => 'Caractéristiques';
+
+  @override
+  String get carInventoryMedia => 'Médias';
+
+  @override
+  String get carInventoryContact => 'Contact';
+
+  @override
+  String get carInventoryReview => 'Vérification';
+
+  @override
+  String get next => 'Suivant';
+
+  @override
+  String get back => 'Retour';
+
+  @override
+  String get publishCar => 'Publier la voiture';
+
+  @override
+  String get updateListing => 'Mettre à jour l’annonce';
+
+  @override
+  String stepCount(Object current, Object total) {
+    return 'Étape $current sur $total';
+  }
+
+  @override
+  String get condition => 'État';
+
+  @override
+  String get bodyType => 'Carrosserie';
+
+  @override
+  String get transmission => 'Transmission';
+
+  @override
+  String get fuelType => 'Carburant';
+
+  @override
+  String get drivetrain => 'Motricité';
+
+  @override
+  String get exteriorColor => 'Couleur extérieure';
+
+  @override
+  String get interiorColor => 'Couleur intérieure';
+
+  @override
+  String get vinOptional => 'VIN (facultatif)';
+
+  @override
+  String get stockNumberOptional => 'Référence/stock (facultatif)';
+
+  @override
+  String get negotiable => 'Négociable';
+
+  @override
+  String get locationCity => 'Ville';
+
+  @override
+  String get locationState => 'État';
+
+  @override
+  String get minPrice => 'Prix min.';
+
+  @override
+  String get minMileage => 'Kilométrage min.';
+
+  @override
+  String get maxMileage => 'Kilométrage max.';
+
+  @override
+  String get dealer => 'Vendeur';
+
+  @override
+  String get location => 'Lieu';
+
+  @override
+  String get structuredFeatures => 'Caractéristiques clés';
+
+  @override
+  String get customFeatures => 'Caractéristiques personnalisées';
+
+  @override
+  String get customFeaturesHint =>
+      'Ajoutez des caractéristiques séparées par des virgules';
+
+  @override
+  String get conditionNew => 'Neuf';
+
+  @override
+  String get conditionUsed => 'Occasion';
+
+  @override
+  String get conditionCertified => 'Certifié';
+
+  @override
+  String get conditionSalvage => 'Accidenté';
+
+  @override
+  String get bodySedan => 'Berline';
+
+  @override
+  String get bodySuv => 'SUV';
+
+  @override
+  String get bodyTruck => 'Pick-up';
+
+  @override
+  String get bodyVan => 'Van';
+
+  @override
+  String get bodyCoupe => 'Coupé';
+
+  @override
+  String get bodyHatchback => 'Hatchback';
+
+  @override
+  String get bodyWagon => 'Break';
+
+  @override
+  String get bodyConvertible => 'Cabriolet';
+
+  @override
+  String get transmissionAutomatic => 'Automatique';
+
+  @override
+  String get transmissionManual => 'Manuelle';
+
+  @override
+  String get transmissionCvt => 'CVT';
+
+  @override
+  String get fuelGas => 'Essence';
+
+  @override
+  String get fuelDiesel => 'Diesel';
+
+  @override
+  String get fuelHybrid => 'Hybride';
+
+  @override
+  String get fuelElectric => 'Électrique';
+
+  @override
+  String get fuelPlugInHybrid => 'Hybride rechargeable';
+
+  @override
+  String get drivetrainFwd => 'Traction';
+
+  @override
+  String get drivetrainRwd => 'Propulsion';
+
+  @override
+  String get drivetrainAwd => 'AWD';
+
+  @override
+  String get drivetrainFourWd => '4x4';
+
+  @override
+  String get featureBackupCamera => 'Caméra de recul';
+
+  @override
+  String get featureBluetooth => 'Bluetooth';
+
+  @override
+  String get featureLeatherSeats => 'Sièges en cuir';
+
+  @override
+  String get featureSunroof => 'Toit ouvrant';
+
+  @override
+  String get featureNavigation => 'Navigation';
+
+  @override
+  String get featureHeatedSeats => 'Sièges chauffants';
+
+  @override
+  String get featureAppleCarPlay => 'Apple CarPlay';
+
+  @override
+  String get featureAndroidAuto => 'Android Auto';
+
+  @override
+  String get featureBlindSpot => 'Détection angle mort';
+
+  @override
+  String get featureThirdRow => 'Troisième rangée';
+
+  @override
+  String get featureRemoteStart => 'Démarrage à distance';
+
+  @override
+  String get featureKeylessEntry => 'Accès sans clé';
+
+  @override
+  String get positivePriceRequired => 'Le prix doit être supérieur à 0.';
+
+  @override
+  String get mileageWholeNumberRequired =>
+      'Le kilométrage doit être un nombre entier positif ou zéro.';
+
+  @override
+  String get vinLengthRequired => 'Le VIN doit contenir 17 caractères.';
+
+  @override
+  String get addAtLeastOneImage =>
+      'Ajoutez au moins une image de la voiture avant de publier.';
+
+  @override
+  String get coverImage => 'Image principale';
+
+  @override
+  String get makeCover => 'Définir comme principale';
+
+  @override
+  String get removeImage => 'Supprimer l’image';
+
+  @override
+  String get listingPreview => 'Aperçu de l’annonce';
+
+  @override
+  String get readyToPublish => 'Prêt à publier';
+
+  @override
+  String get missingRequiredInfo => 'Informations requises manquantes';
+
+  @override
+  String get reviewBeforePublishing =>
+      'Vérifiez l’annonce avant sa mise en ligne pour les clients.';
+
+  @override
+  String get listingWillStayInactive =>
+      'Cette annonce sera enregistrée comme inactive et masquée aux clients.';
+
+  @override
+  String get noFilterResults => 'Aucune voiture ne correspond à ces filtres.';
+
+  @override
+  String get clearFiltersToSeeCars =>
+      'Effacez les filtres pour voir les voitures disponibles.';
+
+  @override
+  String get newestListings => 'Annonces récentes';
+
+  @override
+  String get mileageLowToHigh => 'Kilométrage : croissant';
+
+  @override
+  String get mileageHighToLow => 'Kilométrage : décroissant';
+
+  @override
+  String get priceNegotiable => 'Prix négociable';
+
+  @override
+  String get financingAvailable => 'Infos financement disponibles';
+
+  @override
+  String get any => 'Tous';
+
+  @override
+  String get uploadingCar => 'Téléversement de la voiture...';
+
+  @override
+  String get fixRequiredFields =>
+      'Veuillez corriger les champs requis ci-dessous.';
+
+  @override
+  String get selectStateFirst => 'Sélectionnez d’abord un État';
+
+  @override
+  String get carColorBlack => 'Noir';
+
+  @override
+  String get carColorWhite => 'Blanc';
+
+  @override
+  String get carColorSilver => 'Argent';
+
+  @override
+  String get carColorGray => 'Gris';
+
+  @override
+  String get carColorRed => 'Rouge';
+
+  @override
+  String get carColorBlue => 'Bleu';
+
+  @override
+  String get carColorGreen => 'Vert';
+
+  @override
+  String get carColorYellow => 'Jaune';
+
+  @override
+  String get carColorBrown => 'Marron';
+
+  @override
+  String get carColorBeige => 'Beige';
+
+  @override
+  String get carColorGold => 'Or';
+
+  @override
+  String get carColorOrange => 'Orange';
+
+  @override
+  String get carColorPurple => 'Violet';
+
+  @override
+  String get carColorBurgundy => 'Bordeaux';
+
+  @override
+  String get carColorOther => 'Autre';
+
+  @override
+  String get otherOption => 'Autre';
+
+  @override
+  String get businessLocation => 'Adresse de l’entreprise';
+
+  @override
+  String get viewingLocation => 'Lieu de visite';
+
+  @override
+  String get reserveCarHoldTitle => 'Blocage payé après la visite';
+
+  @override
+  String get reserveCarHoldMessage =>
+      'Utilisez cette option après avoir vu la voiture si vous voulez que l’entreprise la garde pendant que vous revenez finaliser le paiement. Si vous ne revenez pas, l’acompte peut être conservé.';
+
+  @override
+  String get reserveCarQuestion => 'Réserver cette voiture ?';
+
+  @override
+  String reserveCarConfirmMessage(Object amount) {
+    return 'Vous paierez $amount maintenant pour retenir cette voiture. L’entreprise peut conserver l’acompte si vous ne revenez pas finaliser l’achat.';
+  }
+
+  @override
+  String get businessAddressLine1 => 'Adresse de l’entreprise';
+
+  @override
+  String get postalCode => 'Code postal';
+
+  @override
+  String get useBusinessDefaultAddress =>
+      'Utiliser l’adresse par défaut de l’entreprise';
+
+  @override
+  String get useCustomViewingAddress => 'Utiliser une autre adresse de visite';
+
+  @override
+  String get listingLocationSource => 'Lieu de l’annonce';
+
+  @override
+  String get businessAddressMissing =>
+      'Ajoutez l’adresse par défaut dans le profil de l’entreprise, ou choisissez une autre adresse de visite.';
+
+  @override
+  String get editViewingReservation => 'Modifier la visite';
+
+  @override
+  String get changeViewingTime => 'Changer l’heure de visite';
+
+  @override
+  String get viewingEditCutoff =>
+      'Les rendez-vous de visite peuvent être modifiés jusqu’à une heure avant l’heure prévue.';
+
+  @override
+  String get viewingReservationUpdated =>
+      'L’heure de visite a été mise à jour.';
+
+  @override
+  String get cannotEditViewingReservation =>
+      'Cette visite ne peut plus être modifiée.';
+
+  @override
+  String get cancelViewingReservation => 'Annuler la visite';
+
+  @override
+  String get cancelViewingQuestion => 'Annuler cette visite ?';
+
+  @override
+  String get cancelViewingConfirmMessage =>
+      'Cela supprimera votre rendez-vous de visite et rendra la voiture disponible pour que vous puissiez recommencer.';
+
+  @override
+  String get viewingReservationCancelled => 'La visite a été annulée.';
+
+  @override
+  String get viewingScheduled => 'Visite prévue';
+
+  @override
+  String get requestHoldExtensionQuestion =>
+      'Demander une prolongation du blocage ?';
+
+  @override
+  String get requestHoldExtensionMessage =>
+      'L’entreprise examinera votre nouvelle date de retour. Si elle est approuvée, vous paierez tout montant supplémentaire avant le changement de date.';
+
+  @override
+  String get requestExtension => 'Demander une prolongation';
+
+  @override
+  String get extensionRequestSent => 'Demande de prolongation envoyée.';
+
+  @override
+  String holdUntilDate(Object date) {
+    return 'Blocage jusqu’au : $date';
+  }
+
+  @override
+  String get holdReviewRequiredMessage =>
+      'La date de blocage est passée. L’entreprise vérifie si le véhicule a été vendu ou si le client n’est pas venu.';
+
+  @override
+  String get customerNoShowHoldMessage =>
+      'Marqué comme client absent. L’acompte de blocage peut être conservé.';
+
+  @override
+  String get payExtensionQuestion => 'Payer la prolongation ?';
+
+  @override
+  String get payExtensionMessage =>
+      'Votre date de blocage sera mise à jour une fois ce paiement de prolongation terminé.';
+
+  @override
+  String get payExtension => 'Payer la prolongation';
+
+  @override
+  String get extensionPaidHoldUpdated =>
+      'Prolongation payée. La date de blocage a été mise à jour.';
+
+  @override
+  String get chooseBusinessWithShippingFee =>
+      'Choisissez une entreprise avec des frais d’expédition actifs avant le paiement.';
+
+  @override
+  String get processingPayment => 'Traitement du paiement';
+
+  @override
+  String get payAndRequestShipment => 'Payer et demander l’expédition';
+
+  @override
+  String get checkingConnection => 'Vérification de la connexion';
+
+  @override
+  String get checkingConnectionMessage =>
+      'Nous confirmons l’accès à Internet avant d’ouvrir l’application.';
+
+  @override
+  String get noInternetConnection => 'Pas de connexion Internet';
+
+  @override
+  String get noInternetMessage =>
+      'Cette application a besoin d’une connexion Internet active pour charger votre compte, les services, les paiements et les derniers paramètres de sécurité.';
+
+  @override
+  String get retry => 'Réessayer';
+
+  @override
+  String get updateAvailable => 'Mise à jour disponible';
+
+  @override
+  String updateAvailableMessage(Object version) {
+    return 'Une nouvelle version$version est disponible. Mettez à jour maintenant pour obtenir les derniers correctifs, ou continuez pour cette session.';
+  }
+
+  @override
+  String get updateRequired => 'Mise à jour requise';
+
+  @override
+  String updateRequiredMessage(Object version) {
+    return 'Cette version n’est plus prise en charge. Veuillez mettre à jour$version pour continuer.';
+  }
+
+  @override
+  String get updateNow => 'Mettre à jour';
+
+  @override
+  String get continueLabel => 'Continuer';
+
+  @override
+  String get updateLinkUnavailable =>
+      'Le lien de mise à jour n’est pas encore disponible. Veuillez réessayer plus tard.';
 }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 
-/// Wouri-style header with optional back button, title, and actions.
+/// App header with optional back button, title, and actions.
 class GradientHeader extends StatelessWidget {
   const GradientHeader({
     super.key,

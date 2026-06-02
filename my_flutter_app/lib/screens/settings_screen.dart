@@ -5,9 +5,17 @@ import '../widgets/theme_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
+import '../utils/action_confirmation.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  const SettingsScreen({
+    super.key,
+    this.onOpenWallet,
+    this.onOpenAccountProfile,
+  });
+
+  final VoidCallback? onOpenWallet;
+  final VoidCallback? onOpenAccountProfile;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -15,6 +23,17 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   void _handleLogout() async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await confirmMajorAction(
+      context,
+      title: l10n.signOutQuestion,
+      message: l10n.signOutConfirmMessage,
+      confirmLabel: l10n.confirmSignOut,
+      icon: Icons.logout,
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     await authProvider.logout();
 
@@ -29,6 +48,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final l10n = AppLocalizations.of(context)!;
     final roleLabel = authProvider.isAdmin
         ? l10n.admin
+        : authProvider.isBusinessOwner
+        ? l10n.businessAdmin
         : authProvider.isStaff
         ? l10n.staff
         : l10n.customer;
@@ -65,6 +86,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           : authProvider.userEmail ?? l10n.account,
                       subtitle: authProvider.userEmail ?? '',
                       role: roleLabel,
+                      onTap:
+                          widget.onOpenAccountProfile ??
+                          () =>
+                              Navigator.pushNamed(context, '/account-profile'),
                     )
                   else
                     _SignedOutPanel(
@@ -76,6 +101,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 14),
                   _SettingsGroup(
                     children: [
+                      if (!authProvider.hasBusinessDashboardAccess) ...[
+                        _SettingRow(
+                          icon: Icons.account_balance_wallet_outlined,
+                          title: l10n.walletTitle,
+                          subtitle: l10n.walletSubtitle,
+                          onTap:
+                              widget.onOpenWallet ??
+                              () => Navigator.pushNamed(context, '/wallet'),
+                        ),
+                        const Divider(height: 1),
+                      ],
                       _SettingRow(
                         icon: Icons.dark_mode_outlined,
                         title: l10n.themeLabel,
@@ -84,19 +120,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
 
-                  if (authProvider.isStaff) ...[
+                  if (authProvider.hasBusinessDashboardAccess) ...[
                     const SizedBox(height: 14),
                     _SettingsGroup(
                       children: [
-                        _SettingRow(
-                          icon: Icons.public,
-                          title: l10n.destinationCountries,
-                          subtitle: l10n.manageDestinationCountries,
-                          onTap: () => Navigator.pushNamed(
-                            context,
-                            '/destination-countries',
+                        if (authProvider.isAdmin) ...[
+                          _SettingRow(
+                            icon: Icons.storefront_outlined,
+                            title: l10n.businesses,
+                            subtitle: l10n.businessesSubtitle,
+                            onTap: () =>
+                                Navigator.pushNamed(context, '/businesses'),
                           ),
-                        ),
+                          const Divider(height: 1),
+                        ],
+                        if (!authProvider.isAdmin) ...[
+                          _SettingRow(
+                            icon: Icons.storefront_outlined,
+                            title: l10n.businessProfile,
+                            subtitle: l10n.businessProfileSubtitle,
+                            onTap: () => Navigator.pushNamed(
+                              context,
+                              '/business-profile',
+                            ),
+                          ),
+                        ],
+                        if (authProvider.isAdmin) ...[
+                          _SettingRow(
+                            icon: Icons.public,
+                            title: l10n.destinationCountries,
+                            subtitle: l10n.manageDestinationCountries,
+                            onTap: () => Navigator.pushNamed(
+                              context,
+                              '/destination-countries',
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ],
@@ -129,11 +188,13 @@ class _AccountPanel extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.role,
+    required this.onTap,
   });
 
   final String title;
   final String subtitle;
   final String role;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -144,6 +205,7 @@ class _AccountPanel extends StatelessWidget {
           title: title,
           subtitle: subtitle,
           trailing: _RolePill(label: role),
+          onTap: onTap,
         ),
       ],
     );

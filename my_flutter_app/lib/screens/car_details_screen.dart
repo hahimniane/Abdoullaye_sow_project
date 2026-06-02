@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -5,12 +6,93 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/car.dart';
-import '../models/destination_country.dart';
+import '../models/car_purchase.dart';
 import '../providers/auth_provider.dart';
 import '../services/car_purchase_service.dart';
 import '../widgets/language_toggle.dart';
-import '../widgets/destination_country_field.dart';
+import '../widgets/app_snackbars.dart';
 import '../theme/app_colors.dart';
+import '../utils/action_confirmation.dart';
+import '../utils/phone_number_validator.dart';
+
+String _carDetailOptionLabel(AppLocalizations l10n, String value) {
+  switch (value) {
+    case 'new':
+      return l10n.conditionNew;
+    case 'used':
+      return l10n.conditionUsed;
+    case 'certified':
+      return l10n.conditionCertified;
+    case 'salvage':
+      return l10n.conditionSalvage;
+    case 'sedan':
+      return l10n.bodySedan;
+    case 'suv':
+      return l10n.bodySuv;
+    case 'truck':
+      return l10n.bodyTruck;
+    case 'van':
+      return l10n.bodyVan;
+    case 'coupe':
+      return l10n.bodyCoupe;
+    case 'hatchback':
+      return l10n.bodyHatchback;
+    case 'wagon':
+      return l10n.bodyWagon;
+    case 'convertible':
+      return l10n.bodyConvertible;
+    case 'automatic':
+      return l10n.transmissionAutomatic;
+    case 'manual':
+      return l10n.transmissionManual;
+    case 'cvt':
+      return l10n.transmissionCvt;
+    case 'gas':
+      return l10n.fuelGas;
+    case 'diesel':
+      return l10n.fuelDiesel;
+    case 'hybrid':
+      return l10n.fuelHybrid;
+    case 'electric':
+      return l10n.fuelElectric;
+    case 'plug_in_hybrid':
+      return l10n.fuelPlugInHybrid;
+    case 'fwd':
+      return l10n.drivetrainFwd;
+    case 'rwd':
+      return l10n.drivetrainRwd;
+    case 'awd':
+      return l10n.drivetrainAwd;
+    case '4wd':
+      return l10n.drivetrainFourWd;
+    case 'backup_camera':
+      return l10n.featureBackupCamera;
+    case 'bluetooth':
+      return l10n.featureBluetooth;
+    case 'leather_seats':
+      return l10n.featureLeatherSeats;
+    case 'sunroof':
+      return l10n.featureSunroof;
+    case 'navigation':
+      return l10n.featureNavigation;
+    case 'heated_seats':
+      return l10n.featureHeatedSeats;
+    case 'apple_carplay':
+      return l10n.featureAppleCarPlay;
+    case 'android_auto':
+      return l10n.featureAndroidAuto;
+    case 'blind_spot':
+      return l10n.featureBlindSpot;
+    case 'third_row':
+      return l10n.featureThirdRow;
+    case 'remote_start':
+      return l10n.featureRemoteStart;
+    case 'keyless_entry':
+      return l10n.featureKeylessEntry;
+    default:
+      return value;
+  }
+}
 
 class CarDetailsScreen extends StatelessWidget {
   CarDetailsScreen({super.key, required this.car});
@@ -40,8 +122,10 @@ class CarDetailsScreen extends StatelessWidget {
           return car.status;
       }
     }();
+    final user = context.watch<AuthProvider>().user;
     final canReserve = car.status == 'active';
     final canPurchase = car.status == 'active' && car.price > 0;
+    final allFeatures = car.allFeatures;
 
     return Scaffold(
       body: Container(
@@ -135,6 +219,48 @@ class CarDetailsScreen extends StatelessWidget {
                               label: l10n.mileageLabel(car.mileage),
                               icon: Icons.speed,
                             ),
+                            if (car.condition.isNotEmpty)
+                              _InfoChip(
+                                label: _carDetailOptionLabel(
+                                  l10n,
+                                  car.condition,
+                                ),
+                                icon: Icons.verified_outlined,
+                              ),
+                            if (car.bodyType.isNotEmpty)
+                              _InfoChip(
+                                label: _carDetailOptionLabel(
+                                  l10n,
+                                  car.bodyType,
+                                ),
+                                icon: Icons.category_outlined,
+                              ),
+                            if (car.transmission.isNotEmpty)
+                              _InfoChip(
+                                label: _carDetailOptionLabel(
+                                  l10n,
+                                  car.transmission,
+                                ),
+                                icon: Icons.settings_suggest_outlined,
+                              ),
+                            if (car.fuelType.isNotEmpty)
+                              _InfoChip(
+                                label: _carDetailOptionLabel(
+                                  l10n,
+                                  car.fuelType,
+                                ),
+                                icon: Icons.local_gas_station_outlined,
+                              ),
+                            if (car.locationLabel.isNotEmpty)
+                              _InfoChip(
+                                label: car.locationLabel,
+                                icon: Icons.location_on_outlined,
+                              ),
+                            if (car.isNegotiable)
+                              _InfoChip(
+                                label: l10n.priceNegotiable,
+                                icon: Icons.handshake_outlined,
+                              ),
                             if (car.status.isNotEmpty)
                               _InfoChip(
                                 label: l10n.statusLabel,
@@ -171,14 +297,14 @@ class CarDetailsScreen extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        if (car.features.isEmpty)
+                        if (allFeatures.isEmpty)
                           Text(
                             l10n.noFeaturesAvailable,
                             style: TextStyle(color: Colors.grey.shade600),
                           )
                         else
                           Column(
-                            children: car.features.map((feature) {
+                            children: allFeatures.map((feature) {
                               return Padding(
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 4,
@@ -193,7 +319,7 @@ class CarDetailsScreen extends StatelessWidget {
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Text(
-                                        feature,
+                                        _carDetailOptionLabel(l10n, feature),
                                         style: const TextStyle(fontSize: 16),
                                       ),
                                     ),
@@ -209,27 +335,72 @@ class CarDetailsScreen extends StatelessWidget {
                           contactName: car.contactName,
                           contactEmail: car.contactEmail,
                         ),
+                        if (car.locationLabel.isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                          _BusinessLocationCard(
+                            l10n: l10n,
+                            businessName: car.businessName,
+                            location: car.locationLabel,
+                          ),
+                        ],
                         const SizedBox(height: 30),
+                        if (user == null)
+                          _ReservationActionArea(
+                            l10n: l10n,
+                            canReserve: canReserve,
+                            activeViewing: null,
+                            onReserve: () => _showReservationSheet(context),
+                          )
+                        else
+                          StreamBuilder<List<CarPurchase>>(
+                            stream: CarPurchaseService()
+                                .activeViewingReservationsForUser(user.uid),
+                            builder: (context, snapshot) {
+                              CarPurchase? activeViewing;
+                              for (final reservation
+                                  in snapshot.data ?? const <CarPurchase>[]) {
+                                if (reservation.carId == car.id) {
+                                  activeViewing = reservation;
+                                  break;
+                                }
+                              }
+                              return _ReservationActionArea(
+                                l10n: l10n,
+                                canReserve: canReserve,
+                                activeViewing: activeViewing,
+                                onReserve: () => _showReservationSheet(
+                                  context,
+                                  knownActiveViewing: activeViewing,
+                                ),
+                              );
+                            },
+                          ),
+                        const SizedBox(height: 12),
                         SizedBox(
                           width: double.infinity,
                           height: 56,
                           child: OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.brandRed,
-                              side: const BorderSide(
-                                color: AppColors.brandRed,
+                              foregroundColor: AppColors.cobaltDeep,
+                              side: BorderSide(
+                                color: AppColors.cobaltDeep.withValues(
+                                  alpha: 0.55,
+                                ),
                                 width: 1.4,
                               ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
-                            onPressed: canReserve
-                                ? () => _showReservationSheet(context)
+                            onPressed: canPurchase
+                                ? () => _showDepositSheet(context)
                                 : null,
-                            icon: const Icon(Icons.event_available, size: 24),
+                            icon: const Icon(
+                              Icons.lock_clock_outlined,
+                              size: 24,
+                            ),
                             label: Text(
-                              l10n.reserveViewing,
+                              l10n.reserveWithPaidHold,
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -354,7 +525,10 @@ class CarDetailsScreen extends StatelessWidget {
     return result == true && context.read<AuthProvider>().isAuthenticated;
   }
 
-  Future<void> _showReservationSheet(BuildContext context) async {
+  Future<void> _showReservationSheet(
+    BuildContext context, {
+    CarPurchase? knownActiveViewing,
+  }) async {
     final l10n = AppLocalizations.of(context)!;
     final isReady = await _ensureCustomerAccount(
       context,
@@ -364,12 +538,25 @@ class CarDetailsScreen extends StatelessWidget {
     if (!isReady || !context.mounted) return;
 
     final authProvider = context.read<AuthProvider>();
+    final user = authProvider.user;
+    if (user == null) return;
+    final existingViewing =
+        knownActiveViewing ??
+        await CarPurchaseService().activeViewingReservationForCar(
+          buyerUid: user.uid,
+          carId: car.id,
+        );
+    if (!context.mounted) return;
+    if (existingViewing != null) {
+      await _showExistingViewingSheet(context, existingViewing);
+      return;
+    }
+
     final buyerName = authProvider.buyerName;
     final profilePhone = authProvider.customerPhone?.trim() ?? '';
     final buyerPhoneController = TextEditingController(text: profilePhone);
     final needsPhone = profilePhone.isEmpty;
     final slots = _ViewingSlot.available();
-    DestinationCountry? selectedCountry;
     _ViewingSlot? selectedSlot;
     var isSubmitting = false;
     final formKey = GlobalKey<FormState>();
@@ -423,24 +610,22 @@ class CarDetailsScreen extends StatelessWidget {
                             labelText: l10n.customerPhone,
                           ),
                           keyboardType: TextInputType.phone,
-                          validator: (value) {
-                            final digits =
-                                value?.replaceAll(RegExp(r'\D'), '') ?? '';
-                            return digits.length < 7
-                                ? l10n.requiredField
-                                : null;
-                          },
+                          inputFormatters:
+                              PhoneNumberValidator.allowedInputFormatters,
+                          validator: (value) => PhoneNumberValidator.validate(
+                            value,
+                            requiredMessage: l10n.requiredField,
+                          ),
                         ),
                       ],
-                      const SizedBox(height: 16),
-                      DestinationCountryField(
-                        value: selectedCountry,
-                        label: l10n.destinationCountry,
-                        requiredMessage: l10n.requiredField,
-                        onChanged: (country) {
-                          setModalState(() => selectedCountry = country);
-                        },
-                      ),
+                      if (car.locationLabel.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        _SheetInfoPanel(
+                          icon: Icons.place_outlined,
+                          title: l10n.viewingLocation,
+                          message: '${car.businessName}\n${car.locationLabel}',
+                        ),
+                      ],
                       const SizedBox(height: 20),
                       Text(
                         l10n.selectViewingTime,
@@ -496,10 +681,17 @@ class CarDetailsScreen extends StatelessWidget {
                               ? null
                               : () async {
                                   if (!formKey.currentState!.validate() ||
-                                      selectedCountry == null ||
                                       selectedSlot == null) {
                                     return;
                                   }
+                                  final confirmed = await confirmMajorAction(
+                                    context,
+                                    title: l10n.reserveViewingQuestion,
+                                    message: l10n.reserveViewingConfirmMessage,
+                                    confirmLabel: l10n.reserveViewing,
+                                    icon: Icons.event_available_outlined,
+                                  );
+                                  if (!confirmed || !context.mounted) return;
                                   setModalState(() => isSubmitting = true);
                                   try {
                                     if (needsPhone) {
@@ -515,7 +707,6 @@ class CarDetailsScreen extends StatelessWidget {
                                     }
                                     await CarPurchaseService().reserveViewing(
                                       car: car,
-                                      destinationCountry: selectedCountry!,
                                       buyerName: buyerName,
                                       buyerPhone: buyerPhoneController.text
                                           .trim(),
@@ -524,23 +715,17 @@ class CarDetailsScreen extends StatelessWidget {
                                     );
                                     if (!context.mounted) return;
                                     Navigator.pop(context);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          l10n.viewingReservationComplete(
-                                            selectedSlot!.label,
-                                          ),
-                                        ),
-                                        backgroundColor: Colors.green,
+                                    showSuccessSnackBar(
+                                      context,
+                                      l10n.viewingReservationComplete(
+                                        selectedSlot!.label,
                                       ),
                                     );
                                   } catch (e) {
                                     if (!context.mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(_checkoutError(l10n, e)),
-                                        backgroundColor: Colors.red,
-                                      ),
+                                    showErrorSnackBar(
+                                      context,
+                                      _checkoutError(l10n, e),
                                     );
                                   } finally {
                                     if (context.mounted) {
@@ -573,6 +758,521 @@ class CarDetailsScreen extends StatelessWidget {
     buyerPhoneController.dispose();
   }
 
+  Future<void> _showExistingViewingSheet(
+    BuildContext context,
+    CarPurchase reservation,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    var isSubmitting = false;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final appointment = reservation.appointmentStart;
+            final label =
+                reservation.appointmentLabel ??
+                (appointment == null
+                    ? l10n.viewingScheduled
+                    : DateFormat.yMMMd().add_jm().format(appointment));
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: AppColors.brandRed.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Icon(
+                            Icons.event_available_outlined,
+                            color: AppColors.brandRed,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            l10n.youHaveViewingReserved,
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: isSubmitting
+                              ? null
+                              : () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    _SheetInfoPanel(
+                      icon: Icons.schedule_outlined,
+                      title: l10n.currentViewingTime,
+                      message: label,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      l10n.changeOrCancelViewingToBookNew,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.lightMuted,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: FilledButton.icon(
+                        onPressed:
+                            isSubmitting ||
+                                !reservation.canEditViewingReservation
+                            ? null
+                            : () async {
+                                Navigator.pop(context);
+                                await _showEditViewingSheet(
+                                  context,
+                                  reservation,
+                                );
+                              },
+                        icon: const Icon(Icons.event_repeat_outlined),
+                        label: Text(l10n.editViewingReservation),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.errorRed,
+                          side: const BorderSide(color: AppColors.errorRed),
+                        ),
+                        onPressed: isSubmitting
+                            ? null
+                            : () async {
+                                final confirmed = await confirmMajorAction(
+                                  context,
+                                  title: l10n.cancelViewingQuestion,
+                                  message: l10n.cancelViewingConfirmMessage,
+                                  confirmLabel: l10n.cancelViewingReservation,
+                                  icon: Icons.event_busy_outlined,
+                                  destructive: true,
+                                );
+                                if (!confirmed || !context.mounted) return;
+                                setModalState(() => isSubmitting = true);
+                                try {
+                                  await CarPurchaseService()
+                                      .cancelViewingReservation(
+                                        purchaseId: reservation.id,
+                                      );
+                                  if (!context.mounted) return;
+                                  Navigator.pop(context);
+                                  showSuccessSnackBar(
+                                    context,
+                                    l10n.viewingReservationCancelled,
+                                  );
+                                } catch (error) {
+                                  if (!context.mounted) return;
+                                  showErrorSnackBar(
+                                    context,
+                                    l10n.operationFailed('$error'),
+                                  );
+                                  setModalState(() => isSubmitting = false);
+                                }
+                              },
+                        icon: isSubmitting
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.event_busy_outlined),
+                        label: Text(l10n.cancelViewingReservation),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showEditViewingSheet(
+    BuildContext context,
+    CarPurchase reservation,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final slots = _ViewingSlot.available();
+    _ViewingSlot? selectedSlot;
+    var isSubmitting = false;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            l10n.editViewingReservation,
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: isSubmitting
+                              ? null
+                              : () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      l10n.viewingEditCutoff,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.lightMuted,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: slots.map((slot) {
+                        final isSelected = selectedSlot == slot;
+                        return ChoiceChip(
+                          selected: isSelected,
+                          avatar: Icon(
+                            Icons.schedule,
+                            size: 18,
+                            color: isSelected
+                                ? Colors.white
+                                : AppColors.brandRed,
+                          ),
+                          label: Text(slot.label),
+                          selectedColor: AppColors.brandRed,
+                          labelStyle: TextStyle(
+                            color: isSelected
+                                ? Colors.white
+                                : AppColors.lightOnSurface,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          onSelected: isSubmitting
+                              ? null
+                              : (_) => setModalState(() => selectedSlot = slot),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 22),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: FilledButton.icon(
+                        onPressed: isSubmitting
+                            ? null
+                            : () async {
+                                final slot = selectedSlot;
+                                if (slot == null) return;
+                                setModalState(() => isSubmitting = true);
+                                try {
+                                  await CarPurchaseService()
+                                      .updateViewingReservation(
+                                        purchaseId: reservation.id,
+                                        appointmentStart: slot.start,
+                                        appointmentLabel: slot.label,
+                                      );
+                                  if (!context.mounted) return;
+                                  Navigator.pop(context);
+                                  showSuccessSnackBar(
+                                    context,
+                                    l10n.viewingReservationUpdated,
+                                  );
+                                } catch (error) {
+                                  if (!context.mounted) return;
+                                  showErrorSnackBar(
+                                    context,
+                                    l10n.operationFailed('$error'),
+                                  );
+                                  setModalState(() => isSubmitting = false);
+                                }
+                              },
+                        icon: isSubmitting
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.event_repeat_outlined),
+                        label: Text(l10n.changeViewingTime),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showDepositSheet(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final isReady = await _ensureCustomerAccount(
+      context,
+      title: l10n.accountRequiredTitle,
+      message: l10n.loginRequiredForDeposit,
+    );
+    if (!isReady || !context.mounted) return;
+
+    final authProvider = context.read<AuthProvider>();
+    final buyerName = authProvider.buyerName;
+    final profilePhone = authProvider.customerPhone?.trim() ?? '';
+    final buyerPhoneController = TextEditingController(text: profilePhone);
+    final needsPhone = profilePhone.isEmpty;
+    final holdPricing = await _loadHoldPricing();
+    if (!context.mounted) return;
+    DateTime selectedHoldUntil = _dateOnly(
+      DateTime.now().add(const Duration(days: 1)),
+    );
+    var isSubmitting = false;
+    final formKey = GlobalKey<FormState>();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+            final holdQuote = holdPricing.quote(selectedHoldUntil);
+            final depositText = _currency.format(holdQuote.amount);
+            final latestHoldDate = _dateOnly(
+              DateTime.now().add(Duration(days: holdPricing.maxDays)),
+            );
+            return Padding(
+              padding: EdgeInsets.only(bottom: bottomInset),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              l10n.reserveWithPaidHold,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: isSubmitting
+                                ? null
+                                : () => Navigator.pop(context),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        l10n.depositSummary(depositText),
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 16),
+                      _SheetInfoPanel(
+                        icon: Icons.lock_clock_outlined,
+                        title: l10n.reserveCarHoldTitle,
+                        message: l10n.reserveCarHoldMessage,
+                      ),
+                      const SizedBox(height: 12),
+                      const _SheetInfoPanel(
+                        icon: Icons.privacy_tip_outlined,
+                        title: 'No-show history',
+                        message:
+                            'If you do not return by the hold date and the '
+                            'business marks that you did not come, the deposit '
+                            'may be forfeited and this outcome may be visible '
+                            'to car-selling businesses.',
+                      ),
+                      const SizedBox(height: 12),
+                      _SheetInfoPanel(
+                        icon: Icons.event_busy_outlined,
+                        title: 'Hold until',
+                        message:
+                            '${DateFormat.yMMMd().format(selectedHoldUntil)}\n'
+                            '${holdQuote.description}',
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: isSubmitting
+                              ? null
+                              : () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: selectedHoldUntil,
+                                    firstDate: _dateOnly(
+                                      DateTime.now().add(
+                                        const Duration(days: 1),
+                                      ),
+                                    ),
+                                    lastDate: latestHoldDate,
+                                  );
+                                  if (picked == null) return;
+                                  setModalState(() {
+                                    selectedHoldUntil = _dateOnly(picked);
+                                  });
+                                },
+                          icon: const Icon(Icons.calendar_month_outlined),
+                          label: const Text('Choose return date'),
+                        ),
+                      ),
+                      if (car.locationLabel.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        _SheetInfoPanel(
+                          icon: Icons.storefront_outlined,
+                          title: l10n.businessLocation,
+                          message: '${car.businessName}\n${car.locationLabel}',
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      _AccountSummary(name: buyerName, phone: profilePhone),
+                      if (needsPhone) ...[
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: buyerPhoneController,
+                          decoration: InputDecoration(
+                            labelText: l10n.customerPhone,
+                          ),
+                          keyboardType: TextInputType.phone,
+                          inputFormatters:
+                              PhoneNumberValidator.allowedInputFormatters,
+                          validator: (value) => PhoneNumberValidator.validate(
+                            value,
+                            requiredMessage: l10n.requiredField,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: isSubmitting
+                              ? null
+                              : () async {
+                                  if (!formKey.currentState!.validate()) return;
+                                  final confirmed = await confirmMajorAction(
+                                    context,
+                                    title: l10n.reserveCarQuestion,
+                                    message: l10n.reserveCarConfirmMessage(
+                                      depositText,
+                                    ),
+                                    confirmLabel: l10n.continueToPayment,
+                                    icon: Icons.payments_outlined,
+                                  );
+                                  if (!confirmed || !context.mounted) return;
+                                  setModalState(() => isSubmitting = true);
+                                  try {
+                                    if (needsPhone) {
+                                      authProvider
+                                          .updateCustomerPhone(
+                                            buyerPhoneController.text.trim(),
+                                          )
+                                          .catchError((error) {
+                                            debugPrint(
+                                              'Could not save customer phone: $error',
+                                            );
+                                          });
+                                    }
+                                    await CarPurchaseService()
+                                        .reserveWithDeposit(
+                                          car: car,
+                                          buyerName: buyerName,
+                                          buyerPhone: buyerPhoneController.text
+                                              .trim(),
+                                          holdUntilDate: selectedHoldUntil,
+                                        );
+                                    if (!context.mounted) return;
+                                    Navigator.pop(context);
+                                    showSuccessSnackBar(
+                                      context,
+                                      l10n.reservationComplete,
+                                    );
+                                  } catch (e) {
+                                    if (!context.mounted) return;
+                                    showErrorSnackBar(
+                                      context,
+                                      _checkoutError(l10n, e),
+                                    );
+                                  } finally {
+                                    if (context.mounted) {
+                                      setModalState(() => isSubmitting = false);
+                                    }
+                                  }
+                                },
+                          child: isSubmitting
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Text(l10n.continueToPayment),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    buyerPhoneController.dispose();
+  }
+
   Future<void> _showPurchaseSheet(
     BuildContext context,
     String formattedPrice,
@@ -590,7 +1290,6 @@ class CarDetailsScreen extends StatelessWidget {
     final profilePhone = authProvider.customerPhone?.trim() ?? '';
     final buyerPhoneController = TextEditingController(text: profilePhone);
     final needsPhone = profilePhone.isEmpty;
-    DestinationCountry? selectedCountry;
     var isSubmitting = false;
     final formKey = GlobalKey<FormState>();
 
@@ -681,24 +1380,22 @@ class CarDetailsScreen extends StatelessWidget {
                             labelText: l10n.customerPhone,
                           ),
                           keyboardType: TextInputType.phone,
-                          validator: (value) {
-                            final digits =
-                                value?.replaceAll(RegExp(r'\D'), '') ?? '';
-                            return digits.length < 7
-                                ? l10n.requiredField
-                                : null;
-                          },
+                          inputFormatters:
+                              PhoneNumberValidator.allowedInputFormatters,
+                          validator: (value) => PhoneNumberValidator.validate(
+                            value,
+                            requiredMessage: l10n.requiredField,
+                          ),
                         ),
                       ],
-                      const SizedBox(height: 16),
-                      DestinationCountryField(
-                        value: selectedCountry,
-                        label: l10n.destinationCountry,
-                        requiredMessage: l10n.requiredField,
-                        onChanged: (country) {
-                          setModalState(() => selectedCountry = country);
-                        },
-                      ),
+                      if (car.locationLabel.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        _SheetInfoPanel(
+                          icon: Icons.storefront_outlined,
+                          title: l10n.businessLocation,
+                          message: '${car.businessName}\n${car.locationLabel}',
+                        ),
+                      ],
                       const SizedBox(height: 24),
                       SizedBox(
                         width: double.infinity,
@@ -707,10 +1404,17 @@ class CarDetailsScreen extends StatelessWidget {
                           onPressed: isSubmitting
                               ? null
                               : () async {
-                                  if (!formKey.currentState!.validate() ||
-                                      selectedCountry == null) {
+                                  if (!formKey.currentState!.validate()) {
                                     return;
                                   }
+                                  final confirmed = await confirmMajorAction(
+                                    context,
+                                    title: l10n.purchaseCarQuestion,
+                                    message: l10n.purchaseCarConfirmMessage,
+                                    confirmLabel: l10n.continueToPayment,
+                                    icon: Icons.payments_outlined,
+                                  );
+                                  if (!confirmed || !context.mounted) return;
                                   setModalState(() => isSubmitting = true);
                                   try {
                                     if (needsPhone) {
@@ -726,26 +1430,21 @@ class CarDetailsScreen extends StatelessWidget {
                                     }
                                     await CarPurchaseService().purchaseCar(
                                       car: car,
-                                      destinationCountry: selectedCountry!,
                                       buyerName: buyerName,
                                       buyerPhone: buyerPhoneController.text
                                           .trim(),
                                     );
                                     if (!context.mounted) return;
                                     Navigator.pop(context);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(l10n.purchaseComplete),
-                                        backgroundColor: Colors.green,
-                                      ),
+                                    showSuccessSnackBar(
+                                      context,
+                                      l10n.purchaseComplete,
                                     );
                                   } catch (e) {
                                     if (!context.mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(_checkoutError(l10n, e)),
-                                        backgroundColor: Colors.red,
-                                      ),
+                                    showErrorSnackBar(
+                                      context,
+                                      _checkoutError(l10n, e),
                                     );
                                   } finally {
                                     if (context.mounted) {
@@ -825,6 +1524,209 @@ class CarDetailsScreen extends StatelessWidget {
     }
     return l10n.checkoutUnavailable;
   }
+
+  DateTime _dateOnly(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
+  }
+
+  Future<_ResolvedHoldPricing> _loadHoldPricing() async {
+    final businessDoc = await FirebaseFirestore.instance
+        .collection('businesses')
+        .doc(car.businessId)
+        .get();
+    final business = businessDoc.data() ?? const <String, dynamic>{};
+    return _ResolvedHoldPricing.from(car: car, business: business);
+  }
+}
+
+class _HoldQuote {
+  const _HoldQuote({required this.amount, required this.description});
+
+  final double amount;
+  final String description;
+}
+
+class _ResolvedHoldPricing {
+  const _ResolvedHoldPricing({
+    required this.mode,
+    required this.flatFee,
+    required this.dailyRate,
+    required this.maxDays,
+  });
+
+  final String mode;
+  final double flatFee;
+  final double dailyRate;
+  final int maxDays;
+
+  factory _ResolvedHoldPricing.from({
+    required Car car,
+    required Map<String, dynamic> business,
+  }) {
+    final useBusiness = car.useBusinessHoldPricing;
+    final mode = useBusiness
+        ? (business['carHoldPricingMode'] ?? 'flat').toString()
+        : (car.carHoldPricingMode.isEmpty ? 'flat' : car.carHoldPricingMode);
+    final flatFee = useBusiness
+        ? _number(business['carHoldFlatFee'], 500)
+        : (car.carHoldFlatFee ?? 500);
+    final dailyRate = useBusiness
+        ? _number(business['carHoldDailyRate'], 100)
+        : (car.carHoldDailyRate ?? 100);
+    final maxDays =
+        (useBusiness
+                ? _intValue(business['carHoldMaxDays'], 14)
+                : (car.carHoldMaxDays ?? 14))
+            .clamp(1, 30);
+    return _ResolvedHoldPricing(
+      mode: mode == 'per_day' ? 'per_day' : 'flat',
+      flatFee: flatFee > 0 ? flatFee : 500,
+      dailyRate: dailyRate > 0 ? dailyRate : 100,
+      maxDays: maxDays,
+    );
+  }
+
+  _HoldQuote quote(DateTime holdUntilDate) {
+    final today = DateTime.now();
+    final todayOnly = DateTime(today.year, today.month, today.day);
+    final holdOnly = DateTime(
+      holdUntilDate.year,
+      holdUntilDate.month,
+      holdUntilDate.day,
+    );
+    final days = holdOnly.difference(todayOnly).inDays.clamp(1, maxDays);
+    if (mode == 'per_day') {
+      return _HoldQuote(
+        amount: dailyRate * days,
+        description:
+            '$days day hold at ${NumberFormat.simpleCurrency().format(dailyRate)} per day',
+      );
+    }
+    return _HoldQuote(
+      amount: flatFee,
+      description: 'Flat hold fee for up to $maxDays days',
+    );
+  }
+
+  static double _number(dynamic value, double fallback) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? fallback;
+    return fallback;
+  }
+
+  static int _intValue(dynamic value, int fallback) {
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? fallback;
+    return fallback;
+  }
+}
+
+class _ReservationActionArea extends StatelessWidget {
+  const _ReservationActionArea({
+    required this.l10n,
+    required this.canReserve,
+    required this.activeViewing,
+    required this.onReserve,
+  });
+
+  final AppLocalizations l10n;
+  final bool canReserve;
+  final CarPurchase? activeViewing;
+  final VoidCallback onReserve;
+
+  @override
+  Widget build(BuildContext context) {
+    final viewing = activeViewing;
+    final appointment = viewing?.appointmentStart;
+    final label =
+        viewing?.appointmentLabel ??
+        (appointment == null
+            ? l10n.viewingScheduled
+            : DateFormat.yMMMd().add_jm().format(appointment));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (viewing != null) ...[
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.brandRed.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppColors.brandRed.withValues(alpha: 0.2),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.event_available_outlined,
+                    color: AppColors.brandRed,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.youHaveViewingReserved,
+                        style: const TextStyle(
+                          color: AppColors.brandRed,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          color: AppColors.lightOnSurface,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        SizedBox(
+          width: double.infinity,
+          height: 56,
+          child: OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.brandRed,
+              side: const BorderSide(color: AppColors.brandRed, width: 1.4),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onPressed: canReserve ? onReserve : null,
+            icon: Icon(
+              viewing == null
+                  ? Icons.event_available
+                  : Icons.event_repeat_outlined,
+              size: 24,
+            ),
+            label: Text(
+              viewing == null
+                  ? l10n.reserveViewing
+                  : l10n.editViewingReservation,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _AccountSummary extends StatelessWidget {
@@ -872,6 +1774,146 @@ class _AccountSummary extends StatelessWidget {
                   style: Theme.of(
                     context,
                   ).textTheme.bodySmall?.copyWith(color: AppColors.lightMuted),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SheetInfoPanel extends StatelessWidget {
+  const _SheetInfoPanel({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.paper,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.cobaltDeep.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: AppColors.cobaltDeep),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: AppColors.ink,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    color: AppColors.lightMuted,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BusinessLocationCard extends StatelessWidget {
+  const _BusinessLocationCard({
+    required this.l10n,
+    required this.businessName,
+    required this.location,
+  });
+
+  final AppLocalizations l10n;
+  final String businessName;
+  final String location;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.paper,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.rule),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: AppColors.brandRed.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.storefront_outlined,
+              color: AppColors.brandRed,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.businessLocation,
+                  style: const TextStyle(
+                    color: AppColors.ink,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  businessName,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  location,
+                  style: const TextStyle(
+                    color: AppColors.lightMuted,
+                    height: 1.35,
+                  ),
                 ),
               ],
             ),

@@ -4,6 +4,8 @@ import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
+import '../utils/app_feedback.dart';
+import '../widgets/app_snackbars.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -66,9 +68,14 @@ class _LoginScreenState extends State<LoginScreen>
 
       debugPrint('🔵 LoginScreen: Authentication result: $success');
       debugPrint('🔵 LoginScreen: isStaff: ${authProvider.isStaff}');
+      debugPrint(
+        '🔵 LoginScreen: isBusinessOwner: ${authProvider.isBusinessOwner}',
+      );
       debugPrint('🔵 LoginScreen: isAdmin: ${authProvider.isAdmin}');
 
       if (success && mounted) {
+        await AppFeedback.success();
+        if (!mounted) return;
         final routeArgs = ModalRoute.of(context)?.settings.arguments;
         final shouldReturn =
             routeArgs is Map && routeArgs['returnToPrevious'] == true;
@@ -77,9 +84,8 @@ class _LoginScreenState extends State<LoginScreen>
           return;
         }
 
-        // Check if user is staff and navigate accordingly
-        if (authProvider.isStaff) {
-          debugPrint('🔵 LoginScreen: Navigating to staff home');
+        if (authProvider.hasBusinessDashboardAccess) {
+          debugPrint('🔵 LoginScreen: Navigating to business dashboard');
           Navigator.pushNamedAndRemoveUntil(
             context,
             '/staff-home',
@@ -94,13 +100,7 @@ class _LoginScreenState extends State<LoginScreen>
     } catch (error) {
       debugPrint('🔴 LoginScreen: Login error: $error');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(error.toString()),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        showErrorSnackBar(context, error.toString());
       }
     }
   }
@@ -133,19 +133,20 @@ class _LoginScreenState extends State<LoginScreen>
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: Image.asset(
-                                'assets/images/keren_logo.jpg',
-                                width: 160,
-                                height: 120,
-                                fit: BoxFit.contain,
-                                errorBuilder: (_, __, ___) => Image.asset(
-                                  'assets/images/logo.JPG',
-                                  width: 160,
-                                  height: 120,
-                                  fit: BoxFit.contain,
+                            Container(
+                              width: 112,
+                              height: 112,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.14),
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.22),
                                 ),
+                              ),
+                              child: const Icon(
+                                Icons.storefront,
+                                size: 58,
+                                color: Colors.white,
                               ),
                             ),
                             const SizedBox(height: 32),
@@ -447,6 +448,28 @@ class _LoginScreenState extends State<LoginScreen>
                                           ),
                                         ),
                                       ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    OutlinedButton.icon(
+                                      onPressed: () {
+                                        Navigator.pushNamed(
+                                          context,
+                                          '/business-register',
+                                        );
+                                      },
+                                      icon: const Icon(
+                                        Icons.storefront_outlined,
+                                      ),
+                                      label: const Text(
+                                        'Register your business',
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: AppColors.cobaltDeep,
+                                        side: const BorderSide(
+                                          color: AppColors.cobaltDeep,
+                                        ),
+                                        minimumSize: const Size.fromHeight(48),
+                                      ),
                                     ),
                                     const SizedBox(height: 8),
 

@@ -4,6 +4,8 @@ import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
+import '../utils/phone_number_validator.dart';
+import '../widgets/app_snackbars.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -79,14 +81,9 @@ class _SignUpScreenState extends State<SignUpScreen>
 
       if (success && mounted) {
         // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.accountCreatedSuccessfully,
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-          ),
+        showSuccessSnackBar(
+          context,
+          AppLocalizations.of(context)!.accountCreatedSuccessfully,
         );
 
         final routeArgs = ModalRoute.of(context)?.settings.arguments;
@@ -101,24 +98,15 @@ class _SignUpScreenState extends State<SignUpScreen>
         Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
       } else if (!success && mounted) {
         // If success is false, show error
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Sign up failed. Please try again.'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
+        showErrorSnackBar(
+          context,
+          AppLocalizations.of(context)!.signUpFailedTryAgain,
         );
       }
     } catch (error) {
       debugPrint('🔴 SignUpScreen: Error caught: $error');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(error.toString()),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        showErrorSnackBar(context, error.toString());
       }
     }
   }
@@ -279,6 +267,8 @@ class _SignUpScreenState extends State<SignUpScreen>
                                     TextFormField(
                                       controller: _phoneController,
                                       keyboardType: TextInputType.phone,
+                                      inputFormatters: PhoneNumberValidator
+                                          .allowedInputFormatters,
                                       decoration: InputDecoration(
                                         labelText: AppLocalizations.of(
                                           context,
@@ -315,18 +305,15 @@ class _SignUpScreenState extends State<SignUpScreen>
                                         fillColor: Colors.grey.shade50,
                                       ),
                                       validator: (value) {
-                                        final digits =
-                                            value?.replaceAll(
-                                              RegExp(r'\D'),
-                                              '',
-                                            ) ??
-                                            '';
-                                        if (digits.length < 7) {
-                                          return AppLocalizations.of(
+                                        return PhoneNumberValidator.validate(
+                                          value,
+                                          requiredMessage: AppLocalizations.of(
                                             context,
-                                          )!.pleaseEnterPhoneNumber;
-                                        }
-                                        return null;
+                                          )!.pleaseEnterPhoneNumber,
+                                          invalidMessage: AppLocalizations.of(
+                                            context,
+                                          )!.pleaseEnterPhoneNumber,
+                                        );
                                       },
                                     ),
                                     const SizedBox(height: 20),
@@ -624,6 +611,28 @@ class _SignUpScreenState extends State<SignUpScreen>
                                           ),
                                         ),
                                       ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    OutlinedButton.icon(
+                                      onPressed: () {
+                                        Navigator.pushNamed(
+                                          context,
+                                          '/business-register',
+                                        );
+                                      },
+                                      icon: const Icon(
+                                        Icons.storefront_outlined,
+                                      ),
+                                      label: const Text(
+                                        'Register your business instead',
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: AppColors.cobaltDeep,
+                                        side: const BorderSide(
+                                          color: AppColors.cobaltDeep,
+                                        ),
+                                        minimumSize: const Size.fromHeight(48),
+                                      ),
                                     ),
                                   ],
                                 ),

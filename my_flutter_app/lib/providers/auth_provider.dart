@@ -3,7 +3,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
+import '../utils/phone_number_validator.dart';
+
 class AuthProvider extends ChangeNotifier {
+  static const String platformAdminEmail = 'admin@gmail.com';
+
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseFunctions _functions = FirebaseFunctions.instance;
@@ -11,18 +15,32 @@ class AuthProvider extends ChangeNotifier {
   User? _user;
   bool _isStaff = false;
   bool _isAdmin = false;
+  bool _isBusinessOwner = false;
+  String? _role;
+  String? _businessId;
+  String? _businessName;
+  List<String> _businessServices = const [];
   String? _userEmail;
   String? _customerName;
   String? _customerPhone;
+  String? _profileImageUrl;
   bool _isLoading = false;
   bool _isInitializing = true;
 
   User? get user => _user;
   bool get isStaff => _isStaff;
   bool get isAdmin => _isAdmin;
+  bool get isBusinessOwner => _isBusinessOwner;
+  bool get hasBusinessDashboardAccess =>
+      _isStaff || _isBusinessOwner || _isAdmin;
+  String? get role => _role;
+  String? get businessId => _businessId;
+  String? get businessName => _businessName;
+  List<String> get businessServices => List.unmodifiable(_businessServices);
   String? get userEmail => _userEmail;
   String? get customerName => _customerName;
   String? get customerPhone => _customerPhone;
+  String? get profileImageUrl => _profileImageUrl;
   bool get isLoading => _isLoading;
   bool get isInitializing => _isInitializing;
   bool get isAuthenticated => _user != null;
@@ -49,9 +67,15 @@ class AuthProvider extends ChangeNotifier {
     } else {
       _isStaff = false;
       _isAdmin = false;
+      _isBusinessOwner = false;
+      _role = null;
+      _businessId = null;
+      _businessName = null;
+      _businessServices = const [];
       _userEmail = null;
       _customerName = null;
       _customerPhone = null;
+      _profileImageUrl = null;
     }
 
     if (_isInitializing) {
@@ -63,6 +87,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _checkUserRole() async {
     if (_user != null) {
       try {
+        await _ensurePlatformAdminProfileIfNeeded();
         debugPrint('🔍 Fetching user document from Firestore...');
         final userDoc = await _firestore
             .collection('users')
@@ -70,32 +95,71 @@ class AuthProvider extends ChangeNotifier {
             .get();
         if (userDoc.exists) {
           final data = userDoc.data();
-          final role = data?['role'];
-          _isStaff = role == 'staff' || role == 'admin';
+          final role = data?['role'] as String?;
+          _role = role;
+          _isBusinessOwner = role == 'businessOwner';
+          _isStaff = role == 'staff';
           _isAdmin = role == 'admin';
+          _businessId = data?['businessId'] as String?;
+          _businessName = data?['businessName'] as String?;
+          _businessServices = _stringList(data?['businessServices']);
           _customerName = data?['fullName'] as String?;
           _customerPhone = data?['phone'] as String?;
+          _profileImageUrl = data?['profileImageUrl'] as String?;
           debugPrint(
-            '👥 User role: ${_isStaff
-                ? 'staff'
-                : _isAdmin
+            '👥 User role: ${_isAdmin
                 ? 'admin'
+                : _isBusinessOwner
+                ? 'businessOwner'
+                : _isStaff
+                ? 'staff'
                 : 'customer'}',
           );
         } else {
           debugPrint('📄 User document not found.');
           _isStaff = false;
           _isAdmin = false;
+          _isBusinessOwner = false;
+          _role = null;
+          _businessId = null;
+          _businessName = null;
+          _businessServices = const [];
           _customerName = null;
           _customerPhone = null;
+          _profileImageUrl = null;
         }
         // No longer need to notify here, _onAuthStateChanged will do it.
       } catch (e) {
         debugPrint('❌ Error checking user role: $e');
         _isStaff = false;
         _isAdmin = false;
+        _isBusinessOwner = false;
+        _role = null;
+        _businessId = null;
+        _businessName = null;
+        _businessServices = const [];
       }
     }
+  }
+
+  List<String> _stringList(dynamic raw) {
+    if (raw is Iterable) {
+      return raw.map((item) => item.toString()).toList();
+    }
+    return const [];
+  }
+
+  Future<void> _ensurePlatformAdminProfileIfNeeded() async {
+    final email = (_user?.email ?? '').trim().toLowerCase();
+    if (email != platformAdminEmail) return;
+    debugPrint('🛡️ Ensuring platform admin profile for $email...');
+    final callable = _functions.httpsCallable('ensurePlatformAdminProfile');
+    await callable.call();
+  }
+
+  Future<void> refreshUserProfile() async {
+    await _checkUserRole();
+    notifyListeners();
   }
 
   Future<bool> authenticate(String email, String password) async {
@@ -169,9 +233,15 @@ class AuthProvider extends ChangeNotifier {
       _user = null;
       _isStaff = false;
       _isAdmin = false;
+      _isBusinessOwner = false;
+      _role = null;
+      _businessId = null;
+      _businessName = null;
+      _businessServices = const [];
       _userEmail = null;
       _customerName = null;
       _customerPhone = null;
+      _profileImageUrl = null;
       notifyListeners();
     } catch (e) {
       debugPrint('Error during logout: $e');
@@ -181,12 +251,137 @@ class AuthProvider extends ChangeNotifier {
   Future<void> updateCustomerPhone(String phone) async {
     final trimmed = phone.trim();
     if (_user == null || trimmed.isEmpty) return;
+    if (!PhoneNumberValidator.isValid(trimmed)) {
+      throw 'Please enter a valid phone number.';
+    }
     await _firestore.collection('users').doc(_user!.uid).update({
       'phone': trimmed,
       'updatedAt': FieldValue.serverTimestamp(),
     });
     _customerPhone = trimmed;
     notifyListeners();
+  }
+
+  Future<void> updateAccountProfile({
+    required String fullName,
+    required String phone,
+    String? profileImageUrl,
+    String? profileImagePath,
+  }) async {
+    final trimmedPhone = phone.trim();
+    if (_user == null) return;
+    if (!PhoneNumberValidator.isValid(trimmedPhone)) {
+      throw 'Please enter a valid phone number.';
+    }
+    final data = {
+      'fullName': fullName.trim(),
+      'phone': trimmedPhone,
+      if (profileImageUrl != null) 'profileImageUrl': profileImageUrl,
+      if (profileImagePath != null) 'profileImagePath': profileImagePath,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    await _firestore.collection('users').doc(_user!.uid).update(data);
+    await _user!.updateDisplayName(fullName.trim());
+    _customerName = fullName.trim();
+    _customerPhone = trimmedPhone;
+    if (profileImageUrl != null) _profileImageUrl = profileImageUrl;
+    notifyListeners();
+  }
+
+  Future<Map<String, dynamic>> submitBusinessApplication({
+    required String ownerName,
+    required String ownerPhone,
+    required String businessName,
+    required String businessPhone,
+    required String businessEmail,
+    required String businessWebsite,
+    required List<String> enabledServices,
+    String? profileImageUrl,
+    String? profileImagePath,
+    required String serviceNote,
+    required String addressLine1,
+    required String city,
+    required String state,
+    required String postalCode,
+  }) async {
+    if (_user == null) {
+      throw 'Please create an account or sign in first.';
+    }
+    if (!PhoneNumberValidator.isValid(ownerPhone)) {
+      throw 'Please enter a valid owner phone number.';
+    }
+    if (businessPhone.trim().isNotEmpty &&
+        !PhoneNumberValidator.isValid(businessPhone)) {
+      throw 'Please enter a valid business phone number.';
+    }
+
+    final callable = _functions.httpsCallable('submitBusinessApplication');
+    final response = await callable.call<Map<String, dynamic>>({
+      'ownerName': ownerName.trim(),
+      'ownerPhone': ownerPhone.trim(),
+      'businessName': businessName.trim(),
+      'businessPhone': businessPhone.trim(),
+      'businessEmail': businessEmail.trim(),
+      'businessWebsite': businessWebsite.trim(),
+      'enabledServices': enabledServices,
+      if (profileImageUrl != null) 'profileImageUrl': profileImageUrl,
+      if (profileImagePath != null) 'profileImagePath': profileImagePath,
+      'serviceNote': serviceNote.trim(),
+      'addressLine1': addressLine1.trim(),
+      'city': city.trim(),
+      'state': state.trim(),
+      'postalCode': postalCode.trim(),
+    });
+    await refreshUserProfile();
+    return Map<String, dynamic>.from(response.data);
+  }
+
+  Future<void> updateBusinessProfile({
+    required String businessId,
+    required String name,
+    required String phone,
+    required String email,
+    required String website,
+    required List<String> enabledServices,
+    String? profileImageUrl,
+    String? profileImagePath,
+    required String serviceNote,
+    required String addressLine1,
+    required String city,
+    required String state,
+    required String postalCode,
+    required String carHoldPricingMode,
+    required double carHoldFlatFee,
+    required double carHoldDailyRate,
+    required int carHoldMaxDays,
+  }) async {
+    if (_user == null) {
+      throw 'Please sign in first.';
+    }
+    if (phone.trim().isNotEmpty && !PhoneNumberValidator.isValid(phone)) {
+      throw 'Please enter a valid business phone number.';
+    }
+    final callable = _functions.httpsCallable('updateBusinessProfile');
+    await callable.call({
+      'businessId': businessId,
+      'name': name.trim(),
+      'phone': phone.trim(),
+      'email': email.trim(),
+      'website': website.trim(),
+      'enabledServices': enabledServices,
+      if (profileImageUrl != null) 'profileImageUrl': profileImageUrl,
+      if (profileImagePath != null) 'profileImagePath': profileImagePath,
+      'serviceNote': serviceNote.trim(),
+      'addressLine1': addressLine1.trim(),
+      'city': city.trim(),
+      'state': state.trim(),
+      'postalCode': postalCode.trim(),
+      'carHoldPricingMode': carHoldPricingMode,
+      'carHoldFlatFee': carHoldFlatFee,
+      'carHoldDailyRate': carHoldDailyRate,
+      'carHoldMaxDays': carHoldMaxDays,
+    });
+    await refreshUserProfile();
   }
 
   Future<bool> signUp({
@@ -202,6 +397,10 @@ class AuthProvider extends ChangeNotifier {
     User? createdUser;
 
     try {
+      if (!PhoneNumberValidator.isValid(phone)) {
+        throw 'Please enter a valid phone number.';
+      }
+
       debugPrint('📡 Creating new user with Firebase Auth...');
       final userCredential = await _auth.createUserWithEmailAndPassword(
         email: email,
@@ -237,6 +436,10 @@ class AuthProvider extends ChangeNotifier {
         });
         _isStaff = false;
         _isAdmin = false;
+        _isBusinessOwner = false;
+        _role = 'customer';
+        _businessId = null;
+        _businessName = null;
         debugPrint(
           '✅ Firestore user profile created successfully with customer role',
         );
@@ -334,6 +537,8 @@ class AuthProvider extends ChangeNotifier {
       if (_user?.uid == userId) {
         _isStaff = true;
         _isAdmin = false; // A user promoted to staff is not an admin by default
+        _isBusinessOwner = false;
+        _role = 'staff';
         notifyListeners();
       }
     } catch (e) {
@@ -345,7 +550,7 @@ class AuthProvider extends ChangeNotifier {
   // Method to update any user's role (for admin use)
   Future<void> updateUserRole(String userId, String newRole) async {
     // Ensure the new role is valid
-    if (!['customer', 'staff', 'admin'].contains(newRole)) {
+    if (!['customer', 'staff', 'businessOwner', 'admin'].contains(newRole)) {
       throw 'Invalid role specified';
     }
 
@@ -370,7 +575,9 @@ class AuthProvider extends ChangeNotifier {
         // If it's the current user, update the local state
         if (_user?.uid == userId) {
           final role = newRole;
-          _isStaff = role == 'staff' || role == 'admin';
+          _role = role;
+          _isBusinessOwner = role == 'businessOwner';
+          _isStaff = role == 'staff';
           _isAdmin = role == 'admin';
           notifyListeners();
         }
@@ -401,8 +608,16 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // Method to add a new staff user (for admin use)
-  Future<void> addStaffUser(String email, String password) async {
+  // Method to add a new staff user under a business.
+  Future<void> addStaffUser({
+    required String email,
+    required String password,
+    String fullName = '',
+    String phone = '',
+    String? businessId,
+    String? profileImageUrl,
+    String? profileImagePath,
+  }) async {
     try {
       debugPrint('📡 Calling Cloud Function to create staff user...');
 
@@ -413,6 +628,12 @@ class AuthProvider extends ChangeNotifier {
       final result = await callable.call({
         'email': email,
         'password': password,
+        'fullName': fullName.trim(),
+        'phone': phone.trim(),
+        if (businessId != null && businessId.trim().isNotEmpty)
+          'businessId': businessId.trim(),
+        if (profileImageUrl != null) 'profileImageUrl': profileImageUrl,
+        if (profileImagePath != null) 'profileImagePath': profileImagePath,
       });
 
       // Log the result
@@ -433,7 +654,7 @@ class AuthProvider extends ChangeNotifier {
         case 'unauthenticated':
           throw 'You must be authenticated to create users.';
         case 'permission-denied':
-          throw 'Only admins can create new staff users.';
+          throw 'Only platform admins or business admins can create staff users.';
         case 'invalid-argument':
           throw e.message ?? 'Invalid input provided.';
         case 'already-exists':
@@ -448,6 +669,45 @@ class AuthProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('❌ Unexpected error calling Cloud Function: $e');
       throw 'An unexpected error occurred while adding the staff user.';
+    }
+  }
+
+  // Method to delete a user (for admin use)
+  Future<void> addPlatformManager({
+    required String email,
+    required String password,
+    required String fullName,
+    String phone = '',
+  }) async {
+    try {
+      debugPrint('📡 Calling Cloud Function to create platform manager...');
+      final callable = _functions.httpsCallable('createPlatformManager');
+      final result = await callable.call({
+        'email': email.trim(),
+        'password': password.trim(),
+        'fullName': fullName.trim(),
+        'phone': phone.trim(),
+      });
+      if (result.data['success'] != true) {
+        throw 'Failed to create platform manager.';
+      }
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('❌ Firebase Functions Exception: ${e.code} - ${e.message}');
+      switch (e.code) {
+        case 'unauthenticated':
+          throw 'You must be authenticated to create platform managers.';
+        case 'permission-denied':
+          throw 'Only platform admins can create platform managers.';
+        case 'already-exists':
+          throw 'A user with this email already exists.';
+        case 'invalid-argument':
+          throw e.message ?? 'Invalid input provided.';
+        default:
+          throw e.message ?? 'Failed to create platform manager: ${e.code}';
+      }
+    } catch (e) {
+      debugPrint('❌ Unexpected error creating platform manager: $e');
+      throw 'An unexpected error occurred while creating the platform manager.';
     }
   }
 

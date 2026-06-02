@@ -123,6 +123,11 @@ Future<void> generateBarrelShipmentReceipt({
                   buildRow('Receiver Name', shipment.receiverName),
                   buildRow('Receiver Phone', shipment.receiverPhone),
                   buildRow('Destination', shipment.destinationCountryName),
+                  if (shipment.deliveryEstimateLabel != null)
+                    buildRow(
+                      'Delivery Estimate',
+                      shipment.deliveryEstimateLabel!,
+                    ),
                   pw.SizedBox(height: 20),
                   pw.Text(
                     'Billing Summary',

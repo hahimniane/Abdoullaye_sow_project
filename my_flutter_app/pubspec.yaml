@@ -46,6 +46,9 @@ dependencies:
   url_launcher: ^6.2.6
   firebase_storage: ^13.0.4
   image_picker: ^1.0.8
+  http: ^1.2.2
+  mobile_scanner: ^7.2.0
+  google_mlkit_text_recognition: ^0.15.1
 
   webview_flutter: ^4.7.0
   pdf: ^3.11.3
@@ -54,6 +57,10 @@ dependencies:
   google_fonts: ^6.2.1
   shared_preferences: ^2.5.3
   flutter_stripe: ^12.6.0
+  geolocator: ^13.0.1
+  geocoding: ^3.0.0
+  connectivity_plus: ^7.1.1
+  package_info_plus: ^10.1.0
 
 dev_dependencies:
   flutter_test:
@@ -110,20 +117,10 @@ flutter:
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
 
-# Flutter Launcher Icons configuration
-flutter_launcher_icons:
-  android: true
-  ios: true
-  image_path: "assets/images/logo.JPG"
-  adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/images/logo.JPG"
-
 # Flutter Native Splash configuration
 flutter_native_splash:
   color: "#FFFFFF"
-  image: assets/images/logo.JPG
   android: true
   ios: true
   android_12:
-    image: assets/images/logo.JPG
     color: "#FFFFFF"

@@ -2,9 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 import '../models/parked_car.dart';
 import '../models/barrel_shipment.dart';
 import '../models/transport_request.dart';
+import '../models/business_service.dart' as business_services;
+import '../providers/auth_provider.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_colors.dart';
@@ -59,11 +62,20 @@ class _HomeMenuState extends State<HomeMenu> {
       _isLoading = true;
     });
 
-    _parkedCarsSubscription = FirebaseFirestore.instance
-        .collection('parkedCars')
-        .orderBy('parkingDate', descending: true)
-        .snapshots()
-        .listen(
+    final auth = context.read<AuthProvider>();
+    Query<Map<String, dynamic>> scope(
+      CollectionReference<Map<String, dynamic>> collection,
+      String orderBy,
+    ) {
+      if (auth.isAdmin) return collection.orderBy(orderBy, descending: true);
+      return collection.where('businessId', isEqualTo: auth.businessId);
+    }
+
+    _parkedCarsSubscription =
+        scope(
+          FirebaseFirestore.instance.collection('parkedCars'),
+          'parkingDate',
+        ).snapshots().listen(
           (snapshot) {
             final parkedCars = snapshot.docs
                 .map((doc) => ParkedCar.fromFirestore(doc))
@@ -80,11 +92,11 @@ class _HomeMenuState extends State<HomeMenu> {
           },
         );
 
-    _barrelShipmentsSubscription = FirebaseFirestore.instance
-        .collection('barrelShipments')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .listen(
+    _barrelShipmentsSubscription =
+        scope(
+          FirebaseFirestore.instance.collection('barrelShipments'),
+          'createdAt',
+        ).snapshots().listen(
           (snapshot) {
             final shipments = snapshot.docs
                 .map((doc) => BarrelShipment.fromFirestore(doc))
@@ -101,11 +113,11 @@ class _HomeMenuState extends State<HomeMenu> {
           },
         );
 
-    _transportRequestsSubscription = FirebaseFirestore.instance
-        .collection('transportRequests')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .listen(
+    _transportRequestsSubscription =
+        scope(
+          FirebaseFirestore.instance.collection('transportRequests'),
+          'createdAt',
+        ).snapshots().listen(
           (snapshot) {
             final requests = snapshot.docs
                 .map((doc) => TransportRequest.fromFirestore(doc))
@@ -175,12 +187,45 @@ class _HomeMenuState extends State<HomeMenu> {
   }
 
   List<ActivityRecord> get _filteredRecords {
+    final enabled = _enabledActivityCategories();
+    final serviceRecords = _records
+        .where((record) => enabled.contains(record.category))
+        .toList();
     if (_selectedCategory == ServiceCategory.all) {
-      return List<ActivityRecord>.from(_records);
+      return serviceRecords;
     }
-    return _records
+    return serviceRecords
         .where((record) => record.category == _selectedCategory)
         .toList();
+  }
+
+  Set<ServiceCategory> _enabledActivityCategories() {
+    final auth = context.read<AuthProvider>();
+    final services = auth.businessServices.isEmpty
+        ? business_services.defaultBusinessServiceValues
+        : auth.businessServices;
+    return {
+      if (business_services.hasBusinessService(
+        services,
+        business_services.BusinessServiceKey.carParking,
+      ))
+        ServiceCategory.parking,
+      if (business_services.hasBusinessService(
+        services,
+        business_services.BusinessServiceKey.barrelShipping,
+      ))
+        ServiceCategory.barrels,
+      if (business_services.hasBusinessService(
+        services,
+        business_services.BusinessServiceKey.carTransport,
+      ))
+        ServiceCategory.transport,
+      if (business_services.hasBusinessService(
+        services,
+        business_services.BusinessServiceKey.carSales,
+      ))
+        ServiceCategory.sales,
+    };
   }
 
   @override
@@ -274,7 +319,7 @@ class _WelcomeSection extends StatelessWidget {
                 color: AppColors.ink,
               ),
               children: const [
-                TextSpan(text: 'Keren'),
+                TextSpan(text: 'Services'),
                 TextSpan(
                   text: '.',
                   style: TextStyle(color: AppColors.cobalt),
@@ -304,6 +349,26 @@ class _ServicesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final services = auth.businessServices.isEmpty
+        ? business_services.defaultBusinessServiceValues
+        : auth.businessServices;
+    final showParking = business_services.hasBusinessService(
+      services,
+      business_services.BusinessServiceKey.carParking,
+    );
+    final showBarrels = business_services.hasBusinessService(
+      services,
+      business_services.BusinessServiceKey.barrelShipping,
+    );
+    final showTransport = business_services.hasBusinessService(
+      services,
+      business_services.BusinessServiceKey.carTransport,
+    );
+    final showSales = business_services.hasBusinessService(
+      services,
+      business_services.BusinessServiceKey.carSales,
+    );
     return Container(
       padding: EdgeInsets.all(width * 0.06),
       decoration: BoxDecoration(
@@ -312,29 +377,41 @@ class _ServicesSection extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _MenuButton(
-            title: l10n.parkACar,
-            icon: Icons.local_parking,
-            onTap: () => Navigator.pushNamed(context, '/park'),
-          ),
-          const SizedBox(height: 12),
-          _MenuButton(
-            title: l10n.sendBarrels,
-            icon: Icons.local_shipping,
-            onTap: () => Navigator.pushNamed(context, '/barrel'),
-          ),
-          const SizedBox(height: 12),
-          _MenuButton(
-            title: l10n.transportCars,
-            icon: Icons.directions_car,
-            onTap: () => Navigator.pushNamed(context, '/transport'),
-          ),
-          const SizedBox(height: 12),
-          _MenuButton(
-            title: l10n.sellCars,
-            icon: Icons.sell,
-            onTap: () => Navigator.pushNamed(context, '/sell'),
-          ),
+          if (showParking) ...[
+            _MenuButton(
+              title: l10n.parkACar,
+              icon: Icons.local_parking,
+              onTap: () => Navigator.pushNamed(context, '/park'),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (showBarrels) ...[
+            _MenuButton(
+              title: l10n.sendBarrels,
+              icon: Icons.local_shipping,
+              onTap: () => Navigator.pushNamed(context, '/barrel'),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (showTransport) ...[
+            _MenuButton(
+              title: l10n.transportCars,
+              icon: Icons.directions_car,
+              onTap: () => Navigator.pushNamed(context, '/transport'),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (showSales)
+            _MenuButton(
+              title: l10n.sellCars,
+              icon: Icons.sell,
+              onTap: () => Navigator.pushNamed(context, '/sell'),
+            ),
+          if (!showParking && !showBarrels && !showTransport && !showSales)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(l10n.noServicesEnabledYet),
+            ),
         ],
       ),
     );

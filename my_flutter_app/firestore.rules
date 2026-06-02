@@ -8,11 +8,50 @@ service cloud.firestore {
              get(/databases/$(database)/documents/users/$(userId)).data.role == 'admin';
     }
 
-    // Helper function to check if a user is staff or admin
+    function userProfile(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
+    }
+
+    function userRole(userId) {
+      return userProfile(userId).role;
+    }
+
+    function userBusinessId(userId) {
+      return userProfile(userId).businessId;
+    }
+
+    // Helper function to check if a user is staff, business owner, or admin
     function isStaffOrAdmin(userId) {
-      let userRole = get(/databases/$(database)/documents/users/$(userId)).data.role;
       return exists(/databases/$(database)/documents/users/$(userId)) &&
-             (userRole == 'staff' || userRole == 'admin');
+             (userRole(userId) == 'staff' ||
+              userRole(userId) == 'businessOwner' ||
+              userRole(userId) == 'admin');
+    }
+
+    function canManageBusiness(userId, businessId) {
+      return isAdmin(userId) ||
+             (exists(/databases/$(database)/documents/users/$(userId)) &&
+              (userRole(userId) == 'staff' ||
+               userRole(userId) == 'businessOwner') &&
+              userBusinessId(userId) == businessId);
+    }
+
+    function validDeliveryEstimate(data) {
+      return (
+          data.deliveryEstimateMinDays == null &&
+          data.deliveryEstimateMaxDays == null
+        ) ||
+        (
+          data.deliveryEstimateMinDays is int &&
+          data.deliveryEstimateMaxDays is int &&
+          data.deliveryEstimateMinDays > 0 &&
+          data.deliveryEstimateMaxDays >= data.deliveryEstimateMinDays
+        );
+    }
+
+    match /appConfig/client {
+      allow read: if true;
+      allow write: if false;
     }
 
     // Rules for the 'users' collection
@@ -26,48 +65,165 @@ service cloud.firestore {
 
       // Allow admins to read any user's data
       allow read: if request.auth != null && isAdmin(request.auth.uid);
+      allow read: if request.auth != null &&
+        resource.data.businessId is string &&
+        canManageBusiness(request.auth.uid, resource.data.businessId);
       
       // Allow admins to update any user's role
       allow update: if request.auth != null && isAdmin(request.auth.uid) &&
                       'role' in request.resource.data &&
-                      request.resource.data.role in ['customer', 'staff', 'admin'];
+                      request.resource.data.role in ['customer', 'staff', 'businessOwner', 'admin'];
 
       // Prevent users from updating their own role directly
       allow update: if request.auth != null && request.auth.uid == userId &&
                       request.resource.data.diff(resource.data)
                         .affectedKeys()
-                        .hasOnly(['fullName', 'phone', 'updatedAt']);
+                        .hasOnly([
+                          'fullName',
+                          'phone',
+                          'profileImageUrl',
+                          'profileImagePath',
+                          'updatedAt'
+                        ]);
     }
 
     // Rules for the 'parkedCars' collection
     match /parkedCars/{carId} {
       // Allow only staff and admins to create, read, and update parking records
-      allow read, write: if request.auth != null && isStaffOrAdmin(request.auth.uid);
+      allow read: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, resource.data.businessId));
+      allow create, update: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, request.resource.data.businessId));
+      allow delete: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, resource.data.businessId));
     }
 
     match /barrelShipments/{shipmentId} {
-      allow read, write: if request.auth != null && isStaffOrAdmin(request.auth.uid);
+      allow read: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, resource.data.businessId));
+      allow create, update: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, request.resource.data.businessId));
+      allow delete: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, resource.data.businessId));
       allow read: if request.auth != null &&
         resource.data.customerUid == request.auth.uid;
+      allow update: if request.auth != null &&
+        resource.data.customerUid == request.auth.uid &&
+        (
+          resource.data.pickupRequested != true ||
+          !(resource.data.pickupDateTime is timestamp) ||
+          resource.data.pickupDateTime > request.time
+        ) &&
+        resource.data.status == 'pending' &&
+        request.resource.data.customerUid == resource.data.customerUid &&
+        request.resource.data.price == resource.data.price &&
+        request.resource.data.status == resource.data.status &&
+        request.resource.data.paymentStatus == resource.data.paymentStatus &&
+        request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'senderName',
+            'senderAddress',
+            'pickupAddress',
+            'pickupDateTime',
+            'receiverName',
+            'receiverPhone',
+            'updatedAt'
+          ]);
     }
 
     match /transportRequests/{requestId} {
-      allow read, write: if request.auth != null && isStaffOrAdmin(request.auth.uid);
+      allow read: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, resource.data.businessId));
+      allow create, update: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, request.resource.data.businessId));
+      allow delete: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, resource.data.businessId));
     }
 
     match /cars/{carId} {
       allow read: if true;
-      allow write: if request.auth != null && isStaffOrAdmin(request.auth.uid);
+      allow create, update: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, request.resource.data.businessId));
+      allow delete: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, resource.data.businessId));
+    }
+
+    match /businesses/{businessId} {
+      allow read: if resource.data.status == 'approved' ||
+        (request.auth != null && canManageBusiness(request.auth.uid, businessId));
+      allow create, update, delete: if request.auth != null &&
+        isAdmin(request.auth.uid);
+
+      match /destinationCountries/{countryId} {
+        allow read: if resource.data.businessStatus == 'approved' ||
+          get(/databases/$(database)/documents/businesses/$(businessId)).data.status == 'approved' ||
+          (request.auth != null && canManageBusiness(request.auth.uid, businessId));
+        allow write: if request.auth != null &&
+          canManageBusiness(request.auth.uid, businessId) &&
+          (
+            request.resource.data.isActive != true ||
+            (
+              request.resource.data.barrelShippingPrice is number &&
+              request.resource.data.barrelShippingPrice > 0
+            )
+          ) &&
+          validDeliveryEstimate(request.resource.data);
+      }
     }
 
     match /destinationCountries/{countryId} {
       allow read: if true;
-      allow write: if request.auth != null && isStaffOrAdmin(request.auth.uid);
+      allow write: if request.auth != null && isAdmin(request.auth.uid);
+    }
+
+    match /businessApplications/{applicationId} {
+      allow read: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         resource.data.applicantUid == request.auth.uid ||
+         canManageBusiness(request.auth.uid, resource.data.businessId));
+      allow write: if false;
+    }
+
+    match /platformNotifications/{notificationId} {
+      allow read, update: if request.auth != null && isAdmin(request.auth.uid);
+      allow create, delete: if false;
     }
 
     match /shipmentPricing/{pricingId} {
       allow read: if true;
       allow write: if request.auth != null && isStaffOrAdmin(request.auth.uid);
+    }
+
+    match /wallets/{userId} {
+      allow read: if request.auth != null &&
+        (request.auth.uid == userId || isAdmin(request.auth.uid));
+      allow write: if false;
+
+      match /transactions/{transactionId} {
+        allow read: if request.auth != null &&
+          (request.auth.uid == userId || isAdmin(request.auth.uid));
+        allow write: if false;
+      }
+    }
+
+    match /walletRefundRequests/{requestId} {
+      allow read: if request.auth != null &&
+        (resource.data.customerUid == request.auth.uid ||
+         isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, resource.data.businessId));
+      allow write: if false;
     }
 
     match /carPurchases/{purchaseId} {
@@ -76,9 +232,11 @@ service cloud.firestore {
       allow read: if request.auth != null &&
         resource.data.buyerUid == request.auth.uid;
       allow read: if request.auth != null &&
-        isStaffOrAdmin(request.auth.uid);
-      allow update: if request.auth != null && isStaffOrAdmin(request.auth.uid);
-      allow delete: if request.auth != null && isStaffOrAdmin(request.auth.uid);
+        (isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, resource.data.businessId));
+      allow update, delete: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, resource.data.businessId));
     }
   }
 } 

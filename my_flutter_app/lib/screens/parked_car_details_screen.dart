@@ -12,6 +12,7 @@ import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../data/car_catalog.dart';
 import '../theme/app_colors.dart';
+import '../widgets/app_snackbars.dart';
 
 class ParkedCarDetailsScreen extends StatefulWidget {
   final ParkedCar parkedCar;
@@ -45,7 +46,9 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
   @override
   void initState() {
     super.initState();
-    _ownerNameController = TextEditingController(text: widget.parkedCar.ownerName);
+    _ownerNameController = TextEditingController(
+      text: widget.parkedCar.ownerName,
+    );
     _costPerDayController = TextEditingController();
     _vinController = TextEditingController(text: widget.parkedCar.vinNumber);
     _trackingCode = widget.parkedCar.trackingCode;
@@ -54,9 +57,15 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     _parkingStartDate = widget.parkedCar.parkingDate;
     _parkingEndDate = widget.parkedCar.parkingEndDate;
     _totalCost = widget.parkedCar.totalCost ?? 0.0;
-    _selectedMake = widget.parkedCar.carMake.isNotEmpty ? widget.parkedCar.carMake : null;
-    _selectedModel = widget.parkedCar.carModel.isNotEmpty ? widget.parkedCar.carModel : null;
-    _selectedYear = widget.parkedCar.carYear.isNotEmpty ? widget.parkedCar.carYear : null;
+    _selectedMake = widget.parkedCar.carMake.isNotEmpty
+        ? widget.parkedCar.carMake
+        : null;
+    _selectedModel = widget.parkedCar.carModel.isNotEmpty
+        ? widget.parkedCar.carModel
+        : null;
+    _selectedYear = widget.parkedCar.carYear.isNotEmpty
+        ? widget.parkedCar.carYear
+        : null;
 
     if (_parkingEndDate != null) {
       final startDate = DateTime(
@@ -248,7 +257,9 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                   mode: CupertinoDatePickerMode.date,
                   initialDateTime: _parkingStartDate,
                   maximumDate: DateTime.now().add(const Duration(days: 365)),
-                  minimumDate: DateTime.now().subtract(const Duration(days: 365 * 5)),
+                  minimumDate: DateTime.now().subtract(
+                    const Duration(days: 365 * 5),
+                  ),
                   onDateTimeChanged: (DateTime newDateTime) {
                     tempDateTime = newDateTime;
                   },
@@ -262,15 +273,18 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
   }
 
   Future<bool> _persistChanges({bool showSuccess = true}) async {
+    final l10n = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate()) {
       return false;
     }
 
-    if (_selectedMake == null || _selectedModel == null || _selectedYear == null) {
+    if (_selectedMake == null ||
+        _selectedModel == null ||
+        _selectedYear == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please make sure car make, model, and year are selected.'),
+          SnackBar(
+            content: Text(l10n.carIdentityRequired),
             backgroundColor: Colors.red,
           ),
         );
@@ -325,22 +339,12 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       }
 
       if (showSuccess && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Record updated successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        showSuccessSnackBar(context, l10n.recordUpdated);
       }
       return true;
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update record: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        showErrorSnackBar(context, l10n.failedToUpdateRecord(e.toString()));
       }
       return false;
     }
@@ -354,20 +358,23 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
   }
 
   Future<void> _generateFinalReceipt() async {
+    final l10n = AppLocalizations.of(context)!;
     if (_parkingEndDate == null || _costPerDayController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please add an end date and daily cost first.'),
+        SnackBar(
+          content: Text(l10n.addParkingEndAndDailyCost),
           backgroundColor: Colors.orange,
         ),
       );
       return;
     }
 
-    if (_selectedMake == null || _selectedModel == null || _selectedYear == null) {
+    if (_selectedMake == null ||
+        _selectedModel == null ||
+        _selectedYear == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Car make, model, and year must be set before generating a receipt.'),
+        SnackBar(
+          content: Text(l10n.carIdentityReceiptRequired),
           backgroundColor: Colors.red,
         ),
       );
@@ -390,8 +397,8 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     if (endDate.isBefore(startDate)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('End date cannot be before start date.'),
+          SnackBar(
+            content: Text(l10n.endDateBeforeStart),
             backgroundColor: Colors.red,
           ),
         );
@@ -413,12 +420,14 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                 padding: const pw.EdgeInsets.all(20),
                 decoration: pw.BoxDecoration(
                   color: PdfColors.blue,
-                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
+                  borderRadius: const pw.BorderRadius.all(
+                    pw.Radius.circular(10),
+                  ),
                 ),
                 child: pw.Column(
                   children: [
                     pw.Text(
-                      'CAR PARKING RECEIPT',
+                      l10n.carParkingReceipt,
                       style: pw.TextStyle(
                         fontSize: 24,
                         fontWeight: pw.FontWeight.bold,
@@ -427,11 +436,8 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                     ),
                     pw.SizedBox(height: 10),
                     pw.Text(
-                      'Business Services',
-                      style: pw.TextStyle(
-                        fontSize: 16,
-                        color: PdfColors.white,
-                      ),
+                      l10n.businessServices,
+                      style: pw.TextStyle(fontSize: 16, color: PdfColors.white),
                     ),
                   ],
                 ),
@@ -441,41 +447,67 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                 padding: const pw.EdgeInsets.all(20),
                 decoration: pw.BoxDecoration(
                   border: pw.Border.all(color: PdfColors.grey),
-                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
+                  borderRadius: const pw.BorderRadius.all(
+                    pw.Radius.circular(10),
+                  ),
                 ),
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Text(
-                      'Receipt Details',
-                      style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+                      l10n.receiptDetails,
+                      style: pw.TextStyle(
+                        fontSize: 18,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
                     ),
                     pw.SizedBox(height: 15),
-                        _buildPdfRow('Receipt Number:', widget.parkedCar.id),
-                        _buildPdfRow('Tracking Number:', _trackingCode),
-                    _buildPdfRow('Generated On:', DateFormat('MMM dd, yyyy - HH:mm').format(DateTime.now())),
+                    _buildPdfRow(l10n.receiptNumber, widget.parkedCar.id),
+                    _buildPdfRow(l10n.trackingNumberPdf, _trackingCode),
+                    _buildPdfRow(
+                      l10n.generatedOn,
+                      DateFormat('MMM dd, yyyy - HH:mm').format(DateTime.now()),
+                    ),
                     pw.SizedBox(height: 20),
                     pw.Text(
-                      'Car Information',
-                      style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+                      l10n.carInformation,
+                      style: pw.TextStyle(
+                        fontSize: 18,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
                     ),
                     pw.SizedBox(height: 15),
-                    _buildPdfRow('Owner Name:', _ownerNameController.text),
-                    _buildPdfRow('Car Make:', _selectedMake ?? ''),
-                    _buildPdfRow('Car Model:', _selectedModel ?? ''),
-                    _buildPdfRow('Year:', _selectedYear ?? ''),
-                    _buildPdfRow('VIN Number:', _vinController.text),
-                    _buildPdfRow('Parking Start:', DateFormat('MMM dd, yyyy').format(_parkingStartDate)),
-                    _buildPdfRow('Parking End:', DateFormat('MMM dd, yyyy').format(_parkingEndDate!)),
-                    _buildPdfRow('Total Days:', totalDays.toString()),
+                    _buildPdfRow(l10n.ownerNamePdf, _ownerNameController.text),
+                    _buildPdfRow(l10n.carMakePdf, _selectedMake ?? ''),
+                    _buildPdfRow(l10n.carModelPdf, _selectedModel ?? ''),
+                    _buildPdfRow(l10n.yearPdf, _selectedYear ?? ''),
+                    _buildPdfRow(l10n.vinNumberPdf, _vinController.text),
+                    _buildPdfRow(
+                      l10n.parkingStartPdf,
+                      DateFormat('MMM dd, yyyy').format(_parkingStartDate),
+                    ),
+                    _buildPdfRow(
+                      l10n.parkingEndPdf,
+                      DateFormat('MMM dd, yyyy').format(_parkingEndDate!),
+                    ),
+                    _buildPdfRow(l10n.totalDaysPdf, totalDays.toString()),
                     pw.SizedBox(height: 20),
                     pw.Text(
-                      'Billing Summary',
-                      style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+                      l10n.billingSummary,
+                      style: pw.TextStyle(
+                        fontSize: 18,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
                     ),
                     pw.SizedBox(height: 12),
-                    _buildPdfRow('Cost per Day:', '\$${_costPerDayController.text}'),
-                    _buildPdfRow('Total Cost:', '\$${_totalCost.toStringAsFixed(2)}'),
+                    _buildPdfRow(
+                      l10n.costPerDayPdf,
+                      '\$${_costPerDayController.text}',
+                    ),
+                    _buildPdfRow(
+                      l10n.totalCostPdf,
+                      '\$${_totalCost.toStringAsFixed(2)}',
+                    ),
                   ],
                 ),
               ),
@@ -506,21 +538,11 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Final receipt generated and status set to completed.'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        showSuccessSnackBar(context, l10n.finalReceiptGeneratedCompleted);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to generate receipt: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        showErrorSnackBar(context, l10n.failedToGenerateReceipt(e.toString()));
       }
     }
   }
@@ -551,10 +573,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
             ),
           ),
           pw.Expanded(
-            child: pw.Text(
-              value,
-              style: const pw.TextStyle(fontSize: 12),
-            ),
+            child: pw.Text(value, style: const pw.TextStyle(fontSize: 12)),
           ),
         ],
       ),
@@ -570,19 +589,23 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.headerGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.headerGradient),
         child: SafeArea(
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 child: Row(
                   children: [
                     IconButton(
                       onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                      icon: const Icon(
+                        Icons.arrow_back_ios,
+                        color: Colors.white,
+                      ),
                     ),
                     Expanded(
                       child: Text(
@@ -601,9 +624,13 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
               ),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.06),
+                  padding: EdgeInsets.all(
+                    MediaQuery.of(context).size.width * 0.06,
+                  ),
                   child: Container(
-                    padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.05),
+                    padding: EdgeInsets.all(
+                      MediaQuery.of(context).size.width * 0.05,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(24),
@@ -647,7 +674,10 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                               ),
                               IconButton(
                                 onPressed: _copyTrackingNumber,
-                                icon: const Icon(Icons.copy, color: AppColors.brandRed),
+                                icon: const Icon(
+                                  Icons.copy,
+                                  color: AppColors.brandRed,
+                                ),
                                 tooltip: l10n.trackingNumber,
                               ),
                             ],
@@ -664,10 +694,12 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                                   style: OutlinedButton.styleFrom(
                                     minimumSize: const Size.fromHeight(52),
                                     foregroundColor: AppColors.brandRed,
-                                    side: const BorderSide(color: AppColors.brandRed),
+                                    side: const BorderSide(
+                                      color: AppColors.brandRed,
+                                    ),
                                   ),
                                   onPressed: canEdit ? _updateRecord : null,
-                                  child: const Text('Update Record'),
+                                  child: Text(l10n.updateRecord),
                                 ),
                               ),
                               const SizedBox(width: 16),
@@ -682,7 +714,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                                     ),
                                   ),
                                   onPressed: _generateFinalReceipt,
-                                  child: const Text('Generate Final Receipt'),
+                                  child: Text(l10n.generateFinalReceipt),
                                 ),
                               ),
                             ],
@@ -701,6 +733,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
   }
 
   Widget _buildInfoCard(bool canEdit) {
+    final l10n = AppLocalizations.of(context)!;
     final dropdownEnabled = canEdit && !_isCatalogLoading;
 
     return Container(
@@ -712,25 +745,28 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_isCatalogLoading)
-            const LinearProgressIndicator(minHeight: 2),
+          if (_isCatalogLoading) const LinearProgressIndicator(minHeight: 2),
           if (_isCatalogLoading) const SizedBox(height: 16),
           TextFormField(
             controller: _ownerNameController,
             readOnly: !canEdit,
-            decoration: const InputDecoration(labelText: 'Owner Name'),
+            decoration: InputDecoration(labelText: l10n.ownerName),
             validator: (value) {
               if (!canEdit) return null;
-              return value == null || value.isEmpty ? 'Please enter owner name' : null;
+              return value == null || value.isEmpty
+                  ? l10n.ownerNameRequired
+                  : null;
             },
           ),
           const SizedBox(height: 16),
           _buildDropdownField(
-            label: 'Car Make',
+            label: l10n.carMake,
             value: _selectedMake,
             items: _makeOptions,
             enabled: dropdownEnabled,
-            validator: (val) => !canEdit || (val != null && val.isNotEmpty) ? null : 'Please select car make',
+            validator: (val) => !canEdit || (val != null && val.isNotEmpty)
+                ? null
+                : l10n.pleaseSelectCarMake,
             onChanged: (value) {
               if (!dropdownEnabled) return;
               setState(() {
@@ -748,18 +784,23 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
           ),
           const SizedBox(height: 16),
           _buildDropdownField(
-            label: 'Car Model',
+            label: l10n.carModel,
             value: _selectedModel,
             items: _modelOptions,
             enabled: dropdownEnabled && _selectedMake != null,
-            validator: (val) => !canEdit || (val != null && val.isNotEmpty) ? null : 'Please select car model',
+            validator: (val) => !canEdit || (val != null && val.isNotEmpty)
+                ? null
+                : l10n.pleaseSelectCarModel,
             onChanged: (value) {
               if (!dropdownEnabled) return;
               setState(() {
                 _selectedModel = value;
                 _selectedYear = null;
                 if (_selectedMake != null && value != null) {
-                  _yearOptions = CarCatalog.instance.getYears(_selectedMake!, value);
+                  _yearOptions = CarCatalog.instance.getYears(
+                    _selectedMake!,
+                    value,
+                  );
                 } else {
                   _yearOptions = <String>[];
                 }
@@ -768,11 +809,13 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
           ),
           const SizedBox(height: 16),
           _buildDropdownField(
-            label: 'Year',
+            label: l10n.year,
             value: _selectedYear,
             items: _yearOptions,
             enabled: dropdownEnabled && _selectedModel != null,
-            validator: (val) => !canEdit || (val != null && val.isNotEmpty) ? null : 'Please select year',
+            validator: (val) => !canEdit || (val != null && val.isNotEmpty)
+                ? null
+                : l10n.pleaseSelectYear,
             onChanged: (value) {
               if (!dropdownEnabled) return;
               setState(() {
@@ -784,16 +827,18 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
           TextFormField(
             controller: _vinController,
             readOnly: !canEdit,
-            decoration: const InputDecoration(labelText: 'VIN Number'),
+            decoration: InputDecoration(labelText: l10n.vinNumber),
             validator: (value) {
               if (!canEdit) return null;
-              return value == null || value.isEmpty ? 'Please enter VIN number' : null;
+              return value == null || value.isEmpty
+                  ? 'Please enter VIN number'
+                  : null;
             },
           ),
           const SizedBox(height: 16),
           ListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Parking Start Date'),
+            title: Text(l10n.parkingStartDate),
             subtitle: Text(
               DateFormat.yMMMd().format(_parkingStartDate),
               style: const TextStyle(fontWeight: FontWeight.w600),
@@ -821,9 +866,11 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
         children: [
           ListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Parking End Date'),
+            title: Text(l10n.parkingEndDate),
             subtitle: Text(
-              _parkingEndDate == null ? 'Select a date' : DateFormat.yMMMd().format(_parkingEndDate!),
+              _parkingEndDate == null
+                  ? 'Select a date'
+                  : DateFormat.yMMMd().format(_parkingEndDate!),
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             trailing: Icon(
@@ -836,21 +883,25 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
           TextFormField(
             controller: _costPerDayController,
             readOnly: !canEdit,
-            decoration: const InputDecoration(labelText: 'Cost Per Day (\$)'),
+            decoration: InputDecoration(labelText: l10n.costPerDayCurrency),
             keyboardType: TextInputType.number,
             onChanged: (_) => _calculateTotalCost(),
             validator: (value) {
               if (!canEdit) return null;
-              return value == null || value.isEmpty ? 'Please enter cost per day' : null;
+              return value == null || value.isEmpty
+                  ? 'Please enter cost per day'
+                  : null;
             },
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
             key: ValueKey<String>(_statusDraft),
             initialValue: _statusDraft,
-            decoration: const InputDecoration(labelText: 'Status'),
+            decoration: InputDecoration(labelText: l10n.status),
             items: ['active', 'completed']
-                .map((label) => DropdownMenuItem(value: label, child: Text(label)))
+                .map(
+                  (label) => DropdownMenuItem(value: label, child: Text(label)),
+                )
                 .toList(),
             onChanged: canEdit
                 ? (value) {
@@ -889,17 +940,15 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     if (value != null && !effectiveItems.contains(value)) {
       effectiveItems.insert(0, value);
     }
-    final selectedValue =
-        value != null && effectiveItems.contains(value) ? value : null;
+    final selectedValue = value != null && effectiveItems.contains(value)
+        ? value
+        : null;
     return DropdownButtonFormField<String>(
       key: ValueKey<String?>(selectedValue),
       initialValue: selectedValue,
       items: effectiveItems
           .map(
-            (item) => DropdownMenuItem<String>(
-              value: item,
-              child: Text(item),
-            ),
+            (item) => DropdownMenuItem<String>(value: item, child: Text(item)),
           )
           .toList(),
       onChanged: enabled
@@ -914,5 +963,4 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       isExpanded: true,
     );
   }
-
 }

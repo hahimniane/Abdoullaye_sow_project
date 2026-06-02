@@ -11,6 +11,8 @@ class CarPurchase {
     required this.buyerPhone,
     required this.destinationCountryId,
     required this.destinationCountryName,
+    this.businessId = 'keren_auto_sales',
+    this.businessName = 'Keren',
     required this.depositAmount,
     required this.depositCurrency,
     required this.paymentStatus,
@@ -22,6 +24,19 @@ class CarPurchase {
     this.appointmentLabel,
     this.staffNotes,
     this.updatedAt,
+    this.holdUntilDate,
+    this.holdExpiresAt,
+    this.holdPricingMode,
+    this.holdDays,
+    this.holdRateAmount,
+    this.depositForfeitureStatus,
+    this.holdReviewRequiredAt,
+    this.noShowAt,
+    this.extensionRequestStatus,
+    this.extensionRequestedHoldUntilDate,
+    this.extensionExtraAmount,
+    this.extensionPaymentStatus,
+    this.buyerReliabilitySnapshot,
   });
 
   static const double fixedDepositAmount = 500;
@@ -36,6 +51,8 @@ class CarPurchase {
   final String buyerPhone;
   final String destinationCountryId;
   final String destinationCountryName;
+  final String businessId;
+  final String businessName;
   final double depositAmount;
   final String depositCurrency;
   final String paymentStatus;
@@ -47,6 +64,58 @@ class CarPurchase {
   final String? appointmentLabel;
   final String? staffNotes;
   final DateTime? updatedAt;
+  final DateTime? holdUntilDate;
+  final DateTime? holdExpiresAt;
+  final String? holdPricingMode;
+  final int? holdDays;
+  final double? holdRateAmount;
+  final String? depositForfeitureStatus;
+  final DateTime? holdReviewRequiredAt;
+  final DateTime? noShowAt;
+  final String? extensionRequestStatus;
+  final DateTime? extensionRequestedHoldUntilDate;
+  final double? extensionExtraAmount;
+  final String? extensionPaymentStatus;
+  final Map<String, dynamic>? buyerReliabilitySnapshot;
+
+  bool get isViewingReservation {
+    return paymentType == 'viewing_reservation' ||
+        (appointmentStart != null && depositAmount == 0);
+  }
+
+  bool get isActiveViewingReservation {
+    return isViewingReservation &&
+        purchaseStatus != 'cancelled' &&
+        purchaseStatus != 'completed';
+  }
+
+  bool get canEditViewingReservation {
+    final appointment = appointmentStart;
+    if (!isViewingReservation || appointment == null) return false;
+    if (purchaseStatus != 'viewing_scheduled' && purchaseStatus != 'reserved') {
+      return false;
+    }
+    return appointment.difference(DateTime.now()) > const Duration(hours: 1);
+  }
+
+  bool get isPaidHold => paymentType == 'reservation_deposit';
+
+  bool get canRequestHoldExtension {
+    if (!isPaidHold) return false;
+    if (purchaseStatus == 'completed' ||
+        purchaseStatus == 'no_show' ||
+        purchaseStatus == 'cancelled' ||
+        purchaseStatus == 'refunded' ||
+        purchaseStatus == 'forfeited') {
+      return false;
+    }
+    return extensionRequestStatus != 'pending' &&
+        extensionRequestStatus != 'approved';
+  }
+
+  bool get canPayApprovedExtension {
+    return isPaidHold && extensionRequestStatus == 'approved';
+  }
 
   factory CarPurchase.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? <String, dynamic>{};
@@ -66,6 +135,8 @@ class CarPurchase {
           (data['destinationCountryId'] ?? 'guinea') as String,
       destinationCountryName:
           (data['destinationCountryName'] ?? 'Guinea') as String,
+      businessId: (data['businessId'] ?? 'keren_auto_sales') as String,
+      businessName: (data['businessName'] ?? 'Keren') as String,
       depositAmount: _parseDouble(data['depositAmount']),
       depositCurrency:
           (data['depositCurrency'] ?? fixedDepositCurrency) as String,
@@ -78,6 +149,30 @@ class CarPurchase {
       appointmentLabel: data['appointmentLabel'] as String?,
       staffNotes: data['staffNotes'] as String?,
       updatedAt: _toDateTime(data['updatedAt']),
+      holdUntilDate: _toDateTime(data['holdUntilDate']),
+      holdExpiresAt: _toDateTime(data['holdExpiresAt']),
+      holdPricingMode: data['holdPricingMode'] as String?,
+      holdDays: data['holdDays'] is num
+          ? (data['holdDays'] as num).toInt()
+          : int.tryParse('${data['holdDays'] ?? ''}'),
+      holdRateAmount: data['holdRateAmount'] == null
+          ? null
+          : _parseDouble(data['holdRateAmount']),
+      depositForfeitureStatus: data['depositForfeitureStatus'] as String?,
+      holdReviewRequiredAt: _toDateTime(data['holdReviewRequiredAt']),
+      noShowAt: _toDateTime(data['noShowAt']),
+      extensionRequestStatus: data['extensionRequestStatus'] as String?,
+      extensionRequestedHoldUntilDate: _toDateTime(
+        data['extensionRequestedHoldUntilDate'],
+      ),
+      extensionExtraAmount: data['extensionExtraAmount'] == null
+          ? null
+          : _parseDouble(data['extensionExtraAmount']),
+      extensionPaymentStatus: data['extensionPaymentStatus'] as String?,
+      buyerReliabilitySnapshot:
+          data['buyerReliabilitySnapshot'] is Map<String, dynamic>
+          ? Map<String, dynamic>.from(data['buyerReliabilitySnapshot'] as Map)
+          : null,
     );
   }
 

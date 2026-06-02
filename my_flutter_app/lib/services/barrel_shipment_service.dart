@@ -9,15 +9,30 @@ class BarrelAddressSuggestion {
   const BarrelAddressSuggestion({
     required this.description,
     required this.placeId,
+    this.borough,
+    this.postalCode,
+    this.formattedAddress,
+    this.latitude,
+    this.longitude,
   });
 
   final String description;
   final String placeId;
+  final String? borough;
+  final String? postalCode;
+  final String? formattedAddress;
+  final double? latitude;
+  final double? longitude;
 
   factory BarrelAddressSuggestion.fromMap(Map<String, dynamic> data) {
     return BarrelAddressSuggestion(
       description: (data['description'] ?? '') as String,
       placeId: (data['placeId'] ?? '') as String,
+      borough: data['borough'] as String?,
+      postalCode: data['postalCode'] as String?,
+      formattedAddress: data['formattedAddress'] as String?,
+      latitude: (data['latitude'] as num?)?.toDouble(),
+      longitude: (data['longitude'] as num?)?.toDouble(),
     );
   }
 }
@@ -57,10 +72,12 @@ class BarrelShipmentService {
     required String receiverName,
     required String receiverPhone,
     required String destinationCountryId,
+    required String businessId,
     required bool pickupRequested,
     required String pickupAddress,
     required String pickupBorough,
     required DateTime? pickupDateTime,
+    bool useWalletBalance = false,
   }) async {
     final callable = _functions.httpsCallable(
       'createBarrelShipmentPaymentIntent',
@@ -70,45 +87,51 @@ class BarrelShipmentService {
       'receiverName': receiverName,
       'receiverPhone': receiverPhone,
       'destinationCountryId': destinationCountryId,
+      'businessId': businessId,
       'pickupRequested': pickupRequested,
       'pickupAddress': pickupAddress,
       'pickupBorough': pickupBorough,
+      'useWalletBalance': useWalletBalance,
       if (pickupDateTime != null)
         'pickupDateTime': pickupDateTime.toUtc().toIso8601String(),
     });
 
     final data = Map<String, dynamic>.from(response.data);
-    final clientSecret = data['clientSecret'] as String?;
     final shipmentId = data['shipmentId'] as String?;
-    if (clientSecret == null || clientSecret.isEmpty) {
-      throw Exception('Payment could not be initialized.');
-    }
     if (shipmentId == null || shipmentId.isEmpty) {
       throw Exception('Shipment could not be initialized.');
     }
+    final simulatedPayment = data['simulatedPayment'] == true;
 
-    await Stripe.instance.initPaymentSheet(
-      paymentSheetParameters: SetupPaymentSheetParameters(
-        paymentIntentClientSecret: clientSecret,
-        merchantDisplayName: 'Keren Auto Sales',
-        style: ThemeMode.system,
-      ),
-    );
+    if (!simulatedPayment) {
+      final clientSecret = data['clientSecret'] as String?;
+      if (clientSecret == null || clientSecret.isEmpty) {
+        throw Exception('Payment could not be initialized.');
+      }
 
-    try {
-      await Stripe.instance.presentPaymentSheet();
-      await _functions.httpsCallable('completeBarrelShipmentPayment').call({
-        'shipmentId': shipmentId,
-      });
-    } catch (_) {
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          paymentIntentClientSecret: clientSecret,
+          merchantDisplayName: 'Services',
+          style: ThemeMode.system,
+        ),
+      );
+
       try {
-        await _functions.httpsCallable('cancelPendingBarrelShipment').call({
+        await Stripe.instance.presentPaymentSheet();
+        await _functions.httpsCallable('completeBarrelShipmentPayment').call({
           'shipmentId': shipmentId,
         });
       } catch (_) {
-        // Keep the original Stripe error for the customer-facing message.
+        try {
+          await _functions.httpsCallable('cancelPendingBarrelShipment').call({
+            'shipmentId': shipmentId,
+          });
+        } catch (_) {
+          // Keep the original Stripe error for the customer-facing message.
+        }
+        rethrow;
       }
-      rethrow;
     }
 
     final snapshot = await _firestore
@@ -116,5 +139,51 @@ class BarrelShipmentService {
         .doc(shipmentId)
         .get();
     return BarrelShipment.fromFirestore(snapshot);
+  }
+
+  Future<BarrelDestinationChangeResult> changeDestination({
+    required String shipmentId,
+    required String destinationCountryId,
+    required String businessId,
+  }) async {
+    final response = await _functions
+        .httpsCallable('changeBarrelShipmentDestination')
+        .call<Map<String, dynamic>>({
+          'shipmentId': shipmentId,
+          'destinationCountryId': destinationCountryId,
+          'businessId': businessId,
+        });
+    return BarrelDestinationChangeResult.fromMap(
+      Map<String, dynamic>.from(response.data),
+    );
+  }
+}
+
+class BarrelDestinationChangeResult {
+  const BarrelDestinationChangeResult({
+    required this.shipmentId,
+    required this.trackingCode,
+    required this.difference,
+    required this.amountDue,
+    required this.walletCredit,
+    required this.simulatedPayment,
+  });
+
+  final String shipmentId;
+  final String trackingCode;
+  final double difference;
+  final double amountDue;
+  final double walletCredit;
+  final bool simulatedPayment;
+
+  factory BarrelDestinationChangeResult.fromMap(Map<String, dynamic> data) {
+    return BarrelDestinationChangeResult(
+      shipmentId: (data['shipmentId'] ?? '') as String,
+      trackingCode: (data['trackingCode'] ?? '') as String,
+      difference: (data['difference'] as num?)?.toDouble() ?? 0,
+      amountDue: (data['amountDue'] as num?)?.toDouble() ?? 0,
+      walletCredit: (data['walletCredit'] as num?)?.toDouble() ?? 0,
+      simulatedPayment: data['simulatedPayment'] == true,
+    );
   }
 }

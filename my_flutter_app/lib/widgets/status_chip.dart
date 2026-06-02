@@ -5,11 +5,7 @@ import '../theme/app_spacing.dart';
 enum ServiceCategory { parking, barrels, transport, sales, all }
 
 class StatusChip extends StatelessWidget {
-  const StatusChip({
-    super.key,
-    required this.label,
-    required this.category,
-  });
+  const StatusChip({super.key, required this.label, required this.category});
 
   final String label;
   final ServiceCategory category;

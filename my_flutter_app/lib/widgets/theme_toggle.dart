@@ -16,16 +16,15 @@ class ThemeToggle extends StatelessWidget {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
         final l10n = AppLocalizations.of(context)!;
-        final fg =
-            onDarkBackground ? Colors.white : Theme.of(context).colorScheme.onSurface;
-        final bg =
-            onDarkBackground
-                ? Colors.white.withValues(alpha: 0.12)
-                : Theme.of(context).colorScheme.surfaceContainerHighest;
-        final border =
-            onDarkBackground
-                ? Colors.white.withValues(alpha: 0.25)
-                : Theme.of(context).colorScheme.outline;
+        final fg = onDarkBackground
+            ? Colors.white
+            : Theme.of(context).colorScheme.onSurface;
+        final bg = onDarkBackground
+            ? Colors.white.withValues(alpha: 0.12)
+            : Theme.of(context).colorScheme.surfaceContainerHighest;
+        final border = onDarkBackground
+            ? Colors.white.withValues(alpha: 0.25)
+            : Theme.of(context).colorScheme.outline;
 
         return Container(
           decoration: BoxDecoration(
@@ -49,7 +48,9 @@ class ThemeToggle extends StatelessWidget {
                   children: [
                     Icon(
                       themeProvider.isDark ? Icons.dark_mode : Icons.light_mode,
-                      color: onDarkBackground ? AppColors.chrome : AppColors.brandRed,
+                      color: onDarkBackground
+                          ? AppColors.chrome
+                          : AppColors.brandRed,
                       size: 20,
                     ),
                     const SizedBox(width: AppSpacing.sm),

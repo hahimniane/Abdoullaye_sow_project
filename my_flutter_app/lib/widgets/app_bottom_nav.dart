@@ -3,9 +3,14 @@ import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 
 class AppBottomNavItem {
-  const AppBottomNavItem({required this.icon, required this.label});
+  const AppBottomNavItem({
+    required this.icon,
+    required this.label,
+    IconData? selectedIcon,
+  }) : selectedIcon = selectedIcon ?? icon;
 
   final IconData icon;
+  final IconData selectedIcon;
   final String label;
 }
 
@@ -40,10 +45,11 @@ class AppBottomNav extends StatelessWidget {
         ],
       ),
       child: SafeArea(
+        top: false,
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.sm,
-            vertical: AppSpacing.sm,
+            vertical: 7,
           ),
           child: Row(
             children: List.generate(items.length, (index) {
@@ -61,7 +67,7 @@ class AppBottomNav extends StatelessWidget {
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 180),
                         curve: Curves.easeOut,
-                        height: 58,
+                        height: 64,
                         decoration: BoxDecoration(
                           color: isSelected
                               ? AppColors.mist.withValues(alpha: 0.82)
@@ -75,24 +81,26 @@ class AppBottomNav extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              item.icon,
+                              isSelected ? item.selectedIcon : item.icon,
                               color: isSelected
                                   ? AppColors.cobaltDeep
                                   : AppColors.muted,
-                              size: isSelected ? 22 : 20,
+                              size: 22,
                             ),
                             const SizedBox(height: 5),
                             Text(
                               item.label,
-                              maxLines: 1,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: isSelected
                                     ? AppColors.cobaltDeep
                                     : AppColors.muted,
                                 fontFamily: 'JetBrains Mono',
                                 fontWeight: FontWeight.w700,
-                                fontSize: 9,
+                                fontSize: 9.5,
+                                height: 1.08,
                                 letterSpacing: 0,
                               ),
                             ),

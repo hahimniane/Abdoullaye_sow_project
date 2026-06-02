@@ -8,6 +8,8 @@ class DestinationCountry {
     this.isActive = false,
     this.sortOrder = 0,
     this.barrelShippingPrice = 0,
+    this.deliveryEstimateMinDays,
+    this.deliveryEstimateMaxDays,
   });
 
   static const fallback = DestinationCountry(
@@ -24,6 +26,8 @@ class DestinationCountry {
   final bool isActive;
   final int sortOrder;
   final double barrelShippingPrice;
+  final int? deliveryEstimateMinDays;
+  final int? deliveryEstimateMaxDays;
 
   String get displayCode => (code ?? '').trim().toUpperCase();
 
@@ -39,6 +43,20 @@ class DestinationCountry {
     return displayCode.isEmpty ? name : '$name ($displayCode)';
   }
 
+  bool get hasDeliveryEstimate =>
+      deliveryEstimateMinDays != null &&
+      deliveryEstimateMaxDays != null &&
+      deliveryEstimateMinDays! > 0 &&
+      deliveryEstimateMaxDays! >= deliveryEstimateMinDays!;
+
+  String? get deliveryEstimateLabel {
+    if (!hasDeliveryEstimate) return null;
+    if (deliveryEstimateMinDays == deliveryEstimateMaxDays) {
+      return '$deliveryEstimateMinDays days';
+    }
+    return '$deliveryEstimateMinDays-$deliveryEstimateMaxDays days';
+  }
+
   factory DestinationCountry.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? <String, dynamic>{};
     return DestinationCountry(
@@ -49,6 +67,10 @@ class DestinationCountry {
       sortOrder: (data['sortOrder'] as num?)?.toInt() ?? 0,
       barrelShippingPrice:
           (data['barrelShippingPrice'] as num?)?.toDouble() ?? 0,
+      deliveryEstimateMinDays: (data['deliveryEstimateMinDays'] as num?)
+          ?.toInt(),
+      deliveryEstimateMaxDays: (data['deliveryEstimateMaxDays'] as num?)
+          ?.toInt(),
     );
   }
 
@@ -59,6 +81,10 @@ class DestinationCountry {
       'isActive': isActive,
       'sortOrder': sortOrder,
       'barrelShippingPrice': barrelShippingPrice,
+      if (deliveryEstimateMinDays != null)
+        'deliveryEstimateMinDays': deliveryEstimateMinDays,
+      if (deliveryEstimateMaxDays != null)
+        'deliveryEstimateMaxDays': deliveryEstimateMaxDays,
       'updatedAt': FieldValue.serverTimestamp(),
     };
   }

@@ -5,7 +5,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 
 class LanguageToggle extends StatelessWidget {
-  const LanguageToggle({super.key, this.onDarkBackground = true});
+  const LanguageToggle({super.key, this.onDarkBackground = false});
 
   final bool onDarkBackground;
 
@@ -13,16 +13,13 @@ class LanguageToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<LanguageProvider>(
       builder: (context, languageProvider, child) {
-        final fg =
-            onDarkBackground ? Colors.white : Theme.of(context).colorScheme.onSurface;
-        final bg =
-            onDarkBackground
-                ? Colors.white.withValues(alpha: 0.12)
-                : Theme.of(context).colorScheme.surfaceContainerHighest;
-        final border =
-            onDarkBackground
-                ? Colors.white.withValues(alpha: 0.25)
-                : Theme.of(context).colorScheme.outline;
+        final fg = onDarkBackground ? Colors.white : AppColors.ink;
+        final bg = onDarkBackground
+            ? Colors.white.withValues(alpha: 0.16)
+            : AppColors.paper;
+        final border = onDarkBackground
+            ? Colors.white.withValues(alpha: 0.32)
+            : AppColors.rule;
 
         return Container(
           decoration: BoxDecoration(
@@ -46,7 +43,7 @@ class LanguageToggle extends StatelessWidget {
                   children: [
                     Icon(
                       Icons.language,
-                      color: onDarkBackground ? AppColors.chrome : AppColors.brandRed,
+                      color: onDarkBackground ? Colors.white : AppColors.cobalt,
                       size: 20,
                     ),
                     const SizedBox(width: AppSpacing.sm),

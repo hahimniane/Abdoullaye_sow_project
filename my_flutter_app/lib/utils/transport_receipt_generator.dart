@@ -21,14 +21,10 @@ Future<void> generateTransportReceipt({
             width: 150,
             child: pw.Text(
               '$label:',
-              style: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold,
-              ),
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
             ),
           ),
-          pw.Expanded(
-            child: pw.Text(value),
-          ),
+          pw.Expanded(child: pw.Text(value)),
         ],
       ),
     );
@@ -62,10 +58,7 @@ Future<void> generateTransportReceipt({
                   pw.SizedBox(height: 6),
                   pw.Text(
                     'Business Services',
-                    style: pw.TextStyle(
-                      fontSize: 16,
-                      color: PdfColors.white,
-                    ),
+                    style: pw.TextStyle(fontSize: 16, color: PdfColors.white),
                   ),
                 ],
               ),
@@ -107,8 +100,10 @@ Future<void> generateTransportReceipt({
                   buildRow('Year', request.carYear),
                   buildRow('VIN Number', request.vinNumber),
                   buildRow('Destination', request.destinationCountryName),
-                  buildRow('Transport Date',
-                      DateFormat('MMM dd, yyyy').format(request.transportDate)),
+                  buildRow(
+                    'Transport Date',
+                    DateFormat('MMM dd, yyyy').format(request.transportDate),
+                  ),
                   pw.SizedBox(height: 20),
                   pw.Text(
                     'Billing Summary',

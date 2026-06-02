@@ -72,6 +72,19 @@ class DestinationCountryField extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
 
+        if (countries.isEmpty) {
+          return InputDecorator(
+            decoration: InputDecoration(
+              labelText: label,
+              errorText: requiredMessage,
+            ),
+            child: Text(
+              l10n.noApprovedDestinationsAvailable,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          );
+        }
+
         return DropdownButtonFormField<String>(
           initialValue: currentValue,
           items: countries

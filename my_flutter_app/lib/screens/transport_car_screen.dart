@@ -1,15 +1,20 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../data/car_catalog.dart';
 import '../l10n/app_localizations.dart';
+import '../models/business_profile.dart';
 import '../models/destination_country.dart';
 import '../models/transport_request.dart';
+import '../providers/auth_provider.dart';
 import '../utils/tracking_code_generator.dart';
+import '../utils/action_confirmation.dart';
 import '../utils/transport_receipt_generator.dart';
-import '../widgets/language_toggle.dart';
 import '../widgets/destination_country_field.dart';
+import '../widgets/app_snackbars.dart';
+import '../widgets/language_toggle.dart';
 import '../theme/app_colors.dart';
 
 class TransportCarScreen extends StatefulWidget {
@@ -103,9 +108,19 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
       return;
     }
 
+    final confirmed = await confirmMajorAction(
+      context,
+      title: l10n.submitTransportRequestQuestion,
+      message: l10n.submitTransportRequestMessage,
+      confirmLabel: l10n.submitRequest,
+      icon: Icons.local_shipping_outlined,
+    );
+    if (!confirmed || !mounted) return;
+
     setState(() => _isSubmitting = true);
 
     try {
+      final auth = context.read<AuthProvider>();
       final trackingCode = await TrackingCodeGenerator.generateUniqueCode(
         prefix: 'TR',
         collectionPath: 'transportRequests',
@@ -131,29 +146,28 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
 
       final docRef = await FirebaseFirestore.instance
           .collection('transportRequests')
-          .add(request.toFirestore());
+          .add({
+            ...request.toFirestore(),
+            'businessId': auth.isAdmin
+                ? BusinessProfile.defaultBusinessId
+                : auth.businessId ?? BusinessProfile.defaultBusinessId,
+            'businessName': auth.isAdmin
+                ? BusinessProfile.defaultBusinessName
+                : auth.businessName ?? BusinessProfile.defaultBusinessName,
+          });
 
       final savedRequest = request.copyWith(id: docRef.id);
       await generateTransportReceipt(request: savedRequest);
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            l10n.transportRequestSavedWithTracking(savedRequest.trackingCode),
-          ),
-          backgroundColor: Colors.green,
-        ),
+      showSuccessSnackBar(
+        context,
+        l10n.transportRequestSavedWithTracking(savedRequest.trackingCode),
       );
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.failedToSaveTransport(e.toString())),
-          backgroundColor: Colors.red,
-        ),
-      );
+      showErrorSnackBar(context, l10n.failedToSaveTransport(e.toString()));
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);

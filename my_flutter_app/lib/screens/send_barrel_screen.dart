@@ -1,16 +1,27 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
+import '../models/business_destination_option.dart';
 import '../models/destination_country.dart';
 import '../services/barrel_pricing_service.dart';
 import '../services/barrel_shipment_service.dart';
+import '../services/business_service.dart';
 import '../utils/barrel_receipt_generator.dart';
+import '../utils/action_confirmation.dart';
+import '../utils/phone_number_validator.dart';
+import '../widgets/app_snackbars.dart';
 import '../widgets/destination_country_field.dart';
 import '../theme/app_colors.dart';
 
@@ -32,6 +43,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
   final _receiverPhoneController = TextEditingController();
   final _shipmentService = BarrelShipmentService();
   DestinationCountry? _selectedCountry;
+  BusinessDestinationOption? _selectedBusinessOption;
   BarrelPickupPricing _pickupPricing = BarrelPickupPricing.defaultPricing;
   bool _pickupRequested = true;
   bool _isSubmitting = false;
@@ -39,6 +51,8 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
   String _pickupBorough = 'Bronx';
   DateTime? _pickupDateTime;
   bool _receiverPhoneIsWhatsappOnly = false;
+  bool _useWalletBalance = false;
+  double _walletBalance = 0;
   bool _prefilledSenderName = false;
   late final AnimationController _heroController;
 
@@ -79,7 +93,8 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
     super.dispose();
   }
 
-  double get _shippingFee => _selectedCountry?.barrelShippingPrice ?? 0;
+  double get _shippingFee =>
+      _selectedBusinessOption?.country.barrelShippingPrice ?? 0;
   double get _pickupFee =>
       _pickupRequested ? _pickupPricing.pickupFeeForBorough(_pickupBorough) : 0;
   double get _estimatedTotal => _shippingFee + _pickupFee;
@@ -87,7 +102,11 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
       !_pricingLoaded ||
       _shippingFee <= 0 ||
       (_pickupRequested && _pickupFee <= 0);
-  bool get _canPay => _shippingFee > 0 && (!_pickupRequested || _pickupFee > 0);
+  bool get _canPay =>
+      _selectedCountry != null &&
+      _selectedBusinessOption != null &&
+      _shippingFee > 0 &&
+      (!_pickupRequested || _pickupFee > 0);
   bool get _showReceiverWhatsappOption =>
       _ReceiverPhoneRules.isDifferentCountryNumber(
         value: _receiverPhoneController.text,
@@ -114,6 +133,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
   void _handleDestinationChanged(DestinationCountry? country) {
     setState(() {
       _selectedCountry = country;
+      _selectedBusinessOption = null;
       if (!_ReceiverPhoneRules.isDifferentCountryNumber(
         value: _receiverPhoneController.text,
         destination: country,
@@ -135,6 +155,15 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
     final pickupAddress = _pickupRequested
         ? _pickupAddressController.text.trim()
         : _pickupPricing.officeAddress;
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await confirmMajorAction(
+      context,
+      title: l10n.requestBarrelShipmentQuestion,
+      message: l10n.requestBarrelShipmentMessage,
+      confirmLabel: l10n.payAndRequest,
+      icon: Icons.local_shipping_outlined,
+    );
+    if (!confirmed || !mounted) return;
 
     setState(() {
       _isSubmitting = true;
@@ -146,23 +175,21 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
         receiverName: _receiverNameController.text.trim(),
         receiverPhone: _receiverPhoneController.text.trim(),
         destinationCountryId: _selectedCountry!.id,
+        businessId: _selectedBusinessOption!.businessId,
         pickupRequested: _pickupRequested,
         pickupAddress: pickupAddress,
         pickupBorough: _pickupRequested ? _pickupBorough : 'Office drop-off',
         pickupDateTime: _pickupRequested ? _pickupDateTime : null,
+        useWalletBalance: _useWalletBalance,
       );
       await generateBarrelShipmentReceipt(shipment: shipment);
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(
-              context,
-            )!.shipmentSavedWithTracking(shipment.trackingCode),
-          ),
-          backgroundColor: Colors.green,
-        ),
+      showSuccessSnackBar(
+        context,
+        AppLocalizations.of(
+          context,
+        )!.shipmentSavedWithTracking(shipment.trackingCode),
       );
       if (widget.showBackButton) {
         Navigator.of(context).pop();
@@ -175,19 +202,16 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
         _prefillSenderName();
         setState(() {
           _selectedCountry = null;
+          _selectedBusinessOption = null;
           _pickupDateTime = null;
           _pickupBorough = 'Bronx';
           _receiverPhoneIsWhatsappOnly = false;
+          _useWalletBalance = false;
         });
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_friendlyShipmentError(context, e)),
-          backgroundColor: Colors.red,
-        ),
-      );
+      showErrorSnackBar(context, _friendlyShipmentError(context, e));
     } finally {
       if (mounted) {
         setState(() {
@@ -289,6 +313,9 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
       if (error.code == 'not-found') {
         return 'Payment service is not deployed yet. Please deploy the Firebase Functions and try again.';
       }
+      if (error.code == 'internal') {
+        return 'The deployed payment function is still returning an internal error. Deploy the latest Firebase Functions so simulated payments are active.';
+      }
       return l10n.failedToSaveShipment(
         error.message?.trim().isNotEmpty == true ? error.message! : error.code,
       );
@@ -353,6 +380,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final horizontalPadding = media.size.width >= 720 ? 32.0 : 20.0;
     final maxContentWidth = media.size.width >= 900 ? 760.0 : double.infinity;
 
@@ -426,8 +454,8 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                               children: [
                                 _FormSection(
                                   icon: Icons.person_outline,
-                                  title: 'Sender',
-                                  subtitle: 'Who is sending the barrel?',
+                                  title: l10n.sender,
+                                  subtitle: l10n.senderQuestion,
                                   children: [
                                     _RoundedTextField(
                                       label: AppLocalizations.of(
@@ -449,10 +477,10 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                 const SizedBox(height: 14),
                                 _FormSection(
                                   icon: Icons.local_shipping_outlined,
-                                  title: 'Pickup',
+                                  title: l10n.pickup,
                                   subtitle: _pickupRequested
-                                      ? 'We will collect it from a NYC address.'
-                                      : 'You will bring it to the office.',
+                                      ? l10n.pickupCollectNyc
+                                      : l10n.pickupBringOffice,
                                   children: [
                                     _PickupChoice(
                                       pickupRequested: _pickupRequested,
@@ -497,13 +525,15 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                                   validator: (value) {
                                                     if (value == null ||
                                                         value.trim().isEmpty) {
-                                                      return 'Please enter the pickup address';
+                                                      return l10n
+                                                          .pleaseEnterPickupAddress;
                                                     }
                                                     if (_NycAddressSuggestions.detectBorough(
                                                           value,
                                                         ) ==
                                                         null) {
-                                                      return 'Please include the NYC borough or ZIP code';
+                                                      return l10n
+                                                          .pleaseIncludeNycBoroughZip;
                                                     }
                                                     return null;
                                                   },
@@ -515,13 +545,15 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                                   validator: () {
                                                     if (_pickupDateTime ==
                                                         null) {
-                                                      return 'Please choose pickup date and time';
+                                                      return l10n
+                                                          .pleaseChoosePickupDateTime;
                                                     }
                                                     if (!_pickupDateTime!
                                                         .isAfter(
                                                           DateTime.now(),
                                                         )) {
-                                                      return 'Pickup time must be in the future';
+                                                      return l10n
+                                                          .pickupTimeFuture;
                                                     }
                                                     return null;
                                                   },
@@ -539,8 +571,8 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                 const SizedBox(height: 14),
                                 _FormSection(
                                   icon: Icons.call_received_outlined,
-                                  title: 'Receiver',
-                                  subtitle: 'Who should receive it overseas?',
+                                  title: l10n.receiver,
+                                  subtitle: l10n.receiverQuestion,
                                   children: [
                                     _RoundedTextField(
                                       label: AppLocalizations.of(
@@ -565,6 +597,8 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                       controller: _receiverPhoneController,
                                       icon: Icons.phone_outlined,
                                       keyboardType: TextInputType.phone,
+                                      inputFormatters: PhoneNumberValidator
+                                          .allowedInputFormatters,
                                       onChanged: _handleReceiverPhoneChanged,
                                       validator: (value) {
                                         return _ReceiverPhoneRules.validate(
@@ -617,9 +651,9 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                 const SizedBox(height: 14),
                                 _FormSection(
                                   icon: Icons.public_outlined,
-                                  title: 'Destination',
+                                  title: l10n.destination,
                                   subtitle:
-                                      'Choose the country so we can estimate the route.',
+                                      l10n.destinationSubtitleEstimateRoute,
                                   children: [
                                     DestinationCountryField(
                                       value: _selectedCountry,
@@ -631,6 +665,18 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                       )!.requiredField,
                                       onChanged: _handleDestinationChanged,
                                     ),
+                                    if (_selectedCountry != null) ...[
+                                      const SizedBox(height: 14),
+                                      _BusinessOptionSelector(
+                                        countryId: _selectedCountry!.id,
+                                        value: _selectedBusinessOption,
+                                        onChanged: (option) {
+                                          setState(() {
+                                            _selectedBusinessOption = option;
+                                          });
+                                        },
+                                      ),
+                                    ],
                                     const SizedBox(height: 14),
                                     _PriceEstimateCard(
                                       shippingFee: _shippingFee,
@@ -639,13 +685,30 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                           ? _pickupBorough
                                           : 'Office drop-off',
                                       total: _estimatedTotal,
+                                      useWalletBalance: _useWalletBalance,
+                                      walletBalance: _walletBalance,
                                       needsReview: _needsPriceReview,
+                                    ),
+                                    _WalletPaymentOption(
+                                      total: _estimatedTotal,
+                                      selected: _useWalletBalance,
+                                      onBalanceChanged: (balance) {
+                                        if (_walletBalance == balance) return;
+                                        setState(() {
+                                          _walletBalance = balance;
+                                        });
+                                      },
+                                      onChanged: (value) {
+                                        setState(
+                                          () => _useWalletBalance = value,
+                                        );
+                                      },
                                     ),
                                     if (!_canPay) ...[
                                       const SizedBox(height: 12),
-                                      const _InlineNotice(
+                                      _InlineNotice(
                                         message:
-                                            'Please ask staff to set a barrel shipping price for this destination before payment.',
+                                            l10n.chooseBusinessWithShippingFee,
                                       ),
                                     ],
                                   ],
@@ -780,51 +843,54 @@ class _FormSection extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.mist,
-                  borderRadius: BorderRadius.circular(8),
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: AppColors.mist,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, color: AppColors.cobaltDeep, size: 22),
                 ),
-                child: Icon(icon, color: AppColors.cobaltDeep, size: 22),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: AppColors.ink,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          color: AppColors.ink,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 13,
-                        height: 1.25,
-                        fontWeight: FontWeight.w500,
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 13,
+                          height: 1.25,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ...children,
-        ],
+              ],
+            ),
+            const SizedBox(height: 16),
+            ...children,
+          ],
+        ),
       ),
     );
   }
@@ -914,6 +980,240 @@ class _InlineNotice extends StatelessWidget {
   }
 }
 
+class _BusinessOptionSelector extends StatelessWidget {
+  const _BusinessOptionSelector({
+    required this.countryId,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String countryId;
+  final BusinessDestinationOption? value;
+  final ValueChanged<BusinessDestinationOption?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = NumberFormat.simpleCurrency();
+
+    return StreamBuilder<List<BusinessDestinationOption>>(
+      stream: BusinessService().optionsForCountry(countryId),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const _InlineNotice(
+            message:
+                'Business options are not available right now. Please try again in a moment.',
+          );
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final options = snapshot.data!;
+        if (options.isEmpty) {
+          return const _InlineNotice(
+            message:
+                'No approved business is currently shipping to this destination.',
+          );
+        }
+        final selectedOption =
+            value != null && options.any((option) => option.id == value!.id)
+            ? value
+            : null;
+
+        return FormField<BusinessDestinationOption>(
+          key: ValueKey('business-options-$countryId-${selectedOption?.id}'),
+          initialValue: selectedOption,
+          validator: (option) =>
+              option == null ? 'Please choose a business' : null,
+          builder: (field) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Businesses shipping to this country',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 8),
+                for (final option in options) ...[
+                  _BusinessOptionCard(
+                    option: option,
+                    price: currency.format(option.country.barrelShippingPrice),
+                    selected: field.value?.id == option.id,
+                    onTap: () {
+                      field.didChange(option);
+                      onChanged(option);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                if (field.hasError)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12, top: 2),
+                    child: Text(
+                      field.errorText!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _BusinessOptionCard extends StatelessWidget {
+  const _BusinessOptionCard({
+    required this.option,
+    required this.price,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final BusinessDestinationOption option;
+  final String price;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final contact = [
+      option.businessPhone,
+      option.businessEmail,
+      option.businessWebsite,
+    ].where((item) => item != null && item.trim().isNotEmpty).join(' • ');
+
+    final note = option.serviceNote?.trim() ?? '';
+    final deliveryEstimate = option.country.deliveryEstimateLabel;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.cobalt.withValues(alpha: 0.08)
+              : AppColors.paper,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected ? AppColors.cobalt : AppColors.rule,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              selected
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
+              color: selected ? AppColors.cobalt : AppColors.muted,
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.storefront_outlined, size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    option.businessName,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  if (contact.isNotEmpty)
+                    Text(
+                      contact,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  if (note.isNotEmpty)
+                    Text(
+                      note,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  if (deliveryEstimate != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: _DeliveryEstimateChip(label: deliveryEstimate),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 86),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Text(
+                  price,
+                  style: const TextStyle(
+                    color: AppColors.cobaltDeep,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DeliveryEstimateChip extends StatelessWidget {
+  const _DeliveryEstimateChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.sage.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.sage.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.schedule_outlined, size: 14, color: AppColors.sage),
+          const SizedBox(width: 5),
+          Text(
+            'Delivery $label',
+            style: const TextStyle(
+              color: AppColors.sage,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SubmitButton extends StatelessWidget {
   const _SubmitButton({
     required this.isSubmitting,
@@ -927,6 +1227,7 @@ class _SubmitButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final enabled = !isSubmitting && canPay;
 
     return AnimatedScale(
@@ -968,7 +1269,7 @@ class _SubmitButton extends StatelessWidget {
                   ),
           ),
           label: Text(
-            isSubmitting ? 'Processing payment' : 'Pay and request shipment',
+            isSubmitting ? l10n.processingPayment : l10n.payAndRequestShipment,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
           ),
@@ -1017,19 +1318,20 @@ class _PickupChoice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return SizedBox(
       width: double.infinity,
       child: SegmentedButton<bool>(
         segments: [
-          const ButtonSegment<bool>(
+          ButtonSegment<bool>(
             value: true,
-            icon: Icon(Icons.local_shipping_outlined),
-            label: Text('Pick up'),
+            icon: const Icon(Icons.local_shipping_outlined),
+            label: Text(l10n.pickUp),
           ),
           ButtonSegment<bool>(
             value: false,
             icon: const Icon(Icons.storefront_outlined),
-            label: Text('Bring to office', overflow: TextOverflow.ellipsis),
+            label: Text(l10n.bringToOffice, overflow: TextOverflow.ellipsis),
             tooltip: officeAddress,
           ),
         ],
@@ -1080,9 +1382,14 @@ class _AddressAutocompleteField extends StatefulWidget {
 
 class _AddressAutocompleteFieldState extends State<_AddressAutocompleteField> {
   late final FocusNode _focusNode;
-  var _suggestions = const <String>[];
-  var _requestVersion = 0;
-  Timer? _debounce;
+  // Version counter for stale-request detection inside _buildOptions.
+  // NOT tied to setState — mutations here never trigger a rebuild, which is
+  // intentional: we pass _buildOptions as a method tearoff so that
+  // RawAutocomplete.didUpdateWidget sees oldWidget.optionsBuilder ==
+  // widget.optionsBuilder and skips _updateOptions(), breaking the loop where
+  // every setState call re-triggered a new suggestion fetch.
+  var _optionsVersion = 0;
+  bool _isLocating = false;
 
   @override
   void initState() {
@@ -1092,115 +1399,329 @@ class _AddressAutocompleteFieldState extends State<_AddressAutocompleteField> {
 
   @override
   void dispose() {
-    _debounce?.cancel();
     _focusNode.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return RawAutocomplete<String>(
-      textEditingController: widget.controller,
-      focusNode: _focusNode,
-      optionsBuilder: (textEditingValue) {
-        final query = textEditingValue.text.trim();
-        if (query.isNotEmpty) {
-          _loadSuggestions(query);
-        }
-        if (query.isEmpty) return const Iterable<String>.empty();
-        return _suggestions.isEmpty
-            ? _NycAddressSuggestions.match(query)
-            : _suggestions;
-      },
-      onSelected: (selection) {
-        widget.controller.text = selection;
-        widget.onChanged(selection);
-      },
-      fieldViewBuilder:
-          (context, textEditingController, focusNode, onFieldSubmitted) {
-            return TextFormField(
-              controller: textEditingController,
-              focusNode: focusNode,
-              validator: widget.validator,
-              onChanged: widget.onChanged,
-              keyboardType: TextInputType.streetAddress,
-              decoration: InputDecoration(
-                labelText: 'Pickup address in NYC',
-                hintText: 'Street, borough, ZIP',
-                prefixIcon: const Icon(Icons.location_on_outlined),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.rule),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(
-                    color: AppColors.brandRed,
-                    width: 2,
-                  ),
-                ),
-                errorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.errorRed),
-                ),
-                filled: true,
-                fillColor: AppColors.lightSurfaceVariant,
-              ),
-            );
-          },
-      optionsViewBuilder: (context, onSelected, options) {
-        return Align(
-          alignment: Alignment.topLeft,
-          child: Material(
-            elevation: 4,
-            borderRadius: BorderRadius.circular(8),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 240, maxWidth: 420),
-              child: ListView.builder(
-                padding: EdgeInsets.zero,
-                shrinkWrap: true,
-                itemCount: options.length,
-                itemBuilder: (context, index) {
-                  final option = options.elementAt(index);
-                  return ListTile(
-                    dense: true,
-                    leading: const Icon(
-                      Icons.place_outlined,
-                      size: 20,
-                      color: AppColors.cobaltDeep,
-                    ),
-                    title: Text(option),
-                    onTap: () => onSelected(option),
-                  );
-                },
-              ),
-            ),
-          ),
+  // ─── Suggestions (FutureOr — no setState, no infinite loop) ──────────────
+
+  Future<Iterable<BarrelAddressSuggestion>> _buildOptions(
+    TextEditingValue value,
+  ) async {
+    final query = value.text.trim();
+    if (query.isEmpty) return const [];
+
+    final version = ++_optionsVersion;
+    // Debounce: wait for the user to pause typing.
+    await Future.delayed(const Duration(milliseconds: 380));
+    if (version != _optionsVersion) return const [];
+
+    // 1. Firebase Function (Google Places) — works when user is signed in.
+    try {
+      final remote = await widget.service.addressSuggestions(query);
+      if (version != _optionsVersion) return const [];
+      if (remote.isNotEmpty) {
+        return remote;
+      }
+    } catch (_) {}
+
+    // 2. Nominatim (OpenStreetMap) — free, real addresses, no key needed.
+    try {
+      final results = await _nominatimSuggestions(query);
+      if (version != _optionsVersion) return const [];
+      return results;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<List<BarrelAddressSuggestion>> _nominatimSuggestions(
+    String query,
+  ) async {
+    final uri = Uri.https('nominatim.openstreetmap.org', '/search', {
+      'q': '$query, New York',
+      'format': 'jsonv2',
+      'limit': '6',
+      'countrycodes': 'us',
+      'addressdetails': '1',
+    });
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 7);
+    try {
+      final req = await client.getUrl(uri);
+      req.headers.set(HttpHeaders.userAgentHeader, 'TAAO-App/1.0');
+      req.headers.set(HttpHeaders.acceptLanguageHeader, 'en-US,en;q=0.9');
+      final res = await req.close();
+      if (res.statusCode != 200) return const [];
+      final body = await res.transform(utf8.decoder).join();
+      final data = jsonDecode(body) as List<dynamic>;
+      return data
+          .whereType<Map<String, dynamic>>()
+          .map(_formatNominatim)
+          .whereType<BarrelAddressSuggestion>()
+          .take(5)
+          .toList();
+    } finally {
+      client.close();
+    }
+  }
+
+  BarrelAddressSuggestion? _formatNominatim(Map<String, dynamic> result) {
+    final addr = (result['address'] as Map?)?.cast<String, dynamic>();
+    if (addr == null) return null;
+    final houseNo = addr['house_number'] as String? ?? '';
+    final road = addr['road'] as String? ?? '';
+    final postcode = addr['postcode'] as String? ?? '';
+    final borough =
+        _NycAddressSuggestions.detectBorough(
+          [
+            addr['borough'] as String? ?? '',
+            addr['city_district'] as String? ?? '',
+            addr['county'] as String? ?? '',
+            postcode,
+          ].where((s) => s.isNotEmpty).join(', '),
+        ) ??
+        _NycAddressSuggestions.detectBorough(
+          result['display_name'] as String? ?? '',
         );
-      },
+    if (houseNo.isEmpty || road.isEmpty || borough == null) return null;
+    final street = [houseNo, road].where((s) => s.isNotEmpty).join(' ');
+    final description = [
+      street,
+      borough,
+      'NY',
+      postcode,
+    ].where((s) => s.isNotEmpty).join(', ');
+    final lat = double.tryParse(result['lat'] as String? ?? '');
+    final lon = double.tryParse(result['lon'] as String? ?? '');
+    return BarrelAddressSuggestion(
+      description: description,
+      placeId: result['place_id']?.toString() ?? '',
+      borough: borough,
+      postalCode: postcode.isEmpty ? null : postcode,
+      formattedAddress: result['display_name'] as String?,
+      latitude: lat,
+      longitude: lon,
     );
   }
 
-  Future<void> _loadSuggestions(String query) async {
-    final version = ++_requestVersion;
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 220), () async {
-      try {
-        final remote = await widget.service.addressSuggestions(query);
-        if (!mounted || version != _requestVersion) return;
-        setState(() {
-          _suggestions = remote.map((item) => item.description).toList();
-        });
-      } catch (_) {
-        if (!mounted || version != _requestVersion) return;
-        setState(() {
-          _suggestions = _NycAddressSuggestions.match(query).toList();
-        });
+  // ─── GPS locate ──────────────────────────────────────────────────────────
+
+  Future<void> _locateMe() async {
+    setState(() => _isLocating = true);
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
       }
-    });
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) await Geolocator.openAppSettings();
+        return;
+      }
+      if (permission == LocationPermission.denied) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                AppLocalizations.of(context)!.locationPermissionDenied,
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+      final placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+      if (placemarks.isEmpty || !mounted) return;
+
+      final p = placemarks.first;
+      final address = [
+        if (p.street?.isNotEmpty == true) p.street!,
+        if (p.subLocality?.isNotEmpty == true) p.subLocality!,
+        if (p.locality?.isNotEmpty == true) p.locality!,
+        if (p.administrativeArea?.isNotEmpty == true) p.administrativeArea!,
+        if (p.postalCode?.isNotEmpty == true) p.postalCode!,
+      ].join(', ');
+
+      widget.controller.text = address;
+      widget.onChanged(address);
+      _focusNode.requestFocus();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.couldNotGetLocation),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLocating = false);
+    }
+  }
+
+  // ─── Build ────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        RawAutocomplete<BarrelAddressSuggestion>(
+          textEditingController: widget.controller,
+          focusNode: _focusNode,
+          displayStringForOption: (option) => option.description,
+          // Method tearoff — equal across rebuilds so didUpdateWidget never
+          // spuriously re-triggers _updateOptions and restarts the fetch.
+          optionsBuilder: _buildOptions,
+          onSelected: (selection) {
+            widget.controller.text = selection.description;
+            widget.onChanged(selection.description);
+            _focusNode.requestFocus();
+          },
+          fieldViewBuilder:
+              (context, textEditingController, focusNode, onFieldSubmitted) {
+                return TextFormField(
+                  controller: textEditingController,
+                  focusNode: focusNode,
+                  validator: widget.validator,
+                  onChanged: widget.onChanged,
+                  keyboardType: TextInputType.streetAddress,
+                  decoration: InputDecoration(
+                    labelText: l10n.pickupAddressInNyc,
+                    hintText: l10n.pickupAddressNycHint,
+                    prefixIcon: const Icon(Icons.location_on_outlined),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.rule),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(
+                        color: AppColors.brandRed,
+                        width: 2,
+                      ),
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.errorRed),
+                    ),
+                    filled: true,
+                    fillColor: AppColors.lightSurfaceVariant,
+                  ),
+                );
+              },
+          optionsViewBuilder: (context, onSelected, options) {
+            return Align(
+              alignment: Alignment.topLeft,
+              child: Material(
+                elevation: 4,
+                borderRadius: BorderRadius.circular(8),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxHeight: 240,
+                    maxWidth: 420,
+                  ),
+                  child: ListView.builder(
+                    padding: EdgeInsets.zero,
+                    shrinkWrap: true,
+                    itemCount: options.length,
+                    itemBuilder: (context, index) {
+                      final option = options.elementAt(index);
+                      return ListTile(
+                        dense: true,
+                        leading: const Icon(
+                          Icons.place_outlined,
+                          size: 20,
+                          color: AppColors.cobaltDeep,
+                        ),
+                        title: Text(option.description),
+                        subtitle: option.borough == null
+                            ? null
+                            : Text('${option.borough} pickup address'),
+                        onTap: () => onSelected(option),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 8),
+        _LocateMeButton(isLocating: _isLocating, onTap: _locateMe),
+      ],
+    );
+  }
+}
+
+class _LocateMeButton extends StatelessWidget {
+  const _LocateMeButton({required this.isLocating, required this.onTap});
+
+  final bool isLocating;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: isLocating ? null : onTap,
+        borderRadius: BorderRadius.circular(8),
+        splashColor: AppColors.cobaltDeep.withValues(alpha: 0.08),
+        highlightColor: AppColors.cobaltDeep.withValues(alpha: 0.05),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.cobaltDeep.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: AppColors.cobaltDeep.withValues(alpha: 0.18),
+            ),
+          ),
+          child: Row(
+            children: [
+              if (isLocating)
+                const SizedBox(
+                  width: 17,
+                  height: 17,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation(AppColors.cobaltDeep),
+                  ),
+                )
+              else
+                const Icon(
+                  Icons.my_location,
+                  size: 17,
+                  color: AppColors.cobaltDeep,
+                ),
+              const SizedBox(width: 10),
+              Text(
+                isLocating
+                    ? 'Getting your location…'
+                    : 'Use my current location',
+                style: const TextStyle(
+                  color: AppColors.cobaltDeep,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1219,28 +1740,8 @@ class _PickupDateTimeTile extends FormField<DateTime> {
            return Column(
              crossAxisAlignment: CrossAxisAlignment.start,
              children: [
-               ListTile(
-                 contentPadding: const EdgeInsets.symmetric(
-                   horizontal: 14,
-                   vertical: 4,
-                 ),
-                 tileColor: AppColors.lightSurfaceVariant,
-                 title: const Text(
-                   'Pickup date and time',
-                   style: TextStyle(fontWeight: FontWeight.w700),
-                 ),
-                 subtitle: Text(
-                   formatted,
-                   style: TextStyle(
-                     color: value == null ? AppColors.muted : AppColors.ink,
-                     fontWeight: FontWeight.w700,
-                   ),
-                 ),
-                 trailing: const Icon(
-                   Icons.event_available,
-                   color: AppColors.brandRed,
-                 ),
-                 onTap: onTap,
+               Material(
+                 color: AppColors.lightSurfaceVariant,
                  shape: RoundedRectangleBorder(
                    borderRadius: BorderRadius.circular(8),
                    side: BorderSide(
@@ -1249,6 +1750,29 @@ class _PickupDateTimeTile extends FormField<DateTime> {
                          : AppColors.rule,
                      width: state.hasError ? 2 : 1,
                    ),
+                 ),
+                 clipBehavior: Clip.antiAlias,
+                 child: ListTile(
+                   contentPadding: const EdgeInsets.symmetric(
+                     horizontal: 14,
+                     vertical: 4,
+                   ),
+                   title: const Text(
+                     'Pickup date and time',
+                     style: TextStyle(fontWeight: FontWeight.w700),
+                   ),
+                   subtitle: Text(
+                     formatted,
+                     style: TextStyle(
+                       color: value == null ? AppColors.muted : AppColors.ink,
+                       fontWeight: FontWeight.w700,
+                     ),
+                   ),
+                   trailing: const Icon(
+                     Icons.event_available,
+                     color: AppColors.brandRed,
+                   ),
+                   onTap: onTap,
                  ),
                ),
                if (state.hasError)
@@ -1271,6 +1795,8 @@ class _PriceEstimateCard extends StatelessWidget {
     required this.pickupFee,
     required this.pickupBorough,
     required this.total,
+    required this.useWalletBalance,
+    required this.walletBalance,
     required this.needsReview,
   });
 
@@ -1278,11 +1804,17 @@ class _PriceEstimateCard extends StatelessWidget {
   final double pickupFee;
   final String pickupBorough;
   final double total;
+  final bool useWalletBalance;
+  final double walletBalance;
   final bool needsReview;
 
   @override
   Widget build(BuildContext context) {
     final currency = NumberFormat.simpleCurrency();
+    final walletApplied = useWalletBalance
+        ? walletBalance.clamp(0, total).toDouble()
+        : 0.0;
+    final amountDue = (total - walletApplied).clamp(0, double.infinity);
 
     Widget row(String label, String value) {
       return Padding(
@@ -1345,10 +1877,10 @@ class _PriceEstimateCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Estimated cost',
-                  style: TextStyle(
+                  useWalletBalance ? 'Amount due now' : 'Estimated cost',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.w900,
@@ -1356,7 +1888,7 @@ class _PriceEstimateCard extends StatelessWidget {
                 ),
               ),
               Text(
-                currency.format(total),
+                currency.format(amountDue),
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 22,
@@ -1402,6 +1934,13 @@ class _PriceEstimateCard extends StatelessWidget {
                     ],
                   ),
                 ],
+                if (useWalletBalance) ...[
+                  const Divider(height: 18),
+                  row('Original estimated cost', currency.format(total)),
+                  row('Wallet credit', '-${currency.format(walletApplied)}'),
+                  const Divider(height: 18),
+                  row('Card payment due', currency.format(amountDue)),
+                ],
               ],
             ),
           ),
@@ -1421,38 +1960,128 @@ class _PriceEstimateCard extends StatelessWidget {
   }
 }
 
-class _NycAddressSuggestions {
-  static const _samples = [
-    'Bronx, NY 10451',
-    'Fordham Road, Bronx, NY 10458',
-    'Grand Concourse, Bronx, NY 10456',
-    'East 149th Street, Bronx, NY 10455',
-    'Manhattan, NY 10001',
-    'Harlem, Manhattan, NY 10027',
-    'Washington Heights, Manhattan, NY 10032',
-    'Brooklyn, NY 11201',
-    'Flatbush, Brooklyn, NY 11226',
-    'Crown Heights, Brooklyn, NY 11213',
-    'Queens, NY 11375',
-    'Jamaica, Queens, NY 11432',
-    'Flushing, Queens, NY 11354',
-    'Staten Island, NY 10301',
-    'St George, Staten Island, NY 10301',
-  ];
+class _WalletPaymentOption extends StatelessWidget {
+  const _WalletPaymentOption({
+    required this.total,
+    required this.selected,
+    required this.onBalanceChanged,
+    required this.onChanged,
+  });
 
-  static Iterable<String> match(String query) {
-    final lower = query.toLowerCase();
-    final matches = _samples.where(
-      (address) => address.toLowerCase().contains(lower),
+  final double total;
+  final bool selected;
+  final ValueChanged<double> onBalanceChanged;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final user = auth.user;
+    if (user == null || total <= 0 || auth.hasBusinessDashboardAccess) {
+      return const SizedBox.shrink();
+    }
+
+    final currency = NumberFormat.simpleCurrency();
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('wallets')
+          .doc(user.uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final data = snapshot.data?.data() as Map<String, dynamic>?;
+        final balance =
+            (data?['balance'] as num?)?.toDouble() ??
+            (((data?['balanceCents'] as num?)?.toDouble() ?? 0) / 100);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (context.mounted) onBalanceChanged(balance);
+        });
+        if (balance <= 0) {
+          if (selected) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (context.mounted) onChanged(false);
+            });
+          }
+          return const SizedBox.shrink();
+        }
+
+        final applied = balance > total ? total : balance;
+        final cardRemainder = (total - applied).clamp(0, double.infinity);
+        return Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: InkWell(
+            onTap: () => onChanged(!selected),
+            borderRadius: BorderRadius.circular(8),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: selected
+                    ? AppColors.cobalt.withValues(alpha: 0.1)
+                    : AppColors.paper,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: selected ? AppColors.cobalt : AppColors.rule,
+                  width: selected ? 1.5 : 1,
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Checkbox(
+                    value: selected,
+                    onChanged: (value) => onChanged(value ?? false),
+                    activeColor: AppColors.cobalt,
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: AppColors.cobalt.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.account_balance_wallet_outlined,
+                      color: AppColors.cobaltDeep,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Use wallet credit',
+                          style: TextStyle(
+                            color: AppColors.ink,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          selected
+                              ? '${currency.format(applied)} from wallet • ${currency.format(cardRemainder)} remaining'
+                              : '${currency.format(balance)} available',
+                          style: const TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
-    final borough = detectBorough(query);
-    if (borough == null) return matches.take(5);
-    return [
-      '$query, $borough, NY',
-      ...matches,
-    ].where((value) => value.trim().isNotEmpty).take(5);
   }
+}
 
+class _NycAddressSuggestions {
   static String? detectBorough(String value) {
     final lower = value.toLowerCase();
     if (lower.contains('bronx') || _zipInRange(lower, 10400, 10499)) {
@@ -1697,7 +2326,7 @@ class _ReceiverPhoneRules {
     if (raw.isEmpty) return requiredMessage;
 
     final normalized = raw.replaceAll(RegExp(r'[\s().-]'), '');
-    if (!RegExp(r'^\+?\d{7,15}$').hasMatch(normalized)) {
+    if (!PhoneNumberValidator.isValid(raw)) {
       return 'Enter a valid phone number with country code.';
     }
 
@@ -1735,7 +2364,7 @@ class _ReceiverPhoneRules {
     required DestinationCountry? destination,
   }) {
     final normalized = value.trim().replaceAll(RegExp(r'[\s().-]'), '');
-    if (!RegExp(r'^\+?\d{7,15}$').hasMatch(normalized)) return false;
+    if (!PhoneNumberValidator.isValid(value)) return false;
 
     final destinationCode = destination?.displayCode ?? '';
     final expectedCodes = _callingCodes[destinationCode];
@@ -1756,6 +2385,7 @@ class _RoundedTextField extends StatelessWidget {
     this.keyboardType,
     this.icon,
     this.onChanged,
+    this.inputFormatters,
   });
 
   final String label;
@@ -1764,6 +2394,7 @@ class _RoundedTextField extends StatelessWidget {
   final TextInputType? keyboardType;
   final IconData? icon;
   final ValueChanged<String>? onChanged;
+  final List<TextInputFormatter>? inputFormatters;
 
   @override
   Widget build(BuildContext context) {
@@ -1771,6 +2402,7 @@ class _RoundedTextField extends StatelessWidget {
       controller: controller,
       validator: validator,
       keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
       onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// Brand and semantic colors for Keren Auto Sales.
+/// Brand and semantic colors for the marketplace.
 ///
-/// This palette follows the Wouri app direction: deep teal foundations,
+/// This palette uses deep teal foundations,
 /// warm amber highlights, and clean slate/white surfaces.
 abstract final class AppColors {
   static const Color ink = Color(0xFF0F172A);
@@ -47,7 +47,7 @@ abstract final class AppColors {
   static const Color lightOnSurface = ink;
   static const Color lightMuted = muted;
 
-  /// Existing screens still expect a header fill; use Wouri's teal gradient.
+  /// Existing screens still expect a header fill; use the teal gradient.
   static const LinearGradient headerGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,

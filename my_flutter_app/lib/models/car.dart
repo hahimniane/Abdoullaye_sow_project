@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'business_service.dart';
+
 class Car {
   Car({
     required this.id,
@@ -16,9 +18,35 @@ class Car {
     required this.contactPhone,
     this.contactName,
     this.contactEmail,
+    this.condition = '',
+    this.bodyType = '',
+    this.transmission = '',
+    this.fuelType = '',
+    this.drivetrain = '',
+    this.exteriorColor = '',
+    this.interiorColor = '',
+    this.vin = '',
+    this.stockNumber = '',
+    this.isNegotiable = false,
+    this.financingNote = '',
+    this.locationCity = '',
+    this.locationState = '',
+    this.locationAddressLine1 = '',
+    this.locationPostalCode = '',
+    this.structuredFeatures = const <String>[],
+    this.businessId = 'keren_auto_sales',
+    this.businessName = 'Keren',
+    this.businessStatus = 'approved',
+    this.businessProfileImageUrl,
+    this.enabledServices = defaultBusinessServiceValues,
     this.createdAt,
     this.updatedAt,
     this.soldInfo,
+    this.useBusinessHoldPricing = true,
+    this.carHoldPricingMode = '',
+    this.carHoldFlatFee,
+    this.carHoldDailyRate,
+    this.carHoldMaxDays,
   });
 
   final String id;
@@ -35,9 +63,35 @@ class Car {
   final String contactPhone;
   final String? contactName;
   final String? contactEmail;
+  final String condition;
+  final String bodyType;
+  final String transmission;
+  final String fuelType;
+  final String drivetrain;
+  final String exteriorColor;
+  final String interiorColor;
+  final String vin;
+  final String stockNumber;
+  final bool isNegotiable;
+  final String financingNote;
+  final String locationCity;
+  final String locationState;
+  final String locationAddressLine1;
+  final String locationPostalCode;
+  final List<String> structuredFeatures;
+  final String businessId;
+  final String businessName;
+  final String businessStatus;
+  final String? businessProfileImageUrl;
+  final List<String> enabledServices;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final CarSaleInfo? soldInfo;
+  final bool useBusinessHoldPricing;
+  final String carHoldPricingMode;
+  final double? carHoldFlatFee;
+  final double? carHoldDailyRate;
+  final int? carHoldMaxDays;
 
   bool get isSold => status.toLowerCase() == 'sold';
   bool get isReserved => status.toLowerCase() == 'reserved';
@@ -60,6 +114,27 @@ class Car {
           (data['contactPhone'] ?? data['sellerPhone'] ?? '') as String,
       contactName: data['contactName'] as String?,
       contactEmail: data['contactEmail'] as String?,
+      condition: (data['condition'] ?? '') as String,
+      bodyType: (data['bodyType'] ?? '') as String,
+      transmission: (data['transmission'] ?? '') as String,
+      fuelType: (data['fuelType'] ?? '') as String,
+      drivetrain: (data['drivetrain'] ?? '') as String,
+      exteriorColor: (data['exteriorColor'] ?? '') as String,
+      interiorColor: (data['interiorColor'] ?? '') as String,
+      vin: (data['vin'] ?? '') as String,
+      stockNumber: (data['stockNumber'] ?? '') as String,
+      isNegotiable: data['isNegotiable'] == true,
+      financingNote: (data['financingNote'] ?? '') as String,
+      locationCity: (data['locationCity'] ?? '') as String,
+      locationState: (data['locationState'] ?? '') as String,
+      locationAddressLine1: (data['locationAddressLine1'] ?? '') as String,
+      locationPostalCode: (data['locationPostalCode'] ?? '') as String,
+      structuredFeatures: _stringList(data['structuredFeatures']),
+      businessId: (data['businessId'] ?? 'keren_auto_sales') as String,
+      businessName: (data['businessName'] ?? 'Keren') as String,
+      businessStatus: (data['businessStatus'] ?? 'approved') as String,
+      businessProfileImageUrl: data['businessProfileImageUrl'] as String?,
+      enabledServices: normalizeBusinessServices(data['enabledServices']),
       createdAt: _toDateTime(data['createdAt']),
       updatedAt: _toDateTime(data['updatedAt']),
       soldInfo: CarSaleInfo.fromMap(
@@ -67,6 +142,17 @@ class Car {
             ? data['soldInfo'] as Map<String, dynamic>
             : null,
       ),
+      useBusinessHoldPricing: data['useBusinessHoldPricing'] != false,
+      carHoldPricingMode: (data['carHoldPricingMode'] ?? '') as String,
+      carHoldFlatFee: data['carHoldFlatFee'] == null
+          ? null
+          : _parseDouble(data['carHoldFlatFee']),
+      carHoldDailyRate: data['carHoldDailyRate'] == null
+          ? null
+          : _parseDouble(data['carHoldDailyRate']),
+      carHoldMaxDays: data['carHoldMaxDays'] is num
+          ? (data['carHoldMaxDays'] as num).toInt()
+          : int.tryParse('${data['carHoldMaxDays'] ?? ''}'),
     );
   }
 
@@ -98,6 +184,31 @@ class Car {
       return value;
     }
     return null;
+  }
+
+  int? get yearNumber => int.tryParse(year);
+
+  int? get mileageNumber {
+    final digits = mileage.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return null;
+    return int.tryParse(digits);
+  }
+
+  String get locationLabel {
+    final parts = [
+      locationAddressLine1.trim(),
+      locationCity.trim(),
+      locationState.trim(),
+      locationPostalCode.trim(),
+    ].where((part) => part.isNotEmpty).toList();
+    return parts.join(', ');
+  }
+
+  List<String> get allFeatures {
+    final values = <String>{};
+    values.addAll(structuredFeatures.where((item) => item.trim().isNotEmpty));
+    values.addAll(features.where((item) => item.trim().isNotEmpty));
+    return values.toList();
   }
 }
 

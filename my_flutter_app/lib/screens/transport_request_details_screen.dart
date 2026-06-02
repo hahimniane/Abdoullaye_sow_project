@@ -11,6 +11,7 @@ import '../l10n/app_localizations.dart';
 import '../models/transport_request.dart';
 import '../providers/auth_provider.dart';
 import '../utils/transport_receipt_generator.dart';
+import '../widgets/app_snackbars.dart';
 import '../widgets/language_toggle.dart';
 import '../theme/app_colors.dart';
 
@@ -59,9 +60,15 @@ class _TransportRequestDetailsScreenState
     _priceController = TextEditingController(
       text: NumberFormat('#.##').format(widget.request.price),
     );
-    _selectedMake = widget.request.carMake.isNotEmpty ? widget.request.carMake : null;
-    _selectedModel = widget.request.carModel.isNotEmpty ? widget.request.carModel : null;
-    _selectedYear = widget.request.carYear.isNotEmpty ? widget.request.carYear : null;
+    _selectedMake = widget.request.carMake.isNotEmpty
+        ? widget.request.carMake
+        : null;
+    _selectedModel = widget.request.carModel.isNotEmpty
+        ? widget.request.carModel
+        : null;
+    _selectedYear = widget.request.carYear.isNotEmpty
+        ? widget.request.carYear
+        : null;
     _transportDate = widget.request.transportDate;
     _persistedStatus = widget.request.status;
     _statusDraft = _persistedStatus;
@@ -169,9 +176,9 @@ class _TransportRequestDetailsScreenState
     await Clipboard.setData(ClipboardData(text: _trackingCode));
     if (!mounted) return;
     final l10n = AppLocalizations.of(context)!;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l10n.trackingNumberCopied)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.trackingNumberCopied)));
   }
 
   Future<void> _reprintReceipt() async {
@@ -209,32 +216,22 @@ class _TransportRequestDetailsScreenState
           .collection('transportRequests')
           .doc(widget.request.id)
           .update({
-        'ownerName': _ownerController.text.trim(),
-        'carMake': _selectedMake ?? '',
-        'carModel': _selectedModel ?? '',
-        'carYear': _selectedYear ?? '',
-        'vinNumber': _vinController.text.trim(),
-        'transportDate': Timestamp.fromDate(_transportDate),
-        'price': parsedPrice,
-        'status': _statusDraft,
-      });
+            'ownerName': _ownerController.text.trim(),
+            'carMake': _selectedMake ?? '',
+            'carModel': _selectedModel ?? '',
+            'carYear': _selectedYear ?? '',
+            'vinNumber': _vinController.text.trim(),
+            'transportDate': Timestamp.fromDate(_transportDate),
+            'price': parsedPrice,
+            'status': _statusDraft,
+          });
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.transportUpdatedSuccessfully),
-          backgroundColor: Colors.green,
-        ),
-      );
+      showSuccessSnackBar(context, l10n.transportUpdatedSuccessfully);
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.failedToUpdateTransport(e)),
-          backgroundColor: Colors.red,
-        ),
-      );
+      showErrorSnackBar(context, l10n.failedToUpdateTransport(e));
     }
   }
 
@@ -246,19 +243,23 @@ class _TransportRequestDetailsScreenState
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.headerGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.headerGradient),
         child: SafeArea(
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 child: Row(
                   children: [
                     IconButton(
                       onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                      icon: const Icon(
+                        Icons.arrow_back_ios,
+                        color: Colors.white,
+                      ),
                     ),
                     Expanded(
                       child: Text(
@@ -277,9 +278,13 @@ class _TransportRequestDetailsScreenState
               ),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.06),
+                  padding: EdgeInsets.all(
+                    MediaQuery.of(context).size.width * 0.06,
+                  ),
                   child: Container(
-                    padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.05),
+                    padding: EdgeInsets.all(
+                      MediaQuery.of(context).size.width * 0.05,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(24),
@@ -323,7 +328,10 @@ class _TransportRequestDetailsScreenState
                               ),
                               IconButton(
                                 onPressed: _copyTrackingNumber,
-                                icon: const Icon(Icons.copy, color: AppColors.brandRed),
+                                icon: const Icon(
+                                  Icons.copy,
+                                  color: AppColors.brandRed,
+                                ),
                                 tooltip: l10n.trackingNumber,
                               ),
                             ],
@@ -429,8 +437,9 @@ class _TransportRequestDetailsScreenState
                             controller: _priceController,
                             label: l10n.price,
                             readOnly: !canEdit,
-                            keyboardType:
-                                const TextInputType.numberWithOptions(decimal: true),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
                             validator: (value) {
                               if (!canEdit) return null;
                               if (value == null || value.trim().isEmpty) {
@@ -461,7 +470,9 @@ class _TransportRequestDetailsScreenState
                                     }
                                   }
                                 : null,
-                            decoration: InputDecoration(labelText: l10n.statusLabel),
+                            decoration: InputDecoration(
+                              labelText: l10n.statusLabel,
+                            ),
                           ),
                           const SizedBox(height: 24),
                           Row(
@@ -479,7 +490,9 @@ class _TransportRequestDetailsScreenState
                               const SizedBox(width: 16),
                               Expanded(
                                 child: ElevatedButton(
-                                  onPressed: canEdit && !_isSaving ? _updateRequest : null,
+                                  onPressed: canEdit && !_isSaving
+                                      ? _updateRequest
+                                      : null,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF28A745),
                                     foregroundColor: Colors.white,
@@ -492,7 +505,9 @@ class _TransportRequestDetailsScreenState
                                           child: CircularProgressIndicator(
                                             strokeWidth: 2,
                                             valueColor:
-                                                AlwaysStoppedAnimation<Color>(Colors.white),
+                                                AlwaysStoppedAnimation<Color>(
+                                                  Colors.white,
+                                                ),
                                           ),
                                         )
                                       : Text(l10n.updateTransport),
@@ -592,17 +607,16 @@ class _CarDropdownField extends StatelessWidget {
     final currentValue = enabled && value != null && options.contains(value)
         ? value
         : value != null && value!.isNotEmpty
-            ? value
-            : null;
+        ? value
+        : null;
 
     return DropdownButtonFormField<String>(
       key: ValueKey<String?>(currentValue),
       initialValue: currentValue,
       items: options
-          .map((item) => DropdownMenuItem<String>(
-                value: item,
-                child: Text(item),
-              ))
+          .map(
+            (item) => DropdownMenuItem<String>(value: item, child: Text(item)),
+          )
           .toList(),
       onChanged: enabled ? onChanged : null,
       validator: validator,

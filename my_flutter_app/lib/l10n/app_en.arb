@@ -39,6 +39,28 @@
   "model": "Model",
   "year": "Year",
   "vinNumber": "VIN Number",
+  "scanVin": "Scan VIN",
+  "decodeVin": "Decode VIN",
+  "scanVinText": "Scan VIN text",
+  "scanVinInstructions": "Align the VIN barcode inside the frame. If there is no barcode, use text scan.",
+  "useManualEntry": "Use manual entry",
+  "vinScanNoResult": "No VIN was found. Try again or enter it manually.",
+  "vinScanFailed": "VIN scan failed. Try again or enter it manually.",
+  "vinCameraUnavailable": "Camera is unavailable. You can still enter the VIN manually.",
+  "invalidVinNumber": "Enter a valid 17-character VIN without I, O, or Q.",
+  "vinDecodeFailed": "VIN could not be decoded. You can still enter the vehicle details manually.",
+  "vinDecoded": "VIN decoded.",
+  "vinDecodedVehicle": "VIN decoded: {vehicle}",
+  "@vinDecodedVehicle": {
+    "placeholders": {
+      "vehicle": {}
+    }
+  },
+  "vinMatchReview": "Review the decoded details and complete any fields that did not match the catalog.",
+  "decodedVinDetails": "Decoded VIN details",
+  "vehicle": "Vehicle",
+  "bodyStyle": "Body style",
+  "engine": "Engine",
   "parkingDate": "Parking Date",
   "parkingDateTime": "Parking Date & Time",
   "selectDateTime": "Select Date & Time",
@@ -162,6 +184,14 @@
   "tryDifferentSearch": "Try a different search term",
   "home": "Home",
   "settings": "Settings",
+  "navHome": "Home",
+  "navCars": "Cars",
+  "navBarrels": "Barrels",
+  "navPurchases": "Purchases",
+  "navTracking": "Tracking",
+  "navBusiness": "Business",
+  "navUsers": "Users",
+  "navSettings": "Settings",
   "appInformation": "App Information",
   "appVersion": "App Version",
   "companyName": "Company Name",
@@ -179,7 +209,7 @@
   "filterTransport": "Car Transport",
   "filterSales": "Car Sales",
   "totalCars": "Total Cars",
-  "activeCars": "Active Cars",
+  "activeCars": "Active cars",
   "inactiveCars": "Inactive Cars",
   "processing": "Processing",
   "completed": "Completed",
@@ -196,8 +226,8 @@
   "trackShipment": "Track Shipment",
   "tracking": "Tracking",
   "userManagement": "User Management",
-  "setAsCustomer": "Set as Customer",
-  "setAsStaff": "Set as Staff",
+  "setAsCustomer": "Set as customer",
+  "setAsStaff": "Set as staff",
   "setAsAdmin": "Set as Admin",
   "addStaffMember": "Add Staff Member",
   "users": "Users",
@@ -216,7 +246,7 @@
       "error": {}
     }
   },
-  "deleteUser": "Delete User",
+  "deleteUser": "Delete user",
   "confirmDeletion": "Confirm Deletion",
   "confirmDeleteUser": "Are you sure you want to delete the user {email}?",
   "@confirmDeleteUser": {
@@ -224,7 +254,6 @@
       "email": {}
     }
   },
-  "cancel": "Cancel",
   "delete": "Delete",
   "userDeleted": "User {email} deleted successfully",
   "@userDeleted": {
@@ -358,7 +387,8 @@
   "darkMode": "Dark mode",
   "lightMode": "Light mode",
   "reserved": "Reserved",
-  "reserveWithDeposit": "Reserve with $500 Deposit",
+  "reserveWithDeposit": "Reserve with deposit",
+  "reserveWithPaidHold": "Reserve with paid hold",
   "loginRequiredForDeposit": "Please sign in before paying a deposit.",
   "reserveThisCar": "Reserve this car",
   "depositSummary": "A refundable reservation deposit of {amount} is required to hold this vehicle.",
@@ -382,6 +412,9 @@
       "time": {}
     }
   },
+  "youHaveViewingReserved": "You already reserved a viewing",
+  "currentViewingTime": "Current viewing time",
+  "changeOrCancelViewingToBookNew": "To schedule another viewing for this listing, change the current time or cancel this viewing first.",
   "accountRequiredTitle": "Sign in to continue",
   "accountRequiredReserveMessage": "Create an account or sign in so we can save your viewing appointment and keep the car reserved for you.",
   "accountRequiredPurchaseMessage": "Create an account or sign in so we can securely record your purchase and show it in My Purchases.",
@@ -427,5 +460,645 @@
   "countryName": "Country Name",
   "countryCode": "Country Code",
   "seedDefaultCountries": "Seed All Countries",
-  "save": "Save"
+  "save": "Save",
+  "signOutQuestion": "Sign out?",
+  "signOutConfirmMessage": "You will need to sign in again before managing shipments, wallet money, purchases, or business tools.",
+  "confirmSignOut": "Sign out",
+  "walletTitle": "Wallet",
+  "walletSubtitle": "View credits and return money to card",
+  "businesses": "Businesses",
+  "businessesSubtitle": "Approve and manage marketplace businesses",
+  "businessProfile": "Business profile",
+  "businessProfileSubtitle": "Manage profile, services, destinations, and team",
+  "businessAdmin": "Business admin",
+  "chooseAtLeastOneService": "Choose at least one service.",
+  "businessProfileSaved": "Business profile saved.",
+  "noBusinessProfileAssigned": "No business profile is assigned.",
+  "businessProfileNotFound": "Business profile not found.",
+  "destinationsAndShippingFees": "Destinations and shipping fees",
+  "team": "Team",
+  "addStaffMemberButton": "Add staff member",
+  "noTeamMembersYet": "No team members yet.",
+  "details": "Details",
+  "businessName": "Business name",
+  "businessPhone": "Business phone",
+  "businessEmail": "Business email",
+  "website": "Website",
+  "serviceNote": "Service note",
+  "noServicesEnabledYet": "No services are enabled yet.",
+  "requestReturnToCard": "Request return to card",
+  "keepInWallet": "Keep in wallet",
+  "couldNotRequestRefund": "Could not request refund: {error}",
+  "@couldNotRequestRefund": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "returnWalletBalance": "Return wallet balance",
+  "walletReturnMessage": "{amount} will be requested back to the original card. Your wallet balance will move into pending refund.",
+  "@walletReturnMessage": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "returnToCardRequested": "{amount} return to card requested.",
+  "@returnToCardRequested": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "walletBusinessBlocked": "Wallets are for customer refund credits. Business finance tools are available in the platform dashboard.",
+  "availableBalance": "Available balance",
+  "pendingReturnToCard": "{amount} pending return to card",
+  "@pendingReturnToCard": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "requestingReturn": "Requesting return",
+  "returnMoneyToCard": "Return money to card",
+  "walletCreditsInfoWithBalance": "Wallet credits come from shipment price differences. You can keep the credit here or request it back to your original card.",
+  "walletCreditsInfoEmpty": "Refund credits from future shipment changes will appear here.",
+  "activity": "Activity",
+  "destinationRefund": "Destination refund",
+  "destinationRefundWithCode": "Destination refund • {trackingCode}",
+  "@destinationRefundWithCode": {
+    "placeholders": {
+      "trackingCode": {}
+    }
+  },
+  "returnToCardRequestedStatus": "Return to card requested",
+  "returnedToCard": "Returned to card",
+  "noWalletActivityYet": "No wallet activity yet.",
+  "signInToViewWallet": "Sign in to view your wallet.",
+  "decline": "Decline",
+  "accept": "Accept",
+  "saveShipmentChangesQuestion": "Save shipment changes?",
+  "saveShipmentChangesMessage": "This will update the shipment details. Destination changes may adjust the customer wallet or payment totals.",
+  "saveChanges": "Save changes",
+  "sender": "Sender",
+  "senderQuestion": "Who is sending the barrel?",
+  "pickup": "Pickup",
+  "pickupAddress": "Pickup address",
+  "receiver": "Receiver",
+  "receiverQuestion": "Who should receive it overseas?",
+  "destination": "Destination",
+  "staffControls": "Staff controls",
+  "shippingBusiness": "Shipping business",
+  "currentBusiness": "Current business",
+  "newRoute": "New route",
+  "copyTrackingNumber": "Copy tracking number",
+  "receipt": "Receipt",
+  "dropOffOffice": "Drop-off office",
+  "requestBarrelShipmentQuestion": "Request barrel shipment?",
+  "requestBarrelShipmentMessage": "This will create the shipment and start payment for the estimated total.",
+  "payAndRequest": "Pay and request",
+  "pickUp": "Pick up",
+  "bringToOffice": "Bring to office",
+  "locationPermissionDenied": "Location permission denied.",
+  "couldNotGetLocation": "Could not get location. Try again.",
+  "pickupAddressInNyc": "Pickup address in NYC",
+  "submitTransportRequestQuestion": "Submit transport request?",
+  "submitTransportRequestMessage": "This will create a transport request for staff to manage and track.",
+  "submitRequest": "Submit request",
+  "barrelShippingPrice": "Barrel shipping price",
+  "minDeliveryDays": "Min delivery days",
+  "maxDeliveryDays": "Max delivery days",
+  "officeAddress": "Office address",
+  "barrelPickupPricing": "Barrel pickup pricing",
+  "searchCountriesCodesFlags": "Search countries, codes, or flags",
+  "business": "Business",
+  "migrationComplete": "Migration complete: {count} writes.",
+  "@migrationComplete": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "migrationFailed": "Migration failed: {error}",
+  "@migrationFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "status": "Status",
+  "pending": "Pending",
+  "approved": "Approved",
+  "suspended": "Suspended",
+  "saveBusiness": "Save business",
+  "migrateKerenData": "Migrate Keren data",
+  "addBusiness": "Add business",
+  "updatePurchaseStatusQuestion": "Update purchase status?",
+  "updatePurchaseStatusMessage": "This will mark {carTitle} as {status} and update the related car record.",
+  "@updatePurchaseStatusMessage": {
+    "placeholders": {
+      "carTitle": {},
+      "status": {}
+    }
+  },
+  "updateStatus": "Update status",
+  "accountProfile": "Account profile",
+  "profileSaved": "Profile saved.",
+  "phone": "Phone",
+  "addPlatformManager": "Add platform manager",
+  "createAdminSubtitle": "Create another admin who can manage the platform",
+  "addBusinessStaff": "Add business staff",
+  "createStaffSubtitle": "Create a staff login under a business",
+  "noUsersMatch": "No users match this view.",
+  "manager": "Manager",
+  "managers": "Managers",
+  "owners": "Owners",
+  "all": "All",
+  "businessStaff": "Business staff",
+  "searchUsersHint": "Search name, email, phone, business",
+  "userActions": "User actions",
+  "setAsPlatformManager": "Set as platform manager",
+  "userId": "User ID",
+  "chooseStaffBusiness": "Choose a business",
+  "ownerAccount": "Owner account",
+  "ownerFullName": "Owner full name",
+  "ownerPhone": "Owner phone",
+  "ownerEmail": "Owner email",
+  "servicesYouOffer": "Services you offer",
+  "submitBusinessApplicationQuestion": "Submit business application?",
+  "submitBusinessApplicationMessage": "This will create your business account request and open dashboard setup for the selected services.",
+  "submitApplication": "Submit application",
+  "chooseAtLeastOneBusinessService": "Choose at least one business service.",
+  "reserveViewingQuestion": "Reserve viewing?",
+  "reserveViewingConfirmMessage": "This will reserve your selected viewing time for this car.",
+  "purchaseCarQuestion": "Purchase this car?",
+  "purchaseCarConfirmMessage": "This will start checkout and create a purchase record for this car.",
+  "continueToPayment": "Continue to payment",
+  "signUpFailedTryAgain": "Sign up failed. Please try again.",
+  "noApprovedDestinationsAvailable": "No active approved business destinations are available.",
+  "carrierTracking": "Carrier tracking",
+  "couldNotOpenCarrierTracking": "Could not open carrier tracking.",
+  "trackingNumberCopiedShort": "Tracking number copied.",
+  "copy": "Copy",
+  "activeShort": "Active",
+  "pickupShort": "Pickup",
+  "doneShort": "Done",
+  "platformDashboard": "Platform dashboard",
+  "platformDashboardSubtitle": "Applications, businesses, operations, refunds, and marketplace health.",
+  "pendingBusinesses": "Pending businesses",
+  "approvedBusinesses": "Approved businesses",
+  "customers": "Customers",
+  "openShipments": "Open shipments",
+  "pendingPurchases": "Pending purchases",
+  "refundRequests": "Refund requests",
+  "refundRequest": "Refund request",
+  "amountLabel": "Amount: {amount}",
+  "@amountLabel": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "customerLabel": "Customer: {customer}",
+  "@customerLabel": {
+    "placeholders": {
+      "customer": {}
+    }
+  },
+  "statusLabelValue": "Status: {status}",
+  "@statusLabelValue": {
+    "placeholders": {
+      "status": {}
+    }
+  },
+  "businessLabel": "Business: {business}",
+  "@businessLabel": {
+    "placeholders": {
+      "business": {}
+    }
+  },
+  "close": "Close",
+  "platformManagerCreated": "Platform manager created.",
+  "temporaryPassword": "Temporary password",
+  "actionQueue": "Action queue",
+  "review": "Review",
+  "businessManagement": "Business management",
+  "openFullList": "Open full list",
+  "financeReadiness": "Finance readiness",
+  "recentOperations": "Recent operations",
+  "businessReviewSaved": "Business review saved.",
+  "reviewAction": "Review action",
+  "approve": "Approve",
+  "suspend": "Suspend",
+  "reject": "Reject",
+  "requestChanges": "Request changes",
+  "reviewNote": "Review note",
+  "requestId": "Request ID: {id}",
+  "@requestId": {
+    "placeholders": {
+      "id": {}
+    }
+  },
+  "finalReceiptGenerated": "Final receipt generated and status set to completed.",
+  "updateRecord": "Update Record",
+  "generateFinalReceipt": "Generate Final Receipt",
+  "parkingStartDate": "Parking Start Date",
+  "parkingEndDate": "Parking End Date",
+  "costPerDay": "Cost Per Day ($)",
+  "selectCountriesAddFees": "Select the countries this business ships to and add the shipping fee for each destination.",
+  "activeDestinationsHaveFees": "{priced} of {total} active destinations have shipping fees.",
+  "@activeDestinationsHaveFees": {
+    "placeholders": {
+      "priced": {},
+      "total": {}
+    }
+  },
+  "selectDestinationCountries": "Select destination countries",
+  "manageDestinationsFees": "Manage destinations and fees",
+  "businessNameRequired": "Business name is required",
+  "businessPhoneRequired": "Business phone is required",
+  "validBusinessPhoneRequired": "Please enter a valid business phone",
+  "pickupCollectNyc": "We will collect it from a NYC address.",
+  "pickupBringOffice": "You will bring it to the office.",
+  "pleaseEnterPickupAddress": "Please enter the pickup address",
+  "pleaseIncludeNycBoroughZip": "Please include the NYC borough or ZIP code",
+  "pleaseChoosePickupDateTime": "Please choose pickup date and time",
+  "pickupTimeFuture": "Pickup time must be in the future",
+  "destinationSubtitleEstimateRoute": "Choose the country so we can estimate the route.",
+  "pickupAddressNycHint": "e.g. 3184 Webster Ave, Bronx, NY 10467",
+  "pleaseAskStaffSetBarrelPrice": "Please ask staff to set a barrel shipping price for this destination before saving.",
+  "staffControlsSubtitle": "Update internal status and final price.",
+  "officeDropOff": "Office drop-off",
+  "deliveryWithLabel": "Delivery {label}",
+  "@deliveryWithLabel": {
+    "placeholders": {
+      "label": {}
+    }
+  },
+  "addBarrelFeeBeforeActivating": "Add a barrel shipping fee before activating.",
+  "activeDestinationsNeedFee": "Active destinations need a barrel shipping fee greater than 0.",
+  "addMinimumDeliveryDays": "Add minimum delivery days.",
+  "addMaximumDeliveryDays": "Add maximum delivery days.",
+  "useWholeCalendarDays": "Use whole calendar days.",
+  "deliveryDaysGreaterThanZero": "Delivery days must be greater than 0.",
+  "maxDaysAtLeastMin": "Maximum days must be at least the minimum.",
+  "firebaseDeniedDeployRules": "Firebase denied access. Deploy the local Firestore rules and functions, then seed the country catalog.",
+  "optionalDeliveryEstimateNote": "Optional calendar-day estimate shown to customers.",
+  "pickupPriceLabel": "{borough} pickup price",
+  "@pickupPriceLabel": {
+    "placeholders": {
+      "borough": {}
+    }
+  },
+  "editBusiness": "Edit business",
+  "nameLabel": "Name",
+  "businessesEmpty": "No businesses yet.",
+  "chooseStaffBusinessMessage": "Choose the business this staff member belongs to.",
+  "phoneNumberRequired": "Please enter a phone number",
+  "pleaseSelectCarMake": "Please select car make",
+  "pleaseSelectCarModel": "Please select car model",
+  "pleaseSelectYear": "Please select year",
+  "ownerNameRequired": "Please enter owner name",
+  "carIdentityRequired": "Please make sure car make, model, and year are selected.",
+  "recordUpdated": "Record updated successfully!",
+  "failedToUpdateRecord": "Failed to update record: {error}",
+  "@failedToUpdateRecord": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "addParkingEndAndDailyCost": "Please add an end date and daily cost first.",
+  "carIdentityReceiptRequired": "Car make, model, and year must be set before generating a receipt.",
+  "endDateBeforeStart": "End date cannot be before start date.",
+  "finalReceiptGeneratedCompleted": "Final receipt generated and status set to completed.",
+  "failedToGenerateReceipt": "Failed to generate receipt: {error}",
+  "@failedToGenerateReceipt": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "costPerDayCurrency": "Cost Per Day ($)",
+  "carParkingReceipt": "CAR PARKING RECEIPT",
+  "businessServices": "Business Services",
+  "receiptDetails": "Receipt Details",
+  "receiptNumber": "Receipt Number:",
+  "trackingNumberPdf": "Tracking Number:",
+  "generatedOn": "Generated On:",
+  "carInformation": "Car Information",
+  "ownerNamePdf": "Owner Name:",
+  "carMakePdf": "Car Make:",
+  "carModelPdf": "Car Model:",
+  "yearPdf": "Year:",
+  "vinNumberPdf": "VIN Number:",
+  "parkingStartPdf": "Parking Start:",
+  "parkingEndPdf": "Parking End:",
+  "totalDaysPdf": "Total Days:",
+  "billingSummary": "Billing Summary",
+  "costPerDayPdf": "Cost per Day:",
+  "totalCostPdf": "Total Cost:",
+  "peopleAndAccess": "People and access",
+  "peopleAndAccessSubtitle": "Manage platform managers, business teams, and customer accounts.",
+  "platformManagers": "Platform managers",
+  "platformManagersCount": "{count} people with full platform access",
+  "@platformManagersCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "businessTeam": "Business team",
+  "businessTeamCount": "{count} owner/staff accounts",
+  "@businessTeamCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "customerAccountsCount": "{count} shared marketplace customer accounts",
+  "@customerAccountsCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "noEmail": "No email",
+  "platformManager": "Platform manager",
+  "businessOwner": "Business owner",
+  "unassignedBusiness": "Unassigned business",
+  "currentDestinationShipping": "Current destination shipping: {amount}.",
+  "@currentDestinationShipping": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "destinationChangeCollect": "{amount} will be collected for the destination change.",
+  "@destinationChangeCollect": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "destinationChangeCredit": "{amount} will be credited to your wallet.",
+  "@destinationChangeCredit": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "newRouteValue": "{business} to {country}",
+  "@newRouteValue": {
+    "placeholders": {
+      "business": {},
+      "country": {}
+    }
+  },
+  "noMatchingBusinesses": "No matching businesses.",
+  "noOpenShipments": "No open shipments.",
+  "noPendingRefundRequests": "No pending refund requests.",
+  "refundCredits": "Refund credits",
+  "cardReturnRequest": "Card return request",
+  "customerRefundRequest": "Customer refund request",
+  "noBusinessApplicationsWaiting": "No business applications waiting.",
+  "noPendingWalletCardReturns": "No pending wallet card-return requests.",
+  "stripeConnectPlaceholders": "Stripe Connect placeholders are ready for future connected account, payout, and dispute monitoring.",
+  "creating": "Creating",
+  "createManager": "Create manager",
+  "fullNameRequired": "Full name is required",
+  "emailRequired": "Email is required",
+  "validEmailRequired": "Please enter a valid email",
+  "phoneRequired": "Phone is required",
+  "passwordRequired": "Password is required",
+  "services": "Services",
+  "businessIdentitySubtitle": "How customers and staff identify this business.",
+  "businessDefaultAddressSubtitle": "Used as the default address for vehicle listings.",
+  "paidHoldPricing": "Paid hold pricing",
+  "paidHoldPricingSubtitle": "Set the default deposit rule for customers holding cars.",
+  "flatFee": "Flat fee",
+  "perDay": "Per day",
+  "flatHoldFee": "Flat hold fee",
+  "dailyHoldRate": "Daily hold rate",
+  "maxDays": "Max days",
+  "holdMaxDaysHelper": "1 to 30 days",
+  "businessServicesSubtitle": "Choose what this business can offer customers.",
+  "businessServicesCount": "{count} services",
+  "@businessServicesCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "businessProfileApprovalSubtitle": "Customers will see this after platform approval.",
+  "ownerSignedInSubtitle": "This business will be linked to your signed-in account.",
+  "ownerCreateLoginSubtitle": "Create the owner login for this business.",
+  "servicesOfferSubtitle": "Your dashboard will show pages for these services.",
+  "ownerPhoneRequired": "Owner phone is required",
+  "walletBalance": "Wallet balance",
+  "toReceiverInCountry": "To {receiver} in {country}",
+  "@toReceiverInCountry": {
+    "placeholders": {
+      "receiver": {},
+      "country": {}
+    }
+  },
+  "pickupRequestedWithDate": "Pickup requested • {date}",
+  "@pickupRequestedWithDate": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "pickupRequested": "Pickup requested",
+  "customerDropOffAtOffice": "Customer drop-off at office",
+  "pendingPayment": "Pending payment",
+  "requested": "Requested",
+  "inTransit": "In transit",
+  "paid": "Paid",
+  "paymentPending": "Payment pending",
+  "paymentCancelled": "Payment cancelled",
+  "signInToTrackShipments": "Sign in to see your barrel shipment requests, receipts, and pickup status.",
+  "shipmentsLoadError": "We could not load your shipment requests right now. Please try again shortly.",
+  "shipmentsAppearAfterPayment": "Your barrel shipment requests will appear here after payment is completed.",
+  "registerYourBusiness": "Register your business",
+  "submittingApplication": "Submitting application",
+  "submitBusinessApplication": "Submit business application",
+  "ownerNameRequiredShort": "Owner name is required",
+  "unknown": "Unknown",
+  "cardReturnsSimulatedNotice": "Card returns are simulated for now. Keep this pending until real Stripe refunds are connected.",
+  "noBusinessesYet": "No businesses yet.",
+  "saving": "Saving",
+  "saveReview": "Save review",
+  "open": "Open",
+  "errorDetails": "Error: {error}",
+  "@errorDetails": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "carInventoryBasics": "Basics",
+  "carInventoryPricing": "Pricing",
+  "carInventoryDetails": "Details",
+  "carInventoryFeatures": "Features",
+  "carInventoryMedia": "Media",
+  "carInventoryContact": "Contact",
+  "carInventoryReview": "Review",
+  "next": "Next",
+  "back": "Back",
+  "publishCar": "Publish car",
+  "updateListing": "Update listing",
+  "stepCount": "Step {current} of {total}",
+  "@stepCount": {
+    "placeholders": {
+      "current": {},
+      "total": {}
+    }
+  },
+  "condition": "Condition",
+  "bodyType": "Body type",
+  "transmission": "Transmission",
+  "fuelType": "Fuel type",
+  "drivetrain": "Drivetrain",
+  "exteriorColor": "Exterior color",
+  "interiorColor": "Interior color",
+  "vinOptional": "VIN (optional)",
+  "stockNumberOptional": "Stock/reference number (optional)",
+  "negotiable": "Negotiable",
+  "locationCity": "City",
+  "locationState": "State",
+  "minPrice": "Min price",
+  "minMileage": "Min mileage",
+  "maxMileage": "Max mileage",
+  "dealer": "Dealer",
+  "location": "Location",
+  "structuredFeatures": "Key features",
+  "customFeatures": "Custom features",
+  "customFeaturesHint": "Add custom features separated by commas",
+  "conditionNew": "New",
+  "conditionUsed": "Used",
+  "conditionCertified": "Certified",
+  "conditionSalvage": "Salvage",
+  "bodySedan": "Sedan",
+  "bodySuv": "SUV",
+  "bodyTruck": "Truck",
+  "bodyVan": "Van",
+  "bodyCoupe": "Coupe",
+  "bodyHatchback": "Hatchback",
+  "bodyWagon": "Wagon",
+  "bodyConvertible": "Convertible",
+  "transmissionAutomatic": "Automatic",
+  "transmissionManual": "Manual",
+  "transmissionCvt": "CVT",
+  "fuelGas": "Gas",
+  "fuelDiesel": "Diesel",
+  "fuelHybrid": "Hybrid",
+  "fuelElectric": "Electric",
+  "fuelPlugInHybrid": "Plug-in hybrid",
+  "drivetrainFwd": "FWD",
+  "drivetrainRwd": "RWD",
+  "drivetrainAwd": "AWD",
+  "drivetrainFourWd": "4WD",
+  "featureBackupCamera": "Backup camera",
+  "featureBluetooth": "Bluetooth",
+  "featureLeatherSeats": "Leather seats",
+  "featureSunroof": "Sunroof",
+  "featureNavigation": "Navigation",
+  "featureHeatedSeats": "Heated seats",
+  "featureAppleCarPlay": "Apple CarPlay",
+  "featureAndroidAuto": "Android Auto",
+  "featureBlindSpot": "Blind spot monitor",
+  "featureThirdRow": "Third row seating",
+  "featureRemoteStart": "Remote start",
+  "featureKeylessEntry": "Keyless entry",
+  "positivePriceRequired": "Price must be greater than 0.",
+  "mileageWholeNumberRequired": "Mileage must be a non-negative whole number.",
+  "vinLengthRequired": "VIN must be 17 characters.",
+  "addAtLeastOneImage": "Add at least one car image before publishing.",
+  "coverImage": "Cover image",
+  "makeCover": "Make cover",
+  "removeImage": "Remove image",
+  "listingPreview": "Listing preview",
+  "readyToPublish": "Ready to publish",
+  "missingRequiredInfo": "Missing required information",
+  "reviewBeforePublishing": "Review the listing before it goes live for customers.",
+  "listingWillStayInactive": "This listing will be saved as inactive and hidden from customers.",
+  "noFilterResults": "No cars match these filters.",
+  "clearFiltersToSeeCars": "Clear filters to see available cars.",
+  "newestListings": "Newest listings",
+  "mileageLowToHigh": "Mileage: low to high",
+  "mileageHighToLow": "Mileage: high to low",
+  "priceNegotiable": "Price negotiable",
+  "financingAvailable": "Financing info available",
+  "any": "Any",
+  "uploadingCar": "Uploading car...",
+  "fixRequiredFields": "Please fix the required fields below.",
+  "selectStateFirst": "Select a state first",
+  "carColorBlack": "Black",
+  "carColorWhite": "White",
+  "carColorSilver": "Silver",
+  "carColorGray": "Gray",
+  "carColorRed": "Red",
+  "carColorBlue": "Blue",
+  "carColorGreen": "Green",
+  "carColorYellow": "Yellow",
+  "carColorBrown": "Brown",
+  "carColorBeige": "Beige",
+  "carColorGold": "Gold",
+  "carColorOrange": "Orange",
+  "carColorPurple": "Purple",
+  "carColorBurgundy": "Burgundy",
+  "carColorOther": "Other",
+  "otherOption": "Other",
+  "businessLocation": "Business location",
+  "viewingLocation": "Viewing location",
+  "reserveCarHoldTitle": "Paid hold after viewing",
+  "reserveCarHoldMessage": "Use this after you have viewed the car and want the business to hold it while you return to complete payment. If you do not come back, the deposit may be forfeited.",
+  "reserveCarQuestion": "Reserve this car?",
+  "reserveCarConfirmMessage": "You will pay {amount} now to hold this car. The business can keep the deposit if you do not return to complete the purchase.",
+  "@reserveCarConfirmMessage": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "businessAddressLine1": "Business street address",
+  "postalCode": "Postal code",
+  "useBusinessDefaultAddress": "Use business default address",
+  "useCustomViewingAddress": "Use a different viewing address",
+  "listingLocationSource": "Listing location",
+  "businessAddressMissing": "Add the business default address in Business profile, or choose a different viewing address.",
+  "editViewingReservation": "Edit viewing reservation",
+  "changeViewingTime": "Change viewing time",
+  "viewingEditCutoff": "Viewing appointments can be changed until one hour before the scheduled time.",
+  "viewingReservationUpdated": "Viewing time updated.",
+  "cannotEditViewingReservation": "This viewing reservation can no longer be changed.",
+  "cancelViewingReservation": "Cancel viewing",
+  "cancelViewingQuestion": "Cancel this viewing?",
+  "cancelViewingConfirmMessage": "This will remove your viewing appointment and make the car available for you to reserve again.",
+  "viewingReservationCancelled": "Viewing reservation cancelled.",
+  "viewingScheduled": "Viewing scheduled",
+  "requestHoldExtensionQuestion": "Request hold extension?",
+  "requestHoldExtensionMessage": "The business will review your new return date. If approved, you will pay any extra hold amount before the date changes.",
+  "requestExtension": "Request extension",
+  "extensionRequestSent": "Extension request sent.",
+  "holdUntilDate": "Hold until: {date}",
+  "@holdUntilDate": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "holdReviewRequiredMessage": "The hold date has passed. The business is reviewing whether the vehicle was sold or the customer did not come.",
+  "customerNoShowHoldMessage": "Marked as customer did not come. The hold deposit may be forfeited.",
+  "payExtensionQuestion": "Pay extension?",
+  "payExtensionMessage": "Your hold date will update after this extension payment is complete.",
+  "payExtension": "Pay extension",
+  "extensionPaidHoldUpdated": "Extension paid. Hold date updated.",
+  "chooseBusinessWithShippingFee": "Choose a business with an active shipping fee before payment.",
+  "processingPayment": "Processing payment",
+  "payAndRequestShipment": "Pay and request shipment",
+  "checkingConnection": "Checking connection",
+  "checkingConnectionMessage": "We are confirming internet access before opening the app.",
+  "noInternetConnection": "No internet connection",
+  "noInternetMessage": "This app needs an active internet connection to load your account, services, payments, and latest safety settings.",
+  "retry": "Retry",
+  "updateAvailable": "Update available",
+  "updateAvailableMessage": "A newer version{version} is available. Update now for the latest fixes, or continue for this session.",
+  "@updateAvailableMessage": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "updateRequired": "Update required",
+  "updateRequiredMessage": "This version is no longer supported. Please update{version} to continue.",
+  "@updateRequiredMessage": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "updateNow": "Update now",
+  "continueLabel": "Continue",
+  "updateLinkUnavailable": "The update link is not available yet. Please try again later."
 }

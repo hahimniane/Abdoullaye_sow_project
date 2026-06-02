@@ -40,6 +40,28 @@
   "model": "Modèle",
   "year": "Année",
   "vinNumber": "Numéro VIN",
+  "scanVin": "Scanner le VIN",
+  "decodeVin": "Décoder le VIN",
+  "scanVinText": "Scanner le texte VIN",
+  "scanVinInstructions": "Alignez le code-barres VIN dans le cadre. S’il n’y a pas de code-barres, utilisez le scan de texte.",
+  "useManualEntry": "Saisie manuelle",
+  "vinScanNoResult": "Aucun VIN trouvé. Réessayez ou saisissez-le manuellement.",
+  "vinScanFailed": "Le scan du VIN a échoué. Réessayez ou saisissez-le manuellement.",
+  "vinCameraUnavailable": "La caméra est indisponible. Vous pouvez toujours saisir le VIN manuellement.",
+  "invalidVinNumber": "Saisissez un VIN valide de 17 caractères sans I, O ni Q.",
+  "vinDecodeFailed": "Le VIN n’a pas pu être décodé. Vous pouvez toujours saisir les détails du véhicule manuellement.",
+  "vinDecoded": "VIN décodé.",
+  "vinDecodedVehicle": "VIN décodé : {vehicle}",
+  "@vinDecodedVehicle": {
+    "placeholders": {
+      "vehicle": {}
+    }
+  },
+  "vinMatchReview": "Vérifiez les détails décodés et complétez les champs qui ne correspondent pas au catalogue.",
+  "decodedVinDetails": "Détails VIN décodés",
+  "vehicle": "Véhicule",
+  "bodyStyle": "Carrosserie",
+  "engine": "Moteur",
   "parkingDate": "Date de Stationnement",
   "parkingDateTime": "Date et Heure de Stationnement",
   "selectDateTime": "Sélectionner Date et Heure",
@@ -163,6 +185,14 @@
   "tryDifferentSearch": "Essayez un terme de recherche différent",
   "home": "Accueil",
   "settings": "Paramètres",
+  "navHome": "Accueil",
+  "navCars": "Voitures",
+  "navBarrels": "Barils",
+  "navPurchases": "Achats",
+  "navTracking": "Suivi",
+  "navBusiness": "Entreprise",
+  "navUsers": "Utilisateurs",
+  "navSettings": "Réglages",
   "appInformation": "Informations sur l'Application",
   "appVersion": "Version de l'Application",
   "companyName": "Nom de l'Entreprise",
@@ -180,7 +210,7 @@
   "filterTransport": "Transport de voitures",
   "filterSales": "Ventes de voitures",
   "totalCars": "Total des Voitures",
-  "activeCars": "Voitures Actives",
+  "activeCars": "Voitures actives",
   "inactiveCars": "Voitures Inactives",
   "active": "Actif",
   "inactive": "Inactif",
@@ -197,8 +227,8 @@
   "trackShipment": "Suivre l'Expédition",
   "tracking": "Suivi",
   "userManagement": "Gestion des Utilisateurs",
-  "setAsCustomer": "Définir comme Client",
-  "setAsStaff": "Définir comme Personnel",
+  "setAsCustomer": "Définir comme client",
+  "setAsStaff": "Définir comme personnel",
   "setAsAdmin": "Définir comme Administrateur",
   "addStaffMember": "Ajouter un Membre du Personnel",
   "users": "Utilisateurs",
@@ -242,7 +272,7 @@
   "alreadyHaveAccount": "Vous avez déjà un compte ?",
   "dontHaveAccount": "Vous n'avez pas de compte ?",
   "accountCreatedSuccessfully": "Compte créé avec succès !",
-  "deleteUser": "Supprimer l'utilisateur",
+  "deleteUser": "Supprimer l’utilisateur",
   "confirmDeletion": "Confirmer la suppression",
   "confirmDeleteUser": "Êtes-vous sûr de vouloir supprimer l'utilisateur {email} ?",
   "@confirmDeleteUser": {
@@ -250,7 +280,6 @@
       "email": {}
     }
   },
-  "cancel": "Annuler",
   "delete": "Supprimer",
   "userDeleted": "Utilisateur {email} supprimé avec succès",
   "@userDeleted": {
@@ -359,7 +388,8 @@
   "darkMode": "Mode sombre",
   "lightMode": "Mode clair",
   "reserved": "Réservé",
-  "reserveWithDeposit": "Réserver avec un acompte de 500 $",
+  "reserveWithDeposit": "Réserver avec acompte",
+  "reserveWithPaidHold": "Réserver avec retenue payante",
   "loginRequiredForDeposit": "Veuillez vous connecter avant de payer un acompte.",
   "reserveThisCar": "Réserver cette voiture",
   "depositSummary": "Un acompte de réservation remboursable de {amount} est requis pour retenir ce véhicule.",
@@ -383,6 +413,9 @@
       "time": {}
     }
   },
+  "youHaveViewingReserved": "Vous avez déjà réservé une visite",
+  "currentViewingTime": "Heure de visite actuelle",
+  "changeOrCancelViewingToBookNew": "Pour planifier une autre visite pour cette annonce, modifiez l’heure actuelle ou annulez d’abord cette visite.",
   "accountRequiredTitle": "Connectez-vous pour continuer",
   "accountRequiredReserveMessage": "Créez un compte ou connectez-vous afin que nous puissions enregistrer votre rendez-vous et garder la voiture pour vous.",
   "accountRequiredPurchaseMessage": "Créez un compte ou connectez-vous afin que nous puissions enregistrer votre achat en toute sécurité et l'afficher dans Mes achats.",
@@ -428,5 +461,645 @@
   "countryName": "Nom du pays",
   "countryCode": "Code du pays",
   "seedDefaultCountries": "Ajouter tous les pays",
-  "save": "Enregistrer"
+  "save": "Enregistrer",
+  "signOutQuestion": "Se déconnecter ?",
+  "signOutConfirmMessage": "Vous devrez vous reconnecter avant de gérer les expéditions, le portefeuille, les achats ou les outils professionnels.",
+  "confirmSignOut": "Se déconnecter",
+  "walletTitle": "Portefeuille",
+  "walletSubtitle": "Consulter les crédits et retourner l’argent sur la carte",
+  "businesses": "Entreprises",
+  "businessesSubtitle": "Approuver et gérer les entreprises de la plateforme",
+  "businessProfile": "Profil de l’entreprise",
+  "businessProfileSubtitle": "Gérer le profil, les services, les destinations et l’équipe",
+  "businessAdmin": "Administrateur d’entreprise",
+  "chooseAtLeastOneService": "Choisissez au moins un service.",
+  "businessProfileSaved": "Profil de l’entreprise enregistré.",
+  "noBusinessProfileAssigned": "Aucun profil d’entreprise n’est attribué.",
+  "businessProfileNotFound": "Profil de l’entreprise introuvable.",
+  "destinationsAndShippingFees": "Destinations et frais d’expédition",
+  "team": "Équipe",
+  "addStaffMemberButton": "Ajouter un membre du personnel",
+  "noTeamMembersYet": "Aucun membre du personnel pour le moment.",
+  "details": "Détails",
+  "businessName": "Nom de l’entreprise",
+  "businessPhone": "Téléphone de l’entreprise",
+  "businessEmail": "Email de l’entreprise",
+  "website": "Site web",
+  "serviceNote": "Note de service",
+  "noServicesEnabledYet": "Aucun service n’est activé pour le moment.",
+  "requestReturnToCard": "Demander le retour sur la carte",
+  "keepInWallet": "Garder dans le portefeuille",
+  "couldNotRequestRefund": "Impossible de demander le remboursement : {error}",
+  "@couldNotRequestRefund": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "returnWalletBalance": "Retourner le solde du portefeuille",
+  "walletReturnMessage": "{amount} sera demandé vers la carte d’origine. Le solde de votre portefeuille passera en remboursement en attente.",
+  "@walletReturnMessage": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "returnToCardRequested": "Retour de {amount} vers la carte demandé.",
+  "@returnToCardRequested": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "walletBusinessBlocked": "Les portefeuilles servent aux crédits de remboursement des clients. Les outils financiers d’entreprise sont disponibles dans le tableau de bord de la plateforme.",
+  "availableBalance": "Solde disponible",
+  "pendingReturnToCard": "{amount} en attente de retour vers la carte",
+  "@pendingReturnToCard": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "requestingReturn": "Demande en cours",
+  "returnMoneyToCard": "Retourner l’argent sur la carte",
+  "walletCreditsInfoWithBalance": "Les crédits du portefeuille proviennent des différences de prix d’expédition. Vous pouvez garder le crédit ici ou demander son retour sur votre carte d’origine.",
+  "walletCreditsInfoEmpty": "Les crédits de remboursement des prochains changements d’expédition apparaîtront ici.",
+  "activity": "Activité",
+  "destinationRefund": "Remboursement de destination",
+  "destinationRefundWithCode": "Remboursement de destination • {trackingCode}",
+  "@destinationRefundWithCode": {
+    "placeholders": {
+      "trackingCode": {}
+    }
+  },
+  "returnToCardRequestedStatus": "Retour vers la carte demandé",
+  "returnedToCard": "Retourné vers la carte",
+  "noWalletActivityYet": "Aucune activité de portefeuille pour le moment.",
+  "signInToViewWallet": "Connectez-vous pour voir votre portefeuille.",
+  "decline": "Refuser",
+  "accept": "Accepter",
+  "saveShipmentChangesQuestion": "Enregistrer les modifications de l’expédition ?",
+  "saveShipmentChangesMessage": "Cela mettra à jour les détails de l’expédition. Les changements de destination peuvent ajuster le portefeuille du client ou les montants de paiement.",
+  "saveChanges": "Enregistrer les modifications",
+  "sender": "Expéditeur",
+  "senderQuestion": "Qui envoie le baril ?",
+  "pickup": "Ramassage",
+  "pickupAddress": "Adresse de ramassage",
+  "receiver": "Destinataire",
+  "receiverQuestion": "Qui doit le recevoir à l’étranger ?",
+  "destination": "Destination",
+  "staffControls": "Contrôles du personnel",
+  "shippingBusiness": "Entreprise d’expédition",
+  "currentBusiness": "Entreprise actuelle",
+  "newRoute": "Nouvel itinéraire",
+  "copyTrackingNumber": "Copier le numéro de suivi",
+  "receipt": "Reçu",
+  "dropOffOffice": "Bureau de dépôt",
+  "requestBarrelShipmentQuestion": "Demander l’expédition du baril ?",
+  "requestBarrelShipmentMessage": "Cela créera l’expédition et lancera le paiement du total estimé.",
+  "payAndRequest": "Payer et demander",
+  "pickUp": "Ramassage",
+  "bringToOffice": "Apporter au bureau",
+  "locationPermissionDenied": "Autorisation de localisation refusée.",
+  "couldNotGetLocation": "Impossible d’obtenir la position. Réessayez.",
+  "pickupAddressInNyc": "Adresse de ramassage à New York",
+  "submitTransportRequestQuestion": "Soumettre la demande de transport ?",
+  "submitTransportRequestMessage": "Cela créera une demande de transport à gérer et suivre par le personnel.",
+  "submitRequest": "Soumettre la demande",
+  "barrelShippingPrice": "Prix d’expédition du baril",
+  "minDeliveryDays": "Jours de livraison min.",
+  "maxDeliveryDays": "Jours de livraison max.",
+  "officeAddress": "Adresse du bureau",
+  "barrelPickupPricing": "Tarifs de ramassage des barils",
+  "searchCountriesCodesFlags": "Rechercher des pays, codes ou drapeaux",
+  "business": "Entreprise",
+  "migrationComplete": "Migration terminée : {count} écritures.",
+  "@migrationComplete": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "migrationFailed": "Échec de la migration : {error}",
+  "@migrationFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "status": "Statut",
+  "pending": "En attente",
+  "approved": "Approuvé",
+  "suspended": "Suspendu",
+  "saveBusiness": "Enregistrer l’entreprise",
+  "migrateKerenData": "Migrer les données Keren",
+  "addBusiness": "Ajouter une entreprise",
+  "updatePurchaseStatusQuestion": "Mettre à jour le statut de l’achat ?",
+  "updatePurchaseStatusMessage": "Cela marquera {carTitle} comme {status} et mettra à jour la voiture liée.",
+  "@updatePurchaseStatusMessage": {
+    "placeholders": {
+      "carTitle": {},
+      "status": {}
+    }
+  },
+  "updateStatus": "Mettre à jour le statut",
+  "accountProfile": "Profil du compte",
+  "profileSaved": "Profil enregistré.",
+  "phone": "Téléphone",
+  "addPlatformManager": "Ajouter un gestionnaire de plateforme",
+  "createAdminSubtitle": "Créer un autre administrateur qui peut gérer la plateforme",
+  "addBusinessStaff": "Ajouter du personnel d’entreprise",
+  "createStaffSubtitle": "Créer un identifiant personnel sous une entreprise",
+  "noUsersMatch": "Aucun utilisateur ne correspond à cette vue.",
+  "manager": "Gestionnaire",
+  "managers": "Gestionnaires",
+  "owners": "Propriétaires",
+  "all": "Tous",
+  "businessStaff": "Personnel d’entreprise",
+  "searchUsersHint": "Rechercher nom, email, téléphone, entreprise",
+  "userActions": "Actions utilisateur",
+  "setAsPlatformManager": "Définir comme responsable de plateforme",
+  "userId": "ID utilisateur",
+  "chooseStaffBusiness": "Choisissez une entreprise",
+  "ownerAccount": "Compte propriétaire",
+  "ownerFullName": "Nom complet du propriétaire",
+  "ownerPhone": "Téléphone du propriétaire",
+  "ownerEmail": "Email du propriétaire",
+  "servicesYouOffer": "Services proposés",
+  "submitBusinessApplicationQuestion": "Soumettre la demande d’entreprise ?",
+  "submitBusinessApplicationMessage": "Cela créera votre demande de compte entreprise et ouvrira la configuration du tableau de bord pour les services sélectionnés.",
+  "submitApplication": "Soumettre la demande",
+  "chooseAtLeastOneBusinessService": "Choisissez au moins un service d’entreprise.",
+  "reserveViewingQuestion": "Réserver une visite ?",
+  "reserveViewingConfirmMessage": "Cela réservera l’heure de visite choisie pour cette voiture.",
+  "purchaseCarQuestion": "Acheter cette voiture ?",
+  "purchaseCarConfirmMessage": "Cela lancera le paiement et créera un dossier d’achat pour cette voiture.",
+  "continueToPayment": "Continuer vers le paiement",
+  "signUpFailedTryAgain": "L’inscription a échoué. Veuillez réessayer.",
+  "noApprovedDestinationsAvailable": "Aucune destination active d’entreprise approuvée n’est disponible.",
+  "carrierTracking": "Suivi transporteur",
+  "couldNotOpenCarrierTracking": "Impossible d’ouvrir le suivi du transporteur.",
+  "trackingNumberCopiedShort": "Numéro de suivi copié.",
+  "copy": "Copier",
+  "activeShort": "Actifs",
+  "pickupShort": "Ramassage",
+  "doneShort": "Terminés",
+  "platformDashboard": "Tableau de bord de la plateforme",
+  "platformDashboardSubtitle": "Demandes, entreprises, opérations, remboursements et état de la plateforme.",
+  "pendingBusinesses": "Entreprises en attente",
+  "approvedBusinesses": "Entreprises approuvées",
+  "customers": "Clients",
+  "openShipments": "Expéditions ouvertes",
+  "pendingPurchases": "Achats en attente",
+  "refundRequests": "Demandes de remboursement",
+  "refundRequest": "Demande de remboursement",
+  "amountLabel": "Montant : {amount}",
+  "@amountLabel": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "customerLabel": "Client : {customer}",
+  "@customerLabel": {
+    "placeholders": {
+      "customer": {}
+    }
+  },
+  "statusLabelValue": "Statut : {status}",
+  "@statusLabelValue": {
+    "placeholders": {
+      "status": {}
+    }
+  },
+  "businessLabel": "Entreprise : {business}",
+  "@businessLabel": {
+    "placeholders": {
+      "business": {}
+    }
+  },
+  "close": "Fermer",
+  "platformManagerCreated": "Gestionnaire de plateforme créé.",
+  "temporaryPassword": "Mot de passe temporaire",
+  "actionQueue": "File d’actions",
+  "review": "Examiner",
+  "businessManagement": "Gestion des entreprises",
+  "openFullList": "Ouvrir la liste complète",
+  "financeReadiness": "Préparation financière",
+  "recentOperations": "Opérations récentes",
+  "businessReviewSaved": "Examen de l’entreprise enregistré.",
+  "reviewAction": "Action d’examen",
+  "approve": "Approuver",
+  "suspend": "Suspendre",
+  "reject": "Rejeter",
+  "requestChanges": "Demander des modifications",
+  "reviewNote": "Note d’examen",
+  "requestId": "ID de demande : {id}",
+  "@requestId": {
+    "placeholders": {
+      "id": {}
+    }
+  },
+  "finalReceiptGenerated": "Reçu final généré et statut défini comme terminé.",
+  "updateRecord": "Mettre à jour le dossier",
+  "generateFinalReceipt": "Générer le reçu final",
+  "parkingStartDate": "Date de début du stationnement",
+  "parkingEndDate": "Date de fin du stationnement",
+  "costPerDay": "Coût par jour ($)",
+  "selectCountriesAddFees": "Sélectionnez les pays desservis par cette entreprise et ajoutez les frais d’expédition pour chaque destination.",
+  "activeDestinationsHaveFees": "{priced} destination(s) active(s) sur {total} ont des frais d’expédition.",
+  "@activeDestinationsHaveFees": {
+    "placeholders": {
+      "priced": {},
+      "total": {}
+    }
+  },
+  "selectDestinationCountries": "Sélectionner les pays de destination",
+  "manageDestinationsFees": "Gérer les destinations et les frais",
+  "businessNameRequired": "Le nom de l’entreprise est requis",
+  "businessPhoneRequired": "Le téléphone de l’entreprise est requis",
+  "validBusinessPhoneRequired": "Veuillez entrer un téléphone d’entreprise valide",
+  "pickupCollectNyc": "Nous le récupérerons à une adresse à New York.",
+  "pickupBringOffice": "Vous l’apporterez au bureau.",
+  "pleaseEnterPickupAddress": "Veuillez entrer l’adresse de ramassage",
+  "pleaseIncludeNycBoroughZip": "Veuillez inclure l’arrondissement de New York ou le code postal",
+  "pleaseChoosePickupDateTime": "Veuillez choisir la date et l’heure de ramassage",
+  "pickupTimeFuture": "L’heure de ramassage doit être dans le futur",
+  "destinationSubtitleEstimateRoute": "Choisissez le pays afin que nous puissions estimer l’itinéraire.",
+  "pickupAddressNycHint": "ex. 3184 Webster Ave, Bronx, NY 10467",
+  "pleaseAskStaffSetBarrelPrice": "Veuillez demander au personnel de définir un prix d’expédition de baril pour cette destination avant d’enregistrer.",
+  "staffControlsSubtitle": "Mettre à jour le statut interne et le prix final.",
+  "officeDropOff": "Dépôt au bureau",
+  "deliveryWithLabel": "Livraison {label}",
+  "@deliveryWithLabel": {
+    "placeholders": {
+      "label": {}
+    }
+  },
+  "addBarrelFeeBeforeActivating": "Ajoutez des frais d’expédition de baril avant d’activer.",
+  "activeDestinationsNeedFee": "Les destinations actives doivent avoir des frais d’expédition de baril supérieurs à 0.",
+  "addMinimumDeliveryDays": "Ajoutez le nombre minimum de jours de livraison.",
+  "addMaximumDeliveryDays": "Ajoutez le nombre maximum de jours de livraison.",
+  "useWholeCalendarDays": "Utilisez des jours calendaires entiers.",
+  "deliveryDaysGreaterThanZero": "Les jours de livraison doivent être supérieurs à 0.",
+  "maxDaysAtLeastMin": "Le nombre maximum de jours doit être au moins égal au minimum.",
+  "firebaseDeniedDeployRules": "Firebase a refusé l’accès. Déployez les règles Firestore et les fonctions locales, puis ajoutez le catalogue des pays.",
+  "optionalDeliveryEstimateNote": "Estimation optionnelle en jours calendaires affichée aux clients.",
+  "pickupPriceLabel": "Prix de ramassage - {borough}",
+  "@pickupPriceLabel": {
+    "placeholders": {
+      "borough": {}
+    }
+  },
+  "editBusiness": "Modifier l’entreprise",
+  "nameLabel": "Nom",
+  "businessesEmpty": "Aucune entreprise pour le moment.",
+  "chooseStaffBusinessMessage": "Choisissez l’entreprise à laquelle ce membre du personnel appartient.",
+  "phoneNumberRequired": "Veuillez saisir un numéro de téléphone",
+  "pleaseSelectCarMake": "Veuillez sélectionner la marque de la voiture",
+  "pleaseSelectCarModel": "Veuillez sélectionner le modèle de la voiture",
+  "pleaseSelectYear": "Veuillez sélectionner l’année",
+  "ownerNameRequired": "Veuillez saisir le nom du propriétaire",
+  "carIdentityRequired": "Veuillez vérifier que la marque, le modèle et l’année de la voiture sont sélectionnés.",
+  "recordUpdated": "Dossier mis à jour avec succès.",
+  "failedToUpdateRecord": "Échec de la mise à jour du dossier : {error}",
+  "@failedToUpdateRecord": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "addParkingEndAndDailyCost": "Veuillez ajouter une date de fin et un coût journalier.",
+  "carIdentityReceiptRequired": "La marque, le modèle et l’année doivent être définis avant de générer un reçu.",
+  "endDateBeforeStart": "La date de fin ne peut pas être antérieure à la date de début.",
+  "finalReceiptGeneratedCompleted": "Reçu final généré et statut défini comme terminé.",
+  "failedToGenerateReceipt": "Échec de la génération du reçu : {error}",
+  "@failedToGenerateReceipt": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "costPerDayCurrency": "Coût par jour ($)",
+  "carParkingReceipt": "REÇU DE STATIONNEMENT",
+  "businessServices": "Services professionnels",
+  "receiptDetails": "Détails du reçu",
+  "receiptNumber": "Numéro du reçu :",
+  "trackingNumberPdf": "Numéro de suivi :",
+  "generatedOn": "Généré le :",
+  "carInformation": "Informations sur la voiture",
+  "ownerNamePdf": "Nom du propriétaire :",
+  "carMakePdf": "Marque :",
+  "carModelPdf": "Modèle :",
+  "yearPdf": "Année :",
+  "vinNumberPdf": "Numéro VIN :",
+  "parkingStartPdf": "Début du stationnement :",
+  "parkingEndPdf": "Fin du stationnement :",
+  "totalDaysPdf": "Nombre total de jours :",
+  "billingSummary": "Récapitulatif de facturation",
+  "costPerDayPdf": "Coût par jour :",
+  "totalCostPdf": "Coût total :",
+  "peopleAndAccess": "Personnes et accès",
+  "peopleAndAccessSubtitle": "Gérez les responsables de plateforme, les équipes d’entreprise et les comptes clients.",
+  "platformManagers": "Responsables de plateforme",
+  "platformManagersCount": "{count} personnes avec un accès complet à la plateforme",
+  "@platformManagersCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "businessTeam": "Équipe de l’entreprise",
+  "businessTeamCount": "{count} comptes propriétaire/personnel",
+  "@businessTeamCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "customerAccountsCount": "{count} comptes clients partagés du marketplace",
+  "@customerAccountsCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "noEmail": "Aucun e-mail",
+  "platformManager": "Responsable de plateforme",
+  "businessOwner": "Propriétaire d’entreprise",
+  "unassignedBusiness": "Entreprise non attribuée",
+  "currentDestinationShipping": "Expédition actuelle vers la destination : {amount}.",
+  "@currentDestinationShipping": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "destinationChangeCollect": "{amount} sera encaissé pour le changement de destination.",
+  "@destinationChangeCollect": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "destinationChangeCredit": "{amount} sera crédité dans votre portefeuille.",
+  "@destinationChangeCredit": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "newRouteValue": "{business} vers {country}",
+  "@newRouteValue": {
+    "placeholders": {
+      "business": {},
+      "country": {}
+    }
+  },
+  "noMatchingBusinesses": "Aucune entreprise correspondante.",
+  "noOpenShipments": "Aucun envoi ouvert.",
+  "noPendingRefundRequests": "Aucune demande de remboursement en attente.",
+  "refundCredits": "Crédits de remboursement",
+  "cardReturnRequest": "Demande de retour sur carte",
+  "customerRefundRequest": "Demande de remboursement client",
+  "noBusinessApplicationsWaiting": "Aucune demande d’entreprise en attente.",
+  "noPendingWalletCardReturns": "Aucune demande de retour portefeuille vers carte en attente.",
+  "stripeConnectPlaceholders": "Les emplacements Stripe Connect sont prêts pour les futurs comptes connectés, paiements et suivis des litiges.",
+  "creating": "Création",
+  "createManager": "Créer un responsable",
+  "fullNameRequired": "Le nom complet est requis",
+  "emailRequired": "L’e-mail est requis",
+  "validEmailRequired": "Veuillez saisir une adresse e-mail valide",
+  "phoneRequired": "Le téléphone est requis",
+  "passwordRequired": "Le mot de passe est requis",
+  "services": "Services",
+  "businessIdentitySubtitle": "Comment les clients et l’équipe identifient cette entreprise.",
+  "businessDefaultAddressSubtitle": "Utilisée comme adresse par défaut pour les annonces de véhicules.",
+  "paidHoldPricing": "Tarif de retenue payante",
+  "paidHoldPricingSubtitle": "Définissez la règle d’acompte par défaut pour retenir les voitures.",
+  "flatFee": "Frais fixe",
+  "perDay": "Par jour",
+  "flatHoldFee": "Frais fixe de retenue",
+  "dailyHoldRate": "Tarif journalier",
+  "maxDays": "Jours max.",
+  "holdMaxDaysHelper": "1 à 30 jours",
+  "businessServicesSubtitle": "Choisissez ce que cette entreprise peut offrir aux clients.",
+  "businessServicesCount": "{count} services",
+  "@businessServicesCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "businessProfileApprovalSubtitle": "Les clients verront ces informations après l’approbation de la plateforme.",
+  "ownerSignedInSubtitle": "Cette entreprise sera liée à votre compte connecté.",
+  "ownerCreateLoginSubtitle": "Créez le compte propriétaire pour cette entreprise.",
+  "servicesOfferSubtitle": "Votre tableau de bord affichera les pages de ces services.",
+  "ownerPhoneRequired": "Le téléphone du propriétaire est requis",
+  "walletBalance": "Solde du portefeuille",
+  "toReceiverInCountry": "À {receiver} en {country}",
+  "@toReceiverInCountry": {
+    "placeholders": {
+      "receiver": {},
+      "country": {}
+    }
+  },
+  "pickupRequestedWithDate": "Collecte demandée • {date}",
+  "@pickupRequestedWithDate": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "pickupRequested": "Collecte demandée",
+  "customerDropOffAtOffice": "Dépôt client au bureau",
+  "pendingPayment": "Paiement en attente",
+  "requested": "Demandé",
+  "inTransit": "En transit",
+  "paid": "Payé",
+  "paymentPending": "Paiement en attente",
+  "paymentCancelled": "Paiement annulé",
+  "signInToTrackShipments": "Connectez-vous pour voir vos demandes d’envoi de barils, vos reçus et le statut de collecte.",
+  "shipmentsLoadError": "Nous ne pouvons pas charger vos demandes d’envoi pour le moment. Veuillez réessayer bientôt.",
+  "shipmentsAppearAfterPayment": "Vos demandes d’envoi de barils apparaîtront ici une fois le paiement terminé.",
+  "registerYourBusiness": "Inscrire votre entreprise",
+  "submittingApplication": "Envoi de la demande",
+  "submitBusinessApplication": "Envoyer la demande d’entreprise",
+  "ownerNameRequiredShort": "Le nom du propriétaire est requis",
+  "unknown": "Inconnu",
+  "cardReturnsSimulatedNotice": "Les retours sur carte sont simulés pour le moment. Gardez cette demande en attente jusqu’à la connexion des vrais remboursements Stripe.",
+  "noBusinessesYet": "Aucune entreprise pour le moment.",
+  "saving": "Enregistrement",
+  "saveReview": "Enregistrer l’avis",
+  "open": "Ouvert",
+  "errorDetails": "Erreur : {error}",
+  "@errorDetails": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "carInventoryBasics": "Bases",
+  "carInventoryPricing": "Prix",
+  "carInventoryDetails": "Détails",
+  "carInventoryFeatures": "Caractéristiques",
+  "carInventoryMedia": "Médias",
+  "carInventoryContact": "Contact",
+  "carInventoryReview": "Vérification",
+  "next": "Suivant",
+  "back": "Retour",
+  "publishCar": "Publier la voiture",
+  "updateListing": "Mettre à jour l’annonce",
+  "stepCount": "Étape {current} sur {total}",
+  "@stepCount": {
+    "placeholders": {
+      "current": {},
+      "total": {}
+    }
+  },
+  "condition": "État",
+  "bodyType": "Carrosserie",
+  "transmission": "Transmission",
+  "fuelType": "Carburant",
+  "drivetrain": "Motricité",
+  "exteriorColor": "Couleur extérieure",
+  "interiorColor": "Couleur intérieure",
+  "vinOptional": "VIN (facultatif)",
+  "stockNumberOptional": "Référence/stock (facultatif)",
+  "negotiable": "Négociable",
+  "locationCity": "Ville",
+  "locationState": "État",
+  "minPrice": "Prix min.",
+  "minMileage": "Kilométrage min.",
+  "maxMileage": "Kilométrage max.",
+  "dealer": "Vendeur",
+  "location": "Lieu",
+  "structuredFeatures": "Caractéristiques clés",
+  "customFeatures": "Caractéristiques personnalisées",
+  "customFeaturesHint": "Ajoutez des caractéristiques séparées par des virgules",
+  "conditionNew": "Neuf",
+  "conditionUsed": "Occasion",
+  "conditionCertified": "Certifié",
+  "conditionSalvage": "Accidenté",
+  "bodySedan": "Berline",
+  "bodySuv": "SUV",
+  "bodyTruck": "Pick-up",
+  "bodyVan": "Van",
+  "bodyCoupe": "Coupé",
+  "bodyHatchback": "Hatchback",
+  "bodyWagon": "Break",
+  "bodyConvertible": "Cabriolet",
+  "transmissionAutomatic": "Automatique",
+  "transmissionManual": "Manuelle",
+  "transmissionCvt": "CVT",
+  "fuelGas": "Essence",
+  "fuelDiesel": "Diesel",
+  "fuelHybrid": "Hybride",
+  "fuelElectric": "Électrique",
+  "fuelPlugInHybrid": "Hybride rechargeable",
+  "drivetrainFwd": "Traction",
+  "drivetrainRwd": "Propulsion",
+  "drivetrainAwd": "AWD",
+  "drivetrainFourWd": "4x4",
+  "featureBackupCamera": "Caméra de recul",
+  "featureBluetooth": "Bluetooth",
+  "featureLeatherSeats": "Sièges en cuir",
+  "featureSunroof": "Toit ouvrant",
+  "featureNavigation": "Navigation",
+  "featureHeatedSeats": "Sièges chauffants",
+  "featureAppleCarPlay": "Apple CarPlay",
+  "featureAndroidAuto": "Android Auto",
+  "featureBlindSpot": "Détection angle mort",
+  "featureThirdRow": "Troisième rangée",
+  "featureRemoteStart": "Démarrage à distance",
+  "featureKeylessEntry": "Accès sans clé",
+  "positivePriceRequired": "Le prix doit être supérieur à 0.",
+  "mileageWholeNumberRequired": "Le kilométrage doit être un nombre entier positif ou zéro.",
+  "vinLengthRequired": "Le VIN doit contenir 17 caractères.",
+  "addAtLeastOneImage": "Ajoutez au moins une image de la voiture avant de publier.",
+  "coverImage": "Image principale",
+  "makeCover": "Définir comme principale",
+  "removeImage": "Supprimer l’image",
+  "listingPreview": "Aperçu de l’annonce",
+  "readyToPublish": "Prêt à publier",
+  "missingRequiredInfo": "Informations requises manquantes",
+  "reviewBeforePublishing": "Vérifiez l’annonce avant sa mise en ligne pour les clients.",
+  "listingWillStayInactive": "Cette annonce sera enregistrée comme inactive et masquée aux clients.",
+  "noFilterResults": "Aucune voiture ne correspond à ces filtres.",
+  "clearFiltersToSeeCars": "Effacez les filtres pour voir les voitures disponibles.",
+  "newestListings": "Annonces récentes",
+  "mileageLowToHigh": "Kilométrage : croissant",
+  "mileageHighToLow": "Kilométrage : décroissant",
+  "priceNegotiable": "Prix négociable",
+  "financingAvailable": "Infos financement disponibles",
+  "any": "Tous",
+  "uploadingCar": "Téléversement de la voiture...",
+  "fixRequiredFields": "Veuillez corriger les champs requis ci-dessous.",
+  "selectStateFirst": "Sélectionnez d’abord un État",
+  "carColorBlack": "Noir",
+  "carColorWhite": "Blanc",
+  "carColorSilver": "Argent",
+  "carColorGray": "Gris",
+  "carColorRed": "Rouge",
+  "carColorBlue": "Bleu",
+  "carColorGreen": "Vert",
+  "carColorYellow": "Jaune",
+  "carColorBrown": "Marron",
+  "carColorBeige": "Beige",
+  "carColorGold": "Or",
+  "carColorOrange": "Orange",
+  "carColorPurple": "Violet",
+  "carColorBurgundy": "Bordeaux",
+  "carColorOther": "Autre",
+  "otherOption": "Autre",
+  "businessLocation": "Adresse de l’entreprise",
+  "viewingLocation": "Lieu de visite",
+  "reserveCarHoldTitle": "Blocage payé après la visite",
+  "reserveCarHoldMessage": "Utilisez cette option après avoir vu la voiture si vous voulez que l’entreprise la garde pendant que vous revenez finaliser le paiement. Si vous ne revenez pas, l’acompte peut être conservé.",
+  "reserveCarQuestion": "Réserver cette voiture ?",
+  "reserveCarConfirmMessage": "Vous paierez {amount} maintenant pour retenir cette voiture. L’entreprise peut conserver l’acompte si vous ne revenez pas finaliser l’achat.",
+  "@reserveCarConfirmMessage": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "businessAddressLine1": "Adresse de l’entreprise",
+  "postalCode": "Code postal",
+  "useBusinessDefaultAddress": "Utiliser l’adresse par défaut de l’entreprise",
+  "useCustomViewingAddress": "Utiliser une autre adresse de visite",
+  "listingLocationSource": "Lieu de l’annonce",
+  "businessAddressMissing": "Ajoutez l’adresse par défaut dans le profil de l’entreprise, ou choisissez une autre adresse de visite.",
+  "editViewingReservation": "Modifier la visite",
+  "changeViewingTime": "Changer l’heure de visite",
+  "viewingEditCutoff": "Les rendez-vous de visite peuvent être modifiés jusqu’à une heure avant l’heure prévue.",
+  "viewingReservationUpdated": "L’heure de visite a été mise à jour.",
+  "cannotEditViewingReservation": "Cette visite ne peut plus être modifiée.",
+  "cancelViewingReservation": "Annuler la visite",
+  "cancelViewingQuestion": "Annuler cette visite ?",
+  "cancelViewingConfirmMessage": "Cela supprimera votre rendez-vous de visite et rendra la voiture disponible pour que vous puissiez recommencer.",
+  "viewingReservationCancelled": "La visite a été annulée.",
+  "viewingScheduled": "Visite prévue",
+  "requestHoldExtensionQuestion": "Demander une prolongation du blocage ?",
+  "requestHoldExtensionMessage": "L’entreprise examinera votre nouvelle date de retour. Si elle est approuvée, vous paierez tout montant supplémentaire avant le changement de date.",
+  "requestExtension": "Demander une prolongation",
+  "extensionRequestSent": "Demande de prolongation envoyée.",
+  "holdUntilDate": "Blocage jusqu’au : {date}",
+  "@holdUntilDate": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "holdReviewRequiredMessage": "La date de blocage est passée. L’entreprise vérifie si le véhicule a été vendu ou si le client n’est pas venu.",
+  "customerNoShowHoldMessage": "Marqué comme client absent. L’acompte de blocage peut être conservé.",
+  "payExtensionQuestion": "Payer la prolongation ?",
+  "payExtensionMessage": "Votre date de blocage sera mise à jour une fois ce paiement de prolongation terminé.",
+  "payExtension": "Payer la prolongation",
+  "extensionPaidHoldUpdated": "Prolongation payée. La date de blocage a été mise à jour.",
+  "chooseBusinessWithShippingFee": "Choisissez une entreprise avec des frais d’expédition actifs avant le paiement.",
+  "processingPayment": "Traitement du paiement",
+  "payAndRequestShipment": "Payer et demander l’expédition",
+  "checkingConnection": "Vérification de la connexion",
+  "checkingConnectionMessage": "Nous confirmons l’accès à Internet avant d’ouvrir l’application.",
+  "noInternetConnection": "Pas de connexion Internet",
+  "noInternetMessage": "Cette application a besoin d’une connexion Internet active pour charger votre compte, les services, les paiements et les derniers paramètres de sécurité.",
+  "retry": "Réessayer",
+  "updateAvailable": "Mise à jour disponible",
+  "updateAvailableMessage": "Une nouvelle version{version} est disponible. Mettez à jour maintenant pour obtenir les derniers correctifs, ou continuez pour cette session.",
+  "@updateAvailableMessage": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "updateRequired": "Mise à jour requise",
+  "updateRequiredMessage": "Cette version n’est plus prise en charge. Veuillez mettre à jour{version} pour continuer.",
+  "@updateRequiredMessage": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "updateNow": "Mettre à jour",
+  "continueLabel": "Continuer",
+  "updateLinkUnavailable": "Le lien de mise à jour n’est pas encore disponible. Veuillez réessayer plus tard."
 }

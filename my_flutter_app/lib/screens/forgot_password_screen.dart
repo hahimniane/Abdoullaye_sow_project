@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
+import '../utils/app_feedback.dart';
+import '../widgets/app_snackbars.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -30,12 +32,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
-    );
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
     _animationController.forward();
   }
 
@@ -58,16 +61,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           setState(() {
             _isEmailSent = true;
           });
+          await AppFeedback.success();
         }
       } catch (error) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(error.toString()),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 3),
-            ),
-          );
+          showErrorSnackBar(context, error.toString());
         }
       }
     }
@@ -81,9 +79,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.headerGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.headerGradient),
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
@@ -162,10 +158,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                             ),
                           ],
                         ),
-                        child:
-                            _isEmailSent
-                                ? _buildSuccessContent()
-                                : _buildFormContent(),
+                        child: _isEmailSent
+                            ? _buildSuccessContent()
+                            : _buildFormContent(),
                       ),
                     ],
                   ),
@@ -229,8 +224,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed:
-                      authProvider.isLoading ? null : _handleResetPassword,
+                  onPressed: authProvider.isLoading
+                      ? null
+                      : _handleResetPassword,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.brandRed,
                     foregroundColor: Colors.white,
@@ -240,25 +236,24 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                     elevation: 0,
                     splashFactory: NoSplash.splashFactory,
                   ),
-                  child:
-                      authProvider.isLoading
-                          ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white,
-                              ),
-                            ),
-                          )
-                          : Text(
-                            AppLocalizations.of(context)!.resetPassword,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                  child: authProvider.isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
                             ),
                           ),
+                        )
+                      : Text(
+                          AppLocalizations.of(context)!.resetPassword,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
               );
             },

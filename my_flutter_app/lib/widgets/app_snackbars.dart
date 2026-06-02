@@ -1,7 +1,18 @@
-import 'package:flutter/material.dart';
-import '../theme/app_colors.dart';
+import 'dart:async';
 
-void showSuccessSnackBar(BuildContext context, String message) {
+import 'package:flutter/material.dart';
+
+import '../theme/app_colors.dart';
+import '../utils/app_feedback.dart';
+
+void showSuccessSnackBar(
+  BuildContext context,
+  String message, {
+  bool feedback = true,
+}) {
+  if (feedback) {
+    unawaited(AppFeedback.success());
+  }
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
       content: Text(message),
@@ -11,7 +22,14 @@ void showSuccessSnackBar(BuildContext context, String message) {
   );
 }
 
-void showErrorSnackBar(BuildContext context, String message) {
+void showErrorSnackBar(
+  BuildContext context,
+  String message, {
+  bool feedback = true,
+}) {
+  if (feedback) {
+    unawaited(AppFeedback.error());
+  }
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
       content: Text(message),
