@@ -707,6 +707,8 @@ void _showRefundDetails(
 
 Future<void> showAddPlatformManagerDialog(BuildContext context) async {
   final l10n = AppLocalizations.of(context)!;
+  final authProvider = context.read<AuthProvider>();
+  final messenger = ScaffoldMessenger.of(context);
   final formKey = GlobalKey<FormState>();
   final nameController = TextEditingController();
   final emailController = TextEditingController();
@@ -723,7 +725,7 @@ Future<void> showAddPlatformManagerDialog(BuildContext context) async {
             if (!formKey.currentState!.validate()) return;
             setDialogState(() => saving = true);
             try {
-              await context.read<AuthProvider>().addPlatformManager(
+              await authProvider.addPlatformManager(
                 fullName: nameController.text,
                 email: emailController.text,
                 phone: phoneController.text,
@@ -731,10 +733,22 @@ Future<void> showAddPlatformManagerDialog(BuildContext context) async {
               );
               if (!dialogContext.mounted) return;
               Navigator.pop(dialogContext);
-              showSuccessSnackBar(context, l10n.platformManagerCreated);
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Text(l10n.platformManagerCreated),
+                  backgroundColor: const Color(0xFF16A34A),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
             } catch (error) {
               if (!dialogContext.mounted) return;
-              showErrorSnackBar(context, '$error');
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Text('$error'),
+                  backgroundColor: AppColors.brandRed,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
             } finally {
               if (dialogContext.mounted) {
                 setDialogState(() => saving = false);

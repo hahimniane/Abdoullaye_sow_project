@@ -128,8 +128,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   void _openCreateMenu() {
+    final screenContext = context;
     showModalBottomSheet<void>(
-      context: context,
+      context: screenContext,
       backgroundColor: AppColors.paper,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
@@ -157,7 +158,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   subtitle: l10n.createAdminSubtitle,
                   onTap: () {
                     Navigator.pop(context);
-                    showAddPlatformManagerDialog(context);
+                    showAddPlatformManagerDialog(screenContext);
                   },
                 ),
                 const Divider(height: 1),
