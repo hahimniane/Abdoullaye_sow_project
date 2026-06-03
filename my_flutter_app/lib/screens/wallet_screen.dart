@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
+import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/language_toggle.dart';
 
@@ -166,7 +167,7 @@ class _WalletScreenState extends State<WalletScreen> {
       onBack();
       return;
     }
-    Navigator.pop(context);
+    Navigator.maybePop(context);
   }
 }
 
@@ -180,7 +181,7 @@ class _BusinessWalletBlocked extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     return Column(
       children: [
-        _WalletHeader(onBack: onBack ?? () => Navigator.pop(context)),
+        _WalletHeader(onBack: onBack ?? () => Navigator.maybePop(context)),
         Expanded(
           child: Center(
             child: Padding(
@@ -214,10 +215,7 @@ class _WalletHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(8, 12, 20, 8),
       child: Row(
         children: [
-          IconButton(
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_back_ios_new),
-          ),
+          AppBackButton(onPressed: onBack),
           Expanded(
             child: Text(
               l10n.walletTitle,
@@ -574,7 +572,7 @@ class _SignedOutWallet extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     return Column(
       children: [
-        _WalletHeader(onBack: onBack ?? () => Navigator.pop(context)),
+        _WalletHeader(onBack: onBack ?? () => Navigator.maybePop(context)),
         Expanded(
           child: Center(
             child: Padding(

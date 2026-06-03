@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
+import '../models/notification_preferences.dart';
+import '../services/push_notification_service.dart';
 import '../utils/phone_number_validator.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -11,6 +13,7 @@ class AuthProvider extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseFunctions _functions = FirebaseFunctions.instance;
+  final PushNotificationService _pushNotifications = PushNotificationService();
 
   User? _user;
   bool _isStaff = false;
@@ -23,7 +26,10 @@ class AuthProvider extends ChangeNotifier {
   String? _userEmail;
   String? _customerName;
   String? _customerPhone;
+  String? _normalizedPhone;
   String? _profileImageUrl;
+  NotificationPreferences _notificationPreferences =
+      NotificationPreferences.defaults;
   bool _isLoading = false;
   bool _isInitializing = true;
 
@@ -40,7 +46,10 @@ class AuthProvider extends ChangeNotifier {
   String? get userEmail => _userEmail;
   String? get customerName => _customerName;
   String? get customerPhone => _customerPhone;
+  String? get normalizedPhone => _normalizedPhone;
   String? get profileImageUrl => _profileImageUrl;
+  NotificationPreferences get notificationPreferences =>
+      _notificationPreferences;
   bool get isLoading => _isLoading;
   bool get isInitializing => _isInitializing;
   bool get isAuthenticated => _user != null;
@@ -75,7 +84,9 @@ class AuthProvider extends ChangeNotifier {
       _userEmail = null;
       _customerName = null;
       _customerPhone = null;
+      _normalizedPhone = null;
       _profileImageUrl = null;
+      _notificationPreferences = NotificationPreferences.defaults;
     }
 
     if (_isInitializing) {
@@ -105,7 +116,13 @@ class AuthProvider extends ChangeNotifier {
           _businessServices = _stringList(data?['businessServices']);
           _customerName = data?['fullName'] as String?;
           _customerPhone = data?['phone'] as String?;
+          _normalizedPhone = data?['normalizedPhone'] as String?;
           _profileImageUrl = data?['profileImageUrl'] as String?;
+          _notificationPreferences = NotificationPreferences.fromMap(
+            data?['notificationPreferences'] is Map<String, dynamic>
+                ? data!['notificationPreferences'] as Map<String, dynamic>
+                : null,
+          );
           debugPrint(
             '👥 User role: ${_isAdmin
                 ? 'admin'
@@ -126,7 +143,9 @@ class AuthProvider extends ChangeNotifier {
           _businessServices = const [];
           _customerName = null;
           _customerPhone = null;
+          _normalizedPhone = null;
           _profileImageUrl = null;
+          _notificationPreferences = NotificationPreferences.defaults;
         }
         // No longer need to notify here, _onAuthStateChanged will do it.
       } catch (e) {
@@ -162,12 +181,38 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> authenticate(String email, String password) async {
-    debugPrint('🔐 Starting authentication for email: $email');
+  Future<String> _resolveSignInEmail(String identifier) async {
+    final trimmed = identifier.trim();
+    if (trimmed.contains('@')) return trimmed.toLowerCase();
+    if (!PhoneNumberValidator.isValid(trimmed)) {
+      throw 'Enter a valid email address or phone number.';
+    }
+    final callable = _functions.httpsCallable('resolveSignInIdentifier');
+    final response = await callable.call<Map<String, dynamic>>({
+      'identifier': trimmed,
+    });
+    final email = (response.data['email'] ?? '').toString().trim();
+    if (email.isEmpty) {
+      throw 'No account found with this phone number.';
+    }
+    return email.toLowerCase();
+  }
+
+  Future<void> _registerPushNotificationsIfPossible() async {
+    try {
+      await _pushNotifications.requestPermissionAndRegister();
+    } catch (error) {
+      debugPrint('Push registration skipped: $error');
+    }
+  }
+
+  Future<bool> authenticate(String identifier, String password) async {
+    debugPrint('🔐 Starting authentication for identifier: $identifier');
     _isLoading = true;
     notifyListeners();
 
     try {
+      final email = await _resolveSignInEmail(identifier);
       debugPrint('📡 Attempting Firebase authentication...');
       final userCredential = await _auth.signInWithEmailAndPassword(
         email: email,
@@ -185,6 +230,7 @@ class AuthProvider extends ChangeNotifier {
       if (_user != null) {
         debugPrint('🔍 Checking user role in Firestore...');
         await _checkUserRole();
+        await _registerPushNotificationsIfPossible();
       }
 
       _isLoading = false;
@@ -229,6 +275,11 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> logout() async {
     try {
+      try {
+        await _pushNotifications.disableCurrentToken();
+      } catch (e) {
+        debugPrint('Error disabling push token during logout: $e');
+      }
       await _auth.signOut();
       _user = null;
       _isStaff = false;
@@ -241,10 +292,28 @@ class AuthProvider extends ChangeNotifier {
       _userEmail = null;
       _customerName = null;
       _customerPhone = null;
+      _normalizedPhone = null;
       _profileImageUrl = null;
+      _notificationPreferences = NotificationPreferences.defaults;
       notifyListeners();
     } catch (e) {
       debugPrint('Error during logout: $e');
+      await _auth.signOut();
+      _user = null;
+      _isStaff = false;
+      _isAdmin = false;
+      _isBusinessOwner = false;
+      _role = null;
+      _businessId = null;
+      _businessName = null;
+      _businessServices = const [];
+      _userEmail = null;
+      _customerName = null;
+      _customerPhone = null;
+      _normalizedPhone = null;
+      _profileImageUrl = null;
+      _notificationPreferences = NotificationPreferences.defaults;
+      notifyListeners();
     }
   }
 
@@ -254,12 +323,11 @@ class AuthProvider extends ChangeNotifier {
     if (!PhoneNumberValidator.isValid(trimmed)) {
       throw 'Please enter a valid phone number.';
     }
-    await _firestore.collection('users').doc(_user!.uid).update({
-      'phone': trimmed,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-    _customerPhone = trimmed;
-    notifyListeners();
+    await updateAccountProfile(
+      fullName: _customerName ?? buyerName,
+      phone: trimmed,
+      notificationPreferences: _notificationPreferences,
+    );
   }
 
   Future<void> updateAccountProfile({
@@ -267,23 +335,30 @@ class AuthProvider extends ChangeNotifier {
     required String phone,
     String? profileImageUrl,
     String? profileImagePath,
+    NotificationPreferences? notificationPreferences,
   }) async {
     final trimmedPhone = phone.trim();
     if (_user == null) return;
     if (!PhoneNumberValidator.isValid(trimmedPhone)) {
       throw 'Please enter a valid phone number.';
     }
-    final data = {
+    final prefs = notificationPreferences ?? _notificationPreferences;
+    final callable = _functions.httpsCallable('updateCustomerProfile');
+    final response = await callable.call<Map<String, dynamic>>({
       'fullName': fullName.trim(),
       'phone': trimmedPhone,
+      'notificationPreferences': prefs.toMap(),
       if (profileImageUrl != null) 'profileImageUrl': profileImageUrl,
       if (profileImagePath != null) 'profileImagePath': profileImagePath,
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-    await _firestore.collection('users').doc(_user!.uid).update(data);
+    });
     await _user!.updateDisplayName(fullName.trim());
     _customerName = fullName.trim();
     _customerPhone = trimmedPhone;
+    _normalizedPhone =
+        (response.data['normalizedPhone'] ??
+                PhoneNumberValidator.aliasKey(trimmedPhone))
+            .toString();
+    _notificationPreferences = prefs;
     if (profileImageUrl != null) _profileImageUrl = profileImageUrl;
     notifyListeners();
   }
@@ -394,64 +469,34 @@ class AuthProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
-    User? createdUser;
-
     try {
       if (!PhoneNumberValidator.isValid(phone)) {
         throw 'Please enter a valid phone number.';
       }
 
-      debugPrint('📡 Creating new user with Firebase Auth...');
-      final userCredential = await _auth.createUserWithEmailAndPassword(
+      debugPrint('📡 Creating new user through Cloud Functions...');
+      final callable = _functions.httpsCallable('createCustomerUser');
+      final response = await callable.call<Map<String, dynamic>>({
         email: email,
+        password: password,
+        fullName: fullName,
+        phone: phone,
+      });
+
+      final signInEmail = (response.data['email'] ?? email).toString().trim();
+      final userCredential = await _auth.signInWithEmailAndPassword(
+        email: signInEmail,
         password: password,
       );
 
-      createdUser = userCredential.user;
-
-      if (createdUser == null) {
-        throw 'User creation returned null. Please check Firebase configuration.';
-      }
-
-      debugPrint('✅ Firebase Auth user created successfully!');
-      debugPrint('👤 User ID: ${createdUser.uid}');
-      debugPrint('📧 User Email: ${createdUser.email}');
-
-      _user = createdUser;
-      _userEmail = createdUser.email;
+      _user = userCredential.user;
+      _userEmail = userCredential.user?.email;
       _customerName = fullName.trim();
       _customerPhone = phone.trim();
-      await createdUser.updateDisplayName(_customerName);
-
-      // Create user profile in Firestore with customer role
-      debugPrint('📝 Creating user profile in Firestore...');
-      try {
-        final userRef = _firestore.collection('users').doc(createdUser.uid);
-        await userRef.set({
-          'email': createdUser.email,
-          'fullName': _customerName,
-          'phone': _customerPhone,
-          'role': 'customer', // Default role
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-        _isStaff = false;
-        _isAdmin = false;
-        _isBusinessOwner = false;
-        _role = 'customer';
-        _businessId = null;
-        _businessName = null;
-        debugPrint(
-          '✅ Firestore user profile created successfully with customer role',
-        );
-      } catch (firestoreError) {
-        debugPrint('❌ Firestore Error: $firestoreError');
-        // If Firestore fails, delete the auth user to keep things consistent
-        debugPrint(
-          '⚠️ Rolling back Firebase Auth user due to Firestore error...',
-        );
-        await createdUser.delete();
-        throw 'Failed to create user profile in database: $firestoreError';
-      }
+      _normalizedPhone = response.data['normalizedPhone']?.toString();
+      _notificationPreferences = NotificationPreferences.defaults;
+      await _checkUserRole();
+      await _registerPushNotificationsIfPossible();
 
       _isLoading = false;
       notifyListeners();
@@ -491,16 +536,6 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('💥 Unexpected error during sign up: $e');
       _isLoading = false;
       notifyListeners();
-
-      // If we created a user but hit an error, try to clean up
-      if (createdUser != null) {
-        try {
-          debugPrint('⚠️ Cleaning up created user due to error...');
-          await createdUser.delete();
-        } catch (deleteError) {
-          debugPrint('❌ Failed to clean up user: $deleteError');
-        }
-      }
 
       throw 'An unexpected error occurred: $e';
     }

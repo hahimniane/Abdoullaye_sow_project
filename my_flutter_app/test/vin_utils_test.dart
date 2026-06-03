@@ -23,4 +23,20 @@ void main() {
 
     expect(extractVin(text), '1HGCM82633A004352');
   });
+
+  test('repairs common OCR VIN mistakes only when checksum stays valid', () {
+    expect(extractVin('VIN 1HGCM82633AOO4352'), '1HGCM82633A004352');
+    expect(extractVin('VIN 1HGCM82633AO0435I'), isNull);
+  });
+
+  test('returns review candidate when OCR text is VIN-like but invalid', () {
+    const text = '''
+      VIN PLATE
+      4T1 BF1FK
+      5HU6O3521
+    ''';
+
+    expect(extractVin(text), isNull);
+    expect(extractVinCandidateForReview(text), '4T1BF1FK5HU6O3521');
+  });
 }

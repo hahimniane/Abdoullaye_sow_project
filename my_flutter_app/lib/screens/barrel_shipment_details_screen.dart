@@ -17,6 +17,7 @@ import '../services/destination_country_service.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/barrel_receipt_generator.dart';
 import '../utils/phone_number_validator.dart';
+import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/destination_country_field.dart';
 import '../widgets/language_toggle.dart';
@@ -713,17 +714,7 @@ class _BarrelShipmentDetailsScreenState
                 padding: EdgeInsets.fromLTRB(horizontalPadding, 12, 16, 4),
                 child: Row(
                   children: [
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: IconButton.styleFrom(
-                        splashFactory: NoSplash.splashFactory,
-                      ),
-                      icon: const Icon(
-                        Icons.arrow_back_ios,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
+                    const AppBackButton(onDarkBackground: true),
                     Expanded(
                       child: Text(
                         l10n.barrelShipmentDetails,

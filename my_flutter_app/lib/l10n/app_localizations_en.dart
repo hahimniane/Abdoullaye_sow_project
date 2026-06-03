@@ -1049,7 +1049,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'This car already has an active reservation.';
 
   @override
-  String get carNoLongerAvailable => 'This car is no longer available.';
+  String get carNoLongerAvailable => 'This car is no longer available';
 
   @override
   String get destinationCountry => 'Destination Country';
@@ -2275,6 +2275,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get conditionSalvage => 'Salvage';
 
   @override
+  String get conditionExcellent => 'Excellent';
+
+  @override
+  String get conditionGood => 'Good';
+
+  @override
+  String get conditionFair => 'Fair';
+
+  @override
+  String get conditionPoor => 'Poor';
+
+  @override
   String get bodySedan => 'Sedan';
 
   @override
@@ -2369,6 +2381,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get featureKeylessEntry => 'Keyless entry';
+
+  @override
+  String get featureLaneAssist => 'Lane assist';
+
+  @override
+  String get featureAlloyWheels => 'Alloy wheels';
+
+  @override
+  String get featureParkingSensors => 'Parking sensors';
+
+  @override
+  String get featurePremiumAudio => 'Premium audio';
 
   @override
   String get positivePriceRequired => 'Price must be greater than 0.';
@@ -2655,4 +2679,78 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get updateLinkUnavailable =>
       'The update link is not available yet. Please try again later.';
+
+  @override
+  String get emailOrPhone => 'Email or phone';
+
+  @override
+  String get enterEmailOrPhone => 'Enter your email or phone';
+
+  @override
+  String get pleaseEnterEmailOrPhone =>
+      'Please enter your email or phone number';
+
+  @override
+  String get pleaseEnterValidEmailOrPhone =>
+      'Please enter a valid email or phone number';
+
+  @override
+  String get saveProfile => 'Save profile';
+
+  @override
+  String get profilePhoto => 'Profile photo';
+
+  @override
+  String get changePhoto => 'Change photo';
+
+  @override
+  String get notifications => 'Notifications';
+
+  @override
+  String get notificationPreferences => 'Notification preferences';
+
+  @override
+  String get carActivityNotifications => 'Car purchase and reservation updates';
+
+  @override
+  String get shipmentActivityNotifications => 'Barrel shipment updates';
+
+  @override
+  String get walletActivityNotifications => 'Wallet refund updates';
+
+  @override
+  String get businessActivityNotifications => 'Business application updates';
+
+  @override
+  String get faceId => 'Face ID';
+
+  @override
+  String get faceIdUnlock => 'Use Face ID to unlock this app';
+
+  @override
+  String get faceIdUnavailable => 'Face ID is not available on this device';
+
+  @override
+  String get unlockWithFaceId => 'Unlock with Face ID';
+
+  @override
+  String get appLocked => 'App locked';
+
+  @override
+  String get unlockWithFaceIdMessage => 'Use Face ID to continue.';
+
+  @override
+  String get unlock => 'Unlock';
+
+  @override
+  String get favoriteCars => 'Favorite cars';
+
+  @override
+  String get favoriteCarsSubtitle => 'View vehicles you saved';
+
+  @override
+  String get noFavoriteCarsYet => 'No favorite cars yet';
+
+  @override
+  String get favoriteRemoved => 'Favorite removed';
 }

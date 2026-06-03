@@ -21,6 +21,7 @@ import '../services/business_service.dart';
 import '../utils/barrel_receipt_generator.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/phone_number_validator.dart';
+import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/destination_country_field.dart';
 import '../theme/app_colors.dart';
@@ -403,17 +404,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                 child: Row(
                   children: [
                     if (widget.showBackButton)
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: IconButton.styleFrom(
-                          splashFactory: NoSplash.splashFactory,
-                        ),
-                        icon: const Icon(
-                          Icons.arrow_back_ios,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                      )
+                      const AppBackButton(onDarkBackground: true)
                     else
                       const SizedBox(width: 48, height: 48),
                     Expanded(

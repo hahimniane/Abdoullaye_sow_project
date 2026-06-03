@@ -9,89 +9,17 @@ import '../models/car.dart';
 import '../models/car_purchase.dart';
 import '../providers/auth_provider.dart';
 import '../services/car_purchase_service.dart';
-import '../widgets/language_toggle.dart';
+import '../services/favorite_cars_service.dart';
+import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/language_toggle.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
+import '../utils/car_option_localization.dart';
 import '../utils/phone_number_validator.dart';
 
 String _carDetailOptionLabel(AppLocalizations l10n, String value) {
-  switch (value) {
-    case 'new':
-      return l10n.conditionNew;
-    case 'used':
-      return l10n.conditionUsed;
-    case 'certified':
-      return l10n.conditionCertified;
-    case 'salvage':
-      return l10n.conditionSalvage;
-    case 'sedan':
-      return l10n.bodySedan;
-    case 'suv':
-      return l10n.bodySuv;
-    case 'truck':
-      return l10n.bodyTruck;
-    case 'van':
-      return l10n.bodyVan;
-    case 'coupe':
-      return l10n.bodyCoupe;
-    case 'hatchback':
-      return l10n.bodyHatchback;
-    case 'wagon':
-      return l10n.bodyWagon;
-    case 'convertible':
-      return l10n.bodyConvertible;
-    case 'automatic':
-      return l10n.transmissionAutomatic;
-    case 'manual':
-      return l10n.transmissionManual;
-    case 'cvt':
-      return l10n.transmissionCvt;
-    case 'gas':
-      return l10n.fuelGas;
-    case 'diesel':
-      return l10n.fuelDiesel;
-    case 'hybrid':
-      return l10n.fuelHybrid;
-    case 'electric':
-      return l10n.fuelElectric;
-    case 'plug_in_hybrid':
-      return l10n.fuelPlugInHybrid;
-    case 'fwd':
-      return l10n.drivetrainFwd;
-    case 'rwd':
-      return l10n.drivetrainRwd;
-    case 'awd':
-      return l10n.drivetrainAwd;
-    case '4wd':
-      return l10n.drivetrainFourWd;
-    case 'backup_camera':
-      return l10n.featureBackupCamera;
-    case 'bluetooth':
-      return l10n.featureBluetooth;
-    case 'leather_seats':
-      return l10n.featureLeatherSeats;
-    case 'sunroof':
-      return l10n.featureSunroof;
-    case 'navigation':
-      return l10n.featureNavigation;
-    case 'heated_seats':
-      return l10n.featureHeatedSeats;
-    case 'apple_carplay':
-      return l10n.featureAppleCarPlay;
-    case 'android_auto':
-      return l10n.featureAndroidAuto;
-    case 'blind_spot':
-      return l10n.featureBlindSpot;
-    case 'third_row':
-      return l10n.featureThirdRow;
-    case 'remote_start':
-      return l10n.featureRemoteStart;
-    case 'keyless_entry':
-      return l10n.featureKeylessEntry;
-    default:
-      return value;
-  }
+  return localizedCarOptionLabel(l10n, value);
 }
 
 class CarDetailsScreen extends StatelessWidget {
@@ -137,17 +65,7 @@ class CarDetailsScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: IconButton.styleFrom(
-                        splashFactory: NoSplash.splashFactory,
-                      ),
-                      icon: const Icon(
-                        Icons.arrow_back_ios,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
+                    const AppBackButton(onDarkBackground: true),
                     Expanded(
                       child: Text(
                         l10n.carDetails,
@@ -199,6 +117,12 @@ class CarDetailsScreen extends StatelessWidget {
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.brandRed,
                               ),
+                            ),
+                            const SizedBox(width: 8),
+                            _FavoriteCarDetailsButton(
+                              car: car,
+                              onToggle: (value) =>
+                                  _toggleFavorite(context, value),
                             ),
                           ],
                         ),
@@ -523,6 +447,21 @@ class CarDetailsScreen extends StatelessWidget {
     );
     if (!context.mounted) return false;
     return result == true && context.read<AuthProvider>().isAuthenticated;
+  }
+
+  Future<void> _toggleFavorite(BuildContext context, bool value) async {
+    final l10n = AppLocalizations.of(context)!;
+    final ready = await _ensureCustomerAccount(
+      context,
+      title: l10n.accountRequiredTitle,
+      message: l10n.accountOptionalMessage,
+    );
+    if (!ready || !context.mounted) return;
+    try {
+      await FavoriteCarsService().setFavorite(car, value);
+    } catch (error) {
+      if (context.mounted) showErrorSnackBar(context, '$error');
+    }
   }
 
   Future<void> _showReservationSheet(
@@ -2009,6 +1948,37 @@ class _ImageGallery extends StatelessWidget {
           },
         ),
       ),
+    );
+  }
+}
+
+class _FavoriteCarDetailsButton extends StatelessWidget {
+  const _FavoriteCarDetailsButton({required this.car, required this.onToggle});
+
+  final Car car;
+  final ValueChanged<bool> onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<Set<String>>(
+      stream: FavoriteCarsService().favoriteIdsStream(),
+      builder: (context, snapshot) {
+        final isFavorite = (snapshot.data ?? const <String>{}).contains(car.id);
+        return SizedBox(
+          width: 38,
+          height: 38,
+          child: IconButton.filledTonal(
+            padding: EdgeInsets.zero,
+            visualDensity: VisualDensity.compact,
+            onPressed: () => onToggle(!isFavorite),
+            icon: Icon(
+              isFavorite ? Icons.favorite : Icons.favorite_border,
+              color: isFavorite ? AppColors.brandRed : AppColors.cobaltDeep,
+              size: 20,
+            ),
+          ),
+        );
+      },
     );
   }
 }

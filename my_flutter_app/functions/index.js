@@ -1,5 +1,6 @@
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
+const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
 const {defineSecret} = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const logger = require("firebase-functions/logger");
@@ -64,6 +65,283 @@ exports.ensurePlatformAdminProfile = onCall(async (request) => {
     email,
   };
 });
+
+exports.resolveSignInIdentifier = onCall(async (request) => {
+  const identifier = String(request.data?.identifier || "").trim();
+  if (!identifier) {
+    throw new HttpsError("invalid-argument", "Enter an email or phone number");
+  }
+  if (identifier.includes("@")) {
+    if (!isValidEmail(identifier)) {
+      throw new HttpsError("invalid-argument", "Enter a valid email address");
+    }
+    return {email: identifier.toLowerCase()};
+  }
+
+  requireValidPhoneNumber(identifier, "Phone");
+  const alias = normalizePhoneAlias(identifier);
+  const doc = await admin.firestore()
+      .collection("phoneSignInAliases")
+      .doc(alias)
+      .get();
+  if (!doc.exists) {
+    throw new HttpsError("not-found", "No account found for this phone");
+  }
+  const email = String(doc.data()?.email || "").trim().toLowerCase();
+  if (!email) {
+    throw new HttpsError("not-found", "No account found for this phone");
+  }
+  return {email};
+});
+
+exports.createCustomerUser = onCall(async (request) => {
+  const email = String(request.data?.email || "").trim().toLowerCase();
+  const password = String(request.data?.password || "");
+  const fullName = String(request.data?.fullName || "").trim();
+  const phone = String(request.data?.phone || "").trim();
+
+  if (!isValidEmail(email)) {
+    throw new HttpsError("invalid-argument", "Enter a valid email address");
+  }
+  if (password.length < 6) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Password must be at least 6 characters",
+    );
+  }
+  if (!fullName) {
+    throw new HttpsError("invalid-argument", "Full name is required");
+  }
+  requireValidPhoneNumber(phone, "Phone");
+
+  const db = admin.firestore();
+  const normalizedPhone = normalizePhoneAlias(phone);
+  const aliasRef = db.collection("phoneSignInAliases").doc(normalizedPhone);
+  const existingAlias = await aliasRef.get();
+  if (existingAlias.exists) {
+    throw new HttpsError(
+        "already-exists",
+        "An account already uses this phone number",
+    );
+  }
+
+  let userRecord;
+  try {
+    userRecord = await admin.auth().createUser({
+      email,
+      password,
+      displayName: fullName,
+    });
+  } catch (error) {
+    if (error.code === "auth/email-already-exists") {
+      throw new HttpsError(
+          "already-exists",
+          "An account already exists with this email",
+      );
+    }
+    if (error.code === "auth/invalid-email") {
+      throw new HttpsError("invalid-argument", "Enter a valid email address");
+    }
+    logger.error("Failed to create customer auth user", error);
+    throw new HttpsError("internal", "Could not create account");
+  }
+
+  try {
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    await db.runTransaction(async (transaction) => {
+      const aliasSnap = await transaction.get(aliasRef);
+      if (aliasSnap.exists) {
+        throw new HttpsError(
+            "already-exists",
+            "An account already uses this phone number",
+        );
+      }
+      transaction.set(db.collection("users").doc(userRecord.uid), {
+        email,
+        fullName,
+        phone,
+        normalizedPhone,
+        role: "customer",
+        notificationPreferences: defaultNotificationPreferences(),
+        createdAt: now,
+        updatedAt: now,
+      });
+      transaction.set(aliasRef, {
+        uid: userRecord.uid,
+        email,
+        phone,
+        createdAt: now,
+        updatedAt: now,
+      });
+    });
+  } catch (error) {
+    await admin.auth().deleteUser(userRecord.uid).catch((deleteError) => {
+      logger.error("Failed to roll back customer auth user", deleteError);
+    });
+    if (error instanceof HttpsError) throw error;
+    logger.error("Failed to create customer profile", error);
+    throw new HttpsError("internal", "Could not create account profile");
+  }
+
+  return {
+    uid: userRecord.uid,
+    email,
+    normalizedPhone,
+    notificationPreferences: defaultNotificationPreferences(),
+  };
+});
+
+exports.updateCustomerProfile = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const fullName = String(request.data?.fullName || "").trim();
+  const phone = String(request.data?.phone || "").trim();
+  const profileImageUrl =
+    String(request.data?.profileImageUrl || "").trim();
+  const profileImagePath =
+    String(request.data?.profileImagePath || "").trim();
+  const notificationPreferences = normalizeNotificationPreferences(
+      request.data?.notificationPreferences,
+  );
+
+  if (!fullName) {
+    throw new HttpsError("invalid-argument", "Full name is required");
+  }
+  requireValidPhoneNumber(phone, "Phone");
+
+  const db = admin.firestore();
+  const userRef = db.collection("users").doc(uid);
+  const normalizedPhone = normalizePhoneAlias(phone);
+  const nextAliasRef = db.collection("phoneSignInAliases").doc(
+      normalizedPhone,
+  );
+  const email = String(request.auth.token.email || "").toLowerCase();
+  const now = admin.firestore.FieldValue.serverTimestamp();
+
+  await db.runTransaction(async (transaction) => {
+    const userSnap = await transaction.get(userRef);
+    if (!userSnap.exists) {
+      throw new HttpsError("not-found", "User profile not found");
+    }
+    const current = userSnap.data() || {};
+    const currentAlias = String(current.normalizedPhone || "");
+    const nextAliasSnap = await transaction.get(nextAliasRef);
+    if (nextAliasSnap.exists && nextAliasSnap.data()?.uid !== uid) {
+      throw new HttpsError(
+          "already-exists",
+          "An account already uses this phone number",
+      );
+    }
+
+    if (currentAlias && currentAlias !== normalizedPhone) {
+      transaction.delete(db.collection("phoneSignInAliases").doc(
+          currentAlias,
+      ));
+    }
+    transaction.set(nextAliasRef, {
+      uid,
+      email,
+      phone,
+      updatedAt: now,
+      createdAt: nextAliasSnap.exists ?
+        nextAliasSnap.data()?.createdAt || now :
+        now,
+    }, {merge: true});
+
+    const updates = {
+      fullName,
+      phone,
+      normalizedPhone,
+      notificationPreferences,
+      updatedAt: now,
+    };
+    if (profileImageUrl) updates.profileImageUrl = profileImageUrl;
+    if (profileImagePath) updates.profileImagePath = profileImagePath;
+    transaction.set(userRef, updates, {merge: true});
+  });
+
+  await admin.auth().updateUser(uid, {displayName: fullName});
+  return {success: true, normalizedPhone, notificationPreferences};
+});
+
+exports.notifyCarPurchaseStatus = onDocumentUpdated(
+    "carPurchases/{purchaseId}",
+    async (event) => {
+      if (!statusChanged(event)) return;
+      const after = event.data.after.data() || {};
+      const uid = userIdFrom(after, ["buyerUid", "customerUid", "uid"]);
+      await sendPreferenceNotification({
+        uid,
+        preferenceKey: "carActivity",
+        title: "Car update",
+        body: `Your car request is now ${after.status || "updated"}.`,
+        data: {
+          type: "car_purchase_status",
+          purchaseId: event.params.purchaseId,
+          status: after.status || "",
+        },
+      });
+    },
+);
+
+exports.notifyBarrelShipmentStatus = onDocumentUpdated(
+    "barrelShipments/{shipmentId}",
+    async (event) => {
+      if (!statusChanged(event)) return;
+      const after = event.data.after.data() || {};
+      const uid = userIdFrom(after, ["customerUid", "senderUid", "uid"]);
+      await sendPreferenceNotification({
+        uid,
+        preferenceKey: "shipmentActivity",
+        title: "Shipment update",
+        body: `Your barrel shipment is now ${after.status || "updated"}.`,
+        data: {
+          type: "barrel_shipment_status",
+          shipmentId: event.params.shipmentId,
+          status: after.status || "",
+        },
+      });
+    },
+);
+
+exports.notifyWalletRefundStatus = onDocumentUpdated(
+    "walletRefundRequests/{requestId}",
+    async (event) => {
+      if (!statusChanged(event)) return;
+      const after = event.data.after.data() || {};
+      const uid = userIdFrom(after, ["customerUid", "userId", "uid"]);
+      await sendPreferenceNotification({
+        uid,
+        preferenceKey: "walletActivity",
+        title: "Wallet update",
+        body: `Your refund request is now ${after.status || "updated"}.`,
+        data: {
+          type: "wallet_refund_status",
+          requestId: event.params.requestId,
+          status: after.status || "",
+        },
+      });
+    },
+);
+
+exports.notifyBusinessApplicationStatus = onDocumentUpdated(
+    "businessApplications/{applicationId}",
+    async (event) => {
+      if (!statusChanged(event)) return;
+      const after = event.data.after.data() || {};
+      const uid = userIdFrom(after, ["applicantUid", "ownerUid", "uid"]);
+      await sendPreferenceNotification({
+        uid,
+        preferenceKey: "businessActivity",
+        title: "Business application update",
+        body: `Your application is now ${after.status || "updated"}.`,
+        data: {
+          type: "business_application_status",
+          applicationId: event.params.applicationId,
+          status: after.status || "",
+        },
+      });
+    },
+);
 
 async function getUserProfile(uid) {
   const doc = await admin.firestore().collection("users").doc(uid).get();
@@ -513,6 +791,106 @@ function requireValidPhoneNumber(value, fieldName) {
         `${fieldName} must be a valid phone number with 7 to 15 digits`,
     );
   }
+}
+
+function normalizePhoneAlias(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function defaultNotificationPreferences() {
+  return {
+    carActivity: true,
+    shipmentActivity: true,
+    walletActivity: true,
+    businessActivity: true,
+  };
+}
+
+function normalizeNotificationPreferences(raw) {
+  const defaults = defaultNotificationPreferences();
+  const prefs = raw && typeof raw === "object" ? raw : {};
+  return {
+    carActivity: prefs.carActivity !== false && defaults.carActivity,
+    shipmentActivity:
+      prefs.shipmentActivity !== false && defaults.shipmentActivity,
+    walletActivity: prefs.walletActivity !== false && defaults.walletActivity,
+    businessActivity:
+      prefs.businessActivity !== false && defaults.businessActivity,
+  };
+}
+
+async function sendPreferenceNotification({
+  uid,
+  preferenceKey,
+  title,
+  body,
+  data = {},
+}) {
+  if (!uid) return;
+  const db = admin.firestore();
+  const userSnap = await db.collection("users").doc(uid).get();
+  if (!userSnap.exists) return;
+  const prefs = normalizeNotificationPreferences(
+      userSnap.data()?.notificationPreferences,
+  );
+  if (prefs[preferenceKey] === false) return;
+
+  const tokensSnap = await db.collection("users")
+      .doc(uid)
+      .collection("fcmTokens")
+      .where("enabled", "==", true)
+      .get();
+  const tokenDocs = tokensSnap.docs
+      .map((doc) => ({
+        id: doc.id,
+        token: String(doc.data()?.token || doc.id).trim(),
+      }))
+      .filter((item) => item.token);
+  const tokens = tokenDocs.map((item) => item.token);
+  if (!tokens.length) return;
+
+  const response = await admin.messaging().sendEachForMulticast({
+    tokens,
+    notification: {title, body},
+    data: Object.fromEntries(
+        Object.entries(data).map(([key, value]) => [key, String(value)]),
+    ),
+  });
+
+  await Promise.all(response.responses.map((item, index) => {
+    if (!item.error) return Promise.resolve();
+    const code = item.error.code || "";
+    if (
+      code.includes("registration-token-not-registered") ||
+      code.includes("invalid-registration-token")
+    ) {
+      return db.collection("users")
+          .doc(uid)
+          .collection("fcmTokens")
+          .doc(tokenDocs[index].id)
+          .set({
+            enabled: false,
+            disabledAt: admin.firestore.FieldValue.serverTimestamp(),
+            errorCode: code,
+          }, {merge: true});
+    }
+    logger.warn("Push notification send failed", {uid, code});
+    return Promise.resolve();
+  }));
+}
+
+function statusChanged(event) {
+  const before = event.data?.before.data() || {};
+  const after = event.data?.after.data() || {};
+  return String(before.status || "") !== String(after.status || "");
+}
+
+function userIdFrom(data, keys) {
+  for (const key of keys) {
+    const value = String(data?.[key] || "").trim();
+    if (value) return value;
+  }
+  return "";
 }
 
 function centsFromDollars(value) {

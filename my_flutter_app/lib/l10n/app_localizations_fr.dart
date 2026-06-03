@@ -1066,7 +1066,7 @@ class AppLocalizationsFr extends AppLocalizations {
       'Cette voiture a déjà une réservation active.';
 
   @override
-  String get carNoLongerAvailable => 'Cette voiture n\'est plus disponible.';
+  String get carNoLongerAvailable => 'Cette voiture n’est plus disponible';
 
   @override
   String get destinationCountry => 'Pays de destination';
@@ -2323,6 +2323,18 @@ class AppLocalizationsFr extends AppLocalizations {
   String get conditionSalvage => 'Accidenté';
 
   @override
+  String get conditionExcellent => 'Excellent';
+
+  @override
+  String get conditionGood => 'Bon';
+
+  @override
+  String get conditionFair => 'Correct';
+
+  @override
+  String get conditionPoor => 'Mauvais';
+
+  @override
   String get bodySedan => 'Berline';
 
   @override
@@ -2417,6 +2429,18 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get featureKeylessEntry => 'Accès sans clé';
+
+  @override
+  String get featureLaneAssist => 'Aide au maintien de voie';
+
+  @override
+  String get featureAlloyWheels => 'Jantes alliage';
+
+  @override
+  String get featureParkingSensors => 'Capteurs de stationnement';
+
+  @override
+  String get featurePremiumAudio => 'Audio premium';
 
   @override
   String get positivePriceRequired => 'Le prix doit être supérieur à 0.';
@@ -2709,4 +2733,85 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get updateLinkUnavailable =>
       'Le lien de mise à jour n’est pas encore disponible. Veuillez réessayer plus tard.';
+
+  @override
+  String get emailOrPhone => 'Email ou téléphone';
+
+  @override
+  String get enterEmailOrPhone => 'Entrez votre email ou téléphone';
+
+  @override
+  String get pleaseEnterEmailOrPhone =>
+      'Veuillez entrer votre email ou numéro de téléphone';
+
+  @override
+  String get pleaseEnterValidEmailOrPhone =>
+      'Veuillez entrer un email ou numéro de téléphone valide';
+
+  @override
+  String get saveProfile => 'Enregistrer le profil';
+
+  @override
+  String get profilePhoto => 'Photo de profil';
+
+  @override
+  String get changePhoto => 'Changer la photo';
+
+  @override
+  String get notifications => 'Notifications';
+
+  @override
+  String get notificationPreferences => 'Préférences de notification';
+
+  @override
+  String get carActivityNotifications =>
+      'Mises à jour d’achat et de réservation de voitures';
+
+  @override
+  String get shipmentActivityNotifications =>
+      'Mises à jour d’expédition de barils';
+
+  @override
+  String get walletActivityNotifications =>
+      'Mises à jour de remboursement du portefeuille';
+
+  @override
+  String get businessActivityNotifications =>
+      'Mises à jour de demande d’entreprise';
+
+  @override
+  String get faceId => 'Face ID';
+
+  @override
+  String get faceIdUnlock =>
+      'Utiliser Face ID pour déverrouiller l’application';
+
+  @override
+  String get faceIdUnavailable =>
+      'Face ID n’est pas disponible sur cet appareil';
+
+  @override
+  String get unlockWithFaceId => 'Déverrouiller avec Face ID';
+
+  @override
+  String get appLocked => 'Application verrouillée';
+
+  @override
+  String get unlockWithFaceIdMessage => 'Utilisez Face ID pour continuer.';
+
+  @override
+  String get unlock => 'Déverrouiller';
+
+  @override
+  String get favoriteCars => 'Voitures favorites';
+
+  @override
+  String get favoriteCarsSubtitle =>
+      'Voir les véhicules que vous avez enregistrés';
+
+  @override
+  String get noFavoriteCarsYet => 'Aucune voiture favorite pour le moment';
+
+  @override
+  String get favoriteRemoved => 'Favori supprimé';
 }

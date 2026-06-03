@@ -11,6 +11,8 @@ import 'providers/app_gate_provider.dart';
 import 'theme/app_theme.dart';
 import 'l10n/app_localizations.dart';
 import 'widgets/app_gate_boundary.dart';
+import 'widgets/app_snackbars.dart';
+import 'widgets/biometric_lock_gate.dart';
 import 'screens/splash_screen.dart';
 import 'screens/customer_home_screen.dart';
 import 'screens/staff_home_screen.dart';
@@ -33,6 +35,7 @@ import 'screens/business_management_screen.dart';
 import 'screens/business_profile_screen.dart';
 import 'screens/business_registration_screen.dart';
 import 'screens/wallet_screen.dart';
+import 'screens/favorite_cars_screen.dart';
 import 'models/parked_car.dart';
 import 'screens/parked_car_details_screen.dart';
 import 'models/barrel_shipment.dart';
@@ -68,6 +71,7 @@ class MyApp extends StatelessWidget {
             (context, languageProvider, authProvider, themeProvider, child) {
               return MaterialApp(
                 title: 'Veyra',
+                scaffoldMessengerKey: rootScaffoldMessengerKey,
                 locale: languageProvider.currentLocale,
                 supportedLocales: const [Locale('en'), Locale('fr')],
                 localizationsDelegates: const [
@@ -80,7 +84,9 @@ class MyApp extends StatelessWidget {
                 darkTheme: AppTheme.dark,
                 themeMode: themeProvider.themeMode,
                 builder: (context, child) {
-                  return AppGateBoundary(child: child ?? const SizedBox());
+                  return AppGateBoundary(
+                    child: BiometricLockGate(child: child ?? const SizedBox()),
+                  );
                 },
                 initialRoute: '/splash',
                 routes: {
@@ -93,15 +99,19 @@ class MyApp extends StatelessWidget {
                   '/park': (context) => const ParkCarScreen(),
                   '/barrel': (context) => const SendBarrelScreen(),
                   '/transport': (context) => const TransportCarScreen(),
-                  '/sell': (context) => const SellCarsScreen(),
-                  '/tracking': (context) => const TrackingScreen(),
-                  '/my-purchases': (context) => const MyPurchasesScreen(),
+                  '/sell': (context) =>
+                      const SellCarsScreen(showBackButton: true),
+                  '/tracking': (context) =>
+                      const TrackingScreen(showBackButton: true),
+                  '/my-purchases': (context) =>
+                      const MyPurchasesScreen(showBackButton: true),
                   '/purchase-management': (context) =>
                       const StaffPurchaseManagementScreen(),
                   '/destination-countries': (context) =>
                       const DestinationCountriesScreen(),
                   '/account-profile': (context) => const AccountProfileScreen(),
                   '/wallet': (context) => const WalletScreen(),
+                  '/favorite-cars': (context) => const FavoriteCarsScreen(),
                   '/businesses': (context) => const BusinessManagementScreen(),
                   '/business-profile': (context) =>
                       const BusinessProfileScreen(),

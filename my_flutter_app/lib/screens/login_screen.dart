@@ -5,6 +5,7 @@ import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../utils/app_feedback.dart';
+import '../utils/phone_number_validator.dart';
 import '../widgets/app_snackbars.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -58,13 +59,13 @@ class _LoginScreenState extends State<LoginScreen>
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
     try {
-      final email = _emailController.text.trim();
+      final identifier = _emailController.text.trim();
       final password = _passwordController.text.trim();
 
-      debugPrint('🔵 LoginScreen: Attempting login for: $email');
+      debugPrint('🔵 LoginScreen: Attempting login for: $identifier');
       debugPrint('🔵 LoginScreen: Calling authProvider.authenticate()...');
 
-      final success = await authProvider.authenticate(email, password);
+      final success = await authProvider.authenticate(identifier, password);
 
       debugPrint('🔵 LoginScreen: Authentication result: $success');
       debugPrint('🔵 LoginScreen: isStaff: ${authProvider.isStaff}');
@@ -191,19 +192,18 @@ class _LoginScreenState extends State<LoginScreen>
                                 key: _formKey,
                                 child: Column(
                                   children: [
-                                    // Email Field
                                     TextFormField(
                                       controller: _emailController,
                                       keyboardType: TextInputType.emailAddress,
                                       decoration: InputDecoration(
                                         labelText: AppLocalizations.of(
                                           context,
-                                        )!.email,
+                                        )!.emailOrPhone,
                                         hintText: AppLocalizations.of(
                                           context,
-                                        )!.enterEmail,
+                                        )!.enterEmailOrPhone,
                                         prefixIcon: const Icon(
-                                          Icons.email_outlined,
+                                          Icons.alternate_email_outlined,
                                         ),
                                         border: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(
@@ -231,17 +231,27 @@ class _LoginScreenState extends State<LoginScreen>
                                         fillColor: Colors.grey.shade50,
                                       ),
                                       validator: (value) {
-                                        if (value == null || value.isEmpty) {
+                                        final trimmed = value?.trim() ?? '';
+                                        if (trimmed.isEmpty) {
                                           return AppLocalizations.of(
                                             context,
-                                          )!.pleaseEnterEmail;
+                                          )!.pleaseEnterEmailOrPhone;
                                         }
-                                        if (!RegExp(
-                                          r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                                        ).hasMatch(value)) {
+                                        final looksLikeEmail = trimmed.contains(
+                                          '@',
+                                        );
+                                        final validEmail = RegExp(
+                                          r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$',
+                                        ).hasMatch(trimmed);
+                                        final validPhone =
+                                            PhoneNumberValidator.isValid(
+                                              trimmed,
+                                            );
+                                        if ((looksLikeEmail && !validEmail) ||
+                                            (!looksLikeEmail && !validPhone)) {
                                           return AppLocalizations.of(
                                             context,
-                                          )!.pleaseEnterValidEmail;
+                                          )!.pleaseEnterValidEmailOrPhone;
                                         }
                                         return null;
                                       },

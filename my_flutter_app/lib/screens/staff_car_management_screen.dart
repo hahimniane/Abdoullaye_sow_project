@@ -13,13 +13,21 @@ import '../models/business_profile.dart';
 import '../models/business_service.dart';
 import '../models/car.dart';
 import '../providers/auth_provider.dart';
+import '../services/vin_catalog_matcher.dart';
+import '../services/vin_decoder_service.dart';
 import '../theme/app_colors.dart';
+import '../utils/car_option_localization.dart';
 import '../utils/phone_number_validator.dart';
+import '../utils/vin_utils.dart';
+import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/language_toggle.dart';
+import 'vin_scanner_screen.dart';
 
 class StaffCarManagementScreen extends StatefulWidget {
-  const StaffCarManagementScreen({super.key});
+  const StaffCarManagementScreen({super.key, this.showBackButton = false});
+
+  final bool showBackButton;
 
   @override
   State<StaffCarManagementScreen> createState() =>
@@ -315,6 +323,10 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                     padding: const EdgeInsets.all(16.0),
                     child: Row(
                       children: [
+                        if (widget.showBackButton) ...[
+                          const AppBackButton(onDarkBackground: true),
+                          const SizedBox(width: 4),
+                        ],
                         Expanded(
                           child: Text(
                             l10n.manageCars,
@@ -916,112 +928,7 @@ const _carColorValues = [
 ];
 
 String _carOptionLabel(AppLocalizations l10n, String value) {
-  switch (value) {
-    case 'new':
-      return l10n.conditionNew;
-    case 'used':
-      return l10n.conditionUsed;
-    case 'certified':
-      return l10n.conditionCertified;
-    case 'salvage':
-      return l10n.conditionSalvage;
-    case 'sedan':
-      return l10n.bodySedan;
-    case 'suv':
-      return l10n.bodySuv;
-    case 'truck':
-      return l10n.bodyTruck;
-    case 'van':
-      return l10n.bodyVan;
-    case 'coupe':
-      return l10n.bodyCoupe;
-    case 'hatchback':
-      return l10n.bodyHatchback;
-    case 'wagon':
-      return l10n.bodyWagon;
-    case 'convertible':
-      return l10n.bodyConvertible;
-    case 'automatic':
-      return l10n.transmissionAutomatic;
-    case 'manual':
-      return l10n.transmissionManual;
-    case 'cvt':
-      return l10n.transmissionCvt;
-    case 'gas':
-      return l10n.fuelGas;
-    case 'diesel':
-      return l10n.fuelDiesel;
-    case 'hybrid':
-      return l10n.fuelHybrid;
-    case 'electric':
-      return l10n.fuelElectric;
-    case 'plug_in_hybrid':
-      return l10n.fuelPlugInHybrid;
-    case 'fwd':
-      return l10n.drivetrainFwd;
-    case 'rwd':
-      return l10n.drivetrainRwd;
-    case 'awd':
-      return l10n.drivetrainAwd;
-    case '4wd':
-      return l10n.drivetrainFourWd;
-    case 'backup_camera':
-      return l10n.featureBackupCamera;
-    case 'bluetooth':
-      return l10n.featureBluetooth;
-    case 'leather_seats':
-      return l10n.featureLeatherSeats;
-    case 'sunroof':
-      return l10n.featureSunroof;
-    case 'navigation':
-      return l10n.featureNavigation;
-    case 'heated_seats':
-      return l10n.featureHeatedSeats;
-    case 'apple_carplay':
-      return l10n.featureAppleCarPlay;
-    case 'android_auto':
-      return l10n.featureAndroidAuto;
-    case 'blind_spot':
-      return l10n.featureBlindSpot;
-    case 'third_row':
-      return l10n.featureThirdRow;
-    case 'remote_start':
-      return l10n.featureRemoteStart;
-    case 'keyless_entry':
-      return l10n.featureKeylessEntry;
-    case 'black':
-      return l10n.carColorBlack;
-    case 'white':
-      return l10n.carColorWhite;
-    case 'silver':
-      return l10n.carColorSilver;
-    case 'gray':
-      return l10n.carColorGray;
-    case 'red':
-      return l10n.carColorRed;
-    case 'blue':
-      return l10n.carColorBlue;
-    case 'green':
-      return l10n.carColorGreen;
-    case 'yellow':
-      return l10n.carColorYellow;
-    case 'brown':
-      return l10n.carColorBrown;
-    case 'beige':
-      return l10n.carColorBeige;
-    case 'gold':
-      return l10n.carColorGold;
-    case 'orange':
-      return l10n.carColorOrange;
-    case 'purple':
-      return l10n.carColorPurple;
-    case 'burgundy':
-      return l10n.carColorBurgundy;
-    case 'other':
-      return l10n.carColorOther;
-    default:
-      return value;
-  }
+  return localizedCarOptionLabel(l10n, value);
 }
 
 class _CarFormSheet extends StatefulWidget {
@@ -1062,6 +969,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
   late final TextEditingController _holdMaxDaysController;
 
   final ImagePicker _picker = ImagePicker();
+  final VinDecoderService _vinDecoderService = NhtsaVinDecoderService();
   final List<_EditableCarImage> _images = [];
   final Set<String> _structuredFeatures = <String>{};
 
@@ -1085,6 +993,8 @@ class _CarFormSheetState extends State<_CarFormSheet> {
   String _status = 'active';
   bool _isNegotiable = false;
   bool _isPickingImages = false;
+  bool _isVinDecoding = false;
+  DecodedVehicleInfo? _decodedVehicleInfo;
   String? _stepError;
   String? _contactPhoneError;
   String? _businessDefaultAddressError;
@@ -1277,6 +1187,104 @@ class _CarFormSheetState extends State<_CarFormSheet> {
   void _showError(String message) {
     setState(() => _stepError = message);
     showErrorSnackBar(context, message, feedback: false);
+  }
+
+  Future<void> _scanVin() async {
+    final vin = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (context) => const VinScannerScreen()),
+    );
+    if (vin == null || !mounted) return;
+    _vinController.text = vin;
+    await _decodeCurrentVin();
+  }
+
+  Future<void> _decodeCurrentVin() async {
+    final l10n = AppLocalizations.of(context)!;
+    final vin = normalizeVin(_vinController.text);
+    if (!isValidVin(vin)) {
+      _showError(l10n.invalidVinNumber);
+      return;
+    }
+
+    setState(() => _isVinDecoding = true);
+    try {
+      if (_catalogLoading) {
+        await CarCatalog.instance.load();
+        if (mounted && _makeOptions.isEmpty) {
+          setState(() {
+            _makeOptions = CarCatalog.instance.getMakes();
+            _catalogLoading = false;
+          });
+        }
+      }
+      final decoded = await _vinDecoderService.decode(vin);
+      if (!mounted) return;
+      _applyDecodedVehicleInfo(decoded);
+      final message = decoded.summary.isEmpty
+          ? l10n.vinDecoded
+          : l10n.vinDecodedVehicle(decoded.summary);
+      showSuccessSnackBar(context, message);
+    } catch (_) {
+      if (mounted) {
+        _showError(l10n.vinDecodeFailed);
+      }
+    } finally {
+      if (mounted) setState(() => _isVinDecoding = false);
+    }
+  }
+
+  void _applyDecodedVehicleInfo(DecodedVehicleInfo decoded) {
+    final match = matchDecodedVehicleToCatalog(
+      decoded: decoded,
+      makeOptions: _makeOptions,
+      modelsForMake: CarCatalog.instance.getModels,
+      yearsForModel: CarCatalog.instance.getYears,
+    );
+    final bodyType = _bodyTypeFromDecoded(decoded);
+    final fuelType = _optionFromDecoded(_fuelOptions, [decoded.fuelType]);
+
+    setState(() {
+      _decodedVehicleInfo = decoded;
+      if (match.make != null) {
+        _selectedMake = match.make;
+        _modelOptions = match.modelOptions;
+        _selectedModel = match.model;
+        _yearOptions = match.yearOptions;
+        _selectedYear = match.year;
+      }
+      if (bodyType != null) _bodyType = bodyType;
+      if (fuelType != null) _fuelType = fuelType;
+    });
+
+    if (!match.isComplete) {
+      _showError(AppLocalizations.of(context)!.vinMatchReview);
+    }
+  }
+
+  String? _bodyTypeFromDecoded(DecodedVehicleInfo decoded) {
+    final body = decoded.bodyClass?.toLowerCase() ?? '';
+    if (body.contains('sedan')) return 'sedan';
+    if (body.contains('sport utility') || body.contains('suv')) return 'suv';
+    if (body.contains('pickup')) return 'truck';
+    if (body.contains('van')) return 'van';
+    if (body.contains('coupe')) return 'coupe';
+    if (body.contains('hatchback')) return 'hatchback';
+    if (body.contains('wagon')) return 'wagon';
+    if (body.contains('convertible')) return 'convertible';
+    return null;
+  }
+
+  String? _optionFromDecoded(
+    List<_CarOption> options,
+    Iterable<String?> decodedValues,
+  ) {
+    final optionValues = options.map((option) => option.value).toSet();
+    for (final decodedValue in decodedValues) {
+      if (decodedValue == null || decodedValue.trim().isEmpty) continue;
+      final canonical = canonicalCarOptionValue(decodedValue);
+      if (optionValues.contains(canonical)) return canonical;
+    }
+    return null;
   }
 
   int? _mileageValue() {
@@ -1570,6 +1578,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
     int maxLines = 1,
     String? errorText,
     ValueChanged<String>? onChanged,
+    Widget? suffixIcon,
   }) {
     return TextFormField(
       controller: controller,
@@ -1581,6 +1590,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: icon == null ? null : Icon(icon),
+        suffixIcon: suffixIcon,
         errorText: errorText,
       ),
     );
@@ -2052,7 +2062,28 @@ class _CarFormSheetState extends State<_CarFormSheet> {
               controller: _vinController,
               label: l10n.vinOptional,
               icon: Icons.pin_outlined,
+              suffixIcon: IconButton(
+                tooltip: l10n.scanVin,
+                onPressed: _isVinDecoding ? null : _scanVin,
+                icon: const Icon(Icons.document_scanner_outlined),
+              ),
             ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _isVinDecoding ? null : _decodeCurrentVin,
+              icon: _isVinDecoding
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.manage_search),
+              label: Text(l10n.decodeVin),
+            ),
+            if (_decodedVehicleInfo != null) ...[
+              const SizedBox(height: 12),
+              _DecodedVinPanel(info: _decodedVehicleInfo!),
+            ],
             const SizedBox(height: 12),
             _textField(
               controller: _stockNumberController,
@@ -2996,6 +3027,58 @@ class _EmptyCarsState extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _DecodedVinPanel extends StatelessWidget {
+  const _DecodedVinPanel({required this.info});
+
+  final DecodedVehicleInfo info;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final rows = <MapEntry<String, String>>[
+      if (info.summary.isNotEmpty) MapEntry(l10n.vehicle, info.summary),
+      if (info.bodyClass?.isNotEmpty == true)
+        MapEntry(l10n.bodyStyle, info.bodyClass!),
+      if (info.engine?.isNotEmpty == true) MapEntry(l10n.engine, info.engine!),
+      if (info.fuelType?.isNotEmpty == true)
+        MapEntry(l10n.fuelType, info.fuelType!),
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.brandRed.withValues(alpha: 0.06),
+        border: Border.all(color: AppColors.brandRed.withValues(alpha: 0.22)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.fact_check_outlined, color: AppColors.brandRed),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  l10n.decodedVinDetails,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('${row.key}: ${row.value}'),
+            ),
+        ],
       ),
     );
   }

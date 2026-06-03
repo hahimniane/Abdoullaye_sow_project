@@ -10,6 +10,8 @@ class PhoneNumberValidator {
   static String normalized(String value) =>
       value.trim().replaceAll(RegExp(r'[\s().-]'), '');
 
+  static String aliasKey(String value) => digitsOnly(value);
+
   static bool isValid(String? value) {
     final raw = value?.trim() ?? '';
     if (raw.isEmpty) return false;

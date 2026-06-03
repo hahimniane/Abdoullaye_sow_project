@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/vin_text_recognition_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/vin_utils.dart';
 
@@ -26,26 +26,25 @@ class _VinScannerScreenState extends State<VinScannerScreen> {
     ],
   );
   final ImagePicker _imagePicker = ImagePicker();
-  final TextRecognizer _textRecognizer = TextRecognizer(
-    script: TextRecognitionScript.latin,
-  );
+  final VinTextRecognitionService _textRecognitionService =
+      const VinTextRecognitionService();
 
   bool _isCompleting = false;
+  bool _isConfirmingVin = false;
   bool _isOcrLoading = false;
 
   @override
   void dispose() {
     _scannerController.dispose();
-    _textRecognizer.close();
     super.dispose();
   }
 
-  void _handleBarcode(BarcodeCapture capture) {
-    if (_isCompleting) return;
+  Future<void> _handleBarcode(BarcodeCapture capture) async {
+    if (_isCompleting || _isConfirmingVin) return;
     for (final barcode in capture.barcodes) {
       final vin = extractVin(barcode.rawValue ?? '');
       if (vin != null) {
-        _complete(vin);
+        await _confirmAndComplete(vin);
         return;
       }
     }
@@ -62,12 +61,28 @@ class _VinScannerScreenState extends State<VinScannerScreen> {
         imageQuality: 95,
       );
       if (image == null) return;
-      final recognizedText = await _textRecognizer.processImage(
-        InputImage.fromFilePath(image.path),
+      final capture = await _scannerController.analyzeImage(
+        image.path,
+        formats: _scannerController.formats,
       );
-      final vin = extractVin(recognizedText.text);
+      for (final barcode in capture?.barcodes ?? const <Barcode>[]) {
+        final vin = extractVin(barcode.rawValue ?? '');
+        if (vin != null) {
+          await _confirmAndComplete(vin);
+          return;
+        }
+      }
+      final recognizedText = await _textRecognitionService.recognizeText(
+        image.path,
+      );
+      final vin = extractVin(recognizedText);
       if (vin != null) {
-        _complete(vin);
+        await _confirmAndComplete(vin);
+        return;
+      }
+      final reviewCandidate = extractVinCandidateForReview(recognizedText);
+      if (reviewCandidate != null) {
+        await _confirmAndComplete(reviewCandidate);
         return;
       }
       if (mounted) {
@@ -90,6 +105,64 @@ class _VinScannerScreenState extends State<VinScannerScreen> {
         });
       }
     }
+  }
+
+  Future<void> _confirmAndComplete(String vin) async {
+    if (_isCompleting || _isConfirmingVin) return;
+    _isConfirmingVin = true;
+    await _scannerController.stop();
+    if (!mounted) return;
+
+    final controller = TextEditingController(text: vin);
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        final l10n = AppLocalizations.of(context)!;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final normalized = normalizeVin(controller.text);
+            final isValid = isValidVin(normalized);
+            return AlertDialog(
+              title: Text(l10n.vinNumber),
+              content: TextField(
+                controller: controller,
+                autofocus: true,
+                maxLength: vinLength,
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  errorText: normalized.isEmpty || isValid
+                      ? null
+                      : l10n.invalidVinNumber,
+                ),
+                onChanged: (_) => setDialogState(() {}),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text(l10n.useManualEntry),
+                ),
+                FilledButton(
+                  onPressed: isValid
+                      ? () => Navigator.of(context).pop(true)
+                      : null,
+                  child: Text(l10n.done),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (!mounted) return;
+    final confirmedVin = normalizeVin(controller.text);
+    controller.dispose();
+    if (accepted == true) {
+      await _complete(confirmedVin);
+      return;
+    }
+    _isConfirmingVin = false;
+    await _scannerController.start();
   }
 
   Future<void> _complete(String vin) async {

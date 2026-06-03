@@ -2015,7 +2015,7 @@ abstract class AppLocalizations {
   /// No description provided for @carNoLongerAvailable.
   ///
   /// In en, this message translates to:
-  /// **'This car is no longer available.'**
+  /// **'This car is no longer available'**
   String get carNoLongerAvailable;
 
   /// No description provided for @destinationCountry.
@@ -4238,6 +4238,30 @@ abstract class AppLocalizations {
   /// **'Salvage'**
   String get conditionSalvage;
 
+  /// No description provided for @conditionExcellent.
+  ///
+  /// In en, this message translates to:
+  /// **'Excellent'**
+  String get conditionExcellent;
+
+  /// No description provided for @conditionGood.
+  ///
+  /// In en, this message translates to:
+  /// **'Good'**
+  String get conditionGood;
+
+  /// No description provided for @conditionFair.
+  ///
+  /// In en, this message translates to:
+  /// **'Fair'**
+  String get conditionFair;
+
+  /// No description provided for @conditionPoor.
+  ///
+  /// In en, this message translates to:
+  /// **'Poor'**
+  String get conditionPoor;
+
   /// No description provided for @bodySedan.
   ///
   /// In en, this message translates to:
@@ -4429,6 +4453,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Keyless entry'**
   String get featureKeylessEntry;
+
+  /// No description provided for @featureLaneAssist.
+  ///
+  /// In en, this message translates to:
+  /// **'Lane assist'**
+  String get featureLaneAssist;
+
+  /// No description provided for @featureAlloyWheels.
+  ///
+  /// In en, this message translates to:
+  /// **'Alloy wheels'**
+  String get featureAlloyWheels;
+
+  /// No description provided for @featureParkingSensors.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking sensors'**
+  String get featureParkingSensors;
+
+  /// No description provided for @featurePremiumAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Premium audio'**
+  String get featurePremiumAudio;
 
   /// No description provided for @positivePriceRequired.
   ///
@@ -4951,6 +4999,150 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The update link is not available yet. Please try again later.'**
   String get updateLinkUnavailable;
+
+  /// No description provided for @emailOrPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Email or phone'**
+  String get emailOrPhone;
+
+  /// No description provided for @enterEmailOrPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your email or phone'**
+  String get enterEmailOrPhone;
+
+  /// No description provided for @pleaseEnterEmailOrPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter your email or phone number'**
+  String get pleaseEnterEmailOrPhone;
+
+  /// No description provided for @pleaseEnterValidEmailOrPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter a valid email or phone number'**
+  String get pleaseEnterValidEmailOrPhone;
+
+  /// No description provided for @saveProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Save profile'**
+  String get saveProfile;
+
+  /// No description provided for @profilePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile photo'**
+  String get profilePhoto;
+
+  /// No description provided for @changePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Change photo'**
+  String get changePhoto;
+
+  /// No description provided for @notifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get notifications;
+
+  /// No description provided for @notificationPreferences.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification preferences'**
+  String get notificationPreferences;
+
+  /// No description provided for @carActivityNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Car purchase and reservation updates'**
+  String get carActivityNotifications;
+
+  /// No description provided for @shipmentActivityNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrel shipment updates'**
+  String get shipmentActivityNotifications;
+
+  /// No description provided for @walletActivityNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet refund updates'**
+  String get walletActivityNotifications;
+
+  /// No description provided for @businessActivityNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Business application updates'**
+  String get businessActivityNotifications;
+
+  /// No description provided for @faceId.
+  ///
+  /// In en, this message translates to:
+  /// **'Face ID'**
+  String get faceId;
+
+  /// No description provided for @faceIdUnlock.
+  ///
+  /// In en, this message translates to:
+  /// **'Use Face ID to unlock this app'**
+  String get faceIdUnlock;
+
+  /// No description provided for @faceIdUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Face ID is not available on this device'**
+  String get faceIdUnavailable;
+
+  /// No description provided for @unlockWithFaceId.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock with Face ID'**
+  String get unlockWithFaceId;
+
+  /// No description provided for @appLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'App locked'**
+  String get appLocked;
+
+  /// No description provided for @unlockWithFaceIdMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Use Face ID to continue.'**
+  String get unlockWithFaceIdMessage;
+
+  /// No description provided for @unlock.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock'**
+  String get unlock;
+
+  /// No description provided for @favoriteCars.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorite cars'**
+  String get favoriteCars;
+
+  /// No description provided for @favoriteCarsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'View vehicles you saved'**
+  String get favoriteCarsSubtitle;
+
+  /// No description provided for @noFavoriteCarsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No favorite cars yet'**
+  String get noFavoriteCarsYet;
+
+  /// No description provided for @favoriteRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorite removed'**
+  String get favoriteRemoved;
 }
 
 class _AppLocalizationsDelegate

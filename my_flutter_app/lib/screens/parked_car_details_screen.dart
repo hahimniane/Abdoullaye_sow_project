@@ -12,6 +12,7 @@ import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../data/car_catalog.dart';
 import '../theme/app_colors.dart';
+import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 
 class ParkedCarDetailsScreen extends StatefulWidget {
@@ -600,13 +601,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                 ),
                 child: Row(
                   children: [
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(
-                        Icons.arrow_back_ios,
-                        color: Colors.white,
-                      ),
-                    ),
+                    const AppBackButton(onDarkBackground: true),
                     Expanded(
                       child: Text(
                         l10n.carDetails,

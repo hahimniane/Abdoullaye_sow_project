@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../utils/app_feedback.dart';
 
+final rootScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
 void showSuccessSnackBar(
   BuildContext context,
   String message, {
@@ -13,7 +15,10 @@ void showSuccessSnackBar(
   if (feedback) {
     unawaited(AppFeedback.success());
   }
-  ScaffoldMessenger.of(context).showSnackBar(
+  final messenger = rootScaffoldMessengerKey.currentState;
+  if (messenger == null && !context.mounted) return;
+
+  (messenger ?? ScaffoldMessenger.of(context)).showSnackBar(
     SnackBar(
       content: Text(message),
       backgroundColor: const Color(0xFF16A34A),
@@ -30,7 +35,10 @@ void showErrorSnackBar(
   if (feedback) {
     unawaited(AppFeedback.error());
   }
-  ScaffoldMessenger.of(context).showSnackBar(
+  final messenger = rootScaffoldMessengerKey.currentState;
+  if (messenger == null && !context.mounted) return;
+
+  (messenger ?? ScaffoldMessenger.of(context)).showSnackBar(
     SnackBar(
       content: Text(message),
       backgroundColor: AppColors.brandRed,

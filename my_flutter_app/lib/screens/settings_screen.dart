@@ -6,16 +6,21 @@ import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
+import '../widgets/app_back_button.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
     this.onOpenWallet,
     this.onOpenAccountProfile,
+    this.showBackButton = false,
+    this.onBack,
   });
 
   final VoidCallback? onOpenWallet;
   final VoidCallback? onOpenAccountProfile;
+  final bool showBackButton;
+  final VoidCallback? onBack;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -63,6 +68,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
               child: Row(
                 children: [
+                  if (widget.showBackButton) ...[
+                    AppBackButton(onPressed: widget.onBack),
+                    const SizedBox(width: 4),
+                  ],
                   Expanded(
                     child: Text(
                       l10n.settings,
@@ -102,6 +111,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _SettingsGroup(
                     children: [
                       if (!authProvider.hasBusinessDashboardAccess) ...[
+                        _SettingRow(
+                          icon: Icons.favorite_border,
+                          title: l10n.favoriteCars,
+                          subtitle: l10n.favoriteCarsSubtitle,
+                          onTap: () =>
+                              Navigator.pushNamed(context, '/favorite-cars'),
+                        ),
+                        const Divider(height: 1),
                         _SettingRow(
                           icon: Icons.account_balance_wallet_outlined,
                           title: l10n.walletTitle,

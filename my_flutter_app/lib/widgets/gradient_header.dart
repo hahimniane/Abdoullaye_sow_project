@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
+import 'app_back_button.dart';
 
 /// App header with optional back button, title, and actions.
 class GradientHeader extends StatelessWidget {
@@ -34,10 +35,7 @@ class GradientHeader extends StatelessWidget {
           child: Row(
             children: [
               if (showBack)
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white),
-                  onPressed: onBack ?? () => Navigator.maybePop(context),
-                )
+                AppBackButton(onPressed: onBack, onDarkBackground: true)
               else
                 const SizedBox(width: 8),
               Expanded(

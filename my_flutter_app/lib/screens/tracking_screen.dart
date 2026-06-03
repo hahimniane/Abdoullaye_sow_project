@@ -10,10 +10,13 @@ import '../models/barrel_shipment.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../utils/barrel_receipt_generator.dart';
+import '../widgets/app_back_button.dart';
 import '../widgets/language_toggle.dart';
 
 class TrackingScreen extends StatelessWidget {
-  const TrackingScreen({super.key});
+  const TrackingScreen({super.key, this.showBackButton = false});
+
+  final bool showBackButton;
 
   static final Uri _carrierTrackingUri = Uri.parse(
     'https://www.maersk.com/tracking',
@@ -49,6 +52,7 @@ class TrackingScreen extends StatelessWidget {
             actionLabel: l10n.signIn,
             onAction: () => Navigator.pushNamed(context, '/login'),
             onOpenCarrierTracking: () => _openCarrierTracking(context),
+            showBackButton: showBackButton,
           ),
         ),
       );
@@ -69,6 +73,7 @@ class TrackingScreen extends StatelessWidget {
                 icon: Icons.lock_outline,
                 message: l10n.shipmentsLoadError,
                 onOpenCarrierTracking: () => _openCarrierTracking(context),
+                showBackButton: showBackButton,
               ),
             );
           }
@@ -89,6 +94,7 @@ class TrackingScreen extends StatelessWidget {
                 actionLabel: l10n.sendBarrels,
                 onAction: () => Navigator.pushNamed(context, '/barrel'),
                 onOpenCarrierTracking: () => _openCarrierTracking(context),
+                showBackButton: showBackButton,
               ),
             );
           }
@@ -99,6 +105,7 @@ class TrackingScreen extends StatelessWidget {
                 _ShipmentsHeader(
                   title: l10n.trackShipment,
                   onOpenCarrierTracking: () => _openCarrierTracking(context),
+                  showBackButton: showBackButton,
                 ),
                 if (!context.watch<AuthProvider>().hasBusinessDashboardAccess)
                   _WalletSummary(customerUid: user.uid),
@@ -277,10 +284,12 @@ class _ShipmentsHeader extends StatelessWidget {
   const _ShipmentsHeader({
     required this.title,
     required this.onOpenCarrierTracking,
+    required this.showBackButton,
   });
 
   final String title;
   final VoidCallback onOpenCarrierTracking;
+  final bool showBackButton;
 
   @override
   Widget build(BuildContext context) {
@@ -288,6 +297,10 @@ class _ShipmentsHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
       child: Row(
         children: [
+          if (showBackButton) ...[
+            const AppBackButton(),
+            const SizedBox(width: 4),
+          ],
           Expanded(
             child: Text(
               title,
@@ -637,6 +650,7 @@ class _EmptyShipmentsState extends StatelessWidget {
     this.icon = Icons.inventory_2_outlined,
     this.actionLabel,
     this.onAction,
+    this.showBackButton = false,
   });
 
   final String title;
@@ -645,6 +659,7 @@ class _EmptyShipmentsState extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
   final VoidCallback onOpenCarrierTracking;
+  final bool showBackButton;
 
   @override
   Widget build(BuildContext context) {
@@ -653,6 +668,7 @@ class _EmptyShipmentsState extends StatelessWidget {
         _ShipmentsHeader(
           title: title,
           onOpenCarrierTracking: onOpenCarrierTracking,
+          showBackButton: showBackButton,
         ),
         Expanded(
           child: Center(

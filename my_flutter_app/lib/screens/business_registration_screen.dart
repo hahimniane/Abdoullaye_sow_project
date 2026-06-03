@@ -10,6 +10,7 @@ import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/phone_number_validator.dart';
+import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/language_toggle.dart';
 
@@ -268,13 +269,7 @@ class _BusinessRegistrationScreenState
                 padding: const EdgeInsets.fromLTRB(12, 10, 16, 4),
                 child: Row(
                   children: [
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(
-                        Icons.arrow_back_ios,
-                        color: Colors.white,
-                      ),
-                    ),
+                    const AppBackButton(onDarkBackground: true),
                     Expanded(
                       child: Text(
                         l10n.registerYourBusiness,

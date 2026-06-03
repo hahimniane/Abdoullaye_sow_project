@@ -450,7 +450,7 @@ void _openDashboardShortcut(BuildContext context, _MetricData data) {
       Navigator.push(
         context,
         MaterialPageRoute<void>(
-          builder: (_) => const StaffCarManagementScreen(),
+          builder: (_) => const StaffCarManagementScreen(showBackButton: true),
         ),
       );
       break;

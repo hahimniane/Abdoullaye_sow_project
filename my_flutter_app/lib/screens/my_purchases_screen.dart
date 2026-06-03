@@ -9,11 +9,14 @@ import '../providers/auth_provider.dart';
 import '../services/car_purchase_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
+import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/language_toggle.dart';
 
 class MyPurchasesScreen extends StatelessWidget {
-  const MyPurchasesScreen({super.key});
+  const MyPurchasesScreen({super.key, this.showBackButton = false});
+
+  final bool showBackButton;
 
   Future<void> _showEditViewingSheet(
     BuildContext context,
@@ -254,6 +257,7 @@ class MyPurchasesScreen extends StatelessWidget {
             message: l10n.signInToAccount,
             actionLabel: l10n.signIn,
             onAction: () => Navigator.pushNamed(context, '/login'),
+            showBackButton: showBackButton,
           ),
         ),
       );
@@ -273,6 +277,7 @@ class MyPurchasesScreen extends StatelessWidget {
                 title: l10n.myPurchases,
                 message: l10n.purchaseHistoryUnavailable,
                 icon: Icons.lock_outline,
+                showBackButton: showBackButton,
               ),
             );
           }
@@ -287,13 +292,17 @@ class MyPurchasesScreen extends StatelessWidget {
               child: _EmptyPurchasesState(
                 title: l10n.myPurchases,
                 message: l10n.noPurchasesYet,
+                showBackButton: showBackButton,
               ),
             );
           }
           return SafeArea(
             child: Column(
               children: [
-                _PurchasesHeader(title: l10n.myPurchases),
+                _PurchasesHeader(
+                  title: l10n.myPurchases,
+                  showBackButton: showBackButton,
+                ),
                 Expanded(
                   child: ListView.separated(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -329,9 +338,10 @@ class MyPurchasesScreen extends StatelessWidget {
 }
 
 class _PurchasesHeader extends StatelessWidget {
-  const _PurchasesHeader({required this.title});
+  const _PurchasesHeader({required this.title, required this.showBackButton});
 
   final String title;
+  final bool showBackButton;
 
   @override
   Widget build(BuildContext context) {
@@ -339,6 +349,10 @@ class _PurchasesHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
       child: Row(
         children: [
+          if (showBackButton) ...[
+            const AppBackButton(),
+            const SizedBox(width: 4),
+          ],
           Expanded(
             child: Text(
               title,
@@ -361,6 +375,7 @@ class _EmptyPurchasesState extends StatelessWidget {
     this.icon = Icons.receipt_long_outlined,
     this.actionLabel,
     this.onAction,
+    this.showBackButton = false,
   });
 
   final String title;
@@ -368,12 +383,13 @@ class _EmptyPurchasesState extends StatelessWidget {
   final IconData icon;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final bool showBackButton;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _PurchasesHeader(title: title),
+        _PurchasesHeader(title: title, showBackButton: showBackButton),
         Expanded(
           child: Center(
             child: Padding(

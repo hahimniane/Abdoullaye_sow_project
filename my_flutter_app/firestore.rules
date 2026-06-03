@@ -83,8 +83,23 @@ service cloud.firestore {
                           'phone',
                           'profileImageUrl',
                           'profileImagePath',
+                          'notificationPreferences',
                           'updatedAt'
                         ]);
+
+      match /favoriteCars/{carId} {
+        allow read, create, update, delete: if request.auth != null &&
+          request.auth.uid == userId;
+      }
+
+      match /fcmTokens/{tokenId} {
+        allow read, create, update, delete: if request.auth != null &&
+          request.auth.uid == userId;
+      }
+    }
+
+    match /phoneSignInAliases/{alias} {
+      allow read, write: if false;
     }
 
     // Rules for the 'parkedCars' collection

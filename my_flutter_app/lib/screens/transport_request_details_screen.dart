@@ -11,6 +11,7 @@ import '../l10n/app_localizations.dart';
 import '../models/transport_request.dart';
 import '../providers/auth_provider.dart';
 import '../utils/transport_receipt_generator.dart';
+import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/language_toggle.dart';
 import '../theme/app_colors.dart';
@@ -254,13 +255,7 @@ class _TransportRequestDetailsScreenState
                 ),
                 child: Row(
                   children: [
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(
-                        Icons.arrow_back_ios,
-                        color: Colors.white,
-                      ),
-                    ),
+                    const AppBackButton(onDarkBackground: true),
                     Expanded(
                       child: Text(
                         l10n.transportRequestDetails,

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
+import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import 'add_staff_screen.dart';
 import 'platform_admin_dashboard_screen.dart';
@@ -487,11 +488,7 @@ class _UsersHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              IconButton(
-                onPressed: () => Navigator.maybePop(context),
-                icon: const Icon(Icons.arrow_back_ios_new),
-                color: Colors.white,
-              ),
+              const AppBackButton(onDarkBackground: true),
               Expanded(
                 child: Text(
                   l10n.peopleAndAccess,

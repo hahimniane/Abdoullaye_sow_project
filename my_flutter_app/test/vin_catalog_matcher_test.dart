@@ -22,7 +22,50 @@ void main() {
     expect(match.isComplete, isTrue);
   });
 
-  test('leaves unmatched decoded model for staff review', () {
+  test('matches decoded Toyota Camry VIN payload to populate form fields', () {
+    final match = matchDecodedVehicleToCatalog(
+      decoded: const DecodedVehicleInfo(
+        vin: '4T1BF1FK9HU603521',
+        make: 'TOYOTA',
+        model: 'Camry',
+        year: '2017',
+        trim: 'LE/SE/XLE/XSE',
+        bodyClass: 'Sedan/Saloon',
+        fuelType: 'Gasoline',
+      ),
+      makeOptions: const ['Honda', 'Toyota'],
+      modelsForMake: (_) => const ['Camry', 'Corolla'],
+      yearsForModel: (_, _) => const ['2018', '2017', '2016'],
+    );
+
+    expect(match.make, 'Toyota');
+    expect(match.model, 'Camry');
+    expect(match.year, '2017');
+    expect(match.isComplete, isTrue);
+  });
+
+  test('uses decoded model and year when model is missing from catalog', () {
+    final match = matchDecodedVehicleToCatalog(
+      decoded: const DecodedVehicleInfo(
+        vin: 'WBXHT3Z36HH4A55362',
+        make: 'BMW',
+        model: 'X1 xDrive28iBr',
+        year: '2017',
+      ),
+      makeOptions: const ['BMW'],
+      modelsForMake: (_) => const ['3 Series', '5 Series', '7 Series', 'X5'],
+      yearsForModel: (_, _) => const [],
+    );
+
+    expect(match.make, 'BMW');
+    expect(match.model, 'X1');
+    expect(match.year, '2017');
+    expect(match.modelOptions.first, 'X1');
+    expect(match.yearOptions.first, '2017');
+    expect(match.isComplete, isTrue);
+  });
+
+  test('preserves unmatched decoded model for staff review', () {
     final match = matchDecodedVehicleToCatalog(
       decoded: const DecodedVehicleInfo(
         vin: '1HGCM82633A004352',
@@ -36,8 +79,8 @@ void main() {
     );
 
     expect(match.make, 'Honda');
-    expect(match.model, isNull);
-    expect(match.year, isNull);
-    expect(match.isComplete, isFalse);
+    expect(match.model, 'Accord Crosstour');
+    expect(match.year, '2010');
+    expect(match.isComplete, isTrue);
   });
 }

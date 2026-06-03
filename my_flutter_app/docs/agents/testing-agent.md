@@ -82,3 +82,5 @@ Return exact commands run, pass/fail status, relevant failure snippets, and reco
 ## Durable Testing Lessons
 
 Add recurring failure modes, project-specific fake patterns, and useful commands here.
+
+- The iOS 26.5 simulator requires `arm64`; do not exclude simulator `arm64` in `ios/Podfile`. The old `google_mlkit_text_recognition` / MLKit `MLImage.framework` pod only provided an `x86_64` simulator slice and an `arm64` device slice, so it could not run on this simulator runtime. After iOS Podfile or plugin dependency changes, run `pod install` from `my_flutter_app/ios`, then verify with `flutter run -d 96729E62-B230-4C2E-A307-2AEFD8DE8F3A`.

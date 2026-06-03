@@ -19,6 +19,7 @@ import '../data/car_catalog.dart';
 import '../utils/tracking_code_generator.dart';
 import '../utils/vin_utils.dart';
 import '../theme/app_colors.dart';
+import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 
 class ParkCarScreen extends StatefulWidget {
@@ -540,17 +541,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
                   children: [
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: IconButton.styleFrom(
-                        splashFactory: NoSplash.splashFactory,
-                      ),
-                      icon: const Icon(
-                        Icons.arrow_back_ios,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
+                    const AppBackButton(onDarkBackground: true),
                     Expanded(
                       child: Text(
                         AppLocalizations.of(context)!.parkACar,

@@ -6,9 +6,13 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
+import '../models/notification_preferences.dart';
 import '../providers/auth_provider.dart';
+import '../services/biometric_lock_service.dart';
+import '../services/push_notification_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/phone_number_validator.dart';
+import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 
 class AccountProfileScreen extends StatefulWidget {
@@ -26,8 +30,18 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
   final _phoneController = TextEditingController();
   XFile? _image;
   Uint8List? _imageBytes;
+  NotificationPreferences _preferences = NotificationPreferences.defaults;
+  final _biometricLock = BiometricLockService();
+  bool _biometricAvailable = false;
+  bool _biometricEnabled = false;
   bool _saving = false;
   bool _hydrated = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBiometricState();
+  }
 
   @override
   void dispose() {
@@ -44,6 +58,19 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
     _hydrated = true;
     _nameController.text = auth.customerName ?? auth.buyerName;
     _phoneController.text = auth.customerPhone ?? '';
+    _preferences = auth.notificationPreferences;
+  }
+
+  Future<void> _loadBiometricState() async {
+    final results = await Future.wait([
+      _biometricLock.canAuthenticate(),
+      _biometricLock.isEnabled(),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _biometricAvailable = results.first;
+      _biometricEnabled = results.last;
+    });
   }
 
   Future<void> _pickImage() async {
@@ -97,7 +124,18 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
         phone: _phoneController.text,
         profileImageUrl: uploaded?.url,
         profileImagePath: uploaded?.path,
+        notificationPreferences: _preferences,
       );
+      if (_preferences.carActivity ||
+          _preferences.shipmentActivity ||
+          _preferences.walletActivity ||
+          _preferences.businessActivity) {
+        try {
+          await PushNotificationService().requestPermissionAndRegister();
+        } catch (error) {
+          debugPrint('Push registration skipped after profile save: $error');
+        }
+      }
       if (!mounted) return;
       showSuccessSnackBar(context, l10n.profileSaved);
       _close();
@@ -115,7 +153,24 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
       onBack();
       return;
     }
-    Navigator.pop(context);
+    Navigator.maybePop(context);
+  }
+
+  Future<void> _setBiometricEnabled(bool value) async {
+    final l10n = AppLocalizations.of(context)!;
+    if (value && _biometricAvailable) {
+      final allowed = await _biometricLock.authenticate(
+        reason: l10n.unlockWithFaceId,
+      );
+      if (!allowed) return;
+    }
+    await _biometricLock.setEnabled(value);
+    if (!mounted) return;
+    setState(() => _biometricEnabled = value);
+  }
+
+  void _updatePreferences(NotificationPreferences preferences) {
+    setState(() => _preferences = preferences);
   }
 
   @override
@@ -125,12 +180,7 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
     return Scaffold(
       backgroundColor: AppColors.lightBg,
       appBar: AppBar(
-        leading: widget.onBack == null
-            ? null
-            : IconButton(
-                onPressed: _close,
-                icon: const Icon(Icons.arrow_back_ios_new),
-              ),
+        leading: AppBackButton(onPressed: _close),
         title: Text(l10n.accountProfile),
       ),
       body: Form(
@@ -138,42 +188,141 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            Center(
-              child: GestureDetector(
-                onTap: _pickImage,
-                child: CircleAvatar(
-                  radius: 46,
-                  backgroundImage: _imageBytes != null
-                      ? MemoryImage(_imageBytes!)
-                      : (auth.profileImageUrl ?? '').isEmpty
-                      ? null
-                      : NetworkImage(auth.profileImageUrl!),
-                  child:
-                      _imageBytes == null &&
-                          (auth.profileImageUrl ?? '').isEmpty
-                      ? const Icon(Icons.add_a_photo_outlined, size: 30)
-                      : null,
-                ),
+            _ProfileSection(
+              child: Column(
+                children: [
+                  GestureDetector(
+                    onTap: _pickImage,
+                    child: Stack(
+                      alignment: Alignment.bottomRight,
+                      children: [
+                        CircleAvatar(
+                          radius: 52,
+                          backgroundColor: AppColors.brandRed.withValues(
+                            alpha: 0.12,
+                          ),
+                          backgroundImage: _imageBytes != null
+                              ? MemoryImage(_imageBytes!)
+                              : (auth.profileImageUrl ?? '').isEmpty
+                              ? null
+                              : NetworkImage(auth.profileImageUrl!),
+                          child:
+                              _imageBytes == null &&
+                                  (auth.profileImageUrl ?? '').isEmpty
+                              ? const Icon(
+                                  Icons.person_outline,
+                                  size: 44,
+                                  color: AppColors.brandRed,
+                                )
+                              : null,
+                        ),
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: AppColors.brandRed,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white, width: 3),
+                          ),
+                          child: const Icon(
+                            Icons.photo_camera_outlined,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextButton(
+                    onPressed: _pickImage,
+                    child: Text(l10n.changePhoto),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 20),
-            TextFormField(
-              controller: _nameController,
-              textCapitalization: TextCapitalization.words,
-              decoration: InputDecoration(labelText: l10n.fullName),
-              validator: (value) => value == null || value.trim().isEmpty
-                  ? l10n.requiredField
-                  : null,
+            const SizedBox(height: 14),
+            _ProfileSection(
+              title: l10n.accountProfile,
+              child: Column(
+                children: [
+                  TextFormField(
+                    controller: _nameController,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: InputDecoration(labelText: l10n.fullName),
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? l10n.requiredField
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    initialValue: auth.userEmail ?? '',
+                    readOnly: true,
+                    decoration: InputDecoration(labelText: l10n.email),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    inputFormatters:
+                        PhoneNumberValidator.allowedInputFormatters,
+                    decoration: InputDecoration(labelText: l10n.phone),
+                    validator: (value) => PhoneNumberValidator.validate(
+                      value,
+                      requiredMessage: l10n.requiredField,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              inputFormatters: PhoneNumberValidator.allowedInputFormatters,
-              decoration: InputDecoration(labelText: l10n.phone),
-              validator: (value) => PhoneNumberValidator.validate(
-                value,
-                requiredMessage: l10n.requiredField,
+            const SizedBox(height: 14),
+            _ProfileSection(
+              title: l10n.notificationPreferences,
+              child: Column(
+                children: [
+                  _PreferenceSwitch(
+                    title: l10n.carActivityNotifications,
+                    value: _preferences.carActivity,
+                    onChanged: (value) => _updatePreferences(
+                      _preferences.copyWith(carActivity: value),
+                    ),
+                  ),
+                  _PreferenceSwitch(
+                    title: l10n.shipmentActivityNotifications,
+                    value: _preferences.shipmentActivity,
+                    onChanged: (value) => _updatePreferences(
+                      _preferences.copyWith(shipmentActivity: value),
+                    ),
+                  ),
+                  _PreferenceSwitch(
+                    title: l10n.walletActivityNotifications,
+                    value: _preferences.walletActivity,
+                    onChanged: (value) => _updatePreferences(
+                      _preferences.copyWith(walletActivity: value),
+                    ),
+                  ),
+                  _PreferenceSwitch(
+                    title: l10n.businessActivityNotifications,
+                    value: _preferences.businessActivity,
+                    onChanged: (value) => _updatePreferences(
+                      _preferences.copyWith(businessActivity: value),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            _ProfileSection(
+              title: l10n.faceId,
+              child: SwitchListTile.adaptive(
+                value: _biometricAvailable && _biometricEnabled,
+                onChanged: _biometricAvailable ? _setBiometricEnabled : null,
+                contentPadding: EdgeInsets.zero,
+                title: Text(l10n.faceIdUnlock),
+                subtitle: _biometricAvailable
+                    ? null
+                    : Text(l10n.faceIdUnavailable),
+                secondary: const Icon(Icons.face_outlined),
               ),
             ),
             const SizedBox(height: 20),
@@ -188,12 +337,68 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.save_outlined),
-                label: Text(_saving ? 'Saving' : 'Save profile'),
+                label: Text(_saving ? l10n.saving : l10n.saveProfile),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ProfileSection extends StatelessWidget {
+  const _ProfileSection({this.title, required this.child});
+
+  final String? title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.lightOutline),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (title != null) ...[
+            Text(
+              title!,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 14),
+          ],
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _PreferenceSwitch extends StatelessWidget {
+  const _PreferenceSwitch({
+    required this.title,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String title;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile.adaptive(
+      value: value,
+      onChanged: onChanged,
+      contentPadding: EdgeInsets.zero,
+      title: Text(title),
     );
   }
 }
