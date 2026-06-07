@@ -776,7 +776,7 @@ class _BarrelHero extends StatelessWidget {
                   l10n.barrelShippingService,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 24,
+                    fontSize: 18,
                     fontWeight: FontWeight.w900,
                     height: 1.05,
                   ),
@@ -1882,7 +1882,7 @@ class _PriceEstimateCard extends StatelessWidget {
                 currency.format(amountDue),
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 22,
+                  fontSize: 17,
                   fontWeight: FontWeight.w900,
                 ),
               ),

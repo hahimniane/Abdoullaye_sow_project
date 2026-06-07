@@ -600,7 +600,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                             Text(
                               AppLocalizations.of(context)!.carParkingService,
                               style: const TextStyle(
-                                fontSize: 24,
+                                fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
                               ),

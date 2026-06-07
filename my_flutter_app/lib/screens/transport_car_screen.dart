@@ -242,7 +242,7 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
                             Text(
                               l10n.carTransportService,
                               style: const TextStyle(
-                                fontSize: 24,
+                                fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
                               ),

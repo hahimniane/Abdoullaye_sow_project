@@ -314,7 +314,7 @@ class _WelcomeSection extends StatelessWidget {
           RichText(
             text: TextSpan(
               style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                fontSize: 40,
+                fontSize: 24,
                 height: 1,
                 color: AppColors.ink,
               ),
@@ -487,7 +487,7 @@ class _ActivitySection extends StatelessWidget {
           l10n.recentActivity,
           style: const TextStyle(
             color: AppColors.ink,
-            fontSize: 20,
+            fontSize: 17,
             fontWeight: FontWeight.bold,
           ),
         ),

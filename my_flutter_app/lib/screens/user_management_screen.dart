@@ -495,7 +495,7 @@ class _UsersHeader extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 20,
+                    fontSize: 17,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -597,7 +597,7 @@ class _AccessStat extends StatelessWidget {
             value.toString(),
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 22,
+              fontSize: 17,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -955,7 +955,7 @@ class _UserManagementCard extends StatelessWidget {
                 Text(
                   name.isEmpty ? email : name,
                   style: const TextStyle(
-                    fontSize: 20,
+                    fontSize: 17,
                     fontWeight: FontWeight.w900,
                   ),
                 ),

@@ -652,7 +652,7 @@ class _BusinessRegistrationHero extends StatelessWidget {
                   'Join the marketplace',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 24,
+                    fontSize: 18,
                     fontWeight: FontWeight.w900,
                   ),
                 ),

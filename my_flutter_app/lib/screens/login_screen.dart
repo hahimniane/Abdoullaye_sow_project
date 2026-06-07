@@ -156,7 +156,7 @@ class _LoginScreenState extends State<LoginScreen>
                             Text(
                               AppLocalizations.of(context)!.accountLoginTitle,
                               style: const TextStyle(
-                                fontSize: 32,
+                                fontSize: 22,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
                               ),
@@ -167,7 +167,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 context,
                               )!.accountLoginSubtitle,
                               style: const TextStyle(
-                                fontSize: 16,
+                                fontSize: 14,
                                 color: Colors.white70,
                               ),
                               textAlign: TextAlign.center,

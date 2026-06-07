@@ -365,7 +365,7 @@ class _BarrelShipmentDetailsScreenState
                             'Shipping business will change',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 22,
+                              fontSize: 18,
                               fontWeight: FontWeight.w900,
                               height: 1.05,
                             ),
@@ -1470,7 +1470,7 @@ class _EditBarrelHero extends StatelessWidget {
                   l10n.barrelShippingService,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 24,
+                    fontSize: 18,
                     fontWeight: FontWeight.w900,
                     height: 1.05,
                   ),

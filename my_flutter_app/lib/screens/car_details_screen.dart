@@ -104,7 +104,7 @@ class CarDetailsScreen extends StatelessWidget {
                               child: Text(
                                 car.title,
                                 style: const TextStyle(
-                                  fontSize: 24,
+                                  fontSize: 18,
                                   fontWeight: FontWeight.bold,
                                   color: AppColors.brandRed,
                                 ),
@@ -113,7 +113,7 @@ class CarDetailsScreen extends StatelessWidget {
                             Text(
                               priceText,
                               style: const TextStyle(
-                                fontSize: 24,
+                                fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.brandRed,
                               ),
@@ -197,7 +197,7 @@ class CarDetailsScreen extends StatelessWidget {
                         Text(
                           l10n.carDescription,
                           style: const TextStyle(
-                            fontSize: 20,
+                            fontSize: 17,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -216,7 +216,7 @@ class CarDetailsScreen extends StatelessWidget {
                         Text(
                           l10n.features,
                           style: const TextStyle(
-                            fontSize: 20,
+                            fontSize: 17,
                             fontWeight: FontWeight.bold,
                           ),
                         ),

@@ -313,7 +313,7 @@ class _WalletHeroCard extends StatelessWidget {
             currency.format(balance),
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 42,
+              fontSize: 28,
               fontWeight: FontWeight.w900,
               height: 1,
             ),

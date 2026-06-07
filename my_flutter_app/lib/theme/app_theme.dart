@@ -65,7 +65,7 @@ abstract final class AppTheme {
           ),
           textStyle: const TextStyle(
             fontWeight: FontWeight.w600,
-            fontSize: 16,
+            fontSize: 14,
             letterSpacing: 0,
           ),
         ),

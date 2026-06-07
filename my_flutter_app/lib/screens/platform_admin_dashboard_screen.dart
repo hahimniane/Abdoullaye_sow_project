@@ -203,7 +203,7 @@ class _DashboardTitleBlock extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: Colors.white,
-            fontSize: 26,
+            fontSize: 20,
             fontWeight: FontWeight.w900,
           ),
         ),
@@ -400,7 +400,7 @@ class _MetricCard extends StatelessWidget {
                       isLoading ? '...' : data.value.toString(),
                       style: const TextStyle(
                         color: AppColors.ink,
-                        fontSize: 24,
+                        fontSize: 18,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -639,7 +639,7 @@ Future<void> _showDashboardSheet(
                     child: Text(
                       title,
                       style: const TextStyle(
-                        fontSize: 20,
+                        fontSize: 17,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -1198,7 +1198,7 @@ Future<void> _showReviewSheet(
                   Text(
                     business.name,
                     style: const TextStyle(
-                      fontSize: 20,
+                      fontSize: 17,
                       fontWeight: FontWeight.w900,
                     ),
                   ),

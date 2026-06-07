@@ -159,7 +159,7 @@ class _SignUpScreenState extends State<SignUpScreen>
                             Text(
                               AppLocalizations.of(context)!.createAccount,
                               style: const TextStyle(
-                                fontSize: 32,
+                                fontSize: 22,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
                               ),
@@ -168,7 +168,7 @@ class _SignUpScreenState extends State<SignUpScreen>
                             Text(
                               AppLocalizations.of(context)!.signUpToGetStarted,
                               style: const TextStyle(
-                                fontSize: 16,
+                                fontSize: 14,
                                 color: Colors.white70,
                               ),
                             ),

@@ -331,7 +331,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                           child: Text(
                             l10n.manageCars,
                             style: const TextStyle(
-                              fontSize: 24,
+                              fontSize: 18,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                             ),
@@ -582,7 +582,7 @@ class _StatItem extends StatelessWidget {
           Text(
             value,
             style: const TextStyle(
-              fontSize: 22,
+              fontSize: 17,
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
@@ -2472,7 +2472,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
                                   : l10n.editCar,
                               style: const TextStyle(
                                 color: AppColors.ink,
-                                fontSize: 20,
+                                fontSize: 17,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
@@ -2714,7 +2714,7 @@ class _MarkAsSoldSheetState extends State<_MarkAsSoldSheet> {
                   Text(
                     l10n.markAsSold,
                     style: const TextStyle(
-                      fontSize: 20,
+                      fontSize: 17,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -2992,7 +2992,7 @@ class _EmptyCarsState extends StatelessWidget {
                 l10n.noCarsFound,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  fontSize: 21,
+                  fontSize: 17,
                   fontWeight: FontWeight.w800,
                   color: AppColors.ink,
                 ),

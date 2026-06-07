@@ -1704,7 +1704,7 @@ class _BrowseHeader extends StatelessWidget {
                     l10n.availableCars,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 22,
+                      fontSize: 18,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 0,
                       height: 1.05,
@@ -1964,7 +1964,7 @@ class _CarListTile extends StatelessWidget {
                             car.title,
                             style: const TextStyle(
                               fontWeight: FontWeight.w900,
-                              fontSize: 19,
+                              fontSize: 16,
                               height: 1.15,
                             ),
                             overflow: TextOverflow.ellipsis,
@@ -2326,7 +2326,7 @@ class _PriceBadge extends StatelessWidget {
         priceText,
         style: const TextStyle(
           fontWeight: FontWeight.w900,
-          fontSize: 17,
+          fontSize: 15,
           color: AppColors.cobaltDeep,
         ),
         overflow: TextOverflow.ellipsis,

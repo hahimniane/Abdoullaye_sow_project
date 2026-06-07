@@ -62,5 +62,6 @@ Return:
 
 - Prefers clean, professional app UI over flashy marketing-style layouts.
 - Likes restrained radii, purposeful cards, and polished spacing.
+- Prefers compact business-app typography; avoid oversized marketing headlines in operational screens, and keep most UI text near Material-style 14 body, 17-18 section titles, and 20-22 page titles unless a true brand/display moment needs more.
 - Wants Codex to act like a manager and proactively involve design review when UI quality is at stake.
 - Avoid one-off visual inventions that do not fit the existing theme.
