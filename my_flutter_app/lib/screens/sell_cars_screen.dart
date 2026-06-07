@@ -300,7 +300,7 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
               showBackButton: widget.showBackButton,
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
               child: Row(
                 children: [
                   Expanded(
@@ -1666,86 +1666,60 @@ class _BrowseHeader extends StatelessWidget {
       decoration: const BoxDecoration(
         gradient: AppColors.headerGradient,
         borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(28),
-          bottomRight: Radius.circular(28),
+          bottomLeft: Radius.circular(18),
+          bottomRight: Radius.circular(18),
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (showBackButton) ...[
-                  const AppBackButton(onDarkBackground: true),
-                  const SizedBox(width: 4),
-                ],
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.18),
+            if (showBackButton) ...[
+              const AppBackButton(onDarkBackground: true),
+              const SizedBox(width: 6),
+            ],
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+              ),
+              child: const Icon(
+                Icons.directions_car,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  Text(
+                    l10n.availableCars,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0,
+                      height: 1.05,
                     ),
                   ),
-                  child: const Icon(Icons.directions_car, color: Colors.white),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l10n.availableCars,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0,
-                          height: 1.05,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        l10n.browsePurchaseReserve,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.78),
-                          fontSize: 14,
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
+                  _HeaderCountBadge(
+                    visibleCars: visibleCars,
+                    totalCars: totalCars,
+                    label: l10n.cars,
                   ),
-                ),
-                const LanguageToggle(),
-              ],
+                ],
+              ),
             ),
-            const SizedBox(height: 18),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _HeaderMetric(
-                  icon: Icons.garage,
-                  label: l10n.availableCars,
-                  value: '$visibleCars',
-                ),
-                _HeaderMetric(
-                  icon: Icons.inventory_2_outlined,
-                  label: l10n.cars,
-                  value: '$totalCars',
-                ),
-                _HeaderMetric(
-                  icon: Icons.verified_user_outlined,
-                  label: l10n.reserveViewing,
-                  value: '24/7',
-                ),
-              ],
-            ),
+            const SizedBox(width: 8),
+            const LanguageToggle(),
           ],
         ),
       ),
@@ -1753,46 +1727,55 @@ class _BrowseHeader extends StatelessWidget {
   }
 }
 
-class _HeaderMetric extends StatelessWidget {
-  const _HeaderMetric({
-    required this.icon,
+class _HeaderCountBadge extends StatelessWidget {
+  const _HeaderCountBadge({
+    required this.visibleCars,
+    required this.totalCars,
     required this.label,
-    required this.value,
   });
 
-  final IconData icon;
+  final int visibleCars;
+  final int totalCars;
   final String label;
-  final String value;
 
   @override
   Widget build(BuildContext context) {
+    final countText = visibleCars == totalCars
+        ? '$totalCars'
+        : '$visibleCars/$totalCars';
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(999),
         border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 15, color: AppColors.mist),
+          const Icon(
+            Icons.inventory_2_outlined,
+            size: 13,
+            color: AppColors.mist,
+          ),
           const SizedBox(width: 6),
           Text(
-            value,
+            countText,
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w900,
-              fontSize: 13,
+              fontSize: 12,
+              height: 1,
             ),
           ),
-          const SizedBox(width: 5),
+          const SizedBox(width: 4),
           Text(
             label,
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.72),
               fontWeight: FontWeight.w600,
               fontSize: 11,
+              height: 1,
             ),
           ),
         ],
