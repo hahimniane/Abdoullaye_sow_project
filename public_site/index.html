@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/styles.css?v=10" />
+  <link rel="stylesheet" href="assets/styles.css?v=11" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d9488'/%3E%3Cpath d='M8 22c4-10 12-10 16 0' stroke='white' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='11' r='2.4' fill='%23f59e0b'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -59,7 +59,26 @@
         </div>
         <ul class="hero-trust"><li><strong>Registered</strong> businesses</li><li><strong>Clear</strong> pricing and routes</li><li><strong>Platform</strong> support</li></ul>
       </div>
-      <div class="hero-card">
+      <div class="hero-card hero-story">
+        <div class="road-network" aria-hidden="true">
+          <svg class="road-map" viewBox="0 0 520 430" role="img">
+            <defs>
+              <linearGradient id="roadGradient" x1="44" y1="324" x2="472" y2="76" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#0d9488" />
+                <stop offset=".62" stop-color="#14b8a6" />
+                <stop offset="1" stop-color="#f59e0b" />
+              </linearGradient>
+            </defs>
+            <path class="road-shadow" d="M44 324 C128 218 206 286 282 188 C345 108 410 132 472 76" />
+            <path class="road-path" d="M44 324 C128 218 206 286 282 188 C345 108 410 132 472 76" />
+          </svg>
+          <span class="road-node road-node-source"><i></i><b>Source</b></span>
+          <span class="road-node road-node-ship"><i></i><b>Ship</b></span>
+          <span class="road-node road-node-cars"><i></i><b>Cars</b></span>
+          <span class="road-node road-node-food"><i></i><b>Food</b></span>
+          <span class="road-node road-node-pro"><i></i><b>Pros</b></span>
+          <span class="home-pin"><i></i><b>Home</b></span>
+        </div>
         <div class="phone phone-hero">
           <div class="phone-notch"></div>
           <div class="app-top"><div><small>Welcome back</small><b>What do you need today?</b></div><span class="app-ava">A</span></div>
@@ -70,6 +89,11 @@
             <div class="tile"><span class="ti green">🍲</span>Food</div>
           </div>
           <div class="app-track"><div class="app-track-head"><b>Barrel to Conakry</b><span class="pill mini">In transit</span></div><div class="phone-bar"><span style="width:62%"></span></div><small>Estimated delivery · 22 days</small></div>
+        </div>
+        <div class="story-status" aria-hidden="true">
+          <span><b>01</b> Registered</span>
+          <span><b>02</b> Paid safely</span>
+          <span><b>03</b> Tracked</span>
         </div>
       </div>
     </div>
