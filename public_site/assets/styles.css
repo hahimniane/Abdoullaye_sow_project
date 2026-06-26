@@ -288,82 +288,102 @@ a{color:inherit; text-decoration:none}
 
 /* app home (hero phone) */
 .hero-card{display:flex; justify-content:center}
-.hero-story{
+.hero-system{
   min-height:520px;
   align-items:center;
   isolation:isolate;
 }
-.road-network{
+.signal-network{
   position:absolute;
   inset:-32px -44px -42px -64px;
-  z-index:3;
+  z-index:1;
   pointer-events:none;
 }
-.road-map{
+.signal-lines{
   position:absolute;
   inset:0;
   width:100%;
   height:100%;
   overflow:visible;
 }
-.road-map path{
+.signal-lines path{
   fill:none;
   stroke-linecap:round;
   stroke-linejoin:round;
 }
-.road-shadow{
-  stroke:rgba(11,59,56,.10);
-  stroke-width:34;
-  filter:blur(1px);
+.signal-beam{
+  stroke:url("#signalGradient");
+  stroke-width:3;
+  stroke-dasharray:7 14;
+  opacity:.72;
+  filter:drop-shadow(0 10px 18px rgba(13,148,136,.18));
 }
-.road-path{
-  stroke:url("#roadGradient");
-  stroke-width:5;
-  stroke-dasharray:8 16;
-  filter:drop-shadow(0 12px 20px rgba(13,148,136,.20));
-}
-.road-node,
-.home-pin{
+.provider-card,
+.trust-orb{
   position:absolute;
-  z-index:1;
+  z-index:3;
   display:inline-flex;
   align-items:center;
-  gap:8px;
-  padding:8px 11px;
+  gap:9px;
+  padding:10px 12px;
   border:1px solid rgba(13,148,136,.22);
-  border-radius:999px;
-  background:rgba(255,255,255,.82);
-  box-shadow:0 12px 26px rgba(11,59,56,.10);
+  border-radius:16px;
+  background:rgba(255,255,255,.86);
+  box-shadow:0 16px 36px rgba(11,59,56,.12);
   backdrop-filter:blur(12px);
   color:var(--teal-deep);
   font-family:var(--font-head);
-  font-size:12px;
-  font-weight:800;
-  letter-spacing:.01em;
   white-space:nowrap;
 }
-.road-node i,
-.home-pin i{
-  width:11px;
-  height:11px;
-  border-radius:50%;
-  background:var(--teal);
-  box-shadow:0 0 0 5px rgba(13,148,136,.13);
+.provider-card i{
+  display:grid;
+  place-items:center;
+  width:34px;
+  height:34px;
+  border-radius:12px;
+  background:var(--mist);
+  font-style:normal;
+  font-size:17px;
 }
-.road-node-source{left:4%; bottom:25%}
-.road-node-ship{left:-1%; top:39%}
-.road-node-cars{left:13%; bottom:39%}
-.road-node-food{right:2%; bottom:31%}
-.road-node-pro{right:8%; bottom:45%}
-.home-pin{
-  right:0;
-  top:18%;
-  z-index:3;
+.provider-card b,
+.trust-orb b{
+  display:block;
+  font-size:12px;
+  font-weight:800;
+  line-height:1.1;
+}
+.provider-card small{
+  display:block;
+  margin-top:3px;
+  color:var(--muted);
+  font-size:10.5px;
+  font-weight:800;
+}
+.provider-source{left:-4%; bottom:18%}
+.provider-ship{left:-6%; top:30%}
+.provider-cars{right:-5%; top:33%}
+.provider-food{right:-3%; bottom:22%}
+.trust-orb{
+  left:50%;
+  top:-1%;
+  z-index:4;
+  transform:translateX(-50%);
+  border-radius:999px;
   color:var(--gold-deep);
   border-color:rgba(245,158,11,.28);
+  background:rgba(255,251,235,.92);
 }
-.home-pin i{
+.trust-orb i{
+  display:grid;
+  place-items:center;
+  width:24px;
+  height:24px;
+  border-radius:50%;
   background:var(--gold);
+  color:#fff;
+  font-style:normal;
+  font-size:13px;
+  font-weight:900;
   box-shadow:0 0 0 5px rgba(245,158,11,.16);
 }
 .phone-hero,
@@ -473,20 +493,19 @@ a{color:inherit; text-decoration:none}
 @media (max-width:980px){
   .service-featured{grid-template-columns:1fr; gap:30px; padding:34px}
   .app-show-inner{grid-template-columns:1fr; gap:30px}
-  .hero-story{min-height:500px}
-  .road-network{inset:-20px -24px -34px -34px}
-  .road-node-pro{display:none}
+  .hero-system{min-height:500px}
+  .signal-network{inset:-20px -24px -34px -34px}
+  .provider-food{display:none}
 }
 @media (max-width:560px){
   .service-featured{padding:26px}
   .phone-hero,.phone-showcase{width:300px}
   .store-badges{gap:10px}
-  .hero-story{min-height:500px; margin-top:4px; flex-direction:column; gap:10px}
-  .road-network{inset:-8px -10px -18px -18px; z-index:0}
-  .road-node{display:none}
-  .road-node-food,
-  .road-node-pro{display:none}
-  .home-pin{display:none}
+  .hero-system{min-height:500px; margin-top:4px; flex-direction:column; gap:10px}
+  .signal-network{inset:-8px -10px -18px -18px; z-index:0}
+  .provider-card,
+  .trust-orb,
+  .signal-lines{display:none}
   .story-status{position:relative; left:auto; bottom:auto; transform:none; display:grid; grid-template-columns:1fr; gap:6px; width:auto}
   .story-status span{justify-content:center; padding:6px 9px}
 }
@@ -570,34 +589,27 @@ html.js-anim .reveal.in { opacity: 1; transform: none; }
   .phone-hero { animation: floaty 7s ease-in-out 1.1s infinite; }
   .phone-showcase { animation: floaty 8s ease-in-out .9s infinite; }
 
-  .hero-story .road-path {
-    stroke-dasharray:760;
-    stroke-dashoffset:760;
-    animation:drawRoad .95s var(--ease-pro) .18s forwards;
+  .hero-system .signal-beam {
+    stroke-dasharray:260;
+    stroke-dashoffset:260;
+    animation:signalDraw 1s var(--ease-pro) .25s forwards,
+              signalFlow 3.2s linear 1.25s infinite;
   }
-  .hero-story .road-path-out {
-    animation-delay:1.18s;
-  }
-  .hero-story .road-shadow {
-    opacity:0;
-    animation:roadShadowIn .65s ease .15s forwards;
-  }
-  .hero-story .road-shadow-out {
-    animation-delay:1.05s;
-  }
-  .hero-story .road-node,
-  .hero-story .home-pin,
+  .hero-system .beam-ship{animation-delay:.38s, 1.38s}
+  .hero-system .beam-cars{animation-delay:.52s, 1.52s}
+  .hero-system .beam-food{animation-delay:.66s, 1.66s}
+  .hero-system .provider-card,
+  .hero-system .trust-orb,
   .story-status span {
     opacity:0;
-    transform:translateY(10px) scale(.96);
-    animation:routeStopIn .5s var(--ease-pro) forwards;
+    transform:translateY(12px) scale(.96);
+    animation:providerIn .58s var(--ease-pro) forwards;
   }
-  .hero-story .road-node-source{animation-delay:.48s}
-  .hero-story .road-node-ship{animation-delay:.72s}
-  .hero-story .road-node-cars{animation-delay:.96s}
-  .hero-story .road-node-food{animation-delay:1.20s}
-  .hero-story .road-node-pro{animation-delay:1.42s}
-  .hero-story .home-pin{animation-delay:1.58s}
+  .hero-system .provider-source{animation-delay:.42s}
+  .hero-system .provider-ship{animation-delay:.58s}
+  .hero-system .provider-cars{animation-delay:.74s}
+  .hero-system .provider-food{animation-delay:.90s}
+  .hero-system .trust-orb{animation-delay:1.12s}
   .story-status span:nth-child(1){animation-delay:1.80s}
   .story-status span:nth-child(2){animation-delay:1.96s}
   .story-status span:nth-child(3){animation-delay:2.12s}
@@ -642,13 +654,13 @@ html.js-anim .reveal.in { opacity: 1; transform: none; }
   from { opacity: 0; transform: translateY(12px) scale(.98); }
   to { opacity: 1; transform: none; }
 }
-@keyframes drawRoad {
+@keyframes signalDraw {
   to { stroke-dashoffset:0; }
 }
-@keyframes roadShadowIn {
-  to { opacity:1; }
+@keyframes signalFlow {
+  to { stroke-dashoffset:-36; }
 }
-@keyframes routeStopIn {
+@keyframes providerIn {
   to { opacity:1; transform:translateY(0) scale(1); }
 }
 @keyframes floaty {
