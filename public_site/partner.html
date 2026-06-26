@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>List your business — Laawol Digital</title>
+  <meta name="description" content="Apply to offer shipping, cars, sourcing, and more on Laawol Digital. Register your business, choose your services, and go live once approved." />
+  <meta name="theme-color" content="#0b3b38" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/styles.css?v=10" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d9488'/%3E%3Cpath d='M8 22c4-10 12-10 16 0' stroke='white' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='11' r='2.4' fill='%23f59e0b'/%3E%3C/svg%3E" />
+  <style>
+    /* Partner application — scoped styles layered on top of the shared form CSS */
+    .apply-inner{max-width:760px; margin:0 auto}
+    .apply-card{background:var(--paper); border:1px solid var(--line); border-radius:var(--r-lg); padding:26px; box-shadow:var(--shadow); margin-bottom:22px}
+    .apply-card h2{font-size:20px; color:var(--ink); display:flex; align-items:center; gap:10px}
+    .apply-card .card-sub{color:var(--ink-soft); font-size:14.5px; margin:6px 0 18px}
+    .apply-card .field-row{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+    .apply-card label.fld{display:block; font-weight:700; font-size:14px; color:var(--ink-soft); margin-bottom:16px}
+    .apply-card input[type=text],.apply-card input[type=email],.apply-card input[type=tel],.apply-card input[type=password],.apply-card input[type=url],.apply-card select,.apply-card textarea{width:100%; margin-top:7px; padding:13px 14px; border:1.5px solid var(--line); border-radius:12px; font:inherit; font-size:15px; background:var(--bg); color:var(--ink); transition:border-color .15s ease, box-shadow .15s ease}
+    .apply-card input:focus,.apply-card select:focus,.apply-card textarea:focus{outline:none; border-color:var(--teal); box-shadow:0 0 0 4px rgba(13,148,136,.14); background:#fff}
+    .apply-card textarea{resize:vertical}
+    .svc-list{display:grid; gap:12px}
+    .svc{display:flex; gap:12px; align-items:flex-start; border:1.5px solid var(--line); border-radius:14px; padding:14px; cursor:pointer; transition:border-color .15s ease, background .15s ease}
+    .svc:hover{border-color:var(--teal)}
+    .svc.on{border-color:var(--teal); background:rgba(13,148,136,.06)}
+    .svc input{margin-top:3px; width:18px; height:18px; accent-color:var(--teal)}
+    .svc .svc-txt b{display:block; color:var(--ink); font-size:15px}
+    .svc .svc-txt span{color:var(--ink-soft); font-size:13.5px}
+    .logo-row{display:flex; align-items:center; gap:16px}
+    .logo-prev{width:64px; height:64px; border-radius:14px; object-fit:cover; border:1px solid var(--line); background:var(--bg); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:22px}
+    .form-msg{display:none; padding:13px 15px; border-radius:12px; font-size:14px; font-weight:600; margin-bottom:16px}
+    .form-msg.err{display:block; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca}
+    .form-msg.ok{display:block; background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0}
+    .apply-success{display:none; text-align:center; background:var(--paper); border:1px solid var(--line); border-radius:var(--r-lg); padding:40px 26px; box-shadow:var(--shadow)}
+    .apply-success .tick{width:64px; height:64px; border-radius:50%; background:rgba(13,148,136,.12); color:var(--teal); display:inline-flex; align-items:center; justify-content:center; font-size:34px; margin-bottom:14px}
+    .apply-success h2{font-size:24px; color:var(--ink)}
+    .apply-success p{color:var(--ink-soft); max-width:460px; margin:12px auto 0}
+    .apply-success .btn{margin-top:22px}
+    .hint{color:var(--muted); font-size:12px; margin-top:6px}
+    .req{color:#dc2626}
+    .signed-note{background:rgba(13,148,136,.06); border:1px solid rgba(13,148,136,.25); border-radius:12px; padding:12px 14px; font-size:14px; color:var(--ink-soft); margin-bottom:16px}
+    @media (max-width:680px){ .apply-card .field-row{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="index.html" aria-label="Laawol Digital home">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" width="32" height="32"><rect width="32" height="32" rx="9" fill="#0d9488"/><path d="M7 23c4.5-11 13.5-11 18 0" stroke="white" stroke-width="2.6" fill="none" stroke-linecap="round"/><circle cx="16" cy="11" r="2.6" fill="#f59e0b"/></svg></span>
+        <span class="brand-text">Laawol<span>Digital</span></span>
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="index.html">Home</a>
+        <a href="services.html">Services</a>
+        <a href="source.html">Source from home</a>
+        <a href="app.html">The app</a>
+        <a href="about.html">About</a>
+        <a href="contact.html">Contact</a>
+      </nav>
+      <div class="nav-cta">
+        <a class="btn btn-ghost" href="app.html">Get the app</a>
+        <a class="btn btn-primary" href="partner.html">List your business</a>
+      </div>
+      <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false"><span></span><span></span><span></span></button>
+    </div>
+    <div class="mobile-menu" id="mobileMenu">
+      <a href="index.html">Home</a>
+      <a href="services.html">Services</a>
+      <a href="source.html">Source from home</a>
+      <a href="app.html">The app</a>
+      <a href="about.html">About</a>
+      <a href="contact.html">Contact</a>
+      <a href="partner.html" class="active">For businesses</a>
+      <a class="btn btn-primary" href="partner.html">List your business</a>
+    </div>
+  </header>
+
+  <section class="page-head"><div class="hero-bg" aria-hidden="true"></div><div class="container">
+    <span class="kicker">For businesses</span>
+    <h1>List your business on Laawol</h1>
+    <p>Apply once, choose the services you offer, and prepare your operations. Customers see your business after platform approval.</p>
+  </div></section>
+
+  <section class="section" style="padding-top:36px"><div class="container apply-inner">
+    <!-- Success state -->
+    <div class="apply-success" id="applySuccess">
+      <span class="tick" aria-hidden="true">✓</span>
+      <h2>Application submitted</h2>
+      <p>Thanks! Your business application is now pending platform approval. You can sign in to the admin console to set up destinations, listings, and staff right away — customers will see you once you're approved.</p>
+      <a class="btn btn-primary btn-lg" href="https://admin.laawoldigital.com" id="goAdmin">Open the admin console</a>
+    </div>
+
+    <!-- Application form -->
+    <form id="applyForm" novalidate>
+      <div class="form-msg" id="formMsg" role="alert"></div>
+
+      <div class="apply-card">
+        <h2>👤 Owner account</h2>
+        <p class="card-sub" id="ownerSub">Create the login you'll use to manage your business.</p>
+        <div class="signed-note" id="signedNote" style="display:none"></div>
+        <div class="field-row">
+          <label class="fld">Full name <span class="req">*</span>
+            <input type="text" id="ownerName" name="ownerName" autocomplete="name" required />
+          </label>
+          <label class="fld">Phone <span class="req">*</span>
+            <input type="tel" id="ownerPhone" name="ownerPhone" autocomplete="tel" placeholder="+1 555 123 4567" required />
+          </label>
+        </div>
+        <div id="credFields">
+          <div class="field-row">
+            <label class="fld">Email <span class="req">*</span>
+              <input type="email" id="email" name="email" autocomplete="email" required />
+            </label>
+            <label class="fld">Password <span class="req">*</span>
+              <input type="password" id="password" name="password" autocomplete="new-password" minlength="6" required />
+              <span class="hint">At least 6 characters.</span>
+            </label>
+          </div>
+          <label class="fld">Confirm password <span class="req">*</span>
+            <input type="password" id="confirmPassword" name="confirmPassword" autocomplete="new-password" required />
+          </label>
+        </div>
+      </div>
+
+      <div class="apply-card">
+        <h2>🧩 Services you offer</h2>
+        <p class="card-sub">Pick everything your business can provide. You can adjust these later.</p>
+        <div class="svc-list" id="svcList"></div>
+      </div>
+
+      <div class="apply-card">
+        <h2>🏪 Business profile</h2>
+        <p class="card-sub">This is what the platform reviews. Customers only see approved businesses.</p>
+        <label class="fld">Business name <span class="req">*</span>
+          <input type="text" id="businessName" name="businessName" required />
+        </label>
+        <div class="field-row">
+          <label class="fld">Business phone
+            <input type="tel" id="businessPhone" name="businessPhone" placeholder="Optional" />
+          </label>
+          <label class="fld">Business email
+            <input type="email" id="businessEmail" name="businessEmail" placeholder="Optional" />
+          </label>
+        </div>
+        <label class="fld">Website
+          <input type="url" id="businessWebsite" name="businessWebsite" placeholder="https:// (optional)" />
+        </label>
+        <div class="field-row">
+          <label class="fld">Business country <span class="req">*</span>
+            <select id="businessCountry" name="businessCountry" required>
+              <option value="">Select a country</option>
+              <option value="United States">United States</option>
+              <option value="Guinea">Guinea</option>
+              <option value="Senegal">Senegal</option>
+              <option value="Mali">Mali</option>
+              <option value="Côte d'Ivoire">Côte d'Ivoire</option>
+              <option value="Gambia">Gambia</option>
+              <option value="Sierra Leone">Sierra Leone</option>
+              <option value="Liberia">Liberia</option>
+            </select>
+          </label>
+          <label class="fld">Business city <span class="req">*</span>
+            <select id="businessCity" name="businessCity" disabled required>
+              <option value="">Select a city</option>
+            </select>
+          </label>
+        </div>
+        <label class="fld">Tell us about your service
+          <textarea id="serviceNote" name="serviceNote" rows="4" placeholder="Routes, pricing, experience, anything that helps approval (optional)"></textarea>
+        </label>
+        <label class="fld">Logo or storefront image (optional)
+          <div class="logo-row">
+            <span class="logo-prev" id="logoPrev" aria-hidden="true">＋</span>
+            <input type="file" id="logo" name="logo" accept="image/*" />
+          </div>
+        </label>
+      </div>
+
+      <button class="btn btn-primary btn-lg" type="submit" id="submitBtn" style="width:100%">Submit application</button>
+      <small class="form-note">By submitting, you create a Laawol business account and agree to platform review. You can set up your dashboard immediately; customers see you after approval.</small>
+    </form>
+  </div></section>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="index.html"><span class="brand-mark"><svg viewBox="0 0 32 32" width="32" height="32"><rect width="32" height="32" rx="9" fill="#0d9488"/><path d="M7 23c4.5-11 13.5-11 18 0" stroke="white" stroke-width="2.6" fill="none" stroke-linecap="round"/><circle cx="16" cy="11" r="2.6" fill="#f59e0b"/></svg></span><span class="brand-text light">Laawol<span>Digital</span></span></a>
+        <p>A trusted platform for the African diaspora — registered businesses offer shipping, cars, sourcing, food, and professional services with clearer support.</p>
+      </div>
+      <div class="footer-col"><h4>Explore</h4>
+        <a href="services.html">Services</a><a href="source.html">Source from home</a><a href="app.html">The app</a><a href="about.html">About</a>
+      </div>
+      <div class="footer-col"><h4>Company</h4>
+        <a href="about.html">Our story</a><a href="partner.html">List your business</a><a href="contact.html">Contact</a><a href="https://admin.laawoldigital.com">Admin console</a>
+      </div>
+      <div class="footer-col"><h4>Get the app</h4>
+        <a href="contact.html">iOS — App Store</a><a href="contact.html">Android — Google Play</a><a href="contact.html" data-cms-contact="supportEmail" data-cms-contact-href="supportEmail">Support</a>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <span>© <span id="year"></span> Laawol Digital. All rights reserved.</span>
+      <span class="footer-tag">Laawol — the road home.</span>
+    </div>
+  </footer>
+
+  <script src="assets/script.js?v=9"></script>
+  <script src="assets/content.js?v=7"></script>
+
+  <script type="module">
+    import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+    // Same Firebase project the mobile app and admin console use.
+    const firebaseConfig = {
+      apiKey: "AIzaSyBrRDTd5w2iWxTIfvsn7ra0xjW7M-iuPN8",
+      authDomain: "car-selling-flutter-app.firebaseapp.com",
+      projectId: "car-selling-flutter-app",
+      storageBucket: "car-selling-flutter-app.firebasestorage.app",
+      messagingSenderId: "577373430777",
+      appId: "1:577373430777:web:5af70db59c5d49a8125328",
+    };
+    const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const functions = getFunctions(app); // default region us-central1, matches mobile
+    const storage = getStorage(app);
+    const CITY_OPTIONS = {
+      "United States": ["New York", "Bronx", "Brooklyn", "Manhattan", "Queens", "Newark", "Jersey City", "Philadelphia", "Atlanta"],
+      "Guinea": ["Conakry", "Kankan", "Labe", "Nzerekore", "Kindia", "Mamou"],
+      "Senegal": ["Dakar", "Touba", "Thies", "Saint-Louis", "Kaolack", "Ziguinchor"],
+      "Mali": ["Bamako", "Sikasso", "Mopti", "Segou", "Kayes", "Koutiala"],
+      "Côte d'Ivoire": ["Abidjan", "Bouake", "Yamoussoukro", "Daloa", "San-Pedro", "Korhogo"],
+      "Gambia": ["Banjul", "Serekunda", "Brikama", "Bakau", "Farafenni"],
+      "Sierra Leone": ["Freetown", "Bo", "Kenema", "Makeni", "Koidu"],
+      "Liberia": ["Monrovia", "Gbarnga", "Buchanan", "Ganta", "Kakata"],
+    };
+
+    // Service catalog — mirrors my_flutter_app/lib/models/business_service.dart
+    const SERVICES = [
+      { key: "barrelShipping", label: "Barrel shipping", desc: "Ship barrels to destination countries." },
+      { key: "carSales",       label: "Car sales",       desc: "List cars for customers to browse and buy." },
+      { key: "carParking",     label: "Car parking",     desc: "Manage parked cars and parking receipts." },
+      { key: "carTransport",   label: "Car transport",   desc: "Track car transport requests." },
+    ];
+
+    const $ = (id) => document.getElementById(id);
+    const form = $("applyForm");
+    const msg = $("formMsg");
+    const submitBtn = $("submitBtn");
+    const businessCountry = $("businessCountry");
+    const businessCity = $("businessCity");
+
+    businessCountry.addEventListener("change", () => {
+      const cities = CITY_OPTIONS[businessCountry.value] || [];
+      businessCity.innerHTML = '<option value="">Select a city</option>';
+      cities.forEach((city) => {
+        const option = document.createElement("option");
+        option.value = city;
+        option.textContent = city;
+        businessCity.appendChild(option);
+      });
+      businessCity.disabled = cities.length === 0;
+    });
+
+    // Build service checkboxes (all selected by default, like mobile)
+    const svcList = $("svcList");
+    SERVICES.forEach((s) => {
+      const lab = document.createElement("label");
+      lab.className = "svc on";
+      lab.innerHTML =
+        '<input type="checkbox" value="' + s.key + '" checked />' +
+        '<span class="svc-txt"><b>' + s.label + '</b><span>' + s.desc + '</span></span>';
+      const cb = lab.querySelector("input");
+      cb.addEventListener("change", () => lab.classList.toggle("on", cb.checked));
+      svcList.appendChild(lab);
+    });
+    const selectedServices = () =>
+      Array.from(svcList.querySelectorAll("input:checked")).map((c) => c.value);
+    const reducedMotion = window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const scrollToPanel = (node) => {
+      node.scrollIntoView({
+        behavior: reducedMotion ? "auto" : "smooth",
+        block: "center",
+      });
+    };
+
+    // Logo preview
+    let logoFile = null;
+    $("logo").addEventListener("change", (e) => {
+      logoFile = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+      const prev = $("logoPrev");
+      if (logoFile) {
+        const url = URL.createObjectURL(logoFile);
+        prev.style.backgroundImage = "url(" + url + ")";
+        prev.style.backgroundSize = "cover";
+        prev.textContent = "";
+      } else {
+        prev.style.backgroundImage = "";
+        prev.textContent = "＋";
+      }
+    });
+
+    // Public marketing page: every applicant gets (or signs into) their OWN
+    // business account. We deliberately do NOT reuse any pre-existing browser
+    // session — doing so could convert a signed-in admin/customer into a
+    // business owner. The submit handler always signs in as the entered email
+    // before calling submitBusinessApplication.
+
+    const PHONE_OK = (v) => {
+      const raw = String(v || "").trim();
+      if (!raw || /[A-Za-z]/.test(raw)) return false;
+      const norm = raw.replace(/[\s().-]/g, "");
+      if (!/^\+?\d+$/.test(norm)) return false;
+      const digits = norm.replace(/\D/g, "");
+      return digits.length >= 7 && digits.length <= 15;
+    };
+    const EMAIL_OK = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
+
+    function showError(text) {
+      msg.className = "form-msg err";
+      msg.textContent = text;
+      scrollToPanel(msg);
+    }
+    function clearMsg() { msg.className = "form-msg"; msg.textContent = ""; }
+
+    async function uploadLogo(businessId) {
+      const ext = (logoFile.name.split(".").pop() || "jpg").toLowerCase();
+      const safe = ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg";
+      const path = "businesses/" + businessId + "/profile/profile_" + Date.now() + "." + safe;
+      const r = storageRef(storage, path);
+      await uploadBytes(r, logoFile, { contentType: logoFile.type || "image/jpeg" });
+      return { path, url: await getDownloadURL(r) };
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearMsg();
+
+      const ownerName = $("ownerName").value.trim();
+      const ownerPhone = $("ownerPhone").value.trim();
+      const email = $("email").value.trim();
+      const password = $("password").value;
+      const confirmPassword = $("confirmPassword").value;
+      const businessName = $("businessName").value.trim();
+      const businessPhone = $("businessPhone").value.trim();
+      const businessEmail = $("businessEmail").value.trim();
+      const businessWebsite = $("businessWebsite").value.trim();
+      const selectedCountry = businessCountry.value.trim();
+      const selectedCity = businessCity.value.trim();
+      const serviceNote = $("serviceNote").value.trim();
+      const services = selectedServices();
+
+      // Client-side validation (server re-validates everything)
+      if (!ownerName) return showError("Please enter the owner's full name.");
+      if (!PHONE_OK(ownerPhone)) return showError("Enter a valid owner phone number (7–15 digits).");
+      if (!EMAIL_OK(email)) return showError("Enter a valid email address.");
+      if (password.length < 6) return showError("Password must be at least 6 characters.");
+      if (password !== confirmPassword) return showError("Passwords do not match.");
+      if (!services.length) return showError("Choose at least one business service.");
+      if (!businessName) return showError("Please enter your business name.");
+      if (!selectedCountry) return showError("Select your business country.");
+      if (!selectedCity) return showError("Select your business city.");
+      if (businessPhone && !PHONE_OK(businessPhone)) return showError("Enter a valid business phone number, or leave it blank.");
+      if (businessEmail && !EMAIL_OK(businessEmail)) return showError("Enter a valid business email, or leave it blank.");
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Submitting…";
+
+      try {
+        // 1. Always create (or sign into) the applicant's OWN account, and make
+        //    it the active session before applying. This guarantees the
+        //    application is filed under the applicant — never a pre-existing
+        //    admin/customer session that happened to be in the browser.
+        try {
+          const createUser = httpsCallable(functions, "createCustomerUser");
+          const res = await createUser({ email, password, fullName: ownerName, phone: ownerPhone });
+          const signInEmail = (res.data && res.data.email) ? res.data.email : email;
+          await signInWithEmailAndPassword(auth, signInEmail, password);
+        } catch (err) {
+          // Account may already exist — sign the applicant in with the password they entered.
+          if (err && (err.code === "functions/already-exists" || /already/i.test(err.message || ""))) {
+            try {
+              await signInWithEmailAndPassword(auth, email, password);
+            } catch (signInErr) {
+              throw new Error("An account already exists for this email. Enter the correct password to continue.");
+            }
+          } else {
+            throw err;
+          }
+        }
+        const currentUser = auth.currentUser;
+
+        // 2. Submit the business application (same callable the mobile app uses)
+        const submit = httpsCallable(functions, "submitBusinessApplication");
+        const appRes = await submit({
+          ownerName,
+          ownerPhone,
+          businessName,
+          businessPhone,
+          businessEmail: businessEmail || (currentUser && currentUser.email) || email,
+          businessWebsite,
+          enabledServices: services,
+          serviceNote,
+          addressLine1: "",
+          city: selectedCity,
+          country: selectedCountry,
+          state: selectedCountry,
+          postalCode: "",
+        });
+        const businessId = appRes.data && appRes.data.businessId;
+
+        // 3. Optional logo upload (mirrors mobile: only when an image was chosen)
+        if (businessId && logoFile) {
+          try {
+            const up = await uploadLogo(businessId);
+            const updateProfile = httpsCallable(functions, "updateBusinessProfile");
+            await updateProfile({
+              businessId,
+              name: businessName,
+              phone: businessPhone,
+              email: businessEmail || (currentUser && currentUser.email) || email,
+              website: businessWebsite,
+              enabledServices: services,
+              profileImageUrl: up.url,
+              profileImagePath: up.path,
+              serviceNote,
+              addressLine1: "",
+              city: selectedCity,
+              country: selectedCountry,
+              state: selectedCountry,
+              postalCode: "",
+              carHoldPricingMode: "flat",
+              carHoldFlatFee: 500,
+              carHoldDailyRate: 100,
+              carHoldMaxDays: 14,
+            });
+          } catch (imgErr) {
+            console.warn("Logo upload failed (application still submitted):", imgErr);
+          }
+        }
+
+        // 4. Success
+        form.style.display = "none";
+        $("applySuccess").style.display = "block";
+        scrollToPanel($("applySuccess"));
+      } catch (err) {
+        console.error("Business application failed:", err);
+        const friendly = (err && err.message) ? err.message.replace(/^functions\/[a-z-]+:?\s*/i, "") : "Something went wrong. Please try again.";
+        showError(friendly);
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Submit application";
+      }
+    });
+  </script>
+</body>
+</html>
