@@ -22,13 +22,13 @@
     .apply-card input[type=text],.apply-card input[type=email],.apply-card input[type=tel],.apply-card input[type=password],.apply-card input[type=url],.apply-card select,.apply-card textarea{width:100%; margin-top:7px; padding:13px 14px; border:1.5px solid var(--line); border-radius:12px; font:inherit; font-size:15px; background:var(--bg); color:var(--ink); transition:border-color .15s ease, box-shadow .15s ease}
     .apply-card input:focus,.apply-card select:focus,.apply-card textarea:focus{outline:none; border-color:var(--teal); box-shadow:0 0 0 4px rgba(13,148,136,.14); background:#fff}
     .apply-card textarea{resize:vertical}
-    .svc-list{display:grid; gap:12px}
-    .svc{display:flex; gap:12px; align-items:flex-start; border:1.5px solid var(--line); border-radius:14px; padding:14px; cursor:pointer; transition:border-color .15s ease, background .15s ease}
-    .svc:hover{border-color:var(--teal)}
-    .svc.on{border-color:var(--teal); background:rgba(13,148,136,.06)}
-    .svc input{margin-top:3px; width:18px; height:18px; accent-color:var(--teal)}
-    .svc .svc-txt b{display:block; color:var(--ink); font-size:15px}
-    .svc .svc-txt span{color:var(--ink-soft); font-size:13.5px}
+    .partner-service-list{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px}
+    .partner-service-choice{position:relative; display:flex; min-height:78px; gap:12px; align-items:flex-start; border:1.5px solid var(--line); border-radius:14px; padding:14px; cursor:pointer; background:var(--bg); transition:border-color .15s ease, background .15s ease, box-shadow .15s ease}
+    .partner-service-choice:hover{border-color:var(--teal)}
+    .partner-service-choice.on{border-color:var(--teal); background:rgba(13,148,136,.06); box-shadow:0 0 0 3px rgba(13,148,136,.08)}
+    .partner-service-choice input{flex:0 0 auto; margin-top:3px; width:18px; height:18px; accent-color:var(--teal)}
+    .partner-service-text b{display:block; color:var(--ink); font-size:15px; line-height:1.25}
+    .partner-service-text span{display:block; color:var(--ink-soft); font-size:13.5px; line-height:1.35; margin-top:3px}
     .logo-row{display:flex; align-items:center; gap:16px}
     .logo-prev{width:64px; height:64px; border-radius:14px; object-fit:cover; border:1px solid var(--line); background:var(--bg); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:22px}
     .form-msg{display:none; padding:13px 15px; border-radius:12px; font-size:14px; font-weight:600; margin-bottom:16px}
@@ -42,7 +42,7 @@
     .hint{color:var(--muted); font-size:12px; margin-top:6px}
     .req{color:#dc2626}
     .signed-note{background:rgba(13,148,136,.06); border:1px solid rgba(13,148,136,.25); border-radius:12px; padding:12px 14px; font-size:14px; color:var(--ink-soft); margin-bottom:16px}
-    @media (max-width:680px){ .apply-card .field-row{grid-template-columns:1fr} }
+    @media (max-width:680px){ .apply-card .field-row,.partner-service-list{grid-template-columns:1fr} }
   </style>
 </head>
 <body>
@@ -128,7 +128,7 @@
       <div class="apply-card">
         <h2>🧩 Services you offer</h2>
         <p class="card-sub">Pick everything your business can provide. You can adjust these later.</p>
-        <div class="svc-list" id="svcList"></div>
+        <div class="partner-service-list" id="svcList"></div>
       </div>
 
       <div class="apply-card">
@@ -270,10 +270,10 @@
     const svcList = $("svcList");
     SERVICES.forEach((s) => {
       const lab = document.createElement("label");
-      lab.className = "svc on";
+      lab.className = "partner-service-choice on";
       lab.innerHTML =
         '<input type="checkbox" value="' + s.key + '" checked />' +
-        '<span class="svc-txt"><b>' + s.label + '</b><span>' + s.desc + '</span></span>';
+        '<span class="partner-service-text"><b>' + s.label + '</b><span>' + s.desc + '</span></span>';
       const cb = lab.querySelector("input");
       cb.addEventListener("change", () => lab.classList.toggle("on", cb.checked));
       svcList.appendChild(lab);
