@@ -29,6 +29,10 @@ function storageFor(uid) {
     testEnv.unauthenticatedContext().storage();
 }
 
+function storageForToken(uid, token) {
+  return testEnv.authenticatedContext(uid, token).storage();
+}
+
 function imageBytes(size = 16) {
   return Buffer.alloc(size, 1);
 }
@@ -320,6 +324,13 @@ describe("featured business logo Storage rules", () => {
 
   it("allows platform admins and owning business owners to upload logos",
       async () => {
+        await assertSucceeds(
+            putLogo(
+                storageForToken("admin-email-only", {email: "admin@gmail.com"}),
+                "biz_a",
+                "admin-email.png",
+            ),
+        );
         await assertSucceeds(
             putLogo(storageFor("super-admin"), "biz_a", "super.png"),
         );
