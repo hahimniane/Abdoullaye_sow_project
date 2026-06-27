@@ -45,6 +45,8 @@ Cloud Functions commands from `functions/package.json`:
 ```sh
 cd functions
 npm run lint
+npm run test:unit
+npm run test:rules
 npm run serve
 ```
 
@@ -64,7 +66,8 @@ Also available: `npm run shell`, `npm run deploy`, and `npm run logs`. Do not de
 - Prefer pure model/service tests when possible.
 - If a Firebase boundary is hard-wired, isolate logic behind a service boundary before testing.
 - Do not run tests against production Firebase.
-- For emulator-backed testing, document the exact command here once introduced.
+- For emulator-backed Firestore rules testing, run
+  `cd my_flutter_app/functions && npm run test:rules`.
 
 ## Regression Checklist
 
@@ -85,3 +88,27 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
 
 - The iOS 26.5 simulator requires `arm64`; do not exclude simulator `arm64` in `ios/Podfile`. The old `google_mlkit_text_recognition` / MLKit `MLImage.framework` pod only provided an `x86_64` simulator slice and an `arm64` device slice, so it could not run on this simulator runtime. After iOS Podfile or plugin dependency changes, run `pod install` from `my_flutter_app/ios`, then verify with `flutter run -d 96729E62-B230-4C2E-A307-2AEFD8DE8F3A`.
 - Keep `build/**` excluded in `analysis_options.yaml`. Flutter's Swift Package Manager integration can place plugin source under `build/ios/SourcePackages` and `build/macos/SourcePackages`; without the exclusion, `flutter analyze` may fail on generated third-party package examples/tests instead of app code.
+- For production Cloud Functions audits, keep `firebase-admin` on a Firebase Functions-compatible major and use the package-level `uuid` override in `functions/package.json`; `firebase-admin@14` clears the advisory directly but currently conflicts with `firebase-functions@6/7` peer ranges. `firebase-functions-test` was unused and removed because it pulled vulnerable Jest-only dev dependencies.
+- For Website featured-business work, regression-test both authorization planes:
+  UI manage gating plus Firebase Storage/Firestore/callable rules. Logo uploads
+  under `businessLogos/{businessId}/...` should allow super admins and
+  website-manage admins, reject non-image or oversized files, and public
+  country/city fields should be selectable rather than free text.
+- Firestore rules tests for business-scoped collections should cover both point
+  reads and query/list reads. Staff `businessPermissions` are section-scoped for
+  writes, and missing/empty/non-list permissions intentionally mean full staff
+  access under current rules.
+- Business dashboard listing queries must remain uncapped for `cars` while still
+  scoped by `businessId`; if a business cannot see older posted cars, first
+  check whether those legacy car documents are missing the matching
+  `businessId` or were assigned to the wrong/default business. Backfill helper changes should run
+  `cd my_flutter_app/functions && npm run test:unit`. The local fallback script
+  is `npm run backfill:cars -- ...`; it defaults to dry-run and requires
+  explicit `--commit` for writes.
+- Car listing image uploads must use `cars/{businessId}/{carId}/...`; keep
+  legacy `cars/{carId}/...` image URLs readable but deny legacy writes. Storage
+  rules tests should cover owner, listing staff, admin, cross-business,
+  unauthenticated, non-image, and oversized upload cases.
+- For top-level business-owned documents, add takeover regressions: updates must
+  not authorize against a changed `request.resource.data.businessId` without also
+  preserving the existing `resource.data.businessId`.

@@ -2150,6 +2150,24 @@ abstract class AppLocalizations {
   /// **'Country Code'**
   String get countryCode;
 
+  /// No description provided for @selectBusinessCountry.
+  ///
+  /// In en, this message translates to:
+  /// **'Select your business country'**
+  String get selectBusinessCountry;
+
+  /// No description provided for @selectBusinessCity.
+  ///
+  /// In en, this message translates to:
+  /// **'Select your business city'**
+  String get selectBusinessCity;
+
+  /// No description provided for @selectCountryFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Select country first'**
+  String get selectCountryFirst;
+
   /// No description provided for @seedDefaultCountries.
   ///
   /// In en, this message translates to:
@@ -2233,6 +2251,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Business profile saved.'**
   String get businessProfileSaved;
+
+  /// No description provided for @featureBlurbRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a short blurb under 140 characters.'**
+  String get featureBlurbRequired;
+
+  /// No description provided for @featureConsentRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Consent is required before requesting.'**
+  String get featureConsentRequired;
+
+  /// No description provided for @featureLogoRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload a logo before requesting.'**
+  String get featureLogoRequired;
+
+  /// No description provided for @featureRequestSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Featuring request sent for admin review.'**
+  String get featureRequestSent;
+
+  /// No description provided for @featuredOnWebsite.
+  ///
+  /// In en, this message translates to:
+  /// **'Featured on the website'**
+  String get featuredOnWebsite;
+
+  /// No description provided for @featureApprovedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your business is approved for public featuring.'**
+  String get featureApprovedMessage;
+
+  /// No description provided for @featureRequestedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your request is waiting for admin review.'**
+  String get featureRequestedMessage;
+
+  /// No description provided for @featureDefaultMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Request a public marketing card on Laawol Digital.'**
+  String get featureDefaultMessage;
+
+  /// No description provided for @featureAdminNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin note: {note}'**
+  String featureAdminNote(Object note);
+
+  /// No description provided for @uploadLogo.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload logo'**
+  String get uploadLogo;
+
+  /// No description provided for @changeLogo.
+  ///
+  /// In en, this message translates to:
+  /// **'Change logo'**
+  String get changeLogo;
+
+  /// No description provided for @shortPublicBlurb.
+  ///
+  /// In en, this message translates to:
+  /// **'Short public blurb'**
+  String get shortPublicBlurb;
+
+  /// No description provided for @shortPublicBlurbHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'One sentence customers can safely see.'**
+  String get shortPublicBlurbHelper;
+
+  /// No description provided for @featureConsentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'I consent to this business being featured publicly.'**
+  String get featureConsentLabel;
+
+  /// No description provided for @sendingFeatureRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending request'**
+  String get sendingFeatureRequest;
+
+  /// No description provided for @requestFeaturing.
+  ///
+  /// In en, this message translates to:
+  /// **'Request featuring'**
+  String get requestFeaturing;
 
   /// No description provided for @noBusinessProfileAssigned.
   ///

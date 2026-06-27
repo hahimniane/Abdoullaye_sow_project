@@ -1,15 +1,32 @@
-const {onCall, HttpsError} = require("firebase-functions/v2/https");
+const {onCall, onRequest, HttpsError} = require("firebase-functions/v2/https");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
-const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
+const {
+  onDocumentDeleted,
+  onDocumentUpdated,
+} = require("firebase-functions/v2/firestore");
 const {defineSecret} = require("firebase-functions/params");
+const crypto = require("crypto");
 const admin = require("firebase-admin");
 const logger = require("firebase-functions/logger");
 const {ALL_COUNTRIES} = require("./country_catalog");
+const {
+  buildBusinessCarBackfillPayload,
+  buildBusinessCarBackfillResult,
+  eligibleBackfillDocs,
+  normalizeBackfillCarIds,
+} = require("./business_car_backfill");
+const {
+  buildFeaturedBusinessPayload,
+  buildFeaturingRequestUpdate,
+} = require("./featured_business");
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
 
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
+const businessProPriceId = defineSecret("BUSINESS_PRO_PRICE_ID");
+const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
+const anthropicApiKey = defineSecret("ANTHROPIC_API_KEY");
 const googleMapsApiKey = defineSecret("GOOGLE_MAPS_API_KEY");
 const DEPOSIT_CURRENCY = "usd";
 const DEFAULT_HOLD_MAX_DAYS = 14;
@@ -25,7 +42,77 @@ const VALID_BUSINESS_SERVICES = [
   "carParking",
   "carTransport",
 ];
+const VALID_BUSINESS_PERMISSIONS = [
+  "profile",
+  "listings",
+  "purchases",
+  "barrels",
+  "transport",
+  "parking",
+  "destinations",
+  "people",
+  "support",
+  "growth",
+];
+const VALID_PLATFORM_ADMIN_ROLES = [
+  "superAdmin",
+  "operationsManager",
+  "financeManager",
+  "supportAdmin",
+  "contentManager",
+];
+const ADMIN_ROLE_CAPABILITIES = {
+  superAdmin: [
+    "users",
+    "businesses",
+    "marketplace",
+    "operations",
+    "finance",
+    "support",
+    "website",
+  ],
+  operationsManager: [
+    "businesses",
+    "marketplace",
+    "operations",
+    "support",
+    "website",
+  ],
+  financeManager: ["finance", "support"],
+  supportAdmin: ["support"],
+  contentManager: ["website"],
+};
+const ADMIN_BUSINESS_STATUSES = [
+  "pending",
+  "approved",
+  "suspended",
+  "changes_requested",
+  "rejected",
+];
+const ADMIN_LISTING_STATUSES = ["active", "inactive", "reserved", "sold"];
+const ADMIN_OPERATION_STATUSES = [
+  "pending",
+  "active",
+  "scheduled",
+  "in_progress",
+  "completed",
+  "cancelled",
+  "sold",
+  "reserved",
+  "inactive",
+];
+const ADMIN_PURCHASE_STATUSES = [
+  "pending",
+  "viewing_scheduled",
+  "reserved",
+  "completed",
+  "cancelled",
+  "no_show",
+  "refunded",
+  "forfeited",
+];
 const DEFAULT_BUSINESS_SERVICES = [...VALID_BUSINESS_SERVICES];
+const DEFAULT_BUSINESS_ADVISOR_MODEL = "claude-fable-5";
 function requireAuth(request) {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
@@ -53,6 +140,7 @@ exports.ensurePlatformAdminProfile = onCall(async (request) => {
         businessName: admin.firestore.FieldValue.delete(),
         businessServices: admin.firestore.FieldValue.delete(),
         platformAdmin: true,
+        adminRole: "superAdmin",
         updatedAt: now,
         createdAt: now,
       },
@@ -343,13 +431,544 @@ exports.notifyBusinessApplicationStatus = onDocumentUpdated(
     },
 );
 
+exports.unpublishSuspendedFeaturedBusiness = onDocumentUpdated(
+    "businesses/{businessId}",
+    async (event) => {
+      const before = event.data.before.data() || {};
+      const after = event.data.after.data() || {};
+      const status = String(after.status || "").toLowerCase();
+      const wasFeatured = String(before.featureStatus || "") === "approved" ||
+        String(after.featureStatus || "") === "approved";
+      if (!wasFeatured && status !== "suspended" && status !== "rejected") {
+        return;
+      }
+      if (status === "approved") return;
+      await admin.firestore()
+          .collection("featuredBusinesses")
+          .doc(event.params.businessId)
+          .delete();
+      await event.data.after.ref.set({
+        featureStatus: "none",
+        featureNote:
+          "Automatically unpublished because the business is not approved.",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, {merge: true});
+    },
+);
+
+exports.unpublishDeletedFeaturedBusiness = onDocumentDeleted(
+    "businesses/{businessId}",
+    async (event) => {
+      await admin.firestore()
+          .collection("featuredBusinesses")
+          .doc(event.params.businessId)
+          .delete();
+    },
+);
+
 async function getUserProfile(uid) {
   const doc = await admin.firestore().collection("users").doc(uid).get();
   if (!doc.exists) {
     throw new HttpsError("permission-denied", "User profile not found");
   }
-  return {id: doc.id, ...doc.data()};
+  const user = {id: doc.id, ...doc.data()};
+  if (user.role === "admin") {
+    const role = platformAdminRole(user);
+    if (role === "superAdmin") {
+      user.effectiveCapabilities = [
+        "users", "businesses", "marketplace",
+        "operations", "finance", "support", "website",
+      ];
+      user.effectiveServices = null; // null = all services
+    } else {
+      const config = await loadPermissionsConfig();
+      const roleConfig = roleConfigFor(role, config);
+      if (roleConfig) {
+        user.effectiveCapabilities =
+          capabilitiesFromSections(roleConfig.sections);
+        const svc = roleConfig.services;
+        user.effectiveServices =
+          (Array.isArray(svc) && svc.length) ? svc : null;
+      } else {
+        user.effectiveCapabilities = [];
+        user.effectiveServices = [];
+      }
+    }
+  }
+  return user;
 }
+
+// ---- Config-driven RBAC (matches admin_web Settings) ----
+const DEFAULT_ROLE_CONFIGS = {
+  operationsManager: {
+    sections: {
+      people: "view", businesses: "manage", marketplace: "manage",
+      operations: "manage", finance: "none", support: "manage",
+      website: "manage",
+    },
+    services: [],
+  },
+  financeManager: {
+    sections: {
+      people: "view", businesses: "none", marketplace: "none",
+      operations: "view", finance: "manage", support: "manage",
+      website: "none",
+    },
+    services: [],
+  },
+  supportAdmin: {
+    sections: {
+      people: "view", businesses: "view", marketplace: "view",
+      operations: "view", finance: "none", support: "manage",
+      website: "none",
+    },
+    services: [],
+  },
+  contentManager: {
+    sections: {
+      people: "view", businesses: "view", marketplace: "none",
+      operations: "none", finance: "none", support: "none",
+      website: "manage",
+    },
+    services: [],
+  },
+};
+const SECTION_TO_CAPABILITY = {
+  people: "users", businesses: "businesses", marketplace: "marketplace",
+  operations: "operations", finance: "finance", support: "support",
+  website: "website",
+};
+const COLLECTION_TO_SERVICE = {
+  barrelShipments: "barrelShipping",
+  transportRequests: "carTransport",
+  parkedCars: "carParking",
+  cars: "carSales",
+  carPurchases: "carSales",
+};
+
+let _permConfigCache = null;
+let _permConfigAt = 0;
+async function loadPermissionsConfig() {
+  if (_permConfigCache && Date.now() - _permConfigAt < 15000) {
+    return _permConfigCache;
+  }
+  try {
+    const snap = await admin.firestore()
+        .doc("platformConfig/permissions").get();
+    _permConfigCache = snap.exists ? (snap.data() || {}) : {};
+  } catch (error) {
+    logger.warn("Failed to load permissions config", error);
+    _permConfigCache = {};
+  }
+  _permConfigAt = Date.now();
+  return _permConfigCache;
+}
+
+function roleConfigFor(roleKey, config) {
+  const roles = (config && config.roles) || {};
+  return roles[roleKey] || DEFAULT_ROLE_CONFIGS[roleKey] || null;
+}
+
+// A role is assignable if it's the super admin, a built-in role, or a custom
+// role defined in the live config.
+async function assertAssignableRole(adminRole) {
+  if (adminRole === "superAdmin" ||
+      VALID_PLATFORM_ADMIN_ROLES.includes(adminRole)) {
+    return;
+  }
+  const config = await loadPermissionsConfig();
+  const roles = (config && config.roles) || {};
+  if (roles[adminRole]) return;
+  throw new HttpsError("invalid-argument", `Unknown admin role: ${adminRole}`);
+}
+
+function capabilitiesFromSections(sections) {
+  const caps = [];
+  for (const [section, level] of Object.entries(sections || {})) {
+    if (level === "manage" && SECTION_TO_CAPABILITY[section]) {
+      caps.push(SECTION_TO_CAPABILITY[section]);
+    }
+  }
+  return caps;
+}
+
+function hasServiceAccess(user, serviceId) {
+  if (user.role !== "admin") return false;
+  if (user.effectiveServices == null) return true; // all services
+  if (!serviceId) return true;
+  return user.effectiveServices.includes(serviceId);
+}
+
+function requireServiceAccessForCollection(user, collectionName, message) {
+  const serviceId = COLLECTION_TO_SERVICE[collectionName];
+  if (serviceId && !hasServiceAccess(user, serviceId)) {
+    throw new HttpsError(
+        "permission-denied",
+        message || "Your role is not allowed to manage this service",
+    );
+  }
+}
+
+exports.updateCurrentAdminProfile = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const current = await getUserProfile(uid);
+      if (current.role !== "admin") {
+        throw new HttpsError(
+            "permission-denied",
+            "Only platform admins can update an admin profile",
+        );
+      }
+
+      const fullName = String(request.data?.fullName || "").trim();
+      const phone = String(request.data?.phone || "").trim();
+      const profileImageUrl =
+        String(request.data?.profileImageUrl || "").trim();
+      const profileImagePath =
+        String(request.data?.profileImagePath || "").trim();
+      if (phone) {
+        requireValidPhoneNumber(phone, "Phone");
+      }
+
+      const authUser = await admin.auth().getUser(uid);
+      const phoneVerified = Boolean(
+          phone &&
+          authUser.phoneNumber &&
+          authUser.phoneNumber === phone &&
+          request.data?.phoneVerified === true,
+      );
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      const update = {
+        fullName,
+        phone,
+        profileImageUrl,
+        profileImagePath,
+        phoneVerified,
+        updatedAt: now,
+        updatedBy: uid,
+      };
+      if (phoneVerified) {
+        update.phoneVerifiedAt = now;
+      } else {
+        update.phoneVerifiedAt = admin.firestore.FieldValue.delete();
+      }
+
+      const db = admin.firestore();
+      const batch = db.batch();
+      batch.set(db.collection("users").doc(uid), update, {merge: true});
+      setAdminAuditLog(batch, {
+        action: "admin_profile_updated",
+        actorUid: uid,
+        targetCollection: "users",
+        targetId: uid,
+        targetLabel: current.email || fullName || uid,
+        nextValue: phoneVerified ? "phone_verified" : "profile_updated",
+      });
+      await batch.commit();
+
+      const authUpdate = {};
+      if (fullName) authUpdate.displayName = fullName;
+      if (profileImageUrl) authUpdate.photoURL = profileImageUrl;
+      if (Object.keys(authUpdate).length > 0) {
+        await admin.auth().updateUser(uid, authUpdate);
+      }
+
+      return {
+        success: true,
+        profile: {
+          ...current,
+          fullName,
+          phone,
+          profileImageUrl,
+          profileImagePath,
+          phoneVerified,
+        },
+      };
+    },
+);
+
+function platformAdminRole(user) {
+  if (user.role !== "admin") return "";
+  // Any assigned adminRole (built-in or custom) is used as-is; an admin with
+  // no role is treated as the legacy super admin.
+  const role = String(user.adminRole || "").trim();
+  return role || "superAdmin";
+}
+
+function hasAdminCapability(user, capability) {
+  if (user.role !== "admin") return false;
+  // Prefer the effective capabilities resolved from the live config
+  // (attached by getUserProfile); fall back to the static defaults.
+  if (Array.isArray(user.effectiveCapabilities)) {
+    return user.effectiveCapabilities.includes(capability);
+  }
+  const adminRole = platformAdminRole(user);
+  if (adminRole === "superAdmin") return true;
+  return (ADMIN_ROLE_CAPABILITIES[adminRole] || []).includes(capability);
+}
+
+function requireAdminCapability(user, capability, message) {
+  if (!hasAdminCapability(user, capability)) {
+    throw new HttpsError(
+        "permission-denied",
+        message || "Platform administrator permission required",
+    );
+  }
+}
+
+function requireSuperAdmin(user, message) {
+  if (platformAdminRole(user) !== "superAdmin") {
+    throw new HttpsError(
+        "permission-denied",
+        message || "Only super admins can perform this action",
+    );
+  }
+}
+
+function statusConfigForCollection(collectionName) {
+  switch (collectionName) {
+    case "businesses":
+      return {
+        statusField: "status",
+        allowedStatuses: ADMIN_BUSINESS_STATUSES,
+        capability: "businesses",
+      };
+    case "cars":
+      return {
+        statusField: "status",
+        allowedStatuses: ADMIN_LISTING_STATUSES,
+        capability: "marketplace",
+      };
+    case "barrelShipments":
+    case "transportRequests":
+    case "parkedCars":
+      return {
+        statusField: "status",
+        allowedStatuses: ADMIN_OPERATION_STATUSES,
+        capability: "operations",
+      };
+    case "carPurchases":
+      return {
+        statusField: "purchaseStatus",
+        allowedStatuses: ADMIN_PURCHASE_STATUSES,
+        capability: "operations",
+      };
+    default:
+      throw new HttpsError(
+          "invalid-argument",
+          "This collection cannot be managed from the admin console",
+      );
+  }
+}
+
+function statusUpdatePayload({statusField, previousStatus, nextStatus, uid}) {
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  return {
+    [statusField]: nextStatus,
+    updatedAt: now,
+    updatedBy: uid,
+    [`${statusField}UpdatedAt`]: now,
+    [`${statusField}UpdatedBy`]: uid,
+    [`${statusField}PreviousValue`]: String(previousStatus || ""),
+  };
+}
+
+function adminRecordLabel(collectionName, id, data = {}) {
+  return String(
+      data.title ||
+      data.trackingCode ||
+      data.carTitle ||
+      data.name ||
+      data.businessName ||
+      id,
+  );
+}
+
+function setAdminAuditLog(batch, {
+  action,
+  actorUid,
+  targetCollection,
+  targetId,
+  targetLabel,
+  statusField,
+  previousValue,
+  nextValue,
+}) {
+  const ref = admin.firestore().collection("adminAuditLogs").doc();
+  const payload = {
+    action,
+    actorUid,
+    targetCollection,
+    targetId,
+    targetPath: `${targetCollection}/${targetId}`,
+    targetLabel: String(targetLabel || targetId),
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  if (statusField) payload.statusField = statusField;
+  if (previousValue !== undefined) payload.previousValue = previousValue;
+  if (nextValue !== undefined) payload.nextValue = nextValue;
+  batch.set(ref, payload);
+}
+
+exports.publishFeaturedBusiness = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const adminUid = requireAuth(request);
+      const adminUser = await getUserProfile(adminUid);
+      requireAdminCapability(
+          adminUser,
+          "website",
+          "Only website admins can publish featured businesses",
+      );
+
+      const businessId = String(request.data?.businessId || "").trim();
+      if (!businessId) {
+        throw new HttpsError("invalid-argument", "Business is required");
+      }
+
+      const db = admin.firestore();
+      const businessRef = db.collection("businesses").doc(businessId);
+      const businessDoc = await businessRef.get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+      const business = businessDoc.data() || {};
+      const feature = buildFeaturedBusinessPayload({
+        businessId,
+        business,
+        data: request.data || {},
+        adminUid,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        validateWebsite: requireValidWebsite,
+      });
+      if (feature.missing) {
+        const note = `Missing: ${feature.missing.join(", ")}`;
+        await businessRef.set({
+          featureStatus: "requested",
+          featureNote: note,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedBy: adminUid,
+        }, {merge: true});
+        throw new HttpsError("failed-precondition", note);
+      }
+
+      const batch = db.batch();
+      batch.set(
+          db.collection("featuredBusinesses").doc(businessId),
+          feature.payload,
+          {merge: true},
+      );
+      batch.set(businessRef, {
+        marketingBlurb: feature.payload.blurb,
+        featureConsent: true,
+        featureStatus: "approved",
+        featureNote: admin.firestore.FieldValue.delete(),
+        featureOrder: feature.payload.order,
+        logoUrl: feature.payload.logoUrl,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedBy: adminUid,
+      }, {merge: true});
+      setAdminAuditLog(batch, {
+        action: "featured_business_published",
+        actorUid: adminUid,
+        targetCollection: "featuredBusinesses",
+        targetId: businessId,
+        targetLabel: feature.payload.displayName,
+        nextValue: feature.payload.active ? "active" : "inactive",
+      });
+      await batch.commit();
+      return {success: true, businessId};
+    },
+);
+
+exports.unpublishFeaturedBusiness = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const adminUid = requireAuth(request);
+      const adminUser = await getUserProfile(adminUid);
+      requireAdminCapability(
+          adminUser,
+          "website",
+          "Only website admins can unpublish featured businesses",
+      );
+      const businessId = String(request.data?.businessId || "").trim();
+      if (!businessId) {
+        throw new HttpsError("invalid-argument", "Business is required");
+      }
+
+      const db = admin.firestore();
+      const batch = db.batch();
+      batch.delete(db.collection("featuredBusinesses").doc(businessId));
+      batch.set(db.collection("businesses").doc(businessId), {
+        featureStatus: "none",
+        featureNote: admin.firestore.FieldValue.delete(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedBy: adminUid,
+      }, {merge: true});
+      setAdminAuditLog(batch, {
+        action: "featured_business_unpublished",
+        actorUid: adminUid,
+        targetCollection: "featuredBusinesses",
+        targetId: businessId,
+      });
+      await batch.commit();
+      return {success: true, businessId};
+    },
+);
+
+exports.requestFeaturing = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const businessId = String(request.data?.businessId || "").trim();
+      if (!businessId) {
+        throw new HttpsError("invalid-argument", "Business is required");
+      }
+      const user = await requireBusinessManager(callerUid, businessId);
+      if (user.role === "staff") {
+        throw new HttpsError(
+            "permission-denied",
+            "Only business owners can request featuring",
+        );
+      }
+      const businessRef = admin.firestore()
+          .collection("businesses")
+          .doc(businessId);
+      const businessDoc = await businessRef.get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+      const requestUpdate = buildFeaturingRequestUpdate({
+        data: request.data || {},
+        business: businessDoc.data() || {},
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        updatedBy: callerUid,
+        deleteValue: admin.firestore.FieldValue.delete(),
+      });
+      if (requestUpdate.missing) {
+        const note = `Missing: ${requestUpdate.missing.join(", ")}`;
+        const code = requestUpdate.missing.includes("feature consent") ?
+          "failed-precondition" :
+          "invalid-argument";
+        throw new HttpsError(code, note);
+      }
+      await businessRef.set(requestUpdate.update, {merge: true});
+      return {success: true, businessId};
+    },
+);
 
 function canManageBusiness(user, businessId) {
   if (user.role === "admin") return true;
@@ -365,6 +984,13 @@ function normalizeBusinessServices(raw, fallback = DEFAULT_BUSINESS_SERVICES) {
     incoming.includes(service),
   );
   return services.length ? services : [...fallback];
+}
+
+function normalizeBusinessPermissions(raw) {
+  const incoming = Array.isArray(raw) ? raw : [];
+  return VALID_BUSINESS_PERMISSIONS.filter((permission) =>
+    incoming.includes(permission),
+  );
 }
 
 function deliveryEstimateFromCountry(country) {
@@ -532,6 +1158,43 @@ function assertPaidHoldActionable(purchase) {
   }
 }
 
+const TERMINAL_PURCHASE_STATUSES = [
+  "completed", "no_show", "cancelled", "refunded", "forfeited",
+];
+
+function isTerminalPurchaseStatus(status) {
+  return TERMINAL_PURCHASE_STATUSES.includes(String(status || ""));
+}
+
+function purchaseIsViewing(purchase) {
+  if (purchase.paymentType === "viewing_reservation") return true;
+  return Boolean(purchase.appointmentStart) &&
+    Number(purchase.depositAmount || 0) === 0;
+}
+
+function toMillis(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (typeof value === "object" && typeof value.seconds === "number") {
+    return value.seconds * 1000;
+  }
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+// A no-show may only be recorded once the hold period has actually ended — this
+// stops a business from forfeiting a customer's deposit early.
+function assertHoldLapsed(purchase) {
+  if (purchase.purchaseStatus === "hold_review_required") return;
+  if (purchase.holdReviewRequiredAt) return;
+  const holdUntilMs = toMillis(purchase.holdUntilDate);
+  if (holdUntilMs && holdUntilMs <= Date.now()) return;
+  throw new HttpsError(
+      "failed-precondition",
+      "A no-show can only be marked after the hold period has ended.",
+  );
+}
+
 function reliabilitySummaryFromUser(user) {
   return user?.carBuyerReliability || {
     paidHolds: 0,
@@ -552,6 +1215,24 @@ async function requireBusinessManager(uid, businessId) {
   const user = await getUserProfile(uid);
   if (!canManageBusiness(user, businessId)) {
     throw new HttpsError("permission-denied", "Business access denied");
+  }
+  return user;
+}
+
+function hasBusinessPermission(user, section) {
+  if (user.role === "admin" || user.role === "businessOwner") return true;
+  const permissions = Array.isArray(user.businessPermissions) ?
+    user.businessPermissions : [];
+  return permissions.length === 0 || permissions.includes(section);
+}
+
+async function requireBusinessPermission(uid, businessId, section) {
+  const user = await requireBusinessManager(uid, businessId);
+  if (!hasBusinessPermission(user, section)) {
+    throw new HttpsError(
+        "permission-denied",
+        "This staff account is not allowed to manage this section",
+    );
   }
   return user;
 }
@@ -646,6 +1327,7 @@ exports.listActiveBarrelDestinationOptions = onCall(
               isActive: country.isActive === true,
               sortOrder: Number(country.sortOrder || 0),
               barrelShippingPrice: price,
+              destinationNote: country.destinationNote || "",
               ...deliveryEstimateFromCountry(country),
             },
           });
@@ -719,6 +1401,134 @@ async function createStripePaymentIntent(params) {
 
 async function retrieveStripePaymentIntent(paymentIntentId) {
   return stripeRequest(`/payment_intents/${paymentIntentId}`);
+}
+
+async function createStripeCheckoutSession(params) {
+  const body = new URLSearchParams();
+  body.set("mode", "subscription");
+  body.set("client_reference_id", params.businessId);
+  body.set("success_url", params.successUrl);
+  body.set("cancel_url", params.cancelUrl);
+  body.set("line_items[0][price]", params.priceId);
+  body.set("line_items[0][quantity]", "1");
+  Object.entries(params.metadata).forEach(([key, value]) => {
+    body.set(`metadata[${key}]`, value);
+    body.set(`subscription_data[metadata][${key}]`, value);
+  });
+  if (params.customerEmail) {
+    body.set("customer_email", params.customerEmail);
+  }
+  return stripeRequest("/checkout/sessions", {
+    method: "POST",
+    headers: {"Content-Type": "application/x-www-form-urlencoded"},
+    body,
+  });
+}
+
+function verifyStripeWebhookSignature(req, secret) {
+  if (!secret || !secret.startsWith("whsec_")) {
+    throw new Error("Stripe webhook secret is not configured");
+  }
+  const signatureHeader = req.get("stripe-signature") || "";
+  const parts = signatureHeader.split(",").reduce((result, part) => {
+    const [key, value] = part.split("=");
+    if (key && value) {
+      result[key] = value;
+    }
+    return result;
+  }, {});
+  const timestamp = parts.t;
+  const signature = parts.v1;
+  if (!timestamp || !signature || !req.rawBody) {
+    throw new Error("Missing Stripe webhook signature");
+  }
+  const signedPayload = `${timestamp}.${req.rawBody.toString("utf8")}`;
+  const expected = crypto
+      .createHmac("sha256", secret)
+      .update(signedPayload)
+      .digest("hex");
+  const expectedBuffer = Buffer.from(expected, "hex");
+  const signatureBuffer = Buffer.from(signature, "hex");
+  if (
+    expectedBuffer.length !== signatureBuffer.length ||
+    !crypto.timingSafeEqual(expectedBuffer, signatureBuffer)
+  ) {
+    throw new Error("Invalid Stripe webhook signature");
+  }
+}
+
+function stripeSubscriptionBusinessId(object) {
+  return cleanText(
+      object?.metadata?.businessId ||
+      object?.client_reference_id ||
+      object?.subscription_details?.metadata?.businessId ||
+      "",
+      120,
+  );
+}
+
+function isActiveSubscriptionStatus(status) {
+  return ["active", "trialing"].includes(String(status || ""));
+}
+
+function isInactiveSubscriptionStatus(status) {
+  return [
+    "canceled",
+    "incomplete_expired",
+    "unpaid",
+    "paused",
+  ].includes(String(status || ""));
+}
+
+async function updateBusinessProEntitlement({
+  businessId,
+  status,
+  stripeCustomerId,
+  stripeSubscriptionId,
+  priceId,
+  source,
+}) {
+  if (!businessId) return;
+  const active = isActiveSubscriptionStatus(status);
+  const inactive = isInactiveSubscriptionStatus(status);
+  const plan = active ? "pro" : inactive ? "free" : undefined;
+  const db = admin.firestore();
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const subscription = {
+    businessId,
+    source,
+    status: status || "unknown",
+    stripeCustomerId: stripeCustomerId || "",
+    stripeSubscriptionId: stripeSubscriptionId || "",
+    priceId: priceId || "",
+    updatedAt: now,
+  };
+  const businessUpdate = {
+    subscription,
+    updatedAt: now,
+  };
+  if (plan) {
+    businessUpdate.plan = plan;
+    businessUpdate.entitlements = {
+      aiAdvisor: active,
+      featuredPlacement: active,
+      prioritySupport: active,
+    };
+  }
+  const batch = db.batch();
+  batch.set(db.collection("businesses").doc(businessId), businessUpdate, {
+    merge: true,
+  });
+  batch.set(db.collection("businessSubscriptions").doc(businessId), {
+    ...subscription,
+    plan: plan || "pending",
+    entitlements: {
+      aiAdvisor: active,
+      featuredPlacement: active,
+      prioritySupport: active,
+    },
+  }, {merge: true});
+  await batch.commit();
 }
 
 function carTitle(car) {
@@ -923,13 +1733,202 @@ function businessPublicFields(data = {}) {
     serviceNote: String(data.serviceNote || "").trim(),
     addressLine1: String(data.addressLine1 || "").trim(),
     city: String(data.city || "").trim(),
+    country: String(data.country || "").trim(),
     state: String(data.state || "").trim(),
     postalCode: String(data.postalCode || "").trim(),
   };
 }
 
+function hasBusinessEntitlement(business, key) {
+  const entitlements = business.entitlements || {};
+  return business.plan === "pro" ||
+    entitlements[key] === true ||
+    entitlements.all === true;
+}
+
+async function buildBusinessAdvisorSummary(db, businessId) {
+  const [
+    cars,
+    purchases,
+    shipments,
+    transports,
+    parkedCars,
+    supportRequests,
+  ] = await Promise.all([
+    db.collection("cars").where("businessId", "==", businessId).limit(250)
+        .get(),
+    db.collection("carPurchases").where("businessId", "==", businessId)
+        .limit(250).get(),
+    db.collection("barrelShipments").where("businessId", "==", businessId)
+        .limit(250).get(),
+    db.collection("transportRequests").where("businessId", "==", businessId)
+        .limit(250).get(),
+    db.collection("parkedCars").where("businessId", "==", businessId)
+        .limit(250).get(),
+    db.collection("businessSupportRequests")
+        .where("businessId", "==", businessId)
+        .limit(100).get(),
+  ]);
+
+  const carRows = cars.docs.map((doc) => doc.data() || {});
+  const purchaseRows = purchases.docs.map((doc) => doc.data() || {});
+  const shipmentRows = shipments.docs.map((doc) => doc.data() || {});
+  const transportRows = transports.docs.map((doc) => doc.data() || {});
+  const parkedRows = parkedCars.docs.map((doc) => doc.data() || {});
+  const supportRows = supportRequests.docs.map((doc) => doc.data() || {});
+
+  return {
+    generatedAt: new Date().toISOString(),
+    listings: {
+      total: carRows.length,
+      byStatus: countsBy(carRows, "status"),
+      activeInventoryValue: sumNumber(
+          carRows.filter((row) => row.status === "active"),
+          "price",
+      ),
+      missingPhotos: carRows.filter((row) =>
+        !Array.isArray(row.imageUrls) || row.imageUrls.length === 0,
+      ).length,
+      missingDescription: carRows.filter((row) =>
+        !String(row.description || "").trim(),
+      ).length,
+    },
+    purchases: {
+      total: purchaseRows.length,
+      byStatus: countsBy(purchaseRows, "purchaseStatus"),
+      holdDeposits: sumNumber(purchaseRows, "depositAmount"),
+      pendingExtensions: purchaseRows.filter((row) =>
+        row.extensionRequestStatus === "pending",
+      ).length,
+    },
+    operations: {
+      barrelShipments: {
+        total: shipmentRows.length,
+        byStatus: countsBy(shipmentRows, "status"),
+      },
+      transportRequests: {
+        total: transportRows.length,
+        byStatus: countsBy(transportRows, "status"),
+      },
+      parkedCars: {
+        total: parkedRows.length,
+        byStatus: countsBy(parkedRows, "status"),
+      },
+    },
+    support: {
+      total: supportRows.length,
+      byStatus: countsBy(supportRows, "status"),
+      urgent: supportRows.filter((row) =>
+        ["urgent", "blocked"].includes(row.priority),
+      ).length,
+    },
+  };
+}
+
+function countsBy(rows, field) {
+  return rows.reduce((counts, row) => {
+    const value = String(row[field] || "unknown").trim() || "unknown";
+    counts[value] = (counts[value] || 0) + 1;
+    return counts;
+  }, {});
+}
+
+function sumNumber(rows, field) {
+  return rows.reduce((sum, row) => {
+    const amount = Number(row[field] || 0);
+    return sum + (Number.isFinite(amount) ? amount : 0);
+  }, 0);
+}
+
+async function callAnthropicAdvisor({model, businessId, business, summary}) {
+  const apiKey = cleanText(anthropicApiKey.value(), 240);
+  if (!apiKey.startsWith("sk-ant-")) {
+    throw new HttpsError(
+        "failed-precondition",
+        "Anthropic API key is not configured",
+    );
+  }
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 1400,
+      system:
+        "You are a concise business operations advisor for Laawol Digital. " +
+        "Return JSON only with a cards array. Each card must have title, " +
+        "severity, finding, and recommendation. Do not expose private totals " +
+        "outside this business context.",
+      messages: [{
+        role: "user",
+        content: JSON.stringify({
+          businessId,
+          businessName: business.name || businessId,
+          plan: business.plan || "free",
+          enabledServices: business.enabledServices || [],
+          summary,
+        }),
+      }],
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    logger.error("Anthropic advisor request failed", data);
+    throw new HttpsError(
+        "internal",
+        data.error?.message || "AI advisor request failed",
+    );
+  }
+  const rawText = (data.content || [])
+      .map((part) => part?.text || "")
+      .join("\n")
+      .trim();
+  return {
+    rawText,
+    cards: parseAdvisorCards(rawText),
+  };
+}
+
+function parseAdvisorCards(rawText) {
+  try {
+    const parsed = JSON.parse(rawText);
+    if (Array.isArray(parsed.cards)) {
+      return parsed.cards.slice(0, 8).map(normalizeAdvisorCard);
+    }
+  } catch (error) {
+    logger.warn("Advisor response was not strict JSON", error);
+  }
+  return rawText
+      .split(/\n{2,}/)
+      .map((chunk, index) => ({
+        title: `Recommendation ${index + 1}`,
+        severity: "medium",
+        finding: chunk.slice(0, 240),
+        recommendation: chunk.slice(0, 600),
+      }))
+      .filter((card) => card.finding)
+      .slice(0, 5);
+}
+
+function normalizeAdvisorCard(card) {
+  return {
+    title: cleanText(card?.title, 120) || "Recommendation",
+    severity: cleanText(card?.severity, 40) || "medium",
+    finding: cleanText(card?.finding, 500),
+    recommendation: cleanText(card?.recommendation, 900),
+  };
+}
+
 function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+}
+
+function cleanText(value, maxLength) {
+  return String(value || "").trim().slice(0, maxLength);
 }
 
 function normalizeWebsite(value) {
@@ -964,6 +1963,7 @@ async function propagateBusinessSnapshot({
   serviceNote,
   addressLine1,
   city,
+  country,
   state,
   postalCode,
 }) {
@@ -989,6 +1989,7 @@ async function propagateBusinessSnapshot({
         serviceNote: serviceNote || "",
         businessAddressLine1: addressLine1 || "",
         businessCity: city || "",
+        businessCountry: country || "",
         businessState: state || "",
         businessPostalCode: postalCode || "",
         businessStatus,
@@ -997,7 +1998,13 @@ async function propagateBusinessSnapshot({
     });
   });
 
-  const snapshotCollections = ["cars", "barrelShipments", "carPurchases"];
+  const snapshotCollections = [
+    "cars",
+    "barrelShipments",
+    "transportRequests",
+    "parkedCars",
+    "carPurchases",
+  ];
   for (const collection of snapshotCollections) {
     const docs = await db.collection(collection)
         .where("businessId", "==", businessId)
@@ -1017,6 +2024,7 @@ async function propagateBusinessSnapshot({
           serviceNote: serviceNote || "",
           businessAddressLine1: addressLine1 || "",
           businessCity: city || "",
+          businessCountry: country || "",
           businessState: state || "",
           businessPostalCode: postalCode || "",
           updatedAt: now,
@@ -1213,6 +2221,602 @@ exports.requestWalletCardRefund = onCall(
     },
 );
 
+exports.reviewWalletRefundRequest = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const adminUid = requireAuth(request);
+      const adminUser = await getUserProfile(adminUid);
+      requireAdminCapability(
+          adminUser,
+          "finance",
+          "Only finance admins can review wallet refund requests",
+      );
+
+      const requestId = String(request.data?.requestId || "").trim();
+      const decision = String(request.data?.decision || "").trim();
+      const note = String(request.data?.note || "").trim();
+      if (!requestId) {
+        throw new HttpsError("invalid-argument", "Request ID is required");
+      }
+      if (!["completed", "rejected"].includes(decision)) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Decision must be completed or rejected",
+        );
+      }
+
+      const db = admin.firestore();
+      const requestRef = db.collection("walletRefundRequests").doc(requestId);
+      const requestDoc = await requestRef.get();
+      if (!requestDoc.exists) {
+        throw new HttpsError("not-found", "Refund request not found");
+      }
+      const requestData = requestDoc.data() || {};
+      const customerUid = String(requestData.customerUid || "").trim();
+      if (!customerUid) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Refund request is missing a customer",
+        );
+      }
+
+      const walletRef = db.collection("wallets").doc(customerUid);
+      const transactionSnapshot = await walletRef
+          .collection("transactions")
+          .where("refundRequestId", "==", requestId)
+          .limit(1)
+          .get();
+      const debitRef = transactionSnapshot.empty ?
+        null :
+        transactionSnapshot.docs[0].ref;
+
+      await db.runTransaction(async (transaction) => {
+        const freshRequestDoc = await transaction.get(requestRef);
+        if (!freshRequestDoc.exists) {
+          throw new HttpsError("not-found", "Refund request not found");
+        }
+        const freshRequest = freshRequestDoc.data() || {};
+        if (freshRequest.status !== "pending") {
+          throw new HttpsError(
+              "failed-precondition",
+              "Only pending refund requests can be reviewed",
+          );
+        }
+
+        const amountCents = Number(freshRequest.amountCents || 0);
+        if (!Number.isFinite(amountCents) || amountCents <= 0) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Refund request amount is invalid",
+          );
+        }
+        const amount = dollarsFromCents(amountCents);
+        const currency = freshRequest.currency || SHIPMENT_CURRENCY;
+        const now = admin.firestore.FieldValue.serverTimestamp();
+
+        const walletUpdate = {
+          customerUid,
+          currency,
+          pendingRefundCents: admin.firestore.FieldValue.increment(
+              -amountCents,
+          ),
+          pendingRefund: admin.firestore.FieldValue.increment(-amount),
+          updatedAt: now,
+        };
+        if (decision === "rejected") {
+          walletUpdate.balanceCents = admin.firestore.FieldValue.increment(
+              amountCents,
+          );
+          walletUpdate.balance = admin.firestore.FieldValue.increment(amount);
+        }
+        transaction.set(walletRef, walletUpdate, {merge: true});
+
+        transaction.update(requestRef, {
+          status: decision,
+          reviewedAt: now,
+          reviewedBy: adminUid,
+          reviewNote: note,
+          updatedAt: now,
+        });
+        setAdminAuditLog(transaction, {
+          action: "wallet_refund_reviewed",
+          actorUid: adminUid,
+          targetCollection: "walletRefundRequests",
+          targetId: requestId,
+          targetLabel: `${currency} ${amount}`,
+          statusField: "status",
+          previousValue: freshRequest.status || "",
+          nextValue: decision,
+        });
+
+        if (debitRef) {
+          transaction.update(debitRef, {
+            status: decision,
+            reviewedAt: now,
+            reviewedBy: adminUid,
+          });
+        }
+
+        if (decision === "rejected") {
+          const creditRef = walletRef.collection("transactions").doc();
+          transaction.set(creditRef, {
+            type: "credit",
+            reason: "card_refund_rejected",
+            amountCents,
+            amount,
+            currency,
+            refundRequestId: requestId,
+            createdAt: now,
+            createdBy: adminUid,
+          });
+        }
+      });
+
+      return {
+        success: true,
+        requestId,
+        status: decision,
+      };
+    },
+);
+
+exports.sendBusinessSupportRequest = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const adminUid = requireAuth(request);
+      const adminUser = await getUserProfile(adminUid);
+      requireAdminCapability(
+          adminUser,
+          "support",
+          "Only support admins can message businesses",
+      );
+
+      const businessId = cleanText(request.data?.businessId, 120);
+      const priority = cleanText(request.data?.priority, 32) || "normal";
+      const subject = cleanText(request.data?.subject, 160);
+      const message = cleanText(request.data?.message, 4000);
+      const customerName = cleanText(request.data?.customerName, 160);
+      const customerEmail = cleanText(request.data?.customerEmail, 240);
+      const customerPhone = cleanText(request.data?.customerPhone, 40);
+      const relatedCollection = cleanText(
+          request.data?.relatedCollection,
+          120,
+      );
+      const relatedId = cleanText(request.data?.relatedId, 180);
+      const relatedLabel = cleanText(request.data?.relatedLabel, 220);
+      const allowedPriorities = ["normal", "urgent", "blocked"];
+
+      if (!businessId || !subject || !message) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Business, subject, and message are required",
+        );
+      }
+      if (!allowedPriorities.includes(priority)) {
+        throw new HttpsError("invalid-argument", "Invalid request priority");
+      }
+      if (customerEmail && !isValidEmail(customerEmail)) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Customer email must be valid",
+        );
+      }
+      if (customerPhone) {
+        requireValidPhoneNumber(customerPhone, "Customer phone");
+      }
+
+      const db = admin.firestore();
+      const businessRef = db.collection("businesses").doc(businessId);
+      const businessDoc = await businessRef.get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+      const business = businessDoc.data() || {};
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      const requestRef = db.collection("businessSupportRequests").doc();
+      const notificationRef = db.collection("platformNotifications").doc();
+      const actorLabel = adminUser.fullName || adminUser.email || adminUid;
+      const businessName = business.name || businessId;
+      const payload = {
+        businessId,
+        businessName,
+        businessEmail: business.email || "",
+        businessPhone: business.phone || "",
+        priority,
+        subject,
+        message,
+        status: "open",
+        customerName,
+        customerEmail,
+        customerPhone,
+        relatedCollection,
+        relatedId,
+        relatedLabel,
+        source: "admin_console",
+        createdAt: now,
+        createdBy: adminUid,
+        createdByName: actorLabel,
+        createdByEmail: adminUser.email || "",
+        updatedAt: now,
+      };
+
+      const batch = db.batch();
+      batch.set(requestRef, payload);
+      batch.set(notificationRef, {
+        type: "business_support_request",
+        status: "unread",
+        businessId,
+        businessName,
+        title: `Support request: ${subject}`,
+        message,
+        priority,
+        supportRequestId: requestRef.id,
+        relatedCollection,
+        relatedId,
+        relatedLabel,
+        createdAt: now,
+        createdBy: adminUid,
+        updatedAt: now,
+      });
+      setAdminAuditLog(batch, {
+        action: "business_support_request_sent",
+        actorUid: adminUid,
+        targetCollection: "businessSupportRequests",
+        targetId: requestRef.id,
+        targetLabel: `${businessName}: ${subject}`,
+        nextValue: priority,
+      });
+      await batch.commit();
+
+      return {
+        success: true,
+        requestId: requestRef.id,
+        businessId,
+      };
+    },
+);
+
+exports.requestBusinessSupport = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const businessId = cleanText(request.data?.businessId, 120);
+      const priority = cleanText(request.data?.priority, 32) || "normal";
+      const subject = cleanText(request.data?.subject, 160);
+      const message = cleanText(request.data?.message, 4000);
+      const customerName = cleanText(request.data?.customerName, 160);
+      const customerEmail = cleanText(request.data?.customerEmail, 240);
+      const customerPhone = cleanText(request.data?.customerPhone, 40);
+      const relatedCollection = cleanText(
+          request.data?.relatedCollection,
+          120,
+      );
+      const relatedId = cleanText(request.data?.relatedId, 180);
+      const relatedLabel = cleanText(request.data?.relatedLabel, 220);
+      const allowedPriorities = ["normal", "urgent", "blocked"];
+
+      if (!businessId || !subject || !message) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Business, subject, and message are required",
+        );
+      }
+      if (!allowedPriorities.includes(priority)) {
+        throw new HttpsError("invalid-argument", "Invalid request priority");
+      }
+      if (customerEmail && !isValidEmail(customerEmail)) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Customer email must be valid",
+        );
+      }
+      if (customerPhone) {
+        requireValidPhoneNumber(customerPhone, "Customer phone");
+      }
+
+      const callerUser = await requireBusinessPermission(
+          callerUid,
+          businessId,
+          "support",
+      );
+      const db = admin.firestore();
+      const businessRef = db.collection("businesses").doc(businessId);
+      const businessDoc = await businessRef.get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+      const business = businessDoc.data() || {};
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      const requestRef = db.collection("businessSupportRequests").doc();
+      const notificationRef = db.collection("platformNotifications").doc();
+      const actorLabel =
+        callerUser.fullName || callerUser.email || callerUid;
+      const businessName = business.name || callerUser.businessName ||
+        businessId;
+      const payload = {
+        businessId,
+        businessName,
+        businessEmail: business.email || "",
+        businessPhone: business.phone || "",
+        priority,
+        subject,
+        message,
+        status: "open",
+        customerName,
+        customerEmail,
+        customerPhone,
+        relatedCollection,
+        relatedId,
+        relatedLabel,
+        source: "business_console",
+        createdAt: now,
+        createdBy: callerUid,
+        createdByName: actorLabel,
+        createdByEmail: callerUser.email || "",
+        updatedAt: now,
+      };
+
+      const batch = db.batch();
+      batch.set(requestRef, payload);
+      batch.set(notificationRef, {
+        type: "business_support_request",
+        status: "unread",
+        businessId,
+        businessName,
+        title: `Business support: ${subject}`,
+        message,
+        priority,
+        supportRequestId: requestRef.id,
+        relatedCollection,
+        relatedId,
+        relatedLabel,
+        createdAt: now,
+        createdBy: callerUid,
+        updatedAt: now,
+      });
+      setAdminAuditLog(batch, {
+        action: "business_support_request_created",
+        actorUid: callerUid,
+        targetCollection: "businessSupportRequests",
+        targetId: requestRef.id,
+        targetLabel: `${businessName}: ${subject}`,
+        nextValue: priority,
+      });
+      await batch.commit();
+
+      return {
+        success: true,
+        requestId: requestRef.id,
+        businessId,
+      };
+    },
+);
+
+exports.createBusinessProCheckout = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      secrets: [stripeSecretKey, businessProPriceId],
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const businessId = cleanText(request.data?.businessId, 120);
+      const successUrl = requireValidWebsite(
+          cleanText(request.data?.successUrl, 600),
+      );
+      const cancelUrl = requireValidWebsite(
+          cleanText(request.data?.cancelUrl, 600),
+      );
+      if (!businessId) {
+        throw new HttpsError("invalid-argument", "Business is required");
+      }
+
+      const caller = await requireBusinessManager(callerUid, businessId);
+      if (caller.role !== "admin" && caller.role !== "businessOwner") {
+        throw new HttpsError(
+            "permission-denied",
+            "Only business owners can start a subscription",
+        );
+      }
+
+      const priceId = cleanText(businessProPriceId.value(), 160);
+      if (!priceId.startsWith("price_")) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Business Pro price is not configured",
+        );
+      }
+
+      const db = admin.firestore();
+      const businessRef = db.collection("businesses").doc(businessId);
+      const businessDoc = await businessRef.get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+      const business = businessDoc.data() || {};
+      const session = await createStripeCheckoutSession({
+        businessId,
+        priceId,
+        successUrl,
+        cancelUrl,
+        customerEmail: business.email || caller.email || "",
+        metadata: {
+          businessId,
+          businessName: business.name || businessId,
+          feature: "business_pro",
+          priceId,
+        },
+      });
+
+      await businessRef.set({
+        subscription: {
+          checkoutSessionId: session.id,
+          status: "checkout_started",
+          priceId,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedBy: callerUid,
+        },
+      }, {merge: true});
+
+      return {
+        success: true,
+        sessionId: session.id,
+        url: session.url,
+      };
+    },
+);
+
+exports.handleBusinessProStripeWebhook = onRequest(
+    {
+      cors: false,
+      secrets: [stripeWebhookSecret],
+    },
+    async (req, res) => {
+      if (req.method !== "POST") {
+        res.status(405).send("Method not allowed");
+        return;
+      }
+      try {
+        verifyStripeWebhookSignature(req, stripeWebhookSecret.value());
+      } catch (error) {
+        logger.warn("Rejected Stripe webhook", {message: error.message});
+        res.status(400).send("Invalid Stripe signature");
+        return;
+      }
+
+      let event;
+      try {
+        event = JSON.parse(req.rawBody.toString("utf8"));
+      } catch (error) {
+        res.status(400).send("Invalid JSON");
+        return;
+      }
+
+      const object = event?.data?.object || {};
+      try {
+        if (event.type === "checkout.session.completed") {
+          const businessId = stripeSubscriptionBusinessId(object);
+          const status = object.payment_status === "unpaid" ?
+            "incomplete" :
+            "active";
+          await updateBusinessProEntitlement({
+            businessId,
+            status,
+            stripeCustomerId: object.customer,
+            stripeSubscriptionId: object.subscription,
+            priceId: object.metadata?.priceId || "",
+            source: event.type,
+          });
+        } else if (
+          event.type === "customer.subscription.created" ||
+          event.type === "customer.subscription.updated" ||
+          event.type === "customer.subscription.deleted"
+        ) {
+          const businessId = stripeSubscriptionBusinessId(object);
+          const priceId = object.items?.data?.[0]?.price?.id || "";
+          await updateBusinessProEntitlement({
+            businessId,
+            status: object.status,
+            stripeCustomerId: object.customer,
+            stripeSubscriptionId: object.id,
+            priceId,
+            source: event.type,
+          });
+        } else if (event.type === "invoice.payment_failed") {
+          const businessId = stripeSubscriptionBusinessId(object);
+          await updateBusinessProEntitlement({
+            businessId,
+            status: "past_due",
+            stripeCustomerId: object.customer,
+            stripeSubscriptionId: object.subscription,
+            priceId: "",
+            source: event.type,
+          });
+        }
+        res.status(200).json({received: true});
+      } catch (error) {
+        logger.error("Business Pro webhook failed", {
+          type: event.type,
+          message: error.message,
+        });
+        res.status(500).send("Webhook handling failed");
+      }
+    },
+);
+
+exports.generateBusinessInsights = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      secrets: [anthropicApiKey],
+      timeoutSeconds: 120,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const businessId = cleanText(request.data?.businessId, 120);
+      if (!businessId) {
+        throw new HttpsError("invalid-argument", "Business is required");
+      }
+      await requireBusinessPermission(callerUid, businessId, "growth");
+
+      const db = admin.firestore();
+      const businessRef = db.collection("businesses").doc(businessId);
+      const businessDoc = await businessRef.get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+      const business = businessDoc.data() || {};
+      if (!hasBusinessEntitlement(business, "aiAdvisor")) {
+        throw new HttpsError(
+            "failed-precondition",
+            "AI Business Advisor requires a Pro plan",
+        );
+      }
+
+      const summary = await buildBusinessAdvisorSummary(db, businessId);
+      const model = cleanText(
+          request.data?.model || business.aiAdvisorModel ||
+          DEFAULT_BUSINESS_ADVISOR_MODEL,
+          120,
+      );
+      const insight = await callAnthropicAdvisor({
+        model,
+        businessId,
+        business,
+        summary,
+      });
+
+      const insightRef = db.collection("businessInsights").doc();
+      const payload = {
+        businessId,
+        businessName: business.name || businessId,
+        model,
+        summary,
+        cards: insight.cards,
+        rawText: insight.rawText,
+        status: "ready",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdBy: callerUid,
+      };
+      await insightRef.set(payload);
+
+      return {
+        success: true,
+        insightId: insightRef.id,
+        ...payload,
+      };
+    },
+);
+
 exports.submitBusinessApplication = onCall(
     {
       enforceAppCheck: false,
@@ -1233,6 +2837,7 @@ exports.submitBusinessApplication = onCall(
         serviceNote,
         addressLine1,
         city,
+        country,
         state,
         postalCode,
       } = request.data || {};
@@ -1298,6 +2903,7 @@ exports.submitBusinessApplication = onCall(
         serviceNote,
         addressLine1,
         city,
+        country,
         state,
         postalCode,
       });
@@ -1370,6 +2976,353 @@ exports.submitBusinessApplication = onCall(
     },
 );
 
+exports.createAdminBusiness = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const adminUid = requireAuth(request);
+      const adminUser = await getUserProfile(adminUid);
+      requireAdminCapability(
+          adminUser,
+          "businesses",
+          "Only operations admins can create businesses",
+      );
+
+      const {
+        name,
+        phone,
+        email,
+        website,
+        profileImageUrl,
+        profileImagePath,
+        serviceNote,
+        addressLine1,
+        city,
+        country,
+        state,
+        postalCode,
+        enabledServices,
+      } = request.data || {};
+      const status = String(request.data?.status || "pending").trim();
+      const profile = businessPublicFields({
+        name,
+        phone,
+        email,
+        website,
+        profileImageUrl,
+        profileImagePath,
+        serviceNote,
+        addressLine1,
+        city,
+        country,
+        state,
+        postalCode,
+      });
+      if (!profile.name) {
+        throw new HttpsError("invalid-argument", "Business name is required");
+      }
+      if (profile.phone) {
+        requireValidPhoneNumber(profile.phone, "Business phone");
+      }
+      if (profile.email && !isValidEmail(profile.email)) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Please enter a valid business email",
+        );
+      }
+      if (!ADMIN_BUSINESS_STATUSES.includes(status)) {
+        throw new HttpsError("invalid-argument", "Invalid business status");
+      }
+      const normalizedServices = normalizeBusinessServices(
+          enabledServices,
+          [],
+      );
+      if (!normalizedServices.length) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Choose at least one business service",
+        );
+      }
+
+      const db = admin.firestore();
+      const businessId = String(
+          request.data?.businessId || slugFromName(profile.name),
+      ).trim();
+      const businessRef = db.collection("businesses").doc(businessId);
+      const existing = await businessRef.get();
+      if (existing.exists) {
+        throw new HttpsError(
+            "already-exists",
+            "A business with this ID already exists",
+        );
+      }
+
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      const batch = db.batch();
+      batch.set(businessRef, {
+        ...profile,
+        enabledServices: normalizedServices,
+        status,
+        applicationStatus: status,
+        createdAt: now,
+        createdBy: adminUid,
+        updatedAt: now,
+        updatedBy: adminUid,
+      });
+      setAdminAuditLog(batch, {
+        action: "business_created",
+        actorUid: adminUid,
+        targetCollection: "businesses",
+        targetId: businessId,
+        targetLabel: profile.name,
+        nextValue: status,
+      });
+      await batch.commit();
+
+      return {
+        success: true,
+        businessId,
+        businessName: profile.name,
+        status,
+        enabledServices: normalizedServices,
+      };
+    },
+);
+
+exports.createMissingBusinessProfile = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const adminUid = requireAuth(request);
+      const adminUser = await getUserProfile(adminUid);
+      requireAdminCapability(
+          adminUser,
+          "businesses",
+          "Only operations admins can create business profiles",
+      );
+
+      const businessId = String(request.data?.businessId || "").trim();
+      if (!businessId) {
+        throw new HttpsError("invalid-argument", "Business ID is required");
+      }
+      const status = String(request.data?.status || "approved").trim();
+      if (!ADMIN_BUSINESS_STATUSES.includes(status)) {
+        throw new HttpsError("invalid-argument", "Invalid business status");
+      }
+      const profile = businessPublicFields({
+        name: request.data?.name || businessId,
+        phone: request.data?.phone,
+        email: request.data?.email,
+        serviceNote:
+          request.data?.serviceNote ||
+          "Created from existing marketplace or operations records.",
+      });
+      const normalizedServices = normalizeBusinessServices(
+          request.data?.enabledServices,
+      );
+      if (profile.phone) {
+        requireValidPhoneNumber(profile.phone, "Business phone");
+      }
+      if (profile.email && !isValidEmail(profile.email)) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Please enter a valid business email",
+        );
+      }
+
+      const db = admin.firestore();
+      const businessRef = db.collection("businesses").doc(businessId);
+      const businessDoc = await businessRef.get();
+      if (businessDoc.exists) {
+        throw new HttpsError(
+            "already-exists",
+            "Business profile already exists",
+        );
+      }
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      const batch = db.batch();
+      batch.set(businessRef, {
+        ...profile,
+        enabledServices: normalizedServices,
+        status,
+        applicationStatus: status,
+        createdAt: now,
+        createdBy: adminUid,
+        updatedAt: now,
+        updatedBy: adminUid,
+      }, {merge: true});
+      setAdminAuditLog(batch, {
+        action: "business_profile_created",
+        actorUid: adminUid,
+        targetCollection: "businesses",
+        targetId: businessId,
+        targetLabel: profile.name,
+        nextValue: status,
+      });
+      await batch.commit();
+
+      await propagateBusinessSnapshot({
+        businessId,
+        businessName: profile.name,
+        businessStatus: status,
+        phone: profile.phone,
+        email: profile.email,
+        website: profile.website,
+        profileImageUrl: profile.profileImageUrl,
+        profileImagePath: profile.profileImagePath,
+        enabledServices: normalizedServices,
+        serviceNote: profile.serviceNote,
+        addressLine1: profile.addressLine1,
+        city: profile.city,
+        country: profile.country,
+        state: profile.state,
+        postalCode: profile.postalCode,
+      });
+
+      return {success: true, businessId, status};
+    },
+);
+
+exports.updateAdminRecordStatus = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const adminUid = requireAuth(request);
+      const adminUser = await getUserProfile(adminUid);
+      const collectionName =
+        String(request.data?.collectionName || "").trim();
+      const recordId = String(request.data?.recordId || "").trim();
+      const nextStatus = String(request.data?.status || "").trim();
+      if (!collectionName || !recordId || !nextStatus) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Collection, record, and status are required",
+        );
+      }
+      const config = statusConfigForCollection(collectionName);
+      requireAdminCapability(
+          adminUser,
+          config.capability,
+          "This admin role cannot update that record",
+      );
+      requireServiceAccessForCollection(
+          adminUser,
+          collectionName,
+          "Your role is limited to other services",
+      );
+      if (!config.allowedStatuses.includes(nextStatus)) {
+        throw new HttpsError("invalid-argument", "Invalid status");
+      }
+
+      const db = admin.firestore();
+      const recordRef = db.collection(collectionName).doc(recordId);
+      const recordDoc = await recordRef.get();
+      if (!recordDoc.exists) {
+        throw new HttpsError("not-found", "Record not found");
+      }
+      const current = recordDoc.data() || {};
+      const previousStatus = current[config.statusField] || "";
+      const batch = db.batch();
+      batch.update(recordRef, statusUpdatePayload({
+        statusField: config.statusField,
+        previousStatus,
+        nextStatus,
+        uid: adminUid,
+      }));
+      setAdminAuditLog(batch, {
+        action: "status_change",
+        actorUid: adminUid,
+        targetCollection: collectionName,
+        targetId: recordId,
+        targetLabel: adminRecordLabel(collectionName, recordId, current),
+        statusField: config.statusField,
+        previousValue: String(previousStatus || ""),
+        nextValue: nextStatus,
+      });
+      await batch.commit();
+
+      if (collectionName === "businesses") {
+        await propagateBusinessSnapshot({
+          businessId: recordId,
+          businessName: current.name || recordId,
+          businessStatus: nextStatus,
+          phone: current.phone,
+          email: current.email,
+          website: current.website,
+          profileImageUrl: current.profileImageUrl,
+          profileImagePath: current.profileImagePath,
+          enabledServices: normalizeBusinessServices(current.enabledServices),
+          serviceNote: current.serviceNote,
+          addressLine1: current.addressLine1,
+          city: current.city,
+          country: current.country,
+          state: current.state,
+          postalCode: current.postalCode,
+        });
+      }
+
+      return {
+        success: true,
+        collectionName,
+        recordId,
+        statusField: config.statusField,
+        previousStatus,
+        nextStatus,
+      };
+    },
+);
+
+exports.deleteAdminRecord = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const adminUid = requireAuth(request);
+      const adminUser = await getUserProfile(adminUid);
+      requireSuperAdmin(
+          adminUser,
+          "Only super admins can delete platform records",
+      );
+
+      const collectionName =
+        String(request.data?.collectionName || "").trim();
+      const recordId = String(request.data?.recordId || "").trim();
+      if (!collectionName || !recordId) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Collection and record are required",
+        );
+      }
+      statusConfigForCollection(collectionName);
+
+      const db = admin.firestore();
+      const recordRef = db.collection(collectionName).doc(recordId);
+      const recordDoc = await recordRef.get();
+      if (!recordDoc.exists) {
+        throw new HttpsError("not-found", "Record not found");
+      }
+      const current = recordDoc.data() || {};
+      const batch = db.batch();
+      batch.delete(recordRef);
+      setAdminAuditLog(batch, {
+        action: "record_deleted",
+        actorUid: adminUid,
+        targetCollection: collectionName,
+        targetId: recordId,
+        targetLabel: adminRecordLabel(collectionName, recordId, current),
+      });
+      await batch.commit();
+      return {success: true, collectionName, recordId};
+    },
+);
+
 exports.reviewBusinessApplication = onCall(
     {
       enforceAppCheck: false,
@@ -1378,12 +3331,11 @@ exports.reviewBusinessApplication = onCall(
     async (request) => {
       const adminUid = requireAuth(request);
       const adminUser = await getUserProfile(adminUid);
-      if (adminUser.role !== "admin") {
-        throw new HttpsError(
-            "permission-denied",
-            "Only platform admins can review business applications",
-        );
-      }
+      requireAdminCapability(
+          adminUser,
+          "businesses",
+          "Only operations admins can review business applications",
+      );
 
       const {
         businessId,
@@ -1500,6 +3452,16 @@ exports.reviewBusinessApplication = onCall(
           updatedAt: now,
         });
       });
+      setAdminAuditLog(batch, {
+        action: "business_application_reviewed",
+        actorUid: adminUid,
+        targetCollection: "businesses",
+        targetId: businessId,
+        targetLabel: profile.name,
+        statusField: "status",
+        previousValue: current.status || "",
+        nextValue: nextStatus,
+      });
       await batch.commit();
 
       await propagateBusinessSnapshot({
@@ -1515,6 +3477,7 @@ exports.reviewBusinessApplication = onCall(
         serviceNote: profile.serviceNote,
         addressLine1: profile.addressLine1,
         city: profile.city,
+        country: profile.country,
         state: profile.state,
         postalCode: profile.postalCode,
       });
@@ -1547,6 +3510,7 @@ exports.updateBusinessProfile = onCall(
         serviceNote,
         addressLine1,
         city,
+        country,
         state,
         postalCode,
         carHoldPricingMode,
@@ -1579,6 +3543,7 @@ exports.updateBusinessProfile = onCall(
         serviceNote: serviceNote ?? current.serviceNote,
         addressLine1: addressLine1 ?? current.addressLine1,
         city: city ?? current.city,
+        country: country ?? current.country,
         state: state ?? current.state,
         postalCode: postalCode ?? current.postalCode,
       });
@@ -1654,6 +3619,7 @@ exports.updateBusinessProfile = onCall(
         serviceNote: profile.serviceNote,
         addressLine1: profile.addressLine1,
         city: profile.city,
+        country: profile.country,
         state: profile.state,
         postalCode: profile.postalCode,
       });
@@ -1867,13 +3833,13 @@ exports.createStaffUser = onCall(
         }
         const business = businessDoc.data();
 
-        if (
-          callerData.role !== "admin" &&
-          !(
+        const callerCanCreateStaff =
+          hasAdminCapability(callerData, "operations") ||
+          (
             callerData.role === "businessOwner" &&
             callerData.businessId === requestedBusinessId
-          )
-        ) {
+          );
+        if (!callerCanCreateStaff) {
           logger.warn("Non-admin attempted to create user", {
             uid: callerUid,
             role: callerData.role,
@@ -1892,10 +3858,16 @@ exports.createStaffUser = onCall(
           phone,
           profileImageUrl,
           profileImagePath,
+          businessPermissions,
         } = request.data;
+        const normalizedEmail = String(email || "").trim().toLowerCase();
+        const staffName = String(fullName || "").trim();
+        const staffPhone = String(phone || "").trim();
+        const staffPermissions =
+          normalizeBusinessPermissions(businessPermissions);
 
         // Validate input
-        if (!email || !password) {
+        if (!normalizedEmail || !password) {
           throw new HttpsError(
               "invalid-argument",
               "Email and password are required",
@@ -1908,15 +3880,15 @@ exports.createStaffUser = onCall(
               "Password must be at least 6 characters",
           );
         }
-        if (phone) {
-          requireValidPhoneNumber(phone, "Staff phone");
+        if (staffPhone) {
+          requireValidPhoneNumber(staffPhone, "Staff phone");
         }
 
         // Create the new user using Admin SDK
         const userRecord = await admin.auth().createUser({
-          email: email,
+          email: normalizedEmail,
           password: password,
-          displayName: String(fullName || "").trim() || undefined,
+          displayName: staffName || undefined,
         });
 
         logger.info("User created in Firebase Auth", {
@@ -1925,10 +3897,12 @@ exports.createStaffUser = onCall(
         });
 
         // Create the user document in Firestore with staff role
-        await admin.firestore().collection("users").doc(userRecord.uid).set({
-          email: email,
-          fullName: String(fullName || "").trim(),
-          phone: String(phone || "").trim(),
+        const db = admin.firestore();
+        const batch = db.batch();
+        batch.set(db.collection("users").doc(userRecord.uid), {
+          email: normalizedEmail,
+          fullName: staffName,
+          phone: staffPhone,
           profileImageUrl: String(profileImageUrl || "").trim(),
           profileImagePath: String(profileImagePath || "").trim(),
           role: "staff",
@@ -1937,8 +3911,28 @@ exports.createStaffUser = onCall(
           businessServices: normalizeBusinessServices(
               business.enabledServices,
           ),
+          businessPermissions: staffPermissions,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           createdBy: callerUid,
+        });
+        setAdminAuditLog(batch, {
+          action: "staff_user_created",
+          actorUid: callerUid,
+          targetCollection: "users",
+          targetId: userRecord.uid,
+          targetLabel: normalizedEmail,
+          nextValue: requestedBusinessId,
+        });
+        await batch.commit().catch(async (error) => {
+          await admin.auth().deleteUser(userRecord.uid).catch(
+              (deleteError) => {
+                logger.error(
+                    "Failed to roll back staff auth user",
+                    deleteError,
+                );
+              },
+          );
+          throw error;
         });
 
         logger.info("User document created in Firestore", {
@@ -1988,6 +3982,72 @@ exports.createStaffUser = onCall(
     },
 );
 
+exports.updateBusinessStaffPermissions = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const businessId = cleanText(request.data?.businessId, 120);
+      const staffUid = cleanText(request.data?.staffUid, 160);
+      const permissions = normalizeBusinessPermissions(
+          request.data?.businessPermissions,
+      );
+
+      if (!businessId || !staffUid) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Business and staff user are required",
+        );
+      }
+
+      const callerUser = await requireBusinessManager(callerUid, businessId);
+      if (callerUser.role !== "admin" && callerUser.role !== "businessOwner") {
+        throw new HttpsError(
+            "permission-denied",
+            "Only business owners can update staff permissions",
+        );
+      }
+
+      const db = admin.firestore();
+      const staffRef = db.collection("users").doc(staffUid);
+      const staffDoc = await staffRef.get();
+      if (!staffDoc.exists) {
+        throw new HttpsError("not-found", "Staff user not found");
+      }
+      const staff = staffDoc.data() || {};
+      if (staff.businessId !== businessId || staff.role !== "staff") {
+        throw new HttpsError(
+            "failed-precondition",
+            "This user is not staff for the selected business",
+        );
+      }
+
+      const batch = db.batch();
+      batch.set(staffRef, {
+        businessPermissions: permissions,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedBy: callerUid,
+      }, {merge: true});
+      setAdminAuditLog(batch, {
+        action: "business_staff_permissions_updated",
+        actorUid: callerUid,
+        targetCollection: "users",
+        targetId: staffUid,
+        targetLabel: staff.email || staff.fullName || staffUid,
+        nextValue: permissions.join(","),
+      });
+      await batch.commit();
+
+      return {
+        success: true,
+        staffUid,
+        businessPermissions: permissions,
+      };
+    },
+);
+
 exports.createPlatformManager = onCall(
     {
       enforceAppCheck: false,
@@ -1996,14 +4056,15 @@ exports.createPlatformManager = onCall(
     async (request) => {
       const callerUid = requireAuth(request);
       const caller = await getUserProfile(callerUid);
-      if (caller.role !== "admin") {
-        throw new HttpsError(
-            "permission-denied",
-            "Only platform admins can create platform managers",
-        );
-      }
+      requireSuperAdmin(
+          caller,
+          "Only super admins can create platform managers",
+      );
 
       const {email, password, fullName, phone} = request.data;
+      const adminRole = String(
+          request.data?.adminRole || "operationsManager",
+      ).trim();
       const normalizedEmail = String(email || "").trim().toLowerCase();
       const managerName = String(fullName || "").trim();
       const managerPhone = String(phone || "").trim();
@@ -2023,29 +4084,54 @@ exports.createPlatformManager = onCall(
       if (managerPhone) {
         requireValidPhoneNumber(managerPhone, "Platform manager phone");
       }
+      await assertAssignableRole(adminRole);
 
+      let userRecord;
       try {
-        const userRecord = await admin.auth().createUser({
+        userRecord = await admin.auth().createUser({
           email: normalizedEmail,
           password: String(password),
           displayName: managerName,
         });
-        await admin.firestore().collection("users").doc(userRecord.uid).set({
+        const db = admin.firestore();
+        const batch = db.batch();
+        batch.set(db.collection("users").doc(userRecord.uid), {
           email: normalizedEmail,
           fullName: managerName,
           phone: managerPhone,
           role: "admin",
           platformAdmin: true,
+          adminRole,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           createdBy: callerUid,
         });
+        setAdminAuditLog(batch, {
+          action: "platform_manager_created",
+          actorUid: callerUid,
+          targetCollection: "users",
+          targetId: userRecord.uid,
+          targetLabel: normalizedEmail,
+          nextValue: adminRole,
+        });
+        await batch.commit();
         return {
           success: true,
           uid: userRecord.uid,
           email: normalizedEmail,
           role: "admin",
+          adminRole,
         };
       } catch (error) {
+        if (userRecord?.uid) {
+          await admin.auth().deleteUser(userRecord.uid).catch(
+              (deleteError) => {
+                logger.error(
+                    "Failed to roll back platform manager auth user",
+                    deleteError,
+                );
+              },
+          );
+        }
         logger.error("Error creating platform manager", error);
         if (error.code === "auth/email-already-exists") {
           throw new HttpsError(
@@ -2068,6 +4154,362 @@ exports.createPlatformManager = onCall(
             "An error occurred while creating the platform manager",
         );
       }
+    },
+);
+
+exports.setPlatformAdminRole = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const caller = await getUserProfile(callerUid);
+      requireSuperAdmin(
+          caller,
+          "Only super admins can change administrator roles",
+      );
+
+      const userId = String(request.data?.userId || "").trim();
+      const adminRole = String(request.data?.adminRole || "").trim();
+      if (!userId) {
+        throw new HttpsError("invalid-argument", "userId is required");
+      }
+      await assertAssignableRole(adminRole);
+      if (userId === callerUid) {
+        throw new HttpsError(
+            "failed-precondition",
+            "You cannot change your own access role",
+        );
+      }
+
+      const target = await getUserProfile(userId);
+      if (target.role !== "admin") {
+        throw new HttpsError(
+            "failed-precondition",
+            "This user is not a platform administrator",
+        );
+      }
+
+      const db = admin.firestore();
+      const batch = db.batch();
+      batch.set(
+          db.collection("users").doc(userId),
+          {
+            adminRole,
+            platformAdmin: true,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedBy: callerUid,
+          },
+          {merge: true},
+      );
+      setAdminAuditLog(batch, {
+        action: "platform_admin_role_changed",
+        actorUid: callerUid,
+        targetCollection: "users",
+        targetId: userId,
+        targetLabel: target.email || userId,
+        previousValue: target.adminRole || "",
+        nextValue: adminRole,
+      });
+      await batch.commit();
+
+      return {success: true, userId, adminRole};
+    },
+);
+
+exports.listPlatformUsers = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const caller = await getUserProfile(callerUid);
+      if (caller.role !== "admin") {
+        throw new HttpsError(
+            "permission-denied",
+            "Only platform admins can list users",
+        );
+      }
+
+      const maxResults = Math.min(
+          Math.max(Number(request.data?.maxResults) || 1000, 1),
+          1000,
+      );
+      const pageToken = String(request.data?.pageToken || "") || undefined;
+      const db = admin.firestore();
+      const [authPage, profileSnapshot] = await Promise.all([
+        admin.auth().listUsers(maxResults, pageToken),
+        db.collection("users").get(),
+      ]);
+      const profiles = new Map();
+      profileSnapshot.docs.forEach((doc) => {
+        profiles.set(doc.id, {id: doc.id, ...doc.data()});
+      });
+
+      const authUids = new Set(authPage.users.map((userRecord) => {
+        return userRecord.uid;
+      }));
+      const users = authPage.users.map((userRecord) => {
+        const profile = profiles.get(userRecord.uid) || {};
+        const hasProfile = profiles.has(userRecord.uid);
+        return {
+          id: userRecord.uid,
+          uid: userRecord.uid,
+          email: profile.email || userRecord.email || "",
+          fullName: profile.fullName || userRecord.displayName || "",
+          phone: profile.phone || userRecord.phoneNumber || "",
+          profileImageUrl: profile.profileImageUrl || userRecord.photoURL || "",
+          profileImagePath: profile.profileImagePath || "",
+          phoneVerified: profile.phoneVerified === true,
+          phoneVerifiedAt: profile.phoneVerifiedAt || "",
+          role: profile.role || "missing_profile",
+          adminRole: profile.adminRole || "",
+          platformAdmin: profile.platformAdmin === true,
+          businessId: profile.businessId || "",
+          businessName: profile.businessName || "",
+          disabled: userRecord.disabled,
+          emailVerified: userRecord.emailVerified,
+          createdAt: profile.createdAt || userRecord.metadata.creationTime,
+          updatedAt: profile.updatedAt || "",
+          lastSignInAt: userRecord.metadata.lastSignInTime || "",
+          hasProfile,
+          hasAuth: true,
+        };
+      });
+      profileSnapshot.docs.forEach((doc) => {
+        if (authUids.has(doc.id)) return;
+        const profile = doc.data() || {};
+        users.push({
+          id: doc.id,
+          uid: profile.uid || doc.id,
+          email: profile.email || "",
+          fullName: profile.fullName || "",
+          phone: profile.phone || "",
+          profileImageUrl: profile.profileImageUrl || "",
+          profileImagePath: profile.profileImagePath || "",
+          phoneVerified: profile.phoneVerified === true,
+          phoneVerifiedAt: profile.phoneVerifiedAt || "",
+          role: profile.role || "customer",
+          adminRole: profile.adminRole || "",
+          platformAdmin: profile.platformAdmin === true,
+          businessId: profile.businessId || "",
+          businessName: profile.businessName || "",
+          disabled: false,
+          emailVerified: null,
+          createdAt: profile.createdAt || "",
+          updatedAt: profile.updatedAt || "",
+          lastSignInAt: "",
+          hasProfile: true,
+          hasAuth: false,
+        });
+      });
+
+      return {
+        users,
+        pageToken: authPage.pageToken || "",
+      };
+    },
+);
+
+exports.createMissingUserProfile = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const caller = await getUserProfile(callerUid);
+      requireAdminCapability(
+          caller,
+          "users",
+          "Only user admins can create user profiles",
+      );
+
+      const userId = String(request.data?.userId || "").trim();
+      if (!userId) {
+        throw new HttpsError("invalid-argument", "User ID is required");
+      }
+
+      const userRecord = await admin.auth().getUser(userId);
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      const db = admin.firestore();
+      const batch = db.batch();
+      batch.set(
+          db.collection("users").doc(userId),
+          {
+            email: userRecord.email || "",
+            fullName: userRecord.displayName || "",
+            phone: userRecord.phoneNumber || "",
+            role: "customer",
+            createdAt: now,
+            updatedAt: now,
+            createdBy: callerUid,
+          },
+          {merge: true},
+      );
+      setAdminAuditLog(batch, {
+        action: "missing_user_profile_created",
+        actorUid: callerUid,
+        targetCollection: "users",
+        targetId: userId,
+        targetLabel: userRecord.email || userId,
+        nextValue: "customer",
+      });
+      await batch.commit();
+
+      return {
+        success: true,
+        userId,
+        role: "customer",
+      };
+    },
+);
+
+exports.updateBusinessMembership = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const caller = await getUserProfile(callerUid);
+      requireSuperAdmin(
+          caller,
+          "Only super admins can update business membership",
+      );
+
+      const userId = String(request.data?.userId || "").trim();
+      const role = String(request.data?.role || "").trim();
+      const businessId = String(request.data?.businessId || "").trim();
+      if (!userId || !role) {
+        throw new HttpsError(
+            "invalid-argument",
+            "User ID and membership role are required",
+        );
+      }
+      if (!["businessOwner", "staff", "customer"].includes(role)) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Role must be businessOwner, staff, or customer",
+        );
+      }
+      if ((role === "businessOwner" || role === "staff") && !businessId) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Business is required for owners and staff",
+        );
+      }
+      if (userId === callerUid) {
+        throw new HttpsError(
+            "invalid-argument",
+            "You cannot change your own business membership",
+        );
+      }
+
+      try {
+        await admin.auth().getUser(userId);
+      } catch (error) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Business members must have a Firebase Auth account",
+        );
+      }
+
+      const db = admin.firestore();
+      const userRef = db.collection("users").doc(userId);
+      const userDoc = await userRef.get();
+      if (!userDoc.exists) {
+        throw new HttpsError(
+            "not-found",
+            "Create this user's profile before assigning membership",
+        );
+      }
+      const current = userDoc.data() || {};
+      const batch = db.batch();
+      const now = admin.firestore.FieldValue.serverTimestamp();
+
+      let business = null;
+      if (role === "businessOwner" || role === "staff") {
+        const businessDoc = await db.collection("businesses")
+            .doc(businessId)
+            .get();
+        if (!businessDoc.exists) {
+          throw new HttpsError("not-found", "Business not found");
+        }
+        business = businessDoc.data() || {};
+        const businessName = business.name || businessId;
+        if (role === "businessOwner") {
+          const ownerSnapshot = await db.collection("users")
+              .where("businessId", "==", businessId)
+              .where("role", "==", "businessOwner")
+              .get();
+          ownerSnapshot.docs.forEach((ownerDoc) => {
+            if (ownerDoc.id === userId) return;
+            batch.update(ownerDoc.ref, {
+              role: "staff",
+              businessName,
+              businessServices: normalizeBusinessServices(
+                  business.enabledServices,
+              ),
+              updatedAt: now,
+              updatedBy: callerUid,
+            });
+            const owner = ownerDoc.data() || {};
+            setAdminAuditLog(batch, {
+              action: "business_owner_demoted",
+              actorUid: callerUid,
+              targetCollection: "users",
+              targetId: ownerDoc.id,
+              targetLabel: owner.email || owner.fullName || ownerDoc.id,
+              statusField: "role",
+              previousValue: "businessOwner",
+              nextValue: "staff",
+            });
+          });
+        }
+        batch.update(userRef, {
+          role,
+          businessId,
+          businessName,
+          businessServices: normalizeBusinessServices(business.enabledServices),
+          platformAdmin: admin.firestore.FieldValue.delete(),
+          adminRole: admin.firestore.FieldValue.delete(),
+          updatedAt: now,
+          updatedBy: callerUid,
+        });
+      } else {
+        batch.update(userRef, {
+          role: "customer",
+          businessId: admin.firestore.FieldValue.delete(),
+          businessName: admin.firestore.FieldValue.delete(),
+          businessServices: admin.firestore.FieldValue.delete(),
+          platformAdmin: admin.firestore.FieldValue.delete(),
+          adminRole: admin.firestore.FieldValue.delete(),
+          updatedAt: now,
+          updatedBy: callerUid,
+        });
+      }
+
+      setAdminAuditLog(batch, {
+        action: "business_membership_updated",
+        actorUid: callerUid,
+        targetCollection: "users",
+        targetId: userId,
+        targetLabel: current.email || current.fullName || userId,
+        statusField: "role",
+        previousValue: current.role || "",
+        nextValue: role === "customer" ? "customer" : `${role}:${businessId}`,
+      });
+      await batch.commit();
+
+      return {
+        success: true,
+        userId,
+        role,
+        businessId: role === "customer" ? "" : businessId,
+      };
     },
 );
 
@@ -2110,17 +4552,10 @@ exports.updateUserRole = onCall(
 
         const callerData = callerDoc.data();
 
-        // Check if the caller has admin role
-        if (callerData.role !== "admin") {
-          logger.warn("Non-admin attempted to update user role", {
-            uid: callerUid,
-            role: callerData.role,
-          });
-          throw new HttpsError(
-              "permission-denied",
-              "Only admins can update user roles",
-          );
-        }
+        requireSuperAdmin(
+            callerData,
+            "Only super admins can update user roles",
+        );
 
         // Extract details from the request
         const {userId, newRole} = request.data;
@@ -2133,6 +4568,13 @@ exports.updateUserRole = onCall(
           );
         }
 
+        if (userId === callerUid && newRole !== "admin") {
+          throw new HttpsError(
+              "invalid-argument",
+              "You cannot change your own admin role",
+          );
+        }
+
         // Validate role
         const validRoles = ["customer", "staff", "businessOwner", "admin"];
         if (!validRoles.includes(newRole)) {
@@ -2141,13 +4583,51 @@ exports.updateUserRole = onCall(
               `Invalid role. Must be one of: ${validRoles.join(", ")}`,
           );
         }
+        if (newRole === "staff" || newRole === "businessOwner") {
+          throw new HttpsError(
+              "invalid-argument",
+              "Use updateBusinessMembership to assign business roles",
+          );
+        }
 
-        // Update the user's role in Firestore
-        await admin.firestore().collection("users").doc(userId).update({
+        const db = admin.firestore();
+        const userRef = db.collection("users").doc(userId);
+        const targetDoc = await userRef.get();
+        if (!targetDoc.exists) {
+          throw new HttpsError("not-found", "User profile not found");
+        }
+        const target = targetDoc.data() || {};
+        const batch = db.batch();
+        const updatePayload = {
           role: newRole,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedBy: callerUid,
+        };
+        if (newRole === "customer" || newRole === "admin") {
+          updatePayload.businessId = admin.firestore.FieldValue.delete();
+          updatePayload.businessName = admin.firestore.FieldValue.delete();
+          updatePayload.businessServices = admin.firestore.FieldValue.delete();
+        }
+        if (newRole === "customer") {
+          updatePayload.platformAdmin = admin.firestore.FieldValue.delete();
+          updatePayload.adminRole = admin.firestore.FieldValue.delete();
+        }
+        if (newRole === "admin") {
+          updatePayload.platformAdmin = true;
+          updatePayload.adminRole = target.adminRole || "supportAdmin";
+        }
+        batch.update(userRef, updatePayload);
+        setAdminAuditLog(batch, {
+          action: "user_role_updated",
+          actorUid: callerUid,
+          targetCollection: "users",
+          targetId: userId,
+          targetLabel: target.email || target.fullName || userId,
+          statusField: "role",
+          previousValue: target.role || "",
+          nextValue: newRole,
         });
+        await batch.commit();
 
         logger.info("User role updated", {
           userId: userId,
@@ -2216,18 +4696,10 @@ exports.deleteUser = onCall(
         }
 
         const callerData = callerDoc.data();
-
-        // Check if the caller has admin role
-        if (callerData.role !== "admin") {
-          logger.warn("Non-admin attempted to delete user", {
-            uid: callerUid,
-            role: callerData.role,
-          });
-          throw new HttpsError(
-              "permission-denied",
-              "Only admins can delete users",
-          );
-        }
+        requireSuperAdmin(
+            callerData,
+            "Only super admins can delete users",
+        );
 
         // Extract user ID from the request
         const {userId} = request.data;
@@ -2245,13 +4717,26 @@ exports.deleteUser = onCall(
           );
         }
 
+        const db = admin.firestore();
+        const userRef = db.collection("users").doc(userId);
+        const userDoc = await userRef.get();
+        const target = userDoc.data() || {};
+
         // Delete from Firebase Auth
         await admin.auth().deleteUser(userId);
 
         logger.info("User deleted from Firebase Auth", {userId: userId});
 
-        // Delete from Firestore
-        await admin.firestore().collection("users").doc(userId).delete();
+        const batch = db.batch();
+        batch.delete(userRef);
+        setAdminAuditLog(batch, {
+          action: "user_deleted",
+          actorUid: callerUid,
+          targetCollection: "users",
+          targetId: userId,
+          targetLabel: target.email || target.fullName || userId,
+        });
+        await batch.commit();
 
         logger.info("User document deleted from Firestore", {userId: userId});
 
@@ -2289,6 +4774,13 @@ exports.seedDestinationCountries = onCall(
     async (request) => {
       const callerUid = requireAuth(request);
       const user = await getUserProfile(callerUid);
+      if (user.role === "admin") {
+        requireAdminCapability(
+            user,
+            "marketplace",
+            "Only marketplace admins can seed destination countries",
+        );
+      }
       if (
         user.role !== "admin" &&
         user.role !== "businessOwner" &&
@@ -2304,7 +4796,7 @@ exports.seedDestinationCountries = onCall(
       if (!businessId) {
         throw new HttpsError("failed-precondition", "Business is required");
       }
-      await requireBusinessManager(callerUid, businessId);
+      await requireBusinessPermission(callerUid, businessId, "destinations");
       const businessRef = db.collection("businesses").doc(businessId);
       const businessDoc = await businessRef.get();
       if (!businessDoc.exists) {
@@ -2356,7 +4848,7 @@ exports.seedDestinationCountries = onCall(
     },
 );
 
-exports.migrateDefaultBusiness = onCall(
+exports.listDestinationCoverage = onCall(
     {
       enforceAppCheck: false,
       cors: true,
@@ -2367,9 +4859,177 @@ exports.migrateDefaultBusiness = onCall(
       if (user.role !== "admin") {
         throw new HttpsError(
             "permission-denied",
-            "Only platform admins can run this migration",
+            "Only platform admins can list destination coverage",
         );
       }
+
+      const db = admin.firestore();
+      const businesses = await db.collection("businesses").get();
+      const rows = [];
+      for (const businessDoc of businesses.docs) {
+        const business = businessDoc.data() || {};
+        const destinations = await businessDoc.ref
+            .collection("destinationCountries")
+            .get();
+        destinations.docs.forEach((destinationDoc) => {
+          rows.push({
+            id: destinationDoc.id,
+            businessId: businessDoc.id,
+            businessName: business.name || businessDoc.id,
+            businessStatus: business.status || "",
+            ...destinationDoc.data(),
+          });
+        });
+      }
+
+      rows.sort((a, b) => {
+        const businessCompare = String(a.businessName || "").localeCompare(
+            String(b.businessName || ""),
+        );
+        if (businessCompare !== 0) return businessCompare;
+        return Number(a.sortOrder || 0) - Number(b.sortOrder || 0);
+      });
+
+      return {destinations: rows};
+    },
+);
+
+exports.updateDestinationCoverage = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const user = await getUserProfile(callerUid);
+      requireAdminCapability(
+          user,
+          "marketplace",
+          "Only marketplace admins can update destination coverage",
+      );
+
+      const businessId = String(request.data?.businessId || "").trim();
+      const countryId = String(request.data?.countryId || "").trim();
+      const isActive = request.data?.isActive === true;
+      const price = Number(request.data?.barrelShippingPrice || 0);
+      const minDaysRaw = request.data?.deliveryEstimateMinDays;
+      const maxDaysRaw = request.data?.deliveryEstimateMaxDays;
+      const destinationNote = String(
+          request.data?.destinationNote ||
+          request.data?.details ||
+          "",
+      ).trim();
+      const hasEstimate = minDaysRaw !== null &&
+        minDaysRaw !== undefined &&
+        maxDaysRaw !== null &&
+        maxDaysRaw !== undefined;
+      const minDays = Number(minDaysRaw);
+      const maxDays = Number(maxDaysRaw);
+
+      if (!businessId || !countryId) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Business and destination are required",
+        );
+      }
+      if (!Number.isFinite(price) || price < 0) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Barrel shipping price must be zero or more",
+        );
+      }
+      if (isActive && price <= 0) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Active destinations need a barrel shipping fee greater than 0",
+        );
+      }
+      if (
+        hasEstimate &&
+        (
+          !Number.isInteger(minDays) ||
+          !Number.isInteger(maxDays) ||
+          minDays <= 0 ||
+          maxDays < minDays
+        )
+      ) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Delivery days must be positive whole numbers",
+        );
+      }
+
+      const db = admin.firestore();
+      const businessRef = db.collection("businesses").doc(businessId);
+      const businessDoc = await businessRef.get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+      const business = businessDoc.data() || {};
+      const destinationRef = businessRef
+          .collection("destinationCountries")
+          .doc(countryId);
+      const payload = {
+        businessId,
+        businessName: business.name || businessId,
+        businessPhone: business.phone || "",
+        businessEmail: business.email || "",
+        businessWebsite: business.website || "",
+        businessProfileImageUrl: business.profileImageUrl || "",
+        enabledServices: normalizeBusinessServices(business.enabledServices),
+        serviceNote: business.serviceNote || "",
+        businessStatus: business.status || "",
+        barrelShippingPrice: price,
+        isActive,
+        destinationNote: destinationNote ||
+          admin.firestore.FieldValue.delete(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      if (hasEstimate) {
+        payload.deliveryEstimateMinDays = minDays;
+        payload.deliveryEstimateMaxDays = maxDays;
+      } else {
+        payload.deliveryEstimateMinDays =
+          admin.firestore.FieldValue.delete();
+        payload.deliveryEstimateMaxDays =
+          admin.firestore.FieldValue.delete();
+      }
+      const previousDoc = await destinationRef.get();
+      const previous = previousDoc.data() || {};
+      const batch = db.batch();
+      batch.set(destinationRef, payload, {merge: true});
+      setAdminAuditLog(batch, {
+        action: "destination_coverage_updated",
+        actorUid: callerUid,
+        targetCollection: "businesses",
+        targetId: `${businessId}/destinationCountries/${countryId}`,
+        targetLabel: `${business.name || businessId} ${countryId}`,
+        previousValue:
+          `${previous.isActive === true}:${previous.barrelShippingPrice || 0}`,
+        nextValue: `${isActive}:${price}`,
+      });
+      await batch.commit();
+
+      return {
+        success: true,
+        businessId,
+        countryId,
+      };
+    },
+);
+
+exports.migrateDefaultBusiness = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const user = await getUserProfile(callerUid);
+      requireSuperAdmin(
+          user,
+          "Only super admins can run this migration",
+      );
 
       const db = admin.firestore();
       const now = admin.firestore.FieldValue.serverTimestamp();
@@ -2436,6 +5096,8 @@ exports.migrateDefaultBusiness = onCall(
       for (const collection of collections) {
         const snapshot = await db.collection(collection).get();
         snapshot.docs.forEach((doc) => {
+          const data = doc.data() || {};
+          if (cleanText(data.businessId, 120)) return;
           writes.push({
             ref: doc.ref,
             data: {
@@ -2480,6 +5142,115 @@ exports.migrateDefaultBusiness = onCall(
         businessId: DEFAULT_BUSINESS_ID,
         writes: writes.length,
       };
+    },
+);
+
+exports.backfillBusinessCarListings = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const user = await getUserProfile(callerUid);
+      requireSuperAdmin(
+          user,
+          "Only super admins can assign legacy car listings",
+      );
+
+      const businessId = cleanText(request.data?.businessId, 120);
+      if (!businessId) {
+        throw new HttpsError("invalid-argument", "Business is required");
+      }
+      const dryRun = request.data?.dryRun !== false;
+      const batchSize = Math.min(
+          Math.max(intOrFallback(request.data?.limit, 100), 1),
+          200,
+      );
+      const afterId = cleanText(request.data?.afterId, 160);
+      const legacyBusinessName = cleanText(
+          request.data?.legacyBusinessName,
+          160,
+      );
+      const carIds = normalizeBackfillCarIds(request.data?.carIds);
+      const reassignExplicitCarIds =
+        carIds.length > 0 && request.data?.reassignExplicitCarIds === true;
+
+      const db = admin.firestore();
+      const businessRef = db.collection("businesses").doc(businessId);
+      const businessDoc = await businessRef.get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business profile not found");
+      }
+      const business = businessDoc.data() || {};
+      const enabledServices = normalizeBusinessServices(
+          business.enabledServices,
+      );
+
+      let docs = [];
+      if (carIds.length) {
+        docs = await db.getAll(
+            ...carIds.map((id) => db.collection("cars").doc(id)),
+        );
+      } else {
+        let query = db.collection("cars")
+            .orderBy(admin.firestore.FieldPath.documentId())
+            .limit(batchSize);
+        if (legacyBusinessName) {
+          query = db.collection("cars")
+              .where("businessName", "==", legacyBusinessName)
+              .orderBy(admin.firestore.FieldPath.documentId())
+              .limit(batchSize);
+        }
+        if (afterId) {
+          query = query.startAfter(afterId);
+        }
+        const snapshot = await query.get();
+        docs = snapshot.docs;
+      }
+
+      const eligibleDocs = eligibleBackfillDocs(docs, {
+        allowAssigned: reassignExplicitCarIds,
+        targetBusinessId: businessId,
+      });
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      const update = buildBusinessCarBackfillPayload({
+        businessId,
+        business,
+        enabledServices,
+        updatedAt: now,
+      });
+      const result = buildBusinessCarBackfillResult({
+        dryRun,
+        businessId,
+        docs,
+        eligibleDocs,
+      });
+
+      if (dryRun || eligibleDocs.length === 0) {
+        return result;
+      }
+
+      for (let index = 0; index < eligibleDocs.length; index += 200) {
+        const batch = db.batch();
+        eligibleDocs.slice(index, index + 200).forEach((doc) => {
+          batch.set(doc.ref, update, {merge: true});
+          setAdminAuditLog(batch, {
+            action: "legacy_car_listing_business_assigned",
+            actorUid: callerUid,
+            targetCollection: "cars",
+            targetId: doc.id,
+            targetLabel: doc.data()?.title || doc.id,
+            previousValue: cleanText(doc.data()?.businessId, 120) ||
+              "unassigned",
+            nextValue: businessId,
+          });
+        });
+        await batch.commit();
+        result.updated += eligibleDocs.slice(index, index + 200).length;
+      }
+
+      return result;
     },
 );
 
@@ -3933,10 +6704,22 @@ exports.markPaidHoldSold = onCall(
           throw new HttpsError("not-found", "Purchase not found");
         }
         const purchase = purchaseDoc.data();
-        await requireBusinessManager(uid, purchase.businessId);
+        await requireBusinessPermission(uid, purchase.businessId, "purchases");
         assertPaidHoldActionable(purchase);
         const carRef = db.collection("cars").doc(purchase.carId);
         const carDoc = await transaction.get(carRef);
+        // Guard against double-selling the same car to a different hold/buyer.
+        if (
+          carDoc.exists &&
+          carDoc.data().status === "sold" &&
+          carDoc.data().soldPurchaseId &&
+          carDoc.data().soldPurchaseId !== purchaseId
+        ) {
+          throw new HttpsError(
+              "failed-precondition",
+              "This car is already marked sold to another buyer.",
+          );
+        }
         const now = admin.firestore.FieldValue.serverTimestamp();
         transaction.update(purchaseRef, {
           purchaseStatus: "completed",
@@ -3993,8 +6776,9 @@ exports.markPaidHoldNoShow = onCall(
           throw new HttpsError("not-found", "Purchase not found");
         }
         const purchase = purchaseDoc.data();
-        await requireBusinessManager(uid, purchase.businessId);
+        await requireBusinessPermission(uid, purchase.businessId, "purchases");
         assertPaidHoldActionable(purchase);
+        assertHoldLapsed(purchase);
         const carRef = db.collection("cars").doc(purchase.carId);
         const carDoc = await transaction.get(carRef);
         const now = admin.firestore.FieldValue.serverTimestamp();
@@ -4028,6 +6812,149 @@ exports.markPaidHoldNoShow = onCall(
         }, {merge: true});
       });
       return {success: true, purchaseId};
+    },
+);
+
+// Business-initiated finalization for NON paid-hold flows (viewings, direct
+// purchases): mark completed or cancelled. Enforces the state machine, updates
+// the car, and — on cancel of a paid deposit — flags the deposit for refund and
+// notifies the platform instead of silently keeping the customer's money.
+exports.businessFinalizeCarPurchase = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const {purchaseId, outcome, note} = request.data || {};
+      if (!purchaseId) {
+        throw new HttpsError("invalid-argument", "Purchase ID is required");
+      }
+      if (!["completed", "cancelled"].includes(outcome)) {
+        throw new HttpsError(
+            "invalid-argument", "Outcome must be completed or cancelled",
+        );
+      }
+
+      const db = admin.firestore();
+      const purchaseRef = db.collection("carPurchases").doc(purchaseId);
+      const result = await db.runTransaction(async (transaction) => {
+        const purchaseDoc = await transaction.get(purchaseRef);
+        if (!purchaseDoc.exists) {
+          throw new HttpsError("not-found", "Purchase not found");
+        }
+        const purchase = purchaseDoc.data();
+        await requireBusinessPermission(uid, purchase.businessId, "purchases");
+        if (isTerminalPurchaseStatus(purchase.purchaseStatus)) {
+          throw new HttpsError(
+              "failed-precondition",
+              "This record is already finalized and cannot be changed.",
+          );
+        }
+        const carRef = purchase.carId ?
+          db.collection("cars").doc(purchase.carId) : null;
+        const carDoc = carRef ? await transaction.get(carRef) : null;
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        const isViewing = purchaseIsViewing(purchase);
+        const trimmedNote = String(note || "").trim();
+
+        if (outcome === "completed") {
+          transaction.update(purchaseRef, {
+            purchaseStatus: "completed",
+            finalizedAt: now,
+            finalizedBy: uid,
+            staffNotes: trimmedNote || purchase.staffNotes || "",
+            updatedAt: now,
+          });
+          if (carDoc && carDoc.exists) {
+            if (!isViewing) {
+              if (
+                carDoc.data().status === "sold" &&
+                carDoc.data().soldPurchaseId &&
+                carDoc.data().soldPurchaseId !== purchaseId
+              ) {
+                throw new HttpsError(
+                    "failed-precondition",
+                    "This car is already marked sold to another buyer.",
+                );
+              }
+              transaction.update(carRef, {
+                status: "sold",
+                soldPurchaseId: purchaseId,
+                reservedPurchaseId: admin.firestore.FieldValue.delete(),
+                reservationType: admin.firestore.FieldValue.delete(),
+                soldInfo: {
+                  customerName: purchase.buyerName || "",
+                  customerPhone: purchase.buyerPhone || "",
+                  customerEmail: purchase.buyerEmail || "",
+                  amount:
+                    Number(purchase.salePrice || purchase.price || 0) || 0,
+                  depositAmount: Number(purchase.depositAmount || 0) || 0,
+                  soldDate: now,
+                  notes: "Completed by business via console",
+                },
+                updatedAt: now,
+              });
+            } else {
+              transaction.update(carRef, {
+                status: "active",
+                reservedPurchaseId: admin.firestore.FieldValue.delete(),
+                reservationType: admin.firestore.FieldValue.delete(),
+                updatedAt: now,
+              });
+            }
+          }
+          return {refundQueued: false};
+        }
+
+        // outcome === "cancelled"
+        const depositPaid = Number(purchase.depositAmount || 0) > 0 &&
+          purchase.paymentStatus === "paid";
+        transaction.update(purchaseRef, {
+          purchaseStatus: "cancelled",
+          cancelledAt: now,
+          cancelledBy: uid,
+          staffNotes: trimmedNote || purchase.staffNotes || "",
+          // Business cancelled, so the customer is owed their deposit back. We
+          // never silently keep it — flag it and let the platform process it.
+          depositForfeitureStatus: depositPaid ?
+            "refund_pending" : (purchase.depositForfeitureStatus || "none"),
+          updatedAt: now,
+        });
+        if (carDoc && carDoc.exists) {
+          transaction.update(carRef, {
+            status: "active",
+            reservedPurchaseId: admin.firestore.FieldValue.delete(),
+            reservationType: admin.firestore.FieldValue.delete(),
+            updatedAt: now,
+          });
+        }
+        if (depositPaid) {
+          const notifRef = db.collection("platformNotifications").doc();
+          transaction.set(notifRef, {
+            type: "deposit_refund_due",
+            status: "unread",
+            businessId: purchase.businessId,
+            businessName: purchase.businessName || "",
+            purchaseId,
+            buyerUid: purchase.buyerUid || "",
+            buyerEmail: purchase.buyerEmail || "",
+            buyerName: purchase.buyerName || "",
+            amount: Number(purchase.depositAmount || 0) || 0,
+            currency: purchase.depositCurrency || "USD",
+            title: "Deposit refund due",
+            message:
+              `${purchase.businessName || "A business"} cancelled a hold for ` +
+              `${purchase.carTitle || "a vehicle"}. Refund the customer's ` +
+              `deposit of ${purchase.depositAmount} ` +
+              `${purchase.depositCurrency || "USD"}.`,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+        return {refundQueued: depositPaid};
+      });
+      return {success: true, purchaseId, outcome, ...result};
     },
 );
 
@@ -4120,7 +7047,7 @@ exports.decidePaidHoldExtension = onCall(
         throw new HttpsError("not-found", "Purchase not found");
       }
       const purchase = purchaseDoc.data();
-      await requireBusinessManager(uid, purchase.businessId);
+      await requireBusinessPermission(uid, purchase.businessId, "purchases");
       assertPaidHoldActionable(purchase);
       if (purchase.extensionRequestStatus !== "pending") {
         throw new HttpsError(

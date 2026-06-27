@@ -1,21 +1,129 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    match /cars/{carId}/{allPaths=**} {
+    function userProfile() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function userAdminRole() {
+      return userProfile().adminRole is string ? userProfile().adminRole : "";
+    }
+
+    function isPlatformAdmin() {
+      return request.auth != null &&
+        (
+          userProfile().role == 'admin' ||
+          ('platformAdmin' in userProfile() && userProfile().platformAdmin == true)
+        );
+    }
+
+    function hasDynamicWebsiteCapability() {
+      return firestore.exists(/databases/(default)/documents/platformConfig/permissions) &&
+        userAdminRole() in firestore.get(/databases/(default)/documents/platformConfig/permissions)
+          .data.roles &&
+        firestore.get(/databases/(default)/documents/platformConfig/permissions)
+          .data.roles[userAdminRole()].sections.website == 'manage';
+    }
+
+    function canManageWebsite() {
+      return isPlatformAdmin() &&
+        (
+          ('platformAdmin' in userProfile() && userProfile().platformAdmin == true) ||
+          userAdminRole() == "" ||
+          userAdminRole() == "superAdmin" ||
+          userAdminRole() == "operationsManager" ||
+          userAdminRole() == "contentManager" ||
+          hasDynamicWebsiteCapability()
+        );
+    }
+
+    function canManageBusinessLogo(businessId) {
+      return canManageWebsite() ||
+        (
+          (
+            userProfile().businessId == businessId ||
+            userOwnsBusinessDocument(businessId)
+          ) &&
+          userProfile().role == 'businessOwner'
+        );
+    }
+
+    function userOwnsBusinessDocument(businessId) {
+      return firestore.exists(/databases/(default)/documents/businesses/$(businessId)) &&
+        'ownerUid' in firestore.get(/databases/(default)/documents/businesses/$(businessId)).data &&
+        firestore.get(/databases/(default)/documents/businesses/$(businessId)).data.ownerUid == request.auth.uid;
+    }
+
+    function isLinkedToBusiness(businessId) {
+      return userProfile().businessId == businessId ||
+        userOwnsBusinessDocument(businessId);
+    }
+
+    function hasBusinessSection(section) {
+      return
+        !('businessPermissions' in userProfile()) ||
+        !(userProfile().businessPermissions is list) ||
+        userProfile().businessPermissions.size() == 0 ||
+        section in userProfile().businessPermissions;
+    }
+
+    function canManageBusinessListingImages(businessId) {
+      return isPlatformAdmin() ||
+        (
+          isLinkedToBusiness(businessId) &&
+          (
+            userProfile().role == 'businessOwner' ||
+            (
+              userProfile().role == 'staff' &&
+              hasBusinessSection('listings')
+            )
+          )
+        );
+    }
+
+    function canManageBusinessProfileImages(businessId) {
+      return isPlatformAdmin() ||
+        (
+          isLinkedToBusiness(businessId) &&
+          (
+            userProfile().role == 'businessOwner' ||
+            (
+              userProfile().role == 'staff' &&
+              hasBusinessSection('profile')
+            )
+          )
+        );
+    }
+
+    function validImageUpload() {
+      return request.resource.size < 10 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*');
+    }
+
+    match /cars/{businessId}/{carId}/{allPaths=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if request.auth != null &&
+        validImageUpload() &&
+        canManageBusinessListingImages(businessId);
+    }
+
+    match /cars/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
     }
 
     match /businesses/{businessId}/{allPaths=**} {
       allow read: if true;
       allow write: if request.auth != null &&
-        (
-          firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (
-            firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.businessId == businessId &&
-            firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['businessOwner', 'staff']
-          )
-        );
+        validImageUpload() &&
+        canManageBusinessProfileImages(businessId);
+    }
+
+    match /businessLogos/{businessId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null &&
+        validImageUpload() &&
+        canManageBusinessLogo(businessId);
     }
 
     match /users/{userId}/{allPaths=**} {

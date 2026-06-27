@@ -1141,6 +1141,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String get countryCode => 'Code du pays';
 
   @override
+  String get selectBusinessCountry =>
+      'Sélectionnez le pays de votre entreprise';
+
+  @override
+  String get selectBusinessCity => 'Sélectionnez la ville de votre entreprise';
+
+  @override
+  String get selectCountryFirst => 'Sélectionnez d’abord un pays';
+
+  @override
   String get seedDefaultCountries => 'Ajouter tous les pays';
 
   @override
@@ -1185,6 +1195,65 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get businessProfileSaved => 'Profil de l’entreprise enregistré.';
+
+  @override
+  String get featureBlurbRequired =>
+      'Entrez une courte description de moins de 140 caractères.';
+
+  @override
+  String get featureConsentRequired =>
+      'Le consentement est requis avant la demande.';
+
+  @override
+  String get featureLogoRequired =>
+      'Téléversez un logo avant de faire la demande.';
+
+  @override
+  String get featureRequestSent =>
+      'Demande de mise en avant envoyée pour validation.';
+
+  @override
+  String get featuredOnWebsite => 'Mis en avant sur le site';
+
+  @override
+  String get featureApprovedMessage =>
+      'Votre entreprise est approuvée pour une mise en avant publique.';
+
+  @override
+  String get featureRequestedMessage =>
+      'Votre demande est en attente de validation par l’administration.';
+
+  @override
+  String get featureDefaultMessage =>
+      'Demandez une carte marketing publique sur Laawol Digital.';
+
+  @override
+  String featureAdminNote(Object note) {
+    return 'Note admin : $note';
+  }
+
+  @override
+  String get uploadLogo => 'Téléverser le logo';
+
+  @override
+  String get changeLogo => 'Changer le logo';
+
+  @override
+  String get shortPublicBlurb => 'Courte description publique';
+
+  @override
+  String get shortPublicBlurbHelper =>
+      'Une phrase que les clients peuvent voir.';
+
+  @override
+  String get featureConsentLabel =>
+      'J’accepte que cette entreprise soit mise en avant publiquement.';
+
+  @override
+  String get sendingFeatureRequest => 'Envoi de la demande';
+
+  @override
+  String get requestFeaturing => 'Demander la mise en avant';
 
   @override
   String get noBusinessProfileAssigned =>

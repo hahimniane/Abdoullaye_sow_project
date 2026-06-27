@@ -1081,6 +1081,7 @@ class _BusinessOptionCard extends StatelessWidget {
     ].where((item) => item != null && item.trim().isNotEmpty).join(' • ');
 
     final note = option.serviceNote?.trim() ?? '';
+    final destinationNote = option.country.destinationNote?.trim() ?? '';
     final deliveryEstimate = option.country.deliveryEstimateLabel;
 
     return InkWell(
@@ -1109,6 +1110,11 @@ class _BusinessOptionCard extends StatelessWidget {
               color: selected ? AppColors.cobalt : AppColors.muted,
             ),
             const SizedBox(width: 4),
+            Text(
+              option.country.flagEmoji,
+              style: const TextStyle(fontSize: 22),
+            ),
+            const SizedBox(width: 8),
             const Icon(Icons.storefront_outlined, size: 22),
             const SizedBox(width: 10),
             Expanded(
@@ -1134,6 +1140,17 @@ class _BusinessOptionCard extends StatelessWidget {
                   if (note.isNotEmpty)
                     Text(
                       note,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  if (destinationNote.isNotEmpty)
+                    Text(
+                      destinationNote,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(

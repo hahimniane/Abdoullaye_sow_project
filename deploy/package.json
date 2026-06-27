@@ -1,0 +1,9 @@
+{
+  "name": "laawol-deploy",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "verify:public": "node ../public_site/verify-cms.mjs"
+  },
+  "dependencies": { "basic-ftp": "^5.0.5" }
+}

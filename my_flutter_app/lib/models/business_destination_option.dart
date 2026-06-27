@@ -74,6 +74,7 @@ class BusinessDestinationOption {
             ?.toInt(),
         deliveryEstimateMaxDays: (country['deliveryEstimateMaxDays'] as num?)
             ?.toInt(),
+        destinationNote: country['destinationNote'] as String?,
       ),
     );
   }
@@ -131,6 +132,7 @@ class BusinessDestinationOption {
             ?.toInt(),
         deliveryEstimateMaxDays: (data['deliveryEstimateMaxDays'] as num?)
             ?.toInt(),
+        destinationNote: data['destinationNote'] as String?,
       ),
     );
   }

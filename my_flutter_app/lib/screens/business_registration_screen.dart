@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../data/business_location_catalog.dart';
 import '../l10n/app_localizations.dart';
 import '../models/business_service.dart';
 import '../providers/auth_provider.dart';
@@ -36,6 +37,8 @@ class _BusinessRegistrationScreenState
   final _businessWebsiteController = TextEditingController();
   final _serviceNoteController = TextEditingController();
   final _selectedServices = <String>{...defaultBusinessServiceValues};
+  String? _businessCountry;
+  String? _businessCity;
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
   bool _isSubmitting = false;
@@ -107,8 +110,9 @@ class _BusinessRegistrationScreenState
         enabledServices: _selectedServices.toList(),
         serviceNote: _serviceNoteController.text.trim(),
         addressLine1: '',
-        city: '',
-        state: '',
+        city: _businessCity ?? '',
+        country: _businessCountry ?? '',
+        state: _businessCountry ?? '',
         postalCode: '',
       );
       final businessId = application['businessId'] as String?;
@@ -129,8 +133,9 @@ class _BusinessRegistrationScreenState
           profileImagePath: upload.path,
           serviceNote: _serviceNoteController.text.trim(),
           addressLine1: '',
-          city: '',
-          state: '',
+          city: _businessCity ?? '',
+          country: _businessCountry ?? '',
+          state: _businessCountry ?? '',
           postalCode: '',
           carHoldPricingMode: 'flat',
           carHoldFlatFee: 500,
@@ -470,6 +475,47 @@ class _BusinessRegistrationScreenState
                                   validator: _websiteValidator,
                                 ),
                                 const SizedBox(height: 12),
+                                _DropdownField(
+                                  label: l10n.countryName,
+                                  icon: Icons.public_outlined,
+                                  value: _businessCountry,
+                                  values: businessCountryOptions(
+                                    _businessCountry,
+                                  ),
+                                  validator: (value) => _required(
+                                    value,
+                                    l10n.selectBusinessCountry,
+                                  ),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _businessCountry = value;
+                                      _businessCity = null;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 12),
+                                _DropdownField(
+                                  label: l10n.locationCity,
+                                  icon: Icons.location_city_outlined,
+                                  value: _businessCity,
+                                  values: businessCityOptions(
+                                    _businessCountry,
+                                    _businessCity,
+                                  ),
+                                  hintText: _businessCountry == null
+                                      ? l10n.selectCountryFirst
+                                      : null,
+                                  validator: (value) =>
+                                      _required(value, l10n.selectBusinessCity),
+                                  onChanged: _businessCountry == null
+                                      ? null
+                                      : (value) {
+                                          setState(() {
+                                            _businessCity = value;
+                                          });
+                                        },
+                                ),
+                                const SizedBox(height: 12),
                                 _TextField(
                                   controller: _serviceNoteController,
                                   label: l10n.serviceNote,
@@ -770,6 +816,42 @@ class _TextField extends StatelessWidget {
         prefixIcon: Icon(icon),
         suffixIcon: suffixIcon,
       ),
+      validator: validator,
+    );
+  }
+}
+
+class _DropdownField extends StatelessWidget {
+  const _DropdownField({
+    required this.label,
+    required this.icon,
+    required this.value,
+    required this.values,
+    required this.onChanged,
+    this.validator,
+    this.hintText,
+  });
+
+  final String label;
+  final IconData icon;
+  final String? value;
+  final List<String> values;
+  final ValueChanged<String?>? onChanged;
+  final String? Function(String?)? validator;
+  final String? hintText;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String>(
+      initialValue: value != null && values.contains(value) ? value : null,
+      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
+      hint: hintText == null ? null : Text(hintText!),
+      items: values
+          .map(
+            (item) => DropdownMenuItem<String>(value: item, child: Text(item)),
+          )
+          .toList(),
+      onChanged: onChanged,
       validator: validator,
     );
   }

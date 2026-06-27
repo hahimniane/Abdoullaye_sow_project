@@ -92,6 +92,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
     final businessData = businessDoc.data() ?? <String, dynamic>{};
     final docRef = _firestore.collection('cars').doc();
     final imageUrls = await _uploadImages(
+      businessId: businessId,
       carId: docRef.id,
       images: result.images,
     );
@@ -117,6 +118,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
         ? car.status
         : result.status;
     final imageUrls = await _uploadImages(
+      businessId: car.businessId,
       carId: car.id,
       images: result.images,
       previousUrls: car.imageUrls,
@@ -136,6 +138,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
   }
 
   Future<List<String>> _uploadImages({
+    required String businessId,
     required String carId,
     required List<_EditableCarImage> images,
     List<String>? previousUrls,
@@ -155,7 +158,12 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
       final ext = (image.file?.name.split('.').last ?? 'jpg').toLowerCase();
       final filename =
           'car_${carId}_${DateTime.now().millisecondsSinceEpoch}_$index.$ext';
-      final ref = storage.ref().child('cars').child(carId).child(filename);
+      final ref = storage
+          .ref()
+          .child('cars')
+          .child(businessId)
+          .child(carId)
+          .child(filename);
       final contentType = ext == 'png'
           ? 'image/png'
           : ext == 'webp'

@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/styles.css?v=12" />
+  <link rel="stylesheet" href="assets/styles.css?v=14" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d9488'/%3E%3Cpath d='M8 22c4-10 12-10 16 0' stroke='white' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='11' r='2.4' fill='%23f59e0b'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -59,42 +59,83 @@
         </div>
         <ul class="hero-trust"><li><strong>Registered</strong> businesses</li><li><strong>Clear</strong> pricing and routes</li><li><strong>Platform</strong> support</li></ul>
       </div>
-      <div class="hero-card hero-system">
-        <div class="signal-network" aria-hidden="true">
-          <svg class="signal-lines" viewBox="0 0 520 430" role="img">
+      <div class="hero-card">
+        <div class="globe-wrap" role="img" aria-label="A global, two-way marketplace connecting the diaspora and home across many services">
+          <div class="globe-stage">
+          <canvas class="globe-canvas" id="globeCanvas" aria-hidden="true"></canvas>
+          <svg class="globe-svg globe-fallback" viewBox="0 0 460 460" preserveAspectRatio="xMidYMid meet">
             <defs>
-              <linearGradient id="signalGradient" x1="42" y1="338" x2="478" y2="82" gradientUnits="userSpaceOnUse">
-                <stop offset="0" stop-color="#0d9488" />
-                <stop offset=".58" stop-color="#14b8a6" />
-                <stop offset="1" stop-color="#f59e0b" />
+              <radialGradient id="ocean" cx="40%" cy="33%" r="75%">
+                <stop offset="0" stop-color="#2bd6c1" />
+                <stop offset=".5" stop-color="#0d9488" />
+                <stop offset="1" stop-color="#07302c" />
+              </radialGradient>
+              <radialGradient id="haze" cx="50%" cy="50%" r="50%">
+                <stop offset=".62" stop-color="#14b8a6" stop-opacity="0" />
+                <stop offset="1" stop-color="#14b8a6" stop-opacity=".22" />
+              </radialGradient>
+              <linearGradient id="netArc" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#14b8a6" /><stop offset="1" stop-color="#f59e0b" />
               </linearGradient>
+              <clipPath id="ball"><circle cx="230" cy="230" r="150" /></clipPath>
+              <pattern id="land" width="19" height="19" patternUnits="userSpaceOnUse">
+                <circle cx="3" cy="3" r="1.5" fill="#dffff8" opacity=".55" />
+                <animateTransform attributeName="patternTransform" type="translate" from="0 0" to="-19 0" dur="3.4s" repeatCount="indefinite" />
+              </pattern>
             </defs>
-            <path class="signal-beam beam-source" d="M72 330 C150 282 180 244 238 216" />
-            <path class="signal-beam beam-ship" d="M68 152 C150 184 184 196 238 216" />
-            <path class="signal-beam beam-cars" d="M448 158 C386 176 330 198 282 216" />
-            <path class="signal-beam beam-food" d="M452 330 C384 284 338 248 282 216" />
+
+            <circle cx="230" cy="230" r="178" fill="url(#haze)" />
+            <circle cx="230" cy="230" r="150" fill="url(#ocean)" />
+
+            <g clip-path="url(#ball)">
+              <rect class="globe-land" x="-150" y="80" width="760" height="300" fill="url(#land)" />
+              <g class="grat" fill="none" stroke="#d3fff5" stroke-opacity=".16" stroke-width="1.2">
+                <line x1="80" y1="230" x2="380" y2="230" />
+                <ellipse cx="230" cy="230" rx="150" ry="50" />
+                <ellipse cx="230" cy="230" rx="150" ry="104" />
+                <line x1="230" y1="80" x2="230" y2="380" />
+                <ellipse cx="230" cy="230" rx="50" ry="150" />
+                <ellipse cx="230" cy="230" rx="104" ry="150" />
+              </g>
+              <ellipse cx="178" cy="172" rx="58" ry="40" fill="#ffffff" opacity=".1" />
+            </g>
+            <circle cx="230" cy="230" r="150" fill="none" stroke="#06302c" stroke-opacity=".28" stroke-width="1.5" />
+
+            <!-- global routes, pulses travel BOTH ways -->
+            <path id="arc1" class="net-arc" d="M104 128 C 250 24 392 90 388 214" />
+            <path id="arc2" class="net-arc" d="M86 300 C 150 408 330 416 384 312" />
+            <path id="arc3" class="net-arc" d="M120 360 C 60 250 70 150 150 96" />
+            <circle class="net-pulse" r="5"><animateMotion dur="5s" repeatCount="indefinite" calcMode="linear" keyPoints="0;1" keyTimes="0;1"><mpath href="#arc1" /></animateMotion></circle>
+            <circle class="net-pulse gold" r="5"><animateMotion dur="5.6s" begin="1s" repeatCount="indefinite" calcMode="linear" keyPoints="1;0" keyTimes="0;1"><mpath href="#arc2" /></animateMotion></circle>
+            <circle class="net-pulse" r="4.5"><animateMotion dur="6s" begin="2.4s" repeatCount="indefinite" calcMode="linear" keyPoints="0;1" keyTimes="0;1"><mpath href="#arc3" /></animateMotion></circle>
+
+            <!-- hub nodes on the network -->
+            <g class="hub"><circle class="hub-ping" cx="104" cy="128" r="6" /><circle cx="104" cy="128" r="5" /></g>
+            <g class="hub"><circle cx="388" cy="214" r="5" /></g>
+            <g class="hub"><circle class="hub-ping gold" cx="384" cy="312" r="6" /><circle cx="384" cy="312" r="5" /></g>
+            <g class="hub"><circle cx="86" cy="300" r="5" /></g>
+            <g class="hub"><circle cx="150" cy="96" r="4.5" /></g>
           </svg>
-          <span class="provider-card provider-source"><i>📦</i><b>Source</b><small>3 quotes</small></span>
-          <span class="provider-card provider-ship"><i>🛢️</i><b>Barrels</b><small>Route live</small></span>
-          <span class="provider-card provider-cars"><i>🚗</i><b>Cars</b><small>Verified</small></span>
-          <span class="provider-card provider-food"><i>🍲</i><b>Food</b><small>Nearby</small></span>
-          <span class="trust-orb"><i>✓</i><b>Verified marketplace</b></span>
-        </div>
-        <div class="phone phone-hero">
-          <div class="phone-notch"></div>
-          <div class="app-top"><div><small>Welcome back</small><b>What do you need today?</b></div><span class="app-ava">A</span></div>
-          <div class="app-tiles">
-            <div class="tile"><span class="ti teal">📦</span>Source</div>
-            <div class="tile"><span class="ti gold">🛢️</span>Barrels</div>
-            <div class="tile"><span class="ti navy">🚗</span>Cars</div>
-            <div class="tile"><span class="ti green">🍲</span>Food</div>
+
+          <!-- services float around the globe -->
+          <span class="svc svc-a"><i>🛢️</i>Shipping</span>
+          <span class="svc svc-b"><i>🚗</i>Cars</span>
+          <span class="svc svc-c"><i>📦</i>Sourcing</span>
+          <span class="svc svc-d"><i>🍲</i>Food</span>
+          <span class="svc svc-e"><i>⚖️</i>Pros</span>
+          <span class="svc svc-f"><i>💳</i>Payments</span>
+          <span class="globe-trust"><i>✓</i> Verified &amp; tracked</span>
           </div>
-          <div class="app-track"><div class="app-track-head"><b>Barrel to Conakry</b><span class="pill mini">In transit</span></div><div class="phone-bar"><span style="width:62%"></span></div><small>Estimated delivery · 22 days</small></div>
-        </div>
-        <div class="story-status" aria-hidden="true">
-          <span><b>01</b> Registered</span>
-          <span><b>02</b> Paid safely</span>
-          <span><b>03</b> Tracked</span>
+
+          <div class="corridor-card">
+            <div class="cc-head">
+              <span class="cc-emoji" id="ccEmoji">🚢</span>
+              <div class="cc-route"><b id="ccTitle">New York → Conakry</b><small id="ccMeta">Barrels · by sea · paid safely</small></div>
+              <span class="cc-live"><i></i> Live</span>
+            </div>
+            <div class="cc-bar"><span id="ccBar" style="width:62%"></span></div>
+            <small class="cc-eta" id="ccEta">On the vessel · arrives in 22 days · tracked</small>
+          </div>
         </div>
       </div>
     </div>
@@ -208,7 +249,8 @@
       <span class="footer-tag">Laawol — the road home.</span>
     </div>
   </footer>
-  <script src="assets/script.js?v=9"></script>
+  <script src="assets/script.js?v=11"></script>
+  <script src="assets/globe.js?v=3" defer></script>
   <script src="assets/content.js?v=7"></script>
 </body>
 </html>

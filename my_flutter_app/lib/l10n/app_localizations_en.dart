@@ -1123,6 +1123,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get countryCode => 'Country Code';
 
   @override
+  String get selectBusinessCountry => 'Select your business country';
+
+  @override
+  String get selectBusinessCity => 'Select your business city';
+
+  @override
+  String get selectCountryFirst => 'Select country first';
+
+  @override
   String get seedDefaultCountries => 'Seed All Countries';
 
   @override
@@ -1165,6 +1174,61 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get businessProfileSaved => 'Business profile saved.';
+
+  @override
+  String get featureBlurbRequired =>
+      'Enter a short blurb under 140 characters.';
+
+  @override
+  String get featureConsentRequired => 'Consent is required before requesting.';
+
+  @override
+  String get featureLogoRequired => 'Upload a logo before requesting.';
+
+  @override
+  String get featureRequestSent => 'Featuring request sent for admin review.';
+
+  @override
+  String get featuredOnWebsite => 'Featured on the website';
+
+  @override
+  String get featureApprovedMessage =>
+      'Your business is approved for public featuring.';
+
+  @override
+  String get featureRequestedMessage =>
+      'Your request is waiting for admin review.';
+
+  @override
+  String get featureDefaultMessage =>
+      'Request a public marketing card on Laawol Digital.';
+
+  @override
+  String featureAdminNote(Object note) {
+    return 'Admin note: $note';
+  }
+
+  @override
+  String get uploadLogo => 'Upload logo';
+
+  @override
+  String get changeLogo => 'Change logo';
+
+  @override
+  String get shortPublicBlurb => 'Short public blurb';
+
+  @override
+  String get shortPublicBlurbHelper => 'One sentence customers can safely see.';
+
+  @override
+  String get featureConsentLabel =>
+      'I consent to this business being featured publicly.';
+
+  @override
+  String get sendingFeatureRequest => 'Sending request';
+
+  @override
+  String get requestFeaturing => 'Request featuring';
 
   @override
   String get noBusinessProfileAssigned => 'No business profile is assigned.';

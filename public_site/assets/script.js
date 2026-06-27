@@ -139,3 +139,39 @@
   };
   refreshReveals();
 })();
+
+/* Hero corridor — rotating live shipment card */
+(function () {
+  var emoji = document.getElementById("ccEmoji");
+  var title = document.getElementById("ccTitle");
+  var meta = document.getElementById("ccMeta");
+  var bar = document.getElementById("ccBar");
+  var eta = document.getElementById("ccEta");
+  var card = document.querySelector(".corridor-card");
+  if (!emoji || !title || !meta || !bar || !eta || !card) return;
+
+  // Goods AND services move both ways, by sea and by air, across many regions.
+  var feed = [
+    { e: "🚢", t: "New York → Conakry", m: "Barrels · by sea · paid safely", w: 60, x: "On the vessel · arrives in 22 days · tracked" },
+    { e: "✈️", t: "Atlanta → Lagos", m: "Packages · by air · platform-backed", w: 86, x: "In the air · arrives in 3 days · tracked" },
+    { e: "🚢", t: "London → Accra", m: "Car · by sea · escrow protected", w: 40, x: "Loaded at port · arrives in 26 days · tracked" },
+    { e: "✈️", t: "Abidjan → Brussels", m: "Parcel · by air · protected", w: 72, x: "Boarding flight · arrives in 4 days · tracked" },
+    { e: "⚖️", t: "Brussels → Banjul", m: "Licensed professional · supported", w: 55, x: "Consultation confirmed for Friday" },
+    { e: "💳", t: "Paris → Bamako", m: "Payment · platform-protected", w: 96, x: "Released to the business · receipt sent" }
+  ];
+  var i = 0;
+  function render(item) {
+    emoji.textContent = item.e;
+    title.textContent = item.t;
+    meta.textContent = item.m;
+    eta.textContent = item.x;
+    bar.style.width = item.w + "%";
+    card.classList.remove("cc-swap");
+    void card.offsetWidth; // restart animation
+    card.classList.add("cc-swap");
+  }
+  setInterval(function () {
+    i = (i + 1) % feed.length;
+    render(feed[i]);
+  }, 3200);
+})();

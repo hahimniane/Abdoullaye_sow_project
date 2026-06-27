@@ -824,3 +824,118 @@ html.js-anim .reveal.in { opacity: 1; transform: none; }
     animation:none;
   }
 }
+
+/* ============================================================
+   Hero corridor — animated diaspora ⇄ West Africa route
+   ============================================================ */
+.corridor{position:relative; width:100%; max-width:560px; margin:0 auto}
+.corridor-map{width:100%; height:auto; display:block; overflow:visible}
+.land{transition:opacity .6s ease}
+.js-anim .land{opacity:0; animation:landIn 1.2s var(--ease-pro, ease) forwards}
+.js-anim .land:nth-of-type(2){animation-delay:.18s}
+@keyframes landIn{from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:none}}
+
+.arc-flow{stroke-dasharray:9 15; animation:arcFlow 1.05s linear infinite}
+@keyframes arcFlow{to{stroke-dashoffset:-24}}
+
+.payload circle{fill:#fff; stroke:rgba(13,148,136,.22); stroke-width:1.5;
+  filter:drop-shadow(0 6px 12px rgba(11,59,56,.22))}
+.payload .emoji{font-size:18px; text-anchor:middle; dominant-baseline:middle}
+
+.port .dot{filter:drop-shadow(0 3px 8px rgba(11,59,56,.35))}
+.port .ping{fill:rgba(13,148,136,.45); transform-box:fill-box; transform-origin:center;
+  animation:portPing 2.4s ease-out infinite}
+.port .ping-gold{fill:rgba(245,158,11,.5)}
+.port:last-of-type .ping{animation-delay:1.2s}
+@keyframes portPing{0%{r:7; opacity:.6} 70%,100%{r:22; opacity:0}}
+
+.corridor-label{position:absolute; display:flex; flex-direction:column; line-height:1.1;
+  background:rgba(255,255,255,.86); backdrop-filter:blur(6px);
+  border:1px solid var(--line); border-radius:12px; padding:7px 12px; box-shadow:var(--shadow)}
+.corridor-label b{font-family:var(--font-head); font-size:14px; color:var(--ink)}
+.corridor-label small{font-size:11px; color:var(--muted); font-weight:600}
+.lbl-from{left:0; top:44%}
+.lbl-to{right:1%; top:24%}
+.lbl-to b{color:var(--gold-deep)}
+
+.corridor-card{position:absolute; left:8%; right:8%; bottom:-6px;
+  background:var(--paper); border:1px solid var(--line); border-radius:16px;
+  box-shadow:var(--shadow-lg); padding:14px 16px}
+.cc-head{display:flex; align-items:center; gap:11px}
+.cc-emoji{font-size:24px; width:42px; height:42px; flex:0 0 auto; display:grid; place-items:center;
+  background:var(--bg-soft); border-radius:12px}
+.cc-route{flex:1; min-width:0}
+.cc-route b{display:block; font-family:var(--font-head); font-size:15px; color:var(--ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.cc-route small{color:var(--muted); font-size:12px}
+.cc-live{display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:800;
+  color:var(--green); background:rgba(5,150,105,.1); padding:4px 9px; border-radius:999px}
+.cc-live i{width:7px; height:7px; border-radius:50%; background:var(--green); animation:ccPulse 1.4s ease-in-out infinite}
+@keyframes ccPulse{0%,100%{opacity:1; box-shadow:0 0 0 0 rgba(5,150,105,.5)} 50%{opacity:.7; box-shadow:0 0 0 5px rgba(5,150,105,0)}}
+.cc-bar{height:7px; border-radius:6px; background:var(--bg-soft); overflow:hidden; margin:13px 0 7px}
+.cc-bar span{display:block; height:100%; border-radius:6px;
+  background:linear-gradient(90deg,var(--teal),var(--teal-mid)); transition:width .7s var(--ease-pro, ease)}
+.cc-eta{color:var(--ink-soft); font-size:12.5px; font-weight:600}
+.cc-swap{animation:ccSwap .5s var(--ease-pro, ease)}
+@keyframes ccSwap{from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none}}
+
+.corridor-card{margin-bottom:14px}
+@media (max-width:980px){ .corridor{max-width:480px} .corridor-card{position:static; margin-top:14px; left:0; right:0} .lbl-from{top:58%} }
+
+@media (prefers-reduced-motion: reduce){
+  .arc-flow, .port .ping, .cc-live i, .js-anim .land{animation:none}
+  .corridor svg animateMotion{display:none}
+  .payload:nth-of-type(2){transform:translate(150px,-120px)}
+}
+
+/* ============================================================
+   Hero globe — global, two-way, multi-service network
+   ============================================================ */
+.globe-wrap{position:relative; width:100%; max-width:520px; margin:0 auto; display:flex; flex-direction:column; align-items:center}
+.globe-stage{position:relative; width:100%}
+.globe-svg{width:100%; height:auto; display:block; overflow:visible}
+/* card sits BELOW the globe, not over it */
+.globe-wrap .corridor-card{position:static; left:auto; right:auto; bottom:auto; width:100%; max-width:392px; margin:-30px auto 0; position:relative; z-index:3}
+
+.net-arc{fill:none; stroke:url(#netArc); stroke-width:2; stroke-opacity:.5; stroke-dasharray:5 9; animation:netDash 1.25s linear infinite}
+@keyframes netDash{to{stroke-dashoffset:-14}}
+.net-pulse{fill:#14b8a6; filter:drop-shadow(0 0 6px rgba(20,184,166,.85))}
+.net-pulse.gold{fill:#f59e0b; filter:drop-shadow(0 0 6px rgba(245,158,11,.85))}
+
+.hub circle{fill:#06302c}
+.hub .hub-ping{fill:rgba(20,184,166,.55); animation:hubPing 2.6s ease-out infinite}
+.hub .hub-ping.gold{fill:rgba(245,158,11,.6)}
+@keyframes hubPing{0%{r:5; opacity:.6} 70%,100%{r:17; opacity:0}}
+
+.svc{position:absolute; display:inline-flex; align-items:center; gap:7px;
+  background:rgba(255,255,255,.94); backdrop-filter:blur(8px);
+  border:1px solid var(--line); border-radius:999px; padding:6px 13px 6px 9px;
+  font-family:var(--font-head); font-size:13px; font-weight:700; color:var(--ink);
+  box-shadow:var(--shadow); animation:floaty 5.5s ease-in-out infinite; white-space:nowrap}
+.svc i{font-size:15px; font-style:normal}
+.svc-a{top:3%;  left:6%}
+.svc-b{top:0;   right:12%}
+.svc-c{top:38%; right:-3%}
+.svc-d{bottom:20%; right:4%}
+.svc-e{bottom:9%; left:8%}
+.svc-f{top:36%; left:-4%}
+.svc-b{animation-delay:.5s} .svc-c{animation-delay:1s} .svc-d{animation-delay:1.6s}
+.svc-e{animation-delay:2.1s} .svc-f{animation-delay:2.7s}
+@keyframes floaty{0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)}}
+
+.globe-trust{position:absolute; top:5%; left:50%; transform:translateX(-50%);
+  display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:800;
+  color:var(--teal-deep); background:var(--mist); border:1px solid rgba(13,148,136,.28);
+  padding:5px 12px; border-radius:999px; box-shadow:var(--shadow)}
+.globe-trust i{width:15px; height:15px; border-radius:50%; background:var(--teal); color:#fff;
+  display:grid; place-items:center; font-size:9px; font-style:normal}
+
+@media (max-width:980px){ .globe-wrap{max-width:440px} .svc{font-size:12px} .corridor-card{position:static; margin-top:18px; left:0; right:0} }
+@media (prefers-reduced-motion: reduce){
+  .net-arc, .net-pulse, .hub .hub-ping, .svc, .cc-live i{animation:none}
+  .globe-wrap svg animateMotion, .globe-wrap svg animateTransform{display:none}
+}
+
+/* Interactive canvas globe (progressive enhancement over the SVG fallback) */
+.globe-canvas{display:none; width:100%; aspect-ratio:1/1; touch-action:none; cursor:grab}
+.globe-stage:has(.globe-canvas[style*="block"]) .globe-fallback{display:none}

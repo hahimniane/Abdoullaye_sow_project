@@ -8,6 +8,15 @@ service cloud.firestore {
              get(/databases/$(database)/documents/users/$(userId)).data.role == 'admin';
     }
 
+    function isSuperAdmin(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId)) &&
+             get(/databases/$(database)/documents/users/$(userId)).data.role == 'admin' &&
+             (
+               !('adminRole' in get(/databases/$(database)/documents/users/$(userId)).data) ||
+               get(/databases/$(database)/documents/users/$(userId)).data.adminRole == 'superAdmin'
+             );
+    }
+
     function userProfile(userId) {
       return get(/databases/$(database)/documents/users/$(userId)).data;
     }
@@ -20,20 +29,64 @@ service cloud.firestore {
       return userProfile(userId).businessId;
     }
 
+    function userAdminRole(userId) {
+      return userProfile(userId).adminRole is string ?
+        userProfile(userId).adminRole :
+        "";
+    }
+
+    function hasDynamicWebsiteCapability(userId) {
+      return exists(/databases/$(database)/documents/platformConfig/permissions) &&
+        userAdminRole(userId) in get(/databases/$(database)/documents/platformConfig/permissions)
+          .data.roles &&
+        get(/databases/$(database)/documents/platformConfig/permissions)
+          .data.roles[userAdminRole(userId)].sections.website == 'manage';
+    }
+
+    function canManageWebsite(userId) {
+      return isAdmin(userId) &&
+        (
+          isSuperAdmin(userId) ||
+          userAdminRole(userId) == "operationsManager" ||
+          userAdminRole(userId) == "contentManager" ||
+          hasDynamicWebsiteCapability(userId)
+        );
+    }
+
     // Helper function to check if a user is staff, business owner, or admin
     function isStaffOrAdmin(userId) {
       return exists(/databases/$(database)/documents/users/$(userId)) &&
              (userRole(userId) == 'staff' ||
               userRole(userId) == 'businessOwner' ||
-              userRole(userId) == 'admin');
+              isSuperAdmin(userId));
     }
 
     function canManageBusiness(userId, businessId) {
-      return isAdmin(userId) ||
+      return isSuperAdmin(userId) ||
              (exists(/databases/$(database)/documents/users/$(userId)) &&
               (userRole(userId) == 'staff' ||
                userRole(userId) == 'businessOwner') &&
               userBusinessId(userId) == businessId);
+    }
+
+    function canManageBusinessSection(userId, businessId, section) {
+      return isSuperAdmin(userId) ||
+             (
+               exists(/databases/$(database)/documents/users/$(userId)) &&
+               userBusinessId(userId) == businessId &&
+               (
+                 userRole(userId) == 'businessOwner' ||
+                 (
+                   userRole(userId) == 'staff' &&
+                   (
+                     !('businessPermissions' in userProfile(userId)) ||
+                     !(userProfile(userId).businessPermissions is list) ||
+                     userProfile(userId).businessPermissions.size() == 0 ||
+                     section in userProfile(userId).businessPermissions
+                   )
+                 )
+               )
+             );
     }
 
     function validDeliveryEstimate(data) {
@@ -49,9 +102,38 @@ service cloud.firestore {
         );
     }
 
+    function validUserRoleState(data) {
+      return data.role == 'customer' ||
+        data.role == 'admin' ||
+        (
+          (data.role == 'staff' || data.role == 'businessOwner') &&
+          data.businessId is string &&
+          data.businessId != '' &&
+          data.businessName is string &&
+          data.businessName != ''
+        );
+    }
+
     match /appConfig/client {
       allow read: if true;
       allow write: if false;
+    }
+
+    // Platform configuration (e.g. editable role permissions matrix).
+    // Any admin may read it (drives console gating); only super admins write.
+    match /platformConfig/{configId} {
+      allow read: if request.auth != null && isAdmin(request.auth.uid);
+      allow write: if request.auth != null && isSuperAdmin(request.auth.uid);
+    }
+
+    match /websiteContent/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null && canManageWebsite(request.auth.uid);
+    }
+
+    match /featuredBusinesses/{businessId} {
+      allow read: if true;
+      allow write: if request.auth != null && canManageWebsite(request.auth.uid);
     }
 
     // Rules for the 'users' collection
@@ -70,9 +152,10 @@ service cloud.firestore {
         canManageBusiness(request.auth.uid, resource.data.businessId);
       
       // Allow admins to update any user's role
-      allow update: if request.auth != null && isAdmin(request.auth.uid) &&
+      allow update: if request.auth != null && isSuperAdmin(request.auth.uid) &&
                       'role' in request.resource.data &&
-                      request.resource.data.role in ['customer', 'staff', 'businessOwner', 'admin'];
+                      request.resource.data.role in ['customer', 'staff', 'businessOwner', 'admin'] &&
+                      validUserRoleState(request.resource.data);
 
       // Prevent users from updating their own role directly
       allow update: if request.auth != null && request.auth.uid == userId &&
@@ -108,24 +191,35 @@ service cloud.firestore {
       allow read: if request.auth != null &&
         (isAdmin(request.auth.uid) ||
          canManageBusiness(request.auth.uid, resource.data.businessId));
-      allow create, update: if request.auth != null &&
+      allow create: if request.auth != null &&
         (isAdmin(request.auth.uid) ||
-         canManageBusiness(request.auth.uid, request.resource.data.businessId));
+         canManageBusinessSection(request.auth.uid, request.resource.data.businessId, 'parking'));
+      allow update: if request.auth != null &&
+        request.resource.data.businessId == resource.data.businessId &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusinessSection(request.auth.uid, resource.data.businessId, 'parking'));
       allow delete: if request.auth != null &&
         (isAdmin(request.auth.uid) ||
-         canManageBusiness(request.auth.uid, resource.data.businessId));
+         canManageBusinessSection(request.auth.uid, resource.data.businessId, 'parking'));
     }
 
     match /barrelShipments/{shipmentId} {
       allow read: if request.auth != null &&
         (isAdmin(request.auth.uid) ||
          canManageBusiness(request.auth.uid, resource.data.businessId));
-      allow create, update: if request.auth != null &&
+      allow create: if request.auth != null &&
         (isAdmin(request.auth.uid) ||
-         canManageBusiness(request.auth.uid, request.resource.data.businessId));
-      allow delete: if request.auth != null &&
-        (isAdmin(request.auth.uid) ||
-         canManageBusiness(request.auth.uid, resource.data.businessId));
+         canManageBusinessSection(request.auth.uid, request.resource.data.businessId, 'barrels'));
+      // Admins keep full update. A business may only progress fulfillment
+      // (status / tracking / notes) — never the customer's price, fees, payment,
+      // Stripe, or identity fields — and may not delete a customer's shipment.
+      allow update: if request.auth != null && isAdmin(request.auth.uid);
+      allow update: if request.auth != null &&
+        canManageBusinessSection(request.auth.uid, resource.data.businessId, 'barrels') &&
+        request.resource.data.businessId == resource.data.businessId &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'trackingNumber', 'trackingCode', 'staffNotes', 'statusUpdatedAt', 'updatedAt']);
+      allow delete: if request.auth != null && isAdmin(request.auth.uid);
       allow read: if request.auth != null &&
         resource.data.customerUid == request.auth.uid;
       allow update: if request.auth != null &&
@@ -157,36 +251,44 @@ service cloud.firestore {
       allow read: if request.auth != null &&
         (isAdmin(request.auth.uid) ||
          canManageBusiness(request.auth.uid, resource.data.businessId));
-      allow create, update: if request.auth != null &&
+      allow create: if request.auth != null &&
         (isAdmin(request.auth.uid) ||
-         canManageBusiness(request.auth.uid, request.resource.data.businessId));
+         canManageBusinessSection(request.auth.uid, request.resource.data.businessId, 'transport'));
+      allow update: if request.auth != null &&
+        request.resource.data.businessId == resource.data.businessId &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusinessSection(request.auth.uid, resource.data.businessId, 'transport'));
       allow delete: if request.auth != null &&
         (isAdmin(request.auth.uid) ||
-         canManageBusiness(request.auth.uid, resource.data.businessId));
+         canManageBusinessSection(request.auth.uid, resource.data.businessId, 'transport'));
     }
 
     match /cars/{carId} {
       allow read: if true;
-      allow create, update: if request.auth != null &&
+      allow create: if request.auth != null &&
         (isAdmin(request.auth.uid) ||
-         canManageBusiness(request.auth.uid, request.resource.data.businessId));
+         canManageBusinessSection(request.auth.uid, request.resource.data.businessId, 'listings'));
+      allow update: if request.auth != null &&
+        request.resource.data.businessId == resource.data.businessId &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusinessSection(request.auth.uid, resource.data.businessId, 'listings'));
       allow delete: if request.auth != null &&
         (isAdmin(request.auth.uid) ||
-         canManageBusiness(request.auth.uid, resource.data.businessId));
+         canManageBusinessSection(request.auth.uid, resource.data.businessId, 'listings'));
     }
 
     match /businesses/{businessId} {
-      allow read: if resource.data.status == 'approved' ||
-        (request.auth != null && canManageBusiness(request.auth.uid, businessId));
+      allow read: if request.auth != null &&
+        canManageBusiness(request.auth.uid, businessId);
       allow create, update, delete: if request.auth != null &&
-        isAdmin(request.auth.uid);
+        isSuperAdmin(request.auth.uid);
 
       match /destinationCountries/{countryId} {
         allow read: if resource.data.businessStatus == 'approved' ||
           get(/databases/$(database)/documents/businesses/$(businessId)).data.status == 'approved' ||
           (request.auth != null && canManageBusiness(request.auth.uid, businessId));
         allow write: if request.auth != null &&
-          canManageBusiness(request.auth.uid, businessId) &&
+          canManageBusinessSection(request.auth.uid, businessId, 'destinations') &&
           (
             request.resource.data.isActive != true ||
             (
@@ -200,7 +302,11 @@ service cloud.firestore {
 
     match /destinationCountries/{countryId} {
       allow read: if true;
-      allow write: if request.auth != null && isAdmin(request.auth.uid);
+      allow write: if request.auth != null && isSuperAdmin(request.auth.uid);
+    }
+
+    match /{path=**}/destinationCountries/{countryId} {
+      allow read: if request.auth != null && isAdmin(request.auth.uid);
     }
 
     match /businessApplications/{applicationId} {
@@ -214,6 +320,48 @@ service cloud.firestore {
     match /platformNotifications/{notificationId} {
       allow read, update: if request.auth != null && isAdmin(request.auth.uid);
       allow create, delete: if false;
+    }
+
+    match /businessSupportRequests/{requestId} {
+      allow read, update: if request.auth != null && isAdmin(request.auth.uid);
+      allow read: if request.auth != null &&
+        canManageBusiness(request.auth.uid, resource.data.businessId);
+      allow create, delete: if false;
+      allow update: if request.auth != null &&
+        canManageBusiness(request.auth.uid, resource.data.businessId) &&
+        canManageBusinessSection(request.auth.uid, resource.data.businessId, 'support') &&
+        request.resource.data.businessId == resource.data.businessId &&
+        request.resource.data.createdBy == resource.data.createdBy &&
+        request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'status',
+            'businessResponse',
+            'businessRespondedAt',
+            'businessRespondedBy',
+            'businessReadAt',
+            'businessReadBy',
+            'updatedAt'
+          ]);
+    }
+
+    match /businessInsights/{insightId} {
+      allow read: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, resource.data.businessId));
+      allow create, update, delete: if false;
+    }
+
+    match /businessSubscriptions/{subscriptionId} {
+      allow read: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, resource.data.businessId));
+      allow create, update, delete: if false;
+    }
+
+    match /adminAuditLogs/{logId} {
+      allow read: if request.auth != null && isAdmin(request.auth.uid);
+      allow create, update, delete: if false;
     }
 
     match /shipmentPricing/{pricingId} {
@@ -249,9 +397,23 @@ service cloud.firestore {
       allow read: if request.auth != null &&
         (isAdmin(request.auth.uid) ||
          canManageBusiness(request.auth.uid, resource.data.businessId));
-      allow update, delete: if request.auth != null &&
-        (isAdmin(request.auth.uid) ||
-         canManageBusiness(request.auth.uid, resource.data.businessId));
+      // Admins keep full access (and money-moving actions run via Cloud Functions
+      // with the Admin SDK, which bypasses these rules).
+      allow update: if request.auth != null && isAdmin(request.auth.uid);
+      // A business may only nudge status/notes on a NON-finalized record, and may
+      // never alter buyer, money, payment, hold, or extension fields, nor delete
+      // the record. This stops deposit/payment tampering and history erasure;
+      // forfeits/refunds/sales must go through the guarded callables.
+      allow update: if request.auth != null &&
+        canManageBusinessSection(request.auth.uid, resource.data.businessId, 'purchases') &&
+        !(resource.data.purchaseStatus in ['completed', 'no_show', 'cancelled', 'refunded', 'forfeited']) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['purchaseStatus', 'staffNotes', 'updatedAt']) &&
+        request.resource.data.businessId == resource.data.businessId &&
+        request.resource.data.buyerUid == resource.data.buyerUid &&
+        request.resource.data.depositAmount == resource.data.depositAmount &&
+        request.resource.data.paymentStatus == resource.data.paymentStatus;
+      allow delete: if request.auth != null && isAdmin(request.auth.uid);
     }
   }
 } 

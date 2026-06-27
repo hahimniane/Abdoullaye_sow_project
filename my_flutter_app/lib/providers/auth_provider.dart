@@ -376,6 +376,7 @@ class AuthProvider extends ChangeNotifier {
     required String serviceNote,
     required String addressLine1,
     required String city,
+    required String country,
     required String state,
     required String postalCode,
   }) async {
@@ -404,6 +405,7 @@ class AuthProvider extends ChangeNotifier {
       'serviceNote': serviceNote.trim(),
       'addressLine1': addressLine1.trim(),
       'city': city.trim(),
+      'country': country.trim(),
       'state': state.trim(),
       'postalCode': postalCode.trim(),
     });
@@ -423,6 +425,7 @@ class AuthProvider extends ChangeNotifier {
     required String serviceNote,
     required String addressLine1,
     required String city,
+    required String country,
     required String state,
     required String postalCode,
     required String carHoldPricingMode,
@@ -449,6 +452,7 @@ class AuthProvider extends ChangeNotifier {
       'serviceNote': serviceNote.trim(),
       'addressLine1': addressLine1.trim(),
       'city': city.trim(),
+      'country': country.trim(),
       'state': state.trim(),
       'postalCode': postalCode.trim(),
       'carHoldPricingMode': carHoldPricingMode,

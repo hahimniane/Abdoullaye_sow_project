@@ -13,12 +13,18 @@ class BusinessProfile {
     this.website,
     this.profileImageUrl,
     this.profileImagePath,
+    this.logoUrl,
     this.enabledServices = defaultBusinessServiceValues,
     this.serviceNote,
     this.addressLine1,
     this.city,
+    this.country,
     this.state,
     this.postalCode,
+    this.marketingBlurb,
+    this.featureConsent = false,
+    this.featureStatus = 'none',
+    this.featureNote,
     this.carHoldPricingMode = 'flat',
     this.carHoldFlatFee = 500,
     this.carHoldDailyRate = 100,
@@ -37,12 +43,18 @@ class BusinessProfile {
   final String? website;
   final String? profileImageUrl;
   final String? profileImagePath;
+  final String? logoUrl;
   final List<String> enabledServices;
   final String? serviceNote;
   final String? addressLine1;
   final String? city;
+  final String? country;
   final String? state;
   final String? postalCode;
+  final String? marketingBlurb;
+  final bool featureConsent;
+  final String featureStatus;
+  final String? featureNote;
   final String carHoldPricingMode;
   final double carHoldFlatFee;
   final double carHoldDailyRate;
@@ -64,12 +76,18 @@ class BusinessProfile {
       website: data['website'] as String?,
       profileImageUrl: data['profileImageUrl'] as String?,
       profileImagePath: data['profileImagePath'] as String?,
+      logoUrl: data['logoUrl'] as String?,
       enabledServices: normalizeBusinessServices(data['enabledServices']),
       serviceNote: data['serviceNote'] as String?,
       addressLine1: data['addressLine1'] as String?,
       city: data['city'] as String?,
+      country: data['country'] as String?,
       state: data['state'] as String?,
       postalCode: data['postalCode'] as String?,
+      marketingBlurb: data['marketingBlurb'] as String?,
+      featureConsent: data['featureConsent'] == true,
+      featureStatus: (data['featureStatus'] ?? 'none') as String,
+      featureNote: data['featureNote'] as String?,
       carHoldPricingMode: (data['carHoldPricingMode'] ?? 'flat') as String,
       carHoldFlatFee: _parseDouble(data['carHoldFlatFee'], 500),
       carHoldDailyRate: _parseDouble(data['carHoldDailyRate'], 100),
@@ -93,6 +111,7 @@ class BusinessProfile {
     return [
       addressLine1,
       city,
+      country,
       state,
       postalCode,
     ].whereType<String>().where((part) => part.trim().isNotEmpty).join(', ');

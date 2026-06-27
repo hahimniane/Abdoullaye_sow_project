@@ -1,11 +1,13 @@
 import 'dart:typed_data';
 
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../data/business_location_catalog.dart';
 import '../data/us_locations.dart';
 import '../l10n/app_localizations.dart';
 import '../models/business_profile.dart';
@@ -31,18 +33,24 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
   final _websiteController = TextEditingController();
   final _noteController = TextEditingController();
   final _addressLine1Controller = TextEditingController();
+  final _countryController = TextEditingController();
   final _cityController = TextEditingController();
   final _stateController = TextEditingController();
   final _postalCodeController = TextEditingController();
   final _holdFlatFeeController = TextEditingController();
   final _holdDailyRateController = TextEditingController();
   final _holdMaxDaysController = TextEditingController();
+  final _featureBlurbController = TextEditingController();
   final _selectedServices = <String>{};
   String _holdPricingMode = 'flat';
   String? _hydratedBusinessSignature;
   XFile? _image;
   Uint8List? _imageBytes;
+  XFile? _featureLogo;
+  Uint8List? _featureLogoBytes;
+  bool _featureConsent = false;
   bool _isSaving = false;
+  bool _isRequestingFeature = false;
 
   @override
   void dispose() {
@@ -52,12 +60,14 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
     _websiteController.dispose();
     _noteController.dispose();
     _addressLine1Controller.dispose();
+    _countryController.dispose();
     _cityController.dispose();
     _stateController.dispose();
     _postalCodeController.dispose();
     _holdFlatFeeController.dispose();
     _holdDailyRateController.dispose();
     _holdMaxDaysController.dispose();
+    _featureBlurbController.dispose();
     super.dispose();
   }
 
@@ -71,11 +81,17 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
       business.website ?? '',
       business.profileImageUrl ?? '',
       business.profileImagePath ?? '',
+      business.logoUrl ?? '',
       business.serviceNote ?? '',
       business.addressLine1 ?? '',
+      business.country ?? '',
       business.city ?? '',
       business.state ?? '',
       business.postalCode ?? '',
+      business.marketingBlurb ?? '',
+      business.featureConsent,
+      business.featureStatus,
+      business.featureNote ?? '',
       business.enabledServices.join('|'),
       business.carHoldPricingMode,
       business.carHoldFlatFee,
@@ -95,6 +111,12 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
         _websiteController.text = business.website ?? '';
         _noteController.text = business.serviceNote ?? '';
         _addressLine1Controller.text = business.addressLine1 ?? '';
+        _countryController.text =
+            defaultBusinessCountry(
+              country: business.country,
+              state: business.state,
+            ) ??
+            '';
         _cityController.text = business.city ?? '';
         _stateController.text = normalizeUsState(business.state) ?? '';
         _postalCodeController.text = business.postalCode ?? '';
@@ -107,6 +129,8 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
         _holdDailyRateController.text = business.carHoldDailyRate
             .toStringAsFixed(0);
         _holdMaxDaysController.text = business.carHoldMaxDays.toString();
+        _featureBlurbController.text = business.marketingBlurb ?? '';
+        _featureConsent = business.featureConsent;
         _selectedServices
           ..clear()
           ..addAll(business.enabledServices);
@@ -148,6 +172,84 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
       firebase_storage.SettableMetadata(contentType: contentType),
     );
     return _UploadedImage(path: path, url: await ref.getDownloadURL());
+  }
+
+  Future<void> _pickFeatureLogo() async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 88,
+      maxWidth: 800,
+    );
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    if (!mounted) return;
+    setState(() {
+      _featureLogo = picked;
+      _featureLogoBytes = bytes;
+    });
+  }
+
+  Future<_UploadedImage?> _uploadFeatureLogo(String businessId) async {
+    final image = _featureLogo;
+    final bytes = _featureLogoBytes;
+    if (image == null || bytes == null) return null;
+    final ext = image.name.split('.').last.toLowerCase();
+    final safeExt = ['jpg', 'jpeg', 'png', 'webp'].contains(ext) ? ext : 'png';
+    final path =
+        'businessLogos/$businessId/logo_${DateTime.now().millisecondsSinceEpoch}.$safeExt';
+    final contentType = safeExt == 'jpg' || safeExt == 'jpeg'
+        ? 'image/jpeg'
+        : safeExt == 'webp'
+        ? 'image/webp'
+        : 'image/png';
+    final ref = firebase_storage.FirebaseStorage.instance.ref(path);
+    await ref.putData(
+      bytes,
+      firebase_storage.SettableMetadata(contentType: contentType),
+    );
+    return _UploadedImage(path: path, url: await ref.getDownloadURL());
+  }
+
+  Future<void> _requestFeaturing(BusinessProfile business) async {
+    final l10n = AppLocalizations.of(context)!;
+    final blurb = _featureBlurbController.text.trim();
+    if (blurb.isEmpty || blurb.length > 140) {
+      showErrorSnackBar(context, l10n.featureBlurbRequired);
+      return;
+    }
+    if (!_featureConsent) {
+      showErrorSnackBar(context, l10n.featureConsentRequired);
+      return;
+    }
+    final existingLogo = (business.logoUrl ?? business.profileImageUrl ?? '')
+        .trim();
+    if (_featureLogoBytes == null && existingLogo.isEmpty) {
+      showErrorSnackBar(context, l10n.featureLogoRequired);
+      return;
+    }
+
+    setState(() => _isRequestingFeature = true);
+    try {
+      final uploaded = await _uploadFeatureLogo(business.id);
+      final logoUrl = uploaded?.url ?? existingLogo;
+      await FirebaseFunctions.instance.httpsCallable('requestFeaturing').call({
+        'businessId': business.id,
+        'marketingBlurb': blurb,
+        'featureConsent': true,
+        'logoUrl': logoUrl,
+      });
+      if (!mounted) return;
+      setState(() {
+        _featureLogo = null;
+        _featureLogoBytes = null;
+      });
+      showSuccessSnackBar(context, l10n.featureRequestSent);
+    } catch (error) {
+      if (!mounted) return;
+      showErrorSnackBar(context, '$error');
+    } finally {
+      if (mounted) setState(() => _isRequestingFeature = false);
+    }
   }
 
   Future<void> _save(BusinessProfile business) async {
@@ -195,6 +297,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
         serviceNote: _noteController.text,
         addressLine1: _addressLine1Controller.text,
         city: _cityController.text,
+        country: _countryController.text,
         state: normalizeUsState(_stateController.text) ?? '',
         postalCode: _postalCodeController.text,
         carHoldPricingMode: _holdPricingMode,
@@ -285,6 +388,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                   websiteController: _websiteController,
                   noteController: _noteController,
                   addressLine1Controller: _addressLine1Controller,
+                  countryController: _countryController,
                   cityController: _cityController,
                   stateController: _stateController,
                   postalCodeController: _postalCodeController,
@@ -298,6 +402,13 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                   onAddressStateChanged: (value) {
                     setState(() {
                       _stateController.text = value ?? '';
+                      _cityController.clear();
+                    });
+                  },
+                  onAddressCountryChanged: (value) {
+                    setState(() {
+                      _countryController.text = value ?? '';
+                      _stateController.clear();
                       _cityController.clear();
                     });
                   },
@@ -322,6 +433,20 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                     canEdit: canEdit,
                   ),
                 ],
+                const SizedBox(height: 18),
+                _FeaturingRequestPanel(
+                  business: business,
+                  canEdit: canEdit,
+                  blurbController: _featureBlurbController,
+                  featureConsent: _featureConsent,
+                  logoBytes: _featureLogoBytes,
+                  isRequesting: _isRequestingFeature,
+                  onConsentChanged: (value) {
+                    setState(() => _featureConsent = value);
+                  },
+                  onPickLogo: _pickFeatureLogo,
+                  onRequest: () => _requestFeaturing(business),
+                ),
                 if (canEdit) ...[
                   const SizedBox(height: 18),
                   SizedBox(
@@ -413,6 +538,195 @@ class _DestinationSetupPanel extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _FeaturingRequestPanel extends StatelessWidget {
+  const _FeaturingRequestPanel({
+    required this.business,
+    required this.canEdit,
+    required this.blurbController,
+    required this.featureConsent,
+    required this.logoBytes,
+    required this.isRequesting,
+    required this.onConsentChanged,
+    required this.onPickLogo,
+    required this.onRequest,
+  });
+
+  final BusinessProfile business;
+  final bool canEdit;
+  final TextEditingController blurbController;
+  final bool featureConsent;
+  final Uint8List? logoBytes;
+  final bool isRequesting;
+  final ValueChanged<bool> onConsentChanged;
+  final VoidCallback onPickLogo;
+  final VoidCallback onRequest;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final existingLogo = (business.logoUrl ?? business.profileImageUrl ?? '')
+        .trim();
+    final status = business.featureStatus.trim().isEmpty
+        ? 'none'
+        : business.featureStatus.trim();
+    final isApproved = status == 'approved';
+    final isRequested = status == 'requested';
+    final canSubmit = canEdit && !isRequesting;
+    final featureNote = business.featureNote?.trim() ?? '';
+
+    return _Panel(
+      title: l10n.featuredOnWebsite,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            isApproved
+                ? l10n.featureApprovedMessage
+                : isRequested
+                ? l10n.featureRequestedMessage
+                : l10n.featureDefaultMessage,
+            style: const TextStyle(
+              color: AppColors.muted,
+              fontWeight: FontWeight.w700,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  width: 72,
+                  height: 72,
+                  color: AppColors.lightSurfaceVariant,
+                  child: logoBytes != null
+                      ? Image.memory(logoBytes!, fit: BoxFit.cover)
+                      : existingLogo.isNotEmpty
+                      ? Image.network(existingLogo, fit: BoxFit.cover)
+                      : const Icon(
+                          Icons.image_outlined,
+                          color: AppColors.muted,
+                        ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [_FeatureStatusBadge(status: status)],
+                    ),
+                    if (featureNote.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        l10n.featureAdminNote(featureNote),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.saffron,
+                          fontWeight: FontWeight.w800,
+                          height: 1.25,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: canEdit ? onPickLogo : null,
+                      icon: const Icon(Icons.upload_file_outlined),
+                      label: Text(
+                        existingLogo.isEmpty && logoBytes == null
+                            ? l10n.uploadLogo
+                            : l10n.changeLogo,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: blurbController,
+            enabled: canEdit,
+            maxLength: 140,
+            minLines: 2,
+            maxLines: 4,
+            decoration: InputDecoration(
+              labelText: l10n.shortPublicBlurb,
+              helperText: l10n.shortPublicBlurbHelper,
+              prefixIcon: const Icon(Icons.campaign_outlined),
+              filled: true,
+              fillColor: AppColors.lightSurfaceVariant,
+            ),
+          ),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            value: featureConsent,
+            controlAffinity: ListTileControlAffinity.leading,
+            onChanged: canEdit
+                ? (value) => onConsentChanged(value ?? false)
+                : null,
+            title: Text(
+              l10n.featureConsentLabel,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: canSubmit ? onRequest : null,
+              icon: isRequesting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.public_outlined),
+              label: Text(
+                isRequesting
+                    ? l10n.sendingFeatureRequest
+                    : l10n.requestFeaturing,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeatureStatusBadge extends StatelessWidget {
+  const _FeatureStatusBadge({required this.status});
+
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.mist.withValues(alpha: 0.58),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Text(
+        status,
+        style: const TextStyle(
+          color: AppColors.cobaltDeep,
+          fontWeight: FontWeight.w900,
+          fontSize: 12,
+        ),
       ),
     );
   }
@@ -660,6 +974,7 @@ class _BusinessForm extends StatelessWidget {
     required this.websiteController,
     required this.noteController,
     required this.addressLine1Controller,
+    required this.countryController,
     required this.cityController,
     required this.stateController,
     required this.postalCodeController,
@@ -668,6 +983,7 @@ class _BusinessForm extends StatelessWidget {
     required this.holdDailyRateController,
     required this.holdMaxDaysController,
     required this.onHoldPricingModeChanged,
+    required this.onAddressCountryChanged,
     required this.onAddressStateChanged,
     required this.onAddressCityChanged,
     required this.selectedServices,
@@ -682,6 +998,7 @@ class _BusinessForm extends StatelessWidget {
   final TextEditingController websiteController;
   final TextEditingController noteController;
   final TextEditingController addressLine1Controller;
+  final TextEditingController countryController;
   final TextEditingController cityController;
   final TextEditingController stateController;
   final TextEditingController postalCodeController;
@@ -690,6 +1007,7 @@ class _BusinessForm extends StatelessWidget {
   final TextEditingController holdDailyRateController;
   final TextEditingController holdMaxDaysController;
   final ValueChanged<String> onHoldPricingModeChanged;
+  final ValueChanged<String?> onAddressCountryChanged;
   final ValueChanged<String?> onAddressStateChanged;
   final ValueChanged<String?> onAddressCityChanged;
   final Set<String> selectedServices;
@@ -698,6 +1016,8 @@ class _BusinessForm extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final selectedCountry = countryController.text.trim();
+    final isUnitedStates = selectedCountry == 'United States';
     return Form(
       key: formKey,
       child: Column(
@@ -769,27 +1089,42 @@ class _BusinessForm extends StatelessWidget {
                 icon: Icons.place_outlined,
               ),
               _BusinessProfileDropdown(
-                label: l10n.locationState,
-                icon: Icons.map_outlined,
+                label: l10n.countryName,
+                icon: Icons.public_outlined,
                 enabled: canEdit,
-                value: normalizeUsState(stateController.text),
-                values: usStateOptions(stateController.text),
-                displayLabel: (value) => usStateNames[value] ?? value,
-                onChanged: onAddressStateChanged,
+                value: selectedCountry.isEmpty ? null : selectedCountry,
+                values: businessCountryOptions(selectedCountry),
+                displayLabel: (value) => value,
+                onChanged: onAddressCountryChanged,
               ),
+              if (isUnitedStates)
+                _BusinessProfileDropdown(
+                  label: l10n.locationState,
+                  icon: Icons.map_outlined,
+                  enabled: canEdit,
+                  value: normalizeUsState(stateController.text),
+                  values: usStateOptions(stateController.text),
+                  displayLabel: (value) => usStateNames[value] ?? value,
+                  onChanged: onAddressStateChanged,
+                ),
               _BusinessProfileDropdown(
                 label: l10n.locationCity,
                 icon: Icons.location_city_outlined,
-                enabled: canEdit && stateController.text.trim().isNotEmpty,
+                enabled:
+                    canEdit &&
+                    (isUnitedStates
+                        ? stateController.text.trim().isNotEmpty
+                        : selectedCountry.isNotEmpty),
                 value: cityController.text.trim().isEmpty
                     ? null
                     : cityController.text.trim(),
-                values: usCityOptions(
-                  stateController.text,
-                  cityController.text,
-                ),
-                hintText: stateController.text.trim().isEmpty
+                values: isUnitedStates
+                    ? usCityOptions(stateController.text, cityController.text)
+                    : businessCityOptions(selectedCountry, cityController.text),
+                hintText: isUnitedStates && stateController.text.trim().isEmpty
                     ? l10n.selectStateFirst
+                    : selectedCountry.isEmpty
+                    ? l10n.selectCountryFirst
                     : null,
                 displayLabel: (value) =>
                     value == otherCityValue ? l10n.otherOption : value,

@@ -10,6 +10,7 @@ class DestinationCountry {
     this.barrelShippingPrice = 0,
     this.deliveryEstimateMinDays,
     this.deliveryEstimateMaxDays,
+    this.destinationNote,
   });
 
   static const fallback = DestinationCountry(
@@ -28,6 +29,7 @@ class DestinationCountry {
   final double barrelShippingPrice;
   final int? deliveryEstimateMinDays;
   final int? deliveryEstimateMaxDays;
+  final String? destinationNote;
 
   String get displayCode => (code ?? '').trim().toUpperCase();
 
@@ -71,6 +73,7 @@ class DestinationCountry {
           ?.toInt(),
       deliveryEstimateMaxDays: (data['deliveryEstimateMaxDays'] as num?)
           ?.toInt(),
+      destinationNote: data['destinationNote'] as String?,
     );
   }
 
@@ -85,6 +88,8 @@ class DestinationCountry {
         'deliveryEstimateMinDays': deliveryEstimateMinDays,
       if (deliveryEstimateMaxDays != null)
         'deliveryEstimateMaxDays': deliveryEstimateMaxDays,
+      if (destinationNote != null && destinationNote!.isNotEmpty)
+        'destinationNote': destinationNote,
       'updatedAt': FieldValue.serverTimestamp(),
     };
   }

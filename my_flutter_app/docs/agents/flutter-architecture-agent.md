@@ -85,3 +85,22 @@ Return file-specific findings or changes, with attention to cross-screen effects
 ## Durable Architecture Lessons
 
 Add future project conventions and repeated architectural decisions here.
+
+- For public marketing business features, audit every existing public business
+  surface before claiming business counts are private. Use curated public
+  collections or callables for marketing-safe records, and avoid reading the
+  private `businesses` collection from public website code.
+- Admin website curation has two authorization planes: direct client
+  Firestore/Storage writes and Cloud Functions callables. Keep WebsiteView
+  manage gating, Firestore/Storage rules, and
+  `requireAdminCapability("website")` in sync; prefer callables for privileged
+  featured-business publishing and deploy rules from
+  `my_flutter_app/firebase.json`, not the admin web hosting config.
+- Website and featured-business location entry must use selectable country/city
+  controls instead of free text. Derive admin options from registered business
+  data plus legacy featured records unless a dedicated catalog is introduced.
+- Business dashboard car visibility depends on `cars/{id}.businessId`.
+  Business-owner listing queries must stay uncapped and scoped to the owner's
+  `businessId`; legacy/default migrations should only fill missing
+  `businessId` values and must not overwrite cars already assigned to another
+  business.

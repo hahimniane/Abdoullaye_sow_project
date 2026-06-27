@@ -6,7 +6,7 @@ Protect and improve the visual quality, usability, and product feel of the Flutt
 
 ## Current Product Context
 
-- App name: Veyra.
+- Public/platform brand: Laawol Digital. Do not use Veyra/Verya in new brand-facing docs, PDFs, public website copy, or admin design language unless explicitly working on legacy mobile labels.
 - Domain: car sales, parking, transport, barrel shipping, account and staff workflows.
 - Stack: Flutter Material 3 with shared theme files under `lib/theme/`.
 - Current palette uses deep teal foundations, clean slate/white surfaces, warm amber highlights, and semantic green/red states.
@@ -65,3 +65,6 @@ Return:
 - Prefers compact business-app typography; avoid oversized marketing headlines in operational screens, and keep most UI text near Material-style 14 body, 17-18 section titles, and 20-22 page titles unless a true brand/display moment needs more.
 - Wants Codex to act like a manager and proactively involve design review when UI quality is at stake.
 - Avoid one-off visual inventions that do not fit the existing theme.
+- For admin dashboards, use a tidy conventional operations layout: restrained top bar, collapsible sidebar, dense tables/lists, and minimal decorative copy. The user rejected decorative AI-looking admin designs.
+- Website and featured-business location fields must be selectable controls, not free-text country/city inputs. Preserve current/legacy values in select options so existing records remain editable without introducing spelling drift.
+- Business-owner listing views must clearly show all cars for the current business, with no artificial row cap. Empty states should point to missing listings only after the data query has run for the owner's `businessId`.
