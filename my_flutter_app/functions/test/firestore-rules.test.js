@@ -318,7 +318,7 @@ describe("featured business logo Storage rules", () => {
     );
   });
 
-  it("allows website admins and owning business owners to upload logos",
+  it("allows platform admins and owning business owners to upload logos",
       async () => {
         await assertSucceeds(
             putLogo(storageFor("super-admin"), "biz_a", "super.png"),
@@ -330,14 +330,14 @@ describe("featured business logo Storage rules", () => {
             putLogo(storageFor("content-admin"), "biz_a", "admin.png"),
         );
         await assertSucceeds(
+            putLogo(storageFor("finance-admin"), "biz_a", "finance.png"),
+        );
+        await assertSucceeds(
             putLogo(storageFor("owner-a"), "biz_a", "owner.png"),
         );
       });
 
   it("denies staff and cross-business logo uploads", async () => {
-    await assertFails(
-        putLogo(storageFor("finance-admin"), "biz_a", "finance.png"),
-    );
     await assertFails(
         putLogo(storageFor("staff-listings-a"), "biz_a", "staff.png"),
     );

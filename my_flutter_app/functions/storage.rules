@@ -5,10 +5,6 @@ service firebase.storage {
       return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
     }
 
-    function userAdminRole() {
-      return userProfile().adminRole is string ? userProfile().adminRole : "";
-    }
-
     function isPlatformAdmin() {
       return request.auth != null &&
         (
@@ -17,28 +13,8 @@ service firebase.storage {
         );
     }
 
-    function hasDynamicWebsiteCapability() {
-      return firestore.exists(/databases/(default)/documents/platformConfig/permissions) &&
-        userAdminRole() in firestore.get(/databases/(default)/documents/platformConfig/permissions)
-          .data.roles &&
-        firestore.get(/databases/(default)/documents/platformConfig/permissions)
-          .data.roles[userAdminRole()].sections.website == 'manage';
-    }
-
-    function canManageWebsite() {
-      return isPlatformAdmin() &&
-        (
-          ('platformAdmin' in userProfile() && userProfile().platformAdmin == true) ||
-          userAdminRole() == "" ||
-          userAdminRole() == "superAdmin" ||
-          userAdminRole() == "operationsManager" ||
-          userAdminRole() == "contentManager" ||
-          hasDynamicWebsiteCapability()
-        );
-    }
-
     function canManageBusinessLogo(businessId) {
-      return canManageWebsite() ||
+      return isPlatformAdmin() ||
         (
           (
             userProfile().businessId == businessId ||
