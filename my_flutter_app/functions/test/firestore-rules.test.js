@@ -113,6 +113,24 @@ async function seedFirestore() {
         businessName: "Business A",
         businessPermissions: ["listings"],
       },
+      "users/staff-barrels-a": {
+        role: "staff",
+        businessId: "biz_a",
+        businessName: "Business A",
+        businessPermissions: ["barrels"],
+      },
+      "users/customer-owner": {
+        role: "customer",
+        fullName: "Pool Owner",
+      },
+      "users/customer-joiner": {
+        role: "customer",
+        fullName: "Pool Joiner",
+      },
+      "users/customer-stranger": {
+        role: "customer",
+        fullName: "Pool Stranger",
+      },
       "websiteContent/home": {
         hero: {headline: "Trusted business support"},
         featured: {enabled: true, maxToShow: 6},
@@ -172,6 +190,75 @@ async function seedFirestore() {
         createdBy: "other-owner",
         status: "open",
         subject: "Need help",
+      },
+      "barrelPools/pool_a": {
+        businessId: "biz_a",
+        businessName: "Business A",
+        destinationCountryId: "guinea",
+        destinationCountryName: "Guinea",
+        createdByUid: "customer-owner",
+        totalShares: 2,
+        takenShares: 1,
+        openShares: 1,
+        pricePerShare: 150,
+        depositPerShare: 45,
+        status: "open",
+      },
+      "barrelPools/pool_a/participants/customer-owner": {
+        uid: "customer-owner",
+        role: "owner",
+        sharesClaimed: 1,
+        senderName: "Owner Sender",
+        receiverName: "Owner Receiver",
+        receiverPhone: "+15555550100",
+      },
+      "barrelPools/pool_a/participants/customer-joiner": {
+        uid: "customer-joiner",
+        role: "joiner",
+        sharesClaimed: 1,
+        senderName: "Joiner Sender",
+        receiverName: "Joiner Receiver",
+        receiverPhone: "+15555550101",
+      },
+      "users/customer-owner/barrelPools/pool_a": {
+        poolId: "pool_a",
+        businessId: "biz_a",
+        destinationCountryName: "Guinea",
+        participantRole: "owner",
+        participantJoinStatus: "accepted",
+        status: "open",
+      },
+      "users/customer-joiner/barrelPools/pool_a": {
+        poolId: "pool_a",
+        businessId: "biz_a",
+        destinationCountryName: "Guinea",
+        participantRole: "joiner",
+        participantJoinStatus: "requested",
+        status: "open",
+      },
+      "openBarrels/pool_a": {
+        poolId: "pool_a",
+        businessId: "biz_a",
+        businessName: "Business A",
+        destinationCountryId: "guinea",
+        destinationCountryName: "Guinea",
+        sharesAvailable: 1,
+        totalShares: 2,
+        pricePerShare: 150,
+        depositPerShare: 45,
+        status: "open",
+      },
+      "barrelPoolBalanceRequests/balance_a": {
+        businessId: "biz_a",
+        businessName: "Business A",
+        customerUid: "customer-joiner",
+        customerName: "Pool Joiner",
+        amount: 105,
+        amountCents: 10500,
+        status: "pending",
+        source: "barrel_pool_balance",
+        barrelPoolId: "pool_a",
+        trackingCode: "BP-TEST",
       },
     };
 
@@ -311,6 +398,131 @@ describe("business dashboard Firestore rules", () => {
     );
     await assertFails(staffDb.doc("businessSupportRequests/support_b").get());
   });
+});
+
+describe("shared barrel Firestore rules", () => {
+  it("allows signed-in customers to read only the PII-free mirror",
+      async () => {
+        const anonDb = firestoreFor(null);
+        const customerDb = firestoreFor("customer-stranger");
+
+        await assertFails(anonDb.doc("openBarrels/pool_a").get());
+        const mirror = await assertSucceeds(
+            customerDb.doc("openBarrels/pool_a").get(),
+        );
+
+        assert.equal(mirror.get("sharesAvailable"), 1);
+        assert.equal(mirror.get("receiverPhone"), undefined);
+        assert.equal(mirror.get("senderName"), undefined);
+      });
+
+  it("limits private pool reads to participants, business, and admins",
+      async () => {
+        const ownerDb = firestoreFor("customer-owner");
+        const joinerDb = firestoreFor("customer-joiner");
+        const strangerDb = firestoreFor("customer-stranger");
+        const businessDb = firestoreFor("staff-barrels-a");
+        const adminDb = firestoreFor("super-admin");
+
+        await assertSucceeds(ownerDb.doc("barrelPools/pool_a").get());
+        await assertSucceeds(joinerDb.doc("barrelPools/pool_a").get());
+        await assertSucceeds(businessDb.doc("barrelPools/pool_a").get());
+        await assertSucceeds(adminDb.doc("barrelPools/pool_a").get());
+        await assertFails(strangerDb.doc("barrelPools/pool_a").get());
+      });
+
+  it("protects participant PII from customers and all client writes",
+      async () => {
+        const ownerDb = firestoreFor("customer-owner");
+        const joinerDb = firestoreFor("customer-joiner");
+        const strangerDb = firestoreFor("customer-stranger");
+        const businessDb = firestoreFor("staff-barrels-a");
+
+        await assertSucceeds(
+            ownerDb.doc("barrelPools/pool_a/participants/customer-owner").get(),
+        );
+        await assertSucceeds(
+            businessDb
+                .doc("barrelPools/pool_a/participants/customer-joiner")
+                .get(),
+        );
+        await assertFails(
+            joinerDb
+                .doc("barrelPools/pool_a/participants/customer-owner")
+                .get(),
+        );
+        await assertFails(
+            strangerDb
+                .doc("barrelPools/pool_a/participants/customer-joiner")
+                .get(),
+        );
+        await assertFails(
+            ownerDb.doc("barrelPools/pool_a").set(
+                {status: "cancelled"},
+                {merge: true},
+            ),
+        );
+        await assertFails(
+            businessDb.doc("openBarrels/pool_a").set(
+                {sharesAvailable: 2},
+                {merge: true},
+            ),
+        );
+      });
+
+  it("allows customers to read only their private pool membership index",
+      async () => {
+        const ownerDb = firestoreFor("customer-owner");
+        const joinerDb = firestoreFor("customer-joiner");
+        const strangerDb = firestoreFor("customer-stranger");
+        const adminDb = firestoreFor("super-admin");
+
+        await assertSucceeds(
+            ownerDb.doc("users/customer-owner/barrelPools/pool_a").get(),
+        );
+        await assertSucceeds(
+            adminDb.doc("users/customer-owner/barrelPools/pool_a").get(),
+        );
+        await assertFails(
+            joinerDb.doc("users/customer-owner/barrelPools/pool_a").get(),
+        );
+        await assertFails(
+            strangerDb.doc("users/customer-joiner/barrelPools/pool_a").get(),
+        );
+        await assertFails(
+            ownerDb.doc("users/customer-owner/barrelPools/pool_a").set(
+                {status: "cancelled"},
+                {merge: true},
+            ),
+        );
+      });
+
+  it("protects shared barrel balance payment requests",
+      async () => {
+        const joinerDb = firestoreFor("customer-joiner");
+        const strangerDb = firestoreFor("customer-stranger");
+        const businessDb = firestoreFor("staff-barrels-a");
+        const adminDb = firestoreFor("super-admin");
+
+        await assertSucceeds(
+            joinerDb.doc("barrelPoolBalanceRequests/balance_a").get(),
+        );
+        await assertSucceeds(
+            businessDb.doc("barrelPoolBalanceRequests/balance_a").get(),
+        );
+        await assertSucceeds(
+            adminDb.doc("barrelPoolBalanceRequests/balance_a").get(),
+        );
+        await assertFails(
+            strangerDb.doc("barrelPoolBalanceRequests/balance_a").get(),
+        );
+        await assertFails(
+            businessDb.doc("barrelPoolBalanceRequests/balance_a").set(
+                {status: "paid"},
+                {merge: true},
+            ),
+        );
+      });
 });
 
 describe("featured business logo Storage rules", () => {

@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
+import { httpsCallable } from "firebase/functions";
 import {
   BarChart3,
+  Banknote,
   Building2,
   Car,
   ClipboardList,
@@ -37,7 +39,7 @@ import {
   useBusinessCollection,
   useBusinessStaff,
 } from "@/lib/business-data";
-import { db } from "@/lib/firebase";
+import { db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
 
@@ -62,6 +64,7 @@ type BusinessConsoleProps = {
 
 const serviceLabels: Record<string, string> = {
   barrelShipping: "Barrel shipping",
+  sharedBarrels: "Shared barrels",
   carSales: "Car sales",
   carTransport: "Car transport",
   carParking: "Car parking",
@@ -74,13 +77,13 @@ const tabConfig: Array<{
   service?: string;
   permission?: string;
 }> = [
-  {id: "today", label: "Today", description: "What needs attention"},
+  {id: "today", label: "Today", description: "Needs attention"},
   {id: "profile", label: "Business", description: "Profile and services", permission: "profile"},
-  {id: "listings", label: "Listings", description: "Cars for sale", service: "carSales", permission: "listings"},
+  {id: "listings", label: "Listings", description: "Vehicles for sale", service: "carSales", permission: "listings"},
   {id: "purchases", label: "Purchases", description: "Holds and buyers", service: "carSales", permission: "purchases"},
   {id: "barrels", label: "Barrels", description: "Shipping queue", service: "barrelShipping", permission: "barrels"},
   {id: "transport", label: "Transport", description: "Vehicle moves", service: "carTransport", permission: "transport"},
-  {id: "parking", label: "Parking", description: "Parked cars", service: "carParking", permission: "parking"},
+  {id: "parking", label: "Parking", description: "Stored cars", service: "carParking", permission: "parking"},
   {id: "destinations", label: "Destinations", description: "Country pricing", service: "barrelShipping", permission: "destinations"},
   {id: "people", label: "People", description: "Owners and staff", permission: "people"},
   {id: "support", label: "Support", description: "Requests and replies", permission: "support"},
@@ -176,7 +179,8 @@ export function BusinessConsole({
             <Menu size={20} />
           </button>
           <div className="brand-badge">
-            <Building2 size={18} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="Laawol" width={20} height={20} style={{ borderRadius: 5, display: "block" }} />
             <span>Laawol Digital</span>
           </div>
           <div className="topbar-heading">
@@ -222,12 +226,14 @@ export function BusinessConsole({
           {(businessError || !businessId) && <div className="error-box">{businessError || "Business account is not configured."}</div>}
           {!isApproved && businessId && (
             <div className="info-band">
-              This business is currently {statusLabel(status)}. You can review setup data here while platform approval is pending.
+              This business is currently {statusLabel(status).toLowerCase()}. You can review setup data here while it waits for platform approval.
             </div>
           )}
 
           {activeTab === "today" && (
             <TodayView
+              businessId={businessId}
+              business={business}
               attentionRows={attentionRows}
               cars={cars.rows}
               purchases={purchases.rows}
@@ -299,6 +305,8 @@ export function BusinessConsole({
 }
 
 function TodayView({
+  businessId,
+  business,
   attentionRows,
   cars,
   purchases,
@@ -308,6 +316,8 @@ function TodayView({
   support,
   services,
 }: {
+  businessId: string;
+  business: FirestoreRow | null;
   attentionRows: FirestoreRow[];
   cars: FirestoreRow[];
   purchases: FirestoreRow[];
@@ -340,6 +350,7 @@ function TodayView({
         transports={transports}
         parkedCars={parkedCars}
       />
+      <PayoutsPanel businessId={businessId} business={business} />
       <div className="split-grid">
         <Panel title="Needs attention" icon={<BarChart3 size={18} />}>
           <div className="row-list compact">
@@ -370,6 +381,77 @@ function TodayView({
         </div>
       )}
     </div>
+  );
+}
+
+function PayoutsPanel({
+  businessId,
+  business,
+}: {
+  businessId: string;
+  business: FirestoreRow | null;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const payoutsEnabled = business?.payoutsEnabled === true;
+  const chargesEnabled = business?.chargesEnabled === true;
+  const stripeAccountId = text(business?.stripeAccountId, "");
+
+  async function connect() {
+    setBusy(true);
+    setError("");
+    try {
+      const href = window.location.href;
+      const result = await httpsCallable(functions, "createBusinessStripeAccountLink")({
+        businessId,
+        returnUrl: href,
+        refreshUrl: href,
+      });
+      const url = text((result.data as {url?: string})?.url, "");
+      if (!url) throw new Error("Stripe did not return an onboarding link.");
+      window.location.assign(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start Stripe onboarding.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function refresh() {
+    setBusy(true);
+    setError("");
+    try {
+      await httpsCallable(functions, "refreshBusinessStripeAccountStatus")({
+        businessId,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not refresh payout status.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Panel
+      title="Payouts"
+      icon={<Banknote size={18} />}
+      action={
+        <button className="lst-add" disabled={busy || !businessId} onClick={payoutsEnabled ? refresh : connect} type="button">
+          {busy ? "Working..." : payoutsEnabled ? "Refresh" : stripeAccountId ? "Continue setup" : "Connect bank account"}
+        </button>
+      }
+    >
+      <div className="tool-list">
+        <span className={`status-pill ${payoutsEnabled ? "" : "warning"}`}>
+          {payoutsEnabled ? "Payouts enabled" : "Payout setup required"}
+        </span>
+        <span className={`status-pill ${chargesEnabled ? "" : "warning"}`}>
+          {chargesEnabled ? "Charges verified" : "Charges not verified"}
+        </span>
+        {stripeAccountId && <span className="status-pill compact">{stripeAccountId}</span>}
+      </div>
+      {error && <div className="error-box">{error}</div>}
+    </Panel>
   );
 }
 
@@ -449,7 +531,7 @@ function ProfileView({
           <div className="person-block owner-block">
             <span>Name</span>
             <strong>{text(business?.name ?? profile.businessName, "Business")}</strong>
-            <small>{text(business?.email ?? business?.phone ?? business?.website, "Contact details not set")}</small>
+            <small>{text(business?.email ?? business?.phone ?? business?.website, "Business contact not set")}</small>
           </div>
           <div className="business-card-meta">
             <span>Status: {statusLabel(text(business?.status, "pending"))}</span>
@@ -570,7 +652,26 @@ function hasBusinessPermission(profile: UserProfile, permission: string) {
 }
 
 function statusLabel(value: unknown) {
-  return text(value, "unknown")
+  const normalized = text(value, "unknown").toLowerCase();
+  const labels: Record<string, string> = {
+    active: "Active",
+    approved: "Approved",
+    cancelled: "Cancelled",
+    closed: "Closed",
+    completed: "Completed",
+    inactive: "Inactive",
+    in_transit: "In transit",
+    pending: "Pending",
+    refund_pending: "Refund pending",
+    refunded: "Refunded",
+    rejected: "Rejected",
+    reserved: "Reserved",
+    resolved: "Resolved",
+    sold: "Sold",
+    unknown: "Unknown",
+  };
+  if (labels[normalized]) return labels[normalized];
+  return normalized
       .split(/[_-]/)
       .filter(Boolean)
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))

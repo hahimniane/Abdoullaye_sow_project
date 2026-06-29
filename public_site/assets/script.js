@@ -30,6 +30,12 @@
     });
   }
 
+  function localize(value) {
+    return window.LaawolI18n && typeof window.LaawolI18n.localize === "function"
+      ? window.LaawolI18n.localize(value)
+      : value;
+  }
+
   // Mobile menu toggle
   var toggle = document.getElementById("navToggle");
   var menu = document.getElementById("mobileMenu");
@@ -37,7 +43,7 @@
     toggle.addEventListener("click", function () {
       var open = menu.classList.toggle("open");
       toggle.setAttribute("aria-expanded", open ? "true" : "false");
-      toggle.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+      toggle.setAttribute("aria-label", localize(open ? "Close menu" : "Open menu"));
     });
     menu.querySelectorAll("a").forEach(function (a) {
       a.addEventListener("click", function () {
@@ -65,29 +71,33 @@
 
   attachMotionCards();
 
-  var destinationCountry = document.getElementById("destinationCountry");
-  var destinationCity = document.getElementById("destinationCity");
+  var destinationPays = document.getElementById("destinationCountry");
+  var destinationVille = document.getElementById("destinationCity");
   var destinationCities = {
     "Guinea": ["Conakry", "Kankan", "Labe", "Nzerekore", "Kindia", "Mamou"],
-    "Senegal": ["Dakar", "Touba", "Thies", "Saint-Louis", "Kaolack", "Ziguinchor"],
-    "Mali": ["Bamako", "Sikasso", "Mopti", "Segou", "Kayes", "Koutiala"],
-    "Côte d'Ivoire": ["Abidjan", "Bouake", "Yamoussoukro", "Daloa", "San-Pedro", "Korhogo"],
+    "Senegal": ["Dakar", "Touba", "Thiès", "Saint-Louis", "Kaolack", "Ziguinchor"],
+    "Mali": ["Bamako", "Sikasso", "Mopti", "Ségou", "Kayes", "Koutiala"],
+    "Côte d'Ivoire": ["Abidjan", "Bouaké", "Yamoussoukro", "Daloa", "San-Pedro", "Korhogo"],
     "Gambia": ["Banjul", "Serekunda", "Brikama", "Bakau", "Farafenni"],
     "Sierra Leone": ["Freetown", "Bo", "Kenema", "Makeni", "Koidu"],
     "Liberia": ["Monrovia", "Gbarnga", "Buchanan", "Ganta", "Kakata"],
     "United States": ["New York", "Bronx", "Brooklyn", "Manhattan", "Queens", "Newark", "Jersey City", "Philadelphia", "Atlanta"],
   };
-  if (destinationCountry && destinationCity) {
-    destinationCountry.addEventListener("change", function () {
-      var cities = destinationCities[destinationCountry.value] || [];
-      destinationCity.innerHTML = '<option value="">Select a city</option>';
+  if (destinationPays && destinationVille) {
+    destinationPays.addEventListener("change", function () {
+      var cities = destinationCities[destinationPays.value] || [];
+      destinationVille.innerHTML = "";
+      var placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = localize("Select a city");
+      destinationVille.appendChild(placeholder);
       cities.forEach(function (city) {
         var option = document.createElement("option");
         option.value = city;
         option.textContent = city;
-        destinationCity.appendChild(option);
+        destinationVille.appendChild(option);
       });
-      destinationCity.disabled = cities.length === 0;
+      destinationVille.disabled = cities.length === 0;
     });
   }
 
@@ -150,6 +160,12 @@
   var card = document.querySelector(".corridor-card");
   if (!emoji || !title || !meta || !bar || !eta || !card) return;
 
+  function localize(value) {
+    return window.LaawolI18n && typeof window.LaawolI18n.localize === "function"
+      ? window.LaawolI18n.localize(value)
+      : value;
+  }
+
   // Goods AND services move both ways, by sea and by air, across many regions.
   var feed = [
     { e: "🚢", t: "New York → Conakry", m: "Barrels · by sea · paid safely", w: 60, x: "On the vessel · arrives in 22 days · tracked" },
@@ -162,9 +178,9 @@
   var i = 0;
   function render(item) {
     emoji.textContent = item.e;
-    title.textContent = item.t;
-    meta.textContent = item.m;
-    eta.textContent = item.x;
+    title.textContent = localize(item.t);
+    meta.textContent = localize(item.m);
+    eta.textContent = localize(item.x);
     bar.style.width = item.w + "%";
     card.classList.remove("cc-swap");
     void card.offsetWidth; // restart animation

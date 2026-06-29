@@ -42,10 +42,19 @@ const cfg = {
 const SITE_DIR = path.join(ROOT, "public_site");
 const ADMIN_DIR = path.join(ROOT, "admin_web", "out");
 
-console.log("Running public CMS/privacy verification...");
-execFileSync("node", [path.join(SITE_DIR, "verify-cms.mjs")], {
-  stdio: "inherit",
-});
+console.log("Running static deploy preflight...");
+try {
+  execFileSync("node", [path.join(__dirname, "preflight.mjs")], {
+    env: {
+      ...process.env,
+      PREFLIGHT_SCOPE: "static",
+    },
+    stdio: "inherit",
+  });
+} catch {
+  console.error("\nStatic deploy preflight failed. Fix the checks above and retry.");
+  process.exit(1);
+}
 
 if (!cfg.host || !cfg.user || !cfg.password) {
   console.error("Missing FTP_HOST / FTP_USER / FTP_PASS env vars.");

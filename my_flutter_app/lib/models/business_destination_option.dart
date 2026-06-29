@@ -70,6 +70,10 @@ class BusinessDestinationOption {
         sortOrder: (country['sortOrder'] as num?)?.toInt() ?? 0,
         barrelShippingPrice:
             (country['barrelShippingPrice'] as num?)?.toDouble() ?? 0,
+        freightAirPricePerKg:
+            (country['freightAirPricePerKg'] as num?)?.toDouble() ?? 0,
+        freightSeaPricePerKg:
+            (country['freightSeaPricePerKg'] as num?)?.toDouble() ?? 0,
         deliveryEstimateMinDays: (country['deliveryEstimateMinDays'] as num?)
             ?.toInt(),
         deliveryEstimateMaxDays: (country['deliveryEstimateMaxDays'] as num?)

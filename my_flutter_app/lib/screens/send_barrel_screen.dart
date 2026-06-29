@@ -14,6 +14,7 @@ import '../providers/auth_provider.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../models/business_destination_option.dart';
+import '../models/barrel_order.dart';
 import '../models/destination_country.dart';
 import '../services/barrel_pricing_service.dart';
 import '../services/barrel_shipment_service.dart';
@@ -45,6 +46,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
   final _shipmentService = BarrelShipmentService();
   DestinationCountry? _selectedCountry;
   BusinessDestinationOption? _selectedBusinessOption;
+  final List<BarrelOrderLine> _orderLines = [];
   BarrelPickupPricing _pickupPricing = BarrelPickupPricing.defaultPricing;
   bool _pickupRequested = true;
   bool _isSubmitting = false;
@@ -52,6 +54,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
   String _pickupBorough = 'Bronx';
   DateTime? _pickupDateTime;
   bool _receiverPhoneIsWhatsappOnly = false;
+  int _quantity = 1;
   bool _useWalletBalance = false;
   double _walletBalance = 0;
   bool _prefilledSenderName = false;
@@ -94,20 +97,31 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
     super.dispose();
   }
 
+  double get _draftShippingFee =>
+      (_selectedBusinessOption?.country.barrelShippingPrice ?? 0) * _quantity;
+  double get _orderLinesShippingFee =>
+      _orderLines.fold(0, (total, line) => total + line.shippingFee);
   double get _shippingFee =>
-      _selectedBusinessOption?.country.barrelShippingPrice ?? 0;
-  double get _pickupFee =>
+      _orderLines.isNotEmpty ? _orderLinesShippingFee : _draftShippingFee;
+  int get _billableLineCount => _orderLines.isNotEmpty
+      ? _orderLines.length
+      : _selectedBusinessOption == null
+      ? 0
+      : 1;
+  double get _pickupFeePerLine =>
       _pickupRequested ? _pickupPricing.pickupFeeForBorough(_pickupBorough) : 0;
+  double get _pickupFee => _pickupFeePerLine * _billableLineCount;
   double get _estimatedTotal => _shippingFee + _pickupFee;
   bool get _needsPriceReview =>
       !_pricingLoaded ||
       _shippingFee <= 0 ||
-      (_pickupRequested && _pickupFee <= 0);
+      (_pickupRequested && _pickupFeePerLine <= 0);
   bool get _canPay =>
-      _selectedCountry != null &&
-      _selectedBusinessOption != null &&
-      _shippingFee > 0 &&
-      (!_pickupRequested || _pickupFee > 0);
+      (_orderLines.isNotEmpty ||
+          (_selectedCountry != null &&
+              _selectedBusinessOption != null &&
+              _draftShippingFee > 0)) &&
+      (!_pickupRequested || _pickupFeePerLine > 0);
   bool get _showReceiverWhatsappOption =>
       _ReceiverPhoneRules.isDifferentCountryNumber(
         value: _receiverPhoneController.text,
@@ -145,6 +159,31 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
     _formKey.currentState?.validate();
   }
 
+  BarrelOrderLine _draftLine() {
+    return BarrelOrderLine(
+      country: _selectedCountry!,
+      business: _selectedBusinessOption!,
+      receiverName: _receiverNameController.text.trim(),
+      receiverPhone: _receiverPhoneController.text.trim(),
+      receiverPhoneIsWhatsappOnly: _receiverPhoneIsWhatsappOnly,
+      quantity: _quantity,
+    );
+  }
+
+  void _addDestinationLine() {
+    if (!_formKey.currentState!.validate() || !_canPay) return;
+    setState(() {
+      _orderLines.add(_draftLine());
+    });
+    showSuccessSnackBar(context, 'Destination added to this order.');
+  }
+
+  void _removeDestinationLine(int index) {
+    setState(() {
+      _orderLines.removeAt(index);
+    });
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -171,26 +210,28 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
     });
 
     try {
-      final shipment = await _shipmentService.payForShipment(
+      final lines = _orderLines.isNotEmpty
+          ? List.of(_orderLines)
+          : [_draftLine()];
+      final order = await _shipmentService.payForOrder(
         senderName: _senderNameController.text.trim(),
-        receiverName: _receiverNameController.text.trim(),
-        receiverPhone: _receiverPhoneController.text.trim(),
-        destinationCountryId: _selectedCountry!.id,
-        businessId: _selectedBusinessOption!.businessId,
         pickupRequested: _pickupRequested,
         pickupAddress: pickupAddress,
         pickupBorough: _pickupRequested ? _pickupBorough : 'Office drop-off',
         pickupDateTime: _pickupRequested ? _pickupDateTime : null,
+        lines: lines,
         useWalletBalance: _useWalletBalance,
       );
-      await generateBarrelShipmentReceipt(shipment: shipment);
+      await generateBarrelOrderReceipt(
+        orderId: order.orderId,
+        shipments: order.shipments,
+      );
 
       if (!mounted) return;
+      final trackingLabel = order.trackingCodes.join(', ');
       showSuccessSnackBar(
         context,
-        AppLocalizations.of(
-          context,
-        )!.shipmentSavedWithTracking(shipment.trackingCode),
+        AppLocalizations.of(context)!.shipmentSavedWithTracking(trackingLabel),
       );
       if (widget.showBackButton) {
         Navigator.of(context).pop();
@@ -204,6 +245,8 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
         setState(() {
           _selectedCountry = null;
           _selectedBusinessOption = null;
+          _orderLines.clear();
+          _quantity = 1;
           _pickupDateTime = null;
           _pickupBorough = 'Bronx';
           _receiverPhoneIsWhatsappOnly = false;
@@ -439,6 +482,11 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                         children: [
                           _BarrelHero(animation: _heroController),
                           const SizedBox(height: 18),
+                          _SharedBarrelCard(
+                            onTap: () =>
+                                Navigator.pushNamed(context, '/open-barrels'),
+                          ),
+                          const SizedBox(height: 18),
                           Form(
                             key: _formKey,
                             child: Column(
@@ -669,9 +717,39 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                       ),
                                     ],
                                     const SizedBox(height: 14),
+                                    _QuantityStepper(
+                                      value: _quantity,
+                                      onChanged: (value) {
+                                        setState(() => _quantity = value);
+                                      },
+                                    ),
+                                    if (_selectedBusinessOption != null) ...[
+                                      const SizedBox(height: 12),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: OutlinedButton.icon(
+                                          onPressed: _addDestinationLine,
+                                          icon: const Icon(
+                                            Icons.add_location_alt_outlined,
+                                          ),
+                                          label: const Text(
+                                            'Add destination to order',
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    if (_orderLines.isNotEmpty) ...[
+                                      const SizedBox(height: 14),
+                                      _DestinationCart(
+                                        lines: _orderLines,
+                                        onRemove: _removeDestinationLine,
+                                      ),
+                                    ],
+                                    const SizedBox(height: 14),
                                     _PriceEstimateCard(
                                       shippingFee: _shippingFee,
                                       pickupFee: _pickupFee,
+                                      lineCount: _billableLineCount,
                                       pickupBorough: _pickupRequested
                                           ? _pickupBorough
                                           : 'Office drop-off',
@@ -799,6 +877,81 @@ class _BarrelHero extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SharedBarrelCard extends StatelessWidget {
+  const _SharedBarrelCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  String _copy(BuildContext context, String en, String fr) {
+    return Localizations.localeOf(context).languageCode == 'fr' ? fr : en;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE6FFFA),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.group_add_outlined,
+                  color: Color(0xFF0D9488),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _copy(
+                        context,
+                        "Can't fill a barrel?",
+                        "Vous ne remplissez pas un baril ?",
+                      ),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _copy(
+                        context,
+                        'Join an open shared barrel or reserve a share.',
+                        'Rejoignez un baril partagé ouvert ou réservez une part.',
+                      ),
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1456,7 +1609,7 @@ class _AddressAutocompleteFieldState extends State<_AddressAutocompleteField> {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 7);
     try {
       final req = await client.getUrl(uri);
-      req.headers.set(HttpHeaders.userAgentHeader, 'Veyra-App/1.0');
+      req.headers.set(HttpHeaders.userAgentHeader, 'Laawol-App/1.0');
       req.headers.set(HttpHeaders.acceptLanguageHeader, 'en-US,en;q=0.9');
       final res = await req.close();
       if (res.statusCode != 200) return const [];
@@ -1797,10 +1950,149 @@ class _PickupDateTimeTile extends FormField<DateTime> {
        );
 }
 
+class _QuantityStepper extends StatelessWidget {
+  const _QuantityStepper({required this.value, required this.onChanged});
+
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.lightSurfaceVariant,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.inventory_2_outlined, color: AppColors.cobaltDeep),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Barrels for this destination',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+          IconButton.filledTonal(
+            tooltip: 'Decrease',
+            onPressed: value <= 1 ? null : () => onChanged(value - 1),
+            icon: const Icon(Icons.remove),
+          ),
+          SizedBox(
+            width: 42,
+            child: Text(
+              value.toString(),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+          ),
+          IconButton.filledTonal(
+            tooltip: 'Increase',
+            onPressed: value >= 20 ? null : () => onChanged(value + 1),
+            icon: const Icon(Icons.add),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DestinationCart extends StatelessWidget {
+  const _DestinationCart({required this.lines, required this.onRemove});
+
+  final List<BarrelOrderLine> lines;
+  final ValueChanged<int> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = NumberFormat.simpleCurrency();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Destinations in this order',
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 8),
+        for (var index = 0; index < lines.length; index++) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.paper,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.rule),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  lines[index].country.flagEmoji,
+                  style: const TextStyle(fontSize: 24),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        lines[index].country.name,
+                        style: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        lines[index].business.businessName,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        '${lines[index].quantity} barrel(s) for ${lines[index].receiverName}',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      currency.format(lines[index].shippingFee),
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    IconButton(
+                      tooltip: 'Remove',
+                      onPressed: () => onRemove(index),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+}
+
 class _PriceEstimateCard extends StatelessWidget {
   const _PriceEstimateCard({
     required this.shippingFee,
     required this.pickupFee,
+    required this.lineCount,
     required this.pickupBorough,
     required this.total,
     required this.useWalletBalance,
@@ -1810,6 +2102,7 @@ class _PriceEstimateCard extends StatelessWidget {
 
   final double shippingFee;
   final double pickupFee;
+  final int lineCount;
   final String pickupBorough;
   final double total;
   final bool useWalletBalance;
@@ -1914,9 +2207,18 @@ class _PriceEstimateCard extends StatelessWidget {
             ),
             child: Column(
               children: [
-                row('Destination shipment', currency.format(shippingFee)),
                 row(
-                  pickupFee > 0 ? 'Pickup from $pickupBorough' : 'Pickup',
+                  lineCount > 1
+                      ? '$lineCount destination shipments'
+                      : 'Destination shipment',
+                  currency.format(shippingFee),
+                ),
+                row(
+                  pickupFee > 0 && lineCount > 1
+                      ? 'Pickup from $pickupBorough x $lineCount'
+                      : pickupFee > 0
+                      ? 'Pickup from $pickupBorough'
+                      : 'Pickup',
                   currency.format(pickupFee),
                 ),
                 if (pickupFee > 0) ...[

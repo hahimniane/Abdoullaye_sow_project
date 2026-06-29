@@ -332,6 +332,7 @@ class _TransportRequestDetailsScreenState
                             ],
                           ),
                           const SizedBox(height: 16),
+                          _CustomerRequestInfo(request: widget.request),
                           _RoundedTextField(
                             controller: _ownerController,
                             label: l10n.ownerName,
@@ -647,6 +648,118 @@ class _DatePickerTile extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: Colors.grey.shade300),
+      ),
+    );
+  }
+}
+
+/// Read-only summary of what a customer submitted (contact, pickup, notes) so
+/// the business has what it needs to send back a price quote. Only shows for
+/// customer-submitted requests that carry this info.
+class _CustomerRequestInfo extends StatelessWidget {
+  const _CustomerRequestInfo({required this.request});
+
+  final TransportRequest request;
+
+  @override
+  Widget build(BuildContext context) {
+    final isCustomerRequest = request.customerUid != null;
+    final hasDetails = request.customerPhone.isNotEmpty ||
+        request.pickupAddress.isNotEmpty ||
+        request.notes.isNotEmpty;
+    if (!isCustomerRequest && !hasDetails) {
+      return const SizedBox.shrink();
+    }
+
+    final rows = <Widget>[];
+    void add(IconData icon, String label, String value) {
+      if (value.trim().isEmpty) return;
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 18, color: AppColors.cobalt),
+              const SizedBox(width: 10),
+              Expanded(
+                child: RichText(
+                  text: TextSpan(
+                    style: const TextStyle(color: AppColors.ink, fontSize: 13.5),
+                    children: [
+                      TextSpan(
+                        text: '$label  ',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.muted,
+                        ),
+                      ),
+                      TextSpan(text: value),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    add(Icons.phone_outlined, 'Phone', request.customerPhone);
+    add(Icons.place_outlined, 'Pickup', request.pickupAddress);
+    add(Icons.notes_outlined, 'Notes', request.notes);
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.mist.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                'Customer request',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.ink,
+                ),
+              ),
+              const Spacer(),
+              if (request.awaitingQuote)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.saffron.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'Awaiting quote',
+                    style: TextStyle(
+                      color: AppColors.warn,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          ...rows,
+          if (rows.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                'Set a price below to send this customer a quote.',
+                style: TextStyle(color: AppColors.muted, fontSize: 13),
+              ),
+            ),
+        ],
       ),
     );
   }

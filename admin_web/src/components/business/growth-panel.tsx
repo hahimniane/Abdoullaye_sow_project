@@ -50,9 +50,9 @@ export function GrowthPanel({
         window.location.assign(data.url);
         return;
       }
-      setMessage("Checkout session started.");
+      setMessage("Payment session started.");
     } catch (rawError) {
-      setMessage(rawError instanceof Error ? rawError.message : "Could not start checkout.");
+      setMessage(rawError instanceof Error ? rawError.message : "Could not start payment.");
     } finally {
       setBusy("");
     }
@@ -63,9 +63,9 @@ export function GrowthPanel({
     setMessage("");
     try {
       await httpsCallable(functions, "generateBusinessInsights")({businessId});
-      setMessage("Insights generated.");
+      setMessage("Recommendations generated.");
     } catch (rawError) {
-      setMessage(rawError instanceof Error ? rawError.message : "Could not generate insights.");
+      setMessage(rawError instanceof Error ? rawError.message : "Could not generate recommendations.");
     } finally {
       setBusy("");
     }
@@ -80,7 +80,7 @@ export function GrowthPanel({
       <header className="lst-head">
         <div className="lst-head-text">
           <h2>Growth</h2>
-          <p>Your plan, incentives, and AI recommendations for your business.</p>
+          <p>Your plan, benefits, and AI recommendations for your business.</p>
         </div>
         <div className="lst-head-actions">{message && <span className="pur-kind">{message}</span>}</div>
       </header>
@@ -90,14 +90,14 @@ export function GrowthPanel({
       <div className="grw-plans">
         <article className={`grw-plan ${plan === "free" ? "current" : ""}`}>
           <span className="grw-tier">Free</span>
-          <strong>Your tools, included</strong>
-          <p>Listings, destinations, barrels, purchases, parking, transport, staff, and support.</p>
+          <strong>Your included tools</strong>
+          <p>Listings, destinations, barrels, purchases, parking, transport, people, and support.</p>
           {plan === "free" && <span className="lst-badge ok" style={{ alignSelf: "flex-start" }}>Current plan</span>}
         </article>
         <article className={`grw-plan pro ${plan === "pro" ? "current" : ""}`}>
           <span className="grw-tier">Pro</span>
           <strong>AI advisor + lower fees</strong>
-          <p>Get the AI Business Advisor, deeper analytics, and reduced platform fees as you grow.</p>
+          <p>Get the AI advisor, deeper analytics, and reduced platform fees as you grow.</p>
           {plan === "pro" ? (
             <span className="lst-badge ok" style={{ alignSelf: "flex-start" }}>Active</span>
           ) : (
@@ -112,11 +112,11 @@ export function GrowthPanel({
         <div className="grw-advisor-head">
           <div className="lst-empty-icon" style={{ margin: 0, width: 46, height: 46 }}><Sparkles size={22} /></div>
           <div>
-            <strong>AI Business Advisor</strong>
-            <p>{aiAdvisorEnabled ? "Generate fresh recommendations from your latest business data." : "Available on the Pro plan — spots pricing, listing, and response issues and how to fix them."}</p>
+            <strong>Business AI advisor</strong>
+            <p>{aiAdvisorEnabled ? "Generate new recommendations from your latest business data." : "Available on the Pro plan — spots pricing, listing, and response issues and how to fix them."}</p>
           </div>
           <button className="lst-add" type="button" disabled={busy === "advisor" || !businessId || !aiAdvisorEnabled} onClick={generateInsights}>
-            {busy === "advisor" ? <RefreshCw className="spin" size={16} /> : <Sparkles size={16} />} Generate insights
+            {busy === "advisor" ? <RefreshCw className="spin" size={16} /> : <Sparkles size={16} />} Generate recommendations
           </button>
         </div>
 
@@ -139,8 +139,8 @@ export function GrowthPanel({
                 </div>
                 <span className={`lst-badge ${severityTone(text(card.severity, ""))}`}>{statusLabel(card.severity)}</span>
               </div>
-              {Boolean(text(card.finding, "")) && <div className="grw-finding"><b>What we see:</b> {text(card.finding, "")}</div>}
-              {Boolean(text(card.recommendation, "")) && <div className="grw-reco"><b>Do this:</b> {text(card.recommendation, "")}</div>}
+              {Boolean(text(card.finding, "")) && <div className="grw-finding"><b>Finding:</b> {text(card.finding, "")}</div>}
+              {Boolean(text(card.recommendation, "")) && <div className="grw-reco"><b>Recommended action:</b> {text(card.recommendation, "")}</div>}
             </article>
           ))}
         </div>
@@ -177,7 +177,16 @@ function timestampMs(value: unknown): number {
 }
 
 function statusLabel(value: unknown) {
-  return text(value, "unknown")
+  const normalized = text(value, "unknown").toLowerCase();
+  const labels: Record<string, string> = {
+    critical: "Critical",
+    high: "High",
+    medium: "Medium",
+    low: "Low",
+    unknown: "Unknown",
+  };
+  if (labels[normalized]) return labels[normalized];
+  return normalized
     .split(/[_-]/)
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))

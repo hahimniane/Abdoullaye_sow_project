@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 enum BusinessServiceKey {
   barrelShipping('barrelShipping'),
+  sharedBarrels('sharedBarrels'),
+  freight('freight'),
   carSales('carSales'),
   carParking('carParking'),
   carTransport('carTransport');
@@ -40,6 +42,18 @@ const businessServiceCatalog = <BusinessServiceDefinition>[
     icon: Icons.local_shipping_outlined,
   ),
   BusinessServiceDefinition(
+    key: BusinessServiceKey.sharedBarrels,
+    label: 'Shared barrels',
+    description: 'Pool partial barrels and match customers by destination.',
+    icon: Icons.group_add_outlined,
+  ),
+  BusinessServiceDefinition(
+    key: BusinessServiceKey.freight,
+    label: 'Freight (parcels)',
+    description: 'Ship parcels and boxes by weight, by air or sea.',
+    icon: Icons.inventory_2_outlined,
+  ),
+  BusinessServiceDefinition(
     key: BusinessServiceKey.carSales,
     label: 'Car sales',
     description: 'List cars for customers to browse and buy.',
@@ -61,6 +75,8 @@ const businessServiceCatalog = <BusinessServiceDefinition>[
 
 const defaultBusinessServiceValues = <String>[
   'barrelShipping',
+  'sharedBarrels',
+  'freight',
   'carSales',
   'carParking',
   'carTransport',

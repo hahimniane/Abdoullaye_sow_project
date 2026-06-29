@@ -3,6 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "deploy:backend": "node backend-deploy.mjs",
+    "deploy:static:ssh": "node ssh-static-deploy.mjs",
+    "preflight": "node preflight.mjs",
+    "preflight:backend": "PREFLIGHT_SCOPE=backend node preflight.mjs",
+    "preflight:full": "node preflight.mjs",
+    "preflight:static": "PREFLIGHT_SCOPE=static node preflight.mjs",
     "verify:public": "node ../public_site/verify-cms.mjs"
   },
   "dependencies": { "basic-ftp": "^5.0.5" }

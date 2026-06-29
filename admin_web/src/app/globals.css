@@ -3861,6 +3861,7 @@ button[data-loading="true"]::before {
 
 /* Empty state */
 .lst-empty { text-align: center; padding: 48px 20px; background: var(--paper); border: 1px dashed var(--rule); border-radius: 18px; }
+.lst-empty.compact { padding: 28px 18px; }
 .lst-empty-icon { width: 64px; height: 64px; border-radius: 50%; background: var(--mist); color: var(--brand); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 14px; }
 .lst-empty h3 { font-size: 18px; font-weight: 800; color: var(--ink); }
 .lst-empty p { color: var(--muted); margin: 6px 0 18px; }
@@ -3931,6 +3932,14 @@ button[data-loading="true"]::before {
    Business dashboard — Purchases (holds, viewings, buyers)
    =========================================================================== */
 .pur-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 16px; }
+.lst-subsection { margin: 18px 0 22px; padding: 16px; border: 1px solid var(--rule); border-radius: 8px; background: color-mix(in srgb, var(--paper) 88%, var(--mist)); }
+.lst-subhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+.lst-subhead h3 { margin: 0; font-size: 16px; font-weight: 850; color: var(--ink); }
+.lst-subhead p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.pool-head-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.pool-config-note { background: #fff7ed; border: 1px solid rgba(245,158,11,.24); border-radius: 8px; color: #92400e; font-size: 13px; font-weight: 700; margin-bottom: 12px; padding: 9px 11px; }
+.pool-requests { display: grid; gap: 8px; margin: 14px 0 0; }
+.pool-request { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px; border-radius: 8px; background: var(--mist); color: var(--ink); font-size: 13px; font-weight: 700; }
 .pur-card { background: var(--paper); border: 1px solid var(--rule); border-radius: 18px; padding: 16px 16px 14px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 1px 2px rgba(11,59,56,.05), 0 12px 28px rgba(11,59,56,.06); }
 .pur-card.alert { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(245,158,11,.16), 0 12px 28px rgba(11,59,56,.06); }
 .pur-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }

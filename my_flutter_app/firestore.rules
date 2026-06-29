@@ -175,6 +175,12 @@ service cloud.firestore {
           request.auth.uid == userId;
       }
 
+      match /barrelPools/{poolId} {
+        allow read: if request.auth != null &&
+          (request.auth.uid == userId || isAdmin(request.auth.uid));
+        allow create, update, delete: if false;
+      }
+
       match /fcmTokens/{tokenId} {
         allow read, create, update, delete: if request.auth != null &&
           request.auth.uid == userId;
@@ -247,6 +253,86 @@ service cloud.firestore {
           ]);
     }
 
+    match /barrelOrders/{orderId} {
+      allow read: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         resource.data.customerUid == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /freightShipments/{shipmentId} {
+      allow read: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, resource.data.businessId));
+      allow create: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusinessSection(request.auth.uid, request.resource.data.businessId, 'freight'));
+      // Admins keep full update. A business may only progress fulfillment
+      // (status / tracking / notes) — never price, fees, payment, Stripe, or
+      // identity fields — and may not delete a customer's shipment.
+      allow update: if request.auth != null && isAdmin(request.auth.uid);
+      allow update: if request.auth != null &&
+        canManageBusinessSection(request.auth.uid, resource.data.businessId, 'freight') &&
+        request.resource.data.businessId == resource.data.businessId &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'trackingNumber', 'trackingCode', 'staffNotes', 'statusUpdatedAt', 'updatedAt']);
+      allow delete: if request.auth != null && isAdmin(request.auth.uid);
+      allow read: if request.auth != null &&
+        resource.data.customerUid == request.auth.uid;
+      allow update: if request.auth != null &&
+        resource.data.customerUid == request.auth.uid &&
+        (
+          resource.data.pickupRequested != true ||
+          !(resource.data.pickupDateTime is timestamp) ||
+          resource.data.pickupDateTime > request.time
+        ) &&
+        resource.data.status == 'pending' &&
+        request.resource.data.customerUid == resource.data.customerUid &&
+        request.resource.data.price == resource.data.price &&
+        request.resource.data.status == resource.data.status &&
+        request.resource.data.paymentStatus == resource.data.paymentStatus &&
+        request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'senderName',
+            'senderAddress',
+            'pickupAddress',
+            'pickupDateTime',
+            'receiverName',
+            'receiverPhone',
+            'updatedAt'
+          ]);
+    }
+
+    match /openBarrels/{poolId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    match /barrelPools/{poolId} {
+      allow read: if request.auth != null &&
+        (
+          isAdmin(request.auth.uid) ||
+          canManageBusiness(request.auth.uid, resource.data.businessId) ||
+          resource.data.createdByUid == request.auth.uid ||
+          exists(/databases/$(database)/documents/barrelPools/$(poolId)/participants/$(request.auth.uid))
+        );
+      allow create, update, delete: if false;
+
+      match /participants/{participantId} {
+        allow read: if request.auth != null &&
+          (
+            participantId == request.auth.uid ||
+            isAdmin(request.auth.uid) ||
+            canManageBusiness(
+              request.auth.uid,
+              get(/databases/$(database)/documents/barrelPools/$(poolId)).data.businessId
+            )
+          );
+        allow create, update, delete: if false;
+      }
+    }
+
     match /transportRequests/{requestId} {
       allow read: if request.auth != null &&
         (isAdmin(request.auth.uid) ||
@@ -261,6 +347,21 @@ service cloud.firestore {
       allow delete: if request.auth != null &&
         (isAdmin(request.auth.uid) ||
          canManageBusinessSection(request.auth.uid, resource.data.businessId, 'transport'));
+      // Customers may read their own transport requests (for tracking) and
+      // cancel one while it is still pending. Requests are created server-side
+      // by the createTransportRequest function (Admin SDK), so no customer
+      // create rule is needed here.
+      allow read: if request.auth != null &&
+        resource.data.customerUid == request.auth.uid;
+      allow update: if request.auth != null &&
+        resource.data.customerUid == request.auth.uid &&
+        resource.data.status == 'pending' &&
+        request.resource.data.status == 'cancelled' &&
+        request.resource.data.customerUid == resource.data.customerUid &&
+        request.resource.data.businessId == resource.data.businessId &&
+        request.resource.data.price == resource.data.price &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'updatedAt']);
     }
 
     match /cars/{carId} {
@@ -382,6 +483,14 @@ service cloud.firestore {
     }
 
     match /walletRefundRequests/{requestId} {
+      allow read: if request.auth != null &&
+        (resource.data.customerUid == request.auth.uid ||
+         isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, resource.data.businessId));
+      allow write: if false;
+    }
+
+    match /barrelPoolBalanceRequests/{requestId} {
       allow read: if request.auth != null &&
         (resource.data.customerUid == request.auth.uid ||
          isAdmin(request.auth.uid) ||

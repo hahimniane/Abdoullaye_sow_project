@@ -22,6 +22,10 @@ class BusinessProfile {
     this.state,
     this.postalCode,
     this.marketingBlurb,
+    this.stripeAccountId,
+    this.payoutsEnabled = false,
+    this.chargesEnabled = false,
+    this.connectOnboardedAt,
     this.featureConsent = false,
     this.featureStatus = 'none',
     this.featureNote,
@@ -52,6 +56,10 @@ class BusinessProfile {
   final String? state;
   final String? postalCode;
   final String? marketingBlurb;
+  final String? stripeAccountId;
+  final bool payoutsEnabled;
+  final bool chargesEnabled;
+  final DateTime? connectOnboardedAt;
   final bool featureConsent;
   final String featureStatus;
   final String? featureNote;
@@ -85,6 +93,10 @@ class BusinessProfile {
       state: data['state'] as String?,
       postalCode: data['postalCode'] as String?,
       marketingBlurb: data['marketingBlurb'] as String?,
+      stripeAccountId: data['stripeAccountId'] as String?,
+      payoutsEnabled: data['payoutsEnabled'] == true,
+      chargesEnabled: data['chargesEnabled'] == true,
+      connectOnboardedAt: (data['connectOnboardedAt'] as Timestamp?)?.toDate(),
       featureConsent: data['featureConsent'] == true,
       featureStatus: (data['featureStatus'] ?? 'none') as String,
       featureNote: data['featureNote'] as String?,

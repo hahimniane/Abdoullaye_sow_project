@@ -393,6 +393,12 @@ class _ServicesSection extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
+          _MenuButton(
+            title: 'Freight',
+            icon: Icons.inventory_2_outlined,
+            onTap: () => Navigator.pushNamed(context, '/send-freight'),
+          ),
+          const SizedBox(height: 12),
           if (showTransport) ...[
             _MenuButton(
               title: l10n.transportCars,

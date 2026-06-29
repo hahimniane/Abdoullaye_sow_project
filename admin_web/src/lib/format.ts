@@ -16,8 +16,8 @@ export function asDate(value: unknown): Date | null {
 
 export function formatDate(value: unknown) {
   const date = asDate(value);
-  if (!date) return "Not set";
-  return new Intl.DateTimeFormat("en-US", {
+  if (!date) return "Non défini";
+  return new Intl.DateTimeFormat(currentLocale(), {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -26,14 +26,25 @@ export function formatDate(value: unknown) {
 
 export function formatMoney(value: unknown, currency = "USD") {
   const amount = typeof value === "number" ? value : Number(value ?? 0);
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat(currentLocale(), {
     style: "currency",
     currency,
     maximumFractionDigits: 2,
   }).format(Number.isFinite(amount) ? amount : 0);
 }
 
-export function text(value: unknown, fallback = "Unknown") {
+export function text(value: unknown, fallback = "Inconnu") {
   const normalized = String(value ?? "").trim();
   return normalized || fallback;
+}
+
+export function currentLanguage() {
+  if (typeof window !== "undefined" && window.localStorage.getItem("laawol:lang") === "en") {
+    return "en";
+  }
+  return "fr";
+}
+
+export function currentLocale() {
+  return currentLanguage() === "en" ? "en-US" : "fr-FR";
 }

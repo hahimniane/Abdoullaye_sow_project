@@ -68,6 +68,13 @@ class AppGateProvider extends ChangeNotifier {
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   bool _warningDismissed = false;
   int _refreshToken = 0;
+  // Once the first check resolves we stop flashing the blocking "checking"
+  // overlay for subsequent re-checks (connectivity changes, retries).
+  bool _hasCompletedInitialCheck = false;
+  // Last known online state, used to ignore duplicate connectivity events that
+  // iOS emits frequently and which previously caused the app to re-check (and
+  // flicker the gate screen) on every event.
+  bool? _lastOnline;
 
   AppGateStatus _status = AppGateStatus.checking;
   AppVersionDecision? _decision;
@@ -85,7 +92,12 @@ class AppGateProvider extends ChangeNotifier {
     final connectivity = _connectivity;
     if (connectivity == null) return;
     final token = ++_refreshToken;
-    _setStatus(AppGateStatus.checking);
+    // Only block the UI with the full-screen "checking" overlay on the very
+    // first check. Later re-checks run silently so the gate screen does not
+    // flash over the app on every connectivity event.
+    if (!_hasCompletedInitialCheck) {
+      _setStatus(AppGateStatus.checking);
+    }
 
     List<ConnectivityResult> results;
     try {
@@ -115,6 +127,8 @@ class AppGateProvider extends ChangeNotifier {
       );
 
       if (token != _refreshToken) return;
+      _hasCompletedInitialCheck = true;
+      _lastOnline = true;
       _decision = decision;
       _lastError = null;
       switch (decision.requirement) {
@@ -131,6 +145,8 @@ class AppGateProvider extends ChangeNotifier {
       }
     } catch (error) {
       if (token != _refreshToken) return;
+      _hasCompletedInitialCheck = true;
+      _lastOnline = true;
       _lastError = error;
       _setStatus(AppGateStatus.ready);
     }
@@ -163,7 +179,12 @@ class AppGateProvider extends ChangeNotifier {
   }
 
   void _handleConnectivityChanged(List<ConnectivityResult> results) {
-    if (_hasConnection(results)) {
+    final online = _hasConnection(results);
+    // Ignore duplicate events that don't actually change the online/offline
+    // state — iOS emits these often and they would otherwise re-check on a loop.
+    if (_lastOnline == online) return;
+    _lastOnline = online;
+    if (online) {
       refresh();
     } else {
       _setOffline();
@@ -183,6 +204,8 @@ class AppGateProvider extends ChangeNotifier {
   }
 
   void _setOffline([Object? error]) {
+    _hasCompletedInitialCheck = true;
+    _lastOnline = false;
     _lastError = error;
     _setStatus(AppGateStatus.offline);
   }

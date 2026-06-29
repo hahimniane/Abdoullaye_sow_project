@@ -19,7 +19,11 @@ import 'screens/staff_home_screen.dart';
 import 'screens/home_menu.dart';
 import 'screens/park_car_screen.dart';
 import 'screens/send_barrel_screen.dart';
+import 'screens/open_barrels_screen.dart';
+import 'screens/send_freight_screen.dart';
+import 'screens/customize_navbar_screen.dart';
 import 'screens/transport_car_screen.dart';
+import 'screens/request_transport_screen.dart';
 import 'screens/sell_cars_screen.dart';
 import 'screens/tracking_screen.dart';
 import 'screens/login_screen.dart';
@@ -70,7 +74,7 @@ class MyApp extends StatelessWidget {
         builder:
             (context, languageProvider, authProvider, themeProvider, child) {
               return MaterialApp(
-                title: 'Veyra',
+                title: 'Laawol Digital',
                 scaffoldMessengerKey: rootScaffoldMessengerKey,
                 locale: languageProvider.currentLocale,
                 supportedLocales: const [Locale('en'), Locale('fr')],
@@ -98,6 +102,10 @@ class MyApp extends StatelessWidget {
                   '/customer_home': (context) => const CustomerHomeScreen(),
                   '/park': (context) => const ParkCarScreen(),
                   '/barrel': (context) => const SendBarrelScreen(),
+                  '/open-barrels': (context) => const OpenBarrelsScreen(),
+                  '/send-freight': (context) => const SendFreightScreen(),
+                  '/customize-navbar': (context) =>
+                      const CustomizeNavbarScreen(),
                   '/transport': (context) => const TransportCarScreen(),
                   '/sell': (context) =>
                       const SellCarsScreen(showBackButton: true),

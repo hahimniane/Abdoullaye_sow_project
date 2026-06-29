@@ -104,3 +104,7 @@ Add future project conventions and repeated architectural decisions here.
   `businessId`; legacy/default migrations should only fill missing
   `businessId` values and must not overwrite cars already assigned to another
   business.
+- Laawol collects customer payments on the platform account, but business-owned
+  service revenue should be paid directly to the responsible business through
+  Stripe Connect transfers after payment success. Do not design escrow or
+  delivery-gated payout flows unless the user explicitly changes this rule.

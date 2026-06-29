@@ -187,7 +187,7 @@
     function tick() {
       var now = Date.now(), dt = now - lastT; lastT = now;
       if (mode === "auto" && !reduce) {
-        phase += dt * 0.00016;
+        phase += dt * 0.00034;
         projection.rotate([BASE_LON + AMP * Math.sin(phase), BASE_LAT + 3 * Math.sin(phase * 0.6)]);
       } else if (mode === "return") {
         // ease the globe back until Africa is centered, then resume the sway

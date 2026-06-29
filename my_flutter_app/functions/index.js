@@ -3,6 +3,7 @@ const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {
   onDocumentDeleted,
   onDocumentUpdated,
+  onDocumentWritten,
 } = require("firebase-functions/v2/firestore");
 const {defineSecret} = require("firebase-functions/params");
 const crypto = require("crypto");
@@ -19,6 +20,17 @@ const {
   buildFeaturedBusinessPayload,
   buildFeaturingRequestUpdate,
 } = require("./featured_business");
+const {
+  buildOpenBarrelMirrorPayload,
+  isValidStripeSecretKey,
+  runtimePaymentSimulationEnabled,
+  sharedBarrelBalanceCents,
+  sharedBarrelDepositCents,
+  sharedPoolPaymentFields: buildSharedPoolPaymentFields,
+  sharedPoolSealAccounting: buildSharedPoolSealAccounting,
+  simulatedPoolBalanceIntent,
+  hasRemainingSharedPoolBalanceDue,
+} = require("./shared_barrel");
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
@@ -32,12 +44,16 @@ const DEPOSIT_CURRENCY = "usd";
 const DEFAULT_HOLD_MAX_DAYS = 14;
 const PURCHASE_CURRENCY = "usd";
 const SHIPMENT_CURRENCY = "usd";
-const SIMULATE_PAYMENTS = true;
+const SIMULATE_PAYMENTS = runtimePaymentSimulationEnabled(process.env);
 const DEFAULT_BUSINESS_ID = "keren_auto_sales";
 const DEFAULT_BUSINESS_NAME = "Keren";
+const MAX_BARREL_QUANTITY = 20;
+const MAX_BARREL_ORDER_LINES = 10;
 const PLATFORM_ADMIN_EMAIL = "admin@gmail.com";
 const VALID_BUSINESS_SERVICES = [
   "barrelShipping",
+  "sharedBarrels",
+  "freight",
   "carSales",
   "carParking",
   "carTransport",
@@ -540,6 +556,7 @@ const SECTION_TO_CAPABILITY = {
 };
 const COLLECTION_TO_SERVICE = {
   barrelShipments: "barrelShipping",
+  freightShipments: "freight",
   transportRequests: "carTransport",
   parkedCars: "carParking",
   cars: "carSales",
@@ -1211,6 +1228,17 @@ function requireBusinessService(business, service, message) {
   }
 }
 
+function requireSharedBarrelsService(business) {
+  const services = normalizeBusinessServices(business.enabledServices);
+  if (!services.includes("barrelShipping") ||
+      !services.includes("sharedBarrels")) {
+    throw new HttpsError(
+        "failed-precondition",
+        "This business is not accepting shared barrel pools",
+    );
+  }
+}
+
 async function requireBusinessManager(uid, businessId) {
   const user = await getUserProfile(uid);
   if (!canManageBusiness(user, businessId)) {
@@ -1327,6 +1355,8 @@ exports.listActiveBarrelDestinationOptions = onCall(
               isActive: country.isActive === true,
               sortOrder: Number(country.sortOrder || 0),
               barrelShippingPrice: price,
+              freightAirPricePerKg: Number(country.freightAirPricePerKg || 0),
+              freightSeaPricePerKg: Number(country.freightSeaPricePerKg || 0),
               destinationNote: country.destinationNote || "",
               ...deliveryEstimateFromCountry(country),
             },
@@ -1337,6 +1367,183 @@ exports.listActiveBarrelDestinationOptions = onCall(
       options.sort(compareDestinationOptions);
 
       return {options};
+    },
+);
+
+// Lists approved businesses that offer car transport, together with their
+// active destination countries, so a customer can pick who handles their
+// transport request. Unlike barrel options, no shipping price is required —
+// transport is quoted by the business after the request is submitted.
+exports.listTransportBusinessOptions = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async () => {
+      const db = admin.firestore();
+      const businesses = await db.collection("businesses")
+          .where("status", "==", "approved")
+          .get();
+      const options = [];
+
+      for (const businessDoc of businesses.docs) {
+        const business = businessDoc.data();
+        const services = normalizeBusinessServices(business.enabledServices);
+        if (!services.includes("carTransport")) continue;
+
+        const destinations = await businessDoc.ref
+            .collection("destinationCountries")
+            .where("isActive", "==", true)
+            .get();
+
+        destinations.docs.forEach((destinationDoc) => {
+          const country = destinationDoc.data();
+          options.push({
+            id: `${businessDoc.id}_${destinationDoc.id}`,
+            businessId: businessDoc.id,
+            businessName: business.name || businessDoc.id,
+            businessPhone: business.phone || "",
+            businessEmail: business.email || "",
+            businessWebsite: business.website || "",
+            businessProfileImageUrl: business.profileImageUrl || "",
+            enabledServices: services,
+            serviceNote: business.serviceNote || "",
+            businessStatus: "approved",
+            country: {
+              id: destinationDoc.id,
+              name: country.name || destinationDoc.id,
+              code: country.code || "",
+              isActive: country.isActive === true,
+              sortOrder: Number(country.sortOrder || 0),
+              barrelShippingPrice: Number(country.barrelShippingPrice || 0),
+              freightAirPricePerKg: Number(country.freightAirPricePerKg || 0),
+              freightSeaPricePerKg: Number(country.freightSeaPricePerKg || 0),
+              destinationNote: country.destinationNote || "",
+              ...deliveryEstimateFromCountry(country),
+            },
+          });
+        });
+      }
+
+      options.sort(compareDestinationOptions);
+
+      return {options};
+    },
+);
+
+// Creates a customer car-transport request scoped to a chosen business that
+// offers the service. No payment at request time — the request lands as
+// "pending" with quoteStatus "awaitingQuote" and the business sets the price.
+exports.createTransportRequest = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+
+      const businessId = String(data.businessId || "").trim();
+      if (!businessId) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Select a business that offers car transport.",
+        );
+      }
+
+      const businessDoc = await admin.firestore()
+          .collection("businesses")
+          .doc(businessId)
+          .get();
+      if (!businessDoc.exists || businessDoc.data().status !== "approved") {
+        throw new HttpsError(
+            "failed-precondition",
+            "This business is not available right now.",
+        );
+      }
+      const business = businessDoc.data();
+      requireBusinessService(
+          business,
+          "carTransport",
+          "This business is not offering car transport right now.",
+      );
+
+      const destinationCountryId =
+          String(data.destinationCountryId || "").trim();
+      let destinationCountryName =
+          String(data.destinationCountryName || "").trim();
+      if (destinationCountryId) {
+        const destDoc = await businessDoc.ref
+            .collection("destinationCountries")
+            .doc(destinationCountryId)
+            .get();
+        if (!destDoc.exists || destDoc.data().isActive !== true) {
+          throw new HttpsError(
+              "failed-precondition",
+              "That destination is not available for this business.",
+          );
+        }
+        destinationCountryName =
+          destDoc.data().name || destinationCountryName || destinationCountryId;
+      }
+
+      const ownerName = String(data.ownerName || "").trim();
+      const carMake = String(data.carMake || "").trim();
+      const carModel = String(data.carModel || "").trim();
+      const carYear = String(data.carYear || "").trim();
+      const vinNumber = String(data.vinNumber || "").trim();
+      const customerPhone = String(data.customerPhone || "").trim();
+      const pickupAddress = String(data.pickupAddress || "").trim();
+      const notes = String(data.notes || "").trim();
+
+      if (!ownerName || !carMake || !carModel || !carYear || !customerPhone) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Fill in the owner, car make/model/year, and a contact phone.",
+        );
+      }
+
+      let preferredDate = null;
+      if (data.preferredDate) {
+        const parsed = new Date(data.preferredDate);
+        if (!Number.isNaN(parsed.getTime())) {
+          preferredDate = admin.firestore.Timestamp.fromDate(parsed);
+        }
+      }
+
+      const trackingCode =
+          await generateTrackingCode("TR", "transportRequests");
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      const docData = {
+        trackingCode,
+        ownerName,
+        carMake,
+        carModel,
+        carYear,
+        vinNumber,
+        destinationCountryId: destinationCountryId || "guinea",
+        destinationCountryName: destinationCountryName || "Guinea",
+        transportDate: preferredDate || now,
+        preferredDate: preferredDate || null,
+        price: 0,
+        quoteStatus: "awaitingQuote",
+        status: "pending",
+        businessId,
+        businessName: business.name || businessId,
+        customerUid: uid,
+        customerPhone,
+        pickupAddress,
+        notes,
+        source: "customer",
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      const ref = await admin.firestore()
+          .collection("transportRequests")
+          .add(docData);
+
+      return {id: ref.id, trackingCode};
     },
 );
 
@@ -1365,10 +1572,18 @@ async function requireActiveBusinessForCar(car) {
 }
 
 async function stripeRequest(path, options = {}) {
+  const secretKey = stripeSecretKey.value();
+  if (!isValidStripeSecretKey(secretKey)) {
+    logger.error("Stripe secret key is missing or malformed");
+    throw new HttpsError(
+        "failed-precondition",
+        "Stripe payments are not configured. Contact platform support.",
+    );
+  }
   const response = await fetch(`https://api.stripe.com/v1${path}`, {
     ...options,
     headers: {
-      "Authorization": `Bearer ${stripeSecretKey.value()}`,
+      "Authorization": `Bearer ${secretKey.trim()}`,
       "Stripe-Version": "2024-12-18.acacia",
       ...(options.headers || {}),
     },
@@ -1399,8 +1614,64 @@ async function createStripePaymentIntent(params) {
   });
 }
 
+function stripeFormRequest(path, body, options = {}) {
+  return stripeRequest(path, {
+    method: options.method || "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      ...(options.idempotencyKey && {
+        "Idempotency-Key": options.idempotencyKey,
+      }),
+      ...(options.headers || {}),
+    },
+    body,
+  });
+}
+
 async function retrieveStripePaymentIntent(paymentIntentId) {
   return stripeRequest(`/payment_intents/${paymentIntentId}`);
+}
+
+async function createStripeExpressAccount(params) {
+  const body = new URLSearchParams();
+  body.set("type", "express");
+  body.set("capabilities[transfers][requested]", "true");
+  if (params.email) body.set("email", params.email);
+  if (params.country) body.set("country", params.country);
+  Object.entries(params.metadata || {}).forEach(([key, value]) => {
+    body.set(`metadata[${key}]`, String(value));
+  });
+  return stripeFormRequest("/accounts", body);
+}
+
+async function createStripeAccountLink(params) {
+  const body = new URLSearchParams();
+  body.set("account", params.accountId);
+  body.set("type", "account_onboarding");
+  body.set("refresh_url", params.refreshUrl);
+  body.set("return_url", params.returnUrl);
+  return stripeFormRequest("/account_links", body);
+}
+
+async function retrieveStripeAccount(accountId) {
+  return stripeRequest(`/accounts/${encodeURIComponent(accountId)}`);
+}
+
+async function createStripeTransfer(params) {
+  const body = new URLSearchParams();
+  body.set("amount", String(params.amount));
+  body.set("currency", params.currency);
+  body.set("destination", params.destination);
+  body.set("transfer_group", params.transferGroup);
+  if (params.sourceTransaction) {
+    body.set("source_transaction", params.sourceTransaction);
+  }
+  Object.entries(params.metadata || {}).forEach(([key, value]) => {
+    body.set(`metadata[${key}]`, String(value));
+  });
+  return stripeFormRequest("/transfers", body, {
+    idempotencyKey: params.idempotencyKey,
+  });
 }
 
 async function createStripeCheckoutSession(params) {
@@ -2675,6 +2946,107 @@ exports.createBusinessProCheckout = onCall(
     },
 );
 
+exports.createBusinessStripeAccountLink = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const {businessId, returnUrl, refreshUrl} = request.data || {};
+      if (!businessId) {
+        throw new HttpsError("invalid-argument", "Business ID is required");
+      }
+      await requireBusinessManager(uid, businessId);
+
+      const db = admin.firestore();
+      const businessRef = db.collection("businesses").doc(businessId);
+      const businessDoc = await businessRef.get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+      const business = businessDoc.data();
+      let stripeAccountId = String(business.stripeAccountId || "").trim();
+      if (!stripeAccountId) {
+        const account = await createStripeExpressAccount({
+          email: business.email || "",
+          country: /^[A-Z]{2}$/.test(String(business.country || "")) ?
+            String(business.country).toUpperCase() :
+            "US",
+          metadata: {businessId},
+        });
+        stripeAccountId = account.id;
+        await businessRef.set({
+          stripeAccountId,
+          chargesEnabled: account.charges_enabled === true,
+          payoutsEnabled:
+            account.charges_enabled === true &&
+            account.payouts_enabled === true,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, {merge: true});
+      }
+
+      const fallbackUrl =
+        process.env.BUSINESS_DASHBOARD_URL ||
+        "https://laawol.com/app";
+      const accountLink = await createStripeAccountLink({
+        accountId: stripeAccountId,
+        refreshUrl: refreshUrl || fallbackUrl,
+        returnUrl: returnUrl || fallbackUrl,
+      });
+      return {
+        businessId,
+        stripeAccountId,
+        url: accountLink.url,
+      };
+    },
+);
+
+exports.refreshBusinessStripeAccountStatus = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const {businessId} = request.data || {};
+      if (!businessId) {
+        throw new HttpsError("invalid-argument", "Business ID is required");
+      }
+      await requireBusinessManager(uid, businessId);
+      const businessDoc = await admin.firestore()
+          .collection("businesses")
+          .doc(businessId)
+          .get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+      const stripeAccountId =
+        String(businessDoc.data().stripeAccountId || "").trim();
+      if (!stripeAccountId) {
+        return {
+          businessId,
+          stripeAccountId: "",
+          chargesEnabled: false,
+          payoutsEnabled: false,
+        };
+      }
+      const account = await retrieveStripeAccount(stripeAccountId);
+      const payoutsEnabled = await persistStripeAccountStatus({
+        businessId,
+        account,
+      });
+      return {
+        businessId,
+        stripeAccountId,
+        chargesEnabled: account.charges_enabled === true,
+        payoutsEnabled,
+      };
+    },
+);
+
 exports.handleBusinessProStripeWebhook = onRequest(
     {
       cors: false,
@@ -2703,7 +3075,14 @@ exports.handleBusinessProStripeWebhook = onRequest(
 
       const object = event?.data?.object || {};
       try {
-        if (event.type === "checkout.session.completed") {
+        if (event.type === "account.updated") {
+          const accountId = object.id || "";
+          const businessId = object.metadata?.businessId ||
+            await businessIdForStripeAccount(accountId);
+          if (businessId) {
+            await persistStripeAccountStatus({businessId, account: object});
+          }
+        } else if (event.type === "checkout.session.completed") {
           const businessId = stripeSubscriptionBusinessId(object);
           const status = object.payment_status === "unpaid" ?
             "incomplete" :
@@ -5305,10 +5684,3709 @@ exports.suggestPickupAddresses = onCall(
     },
 );
 
+const BARREL_POOL_ORIGINS = new Set([
+  "customerPosted",
+  "dropOff",
+  "businessHeld",
+]);
+const BARREL_POOL_APPROVAL_MODES = new Set(["auto", "approval"]);
+const BARREL_POOL_ACTIVE_STATUSES = new Set([
+  "open",
+  "partially_filled",
+  "full",
+  "pending_seal",
+]);
+const BARREL_POOL_TERMINAL_STATUSES = new Set([
+  "sealed",
+  "delivered",
+  "cancelled",
+  "expired",
+]);
+const BARREL_POOL_ACTIVE_JOIN_STATUSES = new Set(["requested", "accepted"]);
+const BARREL_POOL_DEPOSIT_GRACE_MS = 24 * 60 * 60 * 1000;
+const SHARED_BARREL_PLATFORM_COMMISSION_RATE = 0.1;
+const BARREL_POOL_SHARE_WEIGHT_CAP_KG = 20;
+
+function normalizePoolShares(value, fallback = 1) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1, Math.min(4, Math.trunc(parsed)));
+}
+
+function normalizeTotalPoolShares(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 2;
+  return Math.max(2, Math.min(4, Math.trunc(parsed)));
+}
+
+function normalizeReservedPoolShares(value, totalShares, minShares = 0) {
+  const parsed = Number(value);
+  const fallback = minShares;
+  const shares = Number.isFinite(parsed) ? Math.trunc(parsed) : fallback;
+  return Math.max(minShares, Math.min(totalShares - 1, shares));
+}
+
+function normalizePoolMaxJoiners(value, openShares) {
+  const parsed = Number(value);
+  const fallback = openShares;
+  const joiners = Number.isFinite(parsed) ? Math.trunc(parsed) : fallback;
+  return Math.max(1, Math.min(openShares, joiners));
+}
+
+function normalizeRolloverMaxJoiners(value, openShares, activeJoiners) {
+  const parsed = Number(value);
+  const minimum = Math.max(1, activeJoiners + 1);
+  const maximum = Math.max(minimum, activeJoiners + openShares);
+  const fallback = maximum;
+  const joiners = Number.isFinite(parsed) ? Math.trunc(parsed) : fallback;
+  return Math.max(minimum, Math.min(maximum, joiners));
+}
+
+function normalizePoolDeadline(value) {
+  const parsed = value ? new Date(value) : null;
+  if (!parsed || Number.isNaN(parsed.getTime())) {
+    return admin.firestore.Timestamp.fromDate(
+        new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    );
+  }
+  if (parsed.getTime() <= Date.now()) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Join deadline must be in the future",
+    );
+  }
+  return admin.firestore.Timestamp.fromDate(parsed);
+}
+
+function requirePoolOrigin(value) {
+  const origin = String(value || "customerPosted").trim();
+  if (!BARREL_POOL_ORIGINS.has(origin)) {
+    throw new HttpsError("invalid-argument", "Invalid barrel pool origin");
+  }
+  return origin;
+}
+
+function poolHolderRole(origin) {
+  return origin === "customerPosted" ? "customer" : "business";
+}
+
+function requirePoolApprovalMode(value) {
+  const mode = String(value || "approval").trim();
+  if (!BARREL_POOL_APPROVAL_MODES.has(mode)) {
+    throw new HttpsError("invalid-argument", "Invalid pool approval mode");
+  }
+  return mode;
+}
+
+function poolStatusFor(openShares, takenShares) {
+  if (openShares <= 0) return "full";
+  if (takenShares > 0) return "partially_filled";
+  return "open";
+}
+
+function normalizePoolParticipantInput(data = {}) {
+  const senderName = cleanText(data.senderName, 160);
+  const senderAddress = cleanText(data.senderAddress, 240);
+  const receiverName = cleanText(data.receiverName, 160);
+  const receiverPhone = cleanText(data.receiverPhone, 80);
+  const contentsDescription = cleanText(data.contentsDescription, 500);
+  const pickupRequested = data.pickupRequested === true;
+  const pickupAddress = pickupRequested ?
+    cleanText(data.pickupAddress, 240) :
+    cleanText(data.pickupAddress, 240);
+  const pickupBorough = pickupRequested ?
+    cleanText(data.pickupBorough, 120) :
+    cleanText(data.pickupBorough, 120);
+  const pickupDateTime = pickupRequested ?
+    parseFuturePickup(data.pickupDateTime) :
+    null;
+  const attestedWeightKg = Number(data.attestedWeightKg || 0);
+  const contentsAttested = data.contentsAttested === true ||
+    data.contentsAttestationAccepted === true;
+  const prohibitedItemsAcknowledged =
+    data.prohibitedItemsAcknowledged === true ||
+    data.prohibitedItemsAccepted === true;
+  const sharedLiabilityAccepted = data.sharedLiabilityAccepted === true ||
+    data.sharedBarrelLiabilityAccepted === true;
+
+  if (!senderName || !receiverName || !receiverPhone) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Sender, receiver, and receiver phone are required",
+    );
+  }
+  requireValidPhoneNumber(receiverPhone, "Receiver phone");
+  if (
+    pickupRequested &&
+    (!pickupAddress || !pickupBorough || !pickupDateTime)
+  ) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Pickup address, borough, date, and time are required",
+    );
+  }
+
+  return {
+    senderName,
+    senderAddress,
+    receiverName,
+    receiverPhone,
+    contentsDescription,
+    pickupRequested,
+    pickupAddress,
+    pickupBorough,
+    pickupDateTime,
+    pickupFee: 0,
+    pickupMiles: 0,
+    attestedWeightKg: Number.isFinite(attestedWeightKg) ?
+      Math.max(0, attestedWeightKg) :
+      0,
+    contentsAttested,
+    prohibitedItemsAcknowledged,
+    sharedLiabilityAccepted,
+  };
+}
+
+function pricePoolParticipantPickup(participantInput, pricingData) {
+  if (!participantInput?.pickupRequested) {
+    return {miles: 0, fee: 0};
+  }
+  const pricing = barrelPickupPricingFromData(pricingData);
+  return pickupFeeForBorough(pricing, participantInput.pickupBorough);
+}
+
+function requirePoolParticipantAttestations(participantInput, sharesClaimed) {
+  const shares = normalizePoolShares(sharesClaimed, 1);
+  const maxWeightKg = shares * BARREL_POOL_SHARE_WEIGHT_CAP_KG;
+  // Weight is no longer collected for shared barrels; contents description and
+  // the liability acknowledgments are what we require.
+  if (!participantInput.contentsDescription) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Describe the shared barrel contents before reserving space",
+    );
+  }
+  if (
+    participantInput.contentsAttested !== true ||
+    participantInput.prohibitedItemsAcknowledged !== true ||
+    participantInput.sharedLiabilityAccepted !== true
+  ) {
+    throw new HttpsError(
+        "failed-precondition",
+        "Confirm contents, prohibited item, and shared liability " +
+        "acknowledgments",
+    );
+  }
+  return {
+    weightCapKg: BARREL_POOL_SHARE_WEIGHT_CAP_KG,
+    maxWeightKg,
+  };
+}
+
+function participantPublicSummary(participant) {
+  return {
+    role: participant.role || "joiner",
+    sharesClaimed: Number(participant.sharesClaimed || 0),
+    joinStatus: participant.joinStatus || "requested",
+    paymentStatus: participant.paymentStatus || "pending",
+    pickupRequested: participant.pickupRequested === true,
+    createdAt:
+      participant.createdAt || admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt:
+      participant.updatedAt || admin.firestore.FieldValue.serverTimestamp(),
+  };
+}
+
+function activePoolJoinerCount(publicParticipants = {}) {
+  return Object.values(publicParticipants)
+      .filter((participant) => participant?.role === "joiner")
+      .filter((participant) => BARREL_POOL_ACTIVE_JOIN_STATUSES.has(
+          String(participant?.joinStatus || ""),
+      ))
+      .length;
+}
+
+function timestampMillis(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (typeof value.toDate === "function") return value.toDate().getTime();
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function participantWithinPoolGrace(participant) {
+  const acceptedAt = timestampMillis(participant.acceptedAt);
+  const createdAt = timestampMillis(participant.createdAt);
+  const anchor = acceptedAt || createdAt;
+  return !anchor || Date.now() - anchor <= BARREL_POOL_DEPOSIT_GRACE_MS;
+}
+
+function sharedPoolPaymentFields({
+  poolId,
+  uid,
+  amountCents,
+  totalDepositCents = amountCents,
+  type,
+}) {
+  return buildSharedPoolPaymentFields({
+    poolId,
+    uid,
+    amountCents,
+    totalDepositCents,
+    type,
+    currency: SHIPMENT_CURRENCY,
+    simulatePayments: SIMULATE_PAYMENTS,
+  });
+}
+
+function sharedPoolSealAccounting({pool, participantRows, shipUnderfilled}) {
+  return buildSharedPoolSealAccounting({
+    pool,
+    participantRows,
+    shipUnderfilled,
+    commissionRate: SHARED_BARREL_PLATFORM_COMMISSION_RATE,
+  });
+}
+
+function ensurePoolCanChange(pool) {
+  if (BARREL_POOL_TERMINAL_STATUSES.has(String(pool.status || ""))) {
+    throw new HttpsError(
+        "failed-precondition",
+        "This shared barrel pool is already finalized",
+    );
+  }
+}
+
+function requireAdjustedPoolTotalShares(value) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 2 || parsed > 4) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Adjusted total shares must be between 2 and 4.",
+    );
+  }
+  return parsed;
+}
+
+async function requirePoolDecisionMaker(uid, pool) {
+  if (pool.createdByUid === uid) return {role: "owner"};
+  return requireBusinessPermission(uid, pool.businessId, "barrels");
+}
+
+async function requireVerifiedCustomerForSharedPool(uid) {
+  const user = await getUserProfile(uid);
+  if (user.role !== "customer") {
+    throw new HttpsError(
+        "permission-denied",
+        "Only customer accounts can use shared barrel customer actions",
+    );
+  }
+  if (user.phoneVerified !== true) {
+    throw new HttpsError(
+        "failed-precondition",
+        "Verify your phone number before using shared barrels",
+    );
+  }
+  return user;
+}
+
+function queuePoolParticipantRefund({
+  transaction,
+  participant,
+  pool,
+  poolId,
+  reason,
+  requestedBy = "",
+}) {
+  const uid = participant.uid || "";
+  const refundableCents = Number(participant.refundableAmountCents || 0);
+  if (!uid || !Number.isFinite(refundableCents) || refundableCents <= 0) {
+    return null;
+  }
+  const db = admin.firestore();
+  const amount = dollarsFromCents(refundableCents);
+  const currency = participant.currency || pool.currency || SHIPMENT_CURRENCY;
+  const trackingCode = pool.trackingCode || poolId;
+  const customerName = participant.senderName || participant.customerName || "";
+  const customerEmail = participant.customerEmail || "";
+  const requestRef = db.collection("walletRefundRequests").doc();
+  const notificationRef = db.collection("platformNotifications").doc();
+  const walletRef = db.collection("wallets").doc(uid);
+  const walletTransactionRef = walletRef.collection("transactions").doc();
+  const now = admin.firestore.FieldValue.serverTimestamp();
+
+  transaction.set(walletRef, {
+    customerUid: uid,
+    currency,
+    pendingRefundCents: admin.firestore.FieldValue.increment(
+        refundableCents,
+    ),
+    pendingRefund: admin.firestore.FieldValue.increment(amount),
+    updatedAt: now,
+  }, {merge: true});
+  transaction.set(walletTransactionRef, {
+    type: "credit",
+    reason,
+    status: "pending",
+    amountCents: refundableCents,
+    amount,
+    currency,
+    refundRequestId: requestRef.id,
+    shipmentId: poolId,
+    trackingCode,
+    businessId: pool.businessId,
+    businessName: pool.businessName,
+    customerUid: uid,
+    customerName,
+    customerEmail,
+    createdAt: now,
+  });
+  transaction.set(requestRef, {
+    customerUid: uid,
+    customerEmail,
+    customerName,
+    amountCents: refundableCents,
+    amount,
+    currency,
+    status: "pending",
+    destination: "original_payment",
+    source: "barrel_pool",
+    refundReason: reason,
+    businessId: pool.businessId || "",
+    businessName: pool.businessName || "",
+    barrelPoolId: poolId,
+    trackingCode,
+    participantUid: uid,
+    participantRole: participant.role || "",
+    sharesClaimed: Number(participant.sharesClaimed || 0),
+    relatedCollection: "barrelPools",
+    relatedId: poolId,
+    relatedLabel: trackingCode,
+    createdBy: requestedBy,
+    createdAt: now,
+    updatedAt: now,
+  });
+  transaction.set(notificationRef, {
+    type: "deposit_refund_due",
+    status: "unread",
+    businessId: pool.businessId || "",
+    businessName: pool.businessName || "",
+    barrelPoolId: poolId,
+    trackingCode,
+    participantUid: uid,
+    customerUid: uid,
+    customerEmail,
+    customerName,
+    amount,
+    amountCents: refundableCents,
+    currency,
+    walletRefundRequestId: requestRef.id,
+    relatedCollection: "barrelPools",
+    relatedId: poolId,
+    relatedLabel: trackingCode,
+    title: "Shared barrel refund due",
+    message:
+      `${pool.businessName || "A business"} owes ${customerName || uid} ` +
+      `a shared barrel refund of ${amount} ${currency} for ` +
+      `${trackingCode}.`,
+    createdBy: requestedBy,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return {
+    refundRequestId: requestRef.id,
+    notificationId: notificationRef.id,
+    amountCents: refundableCents,
+  };
+}
+
+function queuePoolParticipantBalancePayment({
+  batch,
+  participant,
+  pool,
+  poolId,
+  shipmentId,
+  shipmentTrackingCode,
+  requestedBy = "",
+}) {
+  const uid = participant.uid || "";
+  const balanceCents = Number(participant.balanceAmountCents || 0);
+  if (!uid || !Number.isFinite(balanceCents) || balanceCents <= 0) {
+    return null;
+  }
+  const db = admin.firestore();
+  const amount = dollarsFromCents(balanceCents);
+  const currency = participant.currency || pool.currency || SHIPMENT_CURRENCY;
+  const trackingCode = pool.trackingCode || poolId;
+  const customerName = participant.senderName || participant.customerName || "";
+  const customerEmail = participant.customerEmail || "";
+  const underfilledAmountCents = Number(
+      participant.underfilledBalanceAmountCents || 0,
+  );
+  const underfilledAmount = dollarsFromCents(underfilledAmountCents);
+  const requestRef = db.collection("barrelPoolBalanceRequests").doc();
+  const notificationRef = db.collection("platformNotifications").doc();
+  const now = admin.firestore.FieldValue.serverTimestamp();
+
+  batch.set(requestRef, {
+    customerUid: uid,
+    customerEmail,
+    customerName,
+    amountCents: balanceCents,
+    amount,
+    currency,
+    status: "pending",
+    source: "barrel_pool_balance",
+    businessId: pool.businessId || "",
+    businessName: pool.businessName || "",
+    platformFeePct: SHARED_BARREL_PLATFORM_COMMISSION_RATE,
+    ...servicePayoutFields({
+      grossCents: balanceCents,
+      platformFeePct: SHARED_BARREL_PLATFORM_COMMISSION_RATE,
+      connectReady: false,
+    }),
+    barrelPoolId: poolId,
+    trackingCode,
+    participantUid: uid,
+    participantRole: participant.role || "",
+    sharesClaimed: Number(participant.sharesClaimed || 0),
+    underfilledAmountCents,
+    underfilledAmount,
+    shipmentId,
+    shipmentTrackingCode,
+    relatedCollection: "barrelPools",
+    relatedId: poolId,
+    relatedLabel: trackingCode,
+    createdBy: requestedBy,
+    createdAt: now,
+    updatedAt: now,
+  });
+  batch.set(notificationRef, {
+    type: "barrel_pool_balance_due",
+    status: "unread",
+    businessId: pool.businessId || "",
+    businessName: pool.businessName || "",
+    barrelPoolId: poolId,
+    trackingCode,
+    participantUid: uid,
+    customerUid: uid,
+    customerEmail,
+    customerName,
+    amount,
+    amountCents: balanceCents,
+    underfilledAmount,
+    underfilledAmountCents,
+    currency,
+    barrelPoolBalanceRequestId: requestRef.id,
+    shipmentId,
+    shipmentTrackingCode,
+    relatedCollection: "barrelPools",
+    relatedId: poolId,
+    relatedLabel: trackingCode,
+    title: "Shared barrel balance due",
+    message:
+      `${customerName || uid} owes ${amount} ${currency} for the ` +
+      `shared barrel balance on ${trackingCode}.`,
+    createdBy: requestedBy,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return {
+    balanceRequestId: requestRef.id,
+    notificationId: notificationRef.id,
+    amountCents: balanceCents,
+  };
+}
+
+function userBarrelPoolRef(db, uid, poolId) {
+  return db.collection("users").doc(uid)
+      .collection("barrelPools").doc(poolId);
+}
+
+function setUserBarrelPoolMembership({
+  transaction,
+  uid,
+  poolId,
+  pool,
+  participant,
+  now,
+}) {
+  if (!uid || String(uid).startsWith("dropoff_")) return;
+  const db = admin.firestore();
+  transaction.set(userBarrelPoolRef(db, uid, poolId), {
+    poolId,
+    businessId: pool.businessId || "",
+    businessName: pool.businessName || "",
+    destinationCountryId: pool.destinationCountryId || "",
+    destinationCountryName: pool.destinationCountryName || "",
+    origin: pool.origin || "customerPosted",
+    holderRole: pool.holderRole || "customer",
+    createdByUid: pool.createdByUid || "",
+    createdByRole: pool.createdByRole || "",
+    totalShares: Number(pool.totalShares || 0),
+    openShares: Number(pool.openShares || 0),
+    sharesAvailable: Number(pool.openShares || 0),
+    pricePerShare: Number(pool.pricePerShare || 0),
+    depositPerShare: Number(pool.depositPerShare || 0),
+    currency: pool.currency || SHIPMENT_CURRENCY,
+    shipMode: pool.shipMode || "sea",
+    joinDeadline: pool.joinDeadline || null,
+    status: pool.status || "open",
+    trackingCode: pool.trackingCode || poolId,
+    approvalMode: pool.approvalMode || "approval",
+    participantRole: participant.role || "joiner",
+    participantJoinStatus: participant.joinStatus || "requested",
+    sharesClaimed: Number(participant.sharesClaimed || 0),
+    updatedAt: now,
+  }, {merge: true});
+}
+
+exports.createBarrelPool = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      await requireVerifiedCustomerForSharedPool(customerUid);
+      const {
+        businessId,
+        destinationCountryId,
+        origin,
+        totalShares,
+        sharesClaimed,
+        maxJoiners,
+        approvalMode,
+        joinDeadline,
+        shipMode,
+        useWalletBalance,
+      } = request.data || {};
+      const normalizedOrigin = requirePoolOrigin(origin);
+      if (normalizedOrigin !== "customerPosted") {
+        throw new HttpsError(
+            "permission-denied",
+            "Customers can only post customer-held shared barrels",
+        );
+      }
+      const holderRole = poolHolderRole(normalizedOrigin);
+      const normalizedTotalShares = normalizeTotalPoolShares(totalShares);
+      const normalizedShares = normalizePoolShares(sharesClaimed, 1);
+      if (normalizedShares >= normalizedTotalShares) {
+        throw new HttpsError(
+            "invalid-argument",
+            "A shared barrel must leave at least one share open",
+        );
+      }
+      const normalizedMaxJoiners = normalizePoolMaxJoiners(
+          maxJoiners,
+          normalizedTotalShares - normalizedShares,
+      );
+      const participantInput = normalizePoolParticipantInput(
+          request.data || {},
+      );
+      const attestation = requirePoolParticipantAttestations(
+          participantInput,
+          normalizedShares,
+      );
+      const deadline = normalizePoolDeadline(joinDeadline);
+      const mode = requirePoolApprovalMode(approvalMode);
+      const businessDestination = await getApprovedBusinessDestination({
+        businessId,
+        countryId: destinationCountryId,
+      });
+      const {business, country, shippingFee, deliveryEstimate} =
+        businessDestination;
+      requireSharedBarrelsService(business);
+      const pricePerShare = dollarsFromCents(
+          Math.round(centsFromDollars(shippingFee) / normalizedTotalShares),
+      );
+      const db = admin.firestore();
+      const pricingDoc = await db.collection("shipmentPricing")
+          .doc("barrelPickup")
+          .get();
+      const connectReady =
+        !!business.stripeAccountId && business.payoutsEnabled === true;
+      const pickup = pricePoolParticipantPickup(
+          participantInput,
+          pricingDoc.data(),
+      );
+      const depositCents = sharedBarrelDepositCents(
+          pricePerShare,
+          normalizedShares,
+      );
+      const balanceCents = sharedBarrelBalanceCents(
+          pricePerShare,
+          normalizedShares,
+          pickup.fee,
+      );
+      const poolRef = db.collection("barrelPools").doc();
+      const participantRef = poolRef.collection("participants").doc(
+          customerUid,
+      );
+      const trackingCode = await generateTrackingCode("BP", "barrelPools");
+      const userRecord = await admin.auth().getUser(customerUid);
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      let walletAppliedCents = 0;
+      let cardDepositCents = 0;
+      await db.runTransaction(async (transaction) => {
+        if (useWalletBalance === true) {
+          walletAppliedCents = await debitWallet({
+            transaction,
+            customerUid,
+            amountCents: depositCents,
+            shipmentId: poolRef.id,
+            trackingCode,
+            reason: "barrel_pool_deposit",
+            businessId: businessDestination.businessId,
+            businessName: business.name || DEFAULT_BUSINESS_NAME,
+          });
+        }
+        cardDepositCents = depositCents - walletAppliedCents;
+        const payment = sharedPoolPaymentFields({
+          poolId: poolRef.id,
+          uid: customerUid,
+          amountCents: cardDepositCents,
+          totalDepositCents: depositCents,
+          type: "barrel_pool_deposit",
+        });
+        const openShares = normalizedTotalShares - normalizedShares;
+        const initialStatus = payment.paymentStatus === "pending" ?
+          "pending_payment" :
+          poolStatusFor(openShares, normalizedShares);
+        const poolData = {
+          businessId: businessDestination.businessId,
+          businessName: business.name || DEFAULT_BUSINESS_NAME,
+          destinationCountryId,
+          destinationCountryName: country.name || destinationCountryId,
+          origin: normalizedOrigin,
+          holderRole,
+          createdByUid: customerUid,
+          createdByRole: "customer",
+          totalShares: normalizedTotalShares,
+          takenShares: normalizedShares,
+          openShares,
+          acceptedShares: normalizedShares,
+          requestedShares: 0,
+          maxJoiners: normalizedMaxJoiners,
+          approvalMode: mode,
+          pricePerShare,
+          depositPerShare: dollarsFromCents(sharedBarrelDepositCents(
+              pricePerShare,
+              1,
+          )),
+          currency: SHIPMENT_CURRENCY,
+          shipMode: shipMode === "air" ? "air" : "sea",
+          joinDeadline: deadline,
+          status: initialStatus,
+          trackingCode,
+          ...deliveryEstimate,
+          publicParticipants: {
+            [customerUid]: {
+              role: "owner",
+              sharesClaimed: normalizedShares,
+              joinStatus: "accepted",
+              paymentStatus: payment.paymentStatus,
+              pickupRequested: participantInput.pickupRequested,
+              createdAt: now,
+              updatedAt: now,
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        };
+        const ownerParticipant = {
+          uid: customerUid,
+          role: "owner",
+          businessId: businessDestination.businessId,
+          businessName: business.name || DEFAULT_BUSINESS_NAME,
+          sharesClaimed: normalizedShares,
+          senderName: participantInput.senderName,
+          senderAddress: participantInput.senderAddress,
+          receiverName: participantInput.receiverName,
+          receiverPhone: participantInput.receiverPhone,
+          contentsDescription: participantInput.contentsDescription,
+          pickupRequested: participantInput.pickupRequested,
+          pickupAddress: participantInput.pickupAddress,
+          pickupBorough: participantInput.pickupBorough,
+          pickupMiles: pickup.miles,
+          pickupFee: pickup.fee,
+          ...(participantInput.pickupDateTime && {
+            pickupDateTime: admin.firestore.Timestamp.fromDate(
+                participantInput.pickupDateTime,
+            ),
+          }),
+          attestedWeightKg: participantInput.attestedWeightKg,
+          weightCapKg: attestation.weightCapKg,
+          maxWeightKg: attestation.maxWeightKg,
+          contentsAttested: participantInput.contentsAttested,
+          prohibitedItemsAcknowledged:
+            participantInput.prohibitedItemsAcknowledged,
+          sharedLiabilityAccepted: participantInput.sharedLiabilityAccepted,
+          customerEmail: userRecord.email || "",
+          joinStatus: "accepted",
+          depositAmount: dollarsFromCents(depositCents),
+          depositAmountCents: depositCents,
+          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
+          walletAppliedCents,
+          cardDepositAmount: dollarsFromCents(cardDepositCents),
+          cardDepositAmountCents: cardDepositCents,
+          balanceAmount: dollarsFromCents(balanceCents),
+          balanceAmountCents: balanceCents,
+          refundableAmountCents: depositCents,
+          refundableAmount: dollarsFromCents(depositCents),
+          platformFeePct: SHARED_BARREL_PLATFORM_COMMISSION_RATE,
+          ...servicePayoutFields({
+            grossCents: depositCents,
+            platformFeePct: SHARED_BARREL_PLATFORM_COMMISSION_RATE,
+            connectReady,
+          }),
+          ...payment,
+          createdAt: now,
+          updatedAt: now,
+        };
+        transaction.set(poolRef, poolData);
+        transaction.set(participantRef, ownerParticipant);
+        setUserBarrelPoolMembership({
+          transaction,
+          uid: customerUid,
+          poolId: poolRef.id,
+          pool: poolData,
+          participant: ownerParticipant,
+          now,
+        });
+      });
+
+      if (cardDepositCents > 0 && !SIMULATE_PAYMENTS) {
+        let paymentIntent;
+        try {
+          paymentIntent = await createStripePaymentIntent({
+            amount: cardDepositCents,
+            currency: SHIPMENT_CURRENCY,
+            metadata: {
+              poolId: poolRef.id,
+              trackingCode,
+              customerUid,
+              participantUid: customerUid,
+              businessId: businessDestination.businessId,
+              destinationCountryId,
+              paymentType: "barrel_pool_deposit",
+            },
+          });
+          await participantRef.update({
+            stripePaymentIntentIds:
+              admin.firestore.FieldValue.arrayUnion(paymentIntent.id),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        } catch (error) {
+          await db.runTransaction(async (transaction) => {
+            const failedAt = admin.firestore.FieldValue.serverTimestamp();
+            transaction.update(poolRef, {
+              status: "cancelled",
+              paymentStatus: "failed",
+              cancelledAt: failedAt,
+              cancellationReason: "deposit_payment_intent_failed",
+              [`publicParticipants.${customerUid}.paymentStatus`]: "failed",
+              updatedAt: failedAt,
+            });
+            transaction.update(participantRef, {
+              paymentStatus: "failed",
+              updatedAt: failedAt,
+            });
+            setUserBarrelPoolMembership({
+              transaction,
+              uid: customerUid,
+              poolId: poolRef.id,
+              pool: {
+                businessId: businessDestination.businessId,
+                businessName: business.name || DEFAULT_BUSINESS_NAME,
+                destinationCountryId,
+                destinationCountryName: country.name || destinationCountryId,
+                origin: normalizedOrigin,
+                holderRole,
+                createdByUid: customerUid,
+                createdByRole: "customer",
+                totalShares: normalizedTotalShares,
+                openShares: normalizedTotalShares - normalizedShares,
+                pricePerShare,
+                depositPerShare: dollarsFromCents(sharedBarrelDepositCents(
+                    pricePerShare,
+                    1,
+                )),
+                currency: SHIPMENT_CURRENCY,
+                shipMode: shipMode === "air" ? "air" : "sea",
+                joinDeadline: deadline,
+                status: "cancelled",
+                trackingCode,
+                approvalMode: mode,
+              },
+              participant: {
+                role: "owner",
+                joinStatus: "accepted",
+                sharesClaimed: normalizedShares,
+                paymentStatus: "failed",
+              },
+              now: failedAt,
+            });
+            if (walletAppliedCents > 0) {
+              await creditWallet({
+                transaction,
+                customerUid,
+                amountCents: walletAppliedCents,
+                shipmentId: poolRef.id,
+                trackingCode,
+                reason: "barrel_pool_deposit_reversal",
+                businessId: businessDestination.businessId,
+                businessName: business.name || DEFAULT_BUSINESS_NAME,
+              });
+            }
+          });
+          throw error;
+        }
+        return {
+          success: true,
+          poolId: poolRef.id,
+          trackingCode,
+          clientSecret: paymentIntent.client_secret,
+          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
+          cardDepositAmount: dollarsFromCents(cardDepositCents),
+          depositAmount: dollarsFromCents(depositCents),
+        };
+      }
+
+      return {
+        success: true,
+        poolId: poolRef.id,
+        trackingCode,
+        simulatedPayment: true,
+        depositAmount: dollarsFromCents(depositCents),
+        walletAppliedAmount: dollarsFromCents(walletAppliedCents),
+        cardDepositAmount: dollarsFromCents(cardDepositCents),
+      };
+    },
+);
+
+exports.createBusinessBarrelPool = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const {
+        businessId,
+        destinationCountryId,
+        origin,
+        totalShares,
+        reservedShares,
+        maxJoiners,
+        approvalMode,
+        joinDeadline,
+        shipMode,
+      } = request.data || {};
+      const normalizedOrigin = requirePoolOrigin(origin || "businessHeld");
+      if (!["businessHeld", "dropOff"].includes(normalizedOrigin)) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Business pools must be drop-off or business-held",
+        );
+      }
+      const businessDestination = await getApprovedBusinessDestination({
+        businessId,
+        countryId: destinationCountryId,
+      });
+      await requireBusinessPermission(
+          callerUid,
+          businessDestination.businessId,
+          "barrels",
+      );
+      const {business, country, shippingFee, deliveryEstimate} =
+        businessDestination;
+      requireSharedBarrelsService(business);
+
+      const normalizedTotalShares = normalizeTotalPoolShares(totalShares);
+      const minimumReservedShares = normalizedOrigin === "dropOff" ? 1 : 0;
+      const normalizedReservedShares = normalizeReservedPoolShares(
+          reservedShares,
+          normalizedTotalShares,
+          minimumReservedShares,
+      );
+      const openShares = normalizedTotalShares - normalizedReservedShares;
+      const normalizedMaxJoiners = normalizePoolMaxJoiners(
+          maxJoiners,
+          openShares,
+      );
+      const mode = requirePoolApprovalMode(approvalMode);
+      const deadline = normalizePoolDeadline(joinDeadline);
+      const pricePerShare = dollarsFromCents(
+          Math.round(centsFromDollars(shippingFee) / normalizedTotalShares),
+      );
+      const depositPerShare = dollarsFromCents(sharedBarrelDepositCents(
+          pricePerShare,
+          1,
+      ));
+      const db = admin.firestore();
+      const poolRef = db.collection("barrelPools").doc();
+      const trackingCode = await generateTrackingCode("BP", "barrelPools");
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      const participantId = cleanText(request.data?.customerUid, 128)
+          .replace(/[/.]/g, "_") || `dropoff_${poolRef.id}`;
+      const participantInput = normalizedReservedShares > 0 ?
+        normalizePoolParticipantInput(request.data || {}) :
+        null;
+      const attestation = participantInput ?
+        requirePoolParticipantAttestations(
+            participantInput,
+            normalizedReservedShares,
+        ) :
+        null;
+      const participantRef = participantInput ?
+        poolRef.collection("participants").doc(participantId) :
+        null;
+      const pricingDoc = participantInput?.pickupRequested ?
+        await db.collection("shipmentPricing").doc("barrelPickup").get() :
+        null;
+      const pickup = pricePoolParticipantPickup(
+          participantInput,
+          pricingDoc?.data(),
+      );
+      const depositCents = sharedBarrelDepositCents(
+          pricePerShare,
+          normalizedReservedShares,
+      );
+      const balanceCents = sharedBarrelBalanceCents(
+          pricePerShare,
+          normalizedReservedShares,
+          pickup.fee,
+      );
+
+      await db.runTransaction(async (transaction) => {
+        const poolData = {
+          businessId: businessDestination.businessId,
+          businessName: business.name || DEFAULT_BUSINESS_NAME,
+          destinationCountryId,
+          destinationCountryName: country.name || destinationCountryId,
+          origin: normalizedOrigin,
+          holderRole: "business",
+          createdByUid: callerUid,
+          createdByRole: "business",
+          totalShares: normalizedTotalShares,
+          takenShares: normalizedReservedShares,
+          openShares,
+          acceptedShares: normalizedReservedShares,
+          requestedShares: 0,
+          maxJoiners: normalizedMaxJoiners,
+          approvalMode: mode,
+          pricePerShare,
+          depositPerShare,
+          currency: SHIPMENT_CURRENCY,
+          shipMode: shipMode === "air" ? "air" : "sea",
+          joinDeadline: deadline,
+          status: poolStatusFor(openShares, normalizedReservedShares),
+          trackingCode,
+          ...deliveryEstimate,
+          publicParticipants: participantInput ? {
+            [participantId]: {
+              role: "owner",
+              sharesClaimed: normalizedReservedShares,
+              joinStatus: "accepted",
+              paymentStatus: "collected_by_business",
+              pickupRequested: participantInput.pickupRequested,
+              createdAt: now,
+              updatedAt: now,
+            },
+          } : {},
+          createdAt: now,
+          updatedAt: now,
+        };
+        transaction.set(poolRef, poolData);
+        if (participantRef && participantInput) {
+          const businessOwnerParticipant = {
+            uid: participantId,
+            role: "owner",
+            managedByBusiness: true,
+            sharesClaimed: normalizedReservedShares,
+            senderName: participantInput.senderName,
+            senderAddress: participantInput.senderAddress,
+            receiverName: participantInput.receiverName,
+            receiverPhone: participantInput.receiverPhone,
+            contentsDescription: participantInput.contentsDescription,
+            pickupRequested: participantInput.pickupRequested,
+            pickupAddress: participantInput.pickupAddress,
+            pickupBorough: participantInput.pickupBorough,
+            pickupMiles: pickup.miles,
+            pickupFee: pickup.fee,
+            ...(participantInput.pickupDateTime && {
+              pickupDateTime: admin.firestore.Timestamp.fromDate(
+                  participantInput.pickupDateTime,
+              ),
+            }),
+            attestedWeightKg: participantInput.attestedWeightKg,
+            weightCapKg: attestation?.weightCapKg || 0,
+            maxWeightKg: attestation?.maxWeightKg || 0,
+            contentsAttested: participantInput.contentsAttested,
+            prohibitedItemsAcknowledged:
+              participantInput.prohibitedItemsAcknowledged,
+            sharedLiabilityAccepted: participantInput.sharedLiabilityAccepted,
+            customerEmail: cleanText(request.data?.customerEmail, 160),
+            joinStatus: "accepted",
+            depositAmount: dollarsFromCents(depositCents),
+            depositAmountCents: depositCents,
+            walletAppliedAmount: 0,
+            walletAppliedCents: 0,
+            cardDepositAmount: 0,
+            cardDepositAmountCents: 0,
+            balanceAmount: dollarsFromCents(balanceCents),
+            balanceAmountCents: balanceCents,
+            refundableAmountCents: 0,
+            refundableAmount: 0,
+            amount: 0,
+            amountCents: 0,
+            currency: SHIPMENT_CURRENCY,
+            paymentStatus: "collected_by_business",
+            stripePaymentIntentIds: [],
+            createdAt: now,
+            updatedAt: now,
+          };
+          transaction.set(participantRef, businessOwnerParticipant);
+          setUserBarrelPoolMembership({
+            transaction,
+            uid: participantId,
+            poolId: poolRef.id,
+            pool: poolData,
+            participant: businessOwnerParticipant,
+            now,
+          });
+        }
+      });
+
+      return {
+        success: true,
+        poolId: poolRef.id,
+        trackingCode,
+        origin: normalizedOrigin,
+      };
+    },
+);
+
+exports.adjustBarrelPoolCapacity = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const poolId = cleanText(request.data?.poolId, 160);
+      const totalShares = requireAdjustedPoolTotalShares(
+          request.data?.totalShares,
+      );
+      const inspectionNote = cleanText(request.data?.inspectionNote, 500);
+      if (!poolId) {
+        throw new HttpsError("invalid-argument", "Pool is required.");
+      }
+      if (!inspectionNote) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Inspection note is required.",
+        );
+      }
+
+      const db = admin.firestore();
+      const poolRef = db.collection("barrelPools").doc(poolId);
+      await db.runTransaction(async (transaction) => {
+        const [poolDoc, participantSnapshot] = await Promise.all([
+          transaction.get(poolRef),
+          transaction.get(
+              poolRef.collection("participants")
+                  .where("joinStatus", "in", ["requested", "accepted"]),
+          ),
+        ]);
+        if (!poolDoc.exists) {
+          throw new HttpsError("not-found", "Shared barrel pool not found");
+        }
+        const pool = poolDoc.data() || {};
+        ensurePoolCanChange(pool);
+        await requireBusinessPermission(callerUid, pool.businessId, "barrels");
+        if (!BARREL_POOL_ACTIVE_STATUSES.has(String(pool.status || ""))) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Only active shared barrel pools can be adjusted.",
+          );
+        }
+
+        const takenShares = Number(pool.takenShares ??
+          Number(pool.acceptedShares || 0) + Number(pool.requestedShares || 0));
+        if (totalShares < takenShares) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Adjusted total shares cannot be below reserved shares.",
+          );
+        }
+        const openShares = totalShares - takenShares;
+        const nextStatus = String(pool.status || "") === "pending_seal" &&
+          openShares === 0 ?
+          "pending_seal" :
+          poolStatusFor(openShares, takenShares);
+        const nextMaxJoiners = openShares > 0 ?
+          Math.max(1, Math.min(
+              Number(pool.maxJoiners || openShares),
+              openShares,
+          )) :
+          Number(pool.maxJoiners || 1);
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        const nextPool = {
+          ...pool,
+          totalShares,
+          openShares,
+          maxJoiners: nextMaxJoiners,
+          status: nextStatus,
+        };
+
+        transaction.update(poolRef, {
+          totalShares,
+          openShares,
+          sharesAvailable: openShares,
+          maxJoiners: nextMaxJoiners,
+          status: nextStatus,
+          lastShareAdjustment: {
+            previousTotalShares: Number(pool.totalShares || 0),
+            previousOpenShares: Number(pool.openShares || 0),
+            totalShares,
+            openShares,
+            inspectionNote,
+            adjustedBy: callerUid,
+            adjustedAt: now,
+          },
+          shareAdjustmentCount: admin.firestore.FieldValue.increment(1),
+          updatedAt: now,
+        });
+
+        participantSnapshot.docs.forEach((participantDoc) => {
+          const participant = participantDoc.data() || {};
+          setUserBarrelPoolMembership({
+            transaction,
+            uid: participantDoc.id,
+            poolId,
+            pool: nextPool,
+            participant: {
+              ...participant,
+              uid: participantDoc.id,
+            },
+            now,
+          });
+        });
+      });
+
+      return {success: true, poolId, totalShares};
+    },
+);
+
+exports.rollBarrelPoolToBusinessHeld = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const poolId = cleanText(request.data?.poolId, 160);
+      const note = cleanText(request.data?.note, 500);
+      if (!poolId) {
+        throw new HttpsError("invalid-argument", "Pool is required.");
+      }
+      const nextDeadline = normalizePoolDeadline(request.data?.joinDeadline);
+      const db = admin.firestore();
+      const poolRef = db.collection("barrelPools").doc(poolId);
+
+      await db.runTransaction(async (transaction) => {
+        const [poolDoc, participantSnapshot] = await Promise.all([
+          transaction.get(poolRef),
+          transaction.get(
+              poolRef.collection("participants")
+                  .where("joinStatus", "in", ["requested", "accepted"]),
+          ),
+        ]);
+        if (!poolDoc.exists) {
+          throw new HttpsError("not-found", "Shared barrel pool not found");
+        }
+        const pool = poolDoc.data() || {};
+        ensurePoolCanChange(pool);
+        await requireBusinessPermission(callerUid, pool.businessId, "barrels");
+        if (!BARREL_POOL_ACTIVE_STATUSES.has(String(pool.status || ""))) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Only active shared barrel pools can be rolled over.",
+          );
+        }
+        if (String(pool.origin || "") === "businessHeld") {
+          throw new HttpsError(
+              "failed-precondition",
+              "This pool is already business-held.",
+          );
+        }
+        const previousDeadlineMillis = timestampMillis(pool.joinDeadline);
+        if (!previousDeadlineMillis || previousDeadlineMillis > Date.now()) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Shared barrels can roll over only after the join deadline.",
+          );
+        }
+        const openShares = Number(pool.openShares || 0);
+        if (openShares <= 0) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Only underfilled pools can roll into business-held matching.",
+          );
+        }
+        const takenShares = Number(pool.takenShares || 0);
+        const activeJoiners = activePoolJoinerCount(
+            pool.publicParticipants || {},
+        );
+        const nextMaxJoiners = normalizeRolloverMaxJoiners(
+            request.data?.maxJoiners,
+            openShares,
+            activeJoiners,
+        );
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        const nextPool = {
+          ...pool,
+          origin: "businessHeld",
+          holderRole: "business",
+          joinDeadline: nextDeadline,
+          maxJoiners: nextMaxJoiners,
+          status: poolStatusFor(openShares, takenShares),
+        };
+
+        transaction.update(poolRef, {
+          origin: "businessHeld",
+          holderRole: "business",
+          joinDeadline: nextDeadline,
+          maxJoiners: nextMaxJoiners,
+          status: poolStatusFor(openShares, takenShares),
+          businessHeldRollover: {
+            previousOrigin: pool.origin || "customerPosted",
+            previousHolderRole: pool.holderRole || "customer",
+            previousJoinDeadline: pool.joinDeadline || null,
+            note,
+            rolledBy: callerUid,
+            rolledAt: now,
+          },
+          rolloverCount: admin.firestore.FieldValue.increment(1),
+          updatedAt: now,
+        });
+
+        participantSnapshot.docs.forEach((participantDoc) => {
+          const participant = participantDoc.data() || {};
+          setUserBarrelPoolMembership({
+            transaction,
+            uid: participantDoc.id,
+            poolId,
+            pool: nextPool,
+            participant: {
+              ...participant,
+              uid: participantDoc.id,
+            },
+            now,
+          });
+        });
+      });
+
+      return {success: true, poolId, origin: "businessHeld"};
+    },
+);
+
+exports.requestJoinBarrelPool = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      await requireVerifiedCustomerForSharedPool(customerUid);
+      const poolId = cleanText(request.data?.poolId, 160);
+      const useWalletBalance = request.data?.useWalletBalance === true;
+      const requestedDestinationCountryId = cleanText(
+          request.data?.destinationCountryId,
+          160,
+      );
+      const sharesClaimed = normalizePoolShares(
+          request.data?.sharesClaimed,
+          1,
+      );
+      if (!poolId) {
+        throw new HttpsError("invalid-argument", "Pool is required");
+      }
+      const participantInput = normalizePoolParticipantInput(
+          request.data || {},
+      );
+      const attestation = requirePoolParticipantAttestations(
+          participantInput,
+          sharesClaimed,
+      );
+      const db = admin.firestore();
+      const poolRef = db.collection("barrelPools").doc(poolId);
+      const participantRef = poolRef.collection("participants").doc(
+          customerUid,
+      );
+      const userRecord = await admin.auth().getUser(customerUid);
+      const pricingDoc = participantInput.pickupRequested ?
+        await db.collection("shipmentPricing").doc("barrelPickup").get() :
+        null;
+      const pickup = pricePoolParticipantPickup(
+          participantInput,
+          pricingDoc?.data(),
+      );
+      let depositCents = 0;
+      let walletAppliedCents = 0;
+      let cardDepositCents = 0;
+      let trackingCode = poolId;
+      let poolBusinessId = "";
+      let poolBusinessName = "";
+      let poolDestinationCountryId = "";
+      let joinStatusForPayment = "requested";
+      await db.runTransaction(async (transaction) => {
+        const [poolDoc, participantDoc] = await Promise.all([
+          transaction.get(poolRef),
+          transaction.get(participantRef),
+        ]);
+        if (!poolDoc.exists) {
+          throw new HttpsError("not-found", "Shared barrel pool not found");
+        }
+        if (participantDoc.exists) {
+          throw new HttpsError(
+              "already-exists",
+              "You already joined this shared barrel",
+          );
+        }
+        const pool = poolDoc.data() || {};
+        ensurePoolCanChange(pool);
+        poolBusinessId = pool.businessId || "";
+        poolBusinessName = pool.businessName || "";
+        poolDestinationCountryId = pool.destinationCountryId || "";
+        if (
+          requestedDestinationCountryId &&
+          requestedDestinationCountryId !== poolDestinationCountryId
+        ) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Joiner destination must match the shared barrel destination",
+          );
+        }
+        if (!BARREL_POOL_ACTIVE_STATUSES.has(String(pool.status || ""))) {
+          throw new HttpsError(
+              "failed-precondition",
+              "This pool is not open for joiners",
+          );
+        }
+        if (
+          pool.joinDeadline &&
+          pool.joinDeadline.toMillis &&
+          pool.joinDeadline.toMillis() <= Date.now()
+        ) {
+          throw new HttpsError(
+              "failed-precondition",
+              "The join deadline has passed",
+          );
+        }
+        const openShares = Number(pool.openShares || 0);
+        if (sharesClaimed > openShares) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Not enough shares are available",
+          );
+        }
+        const joinerCount = activePoolJoinerCount(
+            pool.publicParticipants || {},
+        );
+        const maxJoiners = Number(pool.maxJoiners || 1);
+        if (joinerCount >= maxJoiners) {
+          throw new HttpsError(
+              "failed-precondition",
+              "This pool already has the maximum number of joiners",
+          );
+        }
+        const remainingJoinerSlots = maxJoiners - joinerCount;
+        if (remainingJoinerSlots <= 1 && sharesClaimed < openShares) {
+          throw new HttpsError(
+              "failed-precondition",
+              "The final joiner must claim all remaining shares",
+          );
+        }
+        const pricePerShare = Number(pool.pricePerShare || 0);
+        depositCents = sharedBarrelDepositCents(pricePerShare, sharesClaimed);
+        const balanceCents = sharedBarrelBalanceCents(
+            pricePerShare,
+            sharesClaimed,
+            pickup.fee,
+        );
+        trackingCode = pool.trackingCode || poolId;
+        if (useWalletBalance === true) {
+          walletAppliedCents = await debitWallet({
+            transaction,
+            customerUid,
+            amountCents: depositCents,
+            shipmentId: poolId,
+            trackingCode,
+            reason: "barrel_pool_join_deposit",
+            businessId: pool.businessId,
+            businessName: pool.businessName,
+          });
+        }
+        cardDepositCents = depositCents - walletAppliedCents;
+        const nextOpenShares = openShares - sharesClaimed;
+        const approvalMode = String(pool.approvalMode || "approval");
+        const joinStatus = approvalMode === "auto" ? "accepted" : "requested";
+        joinStatusForPayment = joinStatus;
+        const requestedShares = Number(pool.requestedShares || 0) +
+          (joinStatus === "requested" ? sharesClaimed : 0);
+        const acceptedShares = Number(pool.acceptedShares || 0) +
+          (joinStatus === "accepted" ? sharesClaimed : 0);
+        const payment = sharedPoolPaymentFields({
+          poolId,
+          uid: customerUid,
+          amountCents: cardDepositCents,
+          totalDepositCents: depositCents,
+          type: "barrel_pool_join",
+        });
+        const participant = {
+          uid: customerUid,
+          role: "joiner",
+          businessId: poolBusinessId,
+          businessName: poolBusinessName,
+          sharesClaimed,
+          destinationCountryId: poolDestinationCountryId,
+          destinationCountryName: pool.destinationCountryName || "",
+          senderName: participantInput.senderName,
+          senderAddress: participantInput.senderAddress,
+          receiverName: participantInput.receiverName,
+          receiverPhone: participantInput.receiverPhone,
+          contentsDescription: participantInput.contentsDescription,
+          pickupRequested: participantInput.pickupRequested,
+          pickupAddress: participantInput.pickupAddress,
+          pickupBorough: participantInput.pickupBorough,
+          pickupMiles: pickup.miles,
+          pickupFee: pickup.fee,
+          ...(participantInput.pickupDateTime && {
+            pickupDateTime: admin.firestore.Timestamp.fromDate(
+                participantInput.pickupDateTime,
+            ),
+          }),
+          attestedWeightKg: participantInput.attestedWeightKg,
+          weightCapKg: attestation.weightCapKg,
+          maxWeightKg: attestation.maxWeightKg,
+          contentsAttested: participantInput.contentsAttested,
+          prohibitedItemsAcknowledged:
+            participantInput.prohibitedItemsAcknowledged,
+          sharedLiabilityAccepted: participantInput.sharedLiabilityAccepted,
+          customerEmail: userRecord.email || "",
+          joinStatus,
+          depositAmount: dollarsFromCents(depositCents),
+          depositAmountCents: depositCents,
+          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
+          walletAppliedCents,
+          cardDepositAmount: dollarsFromCents(cardDepositCents),
+          cardDepositAmountCents: cardDepositCents,
+          balanceAmount: dollarsFromCents(balanceCents),
+          balanceAmountCents: balanceCents,
+          refundableAmountCents: depositCents,
+          refundableAmount: dollarsFromCents(depositCents),
+          platformFeePct: SHARED_BARREL_PLATFORM_COMMISSION_RATE,
+          ...servicePayoutFields({
+            grossCents: depositCents,
+            platformFeePct: SHARED_BARREL_PLATFORM_COMMISSION_RATE,
+            connectReady: false,
+          }),
+          ...payment,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+        const nextPoolStatus = poolStatusFor(
+            nextOpenShares,
+            Number(pool.takenShares || 0) + sharesClaimed,
+        );
+        const membershipPool = {
+          ...pool,
+          openShares: nextOpenShares,
+          takenShares: Number(pool.takenShares || 0) + sharesClaimed,
+          requestedShares,
+          acceptedShares,
+          status: nextPoolStatus,
+        };
+        transaction.set(participantRef, participant);
+        transaction.update(poolRef, {
+          takenShares: Number(pool.takenShares || 0) + sharesClaimed,
+          openShares: nextOpenShares,
+          requestedShares,
+          acceptedShares,
+          status: nextPoolStatus,
+          [`publicParticipants.${customerUid}`]:
+            participantPublicSummary(participant),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        setUserBarrelPoolMembership({
+          transaction,
+          uid: customerUid,
+          poolId,
+          pool: membershipPool,
+          participant,
+          now: participant.updatedAt,
+        });
+        if (pool.createdByUid && pool.createdByUid !== customerUid) {
+          const ownerSummary =
+            (pool.publicParticipants || {})[pool.createdByUid] || {};
+          setUserBarrelPoolMembership({
+            transaction,
+            uid: pool.createdByUid,
+            poolId,
+            pool: membershipPool,
+            participant: {
+              role: "owner",
+              joinStatus: "accepted",
+              sharesClaimed: Number(ownerSummary.sharesClaimed || 0),
+            },
+            now: participant.updatedAt,
+          });
+        }
+      });
+
+      if (cardDepositCents > 0 && !SIMULATE_PAYMENTS) {
+        let paymentIntent;
+        try {
+          paymentIntent = await createStripePaymentIntent({
+            amount: cardDepositCents,
+            currency: SHIPMENT_CURRENCY,
+            metadata: {
+              poolId,
+              trackingCode,
+              customerUid,
+              participantUid: customerUid,
+              businessId: poolBusinessId,
+              destinationCountryId: poolDestinationCountryId,
+              paymentType: "barrel_pool_join",
+            },
+          });
+          await participantRef.update({
+            stripePaymentIntentIds:
+              admin.firestore.FieldValue.arrayUnion(paymentIntent.id),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        } catch (error) {
+          await db.runTransaction(async (transaction) => {
+            const [poolDoc, participantDoc] = await Promise.all([
+              transaction.get(poolRef),
+              transaction.get(participantRef),
+            ]);
+            if (!poolDoc.exists || !participantDoc.exists) return;
+            const pool = poolDoc.data() || {};
+            const participant = participantDoc.data() || {};
+            const shares = Number(participant.sharesClaimed || sharesClaimed);
+            const failedAt = admin.firestore.FieldValue.serverTimestamp();
+            const wasRequested =
+              String(participant.joinStatus || joinStatusForPayment) ===
+              "requested";
+            const nextOpenShares = Number(pool.openShares || 0) + shares;
+            const nextTakenShares = Math.max(
+                0,
+                Number(pool.takenShares || 0) - shares,
+            );
+            const nextRequestedShares = Math.max(
+                0,
+                Number(pool.requestedShares || 0) -
+                  (wasRequested ? shares : 0),
+            );
+            const nextAcceptedShares = Math.max(
+                0,
+                Number(pool.acceptedShares || 0) -
+                  (wasRequested ? 0 : shares),
+            );
+            const nextPoolStatus = poolStatusFor(
+                nextOpenShares,
+                nextTakenShares,
+            );
+            transaction.update(participantRef, {
+              joinStatus: "cancelled",
+              paymentStatus: "failed",
+              refundableAmountCents: 0,
+              refundableAmount: 0,
+              updatedAt: failedAt,
+            });
+            transaction.update(poolRef, {
+              openShares: nextOpenShares,
+              takenShares: nextTakenShares,
+              requestedShares: nextRequestedShares,
+              acceptedShares: nextAcceptedShares,
+              status: nextPoolStatus,
+              [`publicParticipants.${customerUid}.joinStatus`]: "cancelled",
+              [`publicParticipants.${customerUid}.paymentStatus`]: "failed",
+              [`publicParticipants.${customerUid}.updatedAt`]: failedAt,
+              updatedAt: failedAt,
+            });
+            setUserBarrelPoolMembership({
+              transaction,
+              uid: customerUid,
+              poolId,
+              pool: {
+                ...pool,
+                openShares: nextOpenShares,
+                takenShares: nextTakenShares,
+                requestedShares: nextRequestedShares,
+                acceptedShares: nextAcceptedShares,
+                status: nextPoolStatus,
+              },
+              participant: {
+                ...participant,
+                joinStatus: "cancelled",
+                paymentStatus: "failed",
+              },
+              now: failedAt,
+            });
+            if (walletAppliedCents > 0) {
+              await creditWallet({
+                transaction,
+                customerUid,
+                amountCents: walletAppliedCents,
+                shipmentId: poolId,
+                trackingCode,
+                reason: "barrel_pool_join_deposit_reversal",
+                businessId: poolBusinessId,
+                businessName: poolBusinessName,
+              });
+            }
+          });
+          throw error;
+        }
+        return {
+          success: true,
+          poolId,
+          trackingCode,
+          depositAmount: dollarsFromCents(depositCents),
+          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
+          cardDepositAmount: dollarsFromCents(cardDepositCents),
+          clientSecret: paymentIntent.client_secret,
+        };
+      }
+
+      return {
+        success: true,
+        poolId,
+        trackingCode,
+        depositAmount: dollarsFromCents(depositCents),
+        walletAppliedAmount: dollarsFromCents(walletAppliedCents),
+        cardDepositAmount: dollarsFromCents(cardDepositCents),
+        simulatedPayment: true,
+      };
+    },
+);
+
+exports.completeBarrelPoolDepositPayment = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const poolId = cleanText(request.data?.poolId, 160);
+      if (!poolId) {
+        throw new HttpsError("invalid-argument", "Pool is required");
+      }
+
+      const db = admin.firestore();
+      const poolRef = db.collection("barrelPools").doc(poolId);
+      const participantRef = poolRef.collection("participants")
+          .doc(customerUid);
+      const [poolDoc, participantDoc] = await Promise.all([
+        poolRef.get(),
+        participantRef.get(),
+      ]);
+      if (!poolDoc.exists || !participantDoc.exists) {
+        throw new HttpsError(
+            "not-found",
+            "Shared barrel participant not found",
+        );
+      }
+      const pool = poolDoc.data() || {};
+      const participant = participantDoc.data() || {};
+      if (participant.paymentStatus === "succeeded") {
+        return {
+          success: true,
+          poolId,
+          trackingCode: pool.trackingCode || poolId,
+        };
+      }
+      if (participant.paymentStatus !== "pending") {
+        throw new HttpsError(
+            "failed-precondition",
+            "This shared barrel deposit is not pending payment",
+        );
+      }
+
+      const intentIds = Array.isArray(participant.stripePaymentIntentIds) ?
+        participant.stripePaymentIntentIds :
+        [];
+      const intentId = intentIds[intentIds.length - 1] || "";
+      let sourceTransaction = "";
+      if (!SIMULATE_PAYMENTS && !String(intentId).startsWith("simulated_")) {
+        if (!intentId) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Missing shared barrel deposit payment intent",
+          );
+        }
+        const intent = await retrieveStripePaymentIntent(intentId);
+        if (intent.status !== "succeeded") {
+          await Promise.all([
+            participantRef.update({
+              paymentStatus: intent.status,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }),
+            poolRef.update({
+              [`publicParticipants.${customerUid}.paymentStatus`]:
+                intent.status,
+              [`publicParticipants.${customerUid}.updatedAt`]:
+                admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }),
+          ]);
+          throw new HttpsError(
+              "failed-precondition",
+              `Payment is ${intent.status}`,
+          );
+        }
+        sourceTransaction = stripeSourceTransactionFromIntent(intent);
+      }
+
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      const nextStatus = pool.status === "pending_payment" ?
+        poolStatusFor(
+            Number(pool.openShares || 0),
+            Number(pool.takenShares || 0),
+        ) :
+        pool.status || "open";
+      await Promise.all([
+        participantRef.update({
+          paymentStatus: "succeeded",
+          paidAt: now,
+          updatedAt: now,
+        }),
+        poolRef.update({
+          status: nextStatus,
+          [`publicParticipants.${customerUid}.paymentStatus`]: "succeeded",
+          [`publicParticipants.${customerUid}.updatedAt`]: now,
+          updatedAt: now,
+        }),
+        userBarrelPoolRef(db, customerUid, poolId).set({
+          status: nextStatus,
+          participantPaymentStatus: "succeeded",
+          updatedAt: now,
+        }, {merge: true}),
+      ]);
+      await issueBusinessPayoutTransfer({
+        ref: participantRef,
+        data: {
+          ...participant,
+          paymentStatus: "succeeded",
+          poolId,
+          trackingCode: pool.trackingCode || poolId,
+          businessId: participant.businessId || pool.businessId || "",
+          businessName: participant.businessName || pool.businessName || "",
+        },
+        sourceTransaction,
+        serviceType: "shared_barrel_deposit",
+        idempotencySuffix: `${poolId}_${customerUid}_deposit`,
+      });
+
+      return {
+        success: true,
+        poolId,
+        trackingCode: pool.trackingCode || poolId,
+      };
+    },
+);
+
+exports.cancelPendingBarrelPoolDeposit = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const poolId = cleanText(request.data?.poolId, 160);
+      if (!poolId) {
+        throw new HttpsError("invalid-argument", "Pool is required");
+      }
+
+      const db = admin.firestore();
+      const poolRef = db.collection("barrelPools").doc(poolId);
+      const participantRef = poolRef.collection("participants")
+          .doc(customerUid);
+      const [poolDoc, participantDoc] = await Promise.all([
+        poolRef.get(),
+        participantRef.get(),
+      ]);
+      if (!poolDoc.exists || !participantDoc.exists) {
+        return {success: true, poolId};
+      }
+      const participant = participantDoc.data() || {};
+      if (participant.paymentStatus !== "pending") {
+        return {success: true, poolId};
+      }
+
+      const intentIds = Array.isArray(participant.stripePaymentIntentIds) ?
+        participant.stripePaymentIntentIds :
+        [];
+      const intentId = intentIds[intentIds.length - 1] || "";
+      if (!SIMULATE_PAYMENTS && intentId) {
+        const intent = await retrieveStripePaymentIntent(intentId);
+        if (intent.status === "succeeded" || intent.status === "processing") {
+          await Promise.all([
+            participantRef.update({
+              paymentStatus: intent.status,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }),
+            poolRef.update({
+              [`publicParticipants.${customerUid}.paymentStatus`]:
+                intent.status,
+              [`publicParticipants.${customerUid}.updatedAt`]:
+                admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }),
+          ]);
+          return {success: true, poolId};
+        }
+      }
+
+      await db.runTransaction(async (transaction) => {
+        const [freshPoolDoc, freshParticipantDoc] = await Promise.all([
+          transaction.get(poolRef),
+          transaction.get(participantRef),
+        ]);
+        if (!freshPoolDoc.exists || !freshParticipantDoc.exists) return;
+        const freshPool = freshPoolDoc.data() || {};
+        const freshParticipant = freshParticipantDoc.data() || {};
+        if (freshParticipant.paymentStatus !== "pending") return;
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        const shares = Number(freshParticipant.sharesClaimed || 0);
+        const isOwner = freshParticipant.role === "owner" ||
+          freshPool.createdByUid === customerUid;
+        if (isOwner) {
+          transaction.update(participantRef, {
+            joinStatus: "cancelled",
+            paymentStatus: "cancelled",
+            refundableAmountCents: 0,
+            refundableAmount: 0,
+            cancelledAt: now,
+            updatedAt: now,
+          });
+          transaction.update(poolRef, {
+            status: "cancelled",
+            cancelledAt: now,
+            cancellationReason: "deposit_payment_cancelled",
+            [`publicParticipants.${customerUid}.joinStatus`]: "cancelled",
+            [`publicParticipants.${customerUid}.paymentStatus`]: "cancelled",
+            [`publicParticipants.${customerUid}.updatedAt`]: now,
+            updatedAt: now,
+          });
+          setUserBarrelPoolMembership({
+            transaction,
+            uid: customerUid,
+            poolId,
+            pool: {...freshPool, status: "cancelled"},
+            participant: {
+              ...freshParticipant,
+              joinStatus: "cancelled",
+              paymentStatus: "cancelled",
+            },
+            now,
+          });
+        } else {
+          const wasRequested =
+            String(freshParticipant.joinStatus || "") === "requested";
+          const nextOpenShares = Number(freshPool.openShares || 0) + shares;
+          const nextTakenShares = Math.max(
+              0,
+              Number(freshPool.takenShares || 0) - shares,
+          );
+          const nextRequestedShares = Math.max(
+              0,
+              Number(freshPool.requestedShares || 0) -
+                (wasRequested ? shares : 0),
+          );
+          const nextAcceptedShares = Math.max(
+              0,
+              Number(freshPool.acceptedShares || 0) -
+                (wasRequested ? 0 : shares),
+          );
+          const nextStatus = poolStatusFor(nextOpenShares, nextTakenShares);
+          transaction.update(participantRef, {
+            joinStatus: "cancelled",
+            paymentStatus: "cancelled",
+            refundableAmountCents: 0,
+            refundableAmount: 0,
+            cancelledAt: now,
+            updatedAt: now,
+          });
+          transaction.update(poolRef, {
+            openShares: nextOpenShares,
+            takenShares: nextTakenShares,
+            requestedShares: nextRequestedShares,
+            acceptedShares: nextAcceptedShares,
+            status: nextStatus,
+            [`publicParticipants.${customerUid}.joinStatus`]: "cancelled",
+            [`publicParticipants.${customerUid}.paymentStatus`]: "cancelled",
+            [`publicParticipants.${customerUid}.updatedAt`]: now,
+            updatedAt: now,
+          });
+          setUserBarrelPoolMembership({
+            transaction,
+            uid: customerUid,
+            poolId,
+            pool: {
+              ...freshPool,
+              openShares: nextOpenShares,
+              takenShares: nextTakenShares,
+              requestedShares: nextRequestedShares,
+              acceptedShares: nextAcceptedShares,
+              status: nextStatus,
+            },
+            participant: {
+              ...freshParticipant,
+              joinStatus: "cancelled",
+              paymentStatus: "cancelled",
+            },
+            now,
+          });
+        }
+        const walletAppliedCents = Number(
+            freshParticipant.walletAppliedCents || 0,
+        );
+        if (Number.isFinite(walletAppliedCents) && walletAppliedCents > 0) {
+          await creditWallet({
+            transaction,
+            customerUid,
+            amountCents: walletAppliedCents,
+            shipmentId: poolId,
+            trackingCode: freshPool.trackingCode || poolId,
+            reason: "barrel_pool_deposit_reversal",
+            businessId: freshPool.businessId,
+            businessName: freshPool.businessName,
+          });
+        }
+      });
+
+      return {success: true, poolId};
+    },
+);
+
+exports.decideBarrelPoolJoin = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const poolId = cleanText(request.data?.poolId, 160);
+      const participantUid = cleanText(request.data?.participantUid, 160);
+      const decision = cleanText(request.data?.decision, 40);
+      if (
+        !poolId ||
+        !participantUid ||
+        !["accept", "reject"].includes(decision)
+      ) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Pool, participant, and decision are required",
+        );
+      }
+      const db = admin.firestore();
+      const poolRef = db.collection("barrelPools").doc(poolId);
+      const participantRef = poolRef.collection("participants")
+          .doc(participantUid);
+      await db.runTransaction(async (transaction) => {
+        const [poolDoc, participantDoc] = await Promise.all([
+          transaction.get(poolRef),
+          transaction.get(participantRef),
+        ]);
+        if (!poolDoc.exists || !participantDoc.exists) {
+          throw new HttpsError("not-found", "Pool participant not found");
+        }
+        const pool = poolDoc.data() || {};
+        const participant = participantDoc.data() || {};
+        ensurePoolCanChange(pool);
+        await requirePoolDecisionMaker(callerUid, pool);
+        if (participant.joinStatus !== "requested") {
+          return;
+        }
+        const shares = Number(participant.sharesClaimed || 0);
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        const depositSettled =
+          participant.paymentStatus === "succeeded" ||
+          participant.paymentStatus === "collected_by_business";
+        if (decision === "accept") {
+          if (!depositSettled) {
+            throw new HttpsError(
+                "failed-precondition",
+                "The participant deposit must be paid before approval.",
+            );
+          }
+          const nextPool = {
+            ...pool,
+            requestedShares: Math.max(
+                0,
+                Number(pool.requestedShares || 0) - shares,
+            ),
+            acceptedShares: Number(pool.acceptedShares || 0) + shares,
+          };
+          transaction.update(participantRef, {
+            joinStatus: "accepted",
+            acceptedAt: now,
+            updatedAt: now,
+          });
+          transaction.update(poolRef, {
+            requestedShares: Math.max(
+                0,
+                Number(pool.requestedShares || 0) - shares,
+            ),
+            acceptedShares: Number(pool.acceptedShares || 0) + shares,
+            [`publicParticipants.${participantUid}.joinStatus`]: "accepted",
+            [`publicParticipants.${participantUid}.updatedAt`]: now,
+            updatedAt: now,
+          });
+          setUserBarrelPoolMembership({
+            transaction,
+            uid: participantUid,
+            poolId,
+            pool: nextPool,
+            participant: {
+              ...participant,
+              joinStatus: "accepted",
+            },
+            now,
+          });
+          return;
+        }
+        const refundRequest = depositSettled ?
+          queuePoolParticipantRefund({
+            transaction,
+            participant: {...participant, uid: participantUid},
+            pool,
+            poolId,
+            reason: "barrel_pool_join_rejected",
+            requestedBy: callerUid,
+          }) :
+          null;
+        const nextPaymentStatus = depositSettled ?
+          "refund_pending" :
+          "cancelled";
+        const nextOpenShares = Number(pool.openShares || 0) + shares;
+        const nextTakenShares = Math.max(
+            0,
+            Number(pool.takenShares || 0) - shares,
+        );
+        const nextPool = {
+          ...pool,
+          openShares: nextOpenShares,
+          takenShares: nextTakenShares,
+          requestedShares: Math.max(
+              0,
+              Number(pool.requestedShares || 0) - shares,
+          ),
+          status: poolStatusFor(nextOpenShares, nextTakenShares),
+        };
+        transaction.update(participantRef, {
+          joinStatus: "rejected",
+          paymentStatus: nextPaymentStatus,
+          refundableAmountCents: 0,
+          refundableAmount: 0,
+          walletRefundRequestId: depositSettled ?
+            refundRequest?.refundRequestId || "" :
+            admin.firestore.FieldValue.delete(),
+          refundRequestedAt: depositSettled ?
+            now :
+            admin.firestore.FieldValue.delete(),
+          updatedAt: now,
+        });
+        if (!depositSettled) {
+          const walletAppliedCents = Number(
+              participant.walletAppliedCents || 0,
+          );
+          if (Number.isFinite(walletAppliedCents) && walletAppliedCents > 0) {
+            await creditWallet({
+              transaction,
+              customerUid: participantUid,
+              amountCents: walletAppliedCents,
+              shipmentId: poolId,
+              trackingCode: pool.trackingCode || poolId,
+              reason: "barrel_pool_join_deposit_reversal",
+              businessId: pool.businessId,
+              businessName: pool.businessName,
+            });
+          }
+        }
+        transaction.update(poolRef, {
+          openShares: nextOpenShares,
+          takenShares: nextTakenShares,
+          requestedShares: Math.max(
+              0,
+              Number(pool.requestedShares || 0) - shares,
+          ),
+          status: poolStatusFor(nextOpenShares, nextTakenShares),
+          [`publicParticipants.${participantUid}.joinStatus`]: "rejected",
+          [`publicParticipants.${participantUid}.paymentStatus`]:
+            nextPaymentStatus,
+          [`publicParticipants.${participantUid}.updatedAt`]: now,
+          updatedAt: now,
+        });
+        setUserBarrelPoolMembership({
+          transaction,
+          uid: participantUid,
+          poolId,
+          pool: nextPool,
+          participant: {
+            ...participant,
+            joinStatus: "rejected",
+          },
+          now,
+        });
+      });
+      return {success: true, poolId, participantUid, decision};
+    },
+);
+
+exports.leaveBarrelPool = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      await requireVerifiedCustomerForSharedPool(customerUid);
+      const poolId = cleanText(request.data?.poolId, 160);
+      if (!poolId) {
+        throw new HttpsError("invalid-argument", "Pool is required");
+      }
+      const db = admin.firestore();
+      const poolRef = db.collection("barrelPools").doc(poolId);
+      const participantRef = poolRef.collection("participants")
+          .doc(customerUid);
+      let refundedCents = 0;
+      let forfeitedCents = 0;
+      await db.runTransaction(async (transaction) => {
+        const [poolDoc, participantDoc] = await Promise.all([
+          transaction.get(poolRef),
+          transaction.get(participantRef),
+        ]);
+        if (!poolDoc.exists || !participantDoc.exists) {
+          throw new HttpsError("not-found", "Pool participant not found");
+        }
+        const pool = poolDoc.data() || {};
+        const participant = participantDoc.data() || {};
+        ensurePoolCanChange(pool);
+        if (participant.role === "owner" || pool.createdByUid === customerUid) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Pool owners must cancel the shared barrel instead",
+          );
+        }
+        const joinStatus = String(participant.joinStatus || "");
+        if (!BARREL_POOL_ACTIVE_JOIN_STATUSES.has(joinStatus)) {
+          throw new HttpsError(
+              "failed-precondition",
+              "This participant is not active in the pool",
+          );
+        }
+        const shares = Number(participant.sharesClaimed || 0);
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        const isRequested = joinStatus === "requested";
+        const shouldRefund = isRequested || participantWithinPoolGrace(
+            participant,
+        );
+        refundedCents = shouldRefund ?
+          Number(participant.refundableAmountCents || 0) :
+          0;
+        forfeitedCents = shouldRefund ?
+          0 :
+          Number(participant.depositAmountCents || 0);
+        let refundRequest = null;
+        if (shouldRefund) {
+          refundRequest = queuePoolParticipantRefund({
+            transaction,
+            participant: {...participant, uid: customerUid},
+            pool,
+            poolId,
+            reason: "barrel_pool_participant_left",
+            requestedBy: customerUid,
+          });
+        }
+        const nextOpenShares = Number(pool.openShares || 0) + shares;
+        const nextTakenShares = Math.max(
+            0,
+            Number(pool.takenShares || 0) - shares,
+        );
+        const nextRequestedShares = Math.max(
+            0,
+            Number(pool.requestedShares || 0) -
+              (isRequested ? shares : 0),
+        );
+        const nextAcceptedShares = Math.max(
+            0,
+            Number(pool.acceptedShares || 0) -
+              (isRequested ? 0 : shares),
+        );
+        const nextJoinStatus = shouldRefund ? "cancelled" : "forfeited";
+        const nextPaymentStatus = shouldRefund ?
+          "refund_pending" :
+          "forfeited";
+        const nextPool = {
+          ...pool,
+          openShares: nextOpenShares,
+          takenShares: nextTakenShares,
+          requestedShares: nextRequestedShares,
+          acceptedShares: nextAcceptedShares,
+          status: poolStatusFor(nextOpenShares, nextTakenShares),
+        };
+        transaction.update(participantRef, {
+          joinStatus: nextJoinStatus,
+          paymentStatus: nextPaymentStatus,
+          refundableAmountCents: 0,
+          refundableAmount: 0,
+          walletRefundRequestId: shouldRefund ?
+            refundRequest?.refundRequestId || "" :
+            admin.firestore.FieldValue.delete(),
+          leftAt: now,
+          refundRequestedAt: shouldRefund ?
+            now :
+            admin.firestore.FieldValue.delete(),
+          depositForfeitureStatus: shouldRefund ? "none" : "forfeited",
+          updatedAt: now,
+        });
+        transaction.update(poolRef, {
+          openShares: nextOpenShares,
+          takenShares: nextTakenShares,
+          requestedShares: nextRequestedShares,
+          acceptedShares: nextAcceptedShares,
+          forfeitedDepositAmountCents:
+            admin.firestore.FieldValue.increment(forfeitedCents),
+          forfeitedDepositAmount:
+            admin.firestore.FieldValue.increment(
+                dollarsFromCents(forfeitedCents),
+            ),
+          status: poolStatusFor(nextOpenShares, nextTakenShares),
+          [`publicParticipants.${customerUid}.joinStatus`]: nextJoinStatus,
+          [`publicParticipants.${customerUid}.paymentStatus`]:
+            nextPaymentStatus,
+          [`publicParticipants.${customerUid}.updatedAt`]: now,
+          updatedAt: now,
+        });
+        setUserBarrelPoolMembership({
+          transaction,
+          uid: customerUid,
+          poolId,
+          pool: nextPool,
+          participant: {
+            ...participant,
+            joinStatus: nextJoinStatus,
+          },
+          now,
+        });
+        if (pool.createdByUid && pool.createdByUid !== customerUid) {
+          const ownerSummary =
+            (pool.publicParticipants || {})[pool.createdByUid] || {};
+          setUserBarrelPoolMembership({
+            transaction,
+            uid: pool.createdByUid,
+            poolId,
+            pool: nextPool,
+            participant: {
+              role: "owner",
+              joinStatus: "accepted",
+              sharesClaimed: Number(ownerSummary.sharesClaimed || 0),
+            },
+            now,
+          });
+        }
+      });
+      return {
+        success: true,
+        poolId,
+        refundedAmount: dollarsFromCents(refundedCents),
+        forfeitedAmount: dollarsFromCents(forfeitedCents),
+      };
+    },
+);
+
+exports.cancelBarrelPool = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const poolId = cleanText(request.data?.poolId, 160);
+      if (!poolId) {
+        throw new HttpsError("invalid-argument", "Pool is required");
+      }
+      const db = admin.firestore();
+      const poolRef = db.collection("barrelPools").doc(poolId);
+      const poolDoc = await poolRef.get();
+      if (!poolDoc.exists) {
+        throw new HttpsError("not-found", "Shared barrel pool not found");
+      }
+      const pool = poolDoc.data() || {};
+      ensurePoolCanChange(pool);
+      await requirePoolDecisionMaker(callerUid, pool);
+      const participants = await poolRef.collection("participants").get();
+      await db.runTransaction(async (transaction) => {
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        const ownerCancellation = callerUid === pool.createdByUid;
+        const nextPool = {
+          ...pool,
+          status: "cancelled",
+        };
+        transaction.update(poolRef, {
+          status: "cancelled",
+          cancelledAt: now,
+          cancelledBy: callerUid,
+          updatedAt: now,
+        });
+        participants.docs.forEach((doc) => {
+          const participant = doc.data() || {};
+          const participantPaid = participant.paymentStatus === "succeeded";
+          const ownerForfeits = ownerCancellation &&
+            participant.role === "owner" &&
+            participantPaid;
+          const nextJoinStatus = ownerForfeits ? "forfeited" :
+            BARREL_POOL_ACTIVE_JOIN_STATUSES.has(
+                String(participant.joinStatus || ""),
+            ) ?
+            "cancelled" :
+            participant.joinStatus;
+          const nextPaymentStatus = ownerForfeits ? "forfeited" :
+            participantPaid ?
+            "refund_pending" :
+            participant.paymentStatus || "not_required";
+          if (ownerForfeits) {
+            const forfeitedCents = Number(
+                participant.depositAmountCents || 0,
+            );
+            transaction.update(doc.ref, {
+              joinStatus: nextJoinStatus,
+              paymentStatus: nextPaymentStatus,
+              refundableAmountCents: 0,
+              refundableAmount: 0,
+              depositForfeitureStatus: "forfeited",
+              forfeitedAt: now,
+              updatedAt: now,
+            });
+            transaction.update(poolRef, {
+              forfeitedDepositAmountCents:
+                admin.firestore.FieldValue.increment(forfeitedCents),
+              forfeitedDepositAmount:
+                admin.firestore.FieldValue.increment(
+                    dollarsFromCents(forfeitedCents),
+                ),
+            });
+          } else if (participantPaid) {
+            const refundRequest = queuePoolParticipantRefund({
+              transaction,
+              participant: {...participant, uid: doc.id},
+              pool,
+              poolId,
+              reason: "barrel_pool_cancelled",
+              requestedBy: callerUid,
+            });
+            transaction.update(doc.ref, {
+              joinStatus: nextJoinStatus,
+              paymentStatus: nextPaymentStatus,
+              refundableAmountCents: 0,
+              refundableAmount: 0,
+              walletRefundRequestId: refundRequest?.refundRequestId || "",
+              refundRequestedAt: now,
+              updatedAt: now,
+            });
+          } else if (BARREL_POOL_ACTIVE_JOIN_STATUSES.has(
+              String(participant.joinStatus || ""),
+          )) {
+            transaction.update(doc.ref, {
+              joinStatus: nextJoinStatus,
+              updatedAt: now,
+            });
+          }
+          transaction.update(poolRef, {
+            [`publicParticipants.${doc.id}.joinStatus`]: nextJoinStatus,
+            [`publicParticipants.${doc.id}.paymentStatus`]: nextPaymentStatus,
+            [`publicParticipants.${doc.id}.updatedAt`]: now,
+          });
+          setUserBarrelPoolMembership({
+            transaction,
+            uid: doc.id,
+            poolId,
+            pool: nextPool,
+            participant: {
+              ...participant,
+              joinStatus: nextJoinStatus,
+            },
+            now,
+          });
+        });
+      });
+      return {success: true, poolId};
+    },
+);
+
+exports.sealBarrelPool = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const poolId = cleanText(request.data?.poolId, 160);
+      if (!poolId) {
+        throw new HttpsError("invalid-argument", "Pool is required");
+      }
+      const db = admin.firestore();
+      const poolRef = db.collection("barrelPools").doc(poolId);
+      const poolDoc = await poolRef.get();
+      if (!poolDoc.exists) {
+        throw new HttpsError("not-found", "Shared barrel pool not found");
+      }
+      const pool = poolDoc.data() || {};
+      ensurePoolCanChange(pool);
+      await requireBusinessPermission(callerUid, pool.businessId, "barrels");
+      const participants = await poolRef.collection("participants")
+          .where("joinStatus", "==", "accepted")
+          .get();
+      if (participants.empty) {
+        throw new HttpsError(
+            "failed-precondition",
+            "No accepted participants are ready to seal",
+        );
+      }
+      if (
+        Number(pool.openShares || 0) > 0 &&
+        request.data?.shipUnderfilled !== true
+      ) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This pool still has open shares",
+        );
+      }
+      if (
+        Number(pool.openShares || 0) > 0 &&
+        request.data?.shipUnderfilled === true
+      ) {
+        const deadlineMillis = timestampMillis(pool.joinDeadline);
+        if (!deadlineMillis || deadlineMillis > Date.now()) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Underfilled pools can only ship after the join deadline",
+          );
+        }
+      }
+      const shipmentRef = db.collection("barrelShipments").doc();
+      const shipmentTracking = await generateTrackingCode(
+          "BS",
+          "barrelShipments",
+      );
+      const participantRows = participants.docs.map((doc) => ({
+        uid: doc.id,
+        ...(doc.data() || {}),
+      }));
+      const unpaidParticipant = participantRows.find((participant) => {
+        const paymentStatus = String(participant.paymentStatus || "");
+        return !["succeeded", "collected_by_business", "not_required"]
+            .includes(paymentStatus);
+      });
+      if (unpaidParticipant) {
+        throw new HttpsError(
+            "failed-precondition",
+            "All accepted shared barrel deposits must be paid before sealing.",
+        );
+      }
+      const accounting = sharedPoolSealAccounting({
+        pool,
+        participantRows,
+        shipUnderfilled: request.data?.shipUnderfilled === true,
+      });
+      const owner = participantRows.find((item) => item.role === "owner") ||
+        participantRows[0];
+      const ownerUid = String(owner.uid || "");
+      const receiverSummary = participantRows
+          .map((item) => cleanText(item.receiverName, 120))
+          .filter(Boolean)
+          .join(", ");
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      const batch = db.batch();
+      const participantBalanceWithUnderfill = (participant) =>
+        Number(participant.balanceAmountCents || 0) +
+        (String(participant.uid || "") === ownerUid ?
+          accounting.underfilledAmountCents :
+          0);
+      const hasManualBalanceDue = !SIMULATE_PAYMENTS &&
+        participantRows.some((participant) =>
+          participantBalanceWithUnderfill(participant) > 0 &&
+          participant.paymentStatus !== "collected_by_business",
+        );
+      batch.set(shipmentRef, {
+        trackingCode: shipmentTracking,
+        sharedPoolId: poolId,
+        sharedPoolTrackingCode: pool.trackingCode || poolId,
+        senderName: `${participantRows.length} shared senders`,
+        senderAddress: pool.holderRole === "business" ?
+          `${pool.businessName} hub` :
+          cleanText(owner.senderAddress, 240),
+        receiverName: receiverSummary || "Multiple receivers",
+        receiverPhone: cleanText(owner.receiverPhone, 80),
+        destinationCountryId: pool.destinationCountryId,
+        destinationCountryName: pool.destinationCountryName,
+        businessId: pool.businessId,
+        businessName: pool.businessName,
+        customerUid: pool.createdByUid,
+        customerEmail: cleanText(owner.customerEmail, 160),
+        pickupRequested: participantRows.some((item) => item.pickupRequested),
+        pickupAddress: "",
+        pickupBorough: "Shared barrel",
+        pickupMiles: 0,
+        pickupFee: 0,
+        shippingFee: dollarsFromCents(accounting.grossAmountCents),
+        pricingPendingReview: false,
+        price: dollarsFromCents(accounting.grossAmountCents),
+        sharedPoolParticipantDepositAmount:
+          dollarsFromCents(accounting.participantDepositCents),
+        sharedPoolParticipantDepositAmountCents:
+          accounting.participantDepositCents,
+        sharedPoolBalanceAmount:
+          dollarsFromCents(accounting.participantBalanceCents),
+        sharedPoolBalanceAmountCents: accounting.participantBalanceCents,
+        sharedPoolUnderfilledShares: accounting.underfilledShares,
+        sharedPoolUnderfilledAmount:
+          dollarsFromCents(accounting.underfilledAmountCents),
+        sharedPoolUnderfilledAmountCents: accounting.underfilledAmountCents,
+        grossAmount: dollarsFromCents(accounting.grossAmountCents),
+        grossAmountCents: accounting.grossAmountCents,
+        platformCommissionRate: SHARED_BARREL_PLATFORM_COMMISSION_RATE,
+        platformCommissionAmount:
+          dollarsFromCents(accounting.platformCommissionCents),
+        platformCommissionAmountCents: accounting.platformCommissionCents,
+        businessPayoutAmount:
+          dollarsFromCents(accounting.businessPayoutCents),
+        businessPayoutAmountCents: accounting.businessPayoutCents,
+        paymentStatus: hasManualBalanceDue ? "balance_due" : "succeeded",
+        status: hasManualBalanceDue ? "pending_payment" : "pending",
+        ...deliveryEstimateFromCountry(pool),
+        createdAt: now,
+        updatedAt: now,
+        ...(hasManualBalanceDue ? {} : {paidAt: now}),
+      });
+      const poolSealUpdate = {
+        status: "sealed",
+        sealedAt: now,
+        sealedBy: callerUid,
+        shipmentId: shipmentRef.id,
+        shipmentTrackingCode: shipmentTracking,
+        balancePaymentStatus: hasManualBalanceDue ? "balance_due" : "succeeded",
+        participantDepositAmount:
+          dollarsFromCents(accounting.participantDepositCents),
+        participantDepositAmountCents: accounting.participantDepositCents,
+        participantBalanceAmount:
+          dollarsFromCents(accounting.participantBalanceCents),
+        participantBalanceAmountCents: accounting.participantBalanceCents,
+        underfilledShares: accounting.underfilledShares,
+        underfilledAmount:
+          dollarsFromCents(accounting.underfilledAmountCents),
+        underfilledAmountCents: accounting.underfilledAmountCents,
+        grossAmount: dollarsFromCents(accounting.grossAmountCents),
+        grossAmountCents: accounting.grossAmountCents,
+        platformCommissionRate: SHARED_BARREL_PLATFORM_COMMISSION_RATE,
+        platformCommissionAmount:
+          dollarsFromCents(accounting.platformCommissionCents),
+        platformCommissionAmountCents: accounting.platformCommissionCents,
+        businessPayoutAmount:
+          dollarsFromCents(accounting.businessPayoutCents),
+        businessPayoutAmountCents: accounting.businessPayoutCents,
+        payoutStatus: hasManualBalanceDue ?
+          "pending_participant_payments" :
+          "paid_via_participant_payments",
+        updatedAt: now,
+      };
+      participantRows.forEach((participant) => {
+        const membershipRef = userBarrelPoolRef(db, participant.uid, poolId);
+        const underfilledBalanceCents =
+          String(participant.uid || "") === ownerUid ?
+          accounting.underfilledAmountCents :
+          0;
+        const balanceCents = Number(participant.balanceAmountCents || 0) +
+          underfilledBalanceCents;
+        const balanceIntentId = balanceCents > 0 && SIMULATE_PAYMENTS ?
+          simulatedPoolBalanceIntent(poolId, participant.uid) :
+          "";
+        const needsManualBalance = !SIMULATE_PAYMENTS &&
+          balanceCents > 0 &&
+          participant.paymentStatus !== "collected_by_business";
+        const balanceRequest = needsManualBalance ?
+          queuePoolParticipantBalancePayment({
+            batch,
+            participant: {
+              ...participant,
+              balanceAmountCents: balanceCents,
+              balanceAmount: dollarsFromCents(balanceCents),
+              underfilledBalanceAmountCents: underfilledBalanceCents,
+            },
+            pool,
+            poolId,
+            shipmentId: shipmentRef.id,
+            shipmentTrackingCode: shipmentTracking,
+            requestedBy: callerUid,
+          }) :
+          null;
+        const participantBalanceStatus = needsManualBalance ?
+          "balance_due" :
+          "succeeded";
+        const participantSealUpdate = {
+          balancePaymentStatus: participantBalanceStatus,
+          balanceDueAmount: dollarsFromCents(balanceCents),
+          balanceDueAmountCents: balanceCents,
+          underfilledBalanceAmount: dollarsFromCents(
+              underfilledBalanceCents,
+          ),
+          underfilledBalanceAmountCents: underfilledBalanceCents,
+          paymentStatus: participantBalanceStatus,
+          sealedAt: now,
+          updatedAt: now,
+          ...(participantBalanceStatus === "succeeded" ? {
+            balancePaidAmount: dollarsFromCents(balanceCents),
+            balancePaidAmountCents: balanceCents,
+            balancePaidAt: now,
+          } : {
+            balancePaymentRequestId:
+              balanceRequest?.balanceRequestId || "",
+            balancePaymentRequestedAt: now,
+          }),
+          ...(balanceIntentId ? {
+            balanceStripePaymentIntentIds:
+              admin.firestore.FieldValue.arrayUnion(balanceIntentId),
+          } : {}),
+        };
+        batch.update(
+            poolRef.collection("participants").doc(participant.uid),
+            participantSealUpdate,
+        );
+        if (!String(participant.uid || "").startsWith("dropoff_")) {
+          batch.set(membershipRef, {
+            poolId,
+            businessId: pool.businessId || "",
+            businessName: pool.businessName || "",
+            destinationCountryId: pool.destinationCountryId || "",
+            destinationCountryName: pool.destinationCountryName || "",
+            origin: pool.origin || "customerPosted",
+            holderRole: pool.holderRole || "customer",
+            createdByUid: pool.createdByUid || "",
+            createdByRole: pool.createdByRole || "",
+            totalShares: Number(pool.totalShares || 0),
+            openShares: Number(pool.openShares || 0),
+            sharesAvailable: Number(pool.openShares || 0),
+            pricePerShare: Number(pool.pricePerShare || 0),
+            depositPerShare: Number(pool.depositPerShare || 0),
+            currency: pool.currency || SHIPMENT_CURRENCY,
+            shipMode: pool.shipMode || "sea",
+            joinDeadline: pool.joinDeadline || null,
+            status: "sealed",
+            trackingCode: pool.trackingCode || poolId,
+            approvalMode: pool.approvalMode || "approval",
+            participantRole: participant.role || "joiner",
+            participantJoinStatus: participant.joinStatus || "accepted",
+            sharesClaimed: Number(participant.sharesClaimed || 0),
+            participantPaymentStatus: participantBalanceStatus,
+            balancePaymentStatus: participantBalanceStatus,
+            balanceDueAmount: dollarsFromCents(balanceCents),
+            balanceDueAmountCents: balanceCents,
+            balancePaymentRequestId:
+              balanceRequest?.balanceRequestId || "",
+            underfilledBalanceAmount: dollarsFromCents(
+                underfilledBalanceCents,
+            ),
+            underfilledBalanceAmountCents: underfilledBalanceCents,
+            shipmentId: shipmentRef.id,
+            shipmentTrackingCode: shipmentTracking,
+            updatedAt: now,
+          }, {merge: true});
+        }
+        poolSealUpdate[`publicParticipants.${participant.uid}.paymentStatus`] =
+          participantBalanceStatus;
+        poolSealUpdate[`publicParticipants.${participant.uid}.updatedAt`] = now;
+      });
+      batch.update(poolRef, poolSealUpdate);
+      await batch.commit();
+      return {
+        success: true,
+        poolId,
+        shipmentId: shipmentRef.id,
+        trackingCode: shipmentTracking,
+      };
+    },
+);
+
+exports.createBarrelPoolBalancePaymentIntent = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const requestId = cleanText(request.data?.requestId, 160);
+      const poolId = cleanText(request.data?.poolId, 160);
+      if (!requestId && !poolId) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Balance request or pool is required",
+        );
+      }
+
+      const db = admin.firestore();
+      let requestRef = requestId ?
+        db.collection("barrelPoolBalanceRequests").doc(requestId) :
+        null;
+      if (!requestRef) {
+        const snapshot = await db.collection("barrelPoolBalanceRequests")
+            .where("barrelPoolId", "==", poolId)
+            .where("customerUid", "==", customerUid)
+            .where("status", "==", "pending")
+            .limit(1)
+            .get();
+        if (snapshot.empty) {
+          throw new HttpsError(
+              "not-found",
+              "Shared barrel balance request not found",
+          );
+        }
+        requestRef = snapshot.docs[0].ref;
+      }
+
+      const requestDoc = await requestRef.get();
+      if (!requestDoc.exists) {
+        throw new HttpsError(
+            "not-found",
+            "Shared barrel balance request not found",
+        );
+      }
+      const balanceRequest = requestDoc.data() || {};
+      if (balanceRequest.customerUid !== customerUid) {
+        throw new HttpsError(
+            "permission-denied",
+            "Shared barrel balance access denied",
+        );
+      }
+      if (balanceRequest.status !== "pending") {
+        throw new HttpsError(
+            "failed-precondition",
+            "Only pending shared barrel balances can be paid",
+        );
+      }
+      const amountCents = Number(balanceRequest.amountCents || 0);
+      if (!Number.isFinite(amountCents) || amountCents <= 0) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Shared barrel balance amount is invalid",
+        );
+      }
+
+      const actualPoolId = cleanText(balanceRequest.barrelPoolId, 160);
+      const participantUid = cleanText(balanceRequest.participantUid, 160);
+      if (!actualPoolId || participantUid !== customerUid) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Shared barrel balance request is missing participant context",
+        );
+      }
+
+      const poolRef = db.collection("barrelPools").doc(actualPoolId);
+      const participantRef = poolRef.collection("participants")
+          .doc(customerUid);
+      const [poolDoc, participantDoc] = await Promise.all([
+        poolRef.get(),
+        participantRef.get(),
+      ]);
+      if (!poolDoc.exists || !participantDoc.exists) {
+        throw new HttpsError(
+            "not-found",
+            "Shared barrel participant not found",
+        );
+      }
+      const pool = poolDoc.data() || {};
+      const participant = participantDoc.data() || {};
+      if (
+        participant.balancePaymentRequestId &&
+        participant.balancePaymentRequestId !== requestRef.id
+      ) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Participant has a different active balance request",
+        );
+      }
+      if (
+        participant.balancePaymentStatus !== "balance_due" &&
+        participant.paymentStatus !== "balance_due"
+      ) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This shared barrel balance is not due",
+        );
+      }
+
+      if (SIMULATE_PAYMENTS) {
+        return {
+          requestId: requestRef.id,
+          poolId: actualPoolId,
+          simulatedPayment: true,
+          amount: dollarsFromCents(amountCents),
+        };
+      }
+
+      const paymentIntent = await createStripePaymentIntent({
+        amount: amountCents,
+        currency: balanceRequest.currency || pool.currency || SHIPMENT_CURRENCY,
+        metadata: {
+          requestId: requestRef.id,
+          poolId: actualPoolId,
+          participantUid: customerUid,
+          customerUid,
+          businessId: pool.businessId || "",
+          paymentType: "barrel_pool_balance",
+        },
+      });
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      await Promise.all([
+        requestRef.update({
+          stripePaymentIntentId: paymentIntent.id,
+          updatedAt: now,
+        }),
+        participantRef.update({
+          balanceStripePaymentIntentIds:
+            admin.firestore.FieldValue.arrayUnion(paymentIntent.id),
+          updatedAt: now,
+        }),
+      ]);
+
+      return {
+        requestId: requestRef.id,
+        poolId: actualPoolId,
+        clientSecret: paymentIntent.client_secret,
+        amount: dollarsFromCents(amountCents),
+      };
+    },
+);
+
+exports.completeBarrelPoolBalancePayment = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const requestId = cleanText(request.data?.requestId, 160);
+      if (!requestId) {
+        throw new HttpsError("invalid-argument", "Balance request is required");
+      }
+
+      const db = admin.firestore();
+      const requestRef = db.collection("barrelPoolBalanceRequests")
+          .doc(requestId);
+      const requestDoc = await requestRef.get();
+      if (!requestDoc.exists) {
+        throw new HttpsError(
+            "not-found",
+            "Shared barrel balance request not found",
+        );
+      }
+      const requestData = requestDoc.data() || {};
+      if (requestData.customerUid !== customerUid) {
+        throw new HttpsError(
+            "permission-denied",
+            "Shared barrel balance access denied",
+        );
+      }
+      if (requestData.status !== "pending") {
+        throw new HttpsError(
+            "failed-precondition",
+            "Only pending shared barrel balances can be paid",
+        );
+      }
+      const requestAmountCents = Number(requestData.amountCents || 0);
+      if (!Number.isFinite(requestAmountCents) || requestAmountCents <= 0) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Shared barrel balance amount is invalid",
+        );
+      }
+      const requestIntentId = cleanText(
+          requestData.stripePaymentIntentId,
+          160,
+      );
+      let sourceTransaction = "";
+      if (!SIMULATE_PAYMENTS) {
+        if (!requestIntentId) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Missing shared barrel balance payment intent",
+          );
+        }
+        const intent = await retrieveStripePaymentIntent(requestIntentId);
+        if (intent.status !== "succeeded") {
+          await requestRef.update({
+            paymentStatus: intent.status,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          throw new HttpsError(
+              "failed-precondition",
+              `Payment is ${intent.status}`,
+          );
+        }
+        sourceTransaction = stripeSourceTransactionFromIntent(intent);
+      }
+
+      await db.runTransaction(async (transaction) => {
+        const freshRequestDoc = await transaction.get(requestRef);
+        if (!freshRequestDoc.exists) {
+          throw new HttpsError(
+              "not-found",
+              "Shared barrel balance request not found",
+          );
+        }
+        const freshRequest = freshRequestDoc.data() || {};
+        if (freshRequest.customerUid !== customerUid) {
+          throw new HttpsError(
+              "permission-denied",
+              "Shared barrel balance access denied",
+          );
+        }
+        if (freshRequest.status !== "pending") {
+          throw new HttpsError(
+              "failed-precondition",
+              "Only pending shared barrel balances can be paid",
+          );
+        }
+        const amountCents = Number(freshRequest.amountCents || 0);
+        if (!Number.isFinite(amountCents) || amountCents <= 0) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Shared barrel balance amount is invalid",
+          );
+        }
+
+        const poolId = cleanText(freshRequest.barrelPoolId, 160);
+        const participantUid = cleanText(freshRequest.participantUid, 160);
+        if (!poolId || participantUid !== customerUid) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Shared barrel balance request is missing participant context",
+          );
+        }
+        const poolRef = db.collection("barrelPools").doc(poolId);
+        const participantRef = poolRef.collection("participants")
+            .doc(participantUid);
+        const shipmentId = cleanText(freshRequest.shipmentId, 160);
+        const shipmentRef = shipmentId ?
+          db.collection("barrelShipments").doc(shipmentId) :
+          null;
+        const notificationQuery = db.collection("platformNotifications")
+            .where("barrelPoolBalanceRequestId", "==", requestId)
+            .limit(10);
+        const [poolDoc, participantDoc, shipmentDoc, participantSnapshot,
+          notificationSnapshot] = await Promise.all([
+          transaction.get(poolRef),
+          transaction.get(participantRef),
+          shipmentRef ? transaction.get(shipmentRef) : Promise.resolve(null),
+          transaction.get(poolRef.collection("participants")
+              .where("joinStatus", "==", "accepted")),
+          transaction.get(notificationQuery),
+        ]);
+        if (!poolDoc.exists || !participantDoc.exists) {
+          throw new HttpsError(
+              "not-found",
+              "Shared barrel participant not found",
+          );
+        }
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        const amount = dollarsFromCents(amountCents);
+        transaction.update(participantRef, {
+          paymentStatus: "succeeded",
+          balancePaymentStatus: "succeeded",
+          balancePaidAmount: amount,
+          balancePaidAmountCents: amountCents,
+          balancePaidAt: now,
+          updatedAt: now,
+        });
+        transaction.set(userBarrelPoolRef(db, participantUid, poolId), {
+          participantPaymentStatus: "succeeded",
+          balancePaymentStatus: "succeeded",
+          balancePaidAmount: amount,
+          balancePaidAmountCents: amountCents,
+          balancePaidAt: now,
+          updatedAt: now,
+        }, {merge: true});
+        transaction.update(requestRef, {
+          status: "completed",
+          paymentStatus: "succeeded",
+          paidAt: now,
+          reviewedAt: now,
+          reviewedBy: customerUid,
+          updatedAt: now,
+        });
+        notificationSnapshot.docs.forEach((doc) => {
+          transaction.update(doc.ref, {
+            status: "resolved",
+            resolvedAt: now,
+            resolvedBy: customerUid,
+            updatedAt: now,
+          });
+        });
+
+        const remainingDue = hasRemainingSharedPoolBalanceDue(
+            participantSnapshot.docs,
+            participantUid,
+        );
+        const poolUpdate = {
+          [`publicParticipants.${participantUid}.paymentStatus`]: "succeeded",
+          [`publicParticipants.${participantUid}.updatedAt`]: now,
+          updatedAt: now,
+        };
+        if (!remainingDue) {
+          poolUpdate.balancePaymentStatus = "succeeded";
+          poolUpdate.balancePaidAt = now;
+          if (shipmentDoc && shipmentDoc.exists) {
+            transaction.update(shipmentRef, {
+              paymentStatus: "succeeded",
+              status: shipmentDoc.data()?.status === "pending_payment" ?
+                "pending" :
+                shipmentDoc.data()?.status || "pending",
+              paidAt: now,
+              updatedAt: now,
+            });
+          }
+        }
+        transaction.update(poolRef, poolUpdate);
+      });
+      await issueBusinessPayoutTransfer({
+        ref: requestRef,
+        data: {
+          ...requestData,
+          paymentStatus: "succeeded",
+          poolId: requestData.barrelPoolId || "",
+          trackingCode: requestData.trackingCode || requestId,
+        },
+        sourceTransaction,
+        serviceType: "shared_barrel_balance",
+        idempotencySuffix: `${requestId}_balance`,
+      });
+
+      return {success: true, requestId};
+    },
+);
+
+exports.markBarrelPoolBalanceCollected = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const requestId = cleanText(request.data?.requestId, 160);
+      const note = cleanText(request.data?.note, 500);
+      if (!requestId) {
+        throw new HttpsError("invalid-argument", "Balance request is required");
+      }
+
+      const db = admin.firestore();
+      const requestRef = db.collection("barrelPoolBalanceRequests")
+          .doc(requestId);
+      const requestDoc = await requestRef.get();
+      if (!requestDoc.exists) {
+        throw new HttpsError(
+            "not-found",
+            "Shared barrel balance request not found",
+        );
+      }
+      const requestData = requestDoc.data() || {};
+      const businessId = cleanText(requestData.businessId, 160);
+      const callerUser = await getUserProfile(callerUid);
+      if (callerUser.role === "admin") {
+        requireAdminCapability(
+            callerUser,
+            "finance",
+            "Only finance admins can reconcile shared barrel balances",
+        );
+        if (!hasServiceAccess(callerUser, "barrelShipping")) {
+          throw new HttpsError(
+              "permission-denied",
+              "Your role is not allowed to manage barrel shipping finance",
+          );
+        }
+      } else {
+        await requireBusinessPermission(callerUid, businessId, "barrels");
+      }
+
+      await db.runTransaction(async (transaction) => {
+        const freshRequestDoc = await transaction.get(requestRef);
+        if (!freshRequestDoc.exists) {
+          throw new HttpsError(
+              "not-found",
+              "Shared barrel balance request not found",
+          );
+        }
+        const freshRequest = freshRequestDoc.data() || {};
+        if (freshRequest.status !== "pending") {
+          throw new HttpsError(
+              "failed-precondition",
+              "Only pending shared barrel balance requests can be collected",
+          );
+        }
+        const amountCents = Number(freshRequest.amountCents || 0);
+        if (!Number.isFinite(amountCents) || amountCents <= 0) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Shared barrel balance amount is invalid",
+          );
+        }
+
+        const poolId = cleanText(freshRequest.barrelPoolId, 160);
+        const participantUid = cleanText(freshRequest.participantUid, 160);
+        if (!poolId || !participantUid) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Shared barrel balance request is missing pool context",
+          );
+        }
+
+        const poolRef = db.collection("barrelPools").doc(poolId);
+        const participantRef = poolRef.collection("participants")
+            .doc(participantUid);
+        const shipmentId = cleanText(freshRequest.shipmentId, 160);
+        const shipmentRef = shipmentId ?
+          db.collection("barrelShipments").doc(shipmentId) :
+          null;
+        const notificationQuery = db.collection("platformNotifications")
+            .where("barrelPoolBalanceRequestId", "==", requestId)
+            .limit(10);
+        const [poolDoc, participantDoc, shipmentDoc, participantSnapshot,
+          notificationSnapshot] = await Promise.all([
+          transaction.get(poolRef),
+          transaction.get(participantRef),
+          shipmentRef ? transaction.get(shipmentRef) : Promise.resolve(null),
+          transaction.get(poolRef.collection("participants")
+              .where("joinStatus", "==", "accepted")),
+          transaction.get(notificationQuery),
+        ]);
+        if (!poolDoc.exists) {
+          throw new HttpsError("not-found", "Shared barrel pool not found");
+        }
+        if (!participantDoc.exists) {
+          throw new HttpsError(
+              "not-found",
+              "Shared barrel participant not found",
+          );
+        }
+        const pool = poolDoc.data() || {};
+        if (cleanText(pool.businessId, 160) !== businessId) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Shared barrel balance request does not match the pool business",
+          );
+        }
+        const participant = participantDoc.data() || {};
+        if (
+          participant.balancePaymentRequestId &&
+          participant.balancePaymentRequestId !== requestId
+        ) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Participant has a different active balance request",
+          );
+        }
+
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        const amount = dollarsFromCents(amountCents);
+        const currency = freshRequest.currency || pool.currency ||
+          SHIPMENT_CURRENCY;
+        const participantUpdate = {
+          paymentStatus: "collected_by_business",
+          balancePaymentStatus: "collected_by_business",
+          balancePaidAmount: amount,
+          balancePaidAmountCents: amountCents,
+          balancePaidAt: now,
+          balanceCollectedAt: now,
+          balanceCollectedBy: callerUid,
+          balanceCollectionNote: note,
+          updatedAt: now,
+        };
+        transaction.update(participantRef, participantUpdate);
+
+        if (!participantUid.startsWith("dropoff_")) {
+          transaction.set(userBarrelPoolRef(db, participantUid, poolId), {
+            participantPaymentStatus: "collected_by_business",
+            balancePaymentStatus: "collected_by_business",
+            balancePaidAmount: amount,
+            balancePaidAmountCents: amountCents,
+            balancePaidAt: now,
+            updatedAt: now,
+          }, {merge: true});
+        }
+
+        transaction.update(requestRef, {
+          status: "completed",
+          collectedAt: now,
+          collectedBy: callerUid,
+          collectionNote: note,
+          reviewedAt: now,
+          reviewedBy: callerUid,
+          updatedAt: now,
+        });
+        notificationSnapshot.docs.forEach((doc) => {
+          transaction.update(doc.ref, {
+            status: "resolved",
+            resolvedAt: now,
+            resolvedBy: callerUid,
+            updatedAt: now,
+          });
+        });
+
+        const remainingDue = hasRemainingSharedPoolBalanceDue(
+            participantSnapshot.docs,
+            participantUid,
+        );
+        const poolUpdate = {
+          [`publicParticipants.${participantUid}.paymentStatus`]:
+            "collected_by_business",
+          [`publicParticipants.${participantUid}.updatedAt`]: now,
+          updatedAt: now,
+        };
+        if (!remainingDue) {
+          poolUpdate.balancePaymentStatus = "succeeded";
+          poolUpdate.balancePaidAt = now;
+          if (shipmentDoc && shipmentDoc.exists) {
+            transaction.update(shipmentRef, {
+              paymentStatus: "succeeded",
+              status: shipmentDoc.data()?.status === "pending_payment" ?
+                "pending" :
+                shipmentDoc.data()?.status || "pending",
+              paidAt: now,
+              updatedAt: now,
+            });
+          }
+        }
+        transaction.update(poolRef, poolUpdate);
+
+        setAdminAuditLog(transaction, {
+          action: "barrel_pool_balance_collected",
+          actorUid: callerUid,
+          targetCollection: "barrelPoolBalanceRequests",
+          targetId: requestId,
+          targetLabel: `${currency} ${amount}`,
+          statusField: "status",
+          previousValue: freshRequest.status || "",
+          nextValue: "completed",
+        });
+      });
+
+      return {
+        success: true,
+        requestId,
+        status: "completed",
+      };
+    },
+);
+
+exports.expireBarrelPools = onSchedule(
+    "every 24 hours",
+    async () => {
+      const db = admin.firestore();
+      const snapshot = await db.collection("barrelPools")
+          .where("status", "in", ["open", "partially_filled"])
+          .where("joinDeadline", "<=", admin.firestore.Timestamp.now())
+          .limit(100)
+          .get();
+      await Promise.all(snapshot.docs.map(async (doc) => {
+        const poolRef = doc.ref;
+        await db.runTransaction(async (transaction) => {
+          const [poolDoc, participants] = await Promise.all([
+            transaction.get(poolRef),
+            transaction.get(poolRef.collection("participants")
+                .where("joinStatus", "in", ["requested", "accepted"])),
+          ]);
+          if (!poolDoc.exists) return;
+          const pool = poolDoc.data() || {};
+          if (!["open", "partially_filled"].includes(String(pool.status))) {
+            return;
+          }
+          const now = admin.firestore.FieldValue.serverTimestamp();
+          const nextPool = {
+            ...pool,
+            status: "expired",
+          };
+          transaction.update(poolRef, {
+            status: "expired",
+            expiredAt: now,
+            updatedAt: now,
+          });
+          participants.docs.forEach((participantDoc) => {
+            const participant = participantDoc.data() || {};
+            const participantUid = participantDoc.id;
+            let refundRequest = null;
+            if (participant.paymentStatus === "succeeded") {
+              refundRequest = queuePoolParticipantRefund({
+                transaction,
+                participant: {...participant, uid: participantUid},
+                pool,
+                poolId: poolRef.id,
+                reason: "barrel_pool_expired",
+              });
+            }
+            transaction.update(participantDoc.ref, {
+              joinStatus: "cancelled",
+              paymentStatus: participant.paymentStatus === "succeeded" ?
+                "refund_pending" :
+                participant.paymentStatus || "not_required",
+              refundableAmountCents: 0,
+              refundableAmount: 0,
+              walletRefundRequestId:
+                participant.paymentStatus === "succeeded" ?
+                refundRequest?.refundRequestId || "" :
+                admin.firestore.FieldValue.delete(),
+              refundRequestedAt: participant.paymentStatus === "succeeded" ?
+                now :
+                admin.firestore.FieldValue.delete(),
+              updatedAt: now,
+            });
+            transaction.update(poolRef, {
+              [`publicParticipants.${participantUid}.joinStatus`]:
+                "cancelled",
+              [`publicParticipants.${participantUid}.paymentStatus`]:
+                participant.paymentStatus === "succeeded" ?
+                  "refund_pending" :
+                  participant.paymentStatus || "not_required",
+              [`publicParticipants.${participantUid}.updatedAt`]: now,
+            });
+            setUserBarrelPoolMembership({
+              transaction,
+              uid: participantUid,
+              poolId: poolRef.id,
+              pool: nextPool,
+              participant: {
+                ...participant,
+                joinStatus: "cancelled",
+              },
+              now,
+            });
+          });
+        });
+      }));
+      logger.info("Expired shared barrel pools", {count: snapshot.size});
+    },
+);
+
+exports.syncOpenBarrelMirror = onDocumentWritten(
+    "barrelPools/{poolId}",
+    async (event) => {
+      const db = admin.firestore();
+      const mirrorRef = db.collection("openBarrels").doc(event.params.poolId);
+      if (!event.data?.after.exists) {
+        await mirrorRef.delete();
+        return;
+      }
+      const pool = event.data.after.data() || {};
+      const timestamp = admin.firestore.FieldValue.serverTimestamp();
+      const payload = buildOpenBarrelMirrorPayload({
+        poolId: event.params.poolId,
+        pool,
+        now: timestamp,
+        currency: SHIPMENT_CURRENCY,
+        activeStatuses: BARREL_POOL_ACTIVE_STATUSES,
+      });
+      if (!payload) {
+        await mirrorRef.delete();
+        return;
+      }
+      await mirrorRef.set(payload, {merge: false});
+    },
+);
+
+function normalizeBarrelQuantity(value) {
+  const quantity = Number(value ?? 1);
+  if (
+    !Number.isInteger(quantity) ||
+    quantity < 1 ||
+    quantity > MAX_BARREL_QUANTITY
+  ) {
+    throw new HttpsError(
+        "invalid-argument",
+        `Barrel quantity must be between 1 and ${MAX_BARREL_QUANTITY}`,
+    );
+  }
+  return quantity;
+}
+
+function servicePlatformFeePctFromPricing(pricingDoc, keys = []) {
+  let raw;
+  for (const key of keys) {
+    if (pricingDoc?.[key] !== undefined) {
+      raw = pricingDoc[key];
+      break;
+    }
+  }
+  if (raw === undefined || raw === null) {
+    raw = pricingDoc?.platformFeePct ??
+      process.env.PLATFORM_SERVICE_FEE_PCT ??
+      0;
+  }
+  const pct = Number(raw);
+  if (!Number.isFinite(pct) || pct < 0 || pct >= 1) return 0;
+  return pct;
+}
+
+function barrelPlatformFeePctFromPricing(pricingDoc) {
+  return servicePlatformFeePctFromPricing(pricingDoc, [
+    "barrelPlatformFeePct",
+  ]);
+}
+
+function servicePayoutFields({
+  grossCents,
+  platformFeePct,
+  connectReady,
+}) {
+  const platformFeeCents = Math.round(grossCents * platformFeePct);
+  return {
+    platformFeeCents,
+    businessPayoutCents: Math.max(0, grossCents - platformFeeCents),
+    payoutStatus: connectReady ? "pending" : "pending_account",
+  };
+}
+
+function barrelLinePayoutFields({
+  shippingFeeCents,
+  platformFeePct,
+  connectReady,
+}) {
+  return servicePayoutFields({
+    grossCents: shippingFeeCents,
+    platformFeePct,
+    connectReady,
+  });
+}
+
+function stripeSourceTransactionFromIntent(intent) {
+  const charge = intent?.latest_charge;
+  if (!charge) return "";
+  return typeof charge === "string" ? charge : charge.id || "";
+}
+
+async function persistStripeAccountStatus({businessId, account}) {
+  const payoutsEnabled =
+    account.charges_enabled === true && account.payouts_enabled === true;
+  await admin.firestore().collection("businesses").doc(businessId).set({
+    stripeAccountId: account.id,
+    chargesEnabled: account.charges_enabled === true,
+    payoutsEnabled,
+    ...(payoutsEnabled && {
+      connectOnboardedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, {merge: true});
+  if (payoutsEnabled) {
+    await retryPendingBusinessTransfersForBusiness(businessId);
+  }
+  return payoutsEnabled;
+}
+
+async function businessIdForStripeAccount(accountId) {
+  const snapshot = await admin.firestore()
+      .collection("businesses")
+      .where("stripeAccountId", "==", accountId)
+      .limit(1)
+      .get();
+  return snapshot.empty ? "" : snapshot.docs[0].id;
+}
+
+async function issueBarrelShipmentTransfer({
+  shipmentRef,
+  shipment,
+  sourceTransaction,
+}) {
+  return issueBusinessPayoutTransfer({
+    ref: shipmentRef,
+    data: shipment,
+    sourceTransaction,
+    serviceType: shipment.sharedPoolId ? "shared_barrel" : "barrel_shipment",
+  });
+}
+
+async function issueBusinessPayoutTransfer({
+  ref,
+  data,
+  sourceTransaction = "",
+  serviceType = "service_payment",
+  payoutCents,
+  idempotencySuffix,
+  payoutStatusField = "payoutStatus",
+  payoutTransferIdField = "payoutTransferId",
+  paidOutAtField = "paidOutAt",
+  payoutErrorField = "payoutError",
+}) {
+  if (SIMULATE_PAYMENTS) return;
+  if (data[payoutStatusField] === "paid") return;
+  const rawPayoutCents = payoutCents ??
+    data.businessPayoutCents ??
+    data.businessPayoutAmountCents ??
+    0;
+  const transferCents = Number(rawPayoutCents);
+  if (!Number.isFinite(transferCents) || transferCents <= 0) return;
+  const businessId = String(data.businessId || "").trim();
+  if (!businessId) return;
+
+  const businessDoc = await admin.firestore()
+      .collection("businesses")
+      .doc(businessId)
+      .get();
+  const business = businessDoc.exists ? businessDoc.data() : {};
+  if (
+    !businessDoc.exists ||
+    !business.stripeAccountId ||
+    business.payoutsEnabled !== true
+  ) {
+    await ref.update({
+      [payoutStatusField]: "pending_account",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return;
+  }
+
+  try {
+    const transfer = await createStripeTransfer({
+      amount: transferCents,
+      currency: SHIPMENT_CURRENCY,
+      destination: business.stripeAccountId,
+      transferGroup: data.orderId || data.poolId || data.sharedPoolId || ref.id,
+      sourceTransaction,
+      idempotencyKey: `transfer_${idempotencySuffix || ref.id}`,
+      metadata: {
+        documentPath: ref.path,
+        documentId: ref.id,
+        shipmentId: data.trackingCode ? ref.id : "",
+        orderId: data.orderId || "",
+        poolId: data.poolId || data.sharedPoolId || "",
+        purchaseId: data.carId ? ref.id : "",
+        businessId,
+        paymentType: `${serviceType}_payout`,
+      },
+    });
+    await ref.update({
+      [payoutStatusField]: "paid",
+      [payoutTransferIdField]: transfer.id,
+      [paidOutAtField]: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (error) {
+    logger.error("Barrel transfer failed", {
+      documentPath: ref.path,
+      orderId: data.orderId || "",
+      businessId,
+      message: error.message,
+    });
+    await ref.update({
+      [payoutStatusField]: "failed",
+      [payoutErrorField]: error.message || "Stripe transfer failed",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+}
+
+async function issueBarrelOrderTransfers({orderId, sourceTransaction = ""}) {
+  const snapshot = await admin.firestore()
+      .collection("barrelShipments")
+      .where("orderId", "==", orderId)
+      .get();
+  await Promise.all(snapshot.docs.map((doc) =>
+    issueBarrelShipmentTransfer({
+      shipmentRef: doc.ref,
+      shipment: doc.data(),
+      sourceTransaction,
+    }),
+  ));
+}
+
+async function retryPendingBusinessTransfersForBusiness(businessId) {
+  const db = admin.firestore();
+  const collections = [
+    {name: "barrelShipments", serviceType: "barrel_shipment"},
+    {name: "freightShipments", serviceType: "freight_shipment"},
+    {name: "carPurchases", serviceType: "car_purchase"},
+    {name: "barrelPoolBalanceRequests", serviceType: "shared_barrel_balance"},
+  ];
+  const snapshots = await Promise.all(collections.map((collection) =>
+    db.collection(collection.name)
+        .where("businessId", "==", businessId)
+        .where("payoutStatus", "in", ["pending_account", "failed"])
+        .limit(50)
+        .get()
+        .then((snapshot) => ({snapshot, serviceType: collection.serviceType})),
+  ));
+  await Promise.all(snapshots.flatMap(({snapshot, serviceType}) =>
+    snapshot.docs
+        .filter((doc) => {
+          const data = doc.data();
+          return data.paymentStatus === "succeeded" ||
+            data.extensionPaymentStatus === "succeeded";
+        })
+        .map((doc) => issueBusinessPayoutTransfer({
+          ref: doc.ref,
+          data: doc.data(),
+          serviceType,
+        })),
+  ));
+  const participantSnapshot = await db.collectionGroup("participants")
+      .where("businessId", "==", businessId)
+      .where("payoutStatus", "in", ["pending_account", "failed"])
+      .limit(50)
+      .get();
+  await Promise.all(participantSnapshot.docs
+      .filter((doc) => doc.data().paymentStatus === "succeeded")
+      .map((doc) => issueBusinessPayoutTransfer({
+        ref: doc.ref,
+        data: doc.data(),
+        serviceType: "shared_barrel_deposit",
+      })));
+  const extensionSnapshot = await db.collection("carPurchases")
+      .where("businessId", "==", businessId)
+      .where("extensionPayoutStatus", "in", ["pending_account", "failed"])
+      .limit(50)
+      .get();
+  await Promise.all(extensionSnapshot.docs
+      .filter((doc) => doc.data().extensionPaymentStatus === "succeeded")
+      .map((doc) => {
+        const data = doc.data();
+        return issueBusinessPayoutTransfer({
+          ref: doc.ref,
+          data,
+          serviceType: "hold_extension",
+          payoutCents: Number(data.extensionBusinessPayoutCents || 0),
+          idempotencySuffix:
+            `${doc.id}_hold_extension_${data.extensionPaymentIntentId || ""}`,
+          payoutStatusField: "extensionPayoutStatus",
+          payoutTransferIdField: "extensionPayoutTransferId",
+          paidOutAtField: "extensionPaidOutAt",
+          payoutErrorField: "extensionPayoutError",
+        });
+      }));
+}
+
 exports.createBarrelShipmentPaymentIntent = onCall(
     {
       enforceAppCheck: false,
       cors: true,
+      secrets: [stripeSecretKey],
     },
     async (request) => {
       const customerUid = requireAuth(request);
@@ -5318,6 +9396,7 @@ exports.createBarrelShipmentPaymentIntent = onCall(
         receiverPhone,
         destinationCountryId,
         businessId,
+        quantity,
         pickupRequested,
         pickupAddress,
         pickupBorough,
@@ -5337,6 +9416,7 @@ exports.createBarrelShipmentPaymentIntent = onCall(
         );
       }
       requireValidPhoneNumber(receiverPhone, "Receiver phone");
+      const barrelQuantity = normalizeBarrelQuantity(quantity);
 
       const wantsPickup = pickupRequested === true;
       if (
@@ -5366,14 +9446,27 @@ exports.createBarrelShipmentPaymentIntent = onCall(
         businessDestination;
 
       const pricing = barrelPickupPricingFromData(pricingDoc.data());
+      const platformFeePct = barrelPlatformFeePctFromPricing(
+          pricingDoc.data(),
+      );
       const pickup = wantsPickup ?
         pickupFeeForBorough(pricing, String(pickupBorough)) :
         {miles: 0, fee: 0};
-      const total = shippingFee + pickup.fee;
+      const lineShippingFee =
+        Math.round(shippingFee * barrelQuantity * 100) / 100;
+      const lineShippingFeeCents = Math.round(lineShippingFee * 100);
+      const total = lineShippingFee + pickup.fee;
       if (!Number.isFinite(total) || total <= 0) {
         throw new HttpsError("failed-precondition", "Invalid shipment total");
       }
       const totalCents = Math.round(total * 100);
+      const connectReady =
+        !!business.stripeAccountId && business.payoutsEnabled === true;
+      const payoutFields = barrelLinePayoutFields({
+        shippingFeeCents: lineShippingFeeCents,
+        platformFeePct,
+        connectReady,
+      });
 
       const shipmentRef = db.collection("barrelShipments").doc();
       const trackingCode = await generateTrackingCode("BS", "barrelShipments");
@@ -5416,13 +9509,17 @@ exports.createBarrelShipmentPaymentIntent = onCall(
             "Office drop-off",
           pickupMiles: pickup.miles,
           pickupFee: pickup.fee,
-          shippingFee,
+          quantity: barrelQuantity,
+          shippingFee: lineShippingFee,
+          unitShippingFee: shippingFee,
           pricingPendingReview: false,
           ...(pickupAppointment && {
             pickupDateTime:
               admin.firestore.Timestamp.fromDate(pickupAppointment),
           }),
           price: total,
+          platformFeePct,
+          ...payoutFields,
           walletAppliedAmount: dollarsFromCents(walletAppliedCents),
           walletAppliedCents,
           cardChargeAmount: dollarsFromCents(chargeCents),
@@ -5437,6 +9534,14 @@ exports.createBarrelShipmentPaymentIntent = onCall(
 
       const chargeCents = totalCents - walletAppliedCents;
       if (chargeCents === 0) {
+        if (!SIMULATE_PAYMENTS) {
+          const snapshot = await shipmentRef.get();
+          await issueBarrelShipmentTransfer({
+            shipmentRef,
+            shipment: snapshot.data() || {},
+            sourceTransaction: "",
+          });
+        }
         return {
           shipmentId: shipmentRef.id,
           trackingCode,
@@ -5514,10 +9619,365 @@ exports.createBarrelShipmentPaymentIntent = onCall(
     },
 );
 
+exports.createBarrelOrderPaymentIntent = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const {
+        senderName,
+        pickupRequested,
+        pickupAddress,
+        pickupBorough,
+        pickupDateTime,
+        useWalletBalance,
+      } = request.data || {};
+      const lines = Array.isArray(request.data?.lines) ?
+        request.data.lines :
+        [];
+
+      if (!senderName || lines.length === 0) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Sender and at least one destination are required",
+        );
+      }
+      if (lines.length > MAX_BARREL_ORDER_LINES) {
+        throw new HttpsError(
+            "invalid-argument",
+            `A barrel order can include up to ${MAX_BARREL_ORDER_LINES} ` +
+              "destinations",
+        );
+      }
+
+      const wantsPickup = pickupRequested === true;
+      if (
+        wantsPickup &&
+        (!pickupAddress || !pickupBorough || !pickupDateTime)
+      ) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Pickup address, borough, date, and time are required",
+        );
+      }
+      const pickupAppointment = wantsPickup ?
+        parseFuturePickup(pickupDateTime) :
+        null;
+
+      const db = admin.firestore();
+      const pricingRef = db.collection("shipmentPricing").doc("barrelPickup");
+      const [pricingDoc, userRecord] = await Promise.all([
+        pricingRef.get(),
+        admin.auth().getUser(customerUid),
+      ]);
+      const pickupPricing = barrelPickupPricingFromData(pricingDoc.data());
+      const platformFeePct = barrelPlatformFeePctFromPricing(
+          pricingDoc.data(),
+      );
+      const cleanPickupAddress = wantsPickup ?
+        String(pickupAddress).trim() :
+        pickupPricing.officeAddress;
+      const pickup = wantsPickup ?
+        pickupFeeForBorough(pickupPricing, String(pickupBorough)) :
+        {miles: 0, fee: 0};
+      const pickupFeeCents = Math.round(pickup.fee * 100);
+
+      const validatedLines = [];
+      for (let index = 0; index < lines.length; index++) {
+        const line = lines[index] || {};
+        const destinationCountryId =
+          String(line.destinationCountryId || "").trim();
+        const businessId = String(line.businessId || "").trim();
+        const receiverName = String(line.receiverName || "").trim();
+        const receiverPhone = String(line.receiverPhone || "").trim();
+        const quantity = normalizeBarrelQuantity(line.quantity);
+        if (
+          !destinationCountryId ||
+          !businessId ||
+          !receiverName ||
+          !receiverPhone
+        ) {
+          throw new HttpsError(
+              "invalid-argument",
+              "Every destination needs a business, receiver, and phone",
+          );
+        }
+        requireValidPhoneNumber(receiverPhone, "Receiver phone");
+        const businessDestination = await getApprovedBusinessDestination({
+          businessId,
+          countryId: destinationCountryId,
+        });
+        const {business, country, shippingFee, deliveryEstimate} =
+          businessDestination;
+        const lineShippingFee =
+          Math.round(shippingFee * quantity * 100) / 100;
+        const lineShippingFeeCents = Math.round(lineShippingFee * 100);
+        const lineTotalCents = lineShippingFeeCents + pickupFeeCents;
+        const connectReady =
+          !!business.stripeAccountId && business.payoutsEnabled === true;
+        validatedLines.push({
+          index,
+          destinationCountryId,
+          businessId: businessDestination.businessId,
+          business,
+          country,
+          deliveryEstimate,
+          receiverName,
+          receiverPhone,
+          quantity,
+          unitShippingFee: shippingFee,
+          lineShippingFee,
+          lineShippingFeeCents,
+          pickupFeeCents,
+          lineTotalCents,
+          payoutFields: barrelLinePayoutFields({
+            shippingFeeCents: lineShippingFeeCents,
+            platformFeePct,
+            connectReady,
+          }),
+        });
+      }
+
+      const orderTotalCents = validatedLines.reduce(
+          (sum, line) => sum + line.lineTotalCents,
+          0,
+      );
+      if (!Number.isFinite(orderTotalCents) || orderTotalCents <= 0) {
+        throw new HttpsError("failed-precondition", "Invalid order total");
+      }
+
+      const orderRef = db.collection("barrelOrders").doc();
+      const shipmentRefs = validatedLines.map(() =>
+        db.collection("barrelShipments").doc(),
+      );
+      const trackingCodes = [];
+      for (let index = 0; index < validatedLines.length; index++) {
+        trackingCodes.push(
+            await generateTrackingCode("BS", "barrelShipments"),
+        );
+      }
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      let walletAppliedCents = 0;
+
+      await db.runTransaction(async (transaction) => {
+        if (useWalletBalance === true) {
+          walletAppliedCents = await debitWallet({
+            transaction,
+            customerUid,
+            amountCents: orderTotalCents,
+            shipmentId: orderRef.id,
+            trackingCode: trackingCodes[0],
+            reason: "barrel_order_payment",
+            businessId: "",
+            businessName: "Multiple businesses",
+          });
+        }
+        const chargeCents = orderTotalCents - walletAppliedCents;
+        transaction.set(orderRef, {
+          customerUid,
+          customerEmail: userRecord.email || "",
+          senderName: String(senderName).trim(),
+          pickupRequested: wantsPickup,
+          pickupAddress: cleanPickupAddress,
+          pickupBorough: wantsPickup ?
+            String(pickupBorough) :
+            "Office drop-off",
+          ...(pickupAppointment && {
+            pickupDateTime:
+              admin.firestore.Timestamp.fromDate(pickupAppointment),
+          }),
+          shipmentIds: shipmentRefs.map((ref) => ref.id),
+          trackingCodes,
+          lineCount: validatedLines.length,
+          quantity: validatedLines.reduce(
+              (sum, line) => sum + line.quantity,
+              0,
+          ),
+          currency: SHIPMENT_CURRENCY,
+          orderTotalCents,
+          orderTotal: dollarsFromCents(orderTotalCents),
+          walletAppliedCents,
+          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
+          cardChargeAmountCents: chargeCents,
+          cardChargeAmount: dollarsFromCents(chargeCents),
+          paymentStatus: chargeCents === 0 ? "succeeded" : "pending",
+          status: chargeCents === 0 ? "pending" : "pending_payment",
+          ...(chargeCents === 0 && {paidAt: now}),
+          createdAt: now,
+          updatedAt: now,
+        });
+
+        validatedLines.forEach((line, index) => {
+          const shipmentRef = shipmentRefs[index];
+          const trackingCode = trackingCodes[index];
+          const lineWalletAppliedCents = walletAppliedCents > 0 ?
+            Math.round(walletAppliedCents * line.lineTotalCents /
+              orderTotalCents) :
+            0;
+          transaction.set(shipmentRef, {
+            orderId: orderRef.id,
+            orderLineIndex: line.index,
+            trackingCode,
+            senderName: String(senderName).trim(),
+            senderAddress: cleanPickupAddress,
+            receiverName: line.receiverName,
+            receiverPhone: line.receiverPhone,
+            destinationCountryId: line.destinationCountryId,
+            destinationCountryName: line.country.name || "Guinea",
+            businessId: line.businessId,
+            businessName: line.business.name || DEFAULT_BUSINESS_NAME,
+            ...line.deliveryEstimate,
+            customerUid,
+            customerEmail: userRecord.email || "",
+            pickupRequested: wantsPickup,
+            pickupAddress: cleanPickupAddress,
+            pickupBorough: wantsPickup ?
+              String(pickupBorough) :
+              "Office drop-off",
+            pickupMiles: pickup.miles,
+            pickupFee: dollarsFromCents(line.pickupFeeCents),
+            quantity: line.quantity,
+            unitShippingFee: line.unitShippingFee,
+            shippingFee: line.lineShippingFee,
+            pricingPendingReview: false,
+            ...(pickupAppointment && {
+              pickupDateTime:
+                admin.firestore.Timestamp.fromDate(pickupAppointment),
+            }),
+            price: dollarsFromCents(line.lineTotalCents),
+            platformFeePct,
+            ...line.payoutFields,
+            walletAppliedCents: lineWalletAppliedCents,
+            walletAppliedAmount: dollarsFromCents(lineWalletAppliedCents),
+            cardChargeAmountCents: Math.max(
+                0,
+                line.lineTotalCents - lineWalletAppliedCents,
+            ),
+            cardChargeAmount: dollarsFromCents(Math.max(
+                0,
+                line.lineTotalCents - lineWalletAppliedCents,
+            )),
+            paymentStatus: chargeCents === 0 ? "succeeded" : "pending",
+            status: chargeCents === 0 ? "pending" : "pending_payment",
+            ...(chargeCents === 0 && {paidAt: now}),
+            createdAt: now,
+            updatedAt: now,
+          });
+        });
+      });
+
+      const chargeCents = orderTotalCents - walletAppliedCents;
+      if (chargeCents === 0) {
+        if (!SIMULATE_PAYMENTS) {
+          await issueBarrelOrderTransfers({orderId: orderRef.id});
+        }
+        return {
+          orderId: orderRef.id,
+          shipmentIds: shipmentRefs.map((ref) => ref.id),
+          trackingCodes,
+          simulatedPayment: true,
+          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
+          cardChargeAmount: 0,
+        };
+      }
+
+      if (SIMULATE_PAYMENTS) {
+        await Promise.all([
+          orderRef.update({
+            paymentStatus: "succeeded",
+            status: "pending",
+            stripePaymentIntentId: `simulated_barrel_order_${orderRef.id}`,
+            paidAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          }),
+          ...shipmentRefs.map((ref) => ref.update({
+            paymentStatus: "succeeded",
+            status: "pending",
+            stripePaymentIntentId: `simulated_barrel_order_${orderRef.id}`,
+            paidAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          })),
+        ]);
+        return {
+          orderId: orderRef.id,
+          shipmentIds: shipmentRefs.map((ref) => ref.id),
+          trackingCodes,
+          simulatedPayment: true,
+          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
+          cardChargeAmount: dollarsFromCents(chargeCents),
+        };
+      }
+
+      let paymentIntent;
+      try {
+        paymentIntent = await createStripePaymentIntent({
+          amount: chargeCents,
+          currency: SHIPMENT_CURRENCY,
+          metadata: {
+            orderId: orderRef.id,
+            customerUid,
+            paymentType: "barrel_order",
+          },
+        });
+        await Promise.all([
+          orderRef.update({
+            stripePaymentIntentId: paymentIntent.id,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          }),
+          ...shipmentRefs.map((ref) => ref.update({
+            stripePaymentIntentId: paymentIntent.id,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          })),
+        ]);
+      } catch (error) {
+        await Promise.all([
+          orderRef.update({
+            paymentStatus: "failed",
+            status: "cancelled",
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          }),
+          ...shipmentRefs.map((ref) => ref.update({
+            paymentStatus: "failed",
+            status: "cancelled",
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          })),
+        ]);
+        if (walletAppliedCents > 0) {
+          await db.runTransaction(async (transaction) => {
+            await creditWallet({
+              transaction,
+              customerUid,
+              amountCents: walletAppliedCents,
+              shipmentId: orderRef.id,
+              trackingCode: trackingCodes[0],
+              reason: "barrel_order_payment_reversal",
+              businessId: "",
+              businessName: "Multiple businesses",
+            });
+          });
+        }
+        throw error;
+      }
+
+      return {
+        orderId: orderRef.id,
+        shipmentIds: shipmentRefs.map((ref) => ref.id),
+        trackingCodes,
+        clientSecret: paymentIntent.client_secret,
+        walletAppliedAmount: dollarsFromCents(walletAppliedCents),
+        cardChargeAmount: dollarsFromCents(chargeCents),
+      };
+    },
+);
+
 exports.completeBarrelShipmentPayment = onCall(
     {
       enforceAppCheck: false,
       cors: true,
+      secrets: [stripeSecretKey],
     },
     async (request) => {
       const customerUid = requireAuth(request);
@@ -5575,6 +10035,15 @@ exports.completeBarrelShipmentPayment = onCall(
         paidAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      await issueBarrelShipmentTransfer({
+        shipmentRef,
+        shipment: {
+          ...shipment,
+          paymentStatus: "succeeded",
+          status: "pending",
+        },
+        sourceTransaction: stripeSourceTransactionFromIntent(intent),
+      });
 
       return {
         success: true,
@@ -5588,6 +10057,7 @@ exports.cancelPendingBarrelShipment = onCall(
     {
       enforceAppCheck: false,
       cors: true,
+      secrets: [stripeSecretKey],
     },
     async (request) => {
       const customerUid = requireAuth(request);
@@ -5649,6 +10119,632 @@ exports.cancelPendingBarrelShipment = onCall(
         });
       }
       return {success: true, shipmentId};
+    },
+);
+
+exports.completeBarrelOrderPayment = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const {orderId} = request.data || {};
+      if (!orderId) {
+        throw new HttpsError("invalid-argument", "Order ID is required");
+      }
+
+      const db = admin.firestore();
+      const orderRef = db.collection("barrelOrders").doc(orderId);
+      const orderDoc = await orderRef.get();
+      if (!orderDoc.exists) {
+        throw new HttpsError("not-found", "Order not found");
+      }
+      const order = orderDoc.data();
+      if (order.customerUid !== customerUid) {
+        throw new HttpsError("permission-denied", "Order access denied");
+      }
+
+      let sourceTransaction = "";
+      if (
+        !SIMULATE_PAYMENTS &&
+        !String(order.stripePaymentIntentId || "").startsWith("simulated_")
+      ) {
+        const intent = await retrieveStripePaymentIntent(
+            order.stripePaymentIntentId,
+        );
+        if (intent.status !== "succeeded") {
+          await orderRef.update({
+            paymentStatus: intent.status,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          throw new HttpsError(
+              "failed-precondition",
+              `Payment is ${intent.status}`,
+          );
+        }
+        sourceTransaction = stripeSourceTransactionFromIntent(intent);
+      }
+
+      const shipments = await db.collection("barrelShipments")
+          .where("orderId", "==", orderId)
+          .get();
+      const batch = db.batch();
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      batch.update(orderRef, {
+        paymentStatus: "succeeded",
+        status: "pending",
+        paidAt: now,
+        updatedAt: now,
+      });
+      shipments.docs.forEach((doc) => {
+        batch.update(doc.ref, {
+          paymentStatus: "succeeded",
+          status: "pending",
+          paidAt: now,
+          updatedAt: now,
+        });
+      });
+      await batch.commit();
+
+      await issueBarrelOrderTransfers({orderId, sourceTransaction});
+
+      return {
+        success: true,
+        orderId,
+        shipmentIds: shipments.docs.map((doc) => doc.id),
+        trackingCodes: shipments.docs.map((doc) => doc.data().trackingCode),
+        simulatedPayment:
+          SIMULATE_PAYMENTS ||
+          String(order.stripePaymentIntentId || "").startsWith("simulated_"),
+      };
+    },
+);
+
+exports.cancelPendingBarrelOrder = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const {orderId} = request.data || {};
+      if (!orderId) {
+        throw new HttpsError("invalid-argument", "Order ID is required");
+      }
+
+      const db = admin.firestore();
+      const orderRef = db.collection("barrelOrders").doc(orderId);
+      const orderDoc = await orderRef.get();
+      if (!orderDoc.exists) return {success: true, orderId};
+      const order = orderDoc.data();
+      if (order.customerUid !== customerUid) {
+        throw new HttpsError("permission-denied", "Order access denied");
+      }
+      if (order.paymentStatus !== "pending") {
+        return {success: true, orderId};
+      }
+
+      if (!SIMULATE_PAYMENTS && order.stripePaymentIntentId) {
+        const intent = await retrieveStripePaymentIntent(
+            order.stripePaymentIntentId,
+        );
+        if (intent.status === "succeeded" || intent.status === "processing") {
+          await orderRef.update({
+            paymentStatus: intent.status,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          return {success: true, orderId};
+        }
+      }
+
+      const shipments = await db.collection("barrelShipments")
+          .where("orderId", "==", orderId)
+          .get();
+      const walletAppliedCents = Number(order.walletAppliedCents || 0);
+      await db.runTransaction(async (transaction) => {
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        transaction.update(orderRef, {
+          paymentStatus: "cancelled",
+          status: "cancelled",
+          walletAppliedReversed: walletAppliedCents > 0,
+          updatedAt: now,
+        });
+        shipments.docs.forEach((doc) => {
+          transaction.update(doc.ref, {
+            paymentStatus: "cancelled",
+            status: "cancelled",
+            walletAppliedReversed: walletAppliedCents > 0,
+            updatedAt: now,
+          });
+        });
+        if (Number.isFinite(walletAppliedCents) && walletAppliedCents > 0) {
+          await creditWallet({
+            transaction,
+            customerUid,
+            amountCents: walletAppliedCents,
+            shipmentId: orderId,
+            trackingCode: (order.trackingCodes || [])[0] || orderId,
+            reason: "barrel_order_payment_reversal",
+            businessId: "",
+            businessName: "Multiple businesses",
+          });
+        }
+      });
+
+      return {success: true, orderId};
+    },
+);
+
+// ===== Freight shipments (parcels priced by weight, by air or sea) =====
+function normalizeFreightMode(value) {
+  return String(value || "sea").trim().toLowerCase() === "air" ?
+    "air" :
+    "sea";
+}
+
+async function getApprovedFreightDestination({businessId, countryId, mode}) {
+  const db = admin.firestore();
+  const resolvedBusinessId = businessId || DEFAULT_BUSINESS_ID;
+  const businessRef = db.collection("businesses").doc(resolvedBusinessId);
+  const destinationRef = businessRef
+      .collection("destinationCountries")
+      .doc(countryId);
+  const [businessDoc, destinationDoc] = await Promise.all([
+    businessRef.get(),
+    destinationRef.get(),
+  ]);
+  if (!businessDoc.exists) {
+    throw new HttpsError("invalid-argument", "Business is unavailable");
+  }
+  const business = businessDoc.data();
+  if (business.status !== "approved") {
+    throw new HttpsError("failed-precondition", "Business is not approved");
+  }
+  requireBusinessService(
+      business,
+      "freight",
+      "This business is not accepting freight shipments",
+  );
+  if (!destinationDoc.exists || destinationDoc.data().isActive === false) {
+    throw new HttpsError("invalid-argument", "Destination is unavailable");
+  }
+  const country = destinationDoc.data();
+  const pricePerKg = mode === "air" ?
+    Number(country.freightAirPricePerKg || 0) :
+    Number(country.freightSeaPricePerKg || 0);
+  if (!Number.isFinite(pricePerKg) || pricePerKg <= 0) {
+    throw new HttpsError(
+        "failed-precondition",
+        `This destination has no ${mode} freight rate yet`,
+    );
+  }
+  return {
+    businessId: resolvedBusinessId,
+    business,
+    country,
+    pricePerKg,
+    deliveryEstimate: deliveryEstimateFromCountry(country),
+  };
+}
+
+exports.createFreightShipmentPaymentIntent = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const {
+        senderName,
+        receiverName,
+        receiverPhone,
+        destinationCountryId,
+        businessId,
+        mode,
+        weightKg,
+        pickupRequested,
+        pickupAddress,
+        pickupBorough,
+        pickupDateTime,
+        useWalletBalance,
+      } = request.data || {};
+
+      if (
+        !senderName ||
+        !receiverName ||
+        !receiverPhone ||
+        !destinationCountryId
+      ) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Sender, receiver, phone, and destination are required",
+        );
+      }
+      requireValidPhoneNumber(receiverPhone, "Receiver phone");
+      const freightMode = normalizeFreightMode(mode);
+      const parcelWeightKg = Number(weightKg || 0);
+      if (!Number.isFinite(parcelWeightKg) || parcelWeightKg <= 0) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Parcel weight must be greater than zero",
+        );
+      }
+
+      const wantsPickup = pickupRequested === true;
+      if (
+        wantsPickup &&
+        (!pickupAddress || !pickupBorough || !pickupDateTime)
+      ) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Pickup address, borough, date, and time are required",
+        );
+      }
+      const pickupAppointment = wantsPickup ?
+        parseFuturePickup(pickupDateTime) :
+        null;
+
+      const db = admin.firestore();
+      const pricingRef = db.collection("shipmentPricing").doc("barrelPickup");
+      const [freightDestination, pricingDoc, userRecord] = await Promise.all([
+        getApprovedFreightDestination({
+          businessId,
+          countryId: destinationCountryId,
+          mode: freightMode,
+        }),
+        pricingRef.get(),
+        admin.auth().getUser(customerUid),
+      ]);
+      const {business, country, pricePerKg, deliveryEstimate} =
+        freightDestination;
+
+      const pricing = barrelPickupPricingFromData(pricingDoc.data());
+      const platformFeePct = servicePlatformFeePctFromPricing(
+          pricingDoc.data(),
+          ["freightPlatformFeePct"],
+      );
+      const pickup = wantsPickup ?
+        pickupFeeForBorough(pricing, String(pickupBorough)) :
+        {miles: 0, fee: 0};
+      const shippingFee =
+        Math.round(parcelWeightKg * pricePerKg * 100) / 100;
+      const shippingFeeCents = Math.round(shippingFee * 100);
+      const total = shippingFee + pickup.fee;
+      if (!Number.isFinite(total) || total <= 0) {
+        throw new HttpsError("failed-precondition", "Invalid shipment total");
+      }
+      const totalCents = Math.round(total * 100);
+
+      const shipmentRef = db.collection("freightShipments").doc();
+      const trackingCode = await generateTrackingCode("FR", "freightShipments");
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      const cleanPickupAddress = wantsPickup ?
+        String(pickupAddress).trim() :
+        pricing.officeAddress;
+      const connectReady =
+        !!business.stripeAccountId && business.payoutsEnabled === true;
+      const payoutFields = servicePayoutFields({
+        grossCents: shippingFeeCents,
+        platformFeePct,
+        connectReady,
+      });
+      let walletAppliedCents = 0;
+      await db.runTransaction(async (transaction) => {
+        if (useWalletBalance === true) {
+          walletAppliedCents = await debitWallet({
+            transaction,
+            customerUid,
+            amountCents: totalCents,
+            shipmentId: shipmentRef.id,
+            trackingCode,
+            reason: "freight_shipment_payment",
+            businessId: freightDestination.businessId,
+            businessName: business.name || DEFAULT_BUSINESS_NAME,
+          });
+        }
+        const chargeCents = totalCents - walletAppliedCents;
+        transaction.set(shipmentRef, {
+          trackingCode,
+          senderName: String(senderName).trim(),
+          senderAddress: cleanPickupAddress,
+          receiverName: String(receiverName).trim(),
+          receiverPhone: String(receiverPhone).trim(),
+          destinationCountryId,
+          destinationCountryName: country.name || "",
+          businessId: freightDestination.businessId,
+          businessName: business.name || DEFAULT_BUSINESS_NAME,
+          ...deliveryEstimate,
+          mode: freightMode,
+          weightKg: parcelWeightKg,
+          pricePerKg,
+          customerUid,
+          customerEmail: userRecord.email || "",
+          pickupRequested: wantsPickup,
+          pickupAddress: cleanPickupAddress,
+          pickupBorough: wantsPickup ?
+            String(pickupBorough) :
+            "Office drop-off",
+          pickupMiles: pickup.miles,
+          pickupFee: pickup.fee,
+          shippingFee,
+          pricingPendingReview: false,
+          ...(pickupAppointment && {
+            pickupDateTime:
+              admin.firestore.Timestamp.fromDate(pickupAppointment),
+          }),
+          price: total,
+          platformFeePct,
+          ...payoutFields,
+          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
+          walletAppliedCents,
+          cardChargeAmount: dollarsFromCents(chargeCents),
+          cardChargeAmountCents: chargeCents,
+          paymentStatus: chargeCents === 0 ? "succeeded" : "pending",
+          status: chargeCents === 0 ? "pending" : "pending_payment",
+          ...(chargeCents === 0 && {paidAt: now}),
+          createdAt: now,
+          updatedAt: now,
+        });
+      });
+
+      const chargeCents = totalCents - walletAppliedCents;
+      if (chargeCents === 0) {
+        if (!SIMULATE_PAYMENTS) {
+          const snapshot = await shipmentRef.get();
+          await issueBusinessPayoutTransfer({
+            ref: shipmentRef,
+            data: snapshot.data() || {},
+            serviceType: "freight_shipment",
+          });
+        }
+        return {
+          shipmentId: shipmentRef.id,
+          trackingCode,
+          simulatedPayment: true,
+          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
+          cardChargeAmount: 0,
+        };
+      }
+
+      if (SIMULATE_PAYMENTS) {
+        await shipmentRef.update({
+          paymentStatus: "succeeded",
+          status: "pending",
+          stripePaymentIntentId: `simulated_freight_${shipmentRef.id}`,
+          paidAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return {
+          shipmentId: shipmentRef.id,
+          trackingCode,
+          simulatedPayment: true,
+          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
+          cardChargeAmount: dollarsFromCents(chargeCents),
+        };
+      }
+
+      let paymentIntent;
+      try {
+        paymentIntent = await createStripePaymentIntent({
+          amount: chargeCents,
+          currency: SHIPMENT_CURRENCY,
+          metadata: {
+            shipmentId: shipmentRef.id,
+            trackingCode,
+            customerUid,
+            destinationCountryId,
+            businessId: freightDestination.businessId,
+            paymentType: "freight_shipment",
+          },
+        });
+        await shipmentRef.update({
+          stripePaymentIntentId: paymentIntent.id,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (error) {
+        await shipmentRef.update({
+          paymentStatus: "failed",
+          status: "cancelled",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        if (walletAppliedCents > 0) {
+          await db.runTransaction(async (transaction) => {
+            await creditWallet({
+              transaction,
+              customerUid,
+              amountCents: walletAppliedCents,
+              shipmentId: shipmentRef.id,
+              trackingCode,
+              reason: "freight_shipment_payment_reversal",
+              businessId: freightDestination.businessId,
+              businessName: business.name || DEFAULT_BUSINESS_NAME,
+            });
+          });
+        }
+        throw error;
+      }
+
+      return {
+        shipmentId: shipmentRef.id,
+        trackingCode,
+        clientSecret: paymentIntent.client_secret,
+        walletAppliedAmount: dollarsFromCents(walletAppliedCents),
+        cardChargeAmount: dollarsFromCents(chargeCents),
+      };
+    },
+);
+
+exports.completeFreightShipmentPayment = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const {shipmentId} = request.data || {};
+      if (!shipmentId) {
+        throw new HttpsError("invalid-argument", "Shipment ID is required");
+      }
+
+      const db = admin.firestore();
+      const shipmentRef = db.collection("freightShipments").doc(shipmentId);
+      const shipmentDoc = await shipmentRef.get();
+      if (!shipmentDoc.exists) {
+        throw new HttpsError("not-found", "Shipment not found");
+      }
+      const shipment = shipmentDoc.data();
+      if (shipment.customerUid !== customerUid) {
+        throw new HttpsError("permission-denied", "Shipment access denied");
+      }
+
+      if (
+        SIMULATE_PAYMENTS ||
+        String(shipment.stripePaymentIntentId || "").startsWith("simulated_")
+      ) {
+        await shipmentRef.update({
+          paymentStatus: "succeeded",
+          status: "pending",
+          paidAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return {
+          success: true,
+          shipmentId,
+          trackingCode: shipment.trackingCode,
+          simulatedPayment: true,
+        };
+      }
+
+      const intent = await retrieveStripePaymentIntent(
+          shipment.stripePaymentIntentId,
+      );
+      if (intent.status !== "succeeded") {
+        await shipmentRef.update({
+          paymentStatus: intent.status,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        throw new HttpsError(
+            "failed-precondition",
+            `Payment is ${intent.status}`,
+        );
+      }
+
+      await shipmentRef.update({
+        paymentStatus: "succeeded",
+        status: "pending",
+        paidAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      await issueBusinessPayoutTransfer({
+        ref: shipmentRef,
+        data: {
+          ...shipment,
+          paymentStatus: "succeeded",
+          status: "pending",
+        },
+        sourceTransaction: stripeSourceTransactionFromIntent(intent),
+        serviceType: "freight_shipment",
+      });
+
+      return {
+        success: true,
+        shipmentId,
+        trackingCode: shipment.trackingCode,
+      };
+    },
+);
+
+exports.cancelPendingFreightShipment = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const {shipmentId} = request.data || {};
+      if (!shipmentId) {
+        throw new HttpsError("invalid-argument", "Shipment ID is required");
+      }
+
+      const db = admin.firestore();
+      const shipmentRef = db.collection("freightShipments").doc(shipmentId);
+      const shipmentDoc = await shipmentRef.get();
+      if (!shipmentDoc.exists) return {success: true, shipmentId};
+      const shipment = shipmentDoc.data();
+      if (shipment.customerUid !== customerUid) {
+        throw new HttpsError("permission-denied", "Shipment access denied");
+      }
+      if (shipment.paymentStatus !== "pending") {
+        return {success: true, shipmentId};
+      }
+
+      if (!SIMULATE_PAYMENTS && shipment.stripePaymentIntentId) {
+        const intent = await retrieveStripePaymentIntent(
+            shipment.stripePaymentIntentId,
+        );
+        if (intent.status === "succeeded" || intent.status === "processing") {
+          await shipmentRef.update({
+            paymentStatus: intent.status,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          return {success: true, shipmentId};
+        }
+      }
+
+      const walletAppliedCents = Number(shipment.walletAppliedCents || 0);
+      if (Number.isFinite(walletAppliedCents) && walletAppliedCents > 0) {
+        await db.runTransaction(async (transaction) => {
+          transaction.update(shipmentRef, {
+            paymentStatus: "cancelled",
+            status: "cancelled",
+            walletAppliedReversed: true,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          await creditWallet({
+            transaction,
+            customerUid,
+            amountCents: walletAppliedCents,
+            shipmentId,
+            trackingCode: shipment.trackingCode,
+            reason: "freight_shipment_payment_reversal",
+            businessId: shipment.businessId,
+            businessName: shipment.businessName,
+          });
+        });
+      } else {
+        await shipmentRef.update({
+          paymentStatus: "cancelled",
+          status: "cancelled",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+      return {success: true, shipmentId};
+    },
+);
+
+exports.notifyFreightShipmentStatus = onDocumentUpdated(
+    "freightShipments/{shipmentId}",
+    async (event) => {
+      if (!statusChanged(event)) return;
+      const after = event.data.after.data() || {};
+      const uid = userIdFrom(after, ["customerUid", "senderUid", "uid"]);
+      await sendPreferenceNotification({
+        uid,
+        preferenceKey: "shipmentActivity",
+        title: "Shipment update",
+        body: `Your freight shipment is now ${after.status || "updated"}.`,
+        data: {
+          type: "freight_shipment_status",
+          shipmentId: event.params.shipmentId,
+          status: after.status || "",
+        },
+      });
     },
 );
 
@@ -5801,6 +10897,7 @@ exports.createCarDepositPaymentIntent = onCall(
     {
       enforceAppCheck: false,
       cors: true,
+      secrets: [stripeSecretKey],
     },
     async (request) => {
       const buyerUid = requireAuth(request);
@@ -5842,6 +10939,17 @@ exports.createCarDepositPaymentIntent = onCall(
         car,
         business: carBusiness.business,
         holdUntilDate,
+      });
+      const platformFeePct = servicePlatformFeePctFromPricing({}, [
+        "carDepositPlatformFeePct",
+      ]);
+      const connectReady =
+        !!carBusiness.business.stripeAccountId &&
+        carBusiness.business.payoutsEnabled === true;
+      const payoutFields = servicePayoutFields({
+        grossCents: holdQuote.amountCents,
+        platformFeePct,
+        connectReady,
       });
 
       const existing = await db
@@ -5887,6 +10995,8 @@ exports.createCarDepositPaymentIntent = onCall(
         paymentType: "reservation_deposit",
         paymentStatus: "pending",
         purchaseStatus: "pending",
+        platformFeePct,
+        ...payoutFields,
         createdAt: now,
         updatedAt: now,
       });
@@ -5948,6 +11058,7 @@ exports.createCarDepositPaymentIntent = onCall(
           businessId: carBusiness.businessId,
           purchaseId: purchaseRef.id,
           holdUntilDate: holdQuote.holdDate.toISOString(),
+          paymentType: "reservation_deposit",
         },
       });
 
@@ -5967,6 +11078,7 @@ exports.createCarViewingReservation = onCall(
     {
       enforceAppCheck: false,
       cors: true,
+      secrets: [stripeSecretKey],
     },
     async (request) => {
       const buyerUid = requireAuth(request);
@@ -6243,6 +11355,7 @@ exports.createCarPurchasePaymentIntent = onCall(
     {
       enforceAppCheck: false,
       cors: true,
+      secrets: [stripeSecretKey],
     },
     async (request) => {
       const buyerUid = requireAuth(request);
@@ -6294,6 +11407,17 @@ exports.createCarPurchasePaymentIntent = onCall(
 
       const purchaseRef = db.collection("carPurchases").doc();
       const purchaseAmountCents = carPriceCents(car);
+      const platformFeePct = servicePlatformFeePctFromPricing({}, [
+        "carPurchasePlatformFeePct",
+      ]);
+      const connectReady =
+        !!carBusiness.business.stripeAccountId &&
+        carBusiness.business.payoutsEnabled === true;
+      const payoutFields = servicePayoutFields({
+        grossCents: purchaseAmountCents,
+        platformFeePct,
+        connectReady,
+      });
       const now = admin.firestore.FieldValue.serverTimestamp();
 
       await db.runTransaction(async (transaction) => {
@@ -6327,6 +11451,8 @@ exports.createCarPurchasePaymentIntent = onCall(
           paymentType: "full_purchase",
           paymentStatus: "pending",
           purchaseStatus: "pending",
+          platformFeePct,
+          ...payoutFields,
           createdAt: now,
           updatedAt: now,
         });
@@ -6393,6 +11519,7 @@ exports.createCarPurchasePaymentIntent = onCall(
             carId,
             buyerUid,
             purchaseId: purchaseRef.id,
+            businessId: carBusiness.businessId,
             paymentType: "full_purchase",
           },
         });
@@ -6429,6 +11556,7 @@ exports.completeCarPurchase = onCall(
     {
       enforceAppCheck: false,
       cors: true,
+      secrets: [stripeSecretKey],
     },
     async (request) => {
       const buyerUid = requireAuth(request);
@@ -6520,6 +11648,16 @@ exports.completeCarPurchase = onCall(
           updatedAt: now,
         });
       });
+      await issueBusinessPayoutTransfer({
+        ref: purchaseRef,
+        data: {
+          ...purchase,
+          paymentStatus: "succeeded",
+          purchaseStatus: "completed",
+        },
+        sourceTransaction: stripeSourceTransactionFromIntent(intent),
+        serviceType: "car_purchase",
+      });
 
       return {
         success: true,
@@ -6532,6 +11670,7 @@ exports.cancelPendingCarPurchase = onCall(
     {
       enforceAppCheck: false,
       cors: true,
+      secrets: [stripeSecretKey],
     },
     async (request) => {
       const buyerUid = requireAuth(request);
@@ -6601,6 +11740,7 @@ exports.completeCarDepositReservation = onCall(
     {
       enforceAppCheck: false,
       cors: true,
+      secrets: [stripeSecretKey],
     },
     async (request) => {
       const buyerUid = requireAuth(request);
@@ -6675,6 +11815,16 @@ exports.completeCarDepositReservation = onCall(
             admin.firestore.FieldValue.increment(1),
           "carBuyerReliability.updatedAt": now,
         }, {merge: true});
+      });
+      await issueBusinessPayoutTransfer({
+        ref: purchaseRef,
+        data: {
+          ...purchase,
+          paymentStatus: "succeeded",
+          purchaseStatus: "reserved",
+        },
+        sourceTransaction: stripeSourceTransactionFromIntent(intent),
+        serviceType: "car_deposit",
       });
 
       return {
@@ -7070,6 +12220,7 @@ exports.createPaidHoldExtensionPaymentIntent = onCall(
     {
       enforceAppCheck: false,
       cors: true,
+      secrets: [stripeSecretKey],
     },
     async (request) => {
       const buyerUid = requireAuth(request);
@@ -7102,6 +12253,21 @@ exports.createPaidHoldExtensionPaymentIntent = onCall(
             "Extension amount is invalid",
         );
       }
+      const businessDoc = purchase.businessId ?
+        await db.collection("businesses").doc(purchase.businessId).get() :
+        null;
+      const business = businessDoc?.exists ? businessDoc.data() : {};
+      const extensionPlatformFeePct = servicePlatformFeePctFromPricing({}, [
+        "holdExtensionPlatformFeePct",
+        "carDepositPlatformFeePct",
+      ]);
+      const extensionConnectReady =
+        !!business.stripeAccountId && business.payoutsEnabled === true;
+      const extensionPayoutFields = servicePayoutFields({
+        grossCents: extraCents,
+        platformFeePct: extensionPlatformFeePct,
+        connectReady: extensionConnectReady,
+      });
 
       async function applyExtension(paymentIntentId, paymentStatus) {
         const now = admin.firestore.FieldValue.serverTimestamp();
@@ -7116,6 +12282,11 @@ exports.createPaidHoldExtensionPaymentIntent = onCall(
           extensionRequestStatus: "paid",
           extensionPaymentStatus: paymentStatus,
           extensionPaymentIntentId: paymentIntentId,
+          extensionPlatformFeePct,
+          extensionPlatformFeeCents: extensionPayoutFields.platformFeeCents,
+          extensionBusinessPayoutCents:
+            extensionPayoutFields.businessPayoutCents,
+          extensionPayoutStatus: extensionPayoutFields.payoutStatus,
           purchaseStatus: "reserved",
           depositForfeitureStatus: "active",
           extensionPaidAt: now,
@@ -7134,12 +12305,18 @@ exports.createPaidHoldExtensionPaymentIntent = onCall(
         metadata: {
           purchaseId,
           buyerUid,
+          businessId: purchase.businessId || "",
           paymentType: "hold_extension",
         },
       });
       await purchaseRef.update({
         extensionPaymentIntentId: paymentIntent.id,
         extensionPaymentStatus: "pending",
+        extensionPlatformFeePct,
+        extensionPlatformFeeCents: extensionPayoutFields.platformFeeCents,
+        extensionBusinessPayoutCents:
+          extensionPayoutFields.businessPayoutCents,
+        extensionPayoutStatus: extensionPayoutFields.payoutStatus,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       return {purchaseId, clientSecret: paymentIntent.client_secret};
@@ -7150,6 +12327,7 @@ exports.completePaidHoldExtensionPayment = onCall(
     {
       enforceAppCheck: false,
       cors: true,
+      secrets: [stripeSecretKey],
     },
     async (request) => {
       const buyerUid = requireAuth(request);
@@ -7172,6 +12350,7 @@ exports.completePaidHoldExtensionPayment = onCall(
         return {success: true, purchaseId};
       }
       const intentId = purchase.extensionPaymentIntentId;
+      let sourceTransaction = "";
       if (!String(intentId || "").startsWith("simulated_")) {
         const intent = await retrieveStripePaymentIntent(intentId);
         if (intent.status !== "succeeded") {
@@ -7184,6 +12363,7 @@ exports.completePaidHoldExtensionPayment = onCall(
               `Payment is ${intent.status}`,
           );
         }
+        sourceTransaction = stripeSourceTransactionFromIntent(intent);
       }
       const now = admin.firestore.FieldValue.serverTimestamp();
       await purchaseRef.update({
@@ -7200,6 +12380,22 @@ exports.completePaidHoldExtensionPayment = onCall(
         depositForfeitureStatus: "active",
         extensionPaidAt: now,
         updatedAt: now,
+      });
+      await issueBusinessPayoutTransfer({
+        ref: purchaseRef,
+        data: {
+          ...purchase,
+          extensionPaymentStatus: "succeeded",
+          extensionPayoutStatus: purchase.extensionPayoutStatus,
+        },
+        sourceTransaction,
+        serviceType: "hold_extension",
+        payoutCents: Number(purchase.extensionBusinessPayoutCents || 0),
+        idempotencySuffix: `${purchaseId}_hold_extension_${intentId}`,
+        payoutStatusField: "extensionPayoutStatus",
+        payoutTransferIdField: "extensionPayoutTransferId",
+        paidOutAtField: "extensionPaidOutAt",
+        payoutErrorField: "extensionPayoutError",
       });
       return {success: true, purchaseId};
     },

@@ -95,6 +95,7 @@ const businessPermissionOptions = [
 
 const serviceOptions = [
   {id: "barrelShipping", label: "Barrel shipping"},
+  {id: "sharedBarrels", label: "Shared barrels"},
   {id: "carSales", label: "Car sales"},
   {id: "carTransport", label: "Car transport"},
   {id: "carParking", label: "Car parking"},

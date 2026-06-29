@@ -6,10 +6,64 @@
     "/databases/(default)/documents";
   var defaultFeatured = {
     enabled: true,
-    heading: "Featured businesses",
-    subheading: "A curated group of approved partners with marketing-safe profiles.",
+    heading: "Entreprises mises en avant",
+    subheading: "Une sélection de partenaires approuvés avec des profils publics validés.",
     maxToShow: 6,
   };
+  var textTranslations = {
+    "Trusted service marketplace": "Marketplace de services de confiance",
+    "Find the right business for the road home.": "Trouvez la bonne entreprise pour la route vers le pays.",
+    "Laawol Digital is a platform where registered businesses offer diaspora services — shipping, cars, sourcing, food, and professional help. We bring the pricing, tracking, support, and accountability into one place so customers can choose with confidence.": "Laawol Digital est une plateforme où des entreprises inscrites proposent des services pour la diaspora : expédition, voitures, approvisionnement, restauration et aide professionnelle. Nous rassemblons les prix, le suivi, l’assistance et la responsabilité au même endroit pour que les clients choisissent en confiance.",
+    "Get the app": "Télécharger l’application",
+    "Explore services": "Découvrir les services",
+    "Featured businesses": "Entreprises mises en avant",
+    "A curated group of approved partners with marketing-safe profiles.": "Une sélection de partenaires approuvés avec des profils publics validés.",
+    "Businesses register on Laawol to offer the services they are good at. You see their routes, pricing, service details, and status in one place, with platform support if something needs attention.": "Les entreprises s’inscrivent sur Laawol pour proposer les services qu’elles maîtrisent. Vous voyez leurs trajets, leurs prix, leurs détails de service et leurs statuts au même endroit, avec l’assistance de la plateforme si un point demande de l’attention.",
+    "Featured business": "Entreprise mise en avant",
+    "We are very Happy with Laawol Digital": "Nous sommes très satisfaits de Laawol Digital",
+  };
+  var serviceTranslations = {
+    barrelShipping: "Expédition de barils",
+    "barrel Shipping": "Expédition de barils",
+    sharedBarrels: "Barils partagés",
+    "shared Barrels": "Barils partagés",
+    carSales: "Vente de voitures",
+    "car Sales": "Vente de voitures",
+    carParking: "Stationnement de voitures",
+    "car Parking": "Stationnement de voitures",
+    carTransport: "Transport de voitures",
+    "car Transport": "Transport de voitures",
+  };
+  var serviceEnglishLabels = {
+    barrelShipping: "Barrel shipping",
+    "barrel Shipping": "Barrel shipping",
+    "Expédition de barils": "Barrel shipping",
+    sharedBarrels: "Shared barrels",
+    "shared Barrels": "Shared barrels",
+    "Barils partagés": "Shared barrels",
+    carSales: "Car sales",
+    "car Sales": "Car sales",
+    "Vente de voitures": "Car sales",
+    carParking: "Car parking",
+    "car Parking": "Car parking",
+    "Stationnement de voitures": "Car parking",
+    carTransport: "Car transport",
+    "car Transport": "Car transport",
+    "Transport de voitures": "Car transport",
+  };
+
+  function localizeText(value) {
+    var text = String(value || "");
+    if (window.LaawolI18n && typeof window.LaawolI18n.localize === "function") {
+      if (typeof window.LaawolI18n.getLang === "function" && window.LaawolI18n.getLang() === "en" && serviceEnglishLabels[text]) {
+        return serviceEnglishLabels[text];
+      }
+      var globalText = window.LaawolI18n.localize(text);
+      if (typeof window.LaawolI18n.getLang === "function" && window.LaawolI18n.getLang() === "en") return globalText;
+      if (globalText !== text) return globalText;
+    }
+    return textTranslations[text] || serviceTranslations[text] || text;
+  }
 
   function valueOf(field) {
     if (!field || typeof field !== "object") return undefined;
@@ -60,7 +114,7 @@
   }
 
   function setGradientHeadline(node, value) {
-    var text = String(value || "").trim();
+    var text = localizeText(value).trim();
     if (!text) return;
 
     var punctuation = "";
@@ -147,7 +201,7 @@
     });
   }
 
-  function applyHome(home) {
+  function applyAccueil(home) {
     document.querySelectorAll("[data-cms]").forEach(function (node) {
       var path = node.getAttribute("data-cms") || "";
       var value = getPath(home, path);
@@ -155,7 +209,7 @@
         if (path === "hero.headline") {
           setGradientHeadline(node, value);
         } else {
-          node.textContent = String(value);
+          node.textContent = localizeText(value);
         }
       }
     });
@@ -182,8 +236,8 @@
       if (section) section.hidden = true;
       return;
     }
-    setText("[data-cms='featured.heading']", featured.heading);
-    setText("[data-cms='featured.subheading']", featured.subheading);
+    setText("[data-cms='featured.heading']", localizeText(featured.heading));
+    setText("[data-cms='featured.subheading']", localizeText(featured.subheading));
     grid.innerHTML = "";
     businesses.forEach(function (business) {
       var card = document.createElement("article");
@@ -196,14 +250,14 @@
 
       var body = document.createElement("div");
       var title = document.createElement("h3");
-      title.textContent = business.displayName || "Featured business";
+      title.textContent = business.displayName || "Entreprise mise en avant";
       var blurb = document.createElement("p");
-      blurb.textContent = business.blurb || "";
+      blurb.textContent = localizeText(business.blurb || "");
       var chips = document.createElement("div");
       chips.className = "partner-chips";
       (business.services || []).slice(0, 4).forEach(function (service) {
         var chip = document.createElement("span");
-        chip.textContent = String(service).replace(/([A-Z])/g, " $1").trim();
+        chip.textContent = localizeText(String(service).replace(/([A-Z])/g, " $1").trim());
         chips.appendChild(chip);
       });
 
@@ -216,6 +270,9 @@
     });
     section.hidden = false;
     refreshAnimations();
+    if (window.LaawolI18n && typeof window.LaawolI18n.refresh === "function") {
+      window.LaawolI18n.refresh();
+    }
   }
 
   Promise.all([
@@ -224,7 +281,7 @@
   ]).then(function (results) {
     var home = results[0] || {};
     var contact = results[1] || {};
-    applyHome(home);
+    applyAccueil(home);
     applyContact(contact);
     refreshAnimations();
     var featured = home.featured || defaultFeatured;

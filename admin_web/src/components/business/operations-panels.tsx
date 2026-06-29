@@ -40,7 +40,7 @@ import {
 } from "lucide-react";
 
 import { db, functions, storage } from "@/lib/firebase";
-import { formatDate, formatMoney, text } from "@/lib/format";
+import { currentLanguage, formatDate, formatMoney, text } from "@/lib/format";
 import { US_STATE_OPTIONS, citiesForState, withSelected } from "@/lib/us-locations";
 import type { FirestoreRow } from "@/types/admin";
 
@@ -122,24 +122,51 @@ type TransportDraft = {
   status: string;
 };
 
+type PoolDraft = {
+  origin: "businessHeld" | "dropOff";
+  destinationCountryId: string;
+  totalShares: string;
+  reservedShares: string;
+  maxJoiners: string;
+  approvalMode: "approval" | "auto";
+  shipMode: "sea" | "air";
+  joinDeadline: string;
+  senderName: string;
+  senderAddress: string;
+  receiverName: string;
+  receiverPhone: string;
+  contentsDescription: string;
+  attestedWeightKg: string;
+  contentsAttested: boolean;
+  prohibitedItemsAcknowledged: boolean;
+  sharedLiabilityAccepted: boolean;
+};
+
+type PoolRolloverDraft = {
+  joinDeadline: string;
+  maxJoiners: string;
+  note: string;
+};
+
 const countries = [
-  { id: "guinea", name: "Guinea", code: "GN" },
-  { id: "senegal", name: "Senegal", code: "SN" },
-  { id: "mali", name: "Mali", code: "ML" },
-  { id: "c-te-d-ivoire", name: "Cote d'Ivoire", code: "CI" },
-  { id: "gambia", name: "Gambia", code: "GM" },
-  { id: "sierra_leone", name: "Sierra Leone", code: "SL" },
-  { id: "liberia", name: "Liberia", code: "LR" },
-  { id: "ghana", name: "Ghana", code: "GH" },
-  { id: "nigeria", name: "Nigeria", code: "NG" },
-  { id: "guinea_bissau", name: "Guinea-Bissau", code: "GW" },
-  { id: "mauritania", name: "Mauritania", code: "MR" },
-  { id: "togo", name: "Togo", code: "TG" },
-  { id: "benin", name: "Benin", code: "BJ" },
-  { id: "burkina_faso", name: "Burkina Faso", code: "BF" },
-  { id: "niger", name: "Niger", code: "NE" },
-  { id: "cameroon", name: "Cameroon", code: "CM" },
+  { id: "guinea", name: "Guinea", nameFr: "Guinée", code: "GN" },
+  { id: "senegal", name: "Senegal", nameFr: "Sénégal", code: "SN" },
+  { id: "mali", name: "Mali", nameFr: "Mali", code: "ML" },
+  { id: "c-te-d-ivoire", name: "Cote d'Ivoire", nameFr: "Côte d’Ivoire", code: "CI" },
+  { id: "gambia", name: "Gambia", nameFr: "Gambie", code: "GM" },
+  { id: "sierra_leone", name: "Sierra Leone", nameFr: "Sierra Leone", code: "SL" },
+  { id: "liberia", name: "Liberia", nameFr: "Libéria", code: "LR" },
+  { id: "ghana", name: "Ghana", nameFr: "Ghana", code: "GH" },
+  { id: "nigeria", name: "Nigeria", nameFr: "Nigéria", code: "NG" },
+  { id: "guinea_bissau", name: "Guinea-Bissau", nameFr: "Guinée-Bissau", code: "GW" },
+  { id: "mauritania", name: "Mauritania", nameFr: "Mauritanie", code: "MR" },
+  { id: "togo", name: "Togo", nameFr: "Togo", code: "TG" },
+  { id: "benin", name: "Benin", nameFr: "Bénin", code: "BJ" },
+  { id: "burkina_faso", name: "Burkina Faso", nameFr: "Burkina Faso", code: "BF" },
+  { id: "niger", name: "Niger", nameFr: "Niger", code: "NE" },
+  { id: "cameroon", name: "Cameroon", nameFr: "Cameroun", code: "CM" },
 ];
+const sharedBarrelShareWeightCapKg = 20;
 
 function countryFlag(code: string) {
   const cc = (code || "").trim().toUpperCase();
@@ -162,6 +189,96 @@ const featureOptions = ["backup_camera", "bluetooth", "leather_seats", "sunroof"
 
 const ACRONYMS = new Set(["suv", "cvt", "vin", "fwd", "rwd", "awd", "4wd"]);
 function optionLabel(value: string) {
+  const labels: Record<"en" | "fr", Record<string, string>> = {
+    en: {
+      automatic: "Automatic",
+      backup_camera: "Backup camera",
+      beige: "Beige",
+      black: "Black",
+      blind_spot: "Blind spot",
+      bluetooth: "Bluetooth",
+      brown: "Brown",
+      certified: "Certified",
+      convertible: "Convertible",
+      coupe: "Coupe",
+      diesel: "Diesel",
+      electric: "Electric",
+      gas: "Gas",
+      gold: "Gold",
+      gray: "Gray",
+      green: "Green",
+      hatchback: "Hatchback",
+      heated_seats: "Heated seats",
+      hybrid: "Hybrid",
+      keyless_entry: "Keyless entry",
+      leather_seats: "Leather seats",
+      manual: "Manual",
+      navigation: "Navigation",
+      new: "New",
+      orange: "Orange",
+      other: "Other",
+      plug_in_hybrid: "Plug-in hybrid",
+      purple: "Purple",
+      red: "Red",
+      remote_start: "Remote start",
+      salvage: "Salvage",
+      sedan: "Sedan",
+      silver: "Silver",
+      sunroof: "Sunroof",
+      third_row: "Third row",
+      truck: "Truck",
+      used: "Used",
+      van: "Van",
+      wagon: "Wagon",
+      white: "White",
+      yellow: "Yellow",
+    },
+    fr: {
+      automatic: "Automatique",
+      backup_camera: "Caméra de recul",
+      beige: "Beige",
+      black: "Noir",
+      blind_spot: "Détection angle mort",
+      bluetooth: "Bluetooth",
+      brown: "Marron",
+      certified: "Certifié",
+      convertible: "Cabriolet",
+      coupe: "Coupé",
+      diesel: "Diesel",
+      electric: "Électrique",
+      gas: "Essence",
+      gold: "Or",
+      gray: "Gris",
+      green: "Vert",
+      hatchback: "Hatchback",
+      heated_seats: "Sièges chauffants",
+      hybrid: "Hybride",
+      keyless_entry: "Accès sans clé",
+      leather_seats: "Sièges en cuir",
+      manual: "Manuelle",
+      navigation: "Navigation",
+      new: "Neuf",
+      orange: "Orange",
+      other: "Autre",
+      plug_in_hybrid: "Hybride rechargeable",
+      purple: "Violet",
+      red: "Rouge",
+      remote_start: "Démarrage à distance",
+      salvage: "Accidenté",
+      sedan: "Berline",
+      silver: "Argent",
+      sunroof: "Toit ouvrant",
+      third_row: "Troisième rangée",
+      truck: "Pick-up",
+      used: "Occasion",
+      van: "Van",
+      wagon: "Break",
+      white: "Blanc",
+      yellow: "Jaune",
+    },
+  };
+  const language = currentLanguage();
+  if (labels[language][value]) return labels[language][value];
   if (!value) return "";
   if (ACRONYMS.has(value.toLowerCase())) return value.toUpperCase();
   return value
@@ -237,6 +354,45 @@ const emptyTransportDraft: TransportDraft = {
   price: "",
   status: "pending",
 };
+
+function futureDateInput(days = 14) {
+  const date = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  return date.toISOString().slice(0, 10);
+}
+
+function defaultPoolDraft(destinationCountryId = ""): PoolDraft {
+  return {
+    origin: "businessHeld",
+    destinationCountryId,
+    totalShares: "2",
+    reservedShares: "0",
+    maxJoiners: "2",
+    approvalMode: "approval",
+    shipMode: "sea",
+    joinDeadline: futureDateInput(),
+    senderName: "",
+    senderAddress: "",
+    receiverName: "",
+    receiverPhone: "",
+    contentsDescription: "",
+    attestedWeightKg: "",
+    contentsAttested: false,
+    prohibitedItemsAcknowledged: false,
+    sharedLiabilityAccepted: false,
+  };
+}
+
+function defaultPoolRolloverDraft(row?: FirestoreRow | null): PoolRolloverDraft {
+  const activeJoiners = publicParticipantRows(row?.publicParticipants)
+    .filter((participant) => ["requested", "accepted"].includes(participant.joinStatus) && participant.role === "joiner")
+    .length;
+  const openShares = Math.max(1, Number(row?.openShares ?? 1));
+  return {
+    joinDeadline: futureDateInput(),
+    maxJoiners: String(Math.max(activeJoiners + 1, activeJoiners + openShares)),
+    note: "",
+  };
+}
 
 export function DestinationsPanel({ businessId }: PanelProps) {
   const destinations = useBusinessSubcollectionRows(
@@ -424,7 +580,7 @@ export function DestinationsPanel({ businessId }: PanelProps) {
                 <label className="lst-field wide"><span>Country</span>
                   <select value={draft.countryId} disabled={Boolean(editingId)} onChange={(event) => setDraft((value) => ({ ...value, countryId: event.target.value }))}>
                     {(editingId ? countries : availableCountries).map((country) => (
-                      <option key={country.id} value={country.id}>{countryFlag(country.code)} {country.name}</option>
+                      <option key={country.id} value={country.id}>{countryFlag(country.code)} {countryName(country.id)}</option>
                     ))}
                   </select>
                 </label>
@@ -999,6 +1155,7 @@ function statusTone(status: string) {
 }
 
 const barrelStatuses = ["pending_payment", "pending", "in_transit", "ready_for_pickup", "completed", "cancelled"];
+const poolStatuses = ["open", "partially_filled", "full", "pending_seal", "sealed", "cancelled", "expired"];
 
 function barrelTone(status: string) {
   switch (status) {
@@ -1009,10 +1166,58 @@ function barrelTone(status: string) {
   }
 }
 
+function publicParticipantRows(value: unknown) {
+  if (!value || typeof value !== "object") return [];
+  return Object.entries(value as Record<string, Record<string, unknown>>).map(([uid, item]) => ({
+    uid,
+    role: text(item.role, "joiner"),
+    sharesClaimed: Number(item.sharesClaimed ?? 0),
+    joinStatus: text(item.joinStatus, "requested"),
+    paymentStatus: text(item.paymentStatus, "pending"),
+  }));
+}
+
+function shareSummary(openShares: unknown, totalShares: unknown) {
+  const open = Number(openShares ?? 0);
+  const total = Number(totalShares ?? 0);
+  return currentLanguage() === "fr"
+    ? `${open} ouvertes / ${total} totales`
+    : `${open} open / ${total} total`;
+}
+
+function shareRequestSummary(shares: unknown) {
+  const count = Number(shares ?? 0);
+  return currentLanguage() === "fr"
+    ? `${count} part${count === 1 ? "" : "s"} demandée${count === 1 ? "" : "s"}`
+    : `${count} share${count === 1 ? "" : "s"} requested`;
+}
+
+function deadlineHasPassed(value: unknown) {
+  if (!value) return false;
+  if (typeof value === "object" && typeof (value as { toMillis?: unknown }).toMillis === "function") {
+    return ((value as { toMillis: () => number }).toMillis()) <= Date.now();
+  }
+  if (typeof value === "object" && typeof (value as { toDate?: unknown }).toDate === "function") {
+    return ((value as { toDate: () => Date }).toDate()).getTime() <= Date.now();
+  }
+  const parsed = new Date(String(value)).getTime();
+  return Number.isFinite(parsed) && parsed <= Date.now();
+}
+
 export function BarrelsPanel({ businessId }: PanelProps) {
   const shipments = useBusinessRows("barrelShipments", businessId, Boolean(businessId), 500);
+  const pools = useBusinessRows("barrelPools", businessId, Boolean(businessId), 500);
+  const balanceRequests = useBusinessRows("barrelPoolBalanceRequests", businessId, Boolean(businessId), 500);
+  const destinations = useBusinessSubcollectionRows("destinationCountries", businessId, Boolean(businessId), 100);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  const [poolFilter, setPoolFilter] = useState("all");
+  const [poolFormOpen, setPoolFormOpen] = useState(false);
+  const [poolDraft, setPoolDraft] = useState<PoolDraft>(() => defaultPoolDraft());
+  const [adjustingPool, setAdjustingPool] = useState<FirestoreRow | null>(null);
+  const [adjustDraft, setAdjustDraft] = useState({ totalShares: "2", inspectionNote: "" });
+  const [rollingPool, setRollingPool] = useState<FirestoreRow | null>(null);
+  const [rollDraft, setRollDraft] = useState<PoolRolloverDraft>(() => defaultPoolRolloverDraft());
   const [message, setMessage] = useState("");
   const [busyId, setBusyId] = useState("");
   const [copied, setCopied] = useState("");
@@ -1024,6 +1229,21 @@ export function BarrelsPanel({ businessId }: PanelProps) {
   const filteredRows = useMemo(
     () => (filter === "all" ? searched : searched.filter((row) => text(row.status, "") === filter)),
     [searched, filter],
+  );
+  const searchedPools = useMemo(
+    () => filterRows(pools.rows, search, ["trackingCode", "businessName", "destinationCountryName", "status", "origin", "shipMode"]),
+    [pools.rows, search],
+  );
+  const filteredPools = useMemo(
+    () => (poolFilter === "all" ? searchedPools : searchedPools.filter((row) => text(row.status, "") === poolFilter)),
+    [poolFilter, searchedPools],
+  );
+  const activeDestinations = useMemo(
+    () =>
+      destinations.rows
+        .filter((row) => row.isActive !== false && Number(row.barrelShippingPrice) > 0)
+        .sort((a, b) => countryName(a.id).localeCompare(countryName(b.id))),
+    [destinations.rows],
   );
 
   async function run(id: string, label: string, action: () => Promise<unknown>) {
@@ -1041,6 +1261,142 @@ export function BarrelsPanel({ businessId }: PanelProps) {
 
   function updateStatus(row: FirestoreRow, status: string) {
     return setDoc(doc(db, "barrelShipments", row.id), { businessId, status, updatedAt: serverTimestamp() }, { merge: true });
+  }
+  function sealPool(row: FirestoreRow, shipUnderfilled = false) {
+    return httpsCallable(functions, "sealBarrelPool")({ poolId: row.id, shipUnderfilled });
+  }
+  function cancelPool(row: FirestoreRow) {
+    return httpsCallable(functions, "cancelBarrelPool")({ poolId: row.id });
+  }
+  function decideJoin(row: FirestoreRow, participantUid: string, decision: "accept" | "reject") {
+    return httpsCallable(functions, "decideBarrelPoolJoin")({ poolId: row.id, participantUid, decision });
+  }
+  function markBalanceCollected(requestId: string, note: string) {
+    return httpsCallable(functions, "markBarrelPoolBalanceCollected")({
+      requestId,
+      note,
+    });
+  }
+  function openAdjustPool(row: FirestoreRow) {
+    setAdjustingPool(row);
+    setAdjustDraft({
+      totalShares: numberString(row.totalShares) || "2",
+      inspectionNote: "",
+    });
+    setMessage("");
+  }
+  function closeAdjustPool() {
+    setAdjustingPool(null);
+    setAdjustDraft({ totalShares: "2", inspectionNote: "" });
+  }
+  function openRollPool(row: FirestoreRow) {
+    setRollingPool(row);
+    setRollDraft(defaultPoolRolloverDraft(row));
+    setMessage("");
+  }
+  function closeRollPool() {
+    setRollingPool(null);
+    setRollDraft(defaultPoolRolloverDraft());
+  }
+  async function savePoolAdjustment() {
+    if (!adjustingPool) throw new Error("Choose a shared barrel pool.");
+    const totalShares = Number(adjustDraft.totalShares);
+    const takenShares = Number(adjustingPool.takenShares ?? 0);
+    if (!Number.isInteger(totalShares) || totalShares < 2 || totalShares > 4) {
+      throw new Error("Adjusted total shares must be between 2 and 4.");
+    }
+    if (totalShares < takenShares) {
+      throw new Error("Adjusted total shares cannot be below reserved shares.");
+    }
+    if (!adjustDraft.inspectionNote.trim()) {
+      throw new Error("Inspection note is required.");
+    }
+    await httpsCallable(functions, "adjustBarrelPoolCapacity")({
+      poolId: adjustingPool.id,
+      totalShares,
+      inspectionNote: adjustDraft.inspectionNote.trim(),
+    });
+    closeAdjustPool();
+  }
+  async function savePoolRollover() {
+    if (!rollingPool) throw new Error("Choose a shared barrel pool.");
+    const maxJoiners = Number(rollDraft.maxJoiners);
+    const deadlineMillis = new Date(rollDraft.joinDeadline).getTime();
+    if (!Number.isFinite(deadlineMillis) || deadlineMillis <= Date.now()) {
+      throw new Error("Choose a future matching deadline.");
+    }
+    if (!Number.isInteger(maxJoiners) || maxJoiners < 1) {
+      throw new Error("Enter at least 1 max joiner.");
+    }
+    await httpsCallable(functions, "rollBarrelPoolToBusinessHeld")({
+      poolId: rollingPool.id,
+      joinDeadline: rollDraft.joinDeadline,
+      maxJoiners,
+      note: rollDraft.note.trim(),
+    });
+    closeRollPool();
+  }
+  function openPoolForm() {
+    setPoolDraft(defaultPoolDraft(activeDestinations[0]?.id ?? ""));
+    setMessage("");
+    setPoolFormOpen(true);
+  }
+  function closePoolForm() {
+    setPoolFormOpen(false);
+    setPoolDraft(defaultPoolDraft(activeDestinations[0]?.id ?? ""));
+  }
+  async function savePool() {
+    if (!businessId) throw new Error("Business ID is required.");
+    if (!poolDraft.destinationCountryId) throw new Error("Choose a destination.");
+    const totalShares = Number(poolDraft.totalShares);
+    const reservedShares = Number(poolDraft.reservedShares);
+    const maxJoiners = Number(poolDraft.maxJoiners);
+    const minimumReserved = poolDraft.origin === "dropOff" ? 1 : 0;
+    if (!Number.isInteger(totalShares) || totalShares < 2 || totalShares > 4) {
+      throw new Error("Total shares must be between 2 and 4.");
+    }
+    if (!Number.isInteger(reservedShares) || reservedShares < minimumReserved || reservedShares >= totalShares) {
+      throw new Error(poolDraft.origin === "dropOff" ? "Drop-off pools need 1 reserved share and at least 1 open share." : "Reserved shares must leave at least 1 share open.");
+    }
+    if (!Number.isInteger(maxJoiners) || maxJoiners < 1) {
+      throw new Error("Enter at least 1 max joiner.");
+    }
+    if (poolDraft.origin === "dropOff" && (!poolDraft.senderName.trim() || !poolDraft.receiverName.trim() || !poolDraft.receiverPhone.trim())) {
+      throw new Error("Sender, receiver, and receiver phone are required for drop-off pools.");
+    }
+    if (poolDraft.origin === "dropOff") {
+      const weightKg = Number(poolDraft.attestedWeightKg || 0);
+      if (!poolDraft.contentsDescription.trim()) {
+        throw new Error("Contents note is required for drop-off pools.");
+      }
+      if (!Number.isFinite(weightKg) || weightKg <= 0 || weightKg > reservedShares * sharedBarrelShareWeightCapKg) {
+        throw new Error("Drop-off weight must fit the reserved shares.");
+      }
+      if (!poolDraft.contentsAttested || !poolDraft.prohibitedItemsAcknowledged || !poolDraft.sharedLiabilityAccepted) {
+        throw new Error("Confirm contents, prohibited items, and shared liability before starting the pool.");
+      }
+    }
+    await httpsCallable(functions, "createBusinessBarrelPool")({
+      businessId,
+      destinationCountryId: poolDraft.destinationCountryId,
+      origin: poolDraft.origin,
+      totalShares,
+      reservedShares,
+      maxJoiners,
+      approvalMode: poolDraft.approvalMode,
+      shipMode: poolDraft.shipMode,
+      joinDeadline: poolDraft.joinDeadline,
+      senderName: poolDraft.senderName,
+      senderAddress: poolDraft.senderAddress,
+      receiverName: poolDraft.receiverName,
+      receiverPhone: poolDraft.receiverPhone,
+      contentsDescription: poolDraft.contentsDescription,
+      attestedWeightKg: Number(poolDraft.attestedWeightKg || 0),
+      contentsAttested: poolDraft.contentsAttested,
+      prohibitedItemsAcknowledged: poolDraft.prohibitedItemsAcknowledged,
+      sharedLiabilityAccepted: poolDraft.sharedLiabilityAccepted,
+    });
+    closePoolForm();
   }
   async function copyTracking(code: string) {
     try {
@@ -1061,6 +1417,9 @@ export function BarrelsPanel({ businessId }: PanelProps) {
       </header>
 
       {shipments.error && <div className="error-box">{shipments.error}</div>}
+      {pools.error && <div className="error-box">{pools.error}</div>}
+      {balanceRequests.error && <div className="error-box">{balanceRequests.error}</div>}
+      {destinations.error && <div className="error-box">{destinations.error}</div>}
 
       <div className="lst-toolbar">
         <div className="lst-search">
@@ -1074,6 +1433,331 @@ export function BarrelsPanel({ businessId }: PanelProps) {
           <Download size={15} /> Export CSV
         </button>
       </div>
+
+      <div className="lst-subsection">
+        <div className="lst-subhead">
+          <div>
+            <h3>Shared barrel pools</h3>
+            <p>{pools.rows.length === 0 ? "Open pooled barrels, approve joiners, and seal full barrels into tracked shipments." : `${pools.rows.length} pool${pools.rows.length === 1 ? "" : "s"}`}</p>
+          </div>
+          <div className="pool-head-actions">
+            <button className="lst-add" type="button" disabled={activeDestinations.length === 0 || Boolean(busyId)} onClick={openPoolForm}>
+              <Plus size={16} /> Start pool
+            </button>
+            <select className="lst-status-select" value={poolFilter} onChange={(event) => setPoolFilter(event.target.value)}>
+              <option value="all">All pool statuses</option>
+              {poolStatuses.map((status) => (<option key={status} value={status}>{statusLabel(status)}</option>))}
+            </select>
+          </div>
+        </div>
+        {activeDestinations.length === 0 && (
+          <div className="pool-config-note">Add an active barrel destination with a price before starting a shared pool.</div>
+        )}
+        {pools.loading && <LoadingState />}
+        {!pools.loading && pools.rows.length === 0 && (
+          <div className="lst-empty compact">
+            <div className="lst-empty-icon"><Package size={26} /></div>
+            <h3>No shared barrel pools yet</h3>
+            <p>Customer-posted, drop-off, and business-held consolidation pools will appear here.</p>
+          </div>
+        )}
+        {!pools.loading && pools.rows.length > 0 && filteredPools.length === 0 && (
+          <EmptyState text="No shared barrel pools match this filter." />
+        )}
+        <div className="pur-grid">
+          {filteredPools.map((row) => {
+            const status = text(row.status, "open");
+            const tracking = text(row.trackingCode, row.id);
+            const participants = publicParticipantRows(row.publicParticipants);
+            const requested = participants.filter((item) => item.joinStatus === "requested");
+            const canSeal = ["full", "pending_seal"].includes(status);
+            const canSealUnderfilled = ["open", "partially_filled"].includes(status) && Number(row.acceptedShares ?? 0) > 0 && Number(row.openShares ?? 0) > 0 && deadlineHasPassed(row.joinDeadline);
+            const canRollToBusinessHeld = ["open", "partially_filled"].includes(status) && text(row.origin, "") !== "businessHeld" && Number(row.openShares ?? 0) > 0 && deadlineHasPassed(row.joinDeadline);
+            const canAdjust = ["open", "partially_filled", "full", "pending_seal"].includes(status);
+            const pendingBalances = balanceRequests.rows.filter((request) =>
+              text(request.barrelPoolId, "") === row.id &&
+              text(request.status, "pending") === "pending",
+            );
+            const lastAdjustment = row.lastShareAdjustment && typeof row.lastShareAdjustment === "object"
+              ? row.lastShareAdjustment as Record<string, unknown>
+              : null;
+            const busy = busyId === `pool-${row.id}`;
+            return (
+              <article className="pur-card" key={`pool-${row.id}`}>
+                <div className="pur-head">
+                  <div className="pur-title">
+                    <button className="bar-track" type="button" title="Copy tracking code" onClick={() => copyTracking(tracking)}>
+                      {tracking} <Copy size={13} />
+                    </button>
+                    <span className="pur-kind">Shared barrel pool</span>
+                  </div>
+                  <span className={`lst-badge ${barrelTone(status)}`}>{statusLabel(status)}</span>
+                </div>
+                <div className="pur-info">
+                  <div><span>Destination</span><b>{text(row.destinationCountryName, "—")}</b></div>
+                  <div><span>Shares</span><b>{shareSummary(row.openShares, row.totalShares)}</b></div>
+                  <div><span>Accepted</span><b>{Number(row.acceptedShares ?? 0)}</b></div>
+                  <div><span>Requested</span><b>{Number(row.requestedShares ?? 0)}</b></div>
+                  <div><span>Per share</span><b>{formatMoney(row.pricePerShare)}</b></div>
+                  <div><span>Deposit</span><b>{formatMoney(row.depositPerShare)}</b></div>
+                  <div><span>Origin</span><b>{statusLabel(text(row.origin, "customerPosted"))}</b></div>
+                  <div><span>Deadline</span><b>{formatDate(row.joinDeadline)}</b></div>
+                  {lastAdjustment && <div><span>Last inspection</span><b>{shareSummary(lastAdjustment.openShares, lastAdjustment.totalShares)}</b></div>}
+                  {Number(row.grossAmount ?? 0) > 0 && <div><span>Gross</span><b>{formatMoney(row.grossAmount)}</b></div>}
+                  {Number(row.businessPayoutAmount ?? 0) > 0 && <div><span>Business payout</span><b>{formatMoney(row.businessPayoutAmount)}</b></div>}
+                  {Number(row.platformCommissionAmount ?? 0) > 0 && <div><span>Platform fee</span><b>{formatMoney(row.platformCommissionAmount)}</b></div>}
+                </div>
+                {lastAdjustment && text(lastAdjustment.inspectionNote, "") && (
+                  <div className="pur-notice">
+                    <Pencil size={15} /> Inspection note: {text(lastAdjustment.inspectionNote, "")}
+                  </div>
+                )}
+                {requested.length > 0 && (
+                  <div className="pool-requests">
+                    {requested.map((participant) => (
+                      <div className="pool-request" key={participant.uid}>
+                        <span>{shareRequestSummary(participant.sharesClaimed)}</span>
+                        <div className="row-actions">
+                          <button className="lst-btn" disabled={busy} type="button" onClick={() => run(`pool-${row.id}`, "Joiner accepted.", () => decideJoin(row, participant.uid, "accept"))}>Approve</button>
+                          <button className="lst-btn ghost" disabled={busy} type="button" onClick={() => run(`pool-${row.id}`, "Joiner rejected.", () => decideJoin(row, participant.uid, "reject"))}>Reject</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {pendingBalances.length > 0 && (
+                  <div className="pool-requests">
+                    {pendingBalances.map((request) => (
+                      <div className="pool-request" key={request.id}>
+                        <span>
+                          {text(request.customerName ?? request.customerEmail ?? request.participantUid, "Customer")} · {formatMoney(request.amount, text(request.currency, "USD"))} · {statusLabel(request.status)}
+                          {Number(request.underfilledAmount ?? 0) > 0 && (
+                            <> · <span>Underfilled</span> {formatMoney(request.underfilledAmount, text(request.currency, "USD"))}</>
+                          )}
+                        </span>
+                        <div className="row-actions">
+                          <button
+                            className="lst-btn"
+                            disabled={busy}
+                            type="button"
+                            onClick={() => {
+                              const note = window.prompt("Collection note (optional)") || "";
+                              run(`pool-${row.id}`, "Shared barrel balance collected.", () => markBalanceCollected(request.id, note));
+                            }}
+                          >
+                            <CheckCircle2 size={15} /> Mark collected
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="pur-actions">
+                  <button className="lst-btn" disabled={!canSeal || busy} type="button" onClick={() => run(`pool-${row.id}`, "Pool sealed into a shipment.", () => sealPool(row))}>
+                    <CheckCircle2 size={15} /> Seal pool
+                  </button>
+                  <button className="lst-btn ghost" disabled={!canSealUnderfilled || busy} title={canSealUnderfilled ? "Seal after deadline" : "Underfilled pools can only ship after the join deadline"} type="button" onClick={() => run(`pool-${row.id}`, "Underfilled pool sealed into a shipment.", () => sealPool(row, true))}>
+                    <CheckCircle2 size={15} /> Seal underfilled
+                  </button>
+                  <button className="lst-btn ghost" disabled={!canRollToBusinessHeld || busy} title={canRollToBusinessHeld ? "Continue matching at the business" : "Only underfilled pools past the join deadline can roll over"} type="button" onClick={() => openRollPool(row)}>
+                    <RotateCcw size={15} /> Roll to business-held
+                  </button>
+                  <button className="lst-btn ghost" disabled={!canAdjust || busy} type="button" onClick={() => openAdjustPool(row)}>
+                    <Pencil size={15} /> Adjust shares
+                  </button>
+                  <button className="lst-btn ghost" disabled={status === "sealed" || status === "cancelled" || busy} type="button" onClick={() => run(`pool-${row.id}`, "Pool cancelled.", () => cancelPool(row))}>
+                    <XCircle size={15} /> Cancel pool
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </div>
+
+      {adjustingPool && (
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeAdjustPool}>
+          <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(event) => event.stopPropagation()}>
+            <header className="lst-modal-head">
+              <h3>Adjust inspected shares</h3>
+              <button className="lst-icon-btn" type="button" onClick={closeAdjustPool} aria-label="Close"><X size={18} /></button>
+            </header>
+            <div className="lst-modal-body">
+              <div className="pool-config-note">
+                Update total shares only after physical inspection. The total cannot be lower than already reserved shares.
+              </div>
+              <div className="lst-form-grid">
+                <label className="lst-field"><span>Current shares</span>
+                  <input readOnly value={shareSummary(adjustingPool.openShares, adjustingPool.totalShares)} />
+                </label>
+                <label className="lst-field"><span>Reserved shares</span>
+                  <input readOnly value={Number(adjustingPool.takenShares ?? 0)} />
+                </label>
+                <label className="lst-field"><span>Inspected total shares</span>
+                  <select value={adjustDraft.totalShares} onChange={(event) => setAdjustDraft((value) => ({ ...value, totalShares: event.target.value }))}>
+                    <option value="2">2 halves</option>
+                    <option value="3">3 shares</option>
+                    <option value="4">4 quarters</option>
+                  </select>
+                </label>
+                <label className="lst-field wide"><span>Inspection note</span>
+                  <textarea rows={3} value={adjustDraft.inspectionNote} onChange={(event) => setAdjustDraft((value) => ({ ...value, inspectionNote: event.target.value }))} placeholder="Explain measured capacity or packing mismatch" />
+                </label>
+              </div>
+            </div>
+            <footer className="lst-modal-foot">
+              <button className="lst-btn ghost" type="button" onClick={closeAdjustPool}>Cancel</button>
+              <button className="lst-add" type="button" disabled={busyId === `pool-adjust-${adjustingPool.id}`} onClick={() => run(`pool-adjust-${adjustingPool.id}`, "Pool capacity adjusted.", savePoolAdjustment)}>
+                <Save size={16} /> Save adjustment
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
+
+      {rollingPool && (
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeRollPool}>
+          <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(event) => event.stopPropagation()}>
+            <header className="lst-modal-head">
+              <h3>Roll to business-held</h3>
+              <button className="lst-icon-btn" type="button" onClick={closeRollPool} aria-label="Close"><X size={18} /></button>
+            </header>
+            <div className="lst-modal-body">
+              <div className="pool-config-note">
+                Use this when an underfilled customer or drop-off pool reached its deadline and the business will keep matching the open shares.
+              </div>
+              <div className="lst-form-grid">
+                <label className="lst-field"><span>Open shares</span>
+                  <input readOnly value={shareSummary(rollingPool.openShares, rollingPool.totalShares)} />
+                </label>
+                <label className="lst-field"><span>Current origin</span>
+                  <input readOnly value={statusLabel(rollingPool.origin)} />
+                </label>
+                <label className="lst-field"><span>New matching deadline</span>
+                  <input type="date" value={rollDraft.joinDeadline} onChange={(event) => setRollDraft((value) => ({ ...value, joinDeadline: event.target.value }))} />
+                </label>
+                <label className="lst-field"><span>Max joiners</span>
+                  <input inputMode="numeric" value={rollDraft.maxJoiners} onChange={(event) => setRollDraft((value) => ({ ...value, maxJoiners: event.target.value }))} />
+                </label>
+                <label className="lst-field wide"><span>Rollover note</span>
+                  <textarea rows={3} value={rollDraft.note} onChange={(event) => setRollDraft((value) => ({ ...value, note: event.target.value }))} placeholder="Example: customer dropped the barrel at the hub for continued matching" />
+                </label>
+              </div>
+            </div>
+            <footer className="lst-modal-foot">
+              <button className="lst-btn ghost" type="button" onClick={closeRollPool}>Cancel</button>
+              <button className="lst-add" type="button" disabled={busyId === `pool-roll-${rollingPool.id}`} onClick={() => run(`pool-roll-${rollingPool.id}`, "Pool rolled into business-held matching.", savePoolRollover)}>
+                <RotateCcw size={16} /> Roll pool
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
+
+      {poolFormOpen && (
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closePoolForm}>
+          <div className="lst-modal" style={{ maxWidth: 640 }} onClick={(event) => event.stopPropagation()}>
+            <header className="lst-modal-head">
+              <h3>Start shared barrel pool</h3>
+              <button className="lst-icon-btn" type="button" onClick={closePoolForm} aria-label="Close"><X size={18} /></button>
+            </header>
+            <div className="lst-modal-body">
+              <div className="lst-form-grid">
+                <label className="lst-field"><span>Pool origin</span>
+                  <select value={poolDraft.origin} onChange={(event) => setPoolDraft((value) => ({
+                    ...value,
+                    origin: event.target.value as PoolDraft["origin"],
+                    reservedShares: event.target.value === "dropOff" ? "1" : "0",
+                  }))}>
+                    <option value="businessHeld">Business-held</option>
+                    <option value="dropOff">Customer drop-off</option>
+                  </select>
+                </label>
+                <label className="lst-field"><span>Destination</span>
+                  <select value={poolDraft.destinationCountryId} onChange={(event) => setPoolDraft((value) => ({ ...value, destinationCountryId: event.target.value }))}>
+                    {activeDestinations.map((row) => {
+                      const country = countries.find((item) => item.id === row.id);
+                      return (
+                        <option key={row.id} value={row.id}>
+                          {countryFlag(text(row.code ?? row.countryCode ?? country?.code, ""))} {countryName(row.id)} · {formatMoney(row.barrelShippingPrice)}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </label>
+                <label className="lst-field"><span>Total shares</span>
+                  <select value={poolDraft.totalShares} onChange={(event) => setPoolDraft((value) => ({ ...value, totalShares: event.target.value }))}>
+                    <option value="2">2 halves</option>
+                    <option value="3">3 shares</option>
+                    <option value="4">4 quarters</option>
+                  </select>
+                </label>
+                <label className="lst-field"><span>Reserved shares</span>
+                  <input inputMode="numeric" value={poolDraft.reservedShares} onChange={(event) => setPoolDraft((value) => ({ ...value, reservedShares: event.target.value }))} placeholder={poolDraft.origin === "dropOff" ? "1" : "0"} />
+                </label>
+                <label className="lst-field"><span>Max joiners</span>
+                  <input inputMode="numeric" value={poolDraft.maxJoiners} onChange={(event) => setPoolDraft((value) => ({ ...value, maxJoiners: event.target.value }))} placeholder="2" />
+                </label>
+                <label className="lst-field"><span>Approval mode</span>
+                  <select value={poolDraft.approvalMode} onChange={(event) => setPoolDraft((value) => ({ ...value, approvalMode: event.target.value as PoolDraft["approvalMode"] }))}>
+                    <option value="approval">Manual approval</option>
+                    <option value="auto">Auto approve</option>
+                  </select>
+                </label>
+                <label className="lst-field"><span>Ship mode</span>
+                  <select value={poolDraft.shipMode} onChange={(event) => setPoolDraft((value) => ({ ...value, shipMode: event.target.value as PoolDraft["shipMode"] }))}>
+                    <option value="sea">Sea</option>
+                    <option value="air">Air</option>
+                  </select>
+                </label>
+                <label className="lst-field"><span>Join deadline</span>
+                  <input type="date" value={poolDraft.joinDeadline} onChange={(event) => setPoolDraft((value) => ({ ...value, joinDeadline: event.target.value }))} />
+                </label>
+                {poolDraft.origin === "dropOff" && (
+                  <>
+                    <label className="lst-field"><span>Sender name</span>
+                      <input value={poolDraft.senderName} onChange={(event) => setPoolDraft((value) => ({ ...value, senderName: event.target.value }))} placeholder="Customer name" />
+                    </label>
+                    <label className="lst-field"><span>Sender address</span>
+                      <input value={poolDraft.senderAddress} onChange={(event) => setPoolDraft((value) => ({ ...value, senderAddress: event.target.value }))} placeholder="Optional" />
+                    </label>
+                    <label className="lst-field"><span>Receiver name</span>
+                      <input value={poolDraft.receiverName} onChange={(event) => setPoolDraft((value) => ({ ...value, receiverName: event.target.value }))} placeholder="Recipient name" />
+                    </label>
+                    <label className="lst-field"><span>Receiver phone</span>
+                      <input value={poolDraft.receiverPhone} onChange={(event) => setPoolDraft((value) => ({ ...value, receiverPhone: event.target.value }))} placeholder="+224…" />
+                    </label>
+                    <label className="lst-field wide"><span>Contents note</span>
+                      <textarea rows={2} value={poolDraft.contentsDescription} onChange={(event) => setPoolDraft((value) => ({ ...value, contentsDescription: event.target.value }))} placeholder="Describe packed contents" />
+                    </label>
+                    <label className="lst-field"><span>Inspected weight (kg)</span>
+                      <input type="number" min="0" step="0.1" value={poolDraft.attestedWeightKg} onChange={(event) => setPoolDraft((value) => ({ ...value, attestedWeightKg: event.target.value }))} placeholder="20 kg per share max" />
+                    </label>
+                    <label className="lst-check wide">
+                      <input type="checkbox" checked={poolDraft.contentsAttested} onChange={(event) => setPoolDraft((value) => ({ ...value, contentsAttested: event.target.checked }))} />
+                      <span>Contents and weight were reviewed with the customer.</span>
+                    </label>
+                    <label className="lst-check wide">
+                      <input type="checkbox" checked={poolDraft.prohibitedItemsAcknowledged} onChange={(event) => setPoolDraft((value) => ({ ...value, prohibitedItemsAcknowledged: event.target.checked }))} />
+                      <span>No prohibited or unsafe items were accepted.</span>
+                    </label>
+                    <label className="lst-check wide">
+                      <input type="checkbox" checked={poolDraft.sharedLiabilityAccepted} onChange={(event) => setPoolDraft((value) => ({ ...value, sharedLiabilityAccepted: event.target.checked }))} />
+                      <span>The customer accepted shared-barrel liability and inspection rules.</span>
+                    </label>
+                  </>
+                )}
+              </div>
+            </div>
+            <footer className="lst-modal-foot">
+              <button className="lst-btn ghost" type="button" onClick={closePoolForm}>Cancel</button>
+              <button className="lst-add" type="button" disabled={busyId === "pool-create"} onClick={() => run("pool-create", "Shared barrel pool opened.", savePool)}>
+                <Save size={16} /> Open pool
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
 
       {shipments.loading && <LoadingState />}
       {!shipments.loading && shipments.rows.length === 0 && (
@@ -1951,7 +2635,7 @@ async function runPanelAction(
     await action();
     setMessage(successMessage);
   } catch (error) {
-    setMessage(error instanceof Error ? error.message : "Action failed.");
+    setMessage(error instanceof Error ? error.message : "L’action a échoué.");
   } finally {
     setBusy(false);
   }
@@ -1986,7 +2670,7 @@ function StatusText({ busy, message }: { busy: boolean; message: string }) {
   if (busy) {
     return (
       <span className="status-pill compact warning">
-        <RefreshCw className="spin" size={14} /> Saving
+        <RefreshCw className="spin" size={14} /> Enregistrement
       </span>
     );
   }
@@ -1997,7 +2681,7 @@ function StatusText({ busy, message }: { busy: boolean; message: string }) {
 function LoadingState() {
   return (
     <div className="empty-state">
-      <RefreshCw className="spin" size={16} /> Loading...
+      <RefreshCw className="spin" size={16} /> Chargement...
     </div>
   );
 }
@@ -2007,7 +2691,9 @@ function EmptyState({ text: message }: { text: string }) {
 }
 
 function countryName(countryId: string) {
-  return countries.find((country) => country.id === countryId)?.name ?? statusLabel(countryId);
+  const country = countries.find((item) => item.id === countryId);
+  if (!country) return statusLabel(countryId);
+  return currentLanguage() === "fr" ? country.nameFr : country.name;
 }
 
 function selectableStateOptions(current: string) {
@@ -2020,7 +2706,7 @@ function deliveryWindow(row: FirestoreRow) {
   const minDays = Number(row.deliveryEstimateMinDays);
   const maxDays = Number(row.deliveryEstimateMaxDays);
   if (!Number.isFinite(minDays) || !Number.isFinite(maxDays) || minDays <= 0 || maxDays <= 0) return "";
-  return `${minDays}-${maxDays} days`;
+  return `${minDays}-${maxDays} jours`;
 }
 
 function downloadCsv(filename: string, rows: FirestoreRow[], columns: string[]) {
@@ -2068,7 +2754,7 @@ function parkingTitle(row: FirestoreRow) {
     row.vehicleTitle ??
       row.carTitle ??
       [row.carYear, row.carMake, row.carModel].filter(Boolean).join(" "),
-    "Parked vehicle",
+    "Véhicule stationné",
   );
 }
 
@@ -2091,7 +2777,96 @@ function numberString(value: unknown) {
 }
 
 function statusLabel(value: unknown) {
-  return text(value, "unknown")
+  const normalized = text(value, "unknown").toLowerCase();
+  const labels: Record<"en" | "fr", Record<string, string>> = {
+    en: {
+      active: "Active",
+      all: "All",
+      approved: "Approved",
+      balance_due: "Balance due",
+      businessheld: "Business-held",
+      cancelled: "Cancelled",
+      closed: "Closed",
+      collected_by_business: "Collected by business",
+      completed: "Completed",
+      customerposted: "Customer-posted",
+      delivered: "Delivered",
+      draft: "Draft",
+      dropoff: "Drop-off",
+      expired: "Expired",
+      forfeited: "Forfeited",
+      full: "Full",
+      hold_review_required: "Hold review required",
+      inactive: "Inactive",
+      in_review: "In review",
+      in_transit: "In transit",
+      no_show: "Customer no-show",
+      not_required: "Not required",
+      open: "Open",
+      paid: "Paid",
+      partially_filled: "Partially filled",
+      pending: "Pending",
+      pending_payment: "Pending payment",
+      pending_seal: "Pending seal",
+      ready_for_pickup: "Ready for pickup",
+      refund_pending: "Refund pending",
+      refunded: "Refunded",
+      rejected: "Rejected",
+      reserved: "Reserved",
+      resolved: "Resolved",
+      scheduled: "Scheduled",
+      sealed: "Sealed",
+      sold: "Sold",
+      unknown: "Unknown",
+      viewing_scheduled: "Viewing scheduled",
+      waiting_on_platform: "Waiting on platform",
+    },
+    fr: {
+      active: "Actif",
+      all: "Tous",
+      approved: "Approuvé",
+      balance_due: "Solde dû",
+      businessheld: "Géré par l’entreprise",
+      cancelled: "Annulé",
+      closed: "Fermé",
+      collected_by_business: "Encaissé par l’entreprise",
+      completed: "Terminé",
+      customerposted: "Publié par un client",
+      delivered: "Livré",
+      draft: "Brouillon",
+      dropoff: "Dépôt client",
+      expired: "Expiré",
+      forfeited: "Conservé",
+      full: "Complet",
+      hold_review_required: "Vérification du blocage requise",
+      inactive: "Inactif",
+      in_review: "En examen",
+      in_transit: "En transit",
+      no_show: "Client absent",
+      not_required: "Non requis",
+      open: "Ouvert",
+      paid: "Payé",
+      partially_filled: "Partiellement rempli",
+      pending: "En attente",
+      pending_payment: "Paiement en attente",
+      pending_seal: "En attente de scellement",
+      ready_for_pickup: "Prêt pour collecte",
+      refund_pending: "Remboursement en attente",
+      refunded: "Remboursé",
+      rejected: "Rejeté",
+      reserved: "Réservé",
+      resolved: "Résolu",
+      scheduled: "Planifié",
+      sealed: "Scellé",
+      sold: "Vendu",
+      unknown: "Inconnu",
+      viewing_scheduled: "Visite planifiée",
+      waiting_on_platform: "En attente de la plateforme",
+    },
+  };
+  const language = currentLanguage();
+  if (labels[language][normalized]) return labels[language][normalized];
+  return normalized
     .split(/[_-]/)
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))

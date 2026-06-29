@@ -107,6 +107,7 @@ const ACCESS_LEVELS: AccessLevel[] = ["none", "view", "manage"];
 // Canonical platform services a role can be scoped to.
 const PLATFORM_SERVICES: Array<{ id: string; label: string }> = [
   { id: "barrelShipping", label: "Barrel shipping" },
+  { id: "sharedBarrels", label: "Shared barrels" },
   { id: "carSales", label: "Car sales" },
   { id: "carTransport", label: "Car transport" },
   { id: "carParking", label: "Car parking" },
@@ -258,6 +259,7 @@ const purchaseStatuses = [
 ];
 const businessServices = [
   { id: "barrelShipping", label: "Barrel shipping" },
+  { id: "sharedBarrels", label: "Shared barrels" },
   { id: "carSales", label: "Car sales" },
   { id: "carParking", label: "Car parking" },
   { id: "carTransport", label: "Car transport" },
@@ -269,6 +271,8 @@ const statusLabels = {
   active: "Active",
   scheduled: "Scheduled",
   in_progress: "In progress",
+  in_review: "In review",
+  in_transit: "In transit",
   completed: "Completed",
   cancelled: "Cancelled",
   sold: "Sold",
@@ -280,9 +284,25 @@ const statusLabels = {
   open: "Open",
   closed: "Closed",
   blocked: "Blocked",
+  delivered: "Delivered",
+  draft: "Draft",
+  expired: "Expired",
+  full: "Full",
+  hold_review_required: "Hold review required",
   missing_profile: "Missing profile",
+  not_required: "Not required",
+  paid: "Paid",
+  partially_filled: "Partially filled",
+  pending_payment: "Pending payment",
+  pending_seal: "Pending seal",
+  ready_for_pickup: "Ready for pickup",
+  sealed: "Sealed",
+  waiting_on_platform: "Waiting on platform",
   viewing_scheduled: "Viewing scheduled",
   no_show: "No show",
+  balance_due: "Balance due",
+  collected_by_business: "Collected by business",
+  refund_pending: "Refund pending",
   refunded: "Refunded",
   forfeited: "Forfeited",
 };
@@ -996,6 +1016,7 @@ export function AdminConsole() {
   const parkedCars = useAdminCollection("parkedCars", enabled, 1000);
   const purchases = useAdminCollection("carPurchases", enabled, 1000);
   const refunds = useAdminCollection("walletRefundRequests", enabled, 500);
+  const barrelPoolBalances = useAdminCollection("barrelPoolBalanceRequests", enabled, 500);
   const wallets = useAdminCollection("wallets", enabled, 1000);
   const walletTransactions = useAdminCollectionGroup("transactions", enabled, 1000);
   const pricing = useAdminCollection("shipmentPricing", enabled, 500);
@@ -1017,6 +1038,7 @@ export function AdminConsole() {
   const parkedRows = previewMode ? previewData.parkedCars : parkedCars.rows;
   const purchaseRows = previewMode ? previewData.purchases : purchases.rows;
   const refundRows = previewMode ? previewData.refunds : refunds.rows;
+  const barrelPoolBalanceRows = previewMode ? [] : barrelPoolBalances.rows;
   const walletRows = previewMode ? previewData.wallets : wallets.rows;
   const walletTransactionRows = previewMode
     ? previewData.walletTransactions
@@ -1100,7 +1122,23 @@ export function AdminConsole() {
 
       try {
         if ((user.email ?? "").toLowerCase() === "admin@gmail.com") {
-          await httpsCallable(functions, "ensurePlatformAdminProfile")();
+          // Best-effort: ensure the platform-admin profile exists on first
+          // login. This must never freeze the console, so it is bounded by a
+          // timeout and its failures are ignored — the profile read below is
+          // the source of truth for access.
+          try {
+            await Promise.race([
+              httpsCallable(functions, "ensurePlatformAdminProfile")(),
+              new Promise((_, reject) =>
+                setTimeout(
+                  () => reject(new Error("ensurePlatformAdminProfile timed out")),
+                  8000,
+                ),
+              ),
+            ]);
+          } catch {
+            // Ignore — fall through to the authoritative profile read.
+          }
         }
         const profileSnapshot = await getDoc(doc(db, "users", user.uid));
         const userProfile = profileSnapshot.exists()
@@ -1116,6 +1154,14 @@ export function AdminConsole() {
         setBooting(false);
       }
     });
+  }, []);
+
+  // Safety net: never let the console hang on the boot spinner. If auth/profile
+  // resolution stalls for any reason, stop booting so the user sees either the
+  // console or the sign-in screen instead of an endless loader.
+  useEffect(() => {
+    const timer = setTimeout(() => setBooting(false), 12000);
+    return () => clearTimeout(timer);
   }, []);
 
   const runAction = useCallback(
@@ -1191,7 +1237,8 @@ export function AdminConsole() {
             <Menu size={20} />
           </button>
           <div className="brand-badge">
-            <Shield size={18} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="Laawol" width={20} height={20} style={{ borderRadius: 5, display: "block" }} />
             <span>Laawol Digital</span>
           </div>
           <div className="topbar-heading">
@@ -1313,6 +1360,7 @@ export function AdminConsole() {
           {activeTab === "finance" && (
             <FinanceView
               refunds={refundRows}
+              barrelPoolBalances={barrelPoolBalanceRows}
               wallets={walletRows}
               walletTransactions={walletTransactionRows}
               businesses={businessRows}
@@ -1409,7 +1457,8 @@ function SignInCard({ authError }: { authError: string }) {
     <div className="login-screen">
       <div className="login-header">
         <div className="brand-mark">
-          <Shield size={30} />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Laawol" width={34} height={34} style={{ borderRadius: 8, display: "block" }} />
         </div>
         <div>
           <h1>Laawol Digital Admin</h1>
@@ -2645,22 +2694,22 @@ function MoreSettings({
 
 const WEBSITE_HOME_DEFAULTS = {
   hero: {
-    eyebrow: "Trusted service marketplace",
-    headline: "Find the right business for the road home.",
-    subheadline: "Laawol Digital is a platform where registered businesses offer diaspora services — shipping, cars, sourcing, food, and professional help. We bring the pricing, tracking, support, and accountability into one place so customers can choose with confidence.",
-    primaryCtaLabel: "Get the app",
+    eyebrow: "Marketplace de services de confiance",
+    headline: "Trouvez la bonne entreprise pour la route vers le pays.",
+    subheadline: "Laawol Digital est une plateforme où des entreprises inscrites proposent des services pour la diaspora : expédition, voitures, approvisionnement, restauration et aide professionnelle. Nous rassemblons les prix, le suivi, l’assistance et la responsabilité au même endroit pour que les clients choisissent en confiance.",
+    primaryCtaLabel: "Télécharger l’application",
     primaryCtaHref: "app.html",
-    secondaryCtaLabel: "Explore services",
+    secondaryCtaLabel: "Découvrir les services",
     secondaryCtaHref: "services.html",
   },
   featured: {
     enabled: true,
-    heading: "Featured businesses",
-    subheading: "A curated group of approved partners with marketing-safe profiles.",
+    heading: "Entreprises mises en avant",
+    subheading: "Une sélection de partenaires approuvés avec des profils publics validés.",
     maxToShow: 6,
   },
   sections: {
-    servicesIntro: "Businesses register on Laawol to offer the services they are good at. You see their routes, pricing, service details, and status in one place, with platform support if something needs attention.",
+    servicesIntro: "Les entreprises s’inscrivent sur Laawol pour proposer les services qu’elles maîtrisent. Vous voyez leurs trajets, leurs prix, leurs détails de service et leurs statuts au même endroit, avec l’assistance de la plateforme si un point demande de l’attention.",
   },
 };
 
@@ -4418,18 +4467,18 @@ function BusinessWorkspace({
               <div className="workspace-section">
                 <ServiceGroup title="Car purchases" icon={<BadgeDollarSign size={16} />} rows={purchases} statusField="purchaseStatus" />
                 <div className="subsection">
-                  <h3>Card return requests</h3>
+                  <h3>Refund requests</h3>
                   <div className="row-list compact">
                     {refunds.map((item) => (
                       <DataRow
                         key={item.id}
-                        title={`${optionalMoney(item.amount, text(item.currency, "USD")) || "Card return"}`}
+                        title={`${optionalMoney(item.amount, text(item.currency, "USD")) || "Refund request"}`}
                         subtitle={[text(item.customerEmail, "Customer"), formatDate(item.createdAt)].filter(Boolean).join(" • ")}
                         badge={statusLabel(item.status)}
                       />
                     ))}
                     {refunds.length === 0 && (
-                      <EmptyState text="No card return requests for this business." />
+                      <EmptyState text="No refund requests for this business." />
                     )}
                   </div>
                 </div>
@@ -5669,6 +5718,7 @@ function financeLedgerRow({
 function buildFinanceLedgerRows({
   walletTransactions,
   refunds,
+  barrelPoolBalances,
   shipments,
   transports,
   parkedCars,
@@ -5678,6 +5728,7 @@ function buildFinanceLedgerRows({
 }: {
   walletTransactions: FirestoreRow[];
   refunds: FirestoreRow[];
+  barrelPoolBalances: FirestoreRow[];
   shipments: FirestoreRow[];
   transports: FirestoreRow[];
   parkedCars: FirestoreRow[];
@@ -5718,12 +5769,34 @@ function buildFinanceLedgerRows({
 
   refunds.forEach((refund) => {
     const amount = amountFromRecord(refund, ["amountCents"], ["amount"]);
+    const sharedBarrelRefund = text(refund.source, "") === "barrel_pool";
     rows.push(financeLedgerRow({
       row: refund,
       source: "refund",
-      sourceLabel: "Card return",
+      sourceLabel: sharedBarrelRefund ? "Shared barrel refund" : "Card return",
       sourceCollection: "walletRefundRequests",
-      title: firstText(refund, ["customerEmail", "customerName"], "Card return request"),
+      title: firstText(
+        refund,
+        ["customerEmail", "customerName"],
+        sharedBarrelRefund ? "Shared barrel refund" : "Card return request",
+      ),
+      amount,
+      businesses,
+    }));
+  });
+
+  barrelPoolBalances.forEach((balance) => {
+    const amount = amountFromRecord(balance, ["amountCents"], ["amount"]);
+    rows.push(financeLedgerRow({
+      row: balance,
+      source: "barrel_balance",
+      sourceLabel: "Shared barrel balance",
+      sourceCollection: "barrelPoolBalanceRequests",
+      title: firstText(
+        balance,
+        ["customerEmail", "customerName", "trackingCode"],
+        "Shared barrel balance due",
+      ),
       amount,
       businesses,
     }));
@@ -5963,6 +6036,7 @@ function RefundRequestRow({
 
 function FinanceView({
   refunds,
+  barrelPoolBalances,
   wallets,
   walletTransactions,
   businesses,
@@ -5978,6 +6052,7 @@ function FinanceView({
   canSendSupport,
 }: {
   refunds: FirestoreRow[];
+  barrelPoolBalances: FirestoreRow[];
   wallets: FirestoreRow[];
   walletTransactions: FirestoreRow[];
   businesses: FirestoreRow[];
@@ -6000,6 +6075,10 @@ function FinanceView({
   const totalPending = refunds
     .filter((item) => item.status === "pending")
     .reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
+  const pendingBarrelBalanceCount = barrelPoolBalances.filter((item) => item.status === "pending").length;
+  const pendingBarrelBalanceTotal = barrelPoolBalances
+    .filter((item) => item.status === "pending")
+    .reduce((sum, item) => sum + amountFromRecord(item, ["amountCents"], ["amount"]), 0);
   const walletBalanceTotal = wallets.reduce(
     (sum, wallet) => sum + amountFromWallet(wallet, "balanceCents", "balance"),
     0,
@@ -6011,6 +6090,7 @@ function FinanceView({
   const ledgerRows = useMemo(() => buildFinanceLedgerRows({
     walletTransactions,
     refunds,
+    barrelPoolBalances,
     shipments,
     transports,
     parkedCars,
@@ -6020,6 +6100,7 @@ function FinanceView({
   }), [
     walletTransactions,
     refunds,
+    barrelPoolBalances,
     shipments,
     transports,
     parkedCars,
@@ -6059,6 +6140,12 @@ function FinanceView({
       note: note.trim(),
     });
   }
+  async function markBalanceCollected(requestId: string, note: string) {
+    await httpsCallable(functions, "markBarrelPoolBalanceCollected")({
+      requestId,
+      note: note.trim(),
+    });
+  }
 
   return (
     <div className="stack">
@@ -6068,6 +6155,8 @@ function FinanceView({
         stats={[
           ["Pending refunds", String(refunds.filter((item) => item.status === "pending").length)],
           ["Pending amount", formatMoney(totalPending)],
+          ["Shared balances due", String(pendingBarrelBalanceCount)],
+          ["Balance due amount", formatMoney(pendingBarrelBalanceTotal)],
           ["Wallet balance", formatMoney(walletBalanceTotal)],
           ["Pending in wallets", formatMoney(pendingWalletTotal)],
           ["Ledger rows", String(ledgerRows.length)],
@@ -6082,6 +6171,10 @@ function FinanceView({
         <article className="metric attention">
           <span>Refund requests</span>
           <strong>{refunds.filter((item) => item.status === "pending").length}</strong>
+        </article>
+        <article className="metric attention">
+          <span>Shared balances due</span>
+          <strong>{formatMoney(pendingBarrelBalanceTotal)}</strong>
         </article>
         <article className="metric good">
           <span>Customer wallet balance</span>
@@ -6143,7 +6236,10 @@ function FinanceView({
             <FinanceLedgerRecordRow
               key={row.id}
               row={row}
+              canManage={canManage}
               canSendSupport={canSendSupport}
+              markBalanceCollected={markBalanceCollected}
+              runAction={runAction}
               onMessageBusiness={() => setSupportDraft(supportDraftFromLedgerRow(row))}
             />
           ))}
@@ -6216,13 +6312,24 @@ function FinanceView({
 
 function FinanceLedgerRecordRow({
   row,
+  canManage,
   canSendSupport,
+  markBalanceCollected,
+  runAction,
   onMessageBusiness,
 }: {
   row: FinanceLedgerRow;
+  canManage: boolean;
   canSendSupport: boolean;
+  markBalanceCollected: (requestId: string, note: string) => Promise<void>;
+  runAction: (label: string, action: () => Promise<unknown>) => void;
   onMessageBusiness: () => void;
 }) {
+  const canCollectBalance =
+    canManage &&
+    row.source === "barrel_balance" &&
+    row.status === "pending" &&
+    Boolean(row.sourceId);
   return (
     <div className="data-row finance-row finance-ledger-row">
       <div className="finance-account-main">
@@ -6248,6 +6355,19 @@ function FinanceLedgerRecordRow({
         {statusLabel(row.status)}
       </span>
       <div className="finance-review-tools">
+        {canCollectBalance && (
+          <button
+            className="secondary-button"
+            onClick={() => {
+              const note = window.prompt("Collection note (optional)") || "";
+              runAction("Shared barrel balance collected", () => markBalanceCollected(row.sourceId, note));
+            }}
+            type="button"
+          >
+            <Check size={15} />
+            Mark collected
+          </button>
+        )}
         <button
           className="secondary-button"
           disabled={!canSendSupport || !row.businessId}
