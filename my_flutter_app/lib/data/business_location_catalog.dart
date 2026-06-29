@@ -1,3 +1,10 @@
+import 'country_catalog.dart';
+
+// Common countries pinned to the top of the address picker for convenience.
+// These names match the keys in [businessCitiesByCountry] so preset cities keep
+// resolving. The FULL country list comes from the canonical [CountryCatalog] —
+// see [businessCountryOptions]. Do NOT treat this short list as the set of
+// selectable countries; an address picker must offer every country.
 const businessCountries = <String>[
   'United States',
   'Guinea',
@@ -8,6 +15,12 @@ const businessCountries = <String>[
   'Sierra Leone',
   'Liberia',
 ];
+
+// ISO codes of the pinned countries above, so we can exclude their duplicates
+// when appending the rest of the canonical catalog.
+const _pinnedCountryCodes = <String>{
+  'US', 'GN', 'SN', 'ML', 'CI', 'GM', 'SL', 'LR',
+};
 
 const businessCitiesByCountry = <String, List<String>>{
   'United States': [
@@ -44,8 +57,19 @@ const businessCitiesByCountry = <String, List<String>>{
   'Liberia': ['Monrovia', 'Gbarnga', 'Buchanan', 'Ganta', 'Kakata'],
 };
 
+/// Every country, sourced from the canonical [CountryCatalog], with the common
+/// US + West-Africa countries pinned on top. An address picker must always be
+/// able to select any country — never a hand-picked subset.
 List<String> businessCountryOptions(String? selected) {
-  return _valuesWithLegacy(businessCountries, selected);
+  final rest = CountryCatalog.all
+      .where(
+        (country) =>
+            !_pinnedCountryCodes.contains((country.code ?? '').toUpperCase()),
+      )
+      .map((country) => country.name)
+      .toList()
+    ..sort();
+  return _valuesWithLegacy([...businessCountries, ...rest], selected);
 }
 
 List<String> businessCityOptions(String? country, String? selected) {

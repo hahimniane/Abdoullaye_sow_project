@@ -2,6 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠️ Engineering guardrails — READ FIRST (MANDATORY)
+
+Before changing or deploying anything, follow **[docs/ENGINEERING_GUARDRAILS.md](docs/ENGINEERING_GUARDRAILS.md)**. Non-negotiables:
+
+- **Definition of Done:** typecheck + tests + build pass, and any UI/behavior change is **verified in a real running app/browser** — not just "it compiles." When you fix a bug, add a regression test.
+- **Deploy gate:** production deploys go through `deploy/` preflight, which enforces a **clean git tree** (deploy only committed code; emergency override `ALLOW_DIRTY_DEPLOY=1`), **passing unit tests**, and **build-from-source** (never deploy a stale/hand-edited `admin_web/out/`). CI (`.github/workflows/ci.yml`) must be green.
+- **Design patterns:** no O(N) work per render/DOM-node (precompute once); `MutationObserver`s must never react to their own writes (guard + `takeRecords()`); transforms must converge/be idempotent; loading states must always resolve (safety timeout on every path); keep pure logic separate and unit-tested.
+- **Reuse before you build:** search for an existing component/data source and reuse or extend it — never fork a partial copy. Shared reference data must be **complete** (a country picker offers every country; a state picker every state). Use the **Canonical sources registry** in the guardrails doc (e.g. `country_catalog.dart` / `country-catalog.ts` for all countries, `us_locations.dart` / `us-locations.ts` for US states). Curated subsets (e.g. barrel destination countries) are the explicit exception.
+
 ## Project Overview
 
 This is a Flutter application for a car selling and shipping services business with Firebase backend integration. The app supports three user roles (customer, staff, admin) with distinct navigation flows and features. It includes localization support for English and French.

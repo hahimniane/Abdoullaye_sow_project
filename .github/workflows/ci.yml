@@ -1,0 +1,66 @@
+name: CI
+
+# Quality gate for every push and pull request. A red run here means the change
+# is not allowed to ship. Mirror these checks locally before deploying:
+#   admin_web:  npm run typecheck && npm test && npm run build
+#   functions:  npm run lint
+#   flutter:    flutter analyze
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  admin-web:
+    name: Admin/Business console (typecheck · test · build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin_web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24" # native TypeScript test execution (node --test *.ts)
+          cache: npm
+          cache-dependency-path: admin_web/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  functions:
+    name: Cloud Functions (lint)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: my_flutter_app/functions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: my_flutter_app/functions/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+
+  flutter:
+    name: Flutter app (analyze)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: my_flutter_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter gen-l10n
+      - run: flutter analyze
