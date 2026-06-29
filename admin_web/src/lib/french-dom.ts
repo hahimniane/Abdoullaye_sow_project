@@ -928,9 +928,28 @@ function buildTranslationRegex(keys: string[]) {
 const englishRegex = buildTranslationRegex(englishTextKeys);
 const frenchRegex = buildTranslationRegex(frenchTextKeys);
 
+// Resolve the active language. A saved choice always wins; otherwise we follow
+// the user's device languages (French device -> French, everyone else -> the
+// base English content). Kept pure so it can be unit-tested without globals.
+export function resolveLang(
+  stored: string | null,
+  deviceLanguages: readonly string[],
+): "en" | "fr" {
+  if (stored === "en" || stored === "fr") return stored;
+  const prefersFrench = deviceLanguages.some(
+    (lang) => (lang ?? "").toLowerCase().startsWith("fr"),
+  );
+  return prefersFrench ? "fr" : "en";
+}
+
 function currentLang() {
-  if (typeof window === "undefined") return "fr";
-  return window.localStorage.getItem(STORAGE_KEY) === "en" ? "en" : "fr";
+  const stored = typeof window !== "undefined" ?
+    window.localStorage.getItem(STORAGE_KEY) :
+    null;
+  const deviceLanguages = typeof navigator !== "undefined" ?
+    [navigator.language, ...(navigator.languages ?? [])].filter(Boolean) :
+    [];
+  return resolveLang(stored, deviceLanguages);
 }
 
 export function translateValue(value: string, lang: string) {

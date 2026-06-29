@@ -16,7 +16,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { TEXT_TRANSLATIONS, translateValue } from "./french-dom.ts";
+import { TEXT_TRANSLATIONS, resolveLang, translateValue } from "./french-dom.ts";
 
 const entries = Object.entries(TEXT_TRANSLATIONS);
 
@@ -65,6 +65,26 @@ test("exact dictionary entries translate to their French value", () => {
   for (const [english, french] of entries) {
     assert.equal(translateValue(english, "fr"), french);
   }
+});
+
+test("language resolves from a saved preference first, then the device", () => {
+  // Saved choice always wins, regardless of device language.
+  assert.equal(resolveLang("en", ["fr-FR"]), "en");
+  assert.equal(resolveLang("fr", ["en-US"]), "fr");
+
+  // No saved choice: follow the device. French device -> French.
+  assert.equal(resolveLang(null, ["fr-FR", "en-US"]), "fr");
+  assert.equal(resolveLang(null, ["fr"]), "fr");
+
+  // No saved choice, non-French device -> base English content.
+  assert.equal(resolveLang(null, ["en-US"]), "en");
+  assert.equal(resolveLang(null, ["es-ES", "de-DE"]), "en");
+
+  // No saved choice and no device info -> English.
+  assert.equal(resolveLang(null, []), "en");
+
+  // Garbage saved value is ignored and we fall back to the device.
+  assert.equal(resolveLang("xx", ["fr-FR"]), "fr");
 });
 
 test("translating a large realistic payload stays within the time budget", () => {
