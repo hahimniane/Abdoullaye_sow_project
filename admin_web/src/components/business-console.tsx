@@ -14,6 +14,7 @@ import {
   LogOut,
   MapPinned,
   Menu,
+  MessageCircle,
   Package,
   ParkingCircle,
   Sparkles,
@@ -35,6 +36,7 @@ import {
   BusinessProfilePanel,
   BusinessSupportPanel,
 } from "@/components/business/profile-support-people";
+import { SupportCasesPanel } from "@/components/support/support-cases-panel";
 import {
   useBusinessCollection,
   useBusinessStaff,
@@ -53,6 +55,7 @@ type BusinessTab =
   | "parking"
   | "destinations"
   | "people"
+  | "cases"
   | "support"
   | "growth";
 
@@ -86,7 +89,8 @@ const tabConfig: Array<{
   {id: "parking", label: "Parking", description: "Stored cars", service: "carParking", permission: "parking"},
   {id: "destinations", label: "Destinations", description: "Country pricing", service: "barrelShipping", permission: "destinations"},
   {id: "people", label: "People", description: "Owners and staff", permission: "people"},
-  {id: "support", label: "Support", description: "Requests and replies", permission: "support"},
+  {id: "cases", label: "Customer support", description: "Order conversations", permission: "support"},
+  {id: "support", label: "Platform help", description: "Requests and replies", permission: "support"},
   {id: "growth", label: "Growth", description: "Plan and AI advisor", permission: "growth"},
 ];
 
@@ -279,6 +283,15 @@ export function BusinessConsole({
               loading={staff.loading}
               error={staff.error}
               canManageStaff={profile.role === "businessOwner"}
+            />
+          )}
+          {activeTab === "cases" && (
+            <SupportCasesPanel
+              scope="business"
+              businessId={businessId}
+              currentUid={firebaseUser.uid}
+              currentName={text(profile.fullName ?? firebaseUser.email, "Business")}
+              canReply={hasBusinessPermission(profile, "support")}
             />
           )}
           {activeTab === "support" && (
@@ -612,6 +625,7 @@ function tabIcon(tab: BusinessTab) {
     parking: <ParkingCircle {...props} />,
     destinations: <MapPinned {...props} />,
     people: <UserCog {...props} />,
+    cases: <MessageCircle {...props} />,
     support: <LifeBuoy {...props} />,
     growth: <Sparkles {...props} />,
   };

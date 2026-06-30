@@ -43,6 +43,14 @@ service cloud.firestore {
           .data.roles[userAdminRole(userId)].sections.website == 'manage';
     }
 
+    function hasDynamicSupportCapability(userId) {
+      return exists(/databases/$(database)/documents/platformConfig/permissions) &&
+        userAdminRole(userId) in get(/databases/$(database)/documents/platformConfig/permissions)
+          .data.roles &&
+        get(/databases/$(database)/documents/platformConfig/permissions)
+          .data.roles[userAdminRole(userId)].sections.support == 'manage';
+    }
+
     function canManageWebsite(userId) {
       return isAdmin(userId) &&
         (
@@ -50,6 +58,17 @@ service cloud.firestore {
           userAdminRole(userId) == "operationsManager" ||
           userAdminRole(userId) == "contentManager" ||
           hasDynamicWebsiteCapability(userId)
+        );
+    }
+
+    function canManageSupport(userId) {
+      return isAdmin(userId) &&
+        (
+          isSuperAdmin(userId) ||
+          userAdminRole(userId) == "operationsManager" ||
+          userAdminRole(userId) == "financeManager" ||
+          userAdminRole(userId) == "supportAdmin" ||
+          hasDynamicSupportCapability(userId)
         );
     }
 
@@ -111,6 +130,29 @@ service cloud.firestore {
           data.businessId != '' &&
           data.businessName is string &&
           data.businessName != ''
+        );
+    }
+
+    function supportCaseData(caseId) {
+      return get(/databases/$(database)/documents/supportCases/$(caseId)).data;
+    }
+
+    // NOTE: authorize purely from the case document + the caller's own profile.
+    // We deliberately avoid an exists() on the case's participants subcollection
+    // here: a subcollection exists() makes the rule un-evaluable for `list`
+    // (collection) queries, which silently breaks the business and admin support
+    // inbox queries (where('businessId'==) / where('escalationStatus'=='escalated')).
+    // Every legitimate reader is already covered: the customer, business
+    // owner/support staff (by businessId), and support admins.
+    function canReadSupportCase(caseId, data) {
+      return request.auth != null &&
+        (
+          data.customerUid == request.auth.uid ||
+          canManageSupport(request.auth.uid) ||
+          (
+            data.businessId is string &&
+            canManageBusinessSection(request.auth.uid, data.businessId, 'support')
+          )
         );
     }
 
@@ -444,6 +486,37 @@ service cloud.firestore {
             'businessReadBy',
             'updatedAt'
           ]);
+    }
+
+    match /supportCases/{caseId} {
+      allow read: if canReadSupportCase(caseId, resource.data);
+      allow create, update, delete: if false;
+
+      match /messages/{messageId} {
+        // Guard the optional `internal` flag: reading resource.data.internal
+        // directly throws "Property internal is undefined" for `list` queries on
+        // messages that omit the field (which is all of them today).
+        allow read: if canReadSupportCase(caseId, supportCaseData(caseId)) &&
+          resource.data.get('internal', false) != true;
+        allow create, update, delete: if false;
+      }
+
+      match /timeline/{eventId} {
+        allow read: if canReadSupportCase(caseId, supportCaseData(caseId)) &&
+          resource.data.get('private', false) != true;
+        allow create, update, delete: if false;
+      }
+
+      match /participants/{participantId} {
+        allow read: if canReadSupportCase(caseId, supportCaseData(caseId));
+        allow create, update, delete: if false;
+      }
+
+      match /internalNotes/{noteId} {
+        allow read: if request.auth != null &&
+          canManageSupport(request.auth.uid);
+        allow create, update, delete: if false;
+      }
     }
 
     match /businessInsights/{insightId} {

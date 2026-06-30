@@ -40,6 +40,7 @@ import {
   Check,
   ClipboardList,
   DatabaseZap,
+  LifeBuoy,
   LogOut,
   Menu,
   Package,
@@ -58,6 +59,7 @@ import {
 import { auth, db, functions, storage } from "@/lib/firebase";
 import { asDate, formatDate, formatMoney, text } from "@/lib/format";
 import type { FirestoreRow, Role, UserProfile } from "@/types/admin";
+import { SupportCasesPanel } from "@/components/support/support-cases-panel";
 
 const tabs = [
   "today",
@@ -66,6 +68,7 @@ const tabs = [
   "marketplace",
   "operations",
   "finance",
+  "support",
   "website",
   "tools",
   "settings",
@@ -76,7 +79,7 @@ type Tab = (typeof tabs)[number];
 const navGroups: Array<{ label: string; tabs: Tab[] }> = [
   { label: "Overview", tabs: ["today"] },
   { label: "Network", tabs: ["businesses", "people"] },
-  { label: "Queues", tabs: ["marketplace", "operations", "finance"] },
+  { label: "Queues", tabs: ["marketplace", "operations", "finance", "support"] },
   { label: "System", tabs: ["website", "tools", "settings"] },
 ];
 
@@ -137,7 +140,7 @@ const DEFAULT_ROLES: Record<string, RoleConfig> = {
 };
 
 const SUPER_ADMIN_TABS: Tab[] = [
-  "today", "businesses", "people", "marketplace", "operations", "finance", "website", "tools", "settings",
+  "today", "businesses", "people", "marketplace", "operations", "finance", "support", "website", "tools", "settings",
 ];
 
 type Perms = {
@@ -210,6 +213,9 @@ function resolvePerms(
   for (const extra of EDITABLE_CAPS) {
     if ((role.sections[extra.key] ?? "none") === "manage") caps.add(extra.cap);
   }
+  // The support capability is a stand-alone cap (not a section), so surface its
+  // own tab whenever the role can reply to support.
+  if (caps.has("support")) allowedTabs.push("support");
   const services = role.services.length ? role.services : null;
   return {
     role: effective, label: role.label, tabs: allowedTabs,
@@ -1374,6 +1380,15 @@ export function AdminConsole() {
               runAction={runAction}
               canManage={perms.can("finance")}
               canSendSupport={perms.can("support")}
+            />
+          )}
+          {activeTab === "support" && (
+            <SupportCasesPanel
+              scope="admin"
+              currentUid={firebaseUser?.uid ?? ""}
+              currentName={text(profile?.fullName ?? firebaseUser?.email, "Platform")}
+              canReply={perms.can("support")}
+              runAction={runAction}
             />
           )}
           {activeTab === "website" && (
@@ -6735,6 +6750,7 @@ function tabLabel(tab: Tab) {
     operations: "Operations",
     marketplace: "Marketplace",
     finance: "Finance",
+    support: "Support",
     website: "Website",
     tools: "Tools",
     settings: "Settings",
@@ -6749,6 +6765,7 @@ function tabHint(tab: Tab) {
     operations: "Barrels, transport, parking",
     marketplace: "Listings by business",
     finance: "Refund queue",
+    support: "Escalated cases",
     website: "Site content",
     tools: "Setup utilities",
     settings: "Roles & configuration",
@@ -6764,6 +6781,7 @@ function tabIcon(tab: Tab) {
     operations: <Truck {...props} />,
     marketplace: <Car {...props} />,
     finance: <BadgeDollarSign {...props} />,
+    support: <LifeBuoy {...props} />,
     website: <Store {...props} />,
     tools: <DatabaseZap {...props} />,
     settings: <SlidersHorizontal {...props} />,

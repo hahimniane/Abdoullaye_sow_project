@@ -65,6 +65,13 @@ function putLegacyCarImage(storage, carId, fileName, options = {}) {
   );
 }
 
+function putSupportAttachment(storage, caseId, uid, fileName, options = {}) {
+  return storage.ref(`support_cases/${caseId}/${uid}/${fileName}`).put(
+      imageBytes(options.size),
+      {contentType: options.contentType || "application/pdf"},
+  );
+}
+
 async function seedFirestore() {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
@@ -97,6 +104,11 @@ async function seedFirestore() {
         adminRole: "financeManager",
         email: "finance@example.com",
       },
+      "users/support-admin": {
+        role: "admin",
+        adminRole: "supportAdmin",
+        email: "support@example.com",
+      },
       "users/owner-a": {
         role: "businessOwner",
         businessId: "biz_a",
@@ -119,6 +131,12 @@ async function seedFirestore() {
         businessName: "Business A",
         businessPermissions: ["barrels"],
       },
+      "users/staff-support-a": {
+        role: "staff",
+        businessId: "biz_a",
+        businessName: "Business A",
+        businessPermissions: ["support"],
+      },
       "users/customer-owner": {
         role: "customer",
         fullName: "Pool Owner",
@@ -130,6 +148,10 @@ async function seedFirestore() {
       "users/customer-stranger": {
         role: "customer",
         fullName: "Pool Stranger",
+      },
+      "users/customer-support": {
+        role: "customer",
+        fullName: "Support Customer",
       },
       "websiteContent/home": {
         hero: {headline: "Trusted business support"},
@@ -259,6 +281,60 @@ async function seedFirestore() {
         source: "barrel_pool_balance",
         barrelPoolId: "pool_a",
         trackingCode: "BP-TEST",
+      },
+      "supportCases/case_a": {
+        customerUid: "customer-support",
+        businessId: "biz_a",
+        businessName: "Business A",
+        subject: "Order help",
+        status: "open",
+        escalationStatus: "not_escalated",
+        participantUids: ["customer-support"],
+      },
+      "supportCases/case_a/participants/customer-support": {
+        uid: "customer-support",
+        role: "customer",
+      },
+      "supportCases/case_a/participants/business_biz_a": {
+        businessId: "biz_a",
+        role: "business",
+      },
+      "supportCases/case_a/messages/msg_a": {
+        body: "Visible message",
+        senderUid: "customer-support",
+        senderRole: "customer",
+        internal: false,
+      },
+      // A message WITHOUT the optional `internal` field — list reads must not
+      // throw "Property internal is undefined" on it (regression guard).
+      "supportCases/case_a/messages/msg_no_field": {
+        body: "Message without an internal flag",
+        senderUid: "customer-support",
+        senderRole: "customer",
+      },
+      "supportCases/case_a/timeline/event_a": {
+        type: "case_created",
+        private: false,
+      },
+      "supportCases/case_a/internalNotes/note_a": {
+        body: "Admin-only note",
+        createdBy: "support-admin",
+      },
+      "supportCases/case_b": {
+        customerUid: "customer-stranger",
+        businessId: "biz_b",
+        businessName: "Business B",
+        subject: "Other case",
+        status: "open",
+        escalationStatus: "not_escalated",
+      },
+      "supportCases/case_escalated": {
+        customerUid: "customer-support",
+        businessId: "biz_a",
+        businessName: "Business A",
+        subject: "Escalated case",
+        status: "escalated_to_platform",
+        escalationStatus: "escalated",
       },
     };
 
@@ -397,6 +473,96 @@ describe("business dashboard Firestore rules", () => {
         staffDb.doc("businessSupportRequests/support_a").get(),
     );
     await assertFails(staffDb.doc("businessSupportRequests/support_b").get());
+  });
+});
+
+describe("marketplace support Firestore rules", () => {
+  it("allows case participants to read visible support data only", async () => {
+    const customerDb = firestoreFor("customer-support");
+    const supportStaffDb = firestoreFor("staff-support-a");
+    const listingStaffDb = firestoreFor("staff-listings-a");
+    const supportAdminDb = firestoreFor("support-admin");
+    const strangerDb = firestoreFor("customer-stranger");
+
+    await assertSucceeds(customerDb.doc("supportCases/case_a").get());
+    await assertSucceeds(
+        customerDb.doc("supportCases/case_a/messages/msg_a").get(),
+    );
+    await assertSucceeds(
+        customerDb.doc("supportCases/case_a/timeline/event_a").get(),
+    );
+    await assertSucceeds(
+        supportStaffDb.doc("supportCases/case_a").get(),
+    );
+    await assertSucceeds(
+        supportAdminDb.doc("supportCases/case_a/internalNotes/note_a").get(),
+    );
+
+    await assertFails(
+        customerDb.doc("supportCases/case_a/internalNotes/note_a").get(),
+    );
+    await assertFails(listingStaffDb.doc("supportCases/case_a").get());
+    await assertFails(strangerDb.doc("supportCases/case_a").get());
+  });
+
+  it("allows the business and admin inbox LIST queries", async () => {
+    // Regression: the support inbox queries are `list` (collection) reads, not
+    // single-doc gets. canReadSupportCase must stay evaluable for list, and the
+    // optional message `internal` flag must not throw when absent.
+    const customerDb = firestoreFor("customer-support");
+    const supportStaffDb = firestoreFor("staff-support-a");
+    const supportAdminDb = firestoreFor("support-admin");
+    const listingStaffDb = firestoreFor("staff-listings-a");
+    const strangerDb = firestoreFor("customer-stranger");
+
+    // Customer inbox: where customerUid == me
+    await assertSucceeds(
+        customerDb.collection("supportCases")
+            .where("customerUid", "==", "customer-support").get(),
+    );
+    // Business inbox: where businessId == my business
+    await assertSucceeds(
+        supportStaffDb.collection("supportCases")
+            .where("businessId", "==", "biz_a").get(),
+    );
+    // Admin inbox: where escalationStatus == 'escalated'
+    await assertSucceeds(
+        supportAdminDb.collection("supportCases")
+            .where("escalationStatus", "==", "escalated").get(),
+    );
+    // Message thread is also a list read, incl. a message with no `internal`.
+    await assertSucceeds(
+        customerDb.collection("supportCases/case_a/messages").get(),
+    );
+
+    // A business staffer without the support section cannot list the queue.
+    await assertFails(
+        listingStaffDb.collection("supportCases")
+            .where("businessId", "==", "biz_a").get(),
+    );
+    // A stranger cannot list another business's cases.
+    await assertFails(
+        strangerDb.collection("supportCases")
+            .where("businessId", "==", "biz_a").get(),
+    );
+  });
+
+  it("denies direct client writes to support case collections", async () => {
+    const customerDb = firestoreFor("customer-support");
+    const supportAdminDb = firestoreFor("support-admin");
+
+    await assertFails(customerDb.doc("supportCases/case_a/messages/new").set({
+      body: "Client write should use callable",
+      senderUid: "customer-support",
+    }));
+    await assertFails(supportAdminDb.doc("supportCases/case_a").set({
+      status: "resolved",
+    }, {merge: true}));
+    await assertFails(
+        supportAdminDb.doc("supportCases/case_a/internalNotes/new").set({
+          body: "Client write should use callable",
+        }),
+    );
   });
 });
 
@@ -715,4 +881,76 @@ describe("car listing image Storage rules", () => {
         ),
     );
   });
+});
+
+describe("support attachment Storage rules", () => {
+  it("allows support participants to upload scoped attachments", async () => {
+    await assertSucceeds(
+        putSupportAttachment(
+            storageFor("customer-support"),
+            "case_a",
+            "customer-support",
+            "receipt.pdf",
+        ),
+    );
+    await assertSucceeds(
+        putSupportAttachment(
+            storageFor("staff-support-a"),
+            "case_a",
+            "staff-support-a",
+            "photo.jpg",
+            {contentType: "image/jpeg"},
+        ),
+    );
+    await assertSucceeds(
+        putSupportAttachment(
+            storageFor("support-admin"),
+            "case_a",
+            "support-admin",
+            "note.txt",
+            {contentType: "text/plain"},
+        ),
+    );
+  });
+
+  it("denies strangers, wrong uploader paths, and invalid support files",
+      async () => {
+        await assertFails(
+            putSupportAttachment(
+                storageFor("customer-stranger"),
+                "case_a",
+                "customer-stranger",
+                "cross.pdf",
+            ),
+        );
+        await assertFails(
+            putSupportAttachment(
+                storageFor("customer-support"),
+                "case_a",
+                "other-user",
+                "wrong-owner.pdf",
+            ),
+        );
+        await assertFails(
+            putSupportAttachment(
+                storageFor("customer-support"),
+                "case_a",
+                "customer-support",
+                "script.js",
+                {contentType: "application/javascript"},
+            ),
+        );
+        await assertFails(
+            putSupportAttachment(
+                storageFor("customer-support"),
+                "case_a",
+                "customer-support",
+                "huge.jpg",
+                {
+                  contentType: "image/jpeg",
+                  size: 10 * 1024 * 1024,
+                },
+            ),
+        );
+      });
 });

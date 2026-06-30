@@ -1,8 +1,8 @@
 import { initializeApp, getApps } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getFunctions } from "firebase/functions";
-import { getStorage } from "firebase/storage";
+import { connectAuthEmulator, getAuth } from "firebase/auth";
+import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
+import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
+import { connectStorageEmulator, getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey:
@@ -28,3 +28,19 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const functions = getFunctions(app);
 export const storage = getStorage(app);
+
+// Opt-in local development against the Firebase emulator suite. Off by default,
+// so production builds (where NEXT_PUBLIC_USE_FIREBASE_EMULATORS is unset) are
+// unaffected. Mirrors the Flutter app's USE_FIREBASE_EMULATORS switch.
+if (
+  typeof window !== "undefined" &&
+  process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true" &&
+  !(globalThis as { __laawolEmulatorsConnected?: boolean }).__laawolEmulatorsConnected
+) {
+  (globalThis as { __laawolEmulatorsConnected?: boolean }).__laawolEmulatorsConnected = true;
+  const host = process.env.NEXT_PUBLIC_FIREBASE_EMULATOR_HOST ?? "127.0.0.1";
+  connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
+  connectFirestoreEmulator(db, host, 8080);
+  connectFunctionsEmulator(functions, host, 5001);
+  connectStorageEmulator(storage, host, 9199);
+}
