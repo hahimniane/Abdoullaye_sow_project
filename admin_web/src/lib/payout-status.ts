@@ -40,9 +40,9 @@ export function resolveBusinessPayoutStatus(input: PayoutStatusInput): BusinessP
       payoutsEnabled,
       primaryLabel: "Payout setup required",
       chargesLabel: chargesEnabled ? "Charges verified" : "Charges not verified",
-      actionLabel: "Connect bank account",
+      actionLabel: "Start Stripe registration",
       refreshLabel: "Refresh status",
-      helperText: "Connect a Stripe payout account so the platform can send this business its payouts.",
+      helperText: "Register with Stripe so Laawol can verify the business and send payouts securely.",
     };
   }
 

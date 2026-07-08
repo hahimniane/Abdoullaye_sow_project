@@ -62,6 +62,46 @@ const previewBusiness: FirestoreRow = {
   },
 };
 
+type PreviewStripeState = "none" | "pending" | "ready";
+
+function resolvePreviewStripeState(value: string | null): PreviewStripeState {
+  if (value === "pending" || value === "ready") return value;
+  return "none";
+}
+
+function businessForPreviewStripeState(state: PreviewStripeState): FirestoreRow {
+  if (state === "ready") {
+    return {
+      ...previewBusiness,
+      status: "approved",
+      stripeAccountId: "acct_atlantic_ready",
+      chargesEnabled: true,
+      payoutsEnabled: true,
+      stripeRequirements: {
+        currentlyDue: [],
+        pastDue: [],
+        pendingVerification: [],
+        disabledReason: "",
+      },
+    };
+  }
+
+  if (state === "pending") return previewBusiness;
+
+  return {
+    ...previewBusiness,
+    stripeAccountId: "",
+    chargesEnabled: false,
+    payoutsEnabled: false,
+    stripeRequirements: {
+      currentlyDue: [],
+      pastDue: [],
+      pendingVerification: [],
+      disabledReason: "requirements.pending_verification",
+    },
+  };
+}
+
 export function ConsoleRouter() {
   useFrenchDomTranslation();
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
@@ -70,6 +110,7 @@ export function ConsoleRouter() {
   const [authError, setAuthError] = useState("");
   const [previewMode, setPreviewMode] = useState(false);
   const [previewConsole, setPreviewConsole] = useState<"admin" | "business">("admin");
+  const [previewStripeState, setPreviewStripeState] = useState<PreviewStripeState>("none");
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -79,6 +120,7 @@ export function ConsoleRouter() {
     if (localPreview) {
       setPreviewMode(true);
       setPreviewConsole(url.searchParams.get("console") === "business" ? "business" : "admin");
+      setPreviewStripeState(resolvePreviewStripeState(url.searchParams.get("stripe")));
       setBooting(false);
       return undefined;
     }
@@ -122,7 +164,7 @@ export function ConsoleRouter() {
         <BusinessConsole
           firebaseUser={previewBusinessUser}
           profile={previewBusinessProfile}
-          previewBusiness={previewBusiness}
+          previewBusiness={businessForPreviewStripeState(previewStripeState)}
           onSignOut={() => setPreviewMode(false)}
         />
       );

@@ -106,7 +106,7 @@
             <input type="text" id="ownerName" name="ownerName" autocomplete="name" required />
           </label>
           <label class="fld">Téléphone <span class="req">*</span>
-            <input type="tel" id="ownerPhone" name="ownerPhone" autocomplete="tel" placeholder="+1 555 123 4567" required />
+            <input type="tel" id="ownerPhone" name="ownerPhone" autocomplete="tel" placeholder="+1 555 123 4567" data-phone-autocode="true" required />
           </label>
         </div>
         <div id="credFields">
@@ -139,37 +139,30 @@
         </label>
         <div class="field-row">
           <label class="fld">Téléphone de l’entreprise
-            <input type="tel" id="businessPhone" name="businessPhone" placeholder="Facultatif" />
+            <input type="tel" id="businessPhone" name="businessPhone" placeholder="Optional" data-phone-autocode="true" />
           </label>
           <label class="fld">Email de l’entreprise
-            <input type="email" id="businessEmail" name="businessEmail" placeholder="Facultatif" />
+            <input type="email" id="businessEmail" name="businessEmail" placeholder="Optional" />
           </label>
         </div>
         <label class="fld">Site web
-          <input type="url" id="businessWebsite" name="businessWebsite" placeholder="https:// (facultatif)" />
+          <input type="url" id="businessWebsite" name="businessWebsite" placeholder="https:// (optional)" />
         </label>
         <div class="field-row">
           <label class="fld">Pays de l’entreprise <span class="req">*</span>
             <select id="businessCountry" name="businessCountry" required>
               <option value="">Sélectionnez un pays</option>
-              <option value="United States">États-Unis</option>
-              <option value="Guinea">Guinée</option>
-              <option value="Senegal">Sénégal</option>
-              <option value="Mali">Mali</option>
-              <option value="Côte d'Ivoire">Côte d'Ivoire</option>
-              <option value="Gambia">Gambie</option>
-              <option value="Sierra Leone">Sierra Leone</option>
-              <option value="Liberia">Libéria</option>
             </select>
           </label>
           <label class="fld">Ville de l’entreprise <span class="req">*</span>
             <select id="businessCity" name="businessCity" disabled required>
               <option value="">Sélectionnez une ville</option>
             </select>
+            <input type="text" id="businessCityText" name="businessCityText" placeholder="Saisissez une ville" autocomplete="address-level2" hidden disabled />
           </label>
         </div>
         <label class="fld">Parlez-nous de votre service
-          <textarea id="serviceNote" name="serviceNote" rows="4" placeholder="Trajets, prix, expérience, tout élément utile à l’approbation (facultatif)"></textarea>
+          <textarea id="serviceNote" name="serviceNote" rows="4" placeholder="Routes, pricing, experience, anything useful for approval (optional)"></textarea>
         </label>
         <label class="fld">Logo ou photo de vitrine (facultatif)
           <div class="logo-row">
@@ -208,6 +201,7 @@
 
   <script src="assets/script.js?v=9"></script>
   <script src="assets/i18n.js?v=3"></script>
+  <script src="assets/country-catalog.js?v=1"></script>
   <script src="assets/content.js?v=9"></script>
 
   <script type="module">
@@ -242,11 +236,11 @@
 
     // Service catalog — mirrors my_flutter_app/lib/models/business_service.dart
     const SERVICES = [
-      { key: "barrelShipping", label: "Expédition de barils", desc: "Expédier des barils vers les pays de destination." },
-      { key: "sharedBarrels", label: "Barils partagés", desc: "Gérer des barils partiels, des dépôts et des regroupements de clients." },
-      { key: "carSales",       label: "Vente de voitures", desc: "Publier des voitures pour que les clients puissent les consulter et les acheter." },
-      { key: "carParking",     label: "Stationnement de voitures", desc: "Gérer les voitures stationnées et les reçus de stationnement." },
-      { key: "carTransport",   label: "Transport de voitures", desc: "Suivre les demandes de transport de véhicules." },
+      { key: "barrelShipping", label: "Barrel shipping", desc: "Ship barrels to destination countries." },
+      { key: "sharedBarrels", label: "Shared barrels", desc: "Manage partial barrels, drop-offs, and customer consolidation." },
+      { key: "carSales",       label: "Car sales", desc: "Publish cars so customers can browse and buy them." },
+      { key: "carParking",     label: "Car parking", desc: "Manage parked cars and parking receipts." },
+      { key: "carTransport",   label: "Car transport", desc: "Track vehicle transport requests." },
     ];
 
     const $ = (id) => document.getElementById(id);
@@ -255,18 +249,91 @@
     const submitBtn = $("submitBtn");
     const businessCountry = $("businessCountry");
     const businessCity = $("businessCity");
+    const businessCityText = $("businessCityText");
+    const countryCatalog = window.LaawolCountryCatalog;
 
-    businessCountry.addEventListener("change", () => {
+    function localize(value) {
+      return window.LaawolI18n && typeof window.LaawolI18n.localize === "function"
+        ? window.LaawolI18n.localize(value)
+        : value;
+    }
+
+    if (countryCatalog && typeof countryCatalog.populateCountrySelect === "function") {
+      countryCatalog.populateCountrySelect(businessCountry);
+    }
+
+    function setBusinessCityOptions() {
       const cities = CITY_OPTIONS[businessCountry.value] || [];
-      businessCity.innerHTML = '<option value="">Sélectionnez une ville</option>';
+      businessCity.innerHTML = "";
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = localize("Select a city");
+      businessCity.appendChild(placeholder);
       cities.forEach((city) => {
         const option = document.createElement("option");
         option.value = city;
         option.textContent = city;
         businessCity.appendChild(option);
       });
-      businessCity.disabled = cities.length === 0;
+      const hasCountry = businessCountry.value.trim().length > 0;
+      const useTextCity = hasCountry && cities.length === 0;
+      businessCity.hidden = useTextCity;
+      businessCity.disabled = useTextCity || !hasCountry;
+      businessCity.required = !useTextCity;
+      businessCityText.hidden = !useTextCity;
+      businessCityText.disabled = !useTextCity;
+      businessCityText.required = useTextCity;
+      if (!useTextCity) businessCityText.value = "";
+      if (useTextCity) businessCity.value = "";
+    }
+
+    function selectedDialCode() {
+      if (countryCatalog && typeof countryCatalog.dialCodeForCountry === "function") {
+        return countryCatalog.dialCodeForCountry(businessCountry.value);
+      }
+      return "";
+    }
+
+    function isOnlyPrefix(value, prefix) {
+      return value.replace(/\s+/g, "") === prefix;
+    }
+
+    function applyPhoneCountryCode(input, dialCode) {
+      const prefix = dialCode ? "+" + dialCode : "";
+      const previousPrefix = input.dataset.autoDialPrefix || "";
+      const value = input.value.trim();
+      input.placeholder = prefix ? prefix + " 555 123 4567" : localize("Phone number");
+      if (!prefix) return;
+
+      if (!value || (previousPrefix && isOnlyPrefix(value, previousPrefix))) {
+        input.value = prefix + " ";
+      } else if (previousPrefix && value.startsWith(previousPrefix + " ")) {
+        const rest = value.slice(previousPrefix.length).trim();
+        input.value = rest ? prefix + " " + rest : prefix + " ";
+      } else if (!value.startsWith("+") && /^\d[\d\s().-]*$/.test(value)) {
+        input.value = prefix + " " + value;
+      }
+      input.dataset.autoDialPrefix = prefix;
+    }
+
+    function syncPhoneCountryCodes() {
+      const dialCode = selectedDialCode();
+      document.querySelectorAll("[data-phone-autocode='true']").forEach((input) => {
+        applyPhoneCountryCode(input, dialCode);
+      });
+    }
+
+    businessCountry.addEventListener("change", () => {
+      setBusinessCityOptions();
+      syncPhoneCountryCodes();
     });
+    document.querySelectorAll("[data-phone-autocode='true']").forEach((input) => {
+      input.addEventListener("focus", () => {
+        if (!input.value.trim()) applyPhoneCountryCode(input, selectedDialCode());
+      });
+    });
+    setBusinessCityOptions();
+    syncPhoneCountryCodes();
 
     // Build service checkboxes (all selected by default, like mobile)
     const svcList = $("svcList");
@@ -353,7 +420,7 @@
       const businessEmail = $("businessEmail").value.trim();
       const businessWebsite = $("businessWebsite").value.trim();
       const selectedCountry = businessCountry.value.trim();
-      const selectedCity = businessCity.value.trim();
+      const selectedCity = (businessCity.hidden ? businessCityText.value : businessCity.value).trim();
       const serviceNote = $("serviceNote").value.trim();
       const services = selectedServices();
 

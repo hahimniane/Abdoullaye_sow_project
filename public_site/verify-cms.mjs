@@ -25,6 +25,7 @@ function assertIncludes(source, expected, label) {
 }
 
 const content = read("assets/content.js");
+const countryCatalog = read("assets/country-catalog.js");
 
 assertIncludes(content, '"websiteContent/home"', "content.js");
 assertIncludes(content, '"websiteContent/contact"', "content.js");
@@ -52,6 +53,17 @@ assert(
   "public content.js must not expose or request business counts",
 );
 
+assertIncludes(countryCatalog, "window.LaawolCountryCatalog", "country-catalog.js");
+assertIncludes(countryCatalog, '"name": "Afghanistan"', "country-catalog.js");
+assertIncludes(countryCatalog, '"name": "United States"', "country-catalog.js");
+assertIncludes(countryCatalog, '"name": "Zimbabwe"', "country-catalog.js");
+assertIncludes(countryCatalog, '"dialCode": "1"', "country-catalog.js");
+assertIncludes(countryCatalog, '"dialCode": "224"', "country-catalog.js");
+assert(
+  Array.from(countryCatalog.matchAll(/"id":/g)).length >= 240,
+  "country-catalog.js must contain the complete country catalog, not a curated subset",
+);
+
 htmlFiles.forEach((file) => {
   const html = read(file);
   assertIncludes(html, "assets/content.js?v=", file);
@@ -70,12 +82,20 @@ assertIncludes(contact, '<select name="destination_city"', "contact.html");
 assertIncludes(contact, 'id="destinationCity"', "contact.html");
 
 const partner = read("partner.html");
+assertIncludes(partner, "assets/country-catalog.js?v=", "partner.html");
 assertIncludes(partner, '<select id="businessCountry"', "partner.html");
 assertIncludes(partner, '<select id="businessCity"', "partner.html");
+assertIncludes(partner, 'id="businessCityText"', "partner.html");
+assertIncludes(partner, 'data-phone-autocode="true"', "partner.html");
 assert(
   !/<input[^>]+id="businessCountry"/i.test(partner) &&
     !/<input[^>]+id="businessCity"/i.test(partner),
   "partner.html business country/city controls must remain selects",
+);
+assert(
+  !/<option value="Guinea">Guinée<\/option>/.test(partner) &&
+    !/<option value="United States">États-Unis<\/option>/.test(partner),
+  "partner.html must populate business countries from country-catalog.js instead of a partial hardcoded list",
 );
 
 console.log(

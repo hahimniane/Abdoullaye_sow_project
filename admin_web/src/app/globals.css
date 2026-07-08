@@ -1771,6 +1771,79 @@ button[data-loading="true"]::before {
   margin: 0;
 }
 
+.stripe-setup-banner {
+  align-items: flex-start;
+  background: linear-gradient(135deg, rgba(236, 253, 245, 0.95), rgba(255, 251, 235, 0.92));
+  border: 1px solid rgba(13, 148, 136, 0.22);
+  border-radius: 8px;
+  box-shadow: 0 14px 34px rgba(11, 59, 56, 0.08);
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  margin: 14px;
+  padding: 18px;
+}
+
+.stripe-setup-main {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.stripe-setup-step {
+  color: var(--brand-strong);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.stripe-setup-main h2 {
+  color: var(--ink);
+  font-size: 24px;
+  line-height: 1.08;
+  margin: 0;
+}
+
+.stripe-setup-main p {
+  color: var(--ink-soft, #3c5450);
+  font-size: 14px;
+  line-height: 1.45;
+  margin: 0;
+  max-width: 760px;
+}
+
+.stripe-setup-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.stripe-setup-meta span {
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid rgba(13, 148, 136, 0.18);
+  border-radius: 999px;
+  color: var(--brand-strong);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 6px 10px;
+}
+
+.stripe-setup-actions {
+  align-items: stretch;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 230px;
+  gap: 8px;
+}
+
+.stripe-setup-actions .lst-add,
+.stripe-setup-actions .secondary-button {
+  justify-content: center;
+  min-height: 40px;
+  width: 100%;
+}
+
 .stripe-help-card {
   background: rgba(248, 250, 252, 0.94);
   border: 1px solid rgba(13, 148, 136, 0.14);
@@ -1992,6 +2065,15 @@ button[data-loading="true"]::before {
     flex: 1 1 140px;
   }
 
+  .stripe-setup-banner {
+    flex-direction: column;
+  }
+
+  .stripe-setup-actions {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
   .sidebar {
     border-right: 0;
     display: flex;
@@ -2043,6 +2125,10 @@ button[data-loading="true"]::before {
 
   .content {
     padding: 12px;
+  }
+
+  .stripe-setup-main h2 {
+    font-size: 22px;
   }
 
   .metric-grid,

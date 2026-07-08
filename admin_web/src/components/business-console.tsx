@@ -10,6 +10,7 @@ import {
   Building2,
   Car,
   ClipboardList,
+  ExternalLink,
   LogOut,
   MapPinned,
   Menu,
@@ -42,7 +43,10 @@ import {
 import { summarizeBusinessEarnings } from "@/lib/business-earnings";
 import { db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
-import { resolveBusinessPayoutStatus } from "@/lib/payout-status";
+import {
+  resolveBusinessPayoutStatus,
+  type BusinessPayoutStatus,
+} from "@/lib/payout-status";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
 
 type BusinessTab =
@@ -170,6 +174,12 @@ export function BusinessConsole({
   const businessName = text(business?.name ?? profile.businessName, "Business");
   const status = text(business?.status ?? business?.businessStatus, "pending");
   const isApproved = status === "approved";
+  const payoutStatus = resolveBusinessPayoutStatus({
+    stripeAccountId: business?.stripeAccountId,
+    chargesEnabled: business?.chargesEnabled,
+    payoutsEnabled: business?.payoutsEnabled,
+  });
+  const canOpenSupport = visibleTabs.some((tab) => tab.id === "cases");
   const attentionRows = [
     ...shipments.rows.filter((row) => isOpenStatus(row.status)).slice(0, 3),
     ...purchases.rows.filter((row) => isOpenStatus(purchaseStatus(row))).slice(0, 3),
@@ -235,9 +245,18 @@ export function BusinessConsole({
 
         <section className="content">
           {(businessError || !businessId) && <div className="error-box">{businessError || "Business account is not configured."}</div>}
+          {businessId && payoutStatus.state !== "ready" && (
+            <StripeSetupBanner
+              businessId={businessId}
+              payoutStatus={payoutStatus}
+              previewMode={previewMode}
+              onOpenSupport={() => setActiveTab("cases")}
+              canOpenSupport={canOpenSupport}
+            />
+          )}
           {!isApproved && businessId && (
             <div className="info-band">
-              This business is currently {statusLabel(status).toLowerCase()}. You can review setup data here while it waits for platform approval.
+              This business is currently {statusLabel(status).toLowerCase()}. Complete Stripe setup and any requested profile details while it waits for platform approval.
             </div>
           )}
 
@@ -255,7 +274,7 @@ export function BusinessConsole({
               services={services}
               previewMode={previewMode}
               onOpenSupport={() => setActiveTab("cases")}
-              canOpenSupport={visibleTabs.some((tab) => tab.id === "cases")}
+              canOpenSupport={canOpenSupport}
             />
           )}
           {activeTab === "profile" && (
@@ -316,6 +335,87 @@ export function BusinessConsole({
         </section>
       </main>
     </div>
+  );
+}
+
+function StripeSetupBanner({
+  businessId,
+  payoutStatus,
+  previewMode,
+  onOpenSupport,
+  canOpenSupport,
+}: {
+  businessId: string;
+  payoutStatus: BusinessPayoutStatus;
+  previewMode: boolean;
+  onOpenSupport: () => void;
+  canOpenSupport: boolean;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const hasStripeAccount = Boolean(payoutStatus.stripeAccountId);
+  const headline = hasStripeAccount
+    ? "Finish Stripe setup to continue"
+    : "Set up Stripe to continue";
+  const body = hasStripeAccount
+    ? "Your Stripe account exists, but Stripe still needs verification details before Laawol can approve payouts or send customer payments to your business."
+    : "Before your business can be approved for paid services, create your secure Stripe account for identity, tax, legal, and bank verification.";
+  const actionLabel = busy
+    ? "Opening Stripe..."
+    : hasStripeAccount
+      ? "Continue Stripe setup"
+      : "Start Stripe registration";
+
+  async function connect() {
+    setBusy(true);
+    setError("");
+    try {
+      const href = window.location.href;
+      const result = await httpsCallable(functions, "createBusinessStripeAccountLink")({
+        businessId,
+        returnUrl: href,
+        refreshUrl: href,
+      });
+      const url = text((result.data as {url?: string})?.url, "");
+      if (!url) throw new Error("Stripe did not return an onboarding link.");
+      window.location.assign(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start Stripe onboarding.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="stripe-setup-banner" aria-labelledby="stripe-setup-title">
+      <div className="stripe-setup-main">
+        <span className="stripe-setup-step">Required first step</span>
+        <h2 id="stripe-setup-title">{headline}</h2>
+        <p>{body}</p>
+        <div className="stripe-setup-meta">
+          <span>{payoutStatus.primaryLabel}</span>
+          <span>{payoutStatus.chargesLabel}</span>
+          {payoutStatus.stripeAccountId && <span>{payoutStatus.stripeAccountId}</span>}
+        </div>
+        {error && <div className="error-box">{error}</div>}
+      </div>
+      <div className="stripe-setup-actions">
+        <button className="lst-add" disabled={busy || !businessId || previewMode} onClick={connect} type="button">
+          {actionLabel}
+        </button>
+        <a
+          className="secondary-button"
+          href="https://support.stripe.com/questions/connect-platforms-manage-onboarding-and-risk-requirements-for-connected-accounts"
+          rel="noreferrer"
+          target="_blank"
+        >
+          Stripe setup help <ExternalLink size={14} />
+        </a>
+        <button className="secondary-button" disabled={!canOpenSupport} onClick={onOpenSupport} type="button">
+          Contact Laawol support
+        </button>
+      </div>
+    </section>
   );
 }
 

@@ -8,7 +8,8 @@ test("business without a Stripe account still needs payout setup", () => {
 
   assert.equal(status.state, "not_connected");
   assert.equal(status.primaryLabel, "Payout setup required");
-  assert.equal(status.actionLabel, "Connect bank account");
+  assert.equal(status.actionLabel, "Start Stripe registration");
+  assert.match(status.helperText, /Register with Stripe/);
 });
 
 test("connected Stripe account is shown as pending instead of unconfigured", () => {
