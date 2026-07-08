@@ -14,6 +14,7 @@ import '../utils/transport_receipt_generator.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/support_entry_button.dart';
 import '../theme/app_colors.dart';
 
 class TransportRequestDetailsScreen extends StatefulWidget {
@@ -333,6 +334,14 @@ class _TransportRequestDetailsScreenState
                           ),
                           const SizedBox(height: 16),
                           _CustomerRequestInfo(request: widget.request),
+                          const SizedBox(height: 16),
+                          SupportEntryButton(
+                            relatedCollection: 'transportRequests',
+                            relatedId: widget.request.id,
+                            subject: l10n.supportChat,
+                            relatedLabel: _trackingCode,
+                          ),
+                          const SizedBox(height: 16),
                           _RoundedTextField(
                             controller: _ownerController,
                             label: l10n.ownerName,
@@ -664,13 +673,15 @@ class _CustomerRequestInfo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isCustomerRequest = request.customerUid != null;
-    final hasDetails = request.customerPhone.isNotEmpty ||
+    final hasDetails =
+        request.customerPhone.isNotEmpty ||
         request.pickupAddress.isNotEmpty ||
         request.notes.isNotEmpty;
     if (!isCustomerRequest && !hasDetails) {
       return const SizedBox.shrink();
     }
 
+    final l10n = AppLocalizations.of(context)!;
     final rows = <Widget>[];
     void add(IconData icon, String label, String value) {
       if (value.trim().isEmpty) return;
@@ -685,7 +696,10 @@ class _CustomerRequestInfo extends StatelessWidget {
               Expanded(
                 child: RichText(
                   text: TextSpan(
-                    style: const TextStyle(color: AppColors.ink, fontSize: 13.5),
+                    style: const TextStyle(
+                      color: AppColors.ink,
+                      fontSize: 13.5,
+                    ),
                     children: [
                       TextSpan(
                         text: '$label  ',
@@ -705,9 +719,9 @@ class _CustomerRequestInfo extends StatelessWidget {
       );
     }
 
-    add(Icons.phone_outlined, 'Phone', request.customerPhone);
-    add(Icons.place_outlined, 'Pickup', request.pickupAddress);
-    add(Icons.notes_outlined, 'Notes', request.notes);
+    add(Icons.phone_outlined, l10n.phoneNumber, request.customerPhone);
+    add(Icons.place_outlined, l10n.pickup, request.pickupAddress);
+    add(Icons.notes_outlined, l10n.additionalNotes, request.notes);
 
     return Container(
       width: double.infinity,
@@ -723,9 +737,9 @@ class _CustomerRequestInfo extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Text(
-                'Customer request',
-                style: TextStyle(
+              Text(
+                l10n.customerRequest,
+                style: const TextStyle(
                   fontWeight: FontWeight.w800,
                   color: AppColors.ink,
                 ),
@@ -733,15 +747,17 @@ class _CustomerRequestInfo extends StatelessWidget {
               const Spacer(),
               if (request.awaitingQuote)
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.saffron.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: const Text(
-                    'Awaiting quote',
-                    style: TextStyle(
+                  child: Text(
+                    l10n.awaitingQuote,
+                    style: const TextStyle(
                       color: AppColors.warn,
                       fontWeight: FontWeight.w700,
                       fontSize: 12,
@@ -752,11 +768,11 @@ class _CustomerRequestInfo extends StatelessWidget {
           ),
           ...rows,
           if (rows.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 8),
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
               child: Text(
-                'Set a price below to send this customer a quote.',
-                style: TextStyle(color: AppColors.muted, fontSize: 13),
+                l10n.setPriceQuoteInstruction,
+                style: const TextStyle(color: AppColors.muted, fontSize: 13),
               ),
             ),
         ],

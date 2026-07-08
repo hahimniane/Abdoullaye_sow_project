@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -5,6 +7,7 @@ import '../l10n/app_localizations.dart';
 import '../models/app_version_config.dart';
 import '../providers/app_gate_provider.dart';
 import '../theme/app_colors.dart';
+import 'async_action_button.dart';
 
 class AppGateBoundary extends StatefulWidget {
   const AppGateBoundary({super.key, required this.child});
@@ -86,7 +89,7 @@ class _AppGateBoundaryState extends State<AppGateBoundary> {
               },
               child: Text(l10n.continueLabel),
             ),
-            FilledButton(
+            AsyncActionButton.filled(
               onPressed: () async {
                 final opened = await gate.openUpdateUrl();
                 if (!opened && context.mounted) {
@@ -95,7 +98,7 @@ class _AppGateBoundaryState extends State<AppGateBoundary> {
                   );
                 }
               },
-              child: Text(l10n.updateNow),
+              label: l10n.updateNow,
             ),
           ],
         );
@@ -163,9 +166,9 @@ class _GateScreen extends StatelessWidget {
   final String message;
   final bool loading;
   final String? actionLabel;
-  final VoidCallback? onAction;
+  final FutureOr<void> Function()? onAction;
   final String? secondaryActionLabel;
-  final VoidCallback? onSecondaryAction;
+  final FutureOr<void> Function()? onSecondaryAction;
 
   @override
   Widget build(BuildContext context) {
@@ -215,17 +218,17 @@ class _GateScreen extends StatelessWidget {
                       if (actionLabel != null && onAction != null)
                         SizedBox(
                           width: double.infinity,
-                          child: FilledButton(
+                          child: AsyncActionButton.filled(
                             onPressed: onAction,
-                            child: Text(actionLabel!),
+                            label: actionLabel!,
                           ),
                         ),
                       if (secondaryActionLabel != null &&
                           onSecondaryAction != null) ...[
                         const SizedBox(height: 8),
-                        TextButton(
+                        AsyncActionButton.text(
                           onPressed: onSecondaryAction,
-                          child: Text(secondaryActionLabel!),
+                          label: secondaryActionLabel!,
                         ),
                       ],
                     ],

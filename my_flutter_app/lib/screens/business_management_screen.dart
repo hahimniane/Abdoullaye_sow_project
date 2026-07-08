@@ -104,10 +104,11 @@ class BusinessManagementScreen extends StatelessWidget {
                             value: 'pending',
                             child: Text(l10n.pending),
                           ),
-                          DropdownMenuItem(
-                            value: 'approved',
-                            child: Text(l10n.approved),
-                          ),
+                          if (business?.status == 'approved')
+                            DropdownMenuItem(
+                              value: 'approved',
+                              child: Text(l10n.approved),
+                            ),
                           DropdownMenuItem(
                             value: 'suspended',
                             child: Text(l10n.suspended),

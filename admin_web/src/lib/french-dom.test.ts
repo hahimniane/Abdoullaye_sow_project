@@ -67,18 +67,39 @@ test("exact dictionary entries translate to their French value", () => {
   }
 });
 
+test("translation does not rewrite identifier-like values", () => {
+  assert.equal(
+    translateValue("acct_atlantic_pending", "fr"),
+    "acct_atlantic_pending",
+  );
+  assert.equal(
+    translateValue("business_status_pending", "fr"),
+    "business_status_pending",
+  );
+  assert.equal(
+    translateValue("2 Stripe requirements due", "fr"),
+    "2 exigences Stripe requises",
+  );
+  assert.equal(
+    translateValue("Business changes requested (preview only)", "fr"),
+    "Modifications demandées à l’entreprise (aperçu uniquement)",
+  );
+});
+
 test("language resolves from a saved preference first, then the device", () => {
   // Saved choice always wins, regardless of device language.
   assert.equal(resolveLang("en", ["fr-FR"]), "en");
   assert.equal(resolveLang("fr", ["en-US"]), "fr");
 
-  // No saved choice: follow the device. French device -> French.
+  // No saved choice: follow the primary device language.
   assert.equal(resolveLang(null, ["fr-FR", "en-US"]), "fr");
   assert.equal(resolveLang(null, ["fr"]), "fr");
+  assert.equal(resolveLang(null, ["en-US", "fr-FR"]), "en");
 
-  // No saved choice, non-French device -> base English content.
+  // No saved choice, unsupported/non-French device -> base English content.
   assert.equal(resolveLang(null, ["en-US"]), "en");
   assert.equal(resolveLang(null, ["es-ES", "de-DE"]), "en");
+  assert.equal(resolveLang(null, ["es-ES", "fr-FR"]), "en");
 
   // No saved choice and no device info -> English.
   assert.equal(resolveLang(null, []), "en");

@@ -21,6 +21,7 @@ import {
 import {
   collection,
   collectionGroup,
+  deleteField,
   doc,
   getDoc,
   limit,
@@ -28,6 +29,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
@@ -57,6 +59,19 @@ import {
 } from "lucide-react";
 
 import { auth, db, functions, storage } from "@/lib/firebase";
+import {
+  VERIFICATION_STATUSES,
+  buildBusinessVerificationChecklist,
+  businessServiceLabel,
+  businessServicesFromRow,
+  businessVerificationActionCount,
+  resolveBusinessStripeVerification,
+  summarizeVerificationItems,
+  type BusinessVerificationItem,
+  type BusinessVerificationSummary,
+  type BusinessStripeVerification,
+  type VerificationStatus,
+} from "@/lib/business-verification";
 import { asDate, formatDate, formatMoney, text } from "@/lib/format";
 import type { FirestoreRow, Role, UserProfile } from "@/types/admin";
 import { SupportCasesPanel } from "@/components/support/support-cases-panel";
@@ -111,6 +126,7 @@ const ACCESS_LEVELS: AccessLevel[] = ["none", "view", "manage"];
 const PLATFORM_SERVICES: Array<{ id: string; label: string }> = [
   { id: "barrelShipping", label: "Barrel shipping" },
   { id: "sharedBarrels", label: "Shared barrels" },
+  { id: "freight", label: "Freight (parcels)" },
   { id: "carSales", label: "Car sales" },
   { id: "carTransport", label: "Car transport" },
   { id: "carParking", label: "Car parking" },
@@ -266,6 +282,7 @@ const purchaseStatuses = [
 const businessServices = [
   { id: "barrelShipping", label: "Barrel shipping" },
   { id: "sharedBarrels", label: "Shared barrels" },
+  { id: "freight", label: "Freight (parcels)" },
   { id: "carSales", label: "Car sales" },
   { id: "carParking", label: "Car parking" },
   { id: "carTransport", label: "Car transport" },
@@ -295,8 +312,11 @@ const statusLabels = {
   expired: "Expired",
   full: "Full",
   hold_review_required: "Hold review required",
+  missing: "Missing",
   missing_profile: "Missing profile",
+  needs_changes: "Needs changes",
   not_required: "Not required",
+  not_applicable: "Not applicable",
   paid: "Paid",
   partially_filled: "Partially filled",
   pending_payment: "Pending payment",
@@ -305,6 +325,8 @@ const statusLabels = {
   sealed: "Sealed",
   waiting_on_platform: "Waiting on platform",
   viewing_scheduled: "Viewing scheduled",
+  submitted: "Submitted",
+  verified: "Verified",
   no_show: "No show",
   balance_due: "Balance due",
   collected_by_business: "Collected by business",
@@ -402,8 +424,63 @@ const previewData = {
     { id: "contact-aissatou", fullName: "Aissatou Bah", email: "aissatou@example.com", phone: "+1 718 555 0134", role: "missing_profile", businessName: "Keren Auto Sales", hasProfile: false, _inferred: true, _sourceCode: "VX-BRL-1048" },
   ],
   businesses: [
-    { id: "keren_auto_sales", name: "Keren Auto Sales", phone: "+1 718 555 0110", email: "ops@kerenautos.com", status: "approved", enabledServices: ["carSales", "carParking", "carTransport", "barrelShipping"], serviceNote: "Cars, parking, transport, barrel shipping", featureConsent: true, marketingBlurb: "Cars, parking, transport, and shipping support for customers moving between the U.S. and West Africa.", logoUrl: "https://placehold.co/256x256?text=K" },
-    { id: "atlantic_exports", name: "Atlantic Exports", phone: "+1 646 555 0182", email: "hello@atlanticexports.com", status: "pending", enabledServices: ["barrelShipping"], featureStatus: "requested", marketingBlurb: "Barrel and shared-load shipping with clear destination pricing.", serviceNote: "Pending document review" },
+    {
+      id: "keren_auto_sales",
+      name: "Keren Auto Sales",
+      phone: "+1 718 555 0110",
+      email: "ops@kerenautos.com",
+      status: "approved",
+      enabledServices: ["carSales", "carParking", "carTransport", "barrelShipping"],
+      serviceNote: "Cars, parking, transport, barrel shipping",
+      featureConsent: true,
+      marketingBlurb: "Cars, parking, transport, and shipping support for customers moving between the U.S. and West Africa.",
+      logoUrl: "https://placehold.co/256x256?text=K",
+      stripeAccountId: "acct_keren_ready",
+      chargesEnabled: true,
+      payoutsEnabled: true,
+      stripeRequirements: {
+        currentlyDue: [],
+        pastDue: [],
+        pendingVerification: [],
+      },
+      verificationReview: {
+        documents: {
+          dealerLicense: {status: "verified"},
+          parkingFacilityProof: {status: "verified"},
+          transportInsurance: {status: "verified"},
+          shippingAuthority: {status: "verified"},
+        },
+      },
+    },
+    {
+      id: "atlantic_exports",
+      name: "Atlantic Exports",
+      phone: "+1 646 555 0182",
+      email: "hello@atlanticexports.com",
+      status: "pending",
+      enabledServices: ["barrelShipping", "sharedBarrels", "freight"],
+      featureStatus: "requested",
+      marketingBlurb: "Barrel and shared-load shipping with clear destination pricing.",
+      serviceNote: "Pending document review",
+      stripeAccountId: "acct_atlantic_pending",
+      chargesEnabled: false,
+      payoutsEnabled: false,
+      stripeRequirements: {
+        currentlyDue: ["external_account", "business_profile.url"],
+        pastDue: [],
+        pendingVerification: [],
+        disabledReason: "requirements.pending_verification",
+      },
+      verificationDocuments: {
+        shippingAuthority: {fileName: "Warehouse agreement.pdf", url: "https://example.com/warehouse.pdf"},
+      },
+      verificationReview: {
+        documents: {
+          shippingAuthority: {status: "needs_changes", note: "Agreement must show current year."},
+        },
+        note: "Send Stripe updates through Stripe. Laawol only needs the current warehouse proof before approval.",
+      },
+    },
   ],
   featuredBusinesses: [
     { id: "keren_auto_sales", businessId: "keren_auto_sales", displayName: "Keren Auto Sales", logoUrl: "https://placehold.co/256x256?text=K", blurb: "Cars, parking, transport, and shipping support for the road home.", services: ["carSales", "carParking", "carTransport"], order: 1, active: true },
@@ -1405,8 +1482,10 @@ export function AdminConsole() {
           )}
           {activeTab === "settings" && (
             <SettingsView
+              businesses={businessRows}
               config={rolePermsConfig}
               currentUserId={firebaseUser?.uid ?? ""}
+              pricing={pricingRows}
               previewMode={previewMode}
               runAction={runAction}
             />
@@ -2244,13 +2323,17 @@ const SETTINGS_SECTION_ROWS: Array<{ key: string; label: string; levels: AccessL
 ];
 
 function SettingsView({
+  businesses,
   config,
   currentUserId,
+  pricing,
   previewMode,
   runAction,
 }: {
+  businesses: FirestoreRow[];
   config: PermissionsConfig | null;
   currentUserId: string;
+  pricing: FirestoreRow[];
   previewMode: boolean;
   runAction: (label: string, action: () => Promise<unknown>) => void;
 }) {
@@ -2468,7 +2551,9 @@ function SettingsView({
       </Panel>
 
       <MoreSettings
+        businesses={businesses}
         currentUserId={currentUserId}
+        pricing={pricing}
         previewMode={previewMode}
         runAction={runAction}
       />
@@ -2506,6 +2591,54 @@ const GENERAL_DEFAULTS = {
 };
 
 type GeneralSettings = typeof GENERAL_DEFAULTS;
+
+const PLATFORM_FEE_KEYS = [
+  "platformFeePct",
+  "barrelPlatformFeePct",
+  "sharedBarrelPlatformFeePct",
+  "freightPlatformFeePct",
+  "parkingPlatformFeePct",
+  "carDepositPlatformFeePct",
+  "carPurchasePlatformFeePct",
+  "holdExtensionPlatformFeePct",
+];
+
+function percentInputFromRate(value: unknown) {
+  const rate = Number(value ?? 0.1);
+  const percent = Number.isFinite(rate) && rate >= 0 ? rate * 100 : 10;
+  return String(Math.round(percent * 100) / 100);
+}
+
+function rateFromPercentInput(value: string) {
+  const percent = Number(value);
+  if (!Number.isFinite(percent) || percent <= 0 || percent >= 100) {
+    throw new Error("Enter a platform fee greater than 0 and less than 100.");
+  }
+  return Math.round(percent * 10000) / 1000000;
+}
+
+function percentLabelFromRate(value: unknown) {
+  const rate = Number(value);
+  if (!Number.isFinite(rate) || rate < 0) return "";
+  return `${Math.round(rate * 10000) / 100}%`;
+}
+
+function businessCommissionRate(business: FirestoreRow) {
+  const rate = Number(business.platformFeePct ?? business.platformCommissionPct);
+  return Number.isFinite(rate) && rate >= 0 && rate < 1 ? rate : null;
+}
+
+function businessSearchText(business: FirestoreRow) {
+  return [
+    business.id,
+    business.name,
+    business.businessName,
+    business.email,
+    business.phone,
+    business.city,
+    business.state,
+  ].map((value) => text(value, "").toLowerCase()).join(" ");
+}
 
 function mergeGeneral(data: Record<string, unknown> | undefined): GeneralSettings {
   const d = data ?? {};
@@ -2556,16 +2689,45 @@ function ToggleRow({
 }
 
 function MoreSettings({
+  businesses,
   currentUserId,
+  pricing,
   previewMode,
   runAction,
 }: {
+  businesses: FirestoreRow[];
   currentUserId: string;
+  pricing: FirestoreRow[];
   previewMode: boolean;
   runAction: (label: string, action: () => Promise<unknown>) => void;
 }) {
   const [draft, setDraft] = useState<GeneralSettings>(() => mergeGeneral(undefined));
+  const [platformFeeDraft, setPlatformFeeDraft] = useState("10");
+  const [businessFeeDraft, setBusinessFeeDraft] = useState("10");
+  const [businessFeeSearch, setBusinessFeeSearch] = useState("");
+  const [selectedBusinessIds, setSelectedBusinessIds] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const serviceFees = useMemo(
+    () => pricing.find((row) => row.id === "serviceFees") ?? null,
+    [pricing],
+  );
+  const defaultPlatformFeeLabel = percentLabelFromRate(serviceFees?.platformFeePct) || "10%";
+  const eligibleBusinesses = useMemo(
+    () => businesses.filter((business) => business._inferred !== true),
+    [businesses],
+  );
+  const filteredBusinesses = useMemo(() => {
+    const needle = businessFeeSearch.trim().toLowerCase();
+    if (!needle) return eligibleBusinesses;
+    return eligibleBusinesses.filter((business) =>
+      businessSearchText(business).includes(needle),
+    );
+  }, [businessFeeSearch, eligibleBusinesses]);
+  const selectedSet = useMemo(() => new Set(selectedBusinessIds), [selectedBusinessIds]);
+  const selectedBusinesses = useMemo(
+    () => eligibleBusinesses.filter((business) => selectedSet.has(business.id)),
+    [eligibleBusinesses, selectedSet],
+  );
 
   useEffect(() => {
     let active = true;
@@ -2584,6 +2746,17 @@ function MoreSettings({
       .catch(() => { if (active) setLoaded(true); });
     return () => { active = false; };
   }, [previewMode]);
+
+  useEffect(() => {
+    setPlatformFeeDraft(percentInputFromRate(serviceFees?.platformFeePct));
+  }, [serviceFees]);
+
+  useEffect(() => {
+    setSelectedBusinessIds((current) => {
+      const valid = new Set(eligibleBusinesses.map((business) => business.id));
+      return current.filter((id) => valid.has(id));
+    });
+  }, [eligibleBusinesses]);
 
   function setBranding(key: string, value: string) {
     setDraft((d) => ({ ...d, branding: { ...d.branding, [key]: value } }));
@@ -2623,6 +2796,63 @@ function MoreSettings({
     );
   }
 
+  async function savePlatformFee() {
+    const rate = rateFromPercentInput(platformFeeDraft);
+    if (previewMode) return;
+    await setDoc(
+      doc(db, "shipmentPricing", "serviceFees"),
+      {
+        ...Object.fromEntries(PLATFORM_FEE_KEYS.map((key) => [key, rate])),
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUserId,
+      },
+      {merge: true},
+    );
+  }
+
+  function toggleBusinessSelection(businessId: string) {
+    setSelectedBusinessIds((current) =>
+      current.includes(businessId)
+        ? current.filter((id) => id !== businessId)
+        : [...current, businessId],
+    );
+  }
+
+  function selectBusinessRows(rows: FirestoreRow[]) {
+    const ids = rows.map((business) => business.id);
+    setSelectedBusinessIds((current) => Array.from(new Set([...current, ...ids])));
+  }
+
+  async function saveBusinessCommission(targets: FirestoreRow[]) {
+    if (targets.length === 0) throw new Error("Select at least one business.");
+    const rate = rateFromPercentInput(businessFeeDraft);
+    if (previewMode) return;
+    await Promise.all(targets.map((business) =>
+      setDoc(
+        doc(db, "businesses", business.id),
+        {
+          platformFeePct: rate,
+          platformFeeUpdatedAt: serverTimestamp(),
+          platformFeeUpdatedBy: currentUserId,
+        },
+        {merge: true},
+      ),
+    ));
+  }
+
+  async function resetBusinessCommission(targets: FirestoreRow[]) {
+    if (targets.length === 0) throw new Error("Select at least one business.");
+    if (previewMode) return;
+    await Promise.all(targets.map((business) =>
+      updateDoc(doc(db, "businesses", business.id), {
+        platformFeePct: deleteField(),
+        platformCommissionPct: deleteField(),
+        platformFeeUpdatedAt: serverTimestamp(),
+        platformFeeUpdatedBy: currentUserId,
+      }),
+    ));
+  }
+
   if (!loaded) {
     return (
       <Panel title="More settings" icon={<SlidersHorizontal size={18} />}>
@@ -2633,6 +2863,156 @@ function MoreSettings({
 
   return (
     <>
+      <Panel
+        title="Platform transaction fee"
+        icon={<BadgeDollarSign size={18} />}
+        action={<button className="primary-button compact" type="button" onClick={() => runAction("Platform fee saved", savePlatformFee)}>Save</button>}
+      >
+        <div className="info-band">
+          This percentage is kept by the platform from each paid customer transaction before calculating the business payout. It is saved to the live payment pricing record used by backend checkout functions.
+        </div>
+        <div className="settings-form narrow">
+          <label>
+            Platform fee (%)
+            <input
+              inputMode="decimal"
+              min="0.01"
+              max="99.99"
+              step="0.01"
+              type="number"
+              value={platformFeeDraft}
+              onChange={(event) => setPlatformFeeDraft(event.target.value)}
+              placeholder="10"
+            />
+          </label>
+        </div>
+      </Panel>
+
+      <Panel
+        title="Business commission overrides"
+        icon={<Building2 size={18} />}
+        action={
+          <div className="panel-tools">
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => selectBusinessRows(filteredBusinesses)}
+            >
+              Select results
+            </button>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() => setSelectedBusinessIds([])}
+            >
+              Clear
+            </button>
+          </div>
+        }
+      >
+        <div className="info-band">
+          <span>Business overrides are used before the default platform transaction fee.</span>{" "}
+          <span>Current default</span>: <b>{defaultPlatformFeeLabel}</b>.
+        </div>
+        <div className="commission-toolbar">
+          <SearchBox
+            value={businessFeeSearch}
+            onChange={setBusinessFeeSearch}
+            placeholder="Search businesses"
+          />
+          <label className="commission-rate-input">
+            Commission (%)
+            <input
+              inputMode="decimal"
+              min="0.01"
+              max="99.99"
+              step="0.01"
+              type="number"
+              value={businessFeeDraft}
+              onChange={(event) => setBusinessFeeDraft(event.target.value)}
+              placeholder="10"
+            />
+          </label>
+        </div>
+        <div className="commission-actions">
+          <button
+            className="primary-button"
+            type="button"
+            disabled={selectedBusinesses.length === 0}
+            onClick={() =>
+              runAction("Business commissions saved", () =>
+                saveBusinessCommission(selectedBusinesses),
+              )
+            }
+          >
+            <span>Set selected</span>
+            <span>({selectedBusinesses.length})</span>
+          </button>
+          <button
+            className="secondary-button"
+            type="button"
+            disabled={eligibleBusinesses.length === 0}
+            onClick={() =>
+              runAction("All business commissions saved", () =>
+                saveBusinessCommission(eligibleBusinesses),
+              )
+            }
+          >
+            Set all businesses
+          </button>
+          <button
+            className="ghost-button"
+            type="button"
+            disabled={selectedBusinesses.length === 0}
+            onClick={() =>
+              runAction("Business commissions reset", () =>
+                resetBusinessCommission(selectedBusinesses),
+              )
+            }
+          >
+            Use default for selected
+          </button>
+        </div>
+        <div className="commission-list">
+          {filteredBusinesses.slice(0, 80).map((business) => {
+            const overrideRate = businessCommissionRate(business);
+            const checked = selectedSet.has(business.id);
+            return (
+              <label className={`commission-row ${checked ? "selected" : ""}`} key={business.id}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleBusinessSelection(business.id)}
+                />
+                <span className="commission-business">
+                  <b>{text(business.name ?? business.businessName, business.id)}</b>
+                  <small>{text(business.email, business.id)}</small>
+                </span>
+                <span className="commission-status">{statusLabels[rowStatus(business) as keyof typeof statusLabels] ?? rowStatus(business)}</span>
+                <span className={overrideRate === null ? "commission-default" : "commission-override"}>
+                  {overrideRate === null
+                    ? (
+                        <>
+                          <span>Default</span> {defaultPlatformFeeLabel}
+                        </>
+                      )
+                    : percentLabelFromRate(overrideRate)}
+                </span>
+              </label>
+            );
+          })}
+          {filteredBusinesses.length > 80 && (
+            <div className="commission-more">
+              <span>Showing</span> <b>80</b>/<b>{filteredBusinesses.length}</b>.{" "}
+              <span>Search to narrow the list.</span>
+            </div>
+          )}
+          {filteredBusinesses.length === 0 && (
+            <EmptyState text={eligibleBusinesses.length === 0 ? "No businesses loaded" : "No businesses match this search."} />
+          )}
+        </div>
+      </Panel>
+
       <Panel
         title="Internal platform branding"
         icon={<Store size={18} />}
@@ -3745,6 +4125,7 @@ function BusinessesView({
       countWhere(slices.purchases, (item) => rowStatus(item, "purchaseStatus") === "pending") +
       countWhere(slices.refunds, (item) => rowStatus(item) === "pending") +
       slices.applications.length +
+      businessVerificationActionCount(business) +
       countWhere(slices.supportRequests, (item) => rowStatus(item, "status") !== "closed")
     );
   }
@@ -4055,6 +4436,7 @@ function BusinessSupportRequestForm({
 
 const workspaceSections = [
   "overview",
+  "verification",
   "people",
   "listings",
   "services",
@@ -4067,12 +4449,239 @@ type WorkspaceSection = (typeof workspaceSections)[number];
 function workspaceSectionLabel(section: WorkspaceSection) {
   return {
     overview: "Overview",
+    verification: "Verification",
     people: "People",
     listings: "Listings",
     services: "Services",
     payments: "Payments",
     support: "Support",
   }[section];
+}
+
+function optionalVerificationText(value: unknown) {
+  if (typeof value === "string") return value.trim();
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+}
+
+function businessVerificationReviewNote(business: FirestoreRow) {
+  const review = business.verificationReview;
+  if (review && typeof review === "object" && !Array.isArray(review)) {
+    return (
+      optionalVerificationText((review as Record<string, unknown>).note) ||
+      optionalVerificationText(business.reviewNote)
+    );
+  }
+  return optionalVerificationText(business.reviewNote);
+}
+
+function verificationAppliesTo(item: BusinessVerificationItem) {
+  return item.services.length === 0
+    ? "All businesses"
+    : item.services.map(businessServiceLabel).join(", ");
+}
+
+function stripeVerificationStateLabel(state: BusinessStripeVerification["state"]) {
+  if (state === "ready") return "Complete";
+  if (state === "pending") return "Pending";
+  if (state === "action_required") return "Action required";
+  return "Not started";
+}
+
+function BusinessVerificationPanel({
+  business,
+  items,
+  summary,
+  stripe,
+  reviewNote,
+  onReviewNoteChange,
+  onStatusChange,
+  onVerifySubmitted,
+  onRefreshStripe,
+  onSave,
+  onApprove,
+  onRequestChanges,
+  runAction,
+}: {
+  business: FirestoreRow;
+  items: BusinessVerificationItem[];
+  summary: BusinessVerificationSummary;
+  stripe: BusinessStripeVerification;
+  reviewNote: string;
+  onReviewNoteChange: (value: string) => void;
+  onStatusChange: (documentId: string, status: VerificationStatus) => void;
+  onVerifySubmitted: () => void;
+  onRefreshStripe: () => Promise<void>;
+  onSave: () => Promise<void>;
+  onApprove: () => Promise<void>;
+  onRequestChanges: () => Promise<void>;
+  runAction: (label: string, action: () => Promise<unknown>) => void;
+}) {
+  const platformBlockers = summary.missing + summary.submitted + summary.needsChanges;
+  const blockers = platformBlockers + (stripe.ready ? 0 : 1);
+  const approvalReady = stripe.ready && summary.approvalReady;
+  const approved = rowStatus(business) === "approved";
+  const canVerifySubmitted = items.some((item) => item.status === "submitted");
+  const stripeDueCount = stripe.currentlyDue.length + stripe.pastDue.length;
+
+  return (
+    <div className="workspace-section">
+      <div className={`verification-readiness ${approvalReady ? "ready" : "blocked"}`}>
+        <div>
+          <strong>
+            {approvalReady ? "Ready to approve" : "Stripe setup or platform documents still need review"}
+          </strong>
+          <span>
+            {approvalReady
+              ? "Stripe and required Laawol service documents are complete."
+              : `${blockers} approval item${blockers === 1 ? "" : "s"} must be completed before approval.`}
+          </span>
+        </div>
+        <span className="status-pill">
+          {stripe.ready ? "Stripe complete" : "Stripe blocked"}
+        </span>
+      </div>
+
+      <div className="verification-summary-grid">
+        <div><b>{summary.total}</b><span>Platform docs</span></div>
+        <div><b>{summary.verified}</b><span>Verified</span></div>
+        <div><b>{summary.submitted + summary.needsChanges}</b><span>Needs review</span></div>
+        <div><b>{summary.missing}</b><span>Missing</span></div>
+      </div>
+
+      <article className={`verification-card stripe-card status-${stripe.state}`}>
+        <header>
+          <div>
+            <strong>Stripe verification</strong>
+            <small>Identity, legal, tax, and bank details</small>
+          </div>
+          <span className={`status-pill compact ${stripe.ready ? "" : "warning"}`}>
+            {stripeVerificationStateLabel(stripe.state)}
+          </span>
+        </header>
+        <p>{stripe.helperText}</p>
+        <div className="verification-evidence">
+          <span>{stripe.stripeAccountId ? `Account: ${stripe.stripeAccountId}` : "No Stripe account connected yet"}</span>
+          {stripeDueCount > 0 && (
+            <span>
+              <strong>{stripeDueCount}</strong> {stripeDueCount === 1 ? "Stripe requirement due" : "Stripe requirements due"}
+            </span>
+          )}
+          {stripe.pendingVerification.length > 0 && (
+            <span><strong>{stripe.pendingVerification.length}</strong> pending with Stripe</span>
+          )}
+          <button
+            className="secondary-button"
+            disabled={!stripe.stripeAccountId}
+            onClick={() => runAction("Stripe status refreshed", onRefreshStripe)}
+            type="button"
+          >
+            Refresh Stripe status
+          </button>
+        </div>
+      </article>
+
+      <div className="verification-list">
+        {items.length === 0 && (
+          <article className="verification-card status-verified">
+            <header>
+              <div>
+                <strong>No Laawol service documents required</strong>
+                <small>Stripe still handles identity, tax, legal, and bank checks.</small>
+              </div>
+              <span className="status-pill compact">Complete</span>
+            </header>
+            <p>The selected services do not require extra Laawol licenses or authority documents.</p>
+          </article>
+        )}
+        {items.map((item) => (
+          <article className={`verification-card status-${item.status}`} key={item.id}>
+            <header>
+              <div>
+                <strong>{item.label}</strong>
+                <small>{verificationAppliesTo(item)}</small>
+              </div>
+              <span className="status-pill compact">{statusLabel(item.status)}</span>
+            </header>
+            <p>{item.description}</p>
+            <div className="verification-evidence">
+              {item.evidence.present ? (
+                item.evidence.url ? (
+                  <a className="link-button" href={item.evidence.url} rel="noreferrer" target="_blank">
+                    Open document
+                    <ArrowUpRight size={14} />
+                  </a>
+                ) : (
+                  <span>Uploaded: {item.evidence.label}</span>
+                )
+              ) : (
+                <span className="verification-missing">No file uploaded yet</span>
+              )}
+              <label>
+                Review status
+                <select
+                  value={item.status}
+                  onChange={(event) =>
+                    onStatusChange(item.id, event.target.value as VerificationStatus)
+                  }
+                >
+                  {VERIFICATION_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {statusLabel(status)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {item.reviewNote && <small className="verification-note">{item.reviewNote}</small>}
+          </article>
+        ))}
+      </div>
+
+      <label className="review-note-field">
+        Review note
+        <textarea
+          placeholder="Explain missing documents, expiry issues, or why a document is not applicable."
+          value={reviewNote}
+          onChange={(event) => onReviewNoteChange(event.target.value)}
+        />
+      </label>
+
+      <div className="verification-actions">
+        <button
+          className="ghost-button"
+          disabled={!canVerifySubmitted}
+          type="button"
+          onClick={onVerifySubmitted}
+        >
+          Verify submitted
+        </button>
+        <button
+          className="secondary-button"
+          type="button"
+          onClick={() => runAction("Business verification saved", onSave)}
+        >
+          Save checklist
+        </button>
+        <button
+          className="secondary-button"
+          disabled={approved}
+          type="button"
+          onClick={() => runAction("Business changes requested", onRequestChanges)}
+        >
+          Request changes
+        </button>
+        <button
+          className="primary-button"
+          disabled={approved || !approvalReady}
+          type="button"
+          onClick={() => runAction("Business approved", onApprove)}
+        >
+          Approve business
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function BusinessWorkspace({
@@ -4123,6 +4732,17 @@ function BusinessWorkspace({
   const [supportDraft, setSupportDraft] = useState<SupportDraft>(() =>
     emptySupportDraft(text(business.id, "")),
   );
+  const baseVerification = useMemo(
+    () => buildBusinessVerificationChecklist(business),
+    [business],
+  );
+  const [documentStatusDraft, setDocumentStatusDraft] = useState<Record<string, VerificationStatus>>(
+    () =>
+      Object.fromEntries(
+        baseVerification.items.map((item) => [item.id, item.status]),
+      ) as Record<string, VerificationStatus>,
+  );
+  const [reviewNote, setReviewNote] = useState(() => businessVerificationReviewNote(business));
 
   useEffect(() => {
     setSupportDraft((current) => ({
@@ -4131,9 +4751,31 @@ function BusinessWorkspace({
     }));
   }, [business.id]);
 
+  const verificationVersion = baseVerification.items
+    .map((item) => `${item.id}:${item.status}:${item.reviewNote}`)
+    .join("|");
+
+  useEffect(() => {
+    setDocumentStatusDraft(
+      Object.fromEntries(
+        baseVerification.items.map((item) => [item.id, item.status]),
+      ) as Record<string, VerificationStatus>,
+    );
+    setReviewNote(businessVerificationReviewNote(business));
+  }, [baseVerification.items, business, verificationVersion]);
+
   const owner = members.find((user) => text(user.role, "") === "businessOwner");
   const staff = members.filter((user) => text(user.role, "") === "staff");
   const inferred = business._inferred === true;
+  const verificationItems: BusinessVerificationItem[] = baseVerification.items.map(
+    (item) => ({
+      ...item,
+      status: documentStatusDraft[item.id] ?? item.status,
+    }),
+  );
+  const verificationSummary = summarizeVerificationItems(verificationItems);
+  const stripeVerification = resolveBusinessStripeVerification(business);
+  const businessApprovalReady = stripeVerification.ready && verificationSummary.approvalReady;
 
   const openShipments = countWhere(shipments, (item) => rowStatus(item) === "pending");
   const openPurchases = countWhere(purchases, (item) => rowStatus(item, "purchaseStatus") === "pending");
@@ -4226,6 +4868,59 @@ function BusinessWorkspace({
     });
   }
 
+  function setVerificationStatus(documentId: string, status: VerificationStatus) {
+    setDocumentStatusDraft((current) => ({...current, [documentId]: status}));
+  }
+
+  function verifySubmittedDocuments() {
+    setDocumentStatusDraft((current) => {
+      const next = {...current};
+      for (const item of verificationItems) {
+        if (item.status === "submitted") next[item.id] = "verified";
+      }
+      return next;
+    });
+  }
+
+  async function saveVerificationReview() {
+    await httpsCallable(functions, "updateBusinessVerificationReview")({
+      businessId: business.id,
+      documents: verificationItems.map((item) => ({
+        id: item.id,
+        status: item.status,
+        note: item.reviewNote,
+      })),
+      note: reviewNote.trim(),
+    });
+  }
+
+  async function refreshStripeVerification() {
+    await httpsCallable(functions, "refreshBusinessStripeAccountStatus")({
+      businessId: business.id,
+    });
+  }
+
+  async function reviewBusiness(action: "approve" | "request_changes") {
+    if (action === "approve" && !businessApprovalReady) {
+      throw new Error("Complete Stripe verification and required platform documents before approval.");
+    }
+    await saveVerificationReview();
+    await httpsCallable(functions, "reviewBusinessApplication")({
+      businessId: business.id,
+      action,
+      name: text(business.name, business.id),
+      phone: text(business.phone, ""),
+      email: text(business.email, ""),
+      website: text(business.website, ""),
+      profileImageUrl: text(business.profileImageUrl, ""),
+      profileImagePath: text(business.profileImagePath, ""),
+      enabledServices: businessServicesFromRow(business),
+      serviceNote: text(business.serviceNote, ""),
+      ownerUid: text(business.ownerUid, ""),
+      reviewNote: reviewNote.trim(),
+    });
+  }
+
   return (
     <div className="workspace-detail">
       <header className="workspace-head">
@@ -4255,7 +4950,15 @@ function BusinessWorkspace({
                 }
               >
                 {businessStatuses.map((status) => (
-                  <option key={status} value={status}>
+                  <option
+                    disabled={
+                      status === "approved" &&
+                      !businessApprovalReady &&
+                      text(business.status, "pending") !== "approved"
+                    }
+                    key={status}
+                    value={status}
+                  >
                     {statusLabel(status)}
                   </option>
                 ))}
@@ -4271,6 +4974,12 @@ function BusinessWorkspace({
         <span><b>{openPurchases}</b> open purchases</span>
         <span className={openRefunds > 0 ? "warn" : ""}><b>{openRefunds}</b> refunds to pay</span>
         <span><b>{members.length}</b> people</span>
+        <span className={!businessApprovalReady ? "warn" : ""}>
+          <b>{stripeVerification.ready ? "Ready" : "Blocked"}</b> verification
+        </span>
+        <span className={!verificationSummary.approvalReady ? "warn" : ""}>
+          <b>{verificationSummary.verified + verificationSummary.notApplicable}/{verificationSummary.total}</b> service docs
+        </span>
       </div>
 
       {inferred ? (
@@ -4341,6 +5050,24 @@ function BusinessWorkspace({
                   </div>
                 </div>
               </div>
+            )}
+
+            {section === "verification" && (
+              <BusinessVerificationPanel
+                business={business}
+                items={verificationItems}
+                summary={verificationSummary}
+                stripe={stripeVerification}
+                reviewNote={reviewNote}
+                onReviewNoteChange={setReviewNote}
+                onStatusChange={setVerificationStatus}
+                onVerifySubmitted={verifySubmittedDocuments}
+                onRefreshStripe={refreshStripeVerification}
+                onSave={saveVerificationReview}
+                onApprove={() => reviewBusiness("approve")}
+                onRequestChanges={() => reviewBusiness("request_changes")}
+                runAction={runAction}
+              />
             )}
 
             {section === "people" && (

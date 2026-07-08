@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/business_destination_option.dart';
 import '../models/business_service.dart';
 import '../services/business_service.dart';
@@ -51,18 +52,19 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   Future<void> _load() async {
     try {
       final all = await _businessService.activeDestinationOptions().first;
-      final options = all
-          .where(
-            (o) =>
-                hasBusinessService(
-                  o.enabledServices,
-                  BusinessServiceKey.freight,
-                ) &&
-                o.country.isActive &&
-                o.country.hasAnyFreightRate,
-          )
-          .toList()
-        ..sort((a, b) => a.businessName.compareTo(b.businessName));
+      final options =
+          all
+              .where(
+                (o) =>
+                    hasBusinessService(
+                      o.enabledServices,
+                      BusinessServiceKey.freight,
+                    ) &&
+                    o.country.isActive &&
+                    o.country.hasAnyFreightRate,
+              )
+              .toList()
+            ..sort((a, b) => a.businessName.compareTo(b.businessName));
       if (!mounted) return;
       setState(() {
         _options = options;
@@ -109,6 +111,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   }
 
   Future<void> _submit() async {
+    final l10n = AppLocalizations.of(context)!;
     if (FirebaseAuth.instance.currentUser == null) {
       Navigator.pushNamed(context, '/login');
       return;
@@ -118,11 +121,11 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     if (_senderController.text.trim().isEmpty ||
         _receiverController.text.trim().isEmpty ||
         _phoneController.text.trim().isEmpty) {
-      _snack('Fill sender, receiver, and phone.');
+      _snack(l10n.fillSenderReceiverPhone);
       return;
     }
     if (_weightKg <= 0) {
-      _snack('Enter the parcel weight in kg.');
+      _snack(l10n.enterParcelWeightKg);
       return;
     }
     setState(() => _busy = true);
@@ -139,9 +142,9 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       if (!mounted) return;
       final code = shipment['trackingCode']?.toString() ?? '';
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Freight booked. Tracking: $code')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.freightBookedTracking(code))));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -152,15 +155,15 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     }
   }
 
-  void _snack(String m) => ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(SnackBar(content: Text(m)));
+  void _snack(String m) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: const Text('Send freight')),
+      appBar: AppBar(title: Text(l10n.sendFreight)),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _options.isEmpty
@@ -170,6 +173,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   }
 
   Widget _emptyState(ThemeData theme) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(28),
@@ -179,7 +183,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
             Icon(Icons.inventory_2_outlined, size: 56, color: theme.hintColor),
             const SizedBox(height: 14),
             Text(
-              'No freight businesses yet',
+              l10n.noFreightBusinessesYet,
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w800,
               ),
@@ -187,9 +191,10 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Parcel freight will appear here once a business sets its air '
-              'or sea rates.',
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+              l10n.noFreightBusinessesSubtitle,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.hintColor,
+              ),
               textAlign: TextAlign.center,
             ),
           ],
@@ -200,6 +205,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
 
   // ---- Step 1: search + pick a business/destination ----
   Widget _searchList(ThemeData theme) {
+    final l10n = AppLocalizations.of(context)!;
     final results = _filtered;
     return Column(
       children: [
@@ -209,7 +215,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
             controller: _searchController,
             onChanged: (v) => setState(() => _query = v),
             decoration: InputDecoration(
-              hintText: 'Search a business or country',
+              hintText: l10n.searchBusinessOrCountry,
               prefixIcon: const Icon(Icons.search),
               suffixIcon: _query.isEmpty
                   ? null
@@ -227,7 +233,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
           child: results.isEmpty
               ? Center(
                   child: Text(
-                    'No match for "$_query"',
+                    l10n.noMatchFor(_query),
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.hintColor,
                     ),
@@ -247,6 +253,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   }
 
   Widget _optionCard(ThemeData theme, BusinessDestinationOption o) {
+    final l10n = AppLocalizations.of(context)!;
     final air = o.country.freightAvailable('air');
     final sea = o.country.freightAvailable('sea');
     return Card(
@@ -272,7 +279,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'To ${o.country.name}',
+                      l10n.toDestination(o.country.name),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.hintColor,
                       ),
@@ -286,15 +293,17 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                           _ratePill(
                             theme,
                             Icons.flight_takeoff,
-                            'Air \$${o.country.freightAirPricePerKg
-                                .toStringAsFixed(2)}/kg',
+                            l10n.airRatePerKg(
+                              '\$${o.country.freightAirPricePerKg.toStringAsFixed(2)}',
+                            ),
                           ),
                         if (sea)
                           _ratePill(
                             theme,
                             Icons.directions_boat,
-                            'Sea \$${o.country.freightSeaPricePerKg
-                                .toStringAsFixed(2)}/kg',
+                            l10n.seaRatePerKg(
+                              '\$${o.country.freightSeaPricePerKg.toStringAsFixed(2)}',
+                            ),
                           ),
                       ],
                     ),
@@ -329,6 +338,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
 
   // ---- Step 2: booking form for the selected option ----
   Widget _bookingForm(ThemeData theme) {
+    final l10n = AppLocalizations.of(context)!;
     final o = _selected!;
     final modes = _availableModes(o);
     return ListView(
@@ -346,15 +356,15 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
               o.businessName,
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
-            subtitle: Text('To ${o.country.name}'),
+            subtitle: Text(l10n.toDestination(o.country.name)),
             trailing: TextButton(
               onPressed: _busy ? null : () => setState(() => _selected = null),
-              child: const Text('Change'),
+              child: Text(l10n.change),
             ),
           ),
         ),
         const SizedBox(height: 16),
-        Text('Shipping mode', style: theme.textTheme.labelLarge),
+        Text(l10n.shippingMode, style: theme.textTheme.labelLarge),
         const SizedBox(height: 10),
         Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -366,9 +376,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                   mode: modes[i],
                   rate: o.country.freightRatePerKg(modes[i]),
                   selected: modes[i] == _mode,
-                  onTap: _busy
-                      ? null
-                      : () => setState(() => _mode = modes[i]),
+                  onTap: _busy ? null : () => setState(() => _mode = modes[i]),
                 ),
               ),
             ],
@@ -379,26 +387,26 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
           controller: _weightController,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           onChanged: (_) => setState(() {}),
-          decoration: const InputDecoration(
-            labelText: 'Parcel weight (kg)',
-            prefixIcon: Icon(Icons.scale_outlined),
+          decoration: InputDecoration(
+            labelText: l10n.parcelWeightKg,
+            prefixIcon: const Icon(Icons.scale_outlined),
           ),
         ),
         const SizedBox(height: 14),
         TextField(
           controller: _senderController,
-          decoration: const InputDecoration(labelText: 'Sender name'),
+          decoration: InputDecoration(labelText: l10n.senderName),
         ),
         const SizedBox(height: 14),
         TextField(
           controller: _receiverController,
-          decoration: const InputDecoration(labelText: 'Receiver name'),
+          decoration: InputDecoration(labelText: l10n.receiverName),
         ),
         const SizedBox(height: 14),
         TextField(
           controller: _phoneController,
           keyboardType: TextInputType.phone,
-          decoration: const InputDecoration(labelText: 'Receiver phone'),
+          decoration: InputDecoration(labelText: l10n.receiverPhone),
         ),
         const SizedBox(height: 18),
         Card(
@@ -414,14 +422,14 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Estimated price',
+                        l10n.estimatedPrice,
                         style: theme.textTheme.labelMedium,
                       ),
                       Text(
                         _weightKg > 0
                             ? '${_weightKg.toStringAsFixed(1)} kg × '
                                   '\$${_ratePerKg.toStringAsFixed(2)}'
-                            : 'Enter a weight to see the price',
+                            : l10n.enterWeightToSeePrice,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.hintColor,
                         ),
@@ -449,11 +457,11 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.local_shipping_outlined),
-          label: const Text('Book & pay'),
+          label: Text(l10n.bookAndPay),
         ),
         const SizedBox(height: 8),
         Text(
-          'Drop your parcel at the business location. Pickup coming soon.',
+          l10n.freightDropOffNote,
           style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
           textAlign: TextAlign.center,
         ),
@@ -481,6 +489,7 @@ class _ModeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     final isAir = mode == 'air';
     final accent = cs.primary;
     return Material(
@@ -528,14 +537,14 @@ class _ModeCard extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                isAir ? 'Air freight' : 'Sea freight',
+                isAir ? l10n.airFreight : l10n.seaFreight,
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 3),
               Text(
-                '\$${rate.toStringAsFixed(2)} / kg',
+                l10n.pricePerKg('\$${rate.toStringAsFixed(2)}'),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                   color: accent,
@@ -543,7 +552,7 @@ class _ModeCard extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                isAir ? 'Faster delivery' : 'Lower cost',
+                isAir ? l10n.fasterDelivery : l10n.lowerCost,
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.hintColor,
                 ),

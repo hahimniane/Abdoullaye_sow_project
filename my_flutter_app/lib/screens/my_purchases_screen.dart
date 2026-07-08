@@ -12,6 +12,7 @@ import '../utils/action_confirmation.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/support_entry_button.dart';
 
 class MyPurchasesScreen extends StatelessWidget {
   const MyPurchasesScreen({super.key, this.showBackButton = false});
@@ -574,6 +575,14 @@ class _PurchaseCard extends StatelessWidget {
                 ).textTheme.bodySmall?.copyWith(color: AppColors.lightMuted),
               ),
             ],
+            const SizedBox(height: 8),
+            SupportEntryButton(
+              relatedCollection: 'carPurchases',
+              relatedId: purchase.id,
+              relatedLabel: purchase.carTitle,
+              subject: l10n.supportPurchaseCaseSubject(purchase.carTitle),
+              compact: true,
+            ),
             const SizedBox(height: 8),
             Text(
               DateFormat.yMMMd().add_jm().format(purchase.createdAt),

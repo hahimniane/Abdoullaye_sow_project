@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/customer_service_catalog.dart';
 import '../services/nav_prefs.dart';
 import '../theme/app_colors.dart';
@@ -59,28 +60,28 @@ class _CustomizeNavbarScreenState extends State<CustomizeNavbarScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final full = _pinned.length >= maxPinnedServices;
     final available = customerServiceCatalog
         .where((s) => !_pinned.contains(s.id))
         .toList();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Customize navbar')),
+      appBar: AppBar(title: Text(l10n.customizeNavbar)),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
               children: [
                 Text(
-                  'Pick up to $maxPinnedServices services for quick access in '
-                  'your bottom bar. Drag to reorder.',
+                  l10n.navbarPickerInstructions(maxPinnedServices),
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: AppColors.muted,
                   ),
                 ),
                 const SizedBox(height: 18),
                 Text(
-                  'In your navbar',
+                  l10n.inYourNavbar,
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
@@ -90,8 +91,8 @@ class _CustomizeNavbarScreenState extends State<CustomizeNavbarScreen> {
                   Padding(
                     padding: const EdgeInsets.all(8),
                     child: Text(
-                      'Nothing pinned yet — add services below.',
-                      style: TextStyle(color: AppColors.muted),
+                      l10n.nothingPinnedYet,
+                      style: const TextStyle(color: AppColors.muted),
                     ),
                   )
                 else
@@ -127,7 +128,7 @@ class _CustomizeNavbarScreenState extends State<CustomizeNavbarScreen> {
                   ),
                 const SizedBox(height: 20),
                 Text(
-                  'Add services',
+                  l10n.addServices,
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
@@ -150,9 +151,11 @@ class _CustomizeNavbarScreenState extends State<CustomizeNavbarScreen> {
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
-                      'Navbar is full ($maxPinnedServices). Remove one to add '
-                      'another.',
-                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                      l10n.navbarFullMessage(maxPinnedServices),
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
               ],

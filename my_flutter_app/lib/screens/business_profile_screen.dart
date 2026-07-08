@@ -40,6 +40,20 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
   final _holdFlatFeeController = TextEditingController();
   final _holdDailyRateController = TextEditingController();
   final _holdMaxDaysController = TextEditingController();
+  final _parkingAddressLine1Controller = TextEditingController();
+  final _parkingCountryController = TextEditingController();
+  final _parkingCityController = TextEditingController();
+  final _parkingStateController = TextEditingController();
+  final _parkingTotalSpacesController = TextEditingController();
+  final _parkingBlockedSpacesController = TextEditingController();
+  final _parkingDailyRateController = TextEditingController();
+  final _parkingWeeklyRateController = TextEditingController();
+  final _parkingMonthlyRateController = TextEditingController();
+  final _parkingMinimumDaysController = TextEditingController();
+  final _parkingPickupFeeController = TextEditingController();
+  final _parkingInstructionsController = TextEditingController();
+  final _parkingLatitudeController = TextEditingController();
+  final _parkingLongitudeController = TextEditingController();
   final _featureBlurbController = TextEditingController();
   final _selectedServices = <String>{};
   String _holdPricingMode = 'flat';
@@ -49,6 +63,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
   XFile? _featureLogo;
   Uint8List? _featureLogoBytes;
   bool _featureConsent = false;
+  bool _parkingPickupAvailable = false;
   bool _isSaving = false;
   bool _isRequestingFeature = false;
 
@@ -67,6 +82,20 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
     _holdFlatFeeController.dispose();
     _holdDailyRateController.dispose();
     _holdMaxDaysController.dispose();
+    _parkingAddressLine1Controller.dispose();
+    _parkingCountryController.dispose();
+    _parkingCityController.dispose();
+    _parkingStateController.dispose();
+    _parkingTotalSpacesController.dispose();
+    _parkingBlockedSpacesController.dispose();
+    _parkingDailyRateController.dispose();
+    _parkingWeeklyRateController.dispose();
+    _parkingMonthlyRateController.dispose();
+    _parkingMinimumDaysController.dispose();
+    _parkingPickupFeeController.dispose();
+    _parkingInstructionsController.dispose();
+    _parkingLatitudeController.dispose();
+    _parkingLongitudeController.dispose();
     _featureBlurbController.dispose();
     super.dispose();
   }
@@ -97,6 +126,21 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
       business.carHoldFlatFee,
       business.carHoldDailyRate,
       business.carHoldMaxDays,
+      business.parkingAddressLine1 ?? '',
+      business.parkingCountry ?? '',
+      business.parkingCity ?? '',
+      business.parkingState ?? '',
+      business.parkingTotalSpaces,
+      business.parkingBlockedSpaces,
+      business.parkingDailyRate,
+      business.parkingWeeklyRate,
+      business.parkingMonthlyRate,
+      business.parkingMinimumDays,
+      business.parkingPickupAvailable,
+      business.parkingPickupFee,
+      business.parkingInstructions ?? '',
+      business.parkingLatitude ?? '',
+      business.parkingLongitude ?? '',
     ].join('|#|');
     if (_hydratedBusinessSignature == signature) {
       return;
@@ -129,6 +173,48 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
         _holdDailyRateController.text = business.carHoldDailyRate
             .toStringAsFixed(0);
         _holdMaxDaysController.text = business.carHoldMaxDays.toString();
+        _parkingAddressLine1Controller.text =
+            business.parkingAddressLine1 ?? business.addressLine1 ?? '';
+        _parkingCountryController.text =
+            defaultBusinessCountry(
+              country: business.parkingCountry ?? business.country,
+              state: business.parkingState ?? business.state,
+            ) ??
+            '';
+        _parkingCityController.text =
+            business.parkingCity ?? business.city ?? '';
+        _parkingStateController.text =
+            normalizeUsState(business.parkingState ?? business.state) ?? '';
+        _parkingTotalSpacesController.text = business.parkingTotalSpaces == 0
+            ? ''
+            : business.parkingTotalSpaces.toString();
+        _parkingBlockedSpacesController.text =
+            business.parkingBlockedSpaces == 0
+            ? ''
+            : business.parkingBlockedSpaces.toString();
+        _parkingDailyRateController.text = business.parkingDailyRate == 0
+            ? ''
+            : business.parkingDailyRate.toStringAsFixed(0);
+        _parkingWeeklyRateController.text = business.parkingWeeklyRate == 0
+            ? ''
+            : business.parkingWeeklyRate.toStringAsFixed(0);
+        _parkingMonthlyRateController.text = business.parkingMonthlyRate == 0
+            ? ''
+            : business.parkingMonthlyRate.toStringAsFixed(0);
+        _parkingMinimumDaysController.text = business.parkingMinimumDays
+            .toString();
+        _parkingPickupAvailable = business.parkingPickupAvailable;
+        _parkingPickupFeeController.text = business.parkingPickupFee == 0
+            ? ''
+            : business.parkingPickupFee.toStringAsFixed(0);
+        _parkingInstructionsController.text =
+            business.parkingInstructions ?? '';
+        _parkingLatitudeController.text = business.parkingLatitude == null
+            ? ''
+            : business.parkingLatitude!.toStringAsFixed(6);
+        _parkingLongitudeController.text = business.parkingLongitude == null
+            ? ''
+            : business.parkingLongitude!.toStringAsFixed(6);
         _featureBlurbController.text = business.marketingBlurb ?? '';
         _featureConsent = business.featureConsent;
         _selectedServices
@@ -252,6 +338,18 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
     }
   }
 
+  double? _optionalCoordinate(
+    TextEditingController controller, {
+    required double min,
+    required double max,
+  }) {
+    final text = controller.text.trim();
+    if (text.isEmpty) return null;
+    final value = double.tryParse(text);
+    if (value == null || value < min || value > max) return null;
+    return value;
+  }
+
   Future<void> _save(BusinessProfile business) async {
     final l10n = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate()) return;
@@ -269,13 +367,72 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
     final holdDailyRate =
         double.tryParse(_holdDailyRateController.text.trim()) ?? 0;
     final holdMaxDays = int.tryParse(_holdMaxDaysController.text.trim()) ?? 14;
+    final parkingTotalSpaces =
+        int.tryParse(_parkingTotalSpacesController.text.trim()) ?? 0;
+    final parkingBlockedSpaces =
+        int.tryParse(_parkingBlockedSpacesController.text.trim()) ?? 0;
+    final parkingDailyRate =
+        double.tryParse(_parkingDailyRateController.text.trim()) ?? 0;
+    final parkingWeeklyRate =
+        double.tryParse(_parkingWeeklyRateController.text.trim()) ?? 0;
+    final parkingMonthlyRate =
+        double.tryParse(_parkingMonthlyRateController.text.trim()) ?? 0;
+    final parkingMinimumDays =
+        int.tryParse(_parkingMinimumDaysController.text.trim()) ?? 1;
+    final parkingPickupFee =
+        double.tryParse(_parkingPickupFeeController.text.trim()) ?? 0;
+    final parkingLatitude = _optionalCoordinate(
+      _parkingLatitudeController,
+      min: -90,
+      max: 90,
+    );
+    final parkingLongitude = _optionalCoordinate(
+      _parkingLongitudeController,
+      min: -180,
+      max: 180,
+    );
+    final hasParkingLatitude = _parkingLatitudeController.text
+        .trim()
+        .isNotEmpty;
+    final hasParkingLongitude = _parkingLongitudeController.text
+        .trim()
+        .isNotEmpty;
     if ((_holdPricingMode == 'flat' && holdFlatFee <= 0) ||
         (_holdPricingMode == 'per_day' && holdDailyRate <= 0) ||
         holdMaxDays < 1 ||
         holdMaxDays > 30) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Enter valid paid hold pricing.'),
+        SnackBar(
+          content: Text(l10n.enterValidPaidHoldPricing),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    final offersParking = _selectedServices.contains(
+      BusinessServiceKey.carParking.value,
+    );
+    if (offersParking &&
+        (parkingTotalSpaces <= 0 ||
+            parkingBlockedSpaces < 0 ||
+            parkingBlockedSpaces > parkingTotalSpaces ||
+            parkingDailyRate <= 0 ||
+            parkingMinimumDays < 1)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.enterValidParkingCapacity),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    if (offersParking &&
+        ((hasParkingLatitude && parkingLatitude == null) ||
+            (hasParkingLongitude && parkingLongitude == null) ||
+            (hasParkingLatitude != hasParkingLongitude))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.enterValidParkingCoordinates),
           backgroundColor: Colors.red,
         ),
       );
@@ -304,6 +461,21 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
         carHoldFlatFee: holdFlatFee,
         carHoldDailyRate: holdDailyRate,
         carHoldMaxDays: holdMaxDays,
+        parkingAddressLine1: _parkingAddressLine1Controller.text,
+        parkingCity: _parkingCityController.text,
+        parkingCountry: _parkingCountryController.text,
+        parkingState: normalizeUsState(_parkingStateController.text) ?? '',
+        parkingTotalSpaces: parkingTotalSpaces,
+        parkingBlockedSpaces: parkingBlockedSpaces,
+        parkingDailyRate: parkingDailyRate,
+        parkingWeeklyRate: parkingWeeklyRate,
+        parkingMonthlyRate: parkingMonthlyRate,
+        parkingMinimumDays: parkingMinimumDays,
+        parkingPickupAvailable: _parkingPickupAvailable,
+        parkingPickupFee: parkingPickupFee,
+        parkingInstructions: _parkingInstructionsController.text,
+        parkingLatitude: parkingLatitude,
+        parkingLongitude: parkingLongitude,
       );
       if (!mounted) return;
       setState(() {
@@ -363,7 +535,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        'Business profile',
+                        l10n.businessProfileTitle,
                         style: Theme.of(context).textTheme.headlineSmall
                             ?.copyWith(fontWeight: FontWeight.w900),
                       ),
@@ -396,6 +568,22 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                   holdFlatFeeController: _holdFlatFeeController,
                   holdDailyRateController: _holdDailyRateController,
                   holdMaxDaysController: _holdMaxDaysController,
+                  parkingAddressLine1Controller: _parkingAddressLine1Controller,
+                  parkingCountryController: _parkingCountryController,
+                  parkingCityController: _parkingCityController,
+                  parkingStateController: _parkingStateController,
+                  parkingTotalSpacesController: _parkingTotalSpacesController,
+                  parkingBlockedSpacesController:
+                      _parkingBlockedSpacesController,
+                  parkingDailyRateController: _parkingDailyRateController,
+                  parkingWeeklyRateController: _parkingWeeklyRateController,
+                  parkingMonthlyRateController: _parkingMonthlyRateController,
+                  parkingMinimumDaysController: _parkingMinimumDaysController,
+                  parkingPickupFeeController: _parkingPickupFeeController,
+                  parkingInstructionsController: _parkingInstructionsController,
+                  parkingLatitudeController: _parkingLatitudeController,
+                  parkingLongitudeController: _parkingLongitudeController,
+                  parkingPickupAvailable: _parkingPickupAvailable,
                   onHoldPricingModeChanged: (value) {
                     setState(() => _holdPricingMode = value);
                   },
@@ -414,6 +602,25 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                   },
                   onAddressCityChanged: (value) {
                     setState(() => _cityController.text = value ?? '');
+                  },
+                  onParkingPickupChanged: (value) {
+                    setState(() => _parkingPickupAvailable = value);
+                  },
+                  onParkingCountryChanged: (value) {
+                    setState(() {
+                      _parkingCountryController.text = value ?? '';
+                      _parkingStateController.clear();
+                      _parkingCityController.clear();
+                    });
+                  },
+                  onParkingStateChanged: (value) {
+                    setState(() {
+                      _parkingStateController.text = value ?? '';
+                      _parkingCityController.clear();
+                    });
+                  },
+                  onParkingCityChanged: (value) {
+                    setState(() => _parkingCityController.text = value ?? '');
                   },
                   selectedServices: _selectedServices,
                   onServiceChanged: (service, selected) {
@@ -460,7 +667,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.save_outlined),
-                      label: Text(_isSaving ? 'Saving' : 'Save changes'),
+                      label: Text(_isSaving ? l10n.saving : l10n.saveChanges),
                     ),
                   ),
                 ],
@@ -982,10 +1189,29 @@ class _BusinessForm extends StatelessWidget {
     required this.holdFlatFeeController,
     required this.holdDailyRateController,
     required this.holdMaxDaysController,
+    required this.parkingAddressLine1Controller,
+    required this.parkingCountryController,
+    required this.parkingCityController,
+    required this.parkingStateController,
+    required this.parkingTotalSpacesController,
+    required this.parkingBlockedSpacesController,
+    required this.parkingDailyRateController,
+    required this.parkingWeeklyRateController,
+    required this.parkingMonthlyRateController,
+    required this.parkingMinimumDaysController,
+    required this.parkingPickupFeeController,
+    required this.parkingInstructionsController,
+    required this.parkingLatitudeController,
+    required this.parkingLongitudeController,
+    required this.parkingPickupAvailable,
     required this.onHoldPricingModeChanged,
     required this.onAddressCountryChanged,
     required this.onAddressStateChanged,
     required this.onAddressCityChanged,
+    required this.onParkingPickupChanged,
+    required this.onParkingCountryChanged,
+    required this.onParkingStateChanged,
+    required this.onParkingCityChanged,
     required this.selectedServices,
     required this.onServiceChanged,
   });
@@ -1006,10 +1232,29 @@ class _BusinessForm extends StatelessWidget {
   final TextEditingController holdFlatFeeController;
   final TextEditingController holdDailyRateController;
   final TextEditingController holdMaxDaysController;
+  final TextEditingController parkingAddressLine1Controller;
+  final TextEditingController parkingCountryController;
+  final TextEditingController parkingCityController;
+  final TextEditingController parkingStateController;
+  final TextEditingController parkingTotalSpacesController;
+  final TextEditingController parkingBlockedSpacesController;
+  final TextEditingController parkingDailyRateController;
+  final TextEditingController parkingWeeklyRateController;
+  final TextEditingController parkingMonthlyRateController;
+  final TextEditingController parkingMinimumDaysController;
+  final TextEditingController parkingPickupFeeController;
+  final TextEditingController parkingInstructionsController;
+  final TextEditingController parkingLatitudeController;
+  final TextEditingController parkingLongitudeController;
+  final bool parkingPickupAvailable;
   final ValueChanged<String> onHoldPricingModeChanged;
   final ValueChanged<String?> onAddressCountryChanged;
   final ValueChanged<String?> onAddressStateChanged;
   final ValueChanged<String?> onAddressCityChanged;
+  final ValueChanged<bool> onParkingPickupChanged;
+  final ValueChanged<String?> onParkingCountryChanged;
+  final ValueChanged<String?> onParkingStateChanged;
+  final ValueChanged<String?> onParkingCityChanged;
   final Set<String> selectedServices;
   final void Function(String service, bool selected) onServiceChanged;
 
@@ -1018,6 +1263,11 @@ class _BusinessForm extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final selectedCountry = countryController.text.trim();
     final isUnitedStates = selectedCountry == 'United States';
+    final parkingCountry = parkingCountryController.text.trim();
+    final parkingIsUnitedStates = parkingCountry == 'United States';
+    final offersParking = selectedServices.contains(
+      BusinessServiceKey.carParking.value,
+    );
     return Form(
       key: formKey,
       child: Column(
@@ -1196,6 +1446,193 @@ class _BusinessForm extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 18),
+          if (offersParking) ...[
+            _ProfileSection(
+              icon: Icons.local_parking_outlined,
+              title: l10n.parkingCapacityTitle,
+              subtitle: l10n.parkingCapacitySubtitle,
+              children: [
+                _BusinessProfileField(
+                  controller: parkingAddressLine1Controller,
+                  enabled: canEdit,
+                  label: l10n.parkingAddress,
+                  icon: Icons.place_outlined,
+                ),
+                _BusinessProfileDropdown(
+                  label: l10n.countryName,
+                  icon: Icons.public_outlined,
+                  enabled: canEdit,
+                  value: parkingCountry.isEmpty ? null : parkingCountry,
+                  values: businessCountryOptions(parkingCountry),
+                  displayLabel: (value) => value,
+                  onChanged: onParkingCountryChanged,
+                ),
+                if (parkingIsUnitedStates)
+                  _BusinessProfileDropdown(
+                    label: l10n.locationState,
+                    icon: Icons.map_outlined,
+                    enabled: canEdit,
+                    value: normalizeUsState(parkingStateController.text),
+                    values: usStateOptions(parkingStateController.text),
+                    displayLabel: (value) => usStateNames[value] ?? value,
+                    onChanged: onParkingStateChanged,
+                  ),
+                _BusinessProfileDropdown(
+                  label: l10n.locationCity,
+                  icon: Icons.location_city_outlined,
+                  enabled:
+                      canEdit &&
+                      (parkingIsUnitedStates
+                          ? parkingStateController.text.trim().isNotEmpty
+                          : parkingCountry.isNotEmpty),
+                  value: parkingCityController.text.trim().isEmpty
+                      ? null
+                      : parkingCityController.text.trim(),
+                  values: parkingIsUnitedStates
+                      ? usCityOptions(
+                          parkingStateController.text,
+                          parkingCityController.text,
+                        )
+                      : businessCityOptions(
+                          parkingCountry,
+                          parkingCityController.text,
+                        ),
+                  hintText:
+                      parkingIsUnitedStates &&
+                          parkingStateController.text.trim().isEmpty
+                      ? l10n.selectStateFirst
+                      : parkingCountry.isEmpty
+                      ? l10n.selectCountryFirst
+                      : null,
+                  displayLabel: (value) =>
+                      value == otherCityValue ? l10n.otherOption : value,
+                  onChanged: onParkingCityChanged,
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _BusinessProfileField(
+                        controller: parkingLatitudeController,
+                        enabled: canEdit,
+                        label: l10n.parkingLatitude,
+                        icon: Icons.explore_outlined,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          signed: true,
+                          decimal: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _BusinessProfileField(
+                        controller: parkingLongitudeController,
+                        enabled: canEdit,
+                        label: l10n.parkingLongitude,
+                        icon: Icons.explore_outlined,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          signed: true,
+                          decimal: true,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _BusinessProfileField(
+                        controller: parkingTotalSpacesController,
+                        enabled: canEdit,
+                        label: l10n.totalParkingSpaces,
+                        icon: Icons.directions_car_outlined,
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _BusinessProfileField(
+                        controller: parkingBlockedSpacesController,
+                        enabled: canEdit,
+                        label: l10n.blockedParkingSpaces,
+                        icon: Icons.block_outlined,
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _BusinessProfileField(
+                        controller: parkingDailyRateController,
+                        enabled: canEdit,
+                        label: l10n.dailyParkingRate,
+                        icon: Icons.attach_money,
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _BusinessProfileField(
+                        controller: parkingMinimumDaysController,
+                        enabled: canEdit,
+                        label: l10n.minimumParkingDays,
+                        icon: Icons.event_outlined,
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _BusinessProfileField(
+                        controller: parkingWeeklyRateController,
+                        enabled: canEdit,
+                        label: l10n.weeklyParkingRate,
+                        icon: Icons.calendar_view_week_outlined,
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _BusinessProfileField(
+                        controller: parkingMonthlyRateController,
+                        enabled: canEdit,
+                        label: l10n.monthlyParkingRate,
+                        icon: Icons.calendar_month_outlined,
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                  ],
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: parkingPickupAvailable,
+                  onChanged: canEdit ? onParkingPickupChanged : null,
+                  title: Text(l10n.pickupAvailable),
+                  subtitle: Text(l10n.pickupAvailableSubtitle),
+                ),
+                if (parkingPickupAvailable)
+                  _BusinessProfileField(
+                    controller: parkingPickupFeeController,
+                    enabled: canEdit,
+                    label: l10n.pickupFee,
+                    icon: Icons.local_shipping_outlined,
+                    keyboardType: TextInputType.number,
+                  ),
+                _BusinessProfileField(
+                  controller: parkingInstructionsController,
+                  enabled: canEdit,
+                  label: l10n.parkingInstructions,
+                  icon: Icons.notes_outlined,
+                  minLines: 2,
+                  maxLines: 4,
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+          ],
           _ProfileSection(
             icon: Icons.apps_outlined,
             title: l10n.services,

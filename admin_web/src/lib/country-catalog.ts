@@ -3,9 +3,8 @@
 // source for any country picker on the web. Do NOT hardcode a partial country
 // list anywhere; import COUNTRY_CATALOG (or COUNTRY_NAMES) instead.
 //
-// Note: barrel *destination* countries are a deliberately curated subset and
-// live separately (operations-panels.tsx `countries`). This catalog is for
-// address/location pickers that must offer every country.
+// Business destination setup also uses this catalog when a business needs all
+// seeded countries available for pricing and editing.
 
 export type CountryEntry = { id: string; name: string; code: string };
 

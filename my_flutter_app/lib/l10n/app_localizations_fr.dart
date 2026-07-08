@@ -579,6 +579,67 @@ class AppLocalizationsFr extends AppLocalizations {
   String get filterAll => 'Tous';
 
   @override
+  String get trackSearchHint => 'Rechercher suivi, destinataire, pays';
+
+  @override
+  String get filterInProgress => 'En cours';
+
+  @override
+  String get filterDelivered => 'Livré';
+
+  @override
+  String get allDestinations => 'Toutes les destinations';
+
+  @override
+  String get noShipmentsMatchFilters =>
+      'Aucune expédition ne correspond à vos filtres';
+
+  @override
+  String get ordersTitle => 'Mes commandes';
+
+  @override
+  String get ordersSearchHint => 'Rechercher commandes, entreprise, pays';
+
+  @override
+  String get ordersEmpty => 'Vos commandes payées apparaissent ici';
+
+  @override
+  String get ordersNoMatch => 'Aucune commande ne correspond à vos filtres';
+
+  @override
+  String get orderTypeCars => 'Voitures';
+
+  @override
+  String get orderTypeBarrels => 'Barils';
+
+  @override
+  String get orderTypeFreight => 'Fret';
+
+  @override
+  String get orderTypeTransport => 'Transport';
+
+  @override
+  String get orderTypeParking => 'Stationnement';
+
+  @override
+  String get orderStatusPending => 'En attente';
+
+  @override
+  String get orderStatusActive => 'Actif';
+
+  @override
+  String get orderStatusInTransit => 'En transit';
+
+  @override
+  String get orderStatusCompleted => 'Terminé';
+
+  @override
+  String get orderStatusCancelled => 'Annulé';
+
+  @override
+  String get orderStatusRefunded => 'Remboursé';
+
+  @override
   String get filterParking => 'Voitures garées';
 
   @override
@@ -846,7 +907,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get contactName => 'Nom du contact';
 
   @override
-  String get contactPhone => 'Téléphone du contact';
+  String get contactPhone => 'Téléphone de contact';
 
   @override
   String get contactEmail => 'Email du contact';
@@ -1669,11 +1730,11 @@ class AppLocalizationsFr extends AppLocalizations {
   String get doneShort => 'Terminés';
 
   @override
-  String get platformDashboard => 'Tableau de bord de la plateforme';
+  String get platformDashboard => 'Tableau de bord plateforme';
 
   @override
   String get platformDashboardSubtitle =>
-      'Demandes, entreprises, opérations, remboursements et état de la plateforme.';
+      'Demandes, entreprises, opérations, remboursements et santé de la marketplace.';
 
   @override
   String get pendingBusinesses => 'Entreprises en attente';
@@ -2020,6 +2081,22 @@ class AppLocalizationsFr extends AppLocalizations {
   String get totalCostPdf => 'Coût total :';
 
   @override
+  String get dateTimePdf => 'Date et heure :';
+
+  @override
+  String get parkingStatusActive => 'Statut du stationnement : ACTIF';
+
+  @override
+  String get vehicleSuccessfullyParked => 'Le véhicule a bien été stationné';
+
+  @override
+  String get termsAndConditions => 'Conditions générales';
+
+  @override
+  String get parkingReceiptTerms =>
+      '• Ce reçu sert de preuve de stationnement\n• Le véhicule sera gardé en sécurité\n• Contactez-nous pour toute question\n• Valable jusqu’à la récupération du véhicule';
+
+  @override
   String get peopleAndAccess => 'Personnes et accès';
 
   @override
@@ -2168,6 +2245,156 @@ class AppLocalizationsFr extends AppLocalizations {
   String get holdMaxDaysHelper => '1 à 30 jours';
 
   @override
+  String get parkingCapacityTitle => 'Capacité de stationnement';
+
+  @override
+  String get parkingCapacitySubtitle =>
+      'Définissez l’adresse, les places et les prix que les clients peuvent réserver.';
+
+  @override
+  String get parkingAddress => 'Adresse du stationnement';
+
+  @override
+  String get parkingLatitude => 'Latitude';
+
+  @override
+  String get parkingLongitude => 'Longitude';
+
+  @override
+  String get totalParkingSpaces => 'Places totales';
+
+  @override
+  String get blockedParkingSpaces => 'Places bloquées';
+
+  @override
+  String get dailyParkingRate => 'Tarif journalier';
+
+  @override
+  String get weeklyParkingRate => 'Tarif hebdomadaire';
+
+  @override
+  String get monthlyParkingRate => 'Tarif mensuel';
+
+  @override
+  String get minimumParkingDays => 'Jours minimum';
+
+  @override
+  String get pickupAvailable => 'Collecte disponible';
+
+  @override
+  String get pickupAvailableSubtitle =>
+      'Les clients peuvent demander la collecte du véhicule avant le stationnement.';
+
+  @override
+  String get pickupFee => 'Frais de collecte';
+
+  @override
+  String get parkingInstructions => 'Instructions de stationnement';
+
+  @override
+  String get enterValidParkingCapacity =>
+      'Ajoutez les places totales, un tarif journalier positif et des places bloquées valides avant d’enregistrer le stationnement.';
+
+  @override
+  String get enterValidParkingCoordinates =>
+      'Saisissez une latitude et une longitude valides pour le stationnement, ou laissez les deux champs vides.';
+
+  @override
+  String get customerParkingTitle => 'Trouver un stationnement';
+
+  @override
+  String get customerParkingSubtitle =>
+      'Choisissez où et quand vous voulez garer la voiture. Nous afficherons les entreprises avec des places libres.';
+
+  @override
+  String get enterCarDetailsToReserveParking =>
+      'Entrez les détails de la voiture pour réserver un stationnement';
+
+  @override
+  String get parkingCity => 'Ville de stationnement';
+
+  @override
+  String get pleaseEnterParkingCity =>
+      'Saisissez la ville où vous voulez garer la voiture.';
+
+  @override
+  String get parkingStart => 'Début du stationnement';
+
+  @override
+  String get parkingEnd => 'Fin du stationnement';
+
+  @override
+  String get searchParking => 'Rechercher un stationnement';
+
+  @override
+  String get searchingParking => 'Recherche...';
+
+  @override
+  String get availableParkingBusinesses => 'Stationnements disponibles';
+
+  @override
+  String get noParkingBusinesses =>
+      'Aucune entreprise n’a de stationnement disponible pour ces dates.';
+
+  @override
+  String get parkingSearchFailed =>
+      'La recherche de stationnement a échoué. Veuillez réessayer.';
+
+  @override
+  String availableSpacesCount(Object count) {
+    return '$count place(s) disponible(s)';
+  }
+
+  @override
+  String parkingPricePerDay(Object amount) {
+    return '$amount/jour';
+  }
+
+  @override
+  String parkingEstimatedTotal(Object amount) {
+    return 'Total estimé : $amount';
+  }
+
+  @override
+  String parkingDistanceMiles(Object miles) {
+    return 'À $miles mi';
+  }
+
+  @override
+  String get reserveParking => 'Réserver le stationnement';
+
+  @override
+  String get reservingParking => 'Réservation...';
+
+  @override
+  String parkingReservationSaved(Object trackingCode) {
+    return 'Stationnement réservé. Numéro de suivi : $trackingCode';
+  }
+
+  @override
+  String get parkingReservationFailed =>
+      'Le stationnement n’a pas pu être réservé. Veuillez réessayer.';
+
+  @override
+  String get accountRequiredParking =>
+      'Connectez-vous pour réserver un stationnement et suivre votre véhicule.';
+
+  @override
+  String get parkingDateRangeInvalid =>
+      'Choisissez une date de fin après la date de début du stationnement.';
+
+  @override
+  String get chooseParkingBusiness =>
+      'Choisissez une entreprise avec du stationnement disponible.';
+
+  @override
+  String get parkingPickupRequested => 'Collecte demandée';
+
+  @override
+  String get parkingPickupOptional =>
+      'Demander la collecte si l’entreprise la propose';
+
+  @override
   String get businessServicesSubtitle =>
       'Choisissez ce que cette entreprise peut offrir aux clients.';
 
@@ -2245,7 +2472,7 @@ class AppLocalizationsFr extends AppLocalizations {
       'Vos demandes d’envoi de barils apparaîtront ici une fois le paiement terminé.';
 
   @override
-  String get registerYourBusiness => 'Inscrire votre entreprise';
+  String get registerYourBusiness => 'Enregistrer votre entreprise';
 
   @override
   String get submittingApplication => 'Envoi de la demande';
@@ -2254,7 +2481,18 @@ class AppLocalizationsFr extends AppLocalizations {
   String get submitBusinessApplication => 'Envoyer la demande d’entreprise';
 
   @override
+  String get businessApplicationSubmittedSetup =>
+      'Demande d’entreprise envoyée. Vous pouvez maintenant configurer votre tableau de bord.';
+
+  @override
   String get ownerNameRequiredShort => 'Le nom du propriétaire est requis';
+
+  @override
+  String get chooseBusinessImageFirst =>
+      'Veuillez d’abord choisir une image pour l’entreprise.';
+
+  @override
+  String get validWebsiteRequired => 'Veuillez saisir un site web valide';
 
   @override
   String get unknown => 'Inconnu';
@@ -2883,4 +3121,1121 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get favoriteRemoved => 'Favori supprimé';
+
+  @override
+  String get enterValidPaidHoldPricing =>
+      'Entrez un tarif de blocage payant valide.';
+
+  @override
+  String get useBusinessPaidHoldPricing =>
+      'Utiliser le tarif de blocage de l’entreprise';
+
+  @override
+  String get useBusinessPaidHoldPricingSubtitle =>
+      'Désactivez cette option pour définir un tarif de blocage propre à cette voiture.';
+
+  @override
+  String get chooseReturnDate => 'Choisir la date de retour';
+
+  @override
+  String get customizeNavbar => 'Personnaliser la barre de navigation';
+
+  @override
+  String get change => 'Changer';
+
+  @override
+  String get sendFreight => 'Envoyer du fret';
+
+  @override
+  String freightBookedTracking(Object trackingCode) {
+    return 'Fret réservé. Suivi : $trackingCode';
+  }
+
+  @override
+  String get fillSenderReceiverPhone =>
+      'Renseignez l’expéditeur, le destinataire et le téléphone.';
+
+  @override
+  String get enterParcelWeightKg => 'Entrez le poids du colis en kg.';
+
+  @override
+  String get noFreightBusinessesYet =>
+      'Aucune entreprise de fret pour le moment';
+
+  @override
+  String get noFreightBusinessesSubtitle =>
+      'Le fret de colis apparaîtra ici lorsqu’une entreprise aura défini ses tarifs air ou mer.';
+
+  @override
+  String get searchBusinessOrCountry => 'Rechercher une entreprise ou un pays';
+
+  @override
+  String noMatchFor(Object query) {
+    return 'Aucun résultat pour « $query »';
+  }
+
+  @override
+  String toDestination(Object destination) {
+    return 'Vers $destination';
+  }
+
+  @override
+  String airRatePerKg(Object rate) {
+    return 'Air $rate/kg';
+  }
+
+  @override
+  String seaRatePerKg(Object rate) {
+    return 'Mer $rate/kg';
+  }
+
+  @override
+  String get shippingMode => 'Mode d’expédition';
+
+  @override
+  String get parcelWeightKg => 'Poids du colis (kg)';
+
+  @override
+  String get estimatedPrice => 'Prix estimé';
+
+  @override
+  String get enterWeightToSeePrice => 'Entrez un poids pour voir le prix';
+
+  @override
+  String get bookAndPay => 'Réserver et payer';
+
+  @override
+  String get freightDropOffNote =>
+      'Déposez votre colis à l’adresse de l’entreprise. Le ramassage arrive bientôt.';
+
+  @override
+  String get airFreight => 'Fret aérien';
+
+  @override
+  String get seaFreight => 'Fret maritime';
+
+  @override
+  String pricePerKg(Object price) {
+    return '$price / kg';
+  }
+
+  @override
+  String get fasterDelivery => 'Livraison plus rapide';
+
+  @override
+  String get lowerCost => 'Coût plus bas';
+
+  @override
+  String get requestCarTransport => 'Demander le transport de voiture';
+
+  @override
+  String get chooseBusinessAndDestination =>
+      'Choisissez une entreprise et une destination.';
+
+  @override
+  String get selectCarMakeModelYear =>
+      'Sélectionnez la marque, le modèle et l’année de la voiture.';
+
+  @override
+  String transportRequestSentToBusiness(
+    Object businessName,
+    Object trackingCode,
+  ) {
+    return 'Demande envoyée à $businessName. Suivi $trackingCode. L’entreprise vous enverra un devis.';
+  }
+
+  @override
+  String couldNotSendRequest(Object error) {
+    return 'Impossible d’envoyer la demande : $error';
+  }
+
+  @override
+  String get pickPreferredDateOptional =>
+      'Choisir une date préférée (facultatif)';
+
+  @override
+  String get whoShouldHandleTransport => 'Qui doit s’en occuper ?';
+
+  @override
+  String get theCar => 'La voiture';
+
+  @override
+  String get contactAndPickup => 'Contact et ramassage';
+
+  @override
+  String get businessDestination => 'Entreprise · destination';
+
+  @override
+  String get pickupAddressOptional => 'Adresse de ramassage (facultatif)';
+
+  @override
+  String get notesForBusinessOptional => 'Notes pour l’entreprise (facultatif)';
+
+  @override
+  String get enterOwnerName => 'Entrez le nom du propriétaire';
+
+  @override
+  String get enterContactPhone => 'Entrez un téléphone de contact';
+
+  @override
+  String get sending => 'Envoi...';
+
+  @override
+  String get sendRequest => 'Envoyer la demande';
+
+  @override
+  String get transportQuoteNoPaymentNote =>
+      'Aucun paiement maintenant — l’entreprise examine votre demande et envoie un devis que vous pourrez accepter.';
+
+  @override
+  String get noTransportBusinessesYet =>
+      'Aucune entreprise ne propose encore le transport de voiture';
+
+  @override
+  String get noTransportBusinessesSubtitle =>
+      'Revenez bientôt — les entreprises ajoutent leurs trajets de transport lorsqu’elles arrivent en ligne.';
+
+  @override
+  String get couldNotLoadTransportOptions =>
+      'Impossible de charger les options de transport';
+
+  @override
+  String get receiverWhatsAppNumberTitle =>
+      'Ce numéro de destinataire est utilisé sur WhatsApp';
+
+  @override
+  String get receiverWhatsAppNumberSubtitle =>
+      'Utilisez ceci seulement si le destinataire utilise un numéro d’un autre pays sur WhatsApp.';
+
+  @override
+  String get samePickup => 'Même ramassage';
+
+  @override
+  String get differentPickups => 'Ramassages différents';
+
+  @override
+  String boroughPickupAddress(Object borough) {
+    return 'Adresse de ramassage à $borough';
+  }
+
+  @override
+  String get barrelsForThisDestination => 'Barils pour cette destination';
+
+  @override
+  String get decrease => 'Diminuer';
+
+  @override
+  String get increase => 'Augmenter';
+
+  @override
+  String get edit => 'Modifier';
+
+  @override
+  String get remove => 'Supprimer';
+
+  @override
+  String barrelCartLine(int quantity, Object receiverName) {
+    String _temp0 = intl.Intl.pluralLogic(
+      quantity,
+      locale: localeName,
+      other: '$quantity barils',
+      one: '1 baril',
+    );
+    return '$_temp0 → $receiverName';
+  }
+
+  @override
+  String holdPricingSummary(Object mode, Object days) {
+    return 'Tarif de blocage : $mode$days';
+  }
+
+  @override
+  String holdDaysSuffix(Object days) {
+    return ' • $days jour(s)';
+  }
+
+  @override
+  String get flat => 'Fixe';
+
+  @override
+  String forfeitureStatusLabel(Object status) {
+    return 'Confiscation : $status';
+  }
+
+  @override
+  String get holdDateReachedStaffAction =>
+      'La date de blocage est atteinte. Marquez ce véhicule comme vendu ou marquez le client comme absent.';
+
+  @override
+  String extensionStatusLine(Object status, Object date, Object amount) {
+    return 'Prolongation : $status$date$amount';
+  }
+
+  @override
+  String dateSuffix(Object date) {
+    return ' • $date';
+  }
+
+  @override
+  String extraAmountSuffix(Object amount) {
+    return ' • supplément $amount';
+  }
+
+  @override
+  String buyerHistoryLine(
+    Object completed,
+    Object noShows,
+    Object forfeitures,
+  ) {
+    return 'Historique acheteur : $completed terminé(s), $noShows absent(s), $forfeitures confisqué(s)';
+  }
+
+  @override
+  String get customerDidNotCome => 'Le client n’est pas venu';
+
+  @override
+  String get approveExtension => 'Approuver la prolongation';
+
+  @override
+  String get rejectExtension => 'Rejeter la prolongation';
+
+  @override
+  String navbarPickerInstructions(int count) {
+    return 'Choisissez jusqu’à $count services pour un accès rapide dans la barre du bas. Faites glisser pour réorganiser.';
+  }
+
+  @override
+  String get inYourNavbar => 'Dans votre barre de navigation';
+
+  @override
+  String get nothingPinnedYet =>
+      'Rien n’est épinglé — ajoutez des services ci-dessous.';
+
+  @override
+  String get addServices => 'Ajouter des services';
+
+  @override
+  String navbarFullMessage(int count) {
+    return 'La barre est pleine ($count). Retirez un service pour en ajouter un autre.';
+  }
+
+  @override
+  String get activeDestinationsRequireFee =>
+      'Les destinations actives nécessitent des frais d’expédition de baril.';
+
+  @override
+  String get seedCountriesEmptyInstruction =>
+      'Ajoutez le catalogue complet des pays, puis recherchez et activez les destinations que vous servez.';
+
+  @override
+  String barrelPriceSummary(Object price) {
+    return 'Baril : $price';
+  }
+
+  @override
+  String deliveryEstimateSummary(Object estimate) {
+    return 'Livraison : $estimate';
+  }
+
+  @override
+  String get businessProfileTitle => 'Profil de l’entreprise';
+
+  @override
+  String get splashTagline => 'Voitures, barils et passage au même endroit.';
+
+  @override
+  String get addMoney => 'Ajouter de l’argent';
+
+  @override
+  String get myOrders => 'Mes commandes';
+
+  @override
+  String get goodMorning => 'Bonjour';
+
+  @override
+  String get goodAfternoon => 'Bon après-midi';
+
+  @override
+  String get goodEvening => 'Bonsoir';
+
+  @override
+  String get signInToYourWallet => 'Connectez-vous à votre portefeuille';
+
+  @override
+  String get walletSignInSubtitle =>
+      'Suivez les commandes, soldes et remboursements.';
+
+  @override
+  String shippingBusinessUnavailable(Object businessName, Object countryName) {
+    return '$businessName n’expédie pas vers $countryName, et aucune autre entreprise n’est encore disponible.';
+  }
+
+  @override
+  String get shippingBusinessWillChange =>
+      'L’entreprise d’expédition va changer';
+
+  @override
+  String shippingBusinessChangeMessage(
+    Object businessName,
+    Object countryName,
+  ) {
+    return '$businessName ne livre pas vers $countryName. Choisissez une autre entreprise approuvée pour continuer.';
+  }
+
+  @override
+  String get availableBusinesses => 'Entreprises disponibles';
+
+  @override
+  String deliveryLabel(Object value) {
+    return 'Livraison $value';
+  }
+
+  @override
+  String get pickupDateAndTime => 'Date et heure de ramassage';
+
+  @override
+  String get shipmentEstimate => 'Estimation de l’expédition';
+
+  @override
+  String get addProfilePicture => 'Ajouter une photo de profil';
+
+  @override
+  String get registerBusinessInstead =>
+      'Enregistrer votre entreprise à la place';
+
+  @override
+  String get businessApprovalSetupNote =>
+      'Vous pouvez configurer les destinations, voitures et employés immédiatement. Les clients verront votre entreprise seulement après l’approbation de la plateforme.';
+
+  @override
+  String get businessProfilePicture => 'Photo de profil de l’entreprise';
+
+  @override
+  String get businessProfilePictureHelper =>
+      'Téléversez un logo ou une image de vitrine que les clients peuvent reconnaître.';
+
+  @override
+  String get joinMarketplace => 'Rejoindre la marketplace';
+
+  @override
+  String get businessApplicationSubtitle =>
+      'Postulez une fois, préparez vos opérations, puis passez en ligne après approbation.';
+
+  @override
+  String totalDaysLabel(Object days) {
+    return 'Nombre total de jours : $days';
+  }
+
+  @override
+  String totalCostLabel(Object cost) {
+    return 'Coût total : $cost';
+  }
+
+  @override
+  String get customerRequest => 'Demande client';
+
+  @override
+  String get awaitingQuote => 'En attente de devis';
+
+  @override
+  String get setPriceQuoteInstruction =>
+      'Définissez un prix ci-dessous pour envoyer un devis à ce client.';
+
+  @override
+  String get barrelOrder => 'Commande de barils';
+
+  @override
+  String barrelOrderSummary(
+    Object barrelCount,
+    Object destinationCount,
+    Object businessCount,
+  ) {
+    return '$barrelCount barils • $destinationCount destinations • $businessCount entreprises';
+  }
+
+  @override
+  String get clear => 'Effacer';
+
+  @override
+  String get signInToSaveBarrelShipment =>
+      'Connectez-vous ou créez un compte afin que nous puissions enregistrer cette expédition de barils en sécurité et l’afficher dans le suivi.';
+
+  @override
+  String get editDestinationPickupHelp =>
+      'Utilisez Modifier sur chaque ligne de destination pour ajouter ou changer les détails de ramassage de cette destination.';
+
+  @override
+  String get businessesShippingToCountry =>
+      'Entreprises expédiant vers ce pays';
+
+  @override
+  String get fixedPickupPriceForBorough =>
+      'Prix de ramassage fixe pour cet arrondissement';
+
+  @override
+  String get finalPriceConfirmedByStaff =>
+      'Le prix final sera confirmé par l’équipe.';
+
+  @override
+  String get useWalletCredit => 'Utiliser le crédit du portefeuille';
+
+  @override
+  String get whereAreBarrelsGoing => 'Où vont ces barils ?';
+
+  @override
+  String get addDestinationInstruction =>
+      'Ajoutez une destination — pays, entreprise, destinataire et nombre de barils envoyés.';
+
+  @override
+  String get addDestination => 'Ajouter une destination';
+
+  @override
+  String get pleaseChooseBusiness => 'Veuillez choisir une entreprise';
+
+  @override
+  String get originalEstimatedCost => 'Coût estimé initial';
+
+  @override
+  String get walletCredit => 'Crédit du portefeuille';
+
+  @override
+  String get cardPaymentDue => 'Paiement par carte dû';
+
+  @override
+  String get addAtLeastOneDestination =>
+      'Ajoutez au moins une destination à cette commande.';
+
+  @override
+  String get noApprovedBusinessShippingDestination =>
+      'Aucune entreprise approuvée n’expédie actuellement vers cette destination.';
+
+  @override
+  String get businessOptionsUnavailable =>
+      'Les options d’entreprise ne sont pas disponibles pour le moment. Veuillez réessayer dans un instant.';
+
+  @override
+  String get gettingYourLocation => 'Récupération de votre position...';
+
+  @override
+  String get useMyCurrentLocation => 'Utiliser ma position actuelle';
+
+  @override
+  String get currentLocationAdded => 'Position actuelle ajoutée';
+
+  @override
+  String get choosePickupDateAndTime =>
+      'Choisir la date et l’heure de ramassage';
+
+  @override
+  String get amountDueNow => 'Montant dû maintenant';
+
+  @override
+  String get estimatedCost => 'Coût estimé';
+
+  @override
+  String get supportCenter => 'Centre de support';
+
+  @override
+  String get supportCases => 'Dossiers de support';
+
+  @override
+  String get supportInbox => 'Boîte de support';
+
+  @override
+  String get supportInboxSubtitle =>
+      'Problèmes clients, réponses des entreprises et escalades admin.';
+
+  @override
+  String get supportChat => 'Chat support';
+
+  @override
+  String get getHelp => 'Obtenir de l’aide';
+
+  @override
+  String get openSupport => 'Ouvrir le support';
+
+  @override
+  String get openingSupport => 'Ouverture du support...';
+
+  @override
+  String get writeSupportMessage => 'Écrire un message';
+
+  @override
+  String get sendMessage => 'Envoyer';
+
+  @override
+  String get sendingMessage => 'Envoi...';
+
+  @override
+  String get supportMessageRequired => 'Écrivez un message avant l’envoi.';
+
+  @override
+  String get supportNoCases => 'Aucun dossier de support';
+
+  @override
+  String get supportNoCasesSubtitle =>
+      'Les dossiers apparaissent ici quand des clients demandent de l’aide à une entreprise.';
+
+  @override
+  String get supportSearch => 'Rechercher des dossiers';
+
+  @override
+  String get supportBusinessFirst => 'Entreprise d’abord';
+
+  @override
+  String get supportEscalated => 'Escaladé';
+
+  @override
+  String get supportResolved => 'Résolu';
+
+  @override
+  String get supportWaitingBusiness => 'En attente de l’entreprise';
+
+  @override
+  String get supportWaitingCustomer => 'En attente du client';
+
+  @override
+  String get supportAdminReviewing => 'Admin en examen';
+
+  @override
+  String get supportUrgent => 'Urgent';
+
+  @override
+  String get supportNormal => 'Normal';
+
+  @override
+  String get supportLinkedRecord => 'Dossier lié';
+
+  @override
+  String get supportCustomer => 'Client';
+
+  @override
+  String get supportBusiness => 'Entreprise';
+
+  @override
+  String get supportPlatformAdmin => 'Admin Laawol';
+
+  @override
+  String get supportAskPlatform => 'Demander l’aide d’un admin Laawol';
+
+  @override
+  String get businessSupportAskAdmin => 'Contacter un admin plateforme';
+
+  @override
+  String get businessSupportTitle => 'Demander l’aide d’un admin plateforme';
+
+  @override
+  String get businessSupportSubtitle =>
+      'Envoyez une demande aux admins Laawol pour votre compte entreprise, vos opérations, vos paiements ou votre accès plateforme.';
+
+  @override
+  String get businessSupportSubject => 'Sujet du support';
+
+  @override
+  String get businessSupportSubjectRequired => 'Saisissez un sujet de support.';
+
+  @override
+  String get supportEscalating => 'Escalade...';
+
+  @override
+  String get supportEscalationTitle => 'Demander l’aide d’un admin Laawol';
+
+  @override
+  String get supportEscalationSubtitle =>
+      'Utilisez ceci quand l’entreprise ne peut pas résoudre le problème ou si c’est urgent.';
+
+  @override
+  String get supportEscalationReason => 'Raison de l’escalade';
+
+  @override
+  String get supportEscalationNote => 'Ajoutez des détails pour l’admin';
+
+  @override
+  String get supportEscalationUnavailable =>
+      'L’escalade vers un admin devient disponible après le délai de réponse de l’entreprise, sauf urgence.';
+
+  @override
+  String get supportReasonUnresolved =>
+      'L’entreprise n’a pas résolu le problème';
+
+  @override
+  String get supportReasonFraud => 'Fraude ou activité suspecte';
+
+  @override
+  String get supportReasonSafety => 'Problème de sécurité';
+
+  @override
+  String get supportReasonAbuse => 'Comportement abusif';
+
+  @override
+  String get supportReasonPaymentNoService =>
+      'Paiement reçu, service non fourni';
+
+  @override
+  String get supportReasonBusinessUnreachable => 'Entreprise injoignable';
+
+  @override
+  String get supportReasonTimeSensitive => 'Ramassage ou livraison urgent';
+
+  @override
+  String get supportEvidence => 'Preuves';
+
+  @override
+  String get supportAddImage => 'Ajouter une image';
+
+  @override
+  String get supportAddAttachment => 'Ajouter une pièce jointe';
+
+  @override
+  String get supportAttachmentSheetTitle => 'Ajouter une pièce jointe';
+
+  @override
+  String get supportPhoto => 'Photo';
+
+  @override
+  String get supportVideo => 'Vidéo';
+
+  @override
+  String get supportFile => 'Fichier';
+
+  @override
+  String get supportUploading => 'Téléversement...';
+
+  @override
+  String get supportRequestEvidence => 'Demander des preuves';
+
+  @override
+  String get supportRequestingEvidence => 'Demande...';
+
+  @override
+  String get supportEvidenceNote => 'Que doit ajouter le client ?';
+
+  @override
+  String get supportResolve => 'Marquer résolu';
+
+  @override
+  String get supportResolving => 'Résolution...';
+
+  @override
+  String get supportReopen => 'Rouvrir';
+
+  @override
+  String get supportReopening => 'Réouverture...';
+
+  @override
+  String get supportInternalNotes => 'Notes internes';
+
+  @override
+  String get supportAddInternalNote => 'Ajouter une note interne';
+
+  @override
+  String get supportSavingNote => 'Enregistrement...';
+
+  @override
+  String get supportNote => 'Note';
+
+  @override
+  String get supportTimeline => 'Chronologie';
+
+  @override
+  String get supportActions => 'Actions';
+
+  @override
+  String get supportFilters => 'Filtres';
+
+  @override
+  String get supportAllCases => 'Tous les dossiers';
+
+  @override
+  String get supportSlaBreaches => 'Délais dépassés';
+
+  @override
+  String get supportFraudSafety => 'Fraude et sécurité';
+
+  @override
+  String get supportOpenFromTransaction =>
+      'Ouvrez un dossier avec l’entreprise responsable. Si ce n’est pas résolu, un admin Laawol peut intervenir.';
+
+  @override
+  String get supportCaseOpened => 'Dossier de support ouvert';
+
+  @override
+  String get supportActionFailed => 'Action de support échouée';
+
+  @override
+  String get supportImageSource => 'Choisir une image';
+
+  @override
+  String get supportCamera => 'Caméra';
+
+  @override
+  String get supportGallery => 'Galerie';
+
+  @override
+  String supportReplyingTo(Object name) {
+    return 'Réponse à $name';
+  }
+
+  @override
+  String get supportEdited => 'modifié';
+
+  @override
+  String get supportReply => 'Répondre';
+
+  @override
+  String get supportDeleteForMe => 'Supprimer pour moi';
+
+  @override
+  String get supportEditMessage => 'Modifier le message';
+
+  @override
+  String get supportSaveEdit => 'Enregistrer';
+
+  @override
+  String get supportCancelReply => 'Annuler la réponse';
+
+  @override
+  String supportCaseStatusLabel(Object status) {
+    return 'Statut : $status';
+  }
+
+  @override
+  String get support => 'Support';
+
+  @override
+  String get supportTeam => 'Équipe support';
+
+  @override
+  String get supportCase => 'Dossier de support';
+
+  @override
+  String get supportBusinessInbox => 'Support entreprise';
+
+  @override
+  String get supportBusinessInboxSubtitle =>
+      'Examinez les dossiers clients, demandez des preuves et coordonnez avec l’assistance Laawol.';
+
+  @override
+  String get supportAdminQueue => 'File de support';
+
+  @override
+  String get supportAdminQueueSubtitle =>
+      'Assignez, escaladez, résolvez et documentez les dossiers de la marketplace.';
+
+  @override
+  String get supportNewCase => 'Nouveau dossier';
+
+  @override
+  String get supportUnavailable => 'Support indisponible';
+
+  @override
+  String get supportSignInRequired =>
+      'Connectez-vous pour ouvrir et consulter les dossiers de support.';
+
+  @override
+  String get supportBusinessRequired =>
+      'Un profil d’entreprise est requis pour utiliser le support entreprise.';
+
+  @override
+  String get supportUnableToLoad => 'Impossible de charger le support';
+
+  @override
+  String get supportSearchCases => 'Rechercher des dossiers';
+
+  @override
+  String get supportNoCasesDesc =>
+      'Les conversations et mises à jour du support apparaîtront ici.';
+
+  @override
+  String get supportLastMessageFallback =>
+      'Ouvrez le dossier pour continuer la conversation.';
+
+  @override
+  String get supportStatusOpen => 'Ouvert';
+
+  @override
+  String get supportStatusWaitingCustomer => 'En attente du client';
+
+  @override
+  String get supportStatusWaitingBusiness => 'En attente de l’entreprise';
+
+  @override
+  String get supportStatusResolved => 'Résolu';
+
+  @override
+  String get supportStatusClosed => 'Fermé';
+
+  @override
+  String get supportFilterWaiting => 'En attente';
+
+  @override
+  String get supportPriorityNormal => 'Normal';
+
+  @override
+  String get supportPriorityUrgent => 'Urgent';
+
+  @override
+  String get supportPriorityEscalated => 'Escaladé';
+
+  @override
+  String get supportCategory => 'Catégorie';
+
+  @override
+  String get supportCategoryGeneral => 'Général';
+
+  @override
+  String get supportCategoryPayment => 'Paiement';
+
+  @override
+  String get supportCategoryDelivery => 'Livraison';
+
+  @override
+  String get supportCategoryVehicle => 'Véhicule';
+
+  @override
+  String get supportCategoryBarrel => 'Baril';
+
+  @override
+  String get supportCategoryTransport => 'Transport';
+
+  @override
+  String get supportCategoryRefund => 'Remboursement';
+
+  @override
+  String get supportAdmin => 'Admin';
+
+  @override
+  String get supportSystem => 'Système';
+
+  @override
+  String get supportSubject => 'Sujet';
+
+  @override
+  String get supportInitialMessage => 'Message initial';
+
+  @override
+  String get supportCreateCase => 'Créer le dossier';
+
+  @override
+  String get supportCreatingCase => 'Création du dossier...';
+
+  @override
+  String get supportCaseActions => 'Actions du dossier';
+
+  @override
+  String get supportAssignToMe => 'M’assigner';
+
+  @override
+  String get supportResolveCase => 'Résoudre le dossier';
+
+  @override
+  String get supportReopenCase => 'Rouvrir le dossier';
+
+  @override
+  String get supportEvidenceRequested => 'Preuves demandées';
+
+  @override
+  String get supportEvidenceAttached => 'Preuve jointe';
+
+  @override
+  String get supportEvidenceUploaded => 'Preuve téléversée.';
+
+  @override
+  String get supportEscalateCase => 'Escalader le dossier';
+
+  @override
+  String get supportEscalate => 'Escalader';
+
+  @override
+  String get supportCaseEscalated => 'Dossier escaladé.';
+
+  @override
+  String get supportEvidenceRequest => 'Demande de preuves';
+
+  @override
+  String get supportSendRequest => 'Envoyer la demande';
+
+  @override
+  String get supportSendingRequest => 'Envoi de la demande...';
+
+  @override
+  String get supportEvidenceRequestSent => 'Demande de preuves envoyée.';
+
+  @override
+  String get supportResolutionNote => 'Note de résolution';
+
+  @override
+  String get supportCaseResolved => 'Dossier résolu.';
+
+  @override
+  String get supportReopenReason => 'Raison de réouverture';
+
+  @override
+  String get supportCaseReopened => 'Dossier rouvert.';
+
+  @override
+  String get supportCaseAssigned => 'Dossier assigné.';
+
+  @override
+  String get supportInternalNote => 'Note interne';
+
+  @override
+  String get supportSaveNote => 'Enregistrer la note';
+
+  @override
+  String get supportInternalNoteSaved => 'Note interne enregistrée.';
+
+  @override
+  String get supportMessage => 'Message';
+
+  @override
+  String get supportMessageHint => 'Écrire un message...';
+
+  @override
+  String get supportSendMessage => 'Envoyer le message';
+
+  @override
+  String get supportNoMessages => 'Aucun message';
+
+  @override
+  String get supportNoMessagesDesc =>
+      'Envoyez le premier message pour démarrer ce fil de support.';
+
+  @override
+  String get supportNoInternalNotes => 'Aucune note interne';
+
+  @override
+  String get supportNoInternalNotesDesc =>
+      'Les notes admin de ce dossier apparaîtront ici.';
+
+  @override
+  String get supportUnassigned => 'Non assigné';
+
+  @override
+  String get supportResolvedComposerDisabled =>
+      'Ce dossier est résolu. Rouvrez-le pour envoyer un autre message.';
+
+  @override
+  String get supportSystemMessage => 'Mise à jour système';
+
+  @override
+  String get supportDeletedMessage => 'Ce message a été supprimé';
+
+  @override
+  String get supportAttachment => 'Pièce jointe';
+
+  @override
+  String get supportAddEvidence => 'Ajouter une preuve';
+
+  @override
+  String get supportUploadImageEvidence => 'Téléverser une image comme preuve';
+
+  @override
+  String get supportAddFileMetadata => 'Ajouter les détails du fichier';
+
+  @override
+  String get supportAddVoiceMetadata => 'Ajouter les détails vocaux';
+
+  @override
+  String get supportImageAttachment => 'Image jointe';
+
+  @override
+  String get supportVoiceAttachment => 'Message vocal';
+
+  @override
+  String get supportFileAttachment => 'Fichier joint';
+
+  @override
+  String get supportVideoAttachment => 'Vidéo jointe';
+
+  @override
+  String get supportOpenAttachment => 'Ouvrir la pièce jointe';
+
+  @override
+  String supportVoiceDuration(Object duration) {
+    return 'Vocal $duration';
+  }
+
+  @override
+  String supportAttachmentSize(Object size) {
+    return '$size';
+  }
+
+  @override
+  String get supportFileName => 'Nom du fichier';
+
+  @override
+  String get supportFileUrl => 'URL du fichier';
+
+  @override
+  String get supportDurationSeconds => 'Durée en secondes';
+
+  @override
+  String get supportSizeBytes => 'Taille en octets';
+
+  @override
+  String get supportFileReadFailed =>
+      'Impossible de lire ce fichier. Réessayez.';
+
+  @override
+  String get supportUnsupportedAttachmentType =>
+      'Choisissez un fichier PDF, texte, Word ou DOCX.';
+
+  @override
+  String get supportAttach => 'Joindre';
+
+  @override
+  String get supportAttaching => 'Ajout...';
+
+  @override
+  String supportPurchaseCaseSubject(Object carTitle) {
+    return 'Support pour $carTitle';
+  }
+
+  @override
+  String get supportSharedBarrelCaseSubject => 'Aide baril partagé';
+
+  @override
+  String get supportPlatformSenderName => 'Assistance Laawol';
+
+  @override
+  String get supportBusinessSenderName => 'Entreprise';
+
+  @override
+  String get parkingStepWhereWhen => 'Où et quand';
+
+  @override
+  String get parkingStepChooseSpot => 'Choisir un emplacement';
+
+  @override
+  String get parkingStepYourCar => 'Votre voiture';
+
+  @override
+  String get parkingStepReview => 'Vérification';
+
+  @override
+  String parkingStepIndicator(Object current, Object total) {
+    return 'Étape $current sur $total';
+  }
+
+  @override
+  String get parkingContinue => 'Continuer';
+
+  @override
+  String get parkingBack => 'Retour';
+
+  @override
+  String get parkingReviewHeading => 'Vérifier et réserver';
+
+  @override
+  String get parkingReviewVehicle => 'Véhicule';
+
+  @override
+  String get parkingReviewDates => 'Dates';
+
+  @override
+  String get parkingReviewPickupYes => 'Ramassage demandé';
+
+  @override
+  String get parkingReviewPickupNo => 'Pas de ramassage';
 }

@@ -13,6 +13,7 @@ import 'platform_admin_dashboard_screen.dart';
 import 'settings_screen.dart';
 import 'staff_car_management_screen.dart';
 import 'staff_purchase_management_screen.dart';
+import 'support_inbox_screen.dart';
 import 'user_management_screen.dart';
 
 class StaffHomeScreen extends StatefulWidget {
@@ -43,6 +44,10 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
       if (hasCarSales) const StaffPurchaseManagementScreen(),
       if (!isAdmin) const BusinessProfileScreen(),
       if (isAdmin) const UserManagementScreen(),
+      if (isAdmin)
+        const SupportInboxScreen.admin()
+      else
+        const SupportInboxScreen.business(),
       const SettingsScreen(),
     ];
   }
@@ -86,6 +91,11 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
           selectedIcon: Icons.people,
           label: l10n.users,
         ),
+      AppBottomNavItem(
+        icon: Icons.support_agent_outlined,
+        selectedIcon: Icons.support_agent,
+        label: l10n.support,
+      ),
       AppBottomNavItem(
         icon: Icons.settings_outlined,
         selectedIcon: Icons.settings,

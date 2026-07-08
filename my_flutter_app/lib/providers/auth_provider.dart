@@ -432,6 +432,21 @@ class AuthProvider extends ChangeNotifier {
     required double carHoldFlatFee,
     required double carHoldDailyRate,
     required int carHoldMaxDays,
+    required String parkingAddressLine1,
+    required String parkingCity,
+    required String parkingCountry,
+    required String parkingState,
+    required int parkingTotalSpaces,
+    required int parkingBlockedSpaces,
+    required double parkingDailyRate,
+    required double parkingWeeklyRate,
+    required double parkingMonthlyRate,
+    required int parkingMinimumDays,
+    required bool parkingPickupAvailable,
+    required double parkingPickupFee,
+    required String parkingInstructions,
+    double? parkingLatitude,
+    double? parkingLongitude,
   }) async {
     if (_user == null) {
       throw 'Please sign in first.';
@@ -459,6 +474,21 @@ class AuthProvider extends ChangeNotifier {
       'carHoldFlatFee': carHoldFlatFee,
       'carHoldDailyRate': carHoldDailyRate,
       'carHoldMaxDays': carHoldMaxDays,
+      'parkingAddressLine1': parkingAddressLine1.trim(),
+      'parkingCity': parkingCity.trim(),
+      'parkingCountry': parkingCountry.trim(),
+      'parkingState': parkingState.trim(),
+      'parkingTotalSpaces': parkingTotalSpaces,
+      'parkingBlockedSpaces': parkingBlockedSpaces,
+      'parkingDailyRate': parkingDailyRate,
+      'parkingWeeklyRate': parkingWeeklyRate,
+      'parkingMonthlyRate': parkingMonthlyRate,
+      'parkingMinimumDays': parkingMinimumDays,
+      'parkingPickupAvailable': parkingPickupAvailable,
+      'parkingPickupFee': parkingPickupFee,
+      'parkingInstructions': parkingInstructions.trim(),
+      'parkingLatitude': parkingLatitude,
+      'parkingLongitude': parkingLongitude,
     });
     await refreshUserProfile();
   }

@@ -623,8 +623,10 @@ class _SignUpScreenState extends State<SignUpScreen>
                                       icon: const Icon(
                                         Icons.storefront_outlined,
                                       ),
-                                      label: const Text(
-                                        'Register your business instead',
+                                      label: Text(
+                                        AppLocalizations.of(
+                                          context,
+                                        )!.registerBusinessInstead,
                                       ),
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: AppColors.cobaltDeep,

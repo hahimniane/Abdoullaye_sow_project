@@ -73,8 +73,11 @@ When changing navigation, compare every named route call against `MaterialApp.ro
 - Are imports organized and unused imports removed?
 - Does the change respect existing provider ownership?
 - Are async calls handled with mounted checks where UI state may update after awaits?
+- Do async user actions expose a loading state, disable repeat activation, and
+  reset in `finally`?
 - Are route arguments typed and validated at both sender and receiver?
-- Are localization keys present in English and French?
+- Are localization keys present in English and French, generated files updated,
+  and dynamic values represented with ARB placeholders?
 - Did the change accidentally create a second source of truth?
 - Are shared widgets still reusable and not overloaded with screen-specific logic?
 
@@ -108,3 +111,9 @@ Add future project conventions and repeated architectural decisions here.
   service revenue should be paid directly to the responsible business through
   Stripe Connect transfers after payment success. Do not design escrow or
   delivery-gated payout flows unless the user explicitly changes this rule.
+- Async button/tap actions must use shared loading-state patterns where
+  practical, show visible progress on all platforms, prevent double submits,
+  and clear the loading flag on success, error, and cancellation.
+- New or changed user-facing strings must use `AppLocalizations` and ARB
+  placeholders. Do not add hardcoded English UI text or local `copy(en, fr)`
+  helpers when an ARB key is the right source of truth.

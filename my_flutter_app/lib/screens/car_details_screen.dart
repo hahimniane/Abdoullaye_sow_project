@@ -1100,7 +1100,7 @@ class CarDetailsScreen extends StatelessWidget {
                                   });
                                 },
                           icon: const Icon(Icons.calendar_month_outlined),
-                          label: const Text('Choose return date'),
+                          label: Text(l10n.chooseReturnDate),
                         ),
                       ),
                       if (car.locationLabel.isNotEmpty) ...[

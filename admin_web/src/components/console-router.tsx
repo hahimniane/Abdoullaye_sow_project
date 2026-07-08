@@ -9,7 +9,58 @@ import { AdminConsole } from "@/components/admin-console";
 import { BusinessConsole } from "@/components/business-console";
 import { auth, db } from "@/lib/firebase";
 import { useFrenchDomTranslation } from "@/lib/french-dom";
-import type { UserProfile } from "@/types/admin";
+import type { FirestoreRow, UserProfile } from "@/types/admin";
+
+const previewBusinessUser = {
+  uid: "business-preview",
+  email: "owner@atlanticexports.com",
+} as User;
+
+const previewBusinessProfile: UserProfile = {
+  id: "business-preview",
+  role: "businessOwner",
+  fullName: "Atlantic Owner",
+  email: "owner@atlanticexports.com",
+  businessId: "atlantic_exports",
+  businessName: "Atlantic Exports",
+  businessServices: ["barrelShipping", "sharedBarrels", "freight"],
+};
+
+const previewBusiness: FirestoreRow = {
+  id: "atlantic_exports",
+  name: "Atlantic Exports",
+  phone: "+1 201 555 0120",
+  email: "owner@atlanticexports.com",
+  website: "https://atlanticexports.example.com",
+  serviceNote: "Barrel and parcel forwarding for West Africa.",
+  status: "changes_requested",
+  enabledServices: ["barrelShipping", "sharedBarrels", "freight"],
+  stripeAccountId: "acct_atlantic_pending",
+  chargesEnabled: false,
+  payoutsEnabled: false,
+  stripeRequirements: {
+    currentlyDue: ["external_account", "business_profile.url"],
+    pastDue: [],
+    pendingVerification: [],
+    disabledReason: "requirements.pending_verification",
+  },
+  verificationDocuments: {
+    shippingAuthority: {
+      fileName: "Warehouse agreement.pdf",
+      url: "https://example.com/warehouse.pdf",
+      status: "needs_changes",
+    },
+  },
+  verificationReview: {
+    note: "Complete Stripe updates in Stripe. Laawol only needs current freight or warehouse authority here.",
+    documents: {
+      shippingAuthority: {
+        status: "needs_changes",
+        note: "Upload a current agreement or freight-forwarder authority.",
+      },
+    },
+  },
+};
 
 export function ConsoleRouter() {
   useFrenchDomTranslation();
@@ -17,8 +68,20 @@ export function ConsoleRouter() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [booting, setBooting] = useState(true);
   const [authError, setAuthError] = useState("");
+  const [previewMode, setPreviewMode] = useState(false);
+  const [previewConsole, setPreviewConsole] = useState<"admin" | "business">("admin");
 
   useEffect(() => {
+    const url = new URL(window.location.href);
+    const localPreview =
+      url.searchParams.get("preview") === "1" &&
+      ["localhost", "127.0.0.1"].includes(window.location.hostname);
+    if (localPreview) {
+      setPreviewMode(true);
+      setPreviewConsole(url.searchParams.get("console") === "business" ? "business" : "admin");
+      setBooting(false);
+      return undefined;
+    }
     return onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user);
       setProfile(null);
@@ -30,7 +93,7 @@ export function ConsoleRouter() {
       try {
         const snap = await getDoc(doc(db, "users", user.uid));
         if (!snap.exists()) {
-          setAuthError("Your account profile is missing. Contact platform support.");
+          setAuthError("Your account profile is missing. Contact Laawol support.");
           return;
         }
         setProfile({id: snap.id, ...snap.data()} as UserProfile);
@@ -51,6 +114,20 @@ export function ConsoleRouter() {
         </div>
       </div>
     );
+  }
+
+  if (previewMode) {
+    if (previewConsole === "business") {
+      return (
+        <BusinessConsole
+          firebaseUser={previewBusinessUser}
+          profile={previewBusinessProfile}
+          previewBusiness={previewBusiness}
+          onSignOut={() => setPreviewMode(false)}
+        />
+      );
+    }
+    return <AdminConsole />;
   }
 
   if (!firebaseUser || !profile) {

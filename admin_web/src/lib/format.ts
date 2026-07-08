@@ -1,5 +1,7 @@
 import type { Timestamp } from "firebase/firestore";
 
+import { currentWebLanguage, currentWebLocale } from "./language.ts";
+
 export function asDate(value: unknown): Date | null {
   if (!value) return null;
   if (value instanceof Date) return value;
@@ -16,7 +18,7 @@ export function asDate(value: unknown): Date | null {
 
 export function formatDate(value: unknown) {
   const date = asDate(value);
-  if (!date) return "Non défini";
+  if (!date) return currentLanguage() === "fr" ? "Non défini" : "Not set";
   return new Intl.DateTimeFormat(currentLocale(), {
     month: "short",
     day: "numeric",
@@ -33,18 +35,15 @@ export function formatMoney(value: unknown, currency = "USD") {
   }).format(Number.isFinite(amount) ? amount : 0);
 }
 
-export function text(value: unknown, fallback = "Inconnu") {
+export function text(value: unknown, fallback?: string) {
   const normalized = String(value ?? "").trim();
-  return normalized || fallback;
+  return normalized || fallback || (currentLanguage() === "fr" ? "Inconnu" : "Unknown");
 }
 
 export function currentLanguage() {
-  if (typeof window !== "undefined" && window.localStorage.getItem("laawol:lang") === "en") {
-    return "en";
-  }
-  return "fr";
+  return currentWebLanguage();
 }
 
 export function currentLocale() {
-  return currentLanguage() === "en" ? "en-US" : "fr-FR";
+  return currentWebLocale();
 }

@@ -21,6 +21,7 @@ import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/destination_country_field.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/support_entry_button.dart';
 import '../theme/app_colors.dart';
 
 class BarrelShipmentDetailsScreen extends StatefulWidget {
@@ -278,10 +279,14 @@ class _BarrelShipmentDetailsScreenState
     }
 
     if (options.isEmpty) {
+      final l10n = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '${_currentShipment.businessName} is not shipping to ${country.name}, and no alternate business is available yet.',
+            l10n.shippingBusinessUnavailable(
+              _currentShipment.businessName,
+              country.name,
+            ),
           ),
           backgroundColor: Colors.red,
         ),
@@ -310,6 +315,7 @@ class _BarrelShipmentDetailsScreenState
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
+        final l10n = AppLocalizations.of(context)!;
         var selected = options.first;
         final currency = NumberFormat.simpleCurrency();
         return StatefulBuilder(
@@ -361,9 +367,9 @@ class _BarrelShipmentDetailsScreenState
                             ),
                           ),
                           const SizedBox(height: 14),
-                          const Text(
-                            'Shipping business will change',
-                            style: TextStyle(
+                          Text(
+                            l10n.shippingBusinessWillChange,
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 18,
                               fontWeight: FontWeight.w900,
@@ -372,7 +378,10 @@ class _BarrelShipmentDetailsScreenState
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            '${_currentShipment.businessName} does not deliver to ${country.name}. Choose another approved business to continue.',
+                            l10n.shippingBusinessChangeMessage(
+                              _currentShipment.businessName,
+                              country.name,
+                            ),
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.86),
                               fontWeight: FontWeight.w700,
@@ -395,7 +404,7 @@ class _BarrelShipmentDetailsScreenState
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              'Available businesses',
+                              l10n.availableBusinesses,
                               style: Theme.of(context).textTheme.titleSmall
                                   ?.copyWith(fontWeight: FontWeight.w900),
                             ),
@@ -752,6 +761,13 @@ class _BarrelShipmentDetailsScreenState
                             createdAt: dateLabel,
                             onCopy: _copyTrackingNumber,
                             onReceipt: _reprintReceipt,
+                          ),
+                          const SizedBox(height: 12),
+                          SupportEntryButton(
+                            relatedCollection: 'barrelShipments',
+                            relatedId: _currentShipment.id,
+                            subject: l10n.supportChat,
+                            relatedLabel: _currentShipment.trackingCode,
                           ),
                           const SizedBox(height: 14),
                           Form(
@@ -1330,7 +1346,9 @@ class _BusinessSwitchOption extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(top: 5),
                       child: Text(
-                        'Delivery $deliveryEstimate',
+                        AppLocalizations.of(
+                          context,
+                        )!.deliveryLabel(deliveryEstimate),
                         style: const TextStyle(
                           color: AppColors.sage,
                           fontSize: 12,
@@ -1397,9 +1415,9 @@ class _PickupTimeEditor extends StatelessWidget {
                   horizontal: 14,
                   vertical: 4,
                 ),
-                title: const Text(
-                  'Pickup date and time',
-                  style: TextStyle(fontWeight: FontWeight.w700),
+                title: Text(
+                  AppLocalizations.of(context)!.pickupDateAndTime,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                 subtitle: Text(
                   label,
@@ -1893,10 +1911,10 @@ class _EditPriceEstimateCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Shipment estimate',
-                  style: TextStyle(
+                  AppLocalizations.of(context)!.shipmentEstimate,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.w900,

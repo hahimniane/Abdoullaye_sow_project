@@ -16,6 +16,7 @@ class TransportRequest {
     required this.status,
     required this.createdAt,
     this.businessName = '',
+    this.businessId = '',
     this.customerUid,
     this.customerPhone = '',
     this.pickupAddress = '',
@@ -37,6 +38,7 @@ class TransportRequest {
   final String status;
   final DateTime createdAt;
   final String businessName;
+  final String businessId;
   final String? customerUid;
   final String customerPhone;
   final String pickupAddress;
@@ -71,6 +73,7 @@ class TransportRequest {
       status: (data['status'] ?? 'pending') as String,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       businessName: (data['businessName'] ?? '') as String,
+      businessId: (data['businessId'] ?? '') as String,
       customerUid: data['customerUid'] as String?,
       customerPhone: (data['customerPhone'] ?? '') as String,
       pickupAddress: (data['pickupAddress'] ?? '') as String,
@@ -94,6 +97,7 @@ class TransportRequest {
       'status': status,
       'createdAt': Timestamp.fromDate(createdAt),
       'businessName': businessName,
+      'businessId': businessId,
       if (customerUid != null) 'customerUid': customerUid,
       'customerPhone': customerPhone,
       'pickupAddress': pickupAddress,
@@ -117,6 +121,7 @@ class TransportRequest {
     String? status,
     DateTime? createdAt,
     String? businessName,
+    String? businessId,
     String? customerUid,
     String? customerPhone,
     String? pickupAddress,
@@ -139,6 +144,7 @@ class TransportRequest {
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       businessName: businessName ?? this.businessName,
+      businessId: businessId ?? this.businessId,
       customerUid: customerUid ?? this.customerUid,
       customerPhone: customerPhone ?? this.customerPhone,
       pickupAddress: pickupAddress ?? this.pickupAddress,

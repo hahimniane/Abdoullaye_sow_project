@@ -75,6 +75,10 @@ Also available: `npm run shell`, `npm run deploy`, and `npm run logs`. Do not de
 - Are affected tests present and passing?
 - Did generated files need regeneration?
 - Are async operations awaited and errors surfaced to the UI?
+- Do async buttons/taps show loading, disable repeat activation, and reset the
+  loading state after success, error, or cancellation?
+- Did every new or changed user-facing string get English and French ARB values,
+  generated localization output, and a hardcoded-string audit?
 - Are Firebase security rules, storage rules, or function contracts affected?
 - Are route arguments and provider dependencies still valid?
 
@@ -112,3 +116,8 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
 - For top-level business-owned documents, add takeover regressions: updates must
   not authorize against a changed `request.resource.data.businessId` without also
   preserving the existing `resource.data.businessId`.
+- For UI workflows, test or manually verify that async buttons and tap targets
+  show progress immediately, cannot be double-clicked/double-tapped, and recover
+  after both success and failure.
+- For Flutter UI changes, run or report a hardcoded-string audit for touched
+  files and verify `flutter gen-l10n` plus `flutter analyze` after ARB edits.

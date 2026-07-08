@@ -214,10 +214,11 @@ if (checksBackend) {
       cwd: path.join(ROOT, "my_flutter_app"),
     });
     const functionsOutput = `${functionsDryRun.stdout}\n${functionsDryRun.stderr}`;
-    const computeApiDisabled =
-      /Compute Engine API has not been used|compute\.googleapis\.com/.test(
-          functionsOutput,
-      );
+    const computeApiDisabled = [
+      /Compute Engine API has not been used/i,
+      /Compute Engine API.*(?:disabled|inaccessible)/i,
+      /compute\.googleapis\.com.*(?:disabled|has not been used|permission denied)/i,
+    ].some((pattern) => pattern.test(functionsOutput));
     addCheck(
         "Functions deploy dry-run",
         functionsDryRun.ok && !computeApiDisabled,

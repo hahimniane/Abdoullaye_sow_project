@@ -141,14 +141,26 @@ class _BusinessRegistrationScreenState
           carHoldFlatFee: 500,
           carHoldDailyRate: 100,
           carHoldMaxDays: 14,
+          parkingAddressLine1: '',
+          parkingCity: _businessCity ?? '',
+          parkingCountry: _businessCountry ?? '',
+          parkingState: _businessCountry ?? '',
+          parkingTotalSpaces: 0,
+          parkingBlockedSpaces: 0,
+          parkingDailyRate: 0,
+          parkingWeeklyRate: 0,
+          parkingMonthlyRate: 0,
+          parkingMinimumDays: 1,
+          parkingPickupAvailable: false,
+          parkingPickupFee: 0,
+          parkingInstructions: '',
+          parkingLatitude: null,
+          parkingLongitude: null,
         );
       }
 
       if (!mounted) return;
-      showSuccessSnackBar(
-        context,
-        'Business application submitted. You can set up your dashboard now.',
-      );
+      showSuccessSnackBar(context, l10n.businessApplicationSubmittedSetup);
       Navigator.pushNamedAndRemoveUntil(
         context,
         '/staff-home',
@@ -181,7 +193,7 @@ class _BusinessRegistrationScreenState
     final image = _profileImage;
     final bytes = _profileImageBytes;
     if (image == null || bytes == null) {
-      throw 'Please choose a business image first.';
+      throw AppLocalizations.of(context)!.chooseBusinessImageFirst;
     }
     final ext = (image.name.split('.').last).toLowerCase();
     final safeExt = ['jpg', 'jpeg', 'png', 'webp'].contains(ext) ? ext : 'jpg';
@@ -205,15 +217,17 @@ class _BusinessRegistrationScreenState
   }
 
   String? _emailValidator(String? value, {bool required = true}) {
+    final l10n = AppLocalizations.of(context)!;
     final trimmed = value?.trim() ?? '';
-    if (trimmed.isEmpty) return required ? 'Email is required' : null;
+    if (trimmed.isEmpty) return required ? l10n.emailRequired : null;
     if (!RegExp(r'^[\w\-.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(trimmed)) {
-      return 'Please enter a valid email';
+      return l10n.validEmailRequired;
     }
     return null;
   }
 
   String? _websiteValidator(String? value) {
+    final l10n = AppLocalizations.of(context)!;
     final trimmed = value?.trim() ?? '';
     if (trimmed.isEmpty) return null;
     final normalized = trimmed.startsWith(RegExp(r'https?://'))
@@ -224,7 +238,7 @@ class _BusinessRegistrationScreenState
         !uri.hasScheme ||
         uri.host.isEmpty ||
         !uri.host.contains('.')) {
-      return 'Please enter a valid website';
+      return l10n.validWebsiteRequired;
     }
     return null;
   }
@@ -547,10 +561,10 @@ class _BusinessRegistrationScreenState
                               ),
                             ),
                             const SizedBox(height: 12),
-                            const Text(
-                              'You can set up destinations, cars, and staff immediately. Customers will only see your business after platform approval.',
+                            Text(
+                              l10n.businessApprovalSetupNote,
                               textAlign: TextAlign.center,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: AppColors.muted,
                                 fontWeight: FontWeight.w600,
                                 height: 1.35,
@@ -609,18 +623,18 @@ class _ProfileImagePicker extends StatelessWidget {
                   : null,
             ),
             const SizedBox(width: 14),
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Business profile picture',
-                    style: TextStyle(fontWeight: FontWeight.w900),
+                    AppLocalizations.of(context)!.businessProfilePicture,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
                   ),
-                  SizedBox(height: 3),
+                  const SizedBox(height: 3),
                   Text(
-                    'Upload a logo or storefront image customers can recognize.',
-                    style: TextStyle(
+                    AppLocalizations.of(context)!.businessProfilePictureHelper,
+                    style: const TextStyle(
                       color: AppColors.muted,
                       fontWeight: FontWeight.w600,
                     ),
@@ -686,26 +700,30 @@ class _BusinessRegistrationHero extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
       ),
-      child: const Row(
+      child: Row(
         children: [
-          Icon(Icons.business_center_outlined, color: Colors.white, size: 42),
-          SizedBox(width: 14),
+          const Icon(
+            Icons.business_center_outlined,
+            color: Colors.white,
+            size: 42,
+          ),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Join the marketplace',
-                  style: TextStyle(
+                  AppLocalizations.of(context)!.joinMarketplace,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 18,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Text(
-                  'Apply once, prepare your operations, then go live when approved.',
-                  style: TextStyle(color: Colors.white70, height: 1.3),
+                  AppLocalizations.of(context)!.businessApplicationSubtitle,
+                  style: const TextStyle(color: Colors.white70, height: 1.3),
                 ),
               ],
             ),

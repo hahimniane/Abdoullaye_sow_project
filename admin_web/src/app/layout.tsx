@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Administration Laawol Digital",
-  description: "Console d’administration des opérations Laawol Digital",
+  description: "Laawol Digital operations console",
   icons: {
     icon: "/logo.png",
     shortcut: "/logo.png",
@@ -16,7 +16,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr">
+    <html lang="en">
       <body>{children}</body>
     </html>
   );

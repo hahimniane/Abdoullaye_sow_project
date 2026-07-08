@@ -5,6 +5,7 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../models/car.dart';
 import '../models/car_purchase.dart';
+import 'stripe_config_service.dart';
 
 class CarPurchaseService {
   CarPurchaseService({FirebaseFunctions? functions})
@@ -104,6 +105,7 @@ class CarPurchaseService {
       throw Exception('Payment could not be initialized.');
     }
 
+    await StripeConfigService.ensureConfigured();
     await Stripe.instance.initPaymentSheet(
       paymentSheetParameters: SetupPaymentSheetParameters(
         paymentIntentClientSecret: clientSecret,
@@ -154,6 +156,7 @@ class CarPurchaseService {
       throw Exception('Payment could not be initialized.');
     }
 
+    await StripeConfigService.ensureConfigured();
     await Stripe.instance.initPaymentSheet(
       paymentSheetParameters: SetupPaymentSheetParameters(
         paymentIntentClientSecret: clientSecret,
@@ -189,6 +192,7 @@ class CarPurchaseService {
     if (clientSecret == null || clientSecret.isEmpty) {
       throw Exception('Extension payment could not be initialized.');
     }
+    await StripeConfigService.ensureConfigured();
     await Stripe.instance.initPaymentSheet(
       paymentSheetParameters: SetupPaymentSheetParameters(
         paymentIntentClientSecret: clientSecret,

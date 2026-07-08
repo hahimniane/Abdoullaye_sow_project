@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter_stripe/flutter_stripe.dart';
 import 'firebase_options.dart';
+import 'firebase_emulator_config.dart';
 import 'providers/language_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
@@ -32,6 +32,7 @@ import 'screens/user_management_screen.dart';
 import 'screens/add_staff_screen.dart';
 import 'screens/signup_screen.dart';
 import 'screens/my_purchases_screen.dart';
+import 'screens/orders_screen.dart';
 import 'screens/staff_purchase_management_screen.dart';
 import 'screens/destination_countries_screen.dart';
 import 'screens/account_profile_screen.dart';
@@ -40,21 +41,21 @@ import 'screens/business_profile_screen.dart';
 import 'screens/business_registration_screen.dart';
 import 'screens/wallet_screen.dart';
 import 'screens/favorite_cars_screen.dart';
+import 'screens/support_inbox_screen.dart';
+import 'screens/support_thread_screen.dart';
 import 'models/parked_car.dart';
 import 'screens/parked_car_details_screen.dart';
 import 'models/barrel_shipment.dart';
 import 'screens/barrel_shipment_details_screen.dart';
 import 'models/transport_request.dart';
 import 'screens/transport_request_details_screen.dart';
+import 'services/stripe_config_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  const stripePublishableKey = String.fromEnvironment('STRIPE_PUBLISHABLE_KEY');
-  if (stripePublishableKey.isNotEmpty) {
-    Stripe.publishableKey = stripePublishableKey;
-    await Stripe.instance.applySettings();
-  }
+  await connectFirebaseEmulatorsIfRequested();
+  await StripeConfigService.ensureConfigured();
   runApp(const MyApp());
 }
 
@@ -107,12 +108,16 @@ class MyApp extends StatelessWidget {
                   '/customize-navbar': (context) =>
                       const CustomizeNavbarScreen(),
                   '/transport': (context) => const TransportCarScreen(),
+                  '/request-transport': (context) =>
+                      const RequestTransportScreen(),
                   '/sell': (context) =>
                       const SellCarsScreen(showBackButton: true),
                   '/tracking': (context) =>
                       const TrackingScreen(showBackButton: true),
                   '/my-purchases': (context) =>
                       const MyPurchasesScreen(showBackButton: true),
+                  '/orders': (context) =>
+                      const OrdersScreen(showBackButton: true),
                   '/purchase-management': (context) =>
                       const StaffPurchaseManagementScreen(),
                   '/destination-countries': (context) =>
@@ -146,7 +151,25 @@ class MyApp extends StatelessWidget {
                   '/home-menu': (context) => const HomeMenu(),
                   '/user-management': (context) => const UserManagementScreen(),
                   '/add-staff': (context) => const AddStaffScreen(),
-                },
+                  '/business-support': (context) =>
+                      const SupportInboxScreen.business(),
+                  '/admin-support': (context) =>
+                      const SupportInboxScreen.admin(),
+                  '/support': (context) {
+                    final args =
+                        ModalRoute.of(context)!.settings.arguments
+                            as SupportInboxArguments?;
+                    if (args == null) {
+                      return const SupportInboxScreen.customer();
+                    }
+                    return SupportInboxScreen(scope: args.scope);
+                  },
+                  '/support-thread': (context) {
+                    final caseId =
+                        ModalRoute.of(context)!.settings.arguments as String;
+                    return SupportThreadScreen(caseId: caseId);
+                  },
+                 },
               );
             },
       ),

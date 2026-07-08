@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/barrel_pool.dart';
 import '../models/business_destination_option.dart';
 import '../models/business_service.dart';
@@ -12,6 +13,7 @@ import '../services/barrel_pricing_service.dart';
 import '../services/business_service.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/support_entry_button.dart';
 
 class OpenBarrelsScreen extends StatefulWidget {
   const OpenBarrelsScreen({super.key});
@@ -273,6 +275,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                 'delivered',
               ].contains(pool.status),
           onAction: _payBalanceOrLeavePool,
+          showSupport: true,
         );
       },
     );
@@ -487,16 +490,17 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                       children: [
                         Text(
                           copy('Request a share', 'Demander une part'),
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleLarge
+                          style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          copy('Reserve space in this open barrel.',
-                              'Réservez de l’espace dans ce baril ouvert.'),
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          copy(
+                            'Reserve space in this open barrel.',
+                            'Réservez de l’espace dans ce baril ouvert.',
+                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
                                 color: Theme.of(context).hintColor,
                                 height: 1.3,
                               ),
@@ -670,9 +674,9 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
         SnackBar(
           content: Text(
             copy(
-              'Could not open the form: ',
-              'Impossible d’ouvrir le formulaire : ',
-            ) +
+                  'Could not open the form: ',
+                  'Impossible d’ouvrir le formulaire : ',
+                ) +
                 error.toString(),
           ),
         ),
@@ -850,19 +854,21 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          copy('Post a partial barrel',
-                              'Publier un baril partiel'),
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleLarge
+                          copy(
+                            'Post a partial barrel',
+                            'Publier un baril partiel',
+                          ),
+                          style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           copy(
-                              'Share the open space so others can join and fill the barrel.',
-                              'Partagez l’espace libre pour que d’autres complètent le baril.'),
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            'Share the open space so others can join and fill the barrel.',
+                            'Partagez l’espace libre pour que d’autres complètent le baril.',
+                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
                                 color: Theme.of(context).hintColor,
                                 height: 1.3,
                               ),
@@ -1275,6 +1281,7 @@ class _PoolList extends StatelessWidget {
     this.actionLabelFor,
     this.actionIconFor,
     this.actionEnabled,
+    this.showSupport = false,
   });
 
   final List<BarrelPool> pools;
@@ -1286,6 +1293,7 @@ class _PoolList extends StatelessWidget {
   final IconData Function(BarrelPool pool)? actionIconFor;
   final Future<void> Function(BarrelPool pool) onAction;
   final bool Function(BarrelPool pool)? actionEnabled;
+  final bool showSupport;
 
   @override
   Widget build(BuildContext context) {
@@ -1305,6 +1313,7 @@ class _PoolList extends StatelessWidget {
           actionEnabled: actionEnabled?.call(pool) ?? true,
           onAction: () => onAction(pool),
           copy: copy,
+          showSupport: showSupport,
         );
       },
       separatorBuilder: (_, __) => const SizedBox(height: 14),
@@ -1324,6 +1333,7 @@ class _PoolCard extends StatelessWidget {
     required this.actionEnabled,
     required this.onAction,
     required this.copy,
+    required this.showSupport,
   });
 
   final BarrelPool pool;
@@ -1335,9 +1345,11 @@ class _PoolCard extends StatelessWidget {
   final bool actionEnabled;
   final VoidCallback onAction;
   final String Function(String en, String fr) copy;
+  final bool showSupport;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Card(
       elevation: 0,
       color: Colors.white,
@@ -1402,6 +1414,20 @@ class _PoolCard extends StatelessWidget {
                 label: Text(actionLabel),
               ),
             ),
+            if (showSupport) ...[
+              const SizedBox(height: 10),
+              SupportEntryButton(
+                relatedCollection: 'barrelPools',
+                relatedId: pool.id,
+                subject: l10n.supportSharedBarrelCaseSubject,
+                relatedLabel: [
+                  pool.destinationCountryName,
+                  pool.businessName,
+                  if (pool.trackingCode.isNotEmpty) pool.trackingCode,
+                ].where((value) => value.isNotEmpty).join(' · '),
+                compact: true,
+              ),
+            ],
           ],
         ),
       ),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
@@ -34,6 +36,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColors.cream,
       body: Consumer<AuthProvider>(
@@ -69,18 +72,20 @@ class _SplashScreenState extends State<SplashScreen> {
                                   height: 0.86,
                                   color: AppColors.ink,
                                 ),
-                            children: const [
-                              TextSpan(text: 'Services'),
+                            children: [
+                              TextSpan(text: l10n.services),
                               TextSpan(
                                 text: '.',
-                                style: TextStyle(color: AppColors.oxblood),
+                                style: const TextStyle(
+                                  color: AppColors.oxblood,
+                                ),
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(height: 18),
                         Text(
-                          'Motorcars, barrels & passage in one place.',
+                          l10n.splashTagline,
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(color: AppColors.muted, height: 1.55),
                         ),

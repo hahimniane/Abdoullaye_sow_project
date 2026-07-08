@@ -13,16 +13,34 @@ import '../utils/barrel_receipt_generator.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/language_toggle.dart';
 
-class TrackingScreen extends StatelessWidget {
+enum _StatusFilter { inProgress, delivered, all }
+
+class TrackingScreen extends StatefulWidget {
   const TrackingScreen({super.key, this.showBackButton = false});
 
   final bool showBackButton;
 
+  @override
+  State<TrackingScreen> createState() => _TrackingScreenState();
+}
+
+class _TrackingScreenState extends State<TrackingScreen> {
   static final Uri _carrierTrackingUri = Uri.parse(
     'https://www.maersk.com/tracking',
   );
 
-  Future<void> _openCarrierTracking(BuildContext context) async {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+  _StatusFilter _status = _StatusFilter.inProgress;
+  String? _destination;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _openCarrierTracking() async {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context)!;
     final opened = await launchUrl(
@@ -34,6 +52,38 @@ class TrackingScreen extends StatelessWidget {
         SnackBar(content: Text(l10n.couldNotOpenCarrierTracking)),
       );
     }
+  }
+
+  bool _inProgress(BarrelShipment s) =>
+      s.status != 'completed' && s.status != 'cancelled';
+
+  bool _matchesStatus(BarrelShipment s) {
+    switch (_status) {
+      case _StatusFilter.inProgress:
+        return _inProgress(s);
+      case _StatusFilter.delivered:
+        return s.status == 'completed';
+      case _StatusFilter.all:
+        return true;
+    }
+  }
+
+  bool _matchesQuery(BarrelShipment s) {
+    if (_query.isEmpty) return true;
+    final q = _query.toLowerCase();
+    return s.trackingCode.toLowerCase().contains(q) ||
+        s.receiverName.toLowerCase().contains(q) ||
+        s.destinationCountryName.toLowerCase().contains(q) ||
+        s.businessName.toLowerCase().contains(q);
+  }
+
+  void _clearFilters() {
+    setState(() {
+      _query = '';
+      _searchController.clear();
+      _status = _StatusFilter.all;
+      _destination = null;
+    });
   }
 
   @override
@@ -51,8 +101,8 @@ class TrackingScreen extends StatelessWidget {
             message: l10n.signInToTrackShipments,
             actionLabel: l10n.signIn,
             onAction: () => Navigator.pushNamed(context, '/login'),
-            onOpenCarrierTracking: () => _openCarrierTracking(context),
-            showBackButton: showBackButton,
+            onOpenCarrierTracking: _openCarrierTracking,
+            showBackButton: widget.showBackButton,
           ),
         ),
       );
@@ -72,8 +122,8 @@ class TrackingScreen extends StatelessWidget {
                 title: l10n.trackShipment,
                 icon: Icons.lock_outline,
                 message: l10n.shipmentsLoadError,
-                onOpenCarrierTracking: () => _openCarrierTracking(context),
-                showBackButton: showBackButton,
+                onOpenCarrierTracking: _openCarrierTracking,
+                showBackButton: widget.showBackButton,
               ),
             );
           }
@@ -93,36 +143,93 @@ class TrackingScreen extends StatelessWidget {
                 message: l10n.shipmentsAppearAfterPayment,
                 actionLabel: l10n.sendBarrels,
                 onAction: () => Navigator.pushNamed(context, '/barrel'),
-                onOpenCarrierTracking: () => _openCarrierTracking(context),
-                showBackButton: showBackButton,
+                onOpenCarrierTracking: _openCarrierTracking,
+                showBackButton: widget.showBackButton,
               ),
             );
           }
+
+          final destinations = <String>{
+            for (final s in shipments) s.destinationCountryName.trim(),
+          }.where((d) => d.isNotEmpty).toList()..sort();
+
+          // Search + destination define the working set; the status segment
+          // shows counts within it and decides what the list displays.
+          final base = shipments
+              .where(
+                (s) =>
+                    _matchesQuery(s) &&
+                    (_destination == null ||
+                        s.destinationCountryName == _destination),
+              )
+              .toList();
+          final inProgressCount = base.where(_inProgress).length;
+          final deliveredCount = base
+              .where((s) => s.status == 'completed')
+              .length;
+          final filtered = base.where(_matchesStatus).toList();
+          final groups = _ShipmentGroup.fromShipments(filtered);
 
           return SafeArea(
             child: Column(
               children: [
                 _ShipmentsHeader(
                   title: l10n.trackShipment,
-                  onOpenCarrierTracking: () => _openCarrierTracking(context),
-                  showBackButton: showBackButton,
+                  onOpenCarrierTracking: _openCarrierTracking,
+                  showBackButton: widget.showBackButton,
                 ),
-                if (!context.watch<AuthProvider>().hasBusinessDashboardAccess)
-                  _WalletSummary(customerUid: user.uid),
-                _ShipmentStats(shipments: shipments),
-                Expanded(
-                  child: RefreshIndicator(
-                    onRefresh: () async {},
-                    child: ListView.separated(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                      itemCount: shipments.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        return _ShipmentCard(shipment: shipments[index]);
-                      },
-                    ),
+                _TrackSearchField(
+                  controller: _searchController,
+                  hint: l10n.trackSearchHint,
+                  onChanged: (value) => setState(() => _query = value.trim()),
+                  onClear: () => setState(() {
+                    _searchController.clear();
+                    _query = '';
+                  }),
+                ),
+                _StatusSegment(
+                  status: _status,
+                  inProgressLabel: l10n.filterInProgress,
+                  deliveredLabel: l10n.filterDelivered,
+                  allLabel: l10n.filterAll,
+                  inProgressCount: inProgressCount,
+                  deliveredCount: deliveredCount,
+                  allCount: base.length,
+                  onChanged: (value) => setState(() => _status = value),
+                ),
+                if (destinations.length > 1)
+                  _DestinationChips(
+                    destinations: destinations,
+                    selected: _destination,
+                    allLabel: l10n.allDestinations,
+                    onSelected: (value) => setState(() => _destination = value),
                   ),
+                Expanded(
+                  child: groups.isEmpty
+                      ? _NoResults(
+                          message: l10n.noShipmentsMatchFilters,
+                          clearLabel: l10n.clearFilters,
+                          onClear: _clearFilters,
+                        )
+                      : RefreshIndicator(
+                          onRefresh: () async {},
+                          child: ListView.separated(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                            itemCount: groups.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 12),
+                            itemBuilder: (context, index) {
+                              final group = groups[index];
+                              if (group.shipments.length == 1) {
+                                return _ShipmentCard(
+                                  shipment: group.shipments.single,
+                                );
+                              }
+                              return _ShipmentGroupCard(group: group);
+                            },
+                          ),
+                        ),
                 ),
               ],
             ),
@@ -133,150 +240,33 @@ class TrackingScreen extends StatelessWidget {
   }
 }
 
-class _WalletSummary extends StatelessWidget {
-  const _WalletSummary({required this.customerUid});
+class _ShipmentGroup {
+  const _ShipmentGroup({required this.id, required this.shipments});
 
-  final String customerUid;
+  final String id;
+  final List<BarrelShipment> shipments;
 
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('wallets')
-          .doc(customerUid)
-          .snapshots(),
-      builder: (context, snapshot) {
-        final l10n = AppLocalizations.of(context)!;
-        final data = snapshot.data?.data() as Map<String, dynamic>?;
-        final balance =
-            (data?['balance'] as num?)?.toDouble() ??
-            (((data?['balanceCents'] as num?)?.toDouble() ?? 0) / 100);
-        final currency = NumberFormat.simpleCurrency(
-          name: (data?['currency'] as String?)?.toUpperCase() ?? 'USD',
-        );
+  BarrelShipment get latest => shipments.first;
 
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('wallets')
-                .doc(customerUid)
-                .collection('transactions')
-                .orderBy('createdAt', descending: true)
-                .limit(3)
-                .snapshots(),
-            builder: (context, transactionsSnapshot) {
-              final transactions = transactionsSnapshot.data?.docs ?? [];
-              return Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppColors.paper,
-                  border: Border.all(color: AppColors.rule),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            color: AppColors.sage.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.account_balance_wallet_outlined,
-                            color: AppColors.sage,
-                            size: 21,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                l10n.walletBalance,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: AppColors.lightMuted,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                              ),
-                              Text(
-                                currency.format(balance),
-                                style: Theme.of(context).textTheme.titleLarge
-                                    ?.copyWith(fontWeight: FontWeight.w900),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Text(
-                          l10n.refundCredits,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: AppColors.lightMuted,
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                      ],
-                    ),
-                    if (transactions.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      const Divider(height: 1),
-                      const SizedBox(height: 8),
-                      ...transactions.map((doc) {
-                        final item = doc.data() as Map<String, dynamic>;
-                        final amount =
-                            (item['amount'] as num?)?.toDouble() ??
-                            (((item['amountCents'] as num?)?.toDouble() ?? 0) /
-                                100);
-                        final trackingCode =
-                            (item['trackingCode'] as String?) ?? '';
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.add_circle_outline,
-                                color: AppColors.sage,
-                                size: 16,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  trackingCode.isEmpty
-                                      ? l10n.destinationRefund
-                                      : l10n.destinationRefundWithCode(
-                                          trackingCode,
-                                        ),
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              Text(
-                                currency.format(amount),
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: AppColors.sage,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                    ],
-                  ],
-                ),
-              );
-            },
+  static List<_ShipmentGroup> fromShipments(List<BarrelShipment> shipments) {
+    final grouped = <String, List<BarrelShipment>>{};
+    for (final shipment in shipments) {
+      final key = shipment.orderId?.trim().isNotEmpty == true
+          ? 'order:${shipment.orderId}'
+          : 'shipment:${shipment.id}';
+      grouped.putIfAbsent(key, () => []).add(shipment);
+    }
+    final groups = grouped.entries
+        .map(
+          (entry) => _ShipmentGroup(
+            id: entry.key,
+            shipments: entry.value
+              ..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
           ),
-        );
-      },
-    );
+        )
+        .toList();
+    groups.sort((a, b) => b.latest.createdAt.compareTo(a.latest.createdAt));
+    return groups;
   }
 }
 
@@ -321,93 +311,220 @@ class _ShipmentsHeader extends StatelessWidget {
   }
 }
 
-class _ShipmentStats extends StatelessWidget {
-  const _ShipmentStats({required this.shipments});
+class _ShipmentGroupCard extends StatelessWidget {
+  const _ShipmentGroupCard({required this.group});
 
-  final List<BarrelShipment> shipments;
+  final _ShipmentGroup group;
+
+  Future<void> _downloadReceipt(BuildContext context) async {
+    await generateBarrelOrderReceipt(
+      orderId: group.latest.orderId ?? group.latest.id,
+      shipments: group.shipments,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final activeCount = shipments
-        .where((shipment) => shipment.status != 'completed')
-        .length;
-    final pickupCount = shipments
+    final l10n = AppLocalizations.of(context)!;
+    final currency = NumberFormat.simpleCurrency();
+    final total = group.shipments.fold<double>(
+      0,
+      (runningTotal, shipment) => runningTotal + shipment.price,
+    );
+    final barrelCount = group.shipments.fold<int>(
+      0,
+      (runningTotal, shipment) => runningTotal + shipment.quantity,
+    );
+    final businesses = {
+      for (final shipment in group.shipments) shipment.businessName,
+    }.where((name) => name.trim().isNotEmpty).length;
+    final pickupCount = group.shipments
         .where((shipment) => shipment.pickupRequested)
         .length;
-    final completedCount = shipments
-        .where((shipment) => shipment.status == 'completed')
-        .length;
-    final l10n = AppLocalizations.of(context)!;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: _StatTile(
-              label: l10n.activeShort,
-              value: activeCount.toString(),
-              icon: Icons.local_shipping,
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      color: AppColors.paper,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: const BorderSide(color: AppColors.rule),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: AppColors.cobalt.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.inventory_2_outlined,
+                    color: AppColors.cobaltDeep,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.barrelOrder,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        l10n.barrelOrderSummary(
+                          barrelCount,
+                          group.shipments.length,
+                          businesses,
+                        ),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.lightMuted,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _StatusPill(
+                  label: _ShipmentCard.statusLabel(l10n, group.latest.status),
+                  color: _ShipmentCard.statusColor(group.latest.status),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _StatTile(
-              label: l10n.pickupShort,
-              value: pickupCount.toString(),
-              icon: Icons.home_work_outlined,
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _InfoChip(
+                  icon: Icons.payments_outlined,
+                  label:
+                      '${currency.format(total)} • ${_ShipmentCard.paymentLabel(l10n, group.latest.paymentStatus)}',
+                ),
+                _InfoChip(
+                  icon: pickupCount > 0
+                      ? Icons.home_work_outlined
+                      : Icons.storefront_outlined,
+                  label: pickupCount > 0
+                      ? '$pickupCount pickup${pickupCount == 1 ? '' : 's'}'
+                      : l10n.customerDropOffAtOffice,
+                ),
+              ],
             ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _StatTile(
-              label: l10n.doneShort,
-              value: completedCount.toString(),
-              icon: Icons.check_circle_outline,
+            const SizedBox(height: 12),
+            for (final shipment in group.shipments) ...[
+              _ShipmentGroupLine(shipment: shipment),
+              if (shipment != group.shipments.last) const Divider(height: 14),
+            ],
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: () => _downloadReceipt(context),
+                icon: const Icon(Icons.receipt_long, size: 18),
+                label: Text(l10n.receipt),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class _StatTile extends StatelessWidget {
-  const _StatTile({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
+class _ShipmentGroupLine extends StatelessWidget {
+  const _ShipmentGroupLine({required this.shipment});
 
-  final String label;
-  final String value;
+  final BarrelShipment shipment;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => Navigator.pushNamed(
+        context,
+        '/barrel-shipment-details',
+        arguments: shipment,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 82,
+              child: Text(
+                shipment.destinationCountryName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    shipment.trackingCode,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${shipment.receiverName} • ${shipment.businessName}',
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.muted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  const _InfoChip({required this.icon, required this.label});
+
   final IconData icon;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.paper,
-        border: Border.all(color: AppColors.rule),
+        color: AppColors.lightSurfaceVariant,
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.rule),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: AppColors.cobalt),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-          ),
+          Icon(icon, size: 15, color: AppColors.cobaltDeep),
+          const SizedBox(width: 6),
           Text(
             label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AppColors.lightMuted,
-              fontWeight: FontWeight.w700,
+            style: const TextStyle(
+              color: AppColors.ink,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ],
@@ -483,8 +600,8 @@ class _ShipmentCard extends StatelessWidget {
                     ),
                   ),
                   _StatusPill(
-                    label: _statusLabel(l10n, shipment.status),
-                    color: _statusColor(shipment.status),
+                    label: statusLabel(l10n, shipment.status),
+                    color: statusColor(shipment.status),
                   ),
                 ],
               ),
@@ -503,7 +620,7 @@ class _ShipmentCard extends StatelessWidget {
               _DetailLine(
                 icon: Icons.payments_outlined,
                 text:
-                    '${currency.format(shipment.price)} • ${_paymentLabel(l10n, shipment.paymentStatus)}',
+                    '${currency.format(shipment.price)} • ${paymentLabel(l10n, shipment.paymentStatus)}',
               ),
               if (shipment.deliveryEstimateLabel != null) ...[
                 const SizedBox(height: 8),
@@ -542,7 +659,7 @@ class _ShipmentCard extends StatelessWidget {
     );
   }
 
-  static String _statusLabel(AppLocalizations l10n, String status) {
+  static String statusLabel(AppLocalizations l10n, String status) {
     switch (status) {
       case 'pending_payment':
         return l10n.pendingPayment;
@@ -559,7 +676,7 @@ class _ShipmentCard extends StatelessWidget {
     }
   }
 
-  static Color _statusColor(String status) {
+  static Color statusColor(String status) {
     switch (status) {
       case 'completed':
         return AppColors.sage;
@@ -574,7 +691,7 @@ class _ShipmentCard extends StatelessWidget {
     }
   }
 
-  static String _paymentLabel(AppLocalizations l10n, String paymentStatus) {
+  static String paymentLabel(AppLocalizations l10n, String paymentStatus) {
     switch (paymentStatus) {
       case 'succeeded':
         return l10n.paid;
@@ -718,6 +835,250 @@ class _EmptyShipmentsState extends StatelessWidget {
                 ],
               ),
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TrackSearchField extends StatelessWidget {
+  const _TrackSearchField({
+    required this.controller,
+    required this.hint,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final String hint;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: hint,
+          prefixIcon: const Icon(Icons.search, size: 20),
+          suffixIcon: controller.text.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: AppLocalizations.of(context)!.clear,
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: onClear,
+                ),
+          isDense: true,
+          filled: true,
+          fillColor: AppColors.paper,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 12,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: AppColors.rule),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: AppColors.rule),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: AppColors.cobalt, width: 1.5),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusSegment extends StatelessWidget {
+  const _StatusSegment({
+    required this.status,
+    required this.inProgressLabel,
+    required this.deliveredLabel,
+    required this.allLabel,
+    required this.inProgressCount,
+    required this.deliveredCount,
+    required this.allCount,
+    required this.onChanged,
+  });
+
+  final _StatusFilter status;
+  final String inProgressLabel;
+  final String deliveredLabel;
+  final String allLabel;
+  final int inProgressCount;
+  final int deliveredCount;
+  final int allCount;
+  final ValueChanged<_StatusFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: AppColors.lightSurfaceVariant,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.rule),
+        ),
+        child: Row(
+          children: [
+            _segment(
+              _StatusFilter.inProgress,
+              inProgressLabel,
+              inProgressCount,
+            ),
+            _segment(_StatusFilter.delivered, deliveredLabel, deliveredCount),
+            _segment(_StatusFilter.all, allLabel, allCount),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _segment(_StatusFilter value, String label, int count) {
+    final selected = value == status;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => onChanged(value),
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.paper : Colors.transparent,
+            borderRadius: BorderRadius.circular(11),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: AppColors.ink.withValues(alpha: 0.06),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              '$label  $count',
+              style: TextStyle(
+                color: selected ? AppColors.cobaltDeep : AppColors.muted,
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DestinationChips extends StatelessWidget {
+  const _DestinationChips({
+    required this.destinations,
+    required this.selected,
+    required this.allLabel,
+    required this.onSelected,
+  });
+
+  final List<String> destinations;
+  final String? selected;
+  final String allLabel;
+  final ValueChanged<String?> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 42,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+        children: [
+          _chip(allLabel, selected == null, () => onSelected(null)),
+          for (final destination in destinations) ...[
+            const SizedBox(width: 8),
+            _chip(
+              destination,
+              selected == destination,
+              () => onSelected(destination),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(String label, bool isSelected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.cobalt : AppColors.paper,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: isSelected ? AppColors.cobalt : AppColors.rule,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : AppColors.ink,
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NoResults extends StatelessWidget {
+  const _NoResults({
+    required this.message,
+    required this.clearLabel,
+    required this.onClear,
+  });
+
+  final String message;
+  final String clearLabel;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(20, 60, 20, 24),
+      children: [
+        const Icon(Icons.search_off_outlined, size: 44, color: AppColors.muted),
+        const SizedBox(height: 12),
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: AppColors.muted,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Center(
+          child: TextButton.icon(
+            onPressed: onClear,
+            icon: const Icon(Icons.filter_alt_off_outlined, size: 18),
+            label: Text(clearLabel),
           ),
         ),
       ],

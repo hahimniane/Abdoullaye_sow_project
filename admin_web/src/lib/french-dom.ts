@@ -2,6 +2,13 @@
 
 import { useEffect } from "react";
 
+import {
+  LANGUAGE_STORAGE_KEY,
+  currentWebLanguage,
+} from "./language.ts";
+
+export { resolveLang } from "./language.ts";
+
 export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Administration Laawol Digital": "Administration Laawol Digital",
   "Action failed.": "L’action a échoué.",
@@ -25,8 +32,13 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Barrel shipping": "Expédition de barils",
   "Barrels": "Barils",
   "Business": "Entreprise",
+  "Businesses": "Entreprises",
+  "Businesses by status": "Entreprises par statut",
   "Business account is not configured.": "Le compte entreprise n’est pas configuré.",
   "Business dashboard": "Tableau de bord entreprise",
+  "Business commission overrides": "Commissions spécifiques par entreprise",
+  "Business commissions reset": "Commissions des entreprises réinitialisées",
+  "Business commissions saved": "Commissions des entreprises enregistrées",
   "Business has consented to being featured": "L’entreprise a accepté d’être mise en avant",
   "Business name": "Nom de l’entreprise",
   "Business profile": "Profil de l’entreprise",
@@ -38,6 +50,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Car transport": "Transport de voitures",
   "Choose a business": "Choisir une entreprise",
   "City": "Ville",
+  "Changes Requested": "Modifications demandées",
   "Clear": "Effacer",
   "Close": "Fermer",
   "Completed": "Terminé",
@@ -52,12 +65,16 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Create parking": "Créer le stationnement",
   "Create transport": "Créer le transport",
   "Created": "Créé",
+  "Current default": "Valeur par défaut actuelle",
   "Current plan": "Forfait actuel",
   "Customer purchases": "Achats clients",
   "Destination": "Destination",
   "Destinations": "Destinations",
+  "Document upload failed.": "Le téléversement du document a échoué.",
+  "Document upload payload is required.": "Le contenu du document à téléverser est requis.",
   "Display name": "Nom public",
   "Download CSV": "Télécharger CSV",
+  "Default": "Par défaut",
   "Edit": "Modifier",
   "Edit featured business": "Modifier l’entreprise mise en avant",
   "Edit listing": "Modifier l’annonce",
@@ -189,7 +206,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Email or password is incorrect.": "L’email ou le mot de passe est incorrect.",
   "Too many attempts. Try again later.": "Trop de tentatives. Réessayez plus tard.",
   "Network error. Check your connection and try again.": "Erreur réseau. Vérifiez votre connexion et réessayez.",
-  "Your account profile is missing. Contact platform support.": "Votre profil de compte est introuvable. Contactez l’assistance de la plateforme.",
+  "Your account profile is missing. Contact Laawol support.": "Votre profil de compte est introuvable. Contactez l’assistance Laawol.",
   "This console is restricted to platform administrators, business owners, and business staff.": "Cette console est réservée aux administrateurs de la plateforme, aux propriétaires d’entreprise et au personnel d’entreprise.",
   "Access management": "Gestion des accès",
   "Access role": "Rôle d’accès",
@@ -272,6 +289,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Business notification": "Notification d’entreprise",
   "Business people": "Équipe de l’entreprise",
   "Business profile created": "Profil d’entreprise créé",
+  "Business profile saved": "Profil d’entreprise enregistré",
   "Business profile was not found.": "Le profil de l’entreprise est introuvable.",
   "Business saved": "Entreprise enregistrée",
   "Business sections": "Sections de l’entreprise",
@@ -281,6 +299,129 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Business status updated": "Statut de l’entreprise mis à jour",
   "Business support request": "Demande d’assistance entreprise",
   "Business user": "Utilisateur entreprise",
+  "Business logo": "Logo de l’entreprise",
+  "Business name is required.": "Le nom de l’entreprise est requis.",
+  "How your business appears to customers, and your car-hold pricing.": "Comment votre entreprise apparaît aux clients et vos tarifs de blocage de voiture.",
+  "Logo / profile image": "Logo / image de profil",
+  "Saved — choose a file to replace.": "Enregistré — choisissez un fichier pour le remplacer.",
+  "Customers recognize you by this image.": "Les clients vous reconnaissent grâce à cette image.",
+  "Choose image": "Choisir une image",
+  "Identity": "Identité",
+  "Service note": "Note de service",
+  "Services you offer": "Services proposés",
+  "Select at least one service.": "Sélectionnez au moins un service.",
+  "Car-hold pricing": "Tarif de blocage de voiture",
+  "Pricing mode": "Mode de tarification",
+  "Flat fee": "Frais fixe",
+  "Flat hold fee (USD)": "Frais fixe de blocage (USD)",
+  "Daily hold rate (USD)": "Tarif quotidien de blocage (USD)",
+  "Max hold days": "Jours de blocage max.",
+  "Enter valid paid hold pricing.": "Saisissez un tarif de blocage payant valide.",
+  "Business approved": "Entreprise approuvée",
+  "Business changes requested": "Modifications demandées à l’entreprise",
+  "Business verification saved": "Vérification de l’entreprise enregistrée",
+  "(preview only)": "(aperçu uniquement)",
+  "Stripe status refreshed": "Statut Stripe actualisé",
+  "Complete Stripe verification and required platform documents before approval.": "Terminez la vérification Stripe et les documents plateforme requis avant l’approbation.",
+  "Verification": "Vérification",
+  "Verification document uploaded": "Document de vérification téléversé",
+  "Verification documents": "Documents de vérification",
+  "Everything required has been verified by Laawol.": "Tous les éléments requis ont été vérifiés par Laawol.",
+  "Required Laawol service documents are complete.": "Les documents de service requis par Laawol sont terminés.",
+  "Upload the documents Laawol admins need before approving your business.": "Téléversez les documents dont les admins Laawol ont besoin avant d’approuver votre entreprise.",
+  "Upload only the service documents Laawol admins need. Stripe collects identity, tax, legal, and bank details.": "Téléversez uniquement les documents de service nécessaires aux admins Laawol. Stripe collecte l’identité, les informations fiscales et légales, ainsi que les coordonnées bancaires.",
+  "Choose a document first.": "Choisissez d’abord un document.",
+  "Documents must be PDF, Word, or image files under 20 MB.": "Les documents doivent être des fichiers PDF, Word ou image de moins de 20 Mo.",
+  "Admin note:": "Note admin :",
+  "Admin request:": "Demande admin :",
+  "Choose document": "Choisir un document",
+  "Upload document": "Téléverser le document",
+  "Ready to approve": "Prêt à approuver",
+  "Request changes": "Demander des modifications",
+  "Documents still need review": "Des documents doivent encore être vérifiés",
+  "Stripe setup or platform documents still need review": "La configuration Stripe ou les documents plateforme doivent encore être vérifiés",
+  "Every required document is verified or marked not applicable.": "Chaque document requis est vérifié ou marqué sans objet.",
+  "Stripe and required Laawol service documents are complete.": "Stripe et les documents de service requis par Laawol sont terminés.",
+  "approval item must be completed before approval.": "élément d’approbation doit être terminé avant l’approbation.",
+  "approval items must be completed before approval.": "éléments d’approbation doivent être terminés avant l’approbation.",
+  "document must be verified before approval.": "document doit être vérifié avant l’approbation.",
+  "documents must be verified before approval.": "documents doivent être vérifiés avant l’approbation.",
+  "Stripe complete": "Stripe terminé",
+  "Stripe blocked": "Stripe bloqué",
+  "docs verified": "documents vérifiés",
+  "service docs": "documents de service",
+  "complete": "terminés",
+  "Required": "Requis",
+  "Platform docs": "Documents plateforme",
+  "Missing or insufficient permissions.": "Autorisations manquantes ou insuffisantes.",
+  "Missing": "Manquant",
+  "Needs review": "À vérifier",
+  "Verified": "Vérifié",
+  "Submitted": "Envoyé",
+  "Needs Changes": "Modifications requises",
+  "Needs changes": "Modifications requises",
+  "Not applicable": "Sans objet",
+  "Stripe verification": "Vérification Stripe",
+  "Identity, legal, tax, and bank details": "Identité, informations légales et fiscales, coordonnées bancaires",
+  "Action required": "Action requise",
+  "Not started": "Non commencé",
+  "Stripe setup required": "Configuration Stripe requise",
+  "Stripe verification complete": "Vérification Stripe terminée",
+  "Stripe action required": "Action Stripe requise",
+  "Stripe review pending": "Vérification Stripe en attente",
+  "Stripe collects owner identity, business legal/tax information, and bank details so Laawol does not ask for those documents here.": "Stripe collecte l’identité du propriétaire, les informations légales/fiscales de l’entreprise et les coordonnées bancaires afin que Laawol ne demande pas ces documents ici.",
+  "Stripe has enabled this business for payouts. Laawol only needs to review service-specific documents.": "Stripe a activé les versements pour cette entreprise. Laawol doit seulement vérifier les documents propres aux services.",
+  "Send the business back to Stripe for identity, tax, legal, or bank updates instead of collecting those files in Laawol.": "Renvoyez l’entreprise vers Stripe pour les mises à jour d’identité, fiscales, légales ou bancaires au lieu de collecter ces fichiers dans Laawol.",
+  "Stripe is still reviewing this business. Refresh the Stripe status before approving the business.": "Stripe vérifie encore cette entreprise. Actualisez le statut Stripe avant d’approuver l’entreprise.",
+  "No Stripe account connected yet": "Aucun compte Stripe connecté pour le moment",
+  "Account:": "Compte :",
+  "Stripe requirement due": "exigence Stripe requise",
+  "Stripe requirements due": "exigences Stripe requises",
+  "pending with Stripe": "en attente chez Stripe",
+  "Refresh Stripe status": "Actualiser le statut Stripe",
+  "No Laawol service documents required": "Aucun document de service Laawol requis",
+  "Stripe still handles identity, tax, legal, and bank checks.": "Stripe gère toujours les vérifications d’identité, fiscales, légales et bancaires.",
+  "The selected services do not require extra Laawol licenses or authority documents.": "Les services sélectionnés n’exigent pas de licences ou documents d’autorisation supplémentaires pour Laawol.",
+  "The services selected for this business do not require extra Laawol licenses or authority documents.": "Les services sélectionnés pour cette entreprise n’exigent pas de licences ou documents d’autorisation supplémentaires pour Laawol.",
+  "Send Stripe updates through Stripe. Laawol only needs the current warehouse proof before approval.": "Envoyez les mises à jour Stripe via Stripe. Laawol a seulement besoin de la preuve d’entrepôt actuelle avant l’approbation.",
+  "Complete Stripe updates in Stripe. Laawol only needs current freight or warehouse authority here.": "Terminez les mises à jour Stripe dans Stripe. Ici, Laawol a seulement besoin d’une autorisation de fret ou d’entrepôt actuelle.",
+  "Upload a current agreement or freight-forwarder authority.": "Téléversez un accord actuel ou une autorisation de transitaire.",
+  "Agreement must show current year.": "L’accord doit indiquer l’année en cours.",
+  "Open document": "Ouvrir le document",
+  "Uploaded:": "Téléversé :",
+  "No file uploaded yet": "Aucun fichier téléversé pour le moment",
+  "Review status": "Statut de vérification",
+  "Verify submitted": "Vérifier les documents envoyés",
+  "Save checklist": "Enregistrer la liste",
+  "Approve business": "Approuver l’entreprise",
+  "Verify every required document before approval.": "Vérifiez chaque document requis avant l’approbation.",
+  "Freight (parcels)": "Fret (colis)",
+  "Government-issued owner ID": "Pièce d’identité officielle du propriétaire",
+  "Passport, driver license, state ID, or national ID matching the business owner.": "Passeport, permis de conduire, pièce d’identité d’État ou carte nationale correspondant au propriétaire de l’entreprise.",
+  "Business registration": "Enregistrement de l’entreprise",
+  "State registration, DBA, articles of organization, or equivalent legal registration.": "Enregistrement d’État, DBA, statuts de société ou enregistrement légal équivalent.",
+  "Tax ID confirmation": "Confirmation d’identifiant fiscal",
+  "EIN letter, resale certificate, tax registration, or local equivalent.": "Lettre EIN, certificat de revente, enregistrement fiscal ou équivalent local.",
+  "Business address proof": "Preuve d’adresse de l’entreprise",
+  "Lease, utility bill, bank statement, or official mail for the operating address.": "Bail, facture de service public, relevé bancaire ou courrier officiel pour l’adresse d’exploitation.",
+  "Payout bank proof": "Preuve du compte bancaire de versement",
+  "Voided check, bank letter, or Stripe account ownership proof for payouts.": "Chèque annulé, lettre bancaire ou preuve de propriété du compte Stripe pour les versements.",
+  "Freight or shipping authority": "Autorisation de fret ou d’expédition",
+  "Freight-forwarder license, warehouse agreement, customs broker agreement, or receiving-partner proof.": "Licence de transitaire, accord d’entrepôt, accord de courtier en douane ou preuve de partenaire de réception.",
+  "Dealer license or sales authorization": "Licence de concessionnaire ou autorisation de vente",
+  "Dealer license, reseller authorization, auction access proof, or local vehicle sales permit.": "Licence de concessionnaire, autorisation de revendeur, preuve d’accès aux enchères ou permis local de vente de véhicules.",
+  "Parking facility proof": "Preuve du site de stationnement",
+  "Lot lease, property ownership, facility insurance, or written parking authorization.": "Bail du terrain, titre de propriété, assurance du site ou autorisation écrite de stationnement.",
+  "Transport insurance and authority": "Assurance et autorisation de transport",
+  "Commercial auto policy, transporter authority, USDOT/MC registration, or carrier agreement.": "Police auto commerciale, autorisation de transporteur, enregistrement USDOT/MC ou accord de transporteur.",
+  "Invalid verification document ID": "ID de document de vérification invalide",
+  "Invalid verification document status": "Statut de document de vérification invalide",
+  "Verification documents must be a list": "Les documents de vérification doivent être une liste",
+  "At least one verification document is required": "Au moins un document de vérification est requis",
+  "Document storage path does not match the business": "Le chemin de stockage du document ne correspond pas à l’entreprise",
+  "Document download URL is required": "L’URL de téléchargement du document est requise",
+  "Document file size is required": "La taille du fichier du document est requise",
+  "Only operations admins can review business verification documents": "Seuls les admins opérations peuvent vérifier les documents d’entreprise",
   "Active inventory value": "Valeur du stock actif",
   "AI advisor + lower fees": "Conseiller IA + frais réduits",
   "Business AI advisor": "Conseiller IA entreprise",
@@ -326,6 +467,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "active": "actif",
   "approved": "approuvé",
   "cancelled": "annulé",
+  "changes requested": "modifications demandées",
   "closed": "fermé",
   "collected_by_business": "encaissé par l’entreprise",
   "completed": "terminé",
@@ -366,7 +508,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Closed": "Fermé",
   "Code": "Code",
   "Collection note (optional)": "Note d’encaissement (facultatif)",
-  "Complete": "Terminer",
+  "Complete": "Terminé",
   "Completing refund request...": "Finalisation de la demande de remboursement...",
   "Condition": "État",
   "Configure how the console works. Create roles, decide what each one can see and do, and limit them to specific services.": "Configurez le fonctionnement de la console. Créez des rôles, décidez ce que chacun peut voir et faire, puis limitez-les à des services précis.",
@@ -666,7 +808,12 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Approval mode": "Mode d’approbation",
   "Auto approve": "Approbation automatique",
   "Business-held": "Géré par l’entreprise",
+  "Business earnings": "Revenus entreprise",
   "Business payout": "Versement entreprise",
+  "A Stripe payout account is connected. Stripe may still be checking the bank account or requesting more details before payouts can start.": "Un compte de versement Stripe est connecté. Stripe peut encore vérifier le compte bancaire ou demander plus de détails avant d’activer les versements.",
+  "Checking status...": "Vérification du statut...",
+  "Charges not verified": "Paiements non vérifiés",
+  "Charges verified": "Paiements vérifiés",
   "Choose a shared barrel pool.": "Choisissez un baril partagé.",
   "Choose a destination.": "Choisissez une destination.",
   "Contents note": "Note sur le contenu",
@@ -693,12 +840,42 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Pool cancelled.": "Baril partagé annulé.",
   "Pool is required.": "Le baril partagé est requis.",
   "Pool origin": "Origine du baril",
+  "Connect a Stripe payout account so the platform can send this business its payouts.": "Connectez un compte de versement Stripe afin que la plateforme puisse envoyer ses versements à cette entreprise.",
+  "Connect bank account": "Connecter le compte bancaire",
+  "Connected, pending verification": "Connecté, vérification en attente",
+  "Continue in Stripe": "Continuer dans Stripe",
+  "Stuck with Stripe setup?": "Bloqué dans la configuration Stripe ?",
+  "Use Continue in Stripe to finish identity, tax, legal, and bank questions. Return here and refresh the status after submitting.": "Utilisez Continuer dans Stripe pour terminer les questions d’identité, fiscales, légales et bancaires. Revenez ici et actualisez le statut après l’envoi.",
+  "Stripe help center": "Centre d’aide Stripe",
+  "Contact Laawol support": "Contacter l’assistance Laawol",
+  "Do not upload identity, tax, legal, or bank files to Laawol. Stripe must collect those details in its secure onboarding flow.": "Ne téléversez pas de fichiers d’identité, fiscaux, légaux ou bancaires dans Laawol. Stripe doit collecter ces informations dans son parcours d’inscription sécurisé.",
+  "Could not refresh payout status.": "Impossible d’actualiser le statut des versements.",
+  "Could not refresh Stripe payout status. Open Stripe setup again or contact Laawol support.": "Impossible d’actualiser le statut de versement Stripe. Ouvrez à nouveau la configuration Stripe ou contactez l’assistance Laawol.",
+  "Could not start Stripe onboarding.": "Impossible de démarrer l’inscription Stripe.",
+  "All business commissions saved": "Commissions de toutes les entreprises enregistrées",
+  "Business overrides are used before the default platform transaction fee.": "Les réglages par entreprise sont appliqués avant les frais de transaction plateforme par défaut.",
+  "Commission (%)": "Commission (%)",
+  "Enter a platform fee greater than 0 and less than 100.": "Saisissez des frais de plateforme supérieurs à 0 et inférieurs à 100.",
+  "Gross received": "Montant brut reçu",
   "Recipient name": "Nom du destinataire",
+  "Refresh status": "Actualiser le statut",
   "Reserved shares": "Parts réservées",
   "Reserved shares must leave at least 1 share open.": "Les parts réservées doivent laisser au moins 1 part ouverte.",
   "Pool sealed into a shipment.": "Baril scellé en expédition.",
   "Platform fee": "Frais plateforme",
+  "Platform fee (%)": "Frais plateforme (%)",
+  "Platform fee saved": "Frais plateforme enregistrés",
+  "Platform fees": "Frais plateforme",
+  "Platform transaction fee": "Frais de transaction plateforme",
+  "Use default for selected": "Utiliser la valeur par défaut pour la sélection",
+  "Paid transactions": "Transactions payées",
+  "Payout setup required": "Configuration des versements requise",
+  "Payouts": "Versements",
+  "Payouts enabled": "Versements activés",
+  "Pending payments": "Paiements en attente",
+  "Pending transactions": "Transactions en attente",
   "Sender, receiver, and receiver phone are required for drop-off pools.": "L’expéditeur, le destinataire et le téléphone du destinataire sont requis pour les dépôts client.",
+  "Service": "Service",
   "Sender name": "Nom de l’expéditeur",
   "Save adjustment": "Enregistrer l’ajustement",
   "Seal pool": "Sceller le baril",
@@ -714,6 +891,8 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Underfilled": "Partiellement rempli",
   "Underfilled pool sealed into a shipment.": "Baril partiellement rempli scellé en expédition.",
   "Update total shares only after physical inspection. The total cannot be lower than already reserved shares.": "Ajustez le nombre total de parts seulement après inspection physique. Le total ne peut pas être inférieur aux parts déjà réservées.",
+  "Stripe did not return an onboarding link.": "Stripe n’a pas renvoyé de lien d’inscription.",
+  "Working...": "Traitement...",
   "2 halves": "2 moitiés",
   "3 shares": "3 parts",
   "4 quarters": "4 quarts",
@@ -744,6 +923,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Schedule and track car transport for your customers.": "Planifiez et suivez le transport de voitures pour vos clients.",
   "Scheduled": "Planifié",
   "Search businesses": "Rechercher des entreprises",
+  "Search to narrow the list.": "Recherchez pour réduire la liste.",
   "Search customer, business, phone, tracking, status": "Rechercher client, entreprise, téléphone, suivi, statut",
   "Search records": "Rechercher des dossiers",
   "Search title, VIN, stock, make, contact": "Rechercher titre, VIN, stock, marque, contact",
@@ -755,6 +935,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Select a business to open its workspace.": "Sélectionnez une entreprise pour ouvrir son espace.",
   "Select a destination country.": "Sélectionnez un pays de destination.",
   "Select a supported country.": "Sélectionnez un pays pris en charge.",
+  "Select at least one business.": "Sélectionnez au moins une entreprise.",
   "Select at least one listing.": "Sélectionnez au moins une annonce.",
   "Select body type": "Sélectionner le type de carrosserie",
   "Select drivetrain": "Sélectionner la transmission motrice",
@@ -771,7 +952,10 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Service operations": "Opérations de service",
   "Service types": "Types de service",
   "Set a price per country so customers can ship barrels there.": "Définissez un prix par pays afin que les clients puissent y envoyer des barils.",
+  "Select results": "Sélectionner les résultats",
   "Set as cover": "Définir comme couverture",
+  "Set all businesses": "Appliquer à toutes les entreprises",
+  "Set selected": "Appliquer aux entreprises sélectionnées",
   "Setup utilities": "Utilitaires de configuration",
   "Shipment pricing": "Prix d’expédition",
   "Shipment updated.": "Expédition mise à jour.",
@@ -816,6 +1000,8 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "This business was inferred from existing marketplace or operations records. Create a profile document before assigning people or editing status.": "Cette entreprise a été déduite de dossiers marketplace ou opérationnels existants. Créez un document de profil avant d’affecter des personnes ou de modifier le statut.",
   "This console is restricted to platform administrators.": "Cette console est réservée aux administrateurs de la plateforme.",
   "This role can view finance records but cannot send business support requests.": "Ce rôle peut voir les dossiers financiers mais ne peut pas envoyer de demandes d’assistance entreprise.",
+  "This percentage is kept by the platform from each paid customer transaction before calculating the business payout. It is saved to the live payment pricing record used by backend checkout functions.": "Ce pourcentage est conservé par la plateforme sur chaque transaction client payée avant de calculer le versement de l’entreprise. Il est enregistré dans le tarif de paiement actif utilisé par les fonctions de paiement backend.",
+  "No paid business transactions are loaded yet.": "Aucune transaction entreprise payée n’est chargée pour le moment.",
   "Title": "Titre",
   "Too many failed attempts. Try again later.": "Trop de tentatives échouées. Réessayez plus tard.",
   "Total": "Total",
@@ -833,6 +1019,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Unassigned listings": "Annonces non affectées",
   "Unsaved": "Non enregistré",
   "Untitled role": "Rôle sans titre",
+  "Upload": "Téléverser",
   "Up": "Monter",
   "Update failed.": "Échec de la mise à jour.",
   "Update status": "Mettre à jour le statut",
@@ -881,11 +1068,22 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "20 kg per share max": "20 kg maximum par part",
   // ---- Marketplace support cases (business + admin consoles) ----
   "Customer support": "Assistance client",
-  "Platform help": "Aide de la plateforme",
+  "Admin help": "Aide admin",
+  "Customers and admin help": "Clients et aide admin",
+  "Manage customer order conversations and reach the admin team from one support inbox.": "Gérez les conversations de commandes clients et contactez l’équipe admin depuis une seule boîte de support.",
+  "New admin request": "Nouvelle demande admin",
+  "Customer order cases and admin help requests will appear here.": "Les dossiers de commandes clients et les demandes d’aide admin apparaîtront ici.",
+  "Admin support case opened": "Dossier d’assistance admin ouvert",
+  "What do you need from the admin team?": "De quoi avez-vous besoin de la part de l’équipe admin ?",
+  "Add the details, order reference, payout issue, or policy question.": "Ajoutez les détails, la référence de commande, le problème de versement ou la question de politique.",
+  "Business context": "Contexte entreprise",
+  "Case type": "Type de dossier",
+  "business admin support": "assistance admin entreprise",
+  "Write a reply...": "Écrire une réponse...",
   "Order conversations": "Conversations de commande",
   "Escalated support": "Assistance escaladée",
   "Escalated cases": "Dossiers escaladés",
-  "Cases customers or businesses escalated to the platform team.": "Dossiers que les clients ou les entreprises ont escaladés vers l’équipe de la plateforme.",
+  "Cases customers or businesses escalated to the admin team.": "Dossiers que les clients ou les entreprises ont escaladés vers l’équipe admin.",
   "Conversations with customers about their orders. You are first-line support.": "Conversations avec les clients à propos de leurs commandes. Vous êtes le premier niveau d’assistance.",
   "Show resolved": "Afficher les résolus",
   "Search cases…": "Rechercher des dossiers…",
@@ -897,9 +1095,9 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Select a case to read the conversation and reply.": "Sélectionnez un dossier pour lire la conversation et répondre.",
   "Loading conversation…": "Chargement de la conversation…",
   "No messages in this case yet.": "Aucun message dans ce dossier pour l’instant.",
-  "Internal notes (platform only)": "Notes internes (plateforme uniquement)",
+  "Internal notes (admin only)": "Notes internes (admin uniquement)",
   "No internal notes yet.": "Aucune note interne pour l’instant.",
-  "Add a private note for the platform team…": "Ajouter une note privée pour l’équipe de la plateforme…",
+  "Add a private note for the admin team...": "Ajouter une note privée pour l’équipe admin...",
   "Add note": "Ajouter une note",
   "Write a reply to the customer…": "Rédigez une réponse au client…",
   "Send reply": "Envoyer la réponse",
@@ -907,7 +1105,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Mark resolved": "Marquer comme résolu",
   "Reopen": "Rouvrir",
   "Claim case": "Prendre en charge",
-  "Escalate to platform": "Escalader vers la plateforme",
+  "Escalate to admin": "Escalader vers un admin",
   "Confirm escalation": "Confirmer l’escalade",
   "Reason": "Motif",
   "You have read-only access to support cases.": "Vous avez un accès en lecture seule aux dossiers d’assistance.",
@@ -917,16 +1115,44 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Attachment": "Pièce jointe",
   "Customer unresponsive": "Client injoignable",
   "Payment dispute": "Litige de paiement",
-  "Need platform decision": "Décision de la plateforme requise",
+  "Need admin decision": "Décision d’un admin requise",
   "Suspected fraud": "Fraude présumée",
   "Safety concern": "Problème de sécurité",
   "Other / cannot resolve": "Autre / impossible à résoudre",
+  // ---- Support activity timeline + claim/ownership ----
+  "Activity": "Activité",
+  "No recorded activity yet.": "Aucune activité enregistrée pour l’instant.",
+  "Claimed by you": "Pris en charge par vous",
+  "Claimed by": "Pris en charge par",
+  "Claimed": "Pris en charge",
+  "another admin": "un autre admin",
+  "Take over": "Reprendre",
+  "You can still reply.": "Vous pouvez tout de même répondre.",
+  "Someone": "Quelqu’un",
+  "opened the case": "a ouvert le dossier",
+  "reopened the case": "a rouvert le dossier",
+  "replied": "a répondu",
+  "shared an attachment": "a partagé une pièce jointe",
+  "claimed the case": "a pris en charge le dossier",
+  "escalated to admin": "a escaladé vers un admin",
+  "requested more info": "a demandé plus d’informations",
+  "resolved the case": "a résolu le dossier",
+  "added an internal note": "a ajouté une note interne",
+  "Order context": "Contexte de la commande",
+  "Laawol support": "Assistance Laawol",
+  "Loading order…": "Chargement de la commande…",
+  "Tracking": "Suivi",
+  "Quantity": "Quantité",
+  "Photo": "Photo",
+  "File": "Fichier",
+  "Sending…": "Envoi…",
 };
 
 const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "Add a photo by URL": "Ajouter une photo par URL",
   "Collapse navigation": "Réduire la navigation",
   "Copy tracking code": "Copier le code de suivi",
+  "Explain missing documents, expiry issues, or why a document is not applicable.": "Expliquez les documents manquants, les problèmes d’expiration ou pourquoi un document est sans objet.",
   "Expand navigation": "Développer la navigation",
   "No-show note (optional)": "Note d’absence (facultatif)",
   "Search car, buyer, phone, status…": "Rechercher voiture, acheteur, téléphone, statut…",
@@ -935,9 +1161,10 @@ const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "Search tracking, owner, car, VIN…": "Rechercher suivi, propriétaire, voiture, VIN…",
   "Search tracking, sender, receiver, phone…": "Rechercher suivi, expéditeur, destinataire, téléphone…",
   "Signed-in account": "Compte connecté",
+  "Verification document summary": "Résumé des documents de vérification",
+  "What your business is known for…": "Ce pour quoi votre entreprise est connue…",
 };
 
-const STORAGE_KEY = "laawol:lang";
 const frToEn = Object.entries(TEXT_TRANSLATIONS).reduce<Record<string, string>>(
   (result, [english, french]) => {
     result[french] = english;
@@ -970,28 +1197,19 @@ function buildTranslationRegex(keys: string[]) {
 const englishRegex = buildTranslationRegex(englishTextKeys);
 const frenchRegex = buildTranslationRegex(frenchTextKeys);
 
-// Resolve the active language. A saved choice always wins; otherwise we follow
-// the user's device languages (French device -> French, everyone else -> the
-// base English content). Kept pure so it can be unit-tested without globals.
-export function resolveLang(
-  stored: string | null,
-  deviceLanguages: readonly string[],
-): "en" | "fr" {
-  if (stored === "en" || stored === "fr") return stored;
-  const prefersFrench = deviceLanguages.some(
-    (lang) => (lang ?? "").toLowerCase().startsWith("fr"),
+function isIdentifierChar(value: string | undefined) {
+  return value ? /[A-Za-z0-9_]/.test(value) : false;
+}
+
+function isInsideIdentifier(value: string, offset: number, match: string) {
+  return (
+    isIdentifierChar(value[offset - 1]) ||
+    isIdentifierChar(value[offset + match.length])
   );
-  return prefersFrench ? "fr" : "en";
 }
 
 function currentLang() {
-  const stored = typeof window !== "undefined" ?
-    window.localStorage.getItem(STORAGE_KEY) :
-    null;
-  const deviceLanguages = typeof navigator !== "undefined" ?
-    [navigator.language, ...(navigator.languages ?? [])].filter(Boolean) :
-    [];
-  return resolveLang(stored, deviceLanguages);
+  return currentWebLanguage();
 }
 
 export function translateValue(value: string, lang: string) {
@@ -1009,7 +1227,10 @@ export function translateValue(value: string, lang: string) {
   const regex = lang === "en" ? frenchRegex : englishRegex;
   if (!regex) return value;
   regex.lastIndex = 0;
-  return value.replace(regex, (match) => sourceDict[match] ?? match);
+  return value.replace(regex, (match, offset: number) => {
+    if (isInsideIdentifier(value, offset, match)) return match;
+    return sourceDict[match] ?? match;
+  });
 }
 
 function translateTextNode(node: Node) {
@@ -1046,16 +1267,16 @@ function translateTree(root: ParentNode) {
 function installToggle() {
   if (document.querySelector("[data-console-lang-toggle]")) return;
   const button = document.createElement("button");
+  const nextLang = currentLang() === "en" ? "fr" : "en";
   button.type = "button";
-  button.className = "secondary-button compact";
+  button.className = "secondary-button compact console-lang-toggle";
   button.dataset.consoleLangToggle = "true";
-  button.textContent = currentLang() === "en" ? "Français" : "English";
-  button.style.position = "fixed";
-  button.style.right = "16px";
-  button.style.bottom = "16px";
-  button.style.zIndex = "1000";
+  button.textContent = nextLang.toUpperCase();
+  button.title =
+    nextLang === "fr" ? "Switch language to French" : "Passer la langue en anglais";
+  button.setAttribute("aria-label", button.title);
   button.addEventListener("click", () => {
-    window.localStorage.setItem(STORAGE_KEY, currentLang() === "en" ? "fr" : "en");
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, nextLang);
     window.location.reload();
   });
   document.body.appendChild(button);

@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
+  doc,
+  getDoc,
   limit,
   onSnapshot,
   orderBy,
@@ -13,21 +15,29 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
+import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   FileText,
+  History,
+  ImagePlus,
   LifeBuoy,
   Lock,
   MessageCircle,
+  Package,
+  Paperclip,
   RotateCcw,
+  RefreshCw,
   Send,
   ShieldQuestion,
   UserCheck,
 } from "lucide-react";
 
-import { db, functions } from "@/lib/firebase";
-import { asDate, text } from "@/lib/format";
+import { db, functions, storage } from "@/lib/firebase";
+import { asDate, formatDate, formatMoney, text } from "@/lib/format";
 import type { FirestoreRow } from "@/types/admin";
 
 type ActionRunner = (label: string, action: () => Promise<unknown>) => Promise<void> | void;
@@ -41,13 +51,13 @@ export type SupportCasesPanelProps = {
   runAction?: ActionRunner;
 };
 
-// Business owners/staff escalate to the platform when they cannot resolve a
+// Business owners/staff escalate to admins when they cannot resolve a
 // case themselves. The reasons mirror the backend's urgent-escalation list so
-// the platform queue is prioritized correctly.
+// the admin queue is prioritized correctly.
 const escalationReasons: Array<{ id: string; label: string }> = [
   { id: "no_response", label: "Customer unresponsive" },
   { id: "payment_no_service", label: "Payment dispute" },
-  { id: "business_unreachable", label: "Need platform decision" },
+  { id: "business_unreachable", label: "Need admin decision" },
   { id: "fraud", label: "Suspected fraud" },
   { id: "safety", label: "Safety concern" },
   { id: "unresolved", label: "Other / cannot resolve" },
@@ -81,7 +91,7 @@ function statusLabel(value: unknown): string {
 }
 
 function roleLabel(role: string): string {
-  if (role === "admin") return "Platform";
+  if (role === "admin") return "Admin";
   if (role === "business") return "Business";
   if (role === "customer") return "Customer";
   return role || "System";
@@ -201,6 +211,111 @@ function useSupportInternalNotes(caseId: string, enabled: boolean): FirestoreRow
   return rows;
 }
 
+function useSupportTimeline(caseId: string): FirestoreRow[] {
+  const [rows, setRows] = useState<FirestoreRow[]>([]);
+  useEffect(() => {
+    if (!caseId) {
+      setRows([]);
+      return;
+    }
+    const unsubscribe = onSnapshot(
+      query(
+        collection(db, "supportCases", caseId, "timeline"),
+        orderBy("createdAt", "desc"),
+        limit(60),
+      ),
+      (snapshot) => setRows(snapshot.docs.map(rowFromSnapshot)),
+      () => setRows([]),
+    );
+    return unsubscribe;
+  }, [caseId]);
+  return rows;
+}
+
+// One-shot fetch of the linked transaction so an admin can see the order context
+// behind an escalated case. Read access is already granted to the responsible
+// business and admins by the per-collection Firestore rules.
+function useRelatedRecord(collectionName: string, relatedId: string): {
+  record: FirestoreRow | null;
+  loading: boolean;
+  error: string;
+} {
+  const [record, setRecord] = useState<FirestoreRow | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!collectionName || !relatedId) {
+      setRecord(null);
+      setError("");
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    getDoc(doc(db, collectionName, relatedId))
+      .then((snap) => {
+        if (cancelled) return;
+        setRecord(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+        setError(snap.exists() ? "" : "Linked order not found.");
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : String(err));
+        setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [collectionName, relatedId]);
+  return { record, loading, error };
+}
+
+// Display name for a message/event actor, respecting who's viewing. Customers
+// are handled in the Flutter app; here a business must not see an individual
+// admin's name (they see "Laawol support"), while admins see real names for
+// accountability.
+function actorDisplayName(
+  role: string,
+  name: string,
+  scope: "business" | "admin",
+): string {
+  if (role === "admin" && scope === "business") return "Laawol support";
+  return text(name, role === "admin" ? "Laawol support" : "User");
+}
+
+// Curated fields shown in the order-context panel across the supported
+// transaction types. Only those present on the record are rendered.
+const CONTEXT_FIELDS: Array<{ key: string; label: string; money?: boolean; date?: boolean; status?: boolean }> = [
+  { key: "trackingCode", label: "Tracking" },
+  { key: "status", label: "Status", status: true },
+  { key: "paymentStatus", label: "Payment", status: true },
+  { key: "price", label: "Amount", money: true },
+  { key: "amount", label: "Amount", money: true },
+  { key: "depositAmount", label: "Deposit", money: true },
+  { key: "quantity", label: "Quantity" },
+  { key: "senderName", label: "Sender" },
+  { key: "receiverName", label: "Receiver" },
+  { key: "buyerName", label: "Buyer" },
+  { key: "destinationCountryName", label: "Destination" },
+  { key: "pickupAddress", label: "Pickup" },
+  { key: "createdAt", label: "Created", date: true },
+];
+
+// Human-readable verb phrase for a timeline event, written to read after the
+// actor's name ("Alice replied"). Add a matching french-dom entry for each.
+function eventLabel(type: string): string {
+  switch (type) {
+    case "created": return "opened the case";
+    case "reopened": return "reopened the case";
+    case "message_sent": return "replied";
+    case "attachment_uploaded": return "shared an attachment";
+    case "assigned": return "claimed the case";
+    case "escalated": return "escalated to admin";
+    case "evidence_requested": return "requested more info";
+    case "resolved": return "resolved the case";
+    case "internal_note_added": return "added an internal note";
+    default: return type.replace(/_/g, " ");
+  }
+}
+
 export function SupportCasesPanel({
   scope,
   businessId = "",
@@ -214,6 +329,13 @@ export function SupportCasesPanel({
   const [selectedId, setSelectedId] = useState("");
   const [search, setSearch] = useState("");
   const [showResolved, setShowResolved] = useState(false);
+  const [showPlatformRequest, setShowPlatformRequest] = useState(false);
+  const [platformDraft, setPlatformDraft] = useState({
+    priority: "normal",
+    subject: "",
+    message: "",
+  });
+  const [busyAction, setBusyAction] = useState("");
   const [localError, setLocalError] = useState("");
 
   const filtered = useMemo(() => {
@@ -245,33 +367,61 @@ export function SupportCasesPanel({
   const selectedCase = rows.find((row) => row.id === selectedId) ?? null;
 
   async function call(label: string, name: string, payload: Record<string, unknown>) {
+    if (busyAction) return;
     const action = async () => {
       await httpsCallable(functions, name)(payload);
     };
     setLocalError("");
+    setBusyAction(label);
     if (runAction) {
-      await runAction(label, action);
+      try {
+        await runAction(label, action);
+      } finally {
+        setBusyAction("");
+      }
       return;
     }
     try {
       await action();
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyAction("");
     }
+  }
+
+  async function createPlatformRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const subject = platformDraft.subject.trim();
+    const message = platformDraft.message.trim();
+    if (!subject || !message || !businessId) return;
+    await call("Admin support case opened", "createBusinessPlatformSupportCase", {
+      businessId,
+      subject,
+      message,
+      priority: platformDraft.priority,
+    });
+    setPlatformDraft({ priority: "normal", subject: "", message: "" });
+    setShowPlatformRequest(false);
   }
 
   return (
     <section className="lst">
       <header className="lst-head">
         <div className="lst-head-text">
-          <h2>{scope === "admin" ? "Escalated support" : "Customer support"}</h2>
+          <h2>{scope === "admin" ? "Escalated support" : "Support"}</h2>
           <p>
             {scope === "admin"
-              ? "Cases customers or businesses escalated to the platform team."
-              : "Conversations with customers about their orders. You are first-line support."}
+              ? "Cases customers or businesses escalated to the admin team."
+              : "Manage customer order conversations and reach the admin team from one support inbox."}
           </p>
         </div>
         <div className="lst-head-actions">
+          {scope === "business" && canReply && (
+            <button className="lst-add" type="button" disabled={Boolean(busyAction)} onClick={() => setShowPlatformRequest(true)}>
+              <Send size={15} /> New admin request
+            </button>
+          )}
           <label className="sup-toggle">
             <input
               type="checkbox"
@@ -301,7 +451,7 @@ export function SupportCasesPanel({
               <p>
                 {scope === "admin"
                   ? "Escalated cases will appear here."
-                  : "When a customer opens a case for one of your orders, it shows up here."}
+                  : "Customer order cases and admin help requests will appear here."}
               </p>
             </div>
           )}
@@ -323,11 +473,19 @@ export function SupportCasesPanel({
                     </span>
                   </div>
                   <span className="sup-inbox-sub">
-                    {text(row.customerName ?? row.customerEmail, "Customer")}
+                    {caseAudienceLabel(row)}
                     {scope === "admin" ? ` · ${text(row.businessName, "Business")}` : ""}
                   </span>
                   <span className="sup-inbox-preview">{text(row.lastMessage, "No messages yet")}</span>
-                  <span className="sup-inbox-time">{formatDateTime(row.lastMessageAt ?? row.updatedAt)}</span>
+                  <span className="sup-inbox-foot">
+                    <span className="sup-inbox-time">{formatDateTime(row.lastMessageAt ?? row.updatedAt)}</span>
+                    {scope === "admin" && text(row.assignedAdminUid, "") && (
+                      <span className="sup-inbox-claim">
+                        <UserCheck size={11} />
+                        {text(row.assignedAdminUid, "") === currentUid ? "You" : "Claimed"}
+                      </span>
+                    )}
+                  </span>
                 </button>
               );
             })}
@@ -344,6 +502,7 @@ export function SupportCasesPanel({
               currentName={text(currentName, "Support")}
               canReply={canReply}
               onCall={call}
+              busyAction={busyAction}
             />
           ) : (
             <div className="sup-thread-empty">
@@ -353,8 +512,70 @@ export function SupportCasesPanel({
           )}
         </div>
       </div>
+      {showPlatformRequest && scope === "business" && (
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={() => setShowPlatformRequest(false)}>
+          <div className="lst-modal" style={{ maxWidth: 560 }} onClick={(event) => event.stopPropagation()}>
+            <header className="lst-modal-head">
+              <h3>New admin request</h3>
+              <button className="lst-icon-btn" type="button" onClick={() => setShowPlatformRequest(false)} aria-label="Close">x</button>
+            </header>
+            <form onSubmit={createPlatformRequest}>
+              <div className="lst-modal-body">
+                <div className="lst-form-grid">
+                  <label className="lst-field">
+                    <span>Priority</span>
+                    <select
+                      value={platformDraft.priority}
+                      onChange={(event) => setPlatformDraft((current) => ({ ...current, priority: event.target.value }))}
+                    >
+                      <option value="normal">Normal</option>
+                      <option value="urgent">Urgent</option>
+                      <option value="blocked">Blocked</option>
+                    </select>
+                  </label>
+                  <label className="lst-field wide">
+                    <span>Subject</span>
+                    <input
+                      required
+                      value={platformDraft.subject}
+                      onChange={(event) => setPlatformDraft((current) => ({ ...current, subject: event.target.value }))}
+                      placeholder="What do you need from the admin team?"
+                    />
+                  </label>
+                  <label className="lst-field wide">
+                    <span>Message</span>
+                    <textarea
+                      required
+                      rows={4}
+                      value={platformDraft.message}
+                      onChange={(event) => setPlatformDraft((current) => ({ ...current, message: event.target.value }))}
+                      placeholder="Add the details, order reference, payout issue, or policy question."
+                    />
+                  </label>
+                </div>
+              </div>
+              <footer className="lst-modal-foot">
+                <button className="lst-btn ghost" type="button" onClick={() => setShowPlatformRequest(false)}>Cancel</button>
+                <button className="lst-add" type="submit" disabled={Boolean(busyAction) || !businessId || !platformDraft.subject.trim() || !platformDraft.message.trim()}>
+                  {busyAction === "Admin support case opened" ? <RefreshCw className="spin" size={15} /> : <Send size={15} />}
+                  {busyAction === "Admin support case opened" ? "Sending..." : "Send request"}
+                </button>
+              </footer>
+            </form>
+          </div>
+        </div>
+      )}
     </section>
   );
+}
+
+function isBusinessPlatformCase(row: FirestoreRow): boolean {
+  return text(row.caseType, "") === "business_platform";
+}
+
+function caseAudienceLabel(row: FirestoreRow): string {
+  if (isBusinessPlatformCase(row)) return "Admin help";
+  return text(row.customerName ?? row.customerEmail, "Customer");
 }
 
 function SupportThread({
@@ -364,6 +585,7 @@ function SupportThread({
   currentName,
   canReply,
   onCall,
+  busyAction,
 }: {
   scope: "business" | "admin";
   supportCase: FirestoreRow;
@@ -371,19 +593,40 @@ function SupportThread({
   currentName: string;
   canReply: boolean;
   onCall: (label: string, name: string, payload: Record<string, unknown>) => Promise<void>;
+  busyAction: string;
 }) {
   const caseId = supportCase.id;
   const { rows: messages, loading, error } = useSupportMessages(caseId, currentUid);
   const internalNotes = useSupportInternalNotes(caseId, scope === "admin");
+  const timeline = useSupportTimeline(caseId);
   const [reply, setReply] = useState("");
   const [escalateReason, setEscalateReason] = useState(escalationReasons[0].id);
   const [showEscalate, setShowEscalate] = useState(false);
+  const [showActivity, setShowActivity] = useState(false);
   const [internalNote, setInternalNote] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const status = text(supportCase.status, "open").toLowerCase();
   const isResolved = RESOLVED_STATUSES.has(status);
   const isEscalated = text(supportCase.escalationStatus, "") === "escalated";
+
+  // Soft ownership: the case records who claimed it (assignedAdminUid). We make
+  // that visible to every admin and warn (not block) before a different admin
+  // replies. The claimer's name comes from the most recent "assigned" timeline
+  // event — written whenever someone claims/takes over — so this stays
+  // frontend-only with no backend change.
+  const assignedUid = text(supportCase.assignedAdminUid, "");
+  const claimedByMe = Boolean(assignedUid) && assignedUid === currentUid;
+  const claimedByOther = Boolean(assignedUid) && !claimedByMe;
+  const claimerName = (() => {
+    const ev = timeline.find(
+      (row) => text(row.type, "") === "assigned" &&
+        (text(row.actorUid, "") === assignedUid || !assignedUid),
+    );
+    return text(ev?.actorName, "another admin");
+  })();
 
   // Mark the case read for this participant whenever a new message arrives.
   useEffect(() => {
@@ -428,7 +671,7 @@ function SupportThread({
 
   async function escalate() {
     const note = reply.trim();
-    await onCall("Escalated to platform", "escalateSupportCase", {
+    await onCall("Escalated to admin", "escalateSupportCase", {
       caseId,
       reason: escalateReason,
       ...(note ? { note } : {}),
@@ -448,15 +691,56 @@ function SupportThread({
     setInternalNote("");
   }
 
+  // Upload an attachment to the case's own storage path, then register it as a
+  // message via the callable (which re-validates path/type/size). Mirrors the
+  // Flutter app's flow and the wouri attachment design.
+  async function uploadAttachment(file: File | null | undefined) {
+    if (!file || uploading) return;
+    setUploadError("");
+    const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/-+/g, "-");
+    const path = `support_cases/${caseId}/${currentUid}/${Date.now()}-${safeName}`;
+    const mimeType = file.type || "application/octet-stream";
+    const messageType = mimeType.startsWith("image/")
+      ? "image"
+      : mimeType.startsWith("video/")
+        ? "video"
+        : mimeType.startsWith("audio/")
+          ? "voice"
+          : "file";
+    setUploading(true);
+    try {
+      const target = storageRef(storage, path);
+      await uploadBytes(target, file, { contentType: mimeType });
+      const url = await getDownloadURL(target);
+      await onCall("Attachment sent", "uploadSupportAttachmentMetadata", {
+        caseId,
+        fileUrl: url,
+        filePath: path,
+        fileName: file.name,
+        mimeType,
+        fileSize: file.size,
+        messageType,
+        ...(reply.trim() ? { caption: reply.trim() } : {}),
+      });
+      setReply("");
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <div className="sup-thread">
       <header className="sup-thread-head">
         <div>
           <strong>{text(supportCase.subject ?? supportCase.relatedLabel, "Support case")}</strong>
           <span className="sup-thread-meta">
-            {text(supportCase.customerName ?? supportCase.customerEmail, "Customer")}
+            {caseAudienceLabel(supportCase)}
             {" · "}
-            {text(supportCase.relatedLabel, text(supportCase.caseType, "Order"))}
+            {isBusinessPlatformCase(supportCase)
+              ? "Admin help"
+              : text(supportCase.relatedLabel, text(supportCase.caseType, "Order"))}
             {scope === "admin" ? ` · ${text(supportCase.businessName, "Business")}` : ""}
           </span>
         </div>
@@ -469,10 +753,17 @@ function SupportThread({
               <AlertTriangle size={12} /> Escalated
             </span>
           )}
+          {scope === "admin" && assignedUid && (
+            <span className={`status-pill compact ${claimedByMe ? "claimed-me" : "claimed-other"}`}>
+              <UserCheck size={12} /> {claimedByMe ? "Claimed by you" : `Claimed by ${claimerName}`}
+            </span>
+          )}
         </div>
       </header>
 
       {error && <div className="error-box">{error}</div>}
+
+      <OrderContext supportCase={supportCase} scope={scope} />
 
       <div className="sup-messages" ref={scrollRef}>
         {loading && <div className="empty-state">Loading conversation…</div>}
@@ -480,14 +771,63 @@ function SupportThread({
           <div className="empty-state">No messages in this case yet.</div>
         )}
         {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} currentUid={currentUid} />
+          <MessageBubble key={message.id} message={message} currentUid={currentUid} scope={scope} />
         ))}
       </div>
+
+      <div className="sup-activity">
+        <button
+          className="sup-activity-toggle"
+          type="button"
+          onClick={() => setShowActivity((value) => !value)}
+        >
+          {showActivity ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          <History size={14} /> Activity
+          <span className="sup-activity-count">{timeline.length}</span>
+        </button>
+        {showActivity && (
+          <ul className="sup-activity-list">
+            {timeline.length === 0 && (
+              <li className="sup-activity-empty">No recorded activity yet.</li>
+            )}
+            {timeline.map((event) => (
+              <li className="sup-activity-row" key={event.id}>
+                <span className="sup-activity-dot" />
+                <span className="sup-activity-text">
+                  <strong>
+                    {scope === "business" && text(event.actorRole, "") === "admin"
+                      ? "Laawol support"
+                      : text(event.actorName, "Someone")}
+                  </strong>{" "}
+                  <span className="sup-activity-verb">{eventLabel(text(event.type, ""))}</span>
+                  {text(event.reason, "") && (
+                    <span className="sup-activity-reason"> · {statusLabel(event.reason)}</span>
+                  )}
+                </span>
+                <span className="sup-activity-time">{formatDateTime(event.createdAt)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {claimedByOther && (
+        <div className="sup-claim-banner">
+          <span className="sup-claim-banner-text">
+            <UserCheck size={14} />
+            <span>{`Claimed by ${claimerName}`}</span>
+            <span className="sup-claim-banner-note">You can still reply.</span>
+          </span>
+          <button className="lst-btn ghost" type="button" onClick={claim}>
+            <UserCheck size={14} /> Take over
+          </button>
+        </div>
+      )}
 
       {scope === "admin" && (
         <div className="sup-notes">
           <div className="sup-notes-head">
-            <Lock size={13} /> Internal notes (platform only)
+            <Lock size={13} /> Internal notes (admin only)
           </div>
           {internalNotes.length === 0 && (
             <span className="sup-notes-empty">No internal notes yet.</span>
@@ -502,12 +842,13 @@ function SupportThread({
             <div className="sup-note-form">
               <textarea
                 rows={2}
-                placeholder="Add a private note for the platform team…"
+                placeholder="Add a private note for the admin team..."
                 value={internalNote}
                 onChange={(event) => setInternalNote(event.target.value)}
               />
-              <button className="lst-btn" type="button" disabled={!internalNote.trim()} onClick={addNote}>
-                <FileText size={14} /> Add note
+              <button className="lst-btn" type="button" disabled={Boolean(busyAction) || !internalNote.trim()} onClick={addNote}>
+                {busyAction === "Internal note added" ? <RefreshCw className="spin" size={14} /> : <FileText size={14} />}
+                {busyAction === "Internal note added" ? "Adding..." : "Add note"}
               </button>
             </div>
           )}
@@ -518,30 +859,64 @@ function SupportThread({
         <div className="sup-composer">
           <textarea
             rows={3}
-            placeholder="Write a reply to the customer…"
+            placeholder={isBusinessPlatformCase(supportCase) ? "Write a reply…" : "Write a reply to the customer..."}
             value={reply}
             onChange={(event) => setReply(event.target.value)}
           />
+          {uploadError && <div className="error-box">{uploadError}</div>}
           <div className="sup-composer-actions">
-            <button className="lst-add" type="button" disabled={!reply.trim()} onClick={send}>
-              <Send size={15} /> Send reply
+            <button className="lst-add" type="button" disabled={Boolean(busyAction) || !reply.trim() || uploading} onClick={send}>
+              {busyAction === "Reply sent" ? <RefreshCw className="spin" size={15} /> : <Send size={15} />}
+              {busyAction === "Reply sent" ? "Sending..." : "Send reply"}
             </button>
-            <button className="lst-btn ghost" type="button" onClick={requestInfo}>
-              <ShieldQuestion size={14} /> Request more info
+            <label className={`lst-btn ghost sup-attach ${uploading ? "is-busy" : ""}`}>
+              <ImagePlus size={14} /> {uploading ? "Sending…" : "Photo"}
+              <input
+                type="file"
+                accept="image/*"
+                hidden
+                disabled={uploading}
+                onChange={(event) => {
+                  void uploadAttachment(event.target.files?.[0]);
+                  event.target.value = "";
+                }}
+              />
+            </label>
+            <label className={`lst-btn ghost sup-attach ${uploading ? "is-busy" : ""}`}>
+              <Paperclip size={14} /> File
+              <input
+                type="file"
+                accept="image/*,video/*,audio/*,application/pdf,text/plain,.doc,.docx"
+                hidden
+                disabled={uploading}
+                onChange={(event) => {
+                  void uploadAttachment(event.target.files?.[0]);
+                  event.target.value = "";
+                }}
+              />
+            </label>
+            <button className="lst-btn ghost" type="button" disabled={Boolean(busyAction)} onClick={requestInfo}>
+              {busyAction === "More information requested" ? <RefreshCw className="spin" size={14} /> : <ShieldQuestion size={14} />}
+              {busyAction === "More information requested" ? "Requesting..." : "Request more info"}
             </button>
             {!isResolved ? (
-              <button className="lst-btn ghost" type="button" onClick={resolve}>
-                <CheckCircle2 size={14} /> Mark resolved
+              <button className="lst-btn ghost" type="button" disabled={Boolean(busyAction)} onClick={resolve}>
+                {busyAction === "Case resolved" ? <RefreshCw className="spin" size={14} /> : <CheckCircle2 size={14} />}
+                {busyAction === "Case resolved" ? "Resolving..." : "Mark resolved"}
               </button>
             ) : (
-              <button className="lst-btn ghost" type="button" onClick={reopen}>
-                <RotateCcw size={14} /> Reopen
+              <button className="lst-btn ghost" type="button" disabled={Boolean(busyAction)} onClick={reopen}>
+                {busyAction === "Case reopened" ? <RefreshCw className="spin" size={14} /> : <RotateCcw size={14} />}
+                {busyAction === "Case reopened" ? "Reopening..." : "Reopen"}
               </button>
             )}
             {scope === "admin" ? (
-              <button className="lst-btn ghost" type="button" onClick={claim}>
-                <UserCheck size={14} /> Claim case
-              </button>
+              !assignedUid && (
+                <button className="lst-btn ghost" type="button" disabled={Boolean(busyAction)} onClick={claim}>
+                  {busyAction === "Case claimed" ? <RefreshCw className="spin" size={14} /> : <UserCheck size={14} />}
+                  {busyAction === "Case claimed" ? "Claiming..." : "Claim case"}
+                </button>
+              )
             ) : (
               !isEscalated && (
                 <button
@@ -549,7 +924,7 @@ function SupportThread({
                   type="button"
                   onClick={() => setShowEscalate((value) => !value)}
                 >
-                  <AlertTriangle size={14} /> Escalate to platform
+                  <AlertTriangle size={14} /> Escalate to admin
                 </button>
               )
             )}
@@ -564,8 +939,9 @@ function SupportThread({
                   ))}
                 </select>
               </label>
-              <button className="lst-btn" type="button" onClick={escalate}>
-                <AlertTriangle size={14} /> Confirm escalation
+              <button className="lst-btn" type="button" disabled={Boolean(busyAction)} onClick={escalate}>
+                {busyAction === "Escalated to admin" ? <RefreshCw className="spin" size={14} /> : <AlertTriangle size={14} />}
+                {busyAction === "Escalated to admin" ? "Escalating..." : "Confirm escalation"}
               </button>
             </div>
           )}
@@ -577,12 +953,113 @@ function SupportThread({
   );
 }
 
+function OrderContext({
+  supportCase,
+  scope,
+}: {
+  supportCase: FirestoreRow;
+  scope: "business" | "admin";
+}) {
+  if (isBusinessPlatformCase(supportCase)) {
+    return (
+      <div className="sup-order">
+        <button className="sup-order-toggle" type="button">
+          <Package size={14} /> Business context
+          <span className="sup-order-label">
+            {text(supportCase.businessName ?? supportCase.relatedLabel, "Business")}
+          </span>
+        </button>
+        <div className="sup-order-body">
+          <div className="sup-order-grid">
+            <div className="sup-order-field">
+              <span>Case type</span>
+              <strong>Admin help</strong>
+            </div>
+            <div className="sup-order-field">
+              <span>Business</span>
+              <strong>{text(supportCase.businessName, "Business")}</strong>
+            </div>
+          </div>
+          <span className="sup-order-ref">business admin support</span>
+        </div>
+      </div>
+    );
+  }
+  const collectionName = text(supportCase.relatedCollection, "");
+  const relatedId = text(supportCase.relatedId, "");
+  const { record, loading, error } = useRelatedRecord(collectionName, relatedId);
+  const [open, setOpen] = useState(scope === "admin");
+
+  const vehicle = record
+    ? [record.vehicleYear, record.vehicleMake, record.vehicleModel]
+        .map((v) => text(v, ""))
+        .filter(Boolean)
+        .join(" ")
+    : "";
+  const carTitle = text(record?.carTitle ?? record?.vehicleTitle, "");
+  const fields = record
+    ? CONTEXT_FIELDS.filter((f) => {
+        const v = record[f.key];
+        return v !== undefined && v !== null && String(v).trim() !== "";
+      })
+    : [];
+
+  return (
+    <div className="sup-order">
+      <button className="sup-order-toggle" type="button" onClick={() => setOpen((v) => !v)}>
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        <Package size={14} /> Order context
+        <span className="sup-order-label">
+          {text(supportCase.relatedLabel, text(supportCase.caseType, "Order"))}
+        </span>
+      </button>
+      {open && (
+        <div className="sup-order-body">
+          {loading && <span className="sup-order-empty">Loading order…</span>}
+          {error && <span className="sup-order-empty">{error}</span>}
+          {record && (
+            <>
+              <div className="sup-order-grid">
+                {(carTitle || vehicle) && (
+                  <div className="sup-order-field">
+                    <span>Vehicle</span>
+                    <strong>{carTitle || vehicle}</strong>
+                  </div>
+                )}
+                {fields.map((f) => (
+                  <div className="sup-order-field" key={f.key}>
+                    <span>{f.label}</span>
+                    <strong>
+                      {f.money
+                        ? formatMoney(record[f.key])
+                        : f.date
+                          ? formatDate(record[f.key])
+                          : f.status
+                            ? statusLabel(record[f.key])
+                            : text(record[f.key], "—")}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+              <span className="sup-order-ref">
+                {text(supportCase.caseType, "order").replace(/_/g, " ")} · {relatedId}
+              </span>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MessageBubble({
   message,
   currentUid,
+  scope,
 }: {
   message: FirestoreRow;
   currentUid: string;
+  scope: "business" | "admin";
 }) {
   const mine = text(message.senderId, "") === currentUid;
   const role = text(message.senderRole, "");
@@ -594,15 +1071,21 @@ function MessageBubble({
   const fileName = text(metadata.fileName, "Attachment");
   const caption = text(metadata.caption, "");
   const isImage = type === "image" && Boolean(fileUrl);
+  const senderDisplay = actorDisplayName(role, text(message.senderName, ""), scope);
 
   if (type === "system") {
-    return <div className="bubble-system">{text(message.content, "")}</div>;
+    // Attribute system events (e.g. "more info requested") to the actor.
+    return (
+      <div className="bubble-system">
+        <strong>{senderDisplay}</strong> · {text(message.content, "")}
+      </div>
+    );
   }
 
   return (
     <div className={`bubble ${mine ? "mine" : ""}`}>
       <div className="bubble-meta">
-        <span>{text(message.senderName, "User")}</span>
+        <span>{senderDisplay}</span>
         <span className={`role-tag role-${role}`}>{roleLabel(role)}</span>
       </div>
       {isImage ? (

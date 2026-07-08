@@ -3,6 +3,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
+import 'stripe_config_service.dart';
+
 /// Customer-side flow for parcel/box freight shipments (priced by weight,
 /// by air or sea). Mirrors [BarrelShipmentService].
 class FreightShipmentService {
@@ -53,6 +55,7 @@ class FreightShipmentService {
       if (clientSecret == null || clientSecret.isEmpty) {
         throw Exception('Payment could not be initialized.');
       }
+      await StripeConfigService.ensureConfigured();
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
           paymentIntentClientSecret: clientSecret,
@@ -62,14 +65,14 @@ class FreightShipmentService {
       );
       try {
         await Stripe.instance.presentPaymentSheet();
-        await _functions
-            .httpsCallable('completeFreightShipmentPayment')
-            .call({'shipmentId': shipmentId});
+        await _functions.httpsCallable('completeFreightShipmentPayment').call({
+          'shipmentId': shipmentId,
+        });
       } catch (_) {
         try {
-          await _functions
-              .httpsCallable('cancelPendingFreightShipment')
-              .call({'shipmentId': shipmentId});
+          await _functions.httpsCallable('cancelPendingFreightShipment').call({
+            'shipmentId': shipmentId,
+          });
         } catch (_) {
           // Preserve the original Stripe error for the customer message.
         }

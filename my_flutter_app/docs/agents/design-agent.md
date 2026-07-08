@@ -42,6 +42,10 @@ Protect and improve the visual quality, usability, and product feel of the Flutt
 - Does the layout avoid overlap when content grows?
 - Does dark mode preserve contrast and hierarchy?
 - Are loading, empty, error, and success states accounted for when relevant?
+- Does every async button, tap target, menu item, and icon action visibly show
+  progress and disable repeat activation while work is running?
+- Is every user-facing string localized through the app l10n system, with both
+  English and French text checked for layout length?
 - Are contrast, font sizes, and semantic hierarchy accessible?
 - Are icon-only controls labeled or otherwise understandable?
 - Are animations/transitions restrained and helpful?
@@ -68,3 +72,8 @@ Return:
 - For admin dashboards, use a tidy conventional operations layout: restrained top bar, collapsible sidebar, dense tables/lists, and minimal decorative copy. The user rejected decorative AI-looking admin designs.
 - Website and featured-business location fields must be selectable controls, not free-text country/city inputs. Preserve current/legacy values in select options so existing records remain editable without introducing spelling drift.
 - Business-owner listing views must clearly show all cars for the current business, with no artificial row cap. Empty states should point to missing listings only after the data query has run for the owner's `businessId`.
+- Every async user action must show a loading/progress state and prevent double
+  taps until it resolves; this applies across mobile, web, tablet, and desktop
+  layouts.
+- User-facing text belongs in the app localization system, not inline English
+  strings or one-off translation helpers; review both English and French layouts.

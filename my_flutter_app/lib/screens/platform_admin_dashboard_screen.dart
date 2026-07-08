@@ -194,25 +194,26 @@ class _DashboardTitleBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
+    final l10n = AppLocalizations.of(context)!;
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Platform dashboard',
+          l10n.platformDashboard,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
+          style: const TextStyle(
             color: Colors.white,
             fontSize: 20,
             fontWeight: FontWeight.w900,
           ),
         ),
-        SizedBox(height: 3),
+        const SizedBox(height: 3),
         Text(
-          'Applications, businesses, operations, refunds, and marketplace health.',
+          l10n.platformDashboardSubtitle,
           maxLines: 3,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: Colors.white70),
+          style: const TextStyle(color: Colors.white70),
         ),
       ],
     );

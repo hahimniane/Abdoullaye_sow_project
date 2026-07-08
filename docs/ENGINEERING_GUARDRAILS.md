@@ -23,6 +23,8 @@ A change is **not done** until all of the following are true:
   incident compiled and typechecked cleanly; only loading the page revealed it.
 - When you fix a bug, you add a regression test that fails before the fix and
   passes after. (See `admin_web/src/lib/french-dom.test.ts` for the pattern.)
+- **Every user-facing string is localized in both languages — see §5.** New or
+  changed copy is not done until it renders correctly in English *and* French.
 
 State plainly what you ran and what the result was. If you skipped a step, say
 so. Never report "done" on unverified work.
@@ -72,6 +74,20 @@ spirit, not just the letter.
 - **Effects must always resolve their loading state.** Every `loading`/`booting`
   flag needs a guaranteed exit on *every* path (success, error, and a safety
   timeout). Never let a spinner depend on a promise that might never settle.
+- **Every async user action must show progress.** Any button, tap target, menu
+  item, or icon action that awaits network, disk, Firebase, Stripe, navigation
+  handoff, geolocation, image picking, file generation, or other non-immediate
+  work must disable repeat activation and show a visible loading state until the
+  work resolves or errors. Prefer shared loading-button primitives over
+  one-off spinners; always reset the state in `finally` and preserve accessible
+  labels.
+- **User-facing text must be localized correctly.** Every new or changed label,
+  title, button, tooltip, snackbar, validation message, empty state, and error
+  message must use the app localization system (`AppLocalizations` / ARB for
+  Flutter, the registered translation system for web) instead of hardcoded
+  English or one-off inline translation helpers. Add both English and French
+  values, use placeholders for dynamic values, regenerate generated localization
+  files, and run a missing-translation audit before finishing.
 - **Separate pure logic from framework glue.** Keep business/transform logic in
   pure, exported functions so they can be unit-tested without a browser or
   React. UI components should be thin wrappers over tested logic.
@@ -123,7 +139,43 @@ If the thing you need is not in this table and is reference data or a reusable
 component, add it as a canonical source **and register it here** so the next
 agent finds it.
 
-## 5. Changing the guardrails
+## 5. Localization — translate every user-facing string
+
+This product ships in **English and French**. A string that is only in English
+is a bug for half the users. Every time you add or change user-facing copy,
+localize it the right way and verify both languages — this is part of the
+Definition of Done, checked on **every** implementation.
+
+**Mobile app (Flutter) — ARB localization:**
+
+- **Never hardcode a user-facing string.** Add the key to **both**
+  `lib/l10n/app_en.arb` *and* `lib/l10n/app_fr.arb`, run `flutter gen-l10n`, and
+  read it with `AppLocalizations.of(context)!.key`. A key missing from
+  `app_fr.arb` means French users see English.
+- Parameterized strings use ARB placeholders, not string interpolation of
+  user-facing fragments.
+- Grep for the visible text you just added: if it appears as a raw Dart string
+  literal in a widget, it is not localized.
+
+**Web consoles (admin_web) — runtime DOM translation:**
+
+- The console renders English in the markup and is translated to French at
+  runtime by `src/lib/french-dom.ts`. Any new English user-facing string —
+  including `placeholder`, `title`, `aria-label`, and `alt` — **must** get an
+  English→French entry in `TEXT_TRANSLATIONS` (or `ATTRIBUTE_TRANSLATIONS`),
+  or French users see raw English.
+- Keep the dictionary **convergent**: a translated value must not contain a
+  source key that would re-translate it (the `french-dom.test.ts` convergence
+  test enforces this — run `npm test`).
+
+**Verify both languages.** Toggle French and confirm the new copy is translated
+and fits (no overflow/clipping) — English text is often shorter than French.
+
+> Known debt: recent barrel/navigation screens added hardcoded English strings
+> (e.g. "Add another destination", "Shipping", "Destinations"). These need ARB
+> keys + French translations to satisfy this rule.
+
+## 6. Changing the guardrails
 
 The preflight, CI, and these rules are themselves protected work. Changing them
 to make a deploy pass is not allowed. Strengthen them when you find a new class

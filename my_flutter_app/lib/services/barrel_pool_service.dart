@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../models/barrel_pool.dart';
+import 'stripe_config_service.dart';
 
 class BarrelPoolService {
   BarrelPoolService({
@@ -22,6 +23,7 @@ class BarrelPoolService {
       return result;
     }
 
+    await StripeConfigService.ensureConfigured();
     await Stripe.instance.initPaymentSheet(
       paymentSheetParameters: SetupPaymentSheetParameters(
         paymentIntentClientSecret: result.clientSecret,
@@ -67,6 +69,7 @@ class BarrelPoolService {
       return;
     }
 
+    await StripeConfigService.ensureConfigured();
     await Stripe.instance.initPaymentSheet(
       paymentSheetParameters: SetupPaymentSheetParameters(
         paymentIntentClientSecret: result.clientSecret,

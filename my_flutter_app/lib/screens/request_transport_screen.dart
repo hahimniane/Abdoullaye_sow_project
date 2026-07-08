@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../data/car_catalog.dart';
+import '../l10n/app_localizations.dart';
 import '../models/business_destination_option.dart';
 import '../providers/auth_provider.dart';
 import '../services/transport_service.dart';
@@ -104,20 +105,21 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
   }
 
   Future<void> _submit() async {
+    final l10n = AppLocalizations.of(context)!;
     if (FirebaseAuth.instance.currentUser == null) {
       Navigator.pushNamed(context, '/login');
       return;
     }
     final option = _selectedOption;
     if (option == null) {
-      showErrorSnackBar(context, 'Choose a business and destination.');
+      showErrorSnackBar(context, l10n.chooseBusinessAndDestination);
       return;
     }
     if (!_formKey.currentState!.validate()) return;
     if (_selectedMake == null ||
         _selectedModel == null ||
         _selectedYear == null) {
-      showErrorSnackBar(context, 'Select the car make, model, and year.');
+      showErrorSnackBar(context, l10n.selectCarMakeModelYear);
       return;
     }
 
@@ -140,13 +142,15 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
       if (!mounted) return;
       showSuccessSnackBar(
         context,
-        'Request sent to ${option.businessName}. '
-        'Tracking ${result.trackingCode}. They will send you a price quote.',
+        l10n.transportRequestSentToBusiness(
+          option.businessName,
+          result.trackingCode,
+        ),
       );
       Navigator.of(context).pop();
     } catch (error) {
       if (!mounted) return;
-      showErrorSnackBar(context, 'Could not send request: $error');
+      showErrorSnackBar(context, l10n.couldNotSendRequest('$error'));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -154,15 +158,16 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColors.cream,
       appBar: AppBar(
         backgroundColor: AppColors.cream,
         elevation: 0,
         leading: const AppBackButton(),
-        title: const Text(
-          'Request car transport',
-          style: TextStyle(fontWeight: FontWeight.w800),
+        title: Text(
+          l10n.requestCarTransport,
+          style: const TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
       body: SafeArea(child: _buildBody()),
@@ -170,24 +175,28 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
   }
 
   Widget _buildBody() {
+    final l10n = AppLocalizations.of(context)!;
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
     if (_loadError != null) {
-      return _ErrorState(message: _loadError!, onRetry: () {
-        setState(() {
-          _loading = true;
-          _loadError = null;
-        });
-        _bootstrap();
-      });
+      return _ErrorState(
+        message: _loadError!,
+        onRetry: () {
+          setState(() {
+            _loading = true;
+            _loadError = null;
+          });
+          _bootstrap();
+        },
+      );
     }
     if (_options.isEmpty) {
       return const _EmptyState();
     }
 
     final dateLabel = _preferredDate == null
-        ? 'Pick a preferred date (optional)'
+        ? l10n.pickPreferredDateOptional
         : DateFormat.yMMMMd().format(_preferredDate!);
 
     return Form(
@@ -195,14 +204,14 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
         children: [
-          const _SectionLabel('Who should handle it?'),
+          _SectionLabel(l10n.whoShouldHandleTransport),
           _CardField(
             child: DropdownButtonFormField<BusinessDestinationOption>(
               initialValue: _selectedOption,
               isExpanded: true,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 border: InputBorder.none,
-                labelText: 'Business · destination',
+                labelText: l10n.businessDestination,
               ),
               items: [
                 for (final option in _options)
@@ -227,14 +236,14 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
               ),
             ),
 
-          const _SectionLabel('The car'),
+          _SectionLabel(l10n.theCar),
           _CardField(
             child: DropdownButtonFormField<String>(
               initialValue: _selectedMake,
               isExpanded: true,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 border: InputBorder.none,
-                labelText: 'Make',
+                labelText: l10n.make,
               ),
               items: [
                 for (final make in _makeOptions)
@@ -245,8 +254,9 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
                   _selectedMake = value;
                   _selectedModel = null;
                   _selectedYear = null;
-                  _modelOptions =
-                      value == null ? const [] : CarCatalog.instance.getModels(value);
+                  _modelOptions = value == null
+                      ? const []
+                      : CarCatalog.instance.getModels(value);
                   _yearOptions = const [];
                 });
               },
@@ -257,9 +267,9 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
             child: DropdownButtonFormField<String>(
               initialValue: _selectedModel,
               isExpanded: true,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 border: InputBorder.none,
-                labelText: 'Model',
+                labelText: l10n.model,
               ),
               items: [
                 for (final model in _modelOptions)
@@ -273,8 +283,10 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
                         _selectedYear = null;
                         _yearOptions = (value == null)
                             ? const []
-                            : CarCatalog.instance
-                                .getYears(_selectedMake!, value);
+                            : CarCatalog.instance.getYears(
+                                _selectedMake!,
+                                value,
+                              );
                       });
                     },
             ),
@@ -284,9 +296,9 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
             child: DropdownButtonFormField<String>(
               initialValue: _selectedYear,
               isExpanded: true,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 border: InputBorder.none,
-                labelText: 'Year',
+                labelText: l10n.year,
               ),
               items: [
                 for (final year in _yearOptions)
@@ -301,23 +313,23 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
           _CardField(
             child: TextFormField(
               controller: _vinController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 border: InputBorder.none,
-                labelText: 'VIN (optional)',
+                labelText: l10n.vinOptional,
               ),
             ),
           ),
 
-          const _SectionLabel('Contact & pickup'),
+          _SectionLabel(l10n.contactAndPickup),
           _CardField(
             child: TextFormField(
               controller: _ownerController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 border: InputBorder.none,
-                labelText: 'Owner name',
+                labelText: l10n.ownerName,
               ),
               validator: (value) => (value == null || value.trim().isEmpty)
-                  ? 'Enter the owner name'
+                  ? l10n.enterOwnerName
                   : null,
             ),
           ),
@@ -326,12 +338,12 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
             child: TextFormField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 border: InputBorder.none,
-                labelText: 'Contact phone',
+                labelText: l10n.contactPhone,
               ),
               validator: (value) => (value == null || value.trim().isEmpty)
-                  ? 'Enter a contact phone'
+                  ? l10n.enterContactPhone
                   : null,
             ),
           ),
@@ -339,9 +351,9 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
           _CardField(
             child: TextFormField(
               controller: _pickupController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 border: InputBorder.none,
-                labelText: 'Pickup address (optional)',
+                labelText: l10n.pickupAddressOptional,
               ),
             ),
           ),
@@ -350,9 +362,9 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
             child: TextFormField(
               controller: _notesController,
               maxLines: 3,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 border: InputBorder.none,
-                labelText: 'Notes for the business (optional)',
+                labelText: l10n.notesForBusinessOptional,
               ),
             ),
           ),
@@ -390,15 +402,14 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
                       ),
                     )
                   : const Icon(Icons.send_outlined),
-              label: Text(_submitting ? 'Sending…' : 'Send request'),
+              label: Text(_submitting ? l10n.sending : l10n.sendRequest),
             ),
           ),
           const SizedBox(height: 10),
-          const Text(
-            'No payment now — the business reviews your request and sends a '
-            'price quote you can accept.',
+          Text(
+            l10n.transportQuoteNoPaymentNote,
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.muted, fontSize: 12.5),
+            style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
           ),
         ],
       ),
@@ -449,25 +460,29 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    final l10n = AppLocalizations.of(context)!;
+    return Center(
       child: Padding(
-        padding: EdgeInsets.all(32),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.local_shipping_outlined, size: 56, color: AppColors.muted),
-            SizedBox(height: 16),
-            Text(
-              'No business is offering car transport yet',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            const Icon(
+              Icons.local_shipping_outlined,
+              size: 56,
+              color: AppColors.muted,
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 16),
             Text(
-              'Check back soon — businesses add transport routes as they come '
-              'online.',
+              l10n.noTransportBusinessesYet,
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.muted),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              l10n.noTransportBusinessesSubtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.muted),
             ),
           ],
         ),
@@ -483,6 +498,7 @@ class _ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -491,9 +507,9 @@ class _ErrorState extends StatelessWidget {
           children: [
             const Icon(Icons.error_outline, size: 52, color: AppColors.warn),
             const SizedBox(height: 14),
-            const Text(
-              'Could not load transport options',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            Text(
+              l10n.couldNotLoadTransportOptions,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
             Text(
@@ -502,7 +518,7 @@ class _ErrorState extends StatelessWidget {
               style: const TextStyle(color: AppColors.muted),
             ),
             const SizedBox(height: 18),
-            FilledButton(onPressed: onRetry, child: const Text('Retry')),
+            FilledButton(onPressed: onRetry, child: Text(l10n.retry)),
           ],
         ),
       ),

@@ -51,6 +51,21 @@ function putBusinessProfileImage(storage, businessId, fileName, options = {}) {
   );
 }
 
+function putBusinessDocument(
+    storage,
+    businessId,
+    documentId,
+    fileName,
+    options = {},
+) {
+  return storage
+      .ref(`businessDocuments/${businessId}/${documentId}/${fileName}`)
+      .put(
+          imageBytes(options.size),
+          {contentType: options.contentType || "application/pdf"},
+      );
+}
+
 function putCarImage(storage, businessId, carId, fileName, options = {}) {
   return storage.ref(`cars/${businessId}/${carId}/${fileName}`).put(
       imageBytes(options.size),
@@ -124,6 +139,12 @@ async function seedFirestore() {
         businessId: "biz_a",
         businessName: "Business A",
         businessPermissions: ["listings"],
+      },
+      "users/staff-profile-a": {
+        role: "staff",
+        businessId: "biz_a",
+        businessName: "Business A",
+        businessPermissions: ["profile"],
       },
       "users/staff-barrels-a": {
         role: "staff",
@@ -803,6 +824,129 @@ describe("business profile image Storage rules", () => {
       });
 });
 
+describe("business verification document Storage rules", () => {
+  it("allows admins, owners, and profile staff to upload documents",
+      async () => {
+        await assertSucceeds(
+            putBusinessDocument(
+                storageFor("super-admin"),
+                "biz_a",
+                "shippingAuthority",
+                "admin.pdf",
+            ),
+        );
+        await assertSucceeds(
+            putBusinessDocument(
+                storageFor("owner-a"),
+                "biz_a",
+                "shippingAuthority",
+                "owner.pdf",
+            ),
+        );
+        await assertSucceeds(
+            putBusinessDocument(
+                storageFor("staff-profile-a"),
+                "biz_a",
+                "shippingAuthority",
+                "staff.pdf",
+            ),
+        );
+      });
+
+  it("allows admins and linked business users to read uploaded documents",
+      async () => {
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+          await putBusinessDocument(
+              context.storage(),
+              "biz_a",
+              "shippingAuthority",
+              "saved.pdf",
+          );
+        });
+
+        await assertSucceeds(
+            storageFor("super-admin")
+                .ref("businessDocuments/biz_a/shippingAuthority/saved.pdf")
+                .getMetadata(),
+        );
+        await assertSucceeds(
+            storageFor("owner-a")
+                .ref("businessDocuments/biz_a/shippingAuthority/saved.pdf")
+                .getMetadata(),
+        );
+        await assertSucceeds(
+            storageFor("staff-profile-a")
+                .ref("businessDocuments/biz_a/shippingAuthority/saved.pdf")
+                .getMetadata(),
+        );
+        await assertFails(
+            storageFor("staff-listings-a")
+                .ref("businessDocuments/biz_b/shippingAuthority/saved.pdf")
+                .getMetadata(),
+        );
+      });
+
+  it("denies unauthenticated, cross-business, and non-profile staff uploads",
+      async () => {
+        await assertFails(
+            putBusinessDocument(
+                storageFor(null),
+                "biz_a",
+                "shippingAuthority",
+                "anon.pdf",
+            ),
+        );
+        await assertFails(
+            putBusinessDocument(
+                storageFor("owner-a"),
+                "biz_b",
+                "shippingAuthority",
+                "cross.pdf",
+            ),
+        );
+        await assertFails(
+            putBusinessDocument(
+                storageFor("staff-listings-a"),
+                "biz_a",
+                "shippingAuthority",
+                "listings.pdf",
+            ),
+        );
+      });
+
+  it("denies Stripe-owned KYC document uploads", async () => {
+    await assertFails(
+        putBusinessDocument(
+            storageFor("owner-a"),
+            "biz_a",
+            "businessRegistration",
+            "registration.pdf",
+        ),
+    );
+  });
+
+  it("denies invalid document file types and oversized uploads", async () => {
+    await assertFails(
+        putBusinessDocument(
+            storageFor("owner-a"),
+            "biz_a",
+            "shippingAuthority",
+            "not-allowed.txt",
+            {contentType: "text/plain"},
+        ),
+    );
+    await assertFails(
+        putBusinessDocument(
+            storageFor("owner-a"),
+            "biz_a",
+            "shippingAuthority",
+            "too-large.pdf",
+            {size: 20 * 1024 * 1024},
+        ),
+    );
+  });
+});
+
 describe("car listing image Storage rules", () => {
   it("keeps existing car image URLs publicly readable", async () => {
     const storage = storageFor(null);
@@ -911,6 +1055,17 @@ describe("support attachment Storage rules", () => {
             {contentType: "text/plain"},
         ),
     );
+    // Regression: uploads whose content type is missing/generic must not be
+    // rejected by the storage rule (the callable validates the real type).
+    await assertSucceeds(
+        putSupportAttachment(
+            storageFor("customer-support"),
+            "case_a",
+            "customer-support",
+            "clip.bin",
+            {contentType: "application/octet-stream"},
+        ),
+    );
   });
 
   it("denies strangers, wrong uploader paths, and invalid support files",
@@ -936,19 +1091,10 @@ describe("support attachment Storage rules", () => {
                 storageFor("customer-support"),
                 "case_a",
                 "customer-support",
-                "script.js",
-                {contentType: "application/javascript"},
-            ),
-        );
-        await assertFails(
-            putSupportAttachment(
-                storageFor("customer-support"),
-                "case_a",
-                "customer-support",
                 "huge.jpg",
                 {
                   contentType: "image/jpeg",
-                  size: 10 * 1024 * 1024,
+                  size: 51 * 1024 * 1024,
                 },
             ),
         );

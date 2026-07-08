@@ -470,8 +470,10 @@ class _LoginScreenState extends State<LoginScreen>
                                       icon: const Icon(
                                         Icons.storefront_outlined,
                                       ),
-                                      label: const Text(
-                                        'Register your business',
+                                      label: Text(
+                                        AppLocalizations.of(
+                                          context,
+                                        )!.registerYourBusiness,
                                       ),
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: AppColors.cobaltDeep,

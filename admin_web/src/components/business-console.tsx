@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
@@ -10,7 +10,6 @@ import {
   Building2,
   Car,
   ClipboardList,
-  LifeBuoy,
   LogOut,
   MapPinned,
   Menu,
@@ -34,15 +33,16 @@ import {
 import {
   BusinessPeoplePanel,
   BusinessProfilePanel,
-  BusinessSupportPanel,
 } from "@/components/business/profile-support-people";
 import { SupportCasesPanel } from "@/components/support/support-cases-panel";
 import {
   useBusinessCollection,
   useBusinessStaff,
 } from "@/lib/business-data";
+import { summarizeBusinessEarnings } from "@/lib/business-earnings";
 import { db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
+import { resolveBusinessPayoutStatus } from "@/lib/payout-status";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
 
 type BusinessTab =
@@ -56,18 +56,19 @@ type BusinessTab =
   | "destinations"
   | "people"
   | "cases"
-  | "support"
   | "growth";
 
 type BusinessConsoleProps = {
   firebaseUser: User;
   profile: UserProfile;
   onSignOut: () => Promise<void> | void;
+  previewBusiness?: FirestoreRow | null;
 };
 
 const serviceLabels: Record<string, string> = {
   barrelShipping: "Barrel shipping",
   sharedBarrels: "Shared barrels",
+  freight: "Freight (parcels)",
   carSales: "Car sales",
   carTransport: "Car transport",
   carParking: "Car parking",
@@ -89,8 +90,7 @@ const tabConfig: Array<{
   {id: "parking", label: "Parking", description: "Stored cars", service: "carParking", permission: "parking"},
   {id: "destinations", label: "Destinations", description: "Country pricing", service: "barrelShipping", permission: "destinations"},
   {id: "people", label: "People", description: "Owners and staff", permission: "people"},
-  {id: "cases", label: "Customer support", description: "Order conversations", permission: "support"},
-  {id: "support", label: "Platform help", description: "Requests and replies", permission: "support"},
+  {id: "cases", label: "Support", description: "Customers and admin help", permission: "support"},
   {id: "growth", label: "Growth", description: "Plan and AI advisor", permission: "growth"},
 ];
 
@@ -98,15 +98,22 @@ export function BusinessConsole({
   firebaseUser,
   profile,
   onSignOut,
+  previewBusiness = null,
 }: BusinessConsoleProps) {
   const businessId = text(profile.businessId, "");
+  const previewMode = Boolean(previewBusiness);
   const [activeTab, setActiveTab] = useState<BusinessTab>("today");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [business, setBusiness] = useState<FirestoreRow | null>(null);
+  const [business, setBusiness] = useState<FirestoreRow | null>(previewBusiness);
   const [businessError, setBusinessError] = useState("");
-  const enabled = Boolean(businessId);
+  const enabled = Boolean(businessId && !previewMode);
 
   useEffect(() => {
+    if (previewMode) {
+      setBusiness(previewBusiness);
+      setBusinessError("");
+      return undefined;
+    }
     if (!businessId) {
       setBusiness(null);
       setBusinessError("This account is not linked to a business.");
@@ -123,7 +130,7 @@ export function BusinessConsole({
         setBusinessError(error.message);
       },
     );
-  }, [businessId]);
+  }, [businessId, previewBusiness, previewMode]);
 
   const services = useMemo(() => {
     const raw = Array.isArray(business?.enabledServices)
@@ -156,7 +163,7 @@ export function BusinessConsole({
   const shipments = useBusinessCollection("barrelShipments", businessId, enabled && services.has("barrelShipping"), 500);
   const transports = useBusinessCollection("transportRequests", businessId, enabled && services.has("carTransport"), 500);
   const parkedCars = useBusinessCollection("parkedCars", businessId, enabled && services.has("carParking"), 500);
-  const support = useBusinessCollection("businessSupportRequests", businessId, enabled, 300);
+  const supportCases = useBusinessCollection("supportCases", businessId, enabled, 300);
   const insights = useBusinessCollection("businessInsights", businessId, enabled, 50);
   const staff = useBusinessStaff(businessId, enabled, 200);
 
@@ -244,8 +251,11 @@ export function BusinessConsole({
               shipments={shipments.rows}
               transports={transports.rows}
               parkedCars={parkedCars.rows}
-              support={support.rows}
+              support={supportCases.rows}
               services={services}
+              previewMode={previewMode}
+              onOpenSupport={() => setActiveTab("cases")}
+              canOpenSupport={visibleTabs.some((tab) => tab.id === "cases")}
             />
           )}
           {activeTab === "profile" && (
@@ -294,14 +304,6 @@ export function BusinessConsole({
               canReply={hasBusinessPermission(profile, "support")}
             />
           )}
-          {activeTab === "support" && (
-            <BusinessSupportPanel
-              businessId={businessId}
-              rows={support.rows}
-              loading={support.loading}
-              error={support.error}
-            />
-          )}
           {activeTab === "growth" && (
             <GrowthPanel
               businessId={businessId}
@@ -328,6 +330,9 @@ function TodayView({
   parkedCars,
   support,
   services,
+  previewMode,
+  onOpenSupport,
+  canOpenSupport,
 }: {
   businessId: string;
   business: FirestoreRow | null;
@@ -339,6 +344,9 @@ function TodayView({
   parkedCars: FirestoreRow[];
   support: FirestoreRow[];
   services: Set<string>;
+  previewMode: boolean;
+  onOpenSupport: () => void;
+  canOpenSupport: boolean;
 }) {
   const metrics = [
     {label: "Active listings", value: cars.filter((row) => row.status === "active").length, tone: "good"},
@@ -363,7 +371,13 @@ function TodayView({
         transports={transports}
         parkedCars={parkedCars}
       />
-      <PayoutsPanel businessId={businessId} business={business} />
+      <PayoutsPanel
+        businessId={businessId}
+        business={business}
+        previewMode={previewMode}
+        onOpenSupport={onOpenSupport}
+        canOpenSupport={canOpenSupport}
+      />
       <div className="split-grid">
         <Panel title="Needs attention" icon={<BarChart3 size={18} />}>
           <div className="row-list compact">
@@ -400,18 +414,28 @@ function TodayView({
 function PayoutsPanel({
   businessId,
   business,
+  previewMode = false,
+  onOpenSupport,
+  canOpenSupport,
 }: {
   businessId: string;
   business: FirestoreRow | null;
+  previewMode?: boolean;
+  onOpenSupport: () => void;
+  canOpenSupport: boolean;
 }) {
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<"" | "link" | "refresh" | "auto">("");
   const [error, setError] = useState("");
-  const payoutsEnabled = business?.payoutsEnabled === true;
-  const chargesEnabled = business?.chargesEnabled === true;
-  const stripeAccountId = text(business?.stripeAccountId, "");
+  const [autoRefreshKey, setAutoRefreshKey] = useState("");
+  const payoutStatus = resolveBusinessPayoutStatus({
+    stripeAccountId: business?.stripeAccountId,
+    chargesEnabled: business?.chargesEnabled,
+    payoutsEnabled: business?.payoutsEnabled,
+  });
+  const busy = busyAction !== "";
 
   async function connect() {
-    setBusy(true);
+    setBusyAction("link");
     setError("");
     try {
       const href = window.location.href;
@@ -426,43 +450,106 @@ function PayoutsPanel({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start Stripe onboarding.");
     } finally {
-      setBusy(false);
+      setBusyAction("");
     }
   }
 
-  async function refresh() {
-    setBusy(true);
-    setError("");
+  const refresh = useCallback(async ({silent = false}: {silent?: boolean} = {}) => {
+    setBusyAction(silent ? "auto" : "refresh");
+    if (!silent) setError("");
     try {
-      await httpsCallable(functions, "refreshBusinessStripeAccountStatus")({
-        businessId,
-      });
+      await httpsCallable(functions, "refreshBusinessStripeAccountStatus")({businessId});
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not refresh payout status.");
+      if (!silent) {
+        setError(err instanceof Error ? err.message : "Could not refresh payout status.");
+      }
     } finally {
-      setBusy(false);
+      setBusyAction("");
     }
-  }
+  }, [businessId]);
+
+  useEffect(() => {
+    if (
+      !businessId ||
+      previewMode ||
+      !payoutStatus.stripeAccountId ||
+      payoutStatus.state !== "connected_pending"
+    ) {
+      return;
+    }
+    const key = `${businessId}:${payoutStatus.stripeAccountId}`;
+    if (autoRefreshKey === key) return;
+    setAutoRefreshKey(key);
+    void refresh({silent: true});
+  }, [autoRefreshKey, businessId, payoutStatus.state, payoutStatus.stripeAccountId, previewMode, refresh]);
+
+  const actionLabel = busy
+    ? busyAction === "refresh" || busyAction === "auto"
+      ? "Checking status..."
+      : "Working..."
+    : payoutStatus.actionLabel;
 
   return (
     <Panel
       title="Payouts"
       icon={<Banknote size={18} />}
       action={
-        <button className="lst-add" disabled={busy || !businessId} onClick={payoutsEnabled ? refresh : connect} type="button">
-          {busy ? "Working..." : payoutsEnabled ? "Refresh" : stripeAccountId ? "Continue setup" : "Connect bank account"}
+        <button
+          className="lst-add"
+          disabled={busy || !businessId || previewMode}
+          onClick={payoutStatus.state === "ready" ? () => refresh() : connect}
+          type="button"
+        >
+          {actionLabel}
         </button>
       }
     >
       <div className="tool-list">
-        <span className={`status-pill ${payoutsEnabled ? "" : "warning"}`}>
-          {payoutsEnabled ? "Payouts enabled" : "Payout setup required"}
+        <span className={`status-pill ${payoutStatus.state === "ready" ? "" : "warning"}`}>
+          {payoutStatus.primaryLabel}
         </span>
-        <span className={`status-pill ${chargesEnabled ? "" : "warning"}`}>
-          {chargesEnabled ? "Charges verified" : "Charges not verified"}
+        <span className={`status-pill ${payoutStatus.chargesEnabled ? "" : "warning"}`}>
+          {payoutStatus.chargesLabel}
         </span>
-        {stripeAccountId && <span className="status-pill compact">{stripeAccountId}</span>}
+        {payoutStatus.stripeAccountId && <span className="status-pill compact">{payoutStatus.stripeAccountId}</span>}
+        {payoutStatus.state === "connected_pending" && (
+          <button className="secondary-button" disabled={busy || !businessId || previewMode} onClick={() => refresh()} type="button">
+            {payoutStatus.refreshLabel}
+          </button>
+        )}
       </div>
+      {payoutStatus.helperText && <div className="info-band">{payoutStatus.helperText}</div>}
+      {payoutStatus.state === "connected_pending" && (
+        <div className="stripe-help-card">
+          <strong>Stuck with Stripe setup?</strong>
+          <p>
+            Use Continue in Stripe to finish identity, tax, legal, and bank questions.
+            Return here and refresh the status after submitting.
+          </p>
+          <div className="stripe-help-actions">
+            <a
+              className="secondary-button"
+              href="https://support.stripe.com/questions/connect-platforms-manage-onboarding-and-risk-requirements-for-connected-accounts"
+              rel="noreferrer"
+              target="_blank"
+            >
+              Stripe help center
+            </a>
+            <button
+              className="secondary-button"
+              disabled={!canOpenSupport}
+              onClick={onOpenSupport}
+              type="button"
+            >
+              Contact Laawol support
+            </button>
+          </div>
+          <small>
+            Do not upload identity, tax, legal, or bank files to Laawol. Stripe must collect
+            those details in its secure onboarding flow.
+          </small>
+        </div>
+      )}
       {error && <div className="error-box">{error}</div>}
     </Panel>
   );
@@ -484,6 +571,12 @@ function AnalyticsView({
   const listingBreakdown = topStatuses(cars, "status");
   const operationBreakdown = topStatuses([...shipments, ...transports, ...parkedCars], "status");
   const purchaseBreakdown = topStatuses(purchases, "purchaseStatus");
+  const earnings = useMemo(() => summarizeBusinessEarnings({
+    purchases,
+    shipments,
+    transports,
+    parkedCars,
+  }), [parkedCars, purchases, shipments, transports]);
   const activeInventoryValue = cars
     .filter((row) => text(row.status, "") === "active")
     .reduce((sum, row) => sum + numericValue(row.price), 0);
@@ -491,19 +584,56 @@ function AnalyticsView({
     .reduce((sum, row) => sum + numericValue(row.depositAmount ?? row.holdDepositAmount), 0);
 
   return (
-    <div className="split-grid">
-      <Panel title="Analytics" icon={<BarChart3 size={18} />}>
-        <div className="metric-grid">
-          <article className="metric money"><span>Active inventory value</span><strong>{formatMoney(activeInventoryValue)}</strong></article>
-          <article className="metric money"><span>Hold deposits</span><strong>{formatMoney(paidHoldValue)}</strong></article>
+    <div className="stack">
+      <div className="split-grid">
+        <Panel title="Analytics" icon={<BarChart3 size={18} />}>
+          <div className="metric-grid">
+            <article className="metric money"><span>Active inventory value</span><strong>{formatMoney(activeInventoryValue)}</strong></article>
+            <article className="metric money"><span>Hold deposits</span><strong>{formatMoney(paidHoldValue)}</strong></article>
+          </div>
+          <div className="analytics-bars">
+            <AnalyticsBars title="Listings" rows={listingBreakdown} />
+            <AnalyticsBars title="Purchases" rows={purchaseBreakdown} />
+          </div>
+        </Panel>
+        <Panel title="Operations mix" icon={<ClipboardList size={18} />}>
+          <AnalyticsBars title="Operational statuses" rows={operationBreakdown} />
+        </Panel>
+      </div>
+      <Panel title="Business earnings" icon={<Banknote size={18} />}>
+        <div className="metric-grid earnings-metrics">
+          <article className="metric money"><span>Gross received</span><strong>{formatMoney(earnings.totals.grossReceived)}</strong></article>
+          <article className="metric attention"><span>Platform fees</span><strong>{formatMoney(earnings.totals.platformFees)}</strong></article>
+          <article className="metric good"><span>Business earnings</span><strong>{formatMoney(earnings.totals.businessEarnings)}</strong></article>
+          <article className="metric neutral"><span>Pending payments</span><strong>{formatMoney(earnings.totals.pendingGross)}</strong></article>
         </div>
-        <div className="analytics-bars">
-          <AnalyticsBars title="Listings" rows={listingBreakdown} />
-          <AnalyticsBars title="Purchases" rows={purchaseBreakdown} />
+        <div className="list-summary">
+          <span>Paid transactions</span> <b>{earnings.totals.paidTransactions.toLocaleString()}</b> · <span>Pending transactions</span> <b>{earnings.totals.pendingTransactions.toLocaleString()}</b>
         </div>
-      </Panel>
-      <Panel title="Operations mix" icon={<ClipboardList size={18} />}>
-        <AnalyticsBars title="Operational statuses" rows={operationBreakdown} />
+        <div className="earnings-table">
+          <div className="earnings-table-head">
+            <span>Service</span>
+            <span>Gross received</span>
+            <span>Platform fees</span>
+            <span>Business earnings</span>
+            <span>Pending</span>
+          </div>
+          {earnings.services.map((service) => (
+            <div className="earnings-table-row" key={service.serviceId}>
+              <span>
+                <strong>{service.label}</strong>
+                <small><span>Paid</span> {service.paidTransactions} · <span>Pending</span> {service.pendingTransactions}</small>
+              </span>
+              <span>{formatMoney(service.grossReceived)}</span>
+              <span>{formatMoney(service.platformFees)}</span>
+              <span>{formatMoney(service.businessEarnings)}</span>
+              <span>{formatMoney(service.pendingGross)}</span>
+            </div>
+          ))}
+        </div>
+        {earnings.totals.paidTransactions === 0 && earnings.totals.pendingTransactions === 0 && (
+          <EmptyState text="No paid business transactions are loaded yet." />
+        )}
       </Panel>
     </div>
   );
@@ -626,7 +756,6 @@ function tabIcon(tab: BusinessTab) {
     destinations: <MapPinned {...props} />,
     people: <UserCog {...props} />,
     cases: <MessageCircle {...props} />,
-    support: <LifeBuoy {...props} />,
     growth: <Sparkles {...props} />,
   };
   return icons[tab];

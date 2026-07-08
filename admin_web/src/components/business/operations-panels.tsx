@@ -40,6 +40,13 @@ import {
 } from "lucide-react";
 
 import { db, functions, storage } from "@/lib/firebase";
+import {
+  DESTINATION_COUNTRIES,
+  destinationCountryById,
+  destinationCountryName,
+  destinationCountryOptionForRow,
+  withSelectedDestinationCountry,
+} from "@/lib/destination-countries";
 import { currentLanguage, formatDate, formatMoney, text } from "@/lib/format";
 import { US_STATE_OPTIONS, citiesForState, withSelected } from "@/lib/us-locations";
 import type { FirestoreRow } from "@/types/admin";
@@ -148,24 +155,7 @@ type PoolRolloverDraft = {
   note: string;
 };
 
-const countries = [
-  { id: "guinea", name: "Guinea", nameFr: "Guinée", code: "GN" },
-  { id: "senegal", name: "Senegal", nameFr: "Sénégal", code: "SN" },
-  { id: "mali", name: "Mali", nameFr: "Mali", code: "ML" },
-  { id: "c-te-d-ivoire", name: "Cote d'Ivoire", nameFr: "Côte d’Ivoire", code: "CI" },
-  { id: "gambia", name: "Gambia", nameFr: "Gambie", code: "GM" },
-  { id: "sierra_leone", name: "Sierra Leone", nameFr: "Sierra Leone", code: "SL" },
-  { id: "liberia", name: "Liberia", nameFr: "Libéria", code: "LR" },
-  { id: "ghana", name: "Ghana", nameFr: "Ghana", code: "GH" },
-  { id: "nigeria", name: "Nigeria", nameFr: "Nigéria", code: "NG" },
-  { id: "guinea_bissau", name: "Guinea-Bissau", nameFr: "Guinée-Bissau", code: "GW" },
-  { id: "mauritania", name: "Mauritania", nameFr: "Mauritanie", code: "MR" },
-  { id: "togo", name: "Togo", nameFr: "Togo", code: "TG" },
-  { id: "benin", name: "Benin", nameFr: "Bénin", code: "BJ" },
-  { id: "burkina_faso", name: "Burkina Faso", nameFr: "Burkina Faso", code: "BF" },
-  { id: "niger", name: "Niger", nameFr: "Niger", code: "NE" },
-  { id: "cameroon", name: "Cameroon", nameFr: "Cameroun", code: "CM" },
-];
+const countries = DESTINATION_COUNTRIES;
 const sharedBarrelShareWeightCapKg = 20;
 
 function countryFlag(code: string) {
@@ -411,7 +401,7 @@ export function DestinationsPanel({ businessId }: PanelProps) {
   const rows = useMemo(
     () =>
       [...destinations.rows].sort((a, b) =>
-        countryName(a.id).localeCompare(countryName(b.id)),
+        destinationRowCountryName(a).localeCompare(destinationRowCountryName(b)),
       ),
     [destinations.rows],
   );
@@ -425,6 +415,16 @@ export function DestinationsPanel({ businessId }: PanelProps) {
     () => countries.filter((country) => editingId === country.id || !rows.some((row) => row.id === country.id)),
     [rows, editingId],
   );
+  const editingRow = useMemo(
+    () => rows.find((row) => row.id === editingId),
+    [rows, editingId],
+  );
+  const selectedCountry = editingId
+    ? destinationCountryOptionForRow(editingRow ?? { id: editingId })
+    : undefined;
+  const destinationCountryOptions = editingId && selectedCountry
+    ? withSelectedDestinationCountry(countries, selectedCountry)
+    : availableCountries;
 
   function openNew() {
     setEditingId("");
@@ -454,7 +454,9 @@ export function DestinationsPanel({ businessId }: PanelProps) {
 
   async function saveDestination() {
     if (!businessId) throw new Error("Business ID is required.");
-    const country = countries.find((item) => item.id === draft.countryId);
+    const country =
+      destinationCountryById(draft.countryId) ??
+      destinationCountryOptionForRow(editingRow ?? { id: draft.countryId });
     if (!country) throw new Error("Select a supported country.");
     const price = Number(draft.price);
     const minDays = Number(draft.minDays);
@@ -539,16 +541,16 @@ export function DestinationsPanel({ businessId }: PanelProps) {
         <EmptyState text="No destinations match your search." />
       )}
 
-      <div className="lst-grid">
+        <div className="lst-grid">
         {filteredRows.map((row) => {
           const active = row.isActive !== false;
-          const country = countries.find((item) => item.id === row.id);
+          const country = destinationCountryOptionForRow(row);
           return (
             <article className={`dst-card ${active ? "" : "off"}`} key={row.id}>
               <div className="dst-head">
                 <span className="dst-flag">{countryFlag(text(row.code ?? row.countryCode ?? country?.code, ""))}</span>
                 <div className="dst-name">
-                  <strong>{countryName(row.id)}</strong>
+                  <strong>{destinationRowCountryName(row)}</strong>
                   <span>{deliveryWindow(row) || "No delivery estimate"}</span>
                 </div>
                 <span className={`lst-badge ${active ? "ok" : "muted"}`}>{active ? "Active" : "Inactive"}</span>
@@ -572,14 +574,14 @@ export function DestinationsPanel({ businessId }: PanelProps) {
         <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeForm}>
           <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(event) => event.stopPropagation()}>
             <header className="lst-modal-head">
-              <h3>{editingId ? `Edit ${countryName(editingId)}` : "New destination"}</h3>
+              <h3>{editingId ? `Edit ${selectedCountry ? countryName(selectedCountry.id) : countryName(editingId)}` : "New destination"}</h3>
               <button className="lst-icon-btn" type="button" onClick={closeForm} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">
               <div className="lst-form-grid">
                 <label className="lst-field wide"><span>Country</span>
                   <select value={draft.countryId} disabled={Boolean(editingId)} onChange={(event) => setDraft((value) => ({ ...value, countryId: event.target.value }))}>
-                    {(editingId ? countries : availableCountries).map((country) => (
+                    {destinationCountryOptions.map((country) => (
                       <option key={country.id} value={country.id}>{countryFlag(country.code)} {countryName(country.id)}</option>
                     ))}
                   </select>
@@ -2691,9 +2693,13 @@ function EmptyState({ text: message }: { text: string }) {
 }
 
 function countryName(countryId: string) {
-  const country = countries.find((item) => item.id === countryId);
-  if (!country) return statusLabel(countryId);
-  return currentLanguage() === "fr" ? country.nameFr : country.name;
+  return destinationCountryName(countryId, currentLanguage());
+}
+
+function destinationRowCountryName(row: FirestoreRow) {
+  const country = destinationCountryOptionForRow(row);
+  if (country.id) return countryName(country.id);
+  return text(row.destinationCountryName ?? row.name, statusLabel(row.id));
 }
 
 function selectableStateOptions(current: string) {

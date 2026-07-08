@@ -10,6 +10,12 @@ class BarrelOrderLine {
     required this.receiverPhone,
     this.receiverPhoneIsWhatsappOnly = false,
     this.quantity = 1,
+    this.pickupRequested = true,
+    this.pickupAddress = '',
+    this.pickupBorough = '',
+    this.pickupFee = 0,
+    this.pickupDateTime,
+    this.hasPickupOverride = false,
   });
 
   final DestinationCountry country;
@@ -18,9 +24,16 @@ class BarrelOrderLine {
   final String receiverPhone;
   final bool receiverPhoneIsWhatsappOnly;
   final int quantity;
+  final bool pickupRequested;
+  final String pickupAddress;
+  final String pickupBorough;
+  final double pickupFee;
+  final DateTime? pickupDateTime;
+  final bool hasPickupOverride;
 
   double get unitShippingFee => country.barrelShippingPrice;
   double get shippingFee => unitShippingFee * quantity;
+  double get lineTotal => shippingFee + pickupFee;
 
   Map<String, dynamic> toCallableJson() {
     return {
@@ -29,6 +42,13 @@ class BarrelOrderLine {
       'receiverName': receiverName,
       'receiverPhone': receiverPhone,
       'quantity': quantity,
+      if (hasPickupOverride) ...{
+        'pickupRequested': pickupRequested,
+        'pickupAddress': pickupAddress,
+        'pickupBorough': pickupBorough,
+        if (pickupDateTime != null)
+          'pickupDateTime': pickupDateTime!.toUtc().toIso8601String(),
+      },
     };
   }
 }

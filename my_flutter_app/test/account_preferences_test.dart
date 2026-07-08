@@ -10,6 +10,10 @@ void main() {
     expect(prefs.shipmentActivity, isTrue);
     expect(prefs.walletActivity, isTrue);
     expect(prefs.businessActivity, isTrue);
+    expect(prefs.supportActivity, isTrue);
+    expect(prefs.supportMessages, isTrue);
+    expect(prefs.supportEscalations, isTrue);
+    expect(prefs.supportCaseUpdates, isTrue);
   });
 
   test('notification preferences serialize and preserve disabled values', () {
@@ -23,6 +27,10 @@ void main() {
       'shipmentActivity': false,
       'walletActivity': false,
       'businessActivity': true,
+      'supportActivity': true,
+      'supportMessages': true,
+      'supportEscalations': true,
+      'supportCaseUpdates': true,
     });
     expect(
       NotificationPreferences.fromMap(prefs.toMap()).shipmentActivity,
@@ -32,6 +40,12 @@ void main() {
       NotificationPreferences.fromMap(prefs.toMap()).walletActivity,
       isFalse,
     );
+    final supportDisabled = NotificationPreferences.fromMap({
+      'supportActivity': false,
+    });
+    expect(supportDisabled.supportMessages, isFalse);
+    expect(supportDisabled.supportEscalations, isFalse);
+    expect(supportDisabled.supportCaseUpdates, isFalse);
   });
 
   test('phone alias key keeps only digits for phone sign-in lookup', () {

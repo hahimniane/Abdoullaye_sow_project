@@ -4,6 +4,8 @@ import '../widgets/language_toggle.dart';
 import '../widgets/theme_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
+import '../screens/support_inbox_screen.dart';
+import '../services/support_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
 import '../widgets/app_back_button.dart';
@@ -134,6 +136,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         title: l10n.themeLabel,
                         trailing: const ThemeToggle(onDarkBackground: false),
                       ),
+                      if (authProvider.isAuthenticated) ...[
+                        const Divider(height: 1),
+                        _SettingRow(
+                          icon: Icons.support_agent_outlined,
+                          title: l10n.supportCenter,
+                          subtitle: l10n.supportInboxSubtitle,
+                          onTap: () => Navigator.pushNamed(
+                            context,
+                            '/support',
+                            arguments: const SupportInboxArguments(
+                              scope: SupportInboxScope.customer,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
 
@@ -141,6 +158,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const SizedBox(height: 14),
                     _SettingsGroup(
                       children: [
+                        _SettingRow(
+                          icon: Icons.support_agent_outlined,
+                          title: l10n.supportInbox,
+                          subtitle: l10n.supportInboxSubtitle,
+                          onTap: () => Navigator.pushNamed(
+                            context,
+                            '/support',
+                            arguments: SupportInboxArguments(
+                              scope: authProvider.isAdmin
+                                  ? SupportInboxScope.admin
+                                  : SupportInboxScope.business,
+                            ),
+                          ),
+                        ),
+                        const Divider(height: 1),
                         if (authProvider.isAdmin) ...[
                           _SettingRow(
                             icon: Icons.storefront_outlined,

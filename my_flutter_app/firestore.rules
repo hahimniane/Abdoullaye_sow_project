@@ -237,7 +237,8 @@ service cloud.firestore {
     match /parkedCars/{carId} {
       // Allow only staff and admins to create, read, and update parking records
       allow read: if request.auth != null &&
-        (isAdmin(request.auth.uid) ||
+        (resource.data.customerUid == request.auth.uid ||
+         isAdmin(request.auth.uid) ||
          canManageBusiness(request.auth.uid, resource.data.businessId));
       allow create: if request.auth != null &&
         (isAdmin(request.auth.uid) ||

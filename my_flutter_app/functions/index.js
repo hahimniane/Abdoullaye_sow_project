@@ -8,6 +8,10 @@ const {
 const {defineSecret} = require("firebase-functions/params");
 const crypto = require("crypto");
 const admin = require("firebase-admin");
+const {
+  FieldValue: FirestoreFieldValue,
+  Timestamp: FirestoreTimestamp,
+} = require("firebase-admin/firestore");
 const logger = require("firebase-functions/logger");
 const {ALL_COUNTRIES} = require("./country_catalog");
 const {
@@ -20,6 +24,15 @@ const {
   buildFeaturedBusinessPayload,
   buildFeaturingRequestUpdate,
 } = require("./featured_business");
+const {
+  buildBusinessVerificationDocumentSubmissionUpdate,
+  buildBusinessVerificationReviewUpdate,
+  businessVerificationApprovalReadiness,
+  cleanBusinessVerificationUploadPayload,
+} = require("./business_verification");
+const {
+  buildStripeAccountBusinessUpdate,
+} = require("./stripe_connect_status");
 const {
   buildOpenBarrelMirrorPayload,
   isValidStripeSecretKey,
@@ -129,6 +142,7 @@ const ADMIN_PURCHASE_STATUSES = [
 ];
 const DEFAULT_BUSINESS_SERVICES = [...VALID_BUSINESS_SERVICES];
 const DEFAULT_BUSINESS_ADVISOR_MODEL = "claude-fable-5";
+const DEFAULT_PLATFORM_SERVICE_FEE_PCT = 0.1;
 function requireAuth(request) {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
@@ -794,6 +808,28 @@ function statusUpdatePayload({statusField, previousStatus, nextStatus, uid}) {
   };
 }
 
+function assertBusinessApprovalReady(business, enabledServices) {
+  const readiness = businessVerificationApprovalReadiness({
+    ...(business || {}),
+    enabledServices: enabledServices || business?.enabledServices || [],
+  });
+  if (readiness.ready) return readiness;
+  const suffix = readiness.blockers.length ?
+    ` Missing: ${readiness.blockers.join(", ")}.` :
+    "";
+  throw new HttpsError(
+      "failed-precondition",
+      "Complete Stripe verification and required platform documents before " +
+        `approval.${suffix}`,
+      {
+        blockers: readiness.blockers,
+        documentBlockers: readiness.documentBlockers,
+        requiredDocumentIds: readiness.requiredDocumentIds,
+        stripeReady: readiness.stripeReady,
+      },
+  );
+}
+
 function adminRecordLabel(collectionName, id, data = {}) {
   return String(
       data.title ||
@@ -1055,6 +1091,15 @@ function compareDestinationOptions(a, b) {
 function numberOrFallback(value, fallback) {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function nullableNumberInRange(value, min, max) {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < min || numeric > max) {
+    return null;
+  }
+  return numeric;
 }
 
 function intOrFallback(value, fallback) {
@@ -1577,7 +1622,7 @@ async function stripeRequest(path, options = {}) {
     logger.error("Stripe secret key is missing or malformed");
     throw new HttpsError(
         "failed-precondition",
-        "Stripe payments are not configured. Contact platform support.",
+        "Stripe payments are not configured. Contact Laawol support.",
     );
   }
   const response = await fetch(`https://api.stripe.com/v1${path}`, {
@@ -1655,6 +1700,12 @@ async function createStripeAccountLink(params) {
 
 async function retrieveStripeAccount(accountId) {
   return stripeRequest(`/accounts/${encodeURIComponent(accountId)}`);
+}
+
+function stripeAccountBusinessUpdate(account) {
+  return buildStripeAccountBusinessUpdate(account, {
+    serverTimestamp: admin.firestore.FieldValue.serverTimestamp,
+  });
 }
 
 async function createStripeTransfer(params) {
@@ -1884,6 +1935,10 @@ function defaultNotificationPreferences() {
     shipmentActivity: true,
     walletActivity: true,
     businessActivity: true,
+    supportActivity: true,
+    supportMessages: true,
+    supportEscalations: true,
+    supportCaseUpdates: true,
   };
 }
 
@@ -1897,6 +1952,17 @@ function normalizeNotificationPreferences(raw) {
     walletActivity: prefs.walletActivity !== false && defaults.walletActivity,
     businessActivity:
       prefs.businessActivity !== false && defaults.businessActivity,
+    supportActivity:
+      prefs.supportActivity !== false && defaults.supportActivity,
+    supportMessages:
+      prefs.supportMessages !== false && prefs.supportActivity !== false &&
+        defaults.supportMessages,
+    supportEscalations:
+      prefs.supportEscalations !== false && prefs.supportActivity !== false &&
+        defaults.supportEscalations,
+    supportCaseUpdates:
+      prefs.supportCaseUpdates !== false && prefs.supportActivity !== false &&
+        defaults.supportCaseUpdates,
   };
 }
 
@@ -2872,6 +2938,7 @@ exports.requestBusinessSupport = onCall(
     },
 );
 
+
 exports.createBusinessProCheckout = onCall(
     {
       enforceAppCheck: false,
@@ -2977,14 +3044,10 @@ exports.createBusinessStripeAccountLink = onCall(
           metadata: {businessId},
         });
         stripeAccountId = account.id;
-        await businessRef.set({
-          stripeAccountId,
-          chargesEnabled: account.charges_enabled === true,
-          payoutsEnabled:
-            account.charges_enabled === true &&
-            account.payouts_enabled === true,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        }, {merge: true});
+        await businessRef.set(
+            stripeAccountBusinessUpdate(account),
+            {merge: true},
+        );
       }
 
       const fallbackUrl =
@@ -3033,17 +3096,30 @@ exports.refreshBusinessStripeAccountStatus = onCall(
           payoutsEnabled: false,
         };
       }
-      const account = await retrieveStripeAccount(stripeAccountId);
-      const payoutsEnabled = await persistStripeAccountStatus({
-        businessId,
-        account,
-      });
-      return {
-        businessId,
-        stripeAccountId,
-        chargesEnabled: account.charges_enabled === true,
-        payoutsEnabled,
-      };
+      try {
+        const account = await retrieveStripeAccount(stripeAccountId);
+        const payoutsEnabled = await persistStripeAccountStatus({
+          businessId,
+          account,
+        });
+        return {
+          businessId,
+          stripeAccountId,
+          chargesEnabled: account.charges_enabled === true,
+          payoutsEnabled,
+        };
+      } catch (error) {
+        logger.error("Could not refresh business Stripe account status", {
+          businessId,
+          stripeAccountId,
+          message: error.message,
+        });
+        throw new HttpsError(
+            "failed-precondition",
+            "Could not refresh Stripe payout status. Open Stripe setup " +
+              "again or contact Laawol support.",
+        );
+      }
     },
 );
 
@@ -3272,6 +3348,7 @@ exports.submitBusinessApplication = onCall(
       const applicationRef = db.collection("businessApplications").doc();
       const notificationRef = db.collection("platformNotifications").doc();
       const now = admin.firestore.FieldValue.serverTimestamp();
+      let responseStatus = "pending";
       const profile = businessPublicFields({
         name: businessName,
         phone: businessPhone || ownerPhone,
@@ -3291,6 +3368,7 @@ exports.submitBusinessApplication = onCall(
         const businessDoc = await transaction.get(businessRef);
         const currentStatus = businessDoc.data()?.status || "pending";
         const status = currentStatus === "approved" ? "approved" : "pending";
+        responseStatus = status;
         transaction.set(businessRef, {
           ...profile,
           status,
@@ -3324,25 +3402,27 @@ exports.submitBusinessApplication = onCall(
           applicantEmail: userRecord.email || "",
           ownerName: String(ownerName).trim(),
           ownerPhone: String(ownerPhone).trim(),
-          status: "pending",
+          status,
           submittedAt: now,
           updatedAt: now,
           profile,
           enabledServices: normalizedServices,
         });
-        transaction.set(notificationRef, {
-          type: "business_application",
-          status: "unread",
-          businessId,
-          businessName: profile.name,
-          applicantUid,
-          applicantEmail: userRecord.email || "",
-          title: "New business application",
-          message: `${profile.name} is waiting for platform approval.`,
-          enabledServices: normalizedServices,
-          createdAt: now,
-          updatedAt: now,
-        });
+        if (status !== "approved") {
+          transaction.set(notificationRef, {
+            type: "business_application",
+            status: "unread",
+            businessId,
+            businessName: profile.name,
+            applicantUid,
+            applicantEmail: userRecord.email || "",
+            title: "New business application",
+            message: `${profile.name} is waiting for platform approval.`,
+            enabledServices: normalizedServices,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
       });
 
       return {
@@ -3350,7 +3430,7 @@ exports.submitBusinessApplication = onCall(
         businessId,
         businessName: profile.name,
         enabledServices: normalizedServices,
-        status: "pending",
+        status: responseStatus,
       };
     },
 );
@@ -3606,6 +3686,12 @@ exports.updateAdminRecordStatus = onCall(
         throw new HttpsError("not-found", "Record not found");
       }
       const current = recordDoc.data() || {};
+      if (collectionName === "businesses" && nextStatus === "approved") {
+        assertBusinessApprovalReady(
+            current,
+            normalizeBusinessServices(current.enabledServices),
+        );
+      }
       const previousStatus = current[config.statusField] || "";
       const batch = db.batch();
       batch.update(recordRef, statusUpdatePayload({
@@ -3702,6 +3788,231 @@ exports.deleteAdminRecord = onCall(
     },
 );
 
+exports.updateBusinessVerificationReview = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const adminUid = requireAuth(request);
+      const adminUser = await getUserProfile(adminUid);
+      requireAdminCapability(
+          adminUser,
+          "businesses",
+          "Only operations admins can review business verification documents",
+      );
+
+      const businessId = String(request.data?.businessId || "").trim();
+      if (!businessId) {
+        throw new HttpsError("invalid-argument", "Business ID is required.");
+      }
+
+      const db = admin.firestore();
+      const businessRef = db.collection("businesses").doc(businessId);
+      const businessDoc = await businessRef.get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+
+      let update;
+      try {
+        update = buildBusinessVerificationReviewUpdate({
+          documents: request.data?.documents,
+          note: request.data?.note,
+          adminUid,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (error) {
+        throw new HttpsError(
+            "invalid-argument",
+            error instanceof Error ? error.message : String(error),
+        );
+      }
+
+      const batch = db.batch();
+      batch.update(businessRef, update);
+      setAdminAuditLog(batch, {
+        action: "business_verification_reviewed",
+        actorUid: adminUid,
+        targetCollection: "businesses",
+        targetId: businessId,
+        targetLabel: adminRecordLabel(
+            "businesses",
+            businessId,
+            businessDoc.data(),
+        ),
+      });
+      await batch.commit();
+
+      return {success: true, businessId};
+    },
+);
+
+exports.submitBusinessVerificationDocument = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const businessId = String(request.data?.businessId || "").trim();
+      if (!businessId) {
+        throw new HttpsError("invalid-argument", "Business ID is required.");
+      }
+      await requireBusinessPermission(callerUid, businessId, "profile");
+
+      let update;
+      try {
+        update = buildBusinessVerificationDocumentSubmissionUpdate({
+          businessId,
+          documentId: request.data?.documentId,
+          fileName: request.data?.fileName,
+          path: request.data?.path,
+          url: request.data?.url,
+          contentType: request.data?.contentType,
+          size: request.data?.size,
+          uid: callerUid,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (error) {
+        throw new HttpsError(
+            "invalid-argument",
+            error instanceof Error ? error.message : String(error),
+        );
+      }
+
+      const db = admin.firestore();
+      const businessRef = db.collection("businesses").doc(businessId);
+      const businessDoc = await businessRef.get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+      const batch = db.batch();
+      batch.update(businessRef, update);
+      setAdminAuditLog(batch, {
+        action: "business_verification_document_submitted",
+        actorUid: callerUid,
+        targetCollection: "businesses",
+        targetId: businessId,
+        targetLabel: adminRecordLabel(
+            "businesses",
+            businessId,
+            businessDoc.data(),
+        ),
+        nextValue: String(request.data?.documentId || ""),
+      });
+      await batch.commit();
+
+      return {success: true, businessId};
+    },
+);
+
+exports.uploadBusinessVerificationDocument = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      memory: "512MiB",
+      timeoutSeconds: 60,
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const businessId = String(request.data?.businessId || "").trim();
+      if (!businessId) {
+        throw new HttpsError("invalid-argument", "Business ID is required.");
+      }
+      await requireBusinessPermission(callerUid, businessId, "profile");
+
+      let upload;
+      try {
+        upload = cleanBusinessVerificationUploadPayload({
+          businessId,
+          documentId: request.data?.documentId,
+          fileName: request.data?.fileName,
+          contentType: request.data?.contentType,
+          size: request.data?.size,
+          base64: request.data?.base64,
+        });
+      } catch (error) {
+        throw new HttpsError(
+            "invalid-argument",
+            error instanceof Error ? error.message : String(error),
+        );
+      }
+
+      const db = admin.firestore();
+      const businessRef = db.collection("businesses").doc(businessId);
+      const businessDoc = await businessRef.get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+
+      const bucketName =
+        process.env.FIREBASE_STORAGE_BUCKET ||
+        process.env.STORAGE_BUCKET ||
+        (
+          process.env.GCLOUD_PROJECT ?
+            `${process.env.GCLOUD_PROJECT}.firebasestorage.app` :
+            undefined
+        );
+      const bucket = bucketName ?
+        admin.storage().bucket(bucketName) :
+        admin.storage().bucket();
+      const token = crypto.randomUUID();
+      await bucket.file(upload.path).save(upload.buffer, {
+        resumable: false,
+        metadata: {
+          cacheControl: "private, max-age=0, no-transform",
+          contentType: upload.contentType,
+          metadata: {
+            businessId,
+            documentId: upload.documentId,
+            firebaseStorageDownloadTokens: token,
+            uploadedBy: callerUid,
+          },
+        },
+      });
+      const encodedPath = encodeURIComponent(upload.path);
+      const url =
+        `https://firebasestorage.googleapis.com/v0/b/${bucket.name}` +
+        `/o/${encodedPath}?alt=media&token=${token}`;
+      const update = buildBusinessVerificationDocumentSubmissionUpdate({
+        businessId,
+        documentId: upload.documentId,
+        fileName: upload.fileName,
+        path: upload.path,
+        url,
+        contentType: upload.contentType,
+        size: upload.size,
+        uid: callerUid,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      const batch = db.batch();
+      batch.update(businessRef, update);
+      setAdminAuditLog(batch, {
+        action: "business_verification_document_uploaded",
+        actorUid: callerUid,
+        targetCollection: "businesses",
+        targetId: businessId,
+        targetLabel: adminRecordLabel(
+            "businesses",
+            businessId,
+            businessDoc.data(),
+        ),
+        nextValue: upload.documentId,
+      });
+      await batch.commit();
+
+      return {
+        success: true,
+        businessId,
+        documentId: upload.documentId,
+        path: upload.path,
+        url,
+      };
+    },
+);
+
 exports.reviewBusinessApplication = onCall(
     {
       enforceAppCheck: false,
@@ -3762,6 +4073,11 @@ exports.reviewBusinessApplication = onCall(
         profileImageUrl: profileImageUrl ?? current.profileImageUrl,
         profileImagePath: profileImagePath ?? current.profileImagePath,
         serviceNote: serviceNote ?? current.serviceNote,
+        addressLine1: current.addressLine1,
+        city: current.city,
+        country: current.country,
+        state: current.state,
+        postalCode: current.postalCode,
       });
       if (!profile.name) {
         throw new HttpsError("invalid-argument", "Business name is required");
@@ -3779,6 +4095,9 @@ exports.reviewBusinessApplication = onCall(
           enabledServices,
           current.enabledServices || DEFAULT_BUSINESS_SERVICES,
       );
+      if (nextStatus === "approved") {
+        assertBusinessApprovalReady(current, normalizedServices);
+      }
 
       const now = admin.firestore.FieldValue.serverTimestamp();
       await businessRef.set({
@@ -3896,6 +4215,21 @@ exports.updateBusinessProfile = onCall(
         carHoldFlatFee,
         carHoldDailyRate,
         carHoldMaxDays,
+        parkingAddressLine1,
+        parkingCity,
+        parkingCountry,
+        parkingState,
+        parkingTotalSpaces,
+        parkingBlockedSpaces,
+        parkingDailyRate,
+        parkingWeeklyRate,
+        parkingMonthlyRate,
+        parkingMinimumDays,
+        parkingPickupAvailable,
+        parkingPickupFee,
+        parkingInstructions,
+        parkingLatitude,
+        parkingLongitude,
       } = request.data || {};
       const user = await requireBusinessManager(callerUid, businessId);
       const db = admin.firestore();
@@ -3968,6 +4302,54 @@ exports.updateBusinessProfile = onCall(
         carHoldFlatFee: holdFlatFee > 0 ? holdFlatFee : 500,
         carHoldDailyRate: holdDailyRate > 0 ? holdDailyRate : 100,
         carHoldMaxDays: holdMaxDays,
+        parkingAddressLine1: String(
+            parkingAddressLine1 ?? current.parkingAddressLine1 ?? "",
+        ).trim(),
+        parkingCity: String(parkingCity ?? current.parkingCity ?? "").trim(),
+        parkingCountry: String(
+            parkingCountry ?? current.parkingCountry ?? "",
+        ).trim(),
+        parkingState: String(
+            parkingState ?? current.parkingState ?? "",
+        ).trim(),
+        parkingTotalSpaces: Math.max(0, intOrFallback(
+            parkingTotalSpaces,
+            current.parkingTotalSpaces || 0,
+        )),
+        parkingBlockedSpaces: Math.max(0, intOrFallback(
+            parkingBlockedSpaces,
+            current.parkingBlockedSpaces || 0,
+        )),
+        parkingDailyRate: Math.max(0, numberOrFallback(
+            parkingDailyRate,
+            current.parkingDailyRate || 0,
+        )),
+        parkingWeeklyRate: Math.max(0, numberOrFallback(
+            parkingWeeklyRate,
+            current.parkingWeeklyRate || 0,
+        )),
+        parkingMonthlyRate: Math.max(0, numberOrFallback(
+            parkingMonthlyRate,
+            current.parkingMonthlyRate || 0,
+        )),
+        parkingMinimumDays: Math.min(365, Math.max(1, intOrFallback(
+            parkingMinimumDays,
+            current.parkingMinimumDays || 1,
+        ))),
+        parkingPickupAvailable: parkingPickupAvailable === true,
+        parkingPickupFee: Math.max(0, numberOrFallback(
+            parkingPickupFee,
+            current.parkingPickupFee || 0,
+        )),
+        parkingInstructions: String(
+            parkingInstructions ?? current.parkingInstructions ?? "",
+        ).trim(),
+        parkingLatitude: parkingLatitude === undefined ?
+          current.parkingLatitude ?? null :
+          nullableNumberInRange(parkingLatitude, -90, 90),
+        parkingLongitude: parkingLongitude === undefined ?
+          current.parkingLongitude ?? null :
+          nullableNumberInRange(parkingLongitude, -180, 180),
         updatedAt: now,
       }, {merge: true});
 
@@ -4026,6 +4408,521 @@ async function generateTrackingCode(prefix, collectionPath) {
   }
   throw new HttpsError("internal", "Could not generate tracking code");
 }
+
+const ACTIVE_PARKING_STATUSES = new Set([
+  "pending_payment",
+  "requested",
+  "reserved",
+  "vehicle_received",
+  "parked",
+  "scheduled_for_transport",
+  "active",
+]);
+
+function parseParkingDate(value, field) {
+  const parsed = value instanceof Date ? value : new Date(String(value || ""));
+  if (Number.isNaN(parsed.getTime())) {
+    throw new HttpsError("invalid-argument", `${field} is required`);
+  }
+  return parsed;
+}
+
+function parkingBillableDays(start, end) {
+  const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+  return Math.max(1, Math.ceil(hours / 24));
+}
+
+function parkingRangeOverlaps(row, start, end) {
+  const rowStart = row.parkingDate?.toDate?.() ||
+    parseParkingDate(row.parkingDate, "parkingDate");
+  const rowEnd = row.parkingEndDate?.toDate?.() || rowStart;
+  return rowEnd.getTime() >= start.getTime() &&
+    rowStart.getTime() <= end.getTime();
+}
+
+function businessOffersParking(business) {
+  return Array.isArray(business.enabledServices) &&
+    business.enabledServices.includes("carParking") &&
+    String(business.status || "") === "approved" &&
+    Number(business.parkingTotalSpaces || 0) > 0 &&
+    Number(business.parkingDailyRate || 0) > 0;
+}
+
+function parkingEstimateCents({business, start, end, pickupRequested}) {
+  let days = parkingBillableDays(start, end);
+  let total = 0;
+  const monthly = centsFromDollars(business.parkingMonthlyRate || 0);
+  const weekly = centsFromDollars(business.parkingWeeklyRate || 0);
+  const daily = centsFromDollars(business.parkingDailyRate || 0);
+  if (monthly > 0) {
+    const months = Math.floor(days / 30);
+    total += months * monthly;
+    days -= months * 30;
+  }
+  if (weekly > 0) {
+    const weeks = Math.floor(days / 7);
+    total += weeks * weekly;
+    days -= weeks * 7;
+  }
+  total += days * daily;
+  if (pickupRequested && business.parkingPickupAvailable === true) {
+    total += centsFromDollars(business.parkingPickupFee || 0);
+  }
+  return Math.max(0, total);
+}
+
+function parkingAvailability({business, reservations, start, end}) {
+  const totalSpaces = Math.max(0, intOrFallback(
+      business.parkingTotalSpaces,
+      0,
+  ));
+  const blockedSpaces = Math.max(0, intOrFallback(
+      business.parkingBlockedSpaces,
+      0,
+  ));
+  const overlapping = reservations.filter((row) =>
+    ACTIVE_PARKING_STATUSES.has(String(row.status || "reserved")) &&
+    parkingRangeOverlaps(row, start, end),
+  ).length;
+  return Math.max(0, totalSpaces - blockedSpaces - overlapping);
+}
+
+function distanceMiles(latA, lonA, latB, lonB) {
+  const values = [latA, lonA, latB, lonB].map(Number);
+  if (values.some((value) => !Number.isFinite(value))) return null;
+  const [aLat, aLon, bLat, bLon] = values.map((value) =>
+    value * Math.PI / 180,
+  );
+  const dLat = bLat - aLat;
+  const dLon = bLon - aLon;
+  const sinLat = Math.sin(dLat / 2);
+  const sinLon = Math.sin(dLon / 2);
+  const h = sinLat * sinLat +
+    Math.cos(aLat) * Math.cos(bLat) * sinLon * sinLon;
+  return 3958.7613 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function parkingOptionFromBusiness({
+  businessId,
+  business,
+  reservations,
+  start,
+  end,
+  pickupRequested,
+  customerLatitude,
+  customerLongitude,
+}) {
+  const availableSpaces = parkingAvailability({
+    business,
+    reservations,
+    start,
+    end,
+  });
+  const estimatedTotalCents = parkingEstimateCents({
+    business,
+    start,
+    end,
+    pickupRequested,
+  });
+  return {
+    businessId,
+    businessName: business.name || DEFAULT_BUSINESS_NAME,
+    city: business.parkingCity || business.city || "",
+    address: business.parkingAddressLine1 || business.addressLine1 || "",
+    totalSpaces: Math.max(0, intOrFallback(business.parkingTotalSpaces, 0)),
+    blockedSpaces: Math.max(0, intOrFallback(
+        business.parkingBlockedSpaces,
+        0,
+    )),
+    availableSpaces,
+    dailyRate: numberOrFallback(business.parkingDailyRate, 0),
+    weeklyRate: numberOrFallback(business.parkingWeeklyRate, 0),
+    monthlyRate: numberOrFallback(business.parkingMonthlyRate, 0),
+    pickupAvailable: business.parkingPickupAvailable === true,
+    pickupFee: numberOrFallback(business.parkingPickupFee, 0),
+    minimumDays: Math.max(1, intOrFallback(business.parkingMinimumDays, 1)),
+    instructions: business.parkingInstructions || "",
+    phone: business.phone || "",
+    email: business.email || "",
+    latitude: business.parkingLatitude ?? null,
+    longitude: business.parkingLongitude ?? null,
+    distanceMiles: distanceMiles(
+        customerLatitude,
+        customerLongitude,
+        business.parkingLatitude,
+        business.parkingLongitude,
+    ),
+    estimatedTotal: dollarsFromCents(estimatedTotalCents),
+  };
+}
+
+exports.listParkingOptions = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      requireAuth(request);
+      const {
+        city,
+        startDate,
+        endDate,
+        pickupRequested,
+        customerLatitude,
+        customerLongitude,
+      } = request.data || {};
+      const normalizedCity = String(city || "").trim().toLowerCase();
+      if (!normalizedCity) {
+        throw new HttpsError("invalid-argument", "Parking city is required");
+      }
+      const start = parseParkingDate(startDate, "Parking start date");
+      const end = parseParkingDate(endDate, "Parking end date");
+      if (end.getTime() < start.getTime()) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Parking end date must be after the start date",
+        );
+      }
+
+      const db = admin.firestore();
+      const businesses = await db.collection("businesses")
+          .where("status", "==", "approved")
+          .get();
+      const options = [];
+      for (const doc of businesses.docs) {
+        const business = doc.data() || {};
+        const businessCity = String(
+            business.parkingCity || business.city || "",
+        ).trim().toLowerCase();
+        if (
+          !businessOffersParking(business) ||
+          businessCity !== normalizedCity
+        ) {
+          continue;
+        }
+        const reservations = await db.collection("parkedCars")
+            .where("businessId", "==", doc.id)
+            .limit(500)
+            .get();
+        const option = parkingOptionFromBusiness({
+          businessId: doc.id,
+          business,
+          reservations: reservations.docs.map((reservation) =>
+            reservation.data() || {},
+          ),
+          start,
+          end,
+          pickupRequested: pickupRequested === true,
+          customerLatitude,
+          customerLongitude,
+        });
+        if (option.availableSpaces > 0) options.push(option);
+      }
+      options.sort((a, b) => {
+        if (a.distanceMiles !== null && b.distanceMiles !== null) {
+          const distance = Number(a.distanceMiles) - Number(b.distanceMiles);
+          if (distance !== 0) return distance;
+        }
+        if (a.distanceMiles !== null) return -1;
+        if (b.distanceMiles !== null) return 1;
+        const price = Number(a.estimatedTotal || 0) -
+          Number(b.estimatedTotal || 0);
+        if (price !== 0) return price;
+        return String(a.businessName).localeCompare(String(b.businessName));
+      });
+      return {options};
+    },
+);
+
+exports.createParkingReservation = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const {
+        businessId,
+        customerName,
+        customerPhone,
+        carMake,
+        carModel,
+        carYear,
+        vinNumber,
+        startDate,
+        endDate,
+        pickupRequested,
+      } = request.data || {};
+      const cleanBusinessId = String(businessId || "").trim();
+      const start = parseParkingDate(startDate, "Parking start date");
+      const end = parseParkingDate(endDate, "Parking end date");
+      if (!cleanBusinessId) {
+        throw new HttpsError("invalid-argument", "Business is required");
+      }
+      if (end.getTime() < start.getTime()) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Parking end date must be after the start date",
+        );
+      }
+      const cleanName = String(customerName || "").trim();
+      const cleanPhone = String(customerPhone || "").trim();
+      if (!cleanName || !cleanPhone) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Customer name and phone are required",
+        );
+      }
+      const cleanCarMake = String(carMake || "").trim();
+      const cleanCarModel = String(carModel || "").trim();
+      const cleanCarYear = String(carYear || "").trim();
+      if (!cleanCarMake || !cleanCarModel || !cleanCarYear) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Vehicle make, model, and year are required",
+        );
+      }
+
+      const db = admin.firestore();
+      const businessRef = db.collection("businesses").doc(cleanBusinessId);
+      const reservationRef = db.collection("parkedCars").doc();
+      const trackingCode = await generateTrackingCode("PK", "parkedCars");
+      let paymentCents = 0;
+      let totalCents = 0;
+      let option;
+      await db.runTransaction(async (transaction) => {
+        const businessDoc = await transaction.get(businessRef);
+        if (!businessDoc.exists) {
+          throw new HttpsError("not-found", "Business not found");
+        }
+        const business = businessDoc.data() || {};
+        if (!businessOffersParking(business)) {
+          throw new HttpsError(
+              "failed-precondition",
+              "This business is not accepting parking reservations",
+          );
+        }
+        const reservations = await transaction.get(
+            db.collection("parkedCars")
+                .where("businessId", "==", cleanBusinessId)
+                .limit(500),
+        );
+        option = parkingOptionFromBusiness({
+          businessId: cleanBusinessId,
+          business,
+          reservations: reservations.docs.map((reservation) =>
+            reservation.data() || {},
+          ),
+          start,
+          end,
+          pickupRequested: pickupRequested === true,
+          customerLatitude: null,
+          customerLongitude: null,
+        });
+        if (option.availableSpaces <= 0) {
+          throw new HttpsError(
+              "failed-precondition",
+              "No parking spaces are available for those dates",
+          );
+        }
+        totalCents = centsFromDollars(option.estimatedTotal);
+        paymentCents = Math.min(totalCents, 5000);
+        const pricingDoc = await transaction.get(
+            db.collection("shipmentPricing").doc("serviceFees"),
+        );
+        const platformFeePct = servicePlatformFeePctForBusiness(
+            pricingDoc.data(),
+            business,
+            ["parkingPlatformFeePct"],
+        );
+        const connectReady = !!business.stripeAccountId &&
+          business.payoutsEnabled === true;
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        transaction.set(reservationRef, {
+          trackingCode,
+          customerUid,
+          customerName: cleanName,
+          customerPhone: cleanPhone,
+          ownerName: cleanName,
+          carMake: cleanCarMake,
+          carModel: cleanCarModel,
+          carYear: cleanCarYear,
+          vinNumber: String(vinNumber || "").trim(),
+          businessId: cleanBusinessId,
+          businessName: option.businessName,
+          parkingCity: option.city,
+          parkingAddress: option.address,
+          parkingDate: admin.firestore.Timestamp.fromDate(start),
+          parkingEndDate: admin.firestore.Timestamp.fromDate(end),
+          status: paymentCents > 0 && !SIMULATE_PAYMENTS ?
+            "pending_payment" :
+            "reserved",
+          paymentStatus: paymentCents > 0 && !SIMULATE_PAYMENTS ?
+            "pending" :
+            "succeeded",
+          totalCost: dollarsFromCents(totalCents),
+          totalCostCents: totalCents,
+          depositAmount: dollarsFromCents(paymentCents),
+          depositAmountCents: paymentCents,
+          currency: SHIPMENT_CURRENCY,
+          pickupRequested: pickupRequested === true &&
+            option.pickupAvailable === true,
+          pickupFee: option.pickupFee,
+          dailyRate: option.dailyRate,
+          weeklyRate: option.weeklyRate,
+          monthlyRate: option.monthlyRate,
+          minimumDays: option.minimumDays,
+          instructions: option.instructions,
+          ...servicePayoutFields({
+            grossCents: paymentCents,
+            platformFeePct,
+            connectReady,
+          }),
+          createdAt: now,
+          updatedAt: now,
+        });
+      });
+
+      if (paymentCents > 0 && !SIMULATE_PAYMENTS) {
+        let paymentIntent;
+        try {
+          paymentIntent = await createStripePaymentIntent({
+            amount: paymentCents,
+            currency: SHIPMENT_CURRENCY,
+            metadata: {
+              reservationId: reservationRef.id,
+              trackingCode,
+              customerUid,
+              businessId: cleanBusinessId,
+              paymentType: "parking_deposit",
+            },
+          });
+          await reservationRef.update({
+            stripePaymentIntentId: paymentIntent.id,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        } catch (error) {
+          await reservationRef.update({
+            status: "cancelled",
+            paymentStatus: "failed",
+            cancellationReason: "parking_payment_intent_failed",
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          throw error;
+        }
+        return {
+          success: true,
+          reservationId: reservationRef.id,
+          trackingCode,
+          clientSecret: paymentIntent.client_secret,
+          depositAmount: dollarsFromCents(paymentCents),
+          estimatedTotal: dollarsFromCents(totalCents),
+        };
+      }
+
+      return {
+        success: true,
+        reservationId: reservationRef.id,
+        trackingCode,
+        simulatedPayment: true,
+        depositAmount: dollarsFromCents(paymentCents),
+        estimatedTotal: dollarsFromCents(totalCents),
+      };
+    },
+);
+
+exports.completeParkingReservation = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const {reservationId} = request.data || {};
+      const cleanReservationId = String(reservationId || "").trim();
+      if (!cleanReservationId) {
+        throw new HttpsError("invalid-argument", "Reservation ID is required");
+      }
+      const db = admin.firestore();
+      const reservationRef = db.collection("parkedCars")
+          .doc(cleanReservationId);
+      const reservationDoc = await reservationRef.get();
+      if (!reservationDoc.exists) {
+        throw new HttpsError("not-found", "Reservation not found");
+      }
+      const reservation = reservationDoc.data() || {};
+      if (reservation.customerUid !== customerUid) {
+        throw new HttpsError("permission-denied", "Reservation access denied");
+      }
+      if (SIMULATE_PAYMENTS) {
+        return {success: true, reservationId: cleanReservationId};
+      }
+      const intent = await retrieveStripePaymentIntent(
+          reservation.stripePaymentIntentId,
+      );
+      if (intent.status !== "succeeded") {
+        await reservationRef.update({
+          paymentStatus: intent.status,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        throw new HttpsError(
+            "failed-precondition",
+            `Payment is ${intent.status}`,
+        );
+      }
+      await reservationRef.update({
+        status: "reserved",
+        paymentStatus: "succeeded",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      await issueBusinessPayoutTransfer({
+        ref: reservationRef,
+        data: {
+          ...reservation,
+          status: "reserved",
+          paymentStatus: "succeeded",
+        },
+        sourceTransaction: stripeSourceTransactionFromIntent(intent),
+        serviceType: "parking_reservation",
+      });
+      return {success: true, reservationId: cleanReservationId};
+    },
+);
+
+exports.cancelPendingParkingReservation = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const {reservationId} = request.data || {};
+      const cleanReservationId = String(reservationId || "").trim();
+      if (!cleanReservationId) {
+        throw new HttpsError("invalid-argument", "Reservation ID is required");
+      }
+      const ref = admin.firestore().collection("parkedCars")
+          .doc(cleanReservationId);
+      const doc = await ref.get();
+      if (!doc.exists) return {success: true};
+      const reservation = doc.data() || {};
+      if (reservation.customerUid !== customerUid) {
+        throw new HttpsError("permission-denied", "Reservation access denied");
+      }
+      if (reservation.status !== "pending_payment") {
+        return {success: true, reservationId: cleanReservationId};
+      }
+      await ref.update({
+        status: "cancelled",
+        paymentStatus: "cancelled",
+        cancellationReason: "customer_payment_cancelled",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return {success: true, reservationId: cleanReservationId};
+    },
+);
 
 function barrelPickupPricingFromData(data) {
   const defaults = {
@@ -5939,12 +6836,17 @@ function sharedPoolPaymentFields({
   });
 }
 
-function sharedPoolSealAccounting({pool, participantRows, shipUnderfilled}) {
+function sharedPoolSealAccounting({
+  pool,
+  participantRows,
+  shipUnderfilled,
+  platformFeePct = SHARED_BARREL_PLATFORM_COMMISSION_RATE,
+}) {
   return buildSharedPoolSealAccounting({
     pool,
     participantRows,
     shipUnderfilled,
-    commissionRate: SHARED_BARREL_PLATFORM_COMMISSION_RATE,
+    commissionRate: platformFeePct,
   });
 }
 
@@ -6107,6 +7009,7 @@ function queuePoolParticipantBalancePayment({
   poolId,
   shipmentId,
   shipmentTrackingCode,
+  platformFeePct = SHARED_BARREL_PLATFORM_COMMISSION_RATE,
   requestedBy = "",
 }) {
   const uid = participant.uid || "";
@@ -6139,10 +7042,10 @@ function queuePoolParticipantBalancePayment({
     source: "barrel_pool_balance",
     businessId: pool.businessId || "",
     businessName: pool.businessName || "",
-    platformFeePct: SHARED_BARREL_PLATFORM_COMMISSION_RATE,
+    platformFeePct,
     ...servicePayoutFields({
       grossCents: balanceCents,
-      platformFeePct: SHARED_BARREL_PLATFORM_COMMISSION_RATE,
+      platformFeePct,
       connectReady: false,
     }),
     barrelPoolId: poolId,
@@ -6305,6 +7208,13 @@ exports.createBarrelPool = onCall(
       const pricingDoc = await db.collection("shipmentPricing")
           .doc("barrelPickup")
           .get();
+      const serviceFeesDoc = await db.collection("shipmentPricing")
+          .doc("serviceFees")
+          .get();
+      const platformFeePct = sharedBarrelPlatformFeePctFromPricing(
+          serviceFeesDoc.data(),
+          business,
+      );
       const connectReady =
         !!business.stripeAccountId && business.payoutsEnabled === true;
       const pickup = pricePoolParticipantPickup(
@@ -6377,6 +7287,7 @@ exports.createBarrelPool = onCall(
           )),
           currency: SHIPMENT_CURRENCY,
           shipMode: shipMode === "air" ? "air" : "sea",
+          platformFeePct,
           joinDeadline: deadline,
           status: initialStatus,
           trackingCode,
@@ -6435,10 +7346,10 @@ exports.createBarrelPool = onCall(
           balanceAmountCents: balanceCents,
           refundableAmountCents: depositCents,
           refundableAmount: dollarsFromCents(depositCents),
-          platformFeePct: SHARED_BARREL_PLATFORM_COMMISSION_RATE,
+          platformFeePct,
           ...servicePayoutFields({
             grossCents: depositCents,
-            platformFeePct: SHARED_BARREL_PLATFORM_COMMISSION_RATE,
+            platformFeePct,
             connectReady,
           }),
           ...payment,
@@ -7032,6 +7943,20 @@ exports.requestJoinBarrelPool = onCall(
       const pricingDoc = participantInput.pickupRequested ?
         await db.collection("shipmentPricing").doc("barrelPickup").get() :
         null;
+      const serviceFeesDoc = await db.collection("shipmentPricing")
+          .doc("serviceFees")
+          .get();
+      const poolSnapshotForFee = await poolRef.get();
+      const poolForFee = poolSnapshotForFee.exists ?
+        poolSnapshotForFee.data() || {} :
+        {};
+      const businessForFeeDoc = poolForFee.businessId ?
+        await db.collection("businesses").doc(poolForFee.businessId).get() :
+        null;
+      const platformFeePct = sharedBarrelPlatformFeePctFromPricing(
+          serviceFeesDoc.data(),
+          businessForFeeDoc?.exists ? businessForFeeDoc.data() : poolForFee,
+      );
       const pickup = pricePoolParticipantPickup(
           participantInput,
           pricingDoc?.data(),
@@ -7190,10 +8115,10 @@ exports.requestJoinBarrelPool = onCall(
           balanceAmountCents: balanceCents,
           refundableAmountCents: depositCents,
           refundableAmount: dollarsFromCents(depositCents),
-          platformFeePct: SHARED_BARREL_PLATFORM_COMMISSION_RATE,
+          platformFeePct,
           ...servicePayoutFields({
             grossCents: depositCents,
-            platformFeePct: SHARED_BARREL_PLATFORM_COMMISSION_RATE,
+            platformFeePct,
             connectReady: false,
           }),
           ...payment,
@@ -8155,6 +9080,16 @@ exports.sealBarrelPool = onCall(
       const pool = poolDoc.data() || {};
       ensurePoolCanChange(pool);
       await requireBusinessPermission(callerUid, pool.businessId, "barrels");
+      const serviceFeesDoc = await db.collection("shipmentPricing")
+          .doc("serviceFees")
+          .get();
+      const businessForFeeDoc = pool.businessId ?
+        await db.collection("businesses").doc(pool.businessId).get() :
+        null;
+      const platformFeePct = sharedBarrelPlatformFeePctFromPricing(
+          serviceFeesDoc.data(),
+          businessForFeeDoc?.exists ? businessForFeeDoc.data() : pool,
+      );
       const participants = await poolRef.collection("participants")
           .where("joinStatus", "==", "accepted")
           .get();
@@ -8209,6 +9144,7 @@ exports.sealBarrelPool = onCall(
         pool,
         participantRows,
         shipUnderfilled: request.data?.shipUnderfilled === true,
+        platformFeePct,
       });
       const owner = participantRows.find((item) => item.role === "owner") ||
         participantRows[0];
@@ -8266,7 +9202,7 @@ exports.sealBarrelPool = onCall(
         sharedPoolUnderfilledAmountCents: accounting.underfilledAmountCents,
         grossAmount: dollarsFromCents(accounting.grossAmountCents),
         grossAmountCents: accounting.grossAmountCents,
-        platformCommissionRate: SHARED_BARREL_PLATFORM_COMMISSION_RATE,
+        platformCommissionRate: platformFeePct,
         platformCommissionAmount:
           dollarsFromCents(accounting.platformCommissionCents),
         platformCommissionAmountCents: accounting.platformCommissionCents,
@@ -8299,7 +9235,7 @@ exports.sealBarrelPool = onCall(
         underfilledAmountCents: accounting.underfilledAmountCents,
         grossAmount: dollarsFromCents(accounting.grossAmountCents),
         grossAmountCents: accounting.grossAmountCents,
-        platformCommissionRate: SHARED_BARREL_PLATFORM_COMMISSION_RATE,
+        platformCommissionRate: platformFeePct,
         platformCommissionAmount:
           dollarsFromCents(accounting.platformCommissionCents),
         platformCommissionAmountCents: accounting.platformCommissionCents,
@@ -8338,6 +9274,7 @@ exports.sealBarrelPool = onCall(
             poolId,
             shipmentId: shipmentRef.id,
             shipmentTrackingCode: shipmentTracking,
+            platformFeePct,
             requestedBy: callerUid,
           }) :
           null;
@@ -9139,15 +10076,35 @@ function servicePlatformFeePctFromPricing(pricingDoc, keys = []) {
   if (raw === undefined || raw === null) {
     raw = pricingDoc?.platformFeePct ??
       process.env.PLATFORM_SERVICE_FEE_PCT ??
-      0;
+      DEFAULT_PLATFORM_SERVICE_FEE_PCT;
   }
   const pct = Number(raw);
   if (!Number.isFinite(pct) || pct < 0 || pct >= 1) return 0;
   return pct;
 }
 
-function barrelPlatformFeePctFromPricing(pricingDoc) {
-  return servicePlatformFeePctFromPricing(pricingDoc, [
+function businessPlatformFeePctFromBusiness(business) {
+  const raw = business?.platformFeePct ?? business?.platformCommissionPct;
+  if (raw === undefined || raw === null || raw === "") return null;
+  const pct = Number(raw);
+  if (!Number.isFinite(pct) || pct < 0 || pct >= 1) return null;
+  return pct;
+}
+
+function servicePlatformFeePctForBusiness(pricingDoc, business, keys = []) {
+  return businessPlatformFeePctFromBusiness(business) ??
+    servicePlatformFeePctFromPricing(pricingDoc, keys);
+}
+
+function barrelPlatformFeePctFromPricing(pricingDoc, business) {
+  return servicePlatformFeePctForBusiness(pricingDoc, business, [
+    "barrelPlatformFeePct",
+  ]);
+}
+
+function sharedBarrelPlatformFeePctFromPricing(pricingDoc, business) {
+  return servicePlatformFeePctForBusiness(pricingDoc, business, [
+    "sharedBarrelPlatformFeePct",
     "barrelPlatformFeePct",
   ]);
 }
@@ -9186,15 +10143,10 @@ function stripeSourceTransactionFromIntent(intent) {
 async function persistStripeAccountStatus({businessId, account}) {
   const payoutsEnabled =
     account.charges_enabled === true && account.payouts_enabled === true;
-  await admin.firestore().collection("businesses").doc(businessId).set({
-    stripeAccountId: account.id,
-    chargesEnabled: account.charges_enabled === true,
-    payoutsEnabled,
-    ...(payoutsEnabled && {
-      connectOnboardedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, {merge: true});
+  await admin.firestore()
+      .collection("businesses")
+      .doc(businessId)
+      .set(stripeAccountBusinessUpdate(account), {merge: true});
   if (payoutsEnabled) {
     await retryPendingBusinessTransfersForBusiness(businessId);
   }
@@ -9448,6 +10400,7 @@ exports.createBarrelShipmentPaymentIntent = onCall(
       const pricing = barrelPickupPricingFromData(pricingDoc.data());
       const platformFeePct = barrelPlatformFeePctFromPricing(
           pricingDoc.data(),
+          business,
       );
       const pickup = wantsPickup ?
         pickupFeeForBorough(pricing, String(pickupBorough)) :
@@ -9674,16 +10627,9 @@ exports.createBarrelOrderPaymentIntent = onCall(
         admin.auth().getUser(customerUid),
       ]);
       const pickupPricing = barrelPickupPricingFromData(pricingDoc.data());
-      const platformFeePct = barrelPlatformFeePctFromPricing(
-          pricingDoc.data(),
-      );
       const cleanPickupAddress = wantsPickup ?
         String(pickupAddress).trim() :
         pickupPricing.officeAddress;
-      const pickup = wantsPickup ?
-        pickupFeeForBorough(pickupPricing, String(pickupBorough)) :
-        {miles: 0, fee: 0};
-      const pickupFeeCents = Math.round(pickup.fee * 100);
 
       const validatedLines = [];
       for (let index = 0; index < lines.length; index++) {
@@ -9694,6 +10640,18 @@ exports.createBarrelOrderPaymentIntent = onCall(
         const receiverName = String(line.receiverName || "").trim();
         const receiverPhone = String(line.receiverPhone || "").trim();
         const quantity = normalizeBarrelQuantity(line.quantity);
+        const lineWantsPickup =
+          line.pickupRequested === undefined ?
+            wantsPickup :
+            line.pickupRequested === true;
+        const linePickupAddress = lineWantsPickup ?
+          String(line.pickupAddress || pickupAddress || "").trim() :
+          pickupPricing.officeAddress;
+        const linePickupBorough = lineWantsPickup ?
+          String(line.pickupBorough || pickupBorough || "").trim() :
+          "Office drop-off";
+        const linePickupDateTime =
+          line.pickupDateTime || pickupDateTime || null;
         if (
           !destinationCountryId ||
           !businessId ||
@@ -9706,6 +10664,23 @@ exports.createBarrelOrderPaymentIntent = onCall(
           );
         }
         requireValidPhoneNumber(receiverPhone, "Receiver phone");
+        if (
+          lineWantsPickup &&
+          (!linePickupAddress || !linePickupBorough || !linePickupDateTime)
+        ) {
+          throw new HttpsError(
+              "invalid-argument",
+              "Every pickup destination needs an address, borough, date, " +
+                "and time",
+          );
+        }
+        const linePickupAppointment = lineWantsPickup ?
+          parseFuturePickup(linePickupDateTime) :
+          null;
+        const linePickup = lineWantsPickup ?
+          pickupFeeForBorough(pickupPricing, linePickupBorough) :
+          {miles: 0, fee: 0};
+        const linePickupFeeCents = Math.round(linePickup.fee * 100);
         const businessDestination = await getApprovedBusinessDestination({
           businessId,
           countryId: destinationCountryId,
@@ -9715,9 +10690,13 @@ exports.createBarrelOrderPaymentIntent = onCall(
         const lineShippingFee =
           Math.round(shippingFee * quantity * 100) / 100;
         const lineShippingFeeCents = Math.round(lineShippingFee * 100);
-        const lineTotalCents = lineShippingFeeCents + pickupFeeCents;
+        const lineTotalCents = lineShippingFeeCents + linePickupFeeCents;
         const connectReady =
           !!business.stripeAccountId && business.payoutsEnabled === true;
+        const platformFeePct = barrelPlatformFeePctFromPricing(
+            pricingDoc.data(),
+            business,
+        );
         validatedLines.push({
           index,
           destinationCountryId,
@@ -9728,11 +10707,17 @@ exports.createBarrelOrderPaymentIntent = onCall(
           receiverName,
           receiverPhone,
           quantity,
+          pickupRequested: lineWantsPickup,
+          pickupAddress: linePickupAddress,
+          pickupBorough: linePickupBorough,
+          pickupAppointment: linePickupAppointment,
+          pickupMiles: linePickup.miles,
           unitShippingFee: shippingFee,
           lineShippingFee,
           lineShippingFeeCents,
-          pickupFeeCents,
+          pickupFeeCents: linePickupFeeCents,
           lineTotalCents,
+          platformFeePct,
           payoutFields: barrelLinePayoutFields({
             shippingFeeCents: lineShippingFeeCents,
             platformFeePct,
@@ -9780,10 +10765,12 @@ exports.createBarrelOrderPaymentIntent = onCall(
           customerUid,
           customerEmail: userRecord.email || "",
           senderName: String(senderName).trim(),
-          pickupRequested: wantsPickup,
-          pickupAddress: cleanPickupAddress,
-          pickupBorough: wantsPickup ?
-            String(pickupBorough) :
+          pickupRequested: validatedLines.some((line) => line.pickupRequested),
+          pickupAddress: validatedLines.some((line) => line.pickupRequested) ?
+            "See shipment pickup details" :
+            cleanPickupAddress,
+          pickupBorough: validatedLines.some((line) => line.pickupRequested) ?
+            "Multiple/line-specific" :
             "Office drop-off",
           ...(pickupAppointment && {
             pickupDateTime:
@@ -9822,7 +10809,7 @@ exports.createBarrelOrderPaymentIntent = onCall(
             orderLineIndex: line.index,
             trackingCode,
             senderName: String(senderName).trim(),
-            senderAddress: cleanPickupAddress,
+            senderAddress: line.pickupAddress,
             receiverName: line.receiverName,
             receiverPhone: line.receiverPhone,
             destinationCountryId: line.destinationCountryId,
@@ -9832,23 +10819,21 @@ exports.createBarrelOrderPaymentIntent = onCall(
             ...line.deliveryEstimate,
             customerUid,
             customerEmail: userRecord.email || "",
-            pickupRequested: wantsPickup,
-            pickupAddress: cleanPickupAddress,
-            pickupBorough: wantsPickup ?
-              String(pickupBorough) :
-              "Office drop-off",
-            pickupMiles: pickup.miles,
+            pickupRequested: line.pickupRequested,
+            pickupAddress: line.pickupAddress,
+            pickupBorough: line.pickupBorough,
+            pickupMiles: line.pickupMiles,
             pickupFee: dollarsFromCents(line.pickupFeeCents),
             quantity: line.quantity,
             unitShippingFee: line.unitShippingFee,
             shippingFee: line.lineShippingFee,
             pricingPendingReview: false,
-            ...(pickupAppointment && {
+            ...(line.pickupAppointment && {
               pickupDateTime:
-                admin.firestore.Timestamp.fromDate(pickupAppointment),
+                admin.firestore.Timestamp.fromDate(line.pickupAppointment),
             }),
             price: dollarsFromCents(line.lineTotalCents),
-            platformFeePct,
+            platformFeePct: line.platformFeePct,
             ...line.payoutFields,
             walletAppliedCents: lineWalletAppliedCents,
             walletAppliedAmount: dollarsFromCents(lineWalletAppliedCents),
@@ -10129,7 +11114,7 @@ exports.completeBarrelOrderPayment = onCall(
       secrets: [stripeSecretKey],
     },
     async (request) => {
-      const customerUid = requireAuth(request);
+      const callerUid = request.auth?.uid || "";
       const {orderId} = request.data || {};
       if (!orderId) {
         throw new HttpsError("invalid-argument", "Order ID is required");
@@ -10142,7 +11127,7 @@ exports.completeBarrelOrderPayment = onCall(
         throw new HttpsError("not-found", "Order not found");
       }
       const order = orderDoc.data();
-      if (order.customerUid !== customerUid) {
+      if (callerUid && order.customerUid !== callerUid) {
         throw new HttpsError("permission-denied", "Order access denied");
       }
 
@@ -10151,8 +11136,15 @@ exports.completeBarrelOrderPayment = onCall(
         !SIMULATE_PAYMENTS &&
         !String(order.stripePaymentIntentId || "").startsWith("simulated_")
       ) {
+        const orderIntentId = String(order.stripePaymentIntentId || "");
+        if (!orderIntentId) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Payment intent is missing",
+          );
+        }
         const intent = await retrieveStripePaymentIntent(
-            order.stripePaymentIntentId,
+            orderIntentId,
         );
         if (intent.status !== "succeeded") {
           await orderRef.update({
@@ -10164,7 +11156,23 @@ exports.completeBarrelOrderPayment = onCall(
               `Payment is ${intent.status}`,
           );
         }
+        if (!callerUid) {
+          const metadata = intent.metadata || {};
+          const metadataOrderId = String(metadata.orderId || "");
+          const metadataCustomerUid = String(metadata.customerUid || "");
+          if (
+            metadataOrderId !== orderId ||
+            metadataCustomerUid !== order.customerUid
+          ) {
+            throw new HttpsError(
+                "unauthenticated",
+                "Authentication required",
+            );
+          }
+        }
         sourceTransaction = stripeSourceTransactionFromIntent(intent);
+      } else if (!callerUid) {
+        throw new HttpsError("unauthenticated", "Authentication required");
       }
 
       const shipments = await db.collection("barrelShipments")
@@ -10403,8 +11411,9 @@ exports.createFreightShipmentPaymentIntent = onCall(
         freightDestination;
 
       const pricing = barrelPickupPricingFromData(pricingDoc.data());
-      const platformFeePct = servicePlatformFeePctFromPricing(
+      const platformFeePct = servicePlatformFeePctForBusiness(
           pricingDoc.data(),
+          business,
           ["freightPlatformFeePct"],
       );
       const pickup = wantsPickup ?
@@ -10940,9 +11949,16 @@ exports.createCarDepositPaymentIntent = onCall(
         business: carBusiness.business,
         holdUntilDate,
       });
-      const platformFeePct = servicePlatformFeePctFromPricing({}, [
-        "carDepositPlatformFeePct",
-      ]);
+      const pricingDoc = await db.collection("shipmentPricing")
+          .doc("serviceFees")
+          .get();
+      const platformFeePct = servicePlatformFeePctForBusiness(
+          pricingDoc.data(),
+          carBusiness.business,
+          [
+            "carDepositPlatformFeePct",
+          ],
+      );
       const connectReady =
         !!carBusiness.business.stripeAccountId &&
         carBusiness.business.payoutsEnabled === true;
@@ -11407,9 +12423,16 @@ exports.createCarPurchasePaymentIntent = onCall(
 
       const purchaseRef = db.collection("carPurchases").doc();
       const purchaseAmountCents = carPriceCents(car);
-      const platformFeePct = servicePlatformFeePctFromPricing({}, [
-        "carPurchasePlatformFeePct",
-      ]);
+      const pricingDoc = await db.collection("shipmentPricing")
+          .doc("serviceFees")
+          .get();
+      const platformFeePct = servicePlatformFeePctForBusiness(
+          pricingDoc.data(),
+          carBusiness.business,
+          [
+            "carPurchasePlatformFeePct",
+          ],
+      );
       const connectReady =
         !!carBusiness.business.stripeAccountId &&
         carBusiness.business.payoutsEnabled === true;
@@ -12257,10 +13280,17 @@ exports.createPaidHoldExtensionPaymentIntent = onCall(
         await db.collection("businesses").doc(purchase.businessId).get() :
         null;
       const business = businessDoc?.exists ? businessDoc.data() : {};
-      const extensionPlatformFeePct = servicePlatformFeePctFromPricing({}, [
-        "holdExtensionPlatformFeePct",
-        "carDepositPlatformFeePct",
-      ]);
+      const pricingDoc = await db.collection("shipmentPricing")
+          .doc("serviceFees")
+          .get();
+      const extensionPlatformFeePct = servicePlatformFeePctForBusiness(
+          pricingDoc.data(),
+          business,
+          [
+            "holdExtensionPlatformFeePct",
+            "carDepositPlatformFeePct",
+          ],
+      );
       const extensionConnectReady =
         !!business.stripeAccountId && business.payoutsEnabled === true;
       const extensionPayoutFields = servicePayoutFields({
@@ -12446,5 +13476,1278 @@ exports.expirePaidCarHolds = onSchedule(
       }
 
       logger.info("Expired paid car holds", {count: expired.size});
+    },
+);
+
+const SUPPORT_CASE_COLLECTIONS = {
+  barrelShipments: {
+    caseType: "barrel_shipment",
+    customerField: "customerUid",
+    businessField: "businessId",
+    businessNameField: "businessName",
+    labelFields: ["trackingCode", "receiverName", "destinationCountryName"],
+  },
+  freightShipments: {
+    caseType: "freight_shipment",
+    customerField: "customerUid",
+    businessField: "businessId",
+    businessNameField: "businessName",
+    labelFields: ["trackingCode", "receiverName", "destinationCountryName"],
+  },
+  transportRequests: {
+    caseType: "transport_request",
+    customerField: "customerUid",
+    businessField: "businessId",
+    businessNameField: "businessName",
+    labelFields: ["trackingCode", "ownerName", "destinationCountryName"],
+  },
+  carPurchases: {
+    caseType: "car_purchase",
+    customerField: "buyerUid",
+    businessField: "businessId",
+    businessNameField: "businessName",
+    labelFields: ["carTitle", "buyerName", "destinationCountryName"],
+  },
+  barrelOrders: {
+    caseType: "barrel_order",
+    customerField: "customerUid",
+    businessField: "businessId",
+    businessNameField: "businessName",
+    labelFields: ["trackingCode", "orderNumber", "status"],
+  },
+  parkedCars: {
+    caseType: "parked_car",
+    customerField: "customerUid",
+    businessField: "businessId",
+    businessNameField: "businessName",
+    labelFields: ["customerName", "vehicleMake", "vehicleModel"],
+  },
+  barrelPools: {
+    caseType: "barrel_pool",
+    customerFields: ["createdByUid"],
+    businessField: "businessId",
+    businessNameField: "businessName",
+    labelFields: ["destinationCountryName", "status"],
+  },
+  walletRefundRequests: {
+    caseType: "wallet_refund",
+    customerField: "customerUid",
+    businessField: "businessId",
+    businessNameField: "businessName",
+    labelFields: ["amount", "status", "source"],
+    platformOwned: true,
+  },
+  barrelPoolBalanceRequests: {
+    caseType: "barrel_pool_balance",
+    customerField: "customerUid",
+    businessField: "businessId",
+    businessNameField: "businessName",
+    labelFields: ["amount", "status", "barrelPoolId"],
+  },
+};
+
+const SUPPORT_URGENT_ESCALATION_REASONS = [
+  "fraud",
+  "safety",
+  "abuse",
+  "legal",
+  "urgent",
+  "payment_blocked",
+  "service_blocked",
+  "no_response",
+  "payment_no_service",
+  "business_unreachable",
+  "pickup_delivery_time_sensitive",
+  "admin_override",
+];
+
+const SUPPORT_MESSAGE_TYPES = [
+  "text",
+  "image",
+  "file",
+  "voice",
+  "video",
+  "system",
+];
+
+function supportCaseId(collectionName, relatedId) {
+  return `${collectionName}_${relatedId}`
+      .replace(/[^A-Za-z0-9_-]/g, "_")
+      .slice(0, 220);
+}
+
+function supportNow() {
+  return FirestoreFieldValue.serverTimestamp();
+}
+
+function supportTimestampFromDate(date) {
+  return FirestoreTimestamp.fromDate(date);
+}
+
+function supportDateFromTimestamp(value) {
+  if (!value) return null;
+  if (typeof value.toDate === "function") return value.toDate();
+  return null;
+}
+
+function addBusinessDays(date, days) {
+  const next = new Date(date.getTime());
+  let remaining = days;
+  while (remaining > 0) {
+    next.setDate(next.getDate() + 1);
+    const day = next.getDay();
+    if (day !== 0 && day !== 6) remaining -= 1;
+  }
+  return next;
+}
+
+function supportDisplayName(user, fallback) {
+  return cleanText(
+      user?.fullName || user?.displayName || user?.businessName ||
+        user?.email || fallback || "Support participant",
+      160,
+  );
+}
+
+function supportRoleForUser(user, supportCase) {
+  if (user.role === "admin") return "admin";
+  if (
+    (user.role === "businessOwner" || user.role === "staff") &&
+    user.businessId === supportCase.businessId
+  ) {
+    return "business";
+  }
+  if (user.id === supportCase.customerUid) return "customer";
+  return "";
+}
+
+function supportCanAdminSeeAll(user) {
+  return user.role === "admin" && hasAdminCapability(user, "support");
+}
+
+function supportCanReadCase(user, supportCase) {
+  if (!user || !supportCase) return false;
+  if (user.id === supportCase.customerUid) return true;
+  if (
+    (user.role === "businessOwner" || user.role === "staff") &&
+    user.businessId === supportCase.businessId
+  ) {
+    return user.role === "businessOwner" ||
+      hasBusinessPermission(user, "support");
+  }
+  if (supportCanAdminSeeAll(user)) return true;
+  return false;
+}
+
+function supportCanReply(user, supportCase) {
+  const role = supportRoleForUser(user, supportCase);
+  if (role === "customer") return true;
+  if (role === "admin") return supportCanAdminSeeAll(user);
+  if (role === "business") return hasBusinessPermission(user, "support");
+  return false;
+}
+
+function supportRelatedLabel(record, config, relatedId) {
+  const values = (config.labelFields || [])
+      .map((field) => record[field])
+      .filter((value) => value !== undefined && value !== null && value !== "")
+      .map((value) => String(value).trim())
+      .filter(Boolean);
+  return cleanText(values.join(" · ") || relatedId, 220);
+}
+
+function supportCustomerUid(record, config) {
+  if (config.customerField && record[config.customerField]) {
+    return String(record[config.customerField]).trim();
+  }
+  for (const field of config.customerFields || []) {
+    if (record[field]) return String(record[field]).trim();
+  }
+  return "";
+}
+
+async function resolveSupportRelatedRecord({
+  db,
+  collectionName,
+  relatedId,
+  callerUid,
+}) {
+  const config = SUPPORT_CASE_COLLECTIONS[collectionName];
+  if (!config) {
+    throw new HttpsError("invalid-argument", "Unsupported support record");
+  }
+  const relatedRef = db.collection(collectionName).doc(relatedId);
+  const relatedDoc = await relatedRef.get();
+  if (!relatedDoc.exists) {
+    throw new HttpsError("not-found", "Support record not found");
+  }
+  const record = relatedDoc.data() || {};
+  let customerUid = supportCustomerUid(record, config);
+  if (!customerUid && collectionName === "barrelPools") {
+    const participantDoc = await relatedRef.collection("participants")
+        .doc(callerUid)
+        .get();
+    if (participantDoc.exists) customerUid = callerUid;
+  }
+  let businessId = String(record[config.businessField] || "").trim();
+  if (!businessId && config.platformOwned === true) {
+    businessId = "__platform_support";
+  }
+  if (!businessId) {
+    throw new HttpsError(
+        "failed-precondition",
+        "This record is missing the responsible business.",
+    );
+  }
+  const businessName = cleanText(
+      record[config.businessNameField] ||
+        (config.platformOwned === true ? "Laawol support" : businessId),
+      160,
+  );
+  const relatedLabel = supportRelatedLabel(record, config, relatedId);
+  return {
+    relatedRef,
+    record,
+    customerUid,
+    businessId,
+    businessName,
+    relatedLabel,
+    caseType: config.caseType,
+  };
+}
+
+async function requireSupportCase(db, caseId) {
+  const ref = db.collection("supportCases").doc(caseId);
+  const doc = await ref.get();
+  if (!doc.exists) {
+    throw new HttpsError("not-found", "Support case not found");
+  }
+  return {ref, doc, data: {id: doc.id, ...doc.data()}};
+}
+
+function supportMessagePayload({
+  uid,
+  user,
+  supportCase,
+  content,
+  messageType,
+  metadata,
+  replyTo,
+  visibility,
+}) {
+  const senderRole = supportRoleForUser(user, supportCase);
+  return {
+    senderId: uid,
+    senderRole,
+    senderName: supportDisplayName(user, uid),
+    senderProfileImageUrl: cleanText(user.profileImageUrl, 600),
+    content,
+    messageType,
+    metadata: metadata || {},
+    replyTo: replyTo || null,
+    visibility: visibility || "case",
+    readBy: {[uid]: FirestoreTimestamp.now()},
+    deletedForUsers: {},
+    editHistory: [],
+    createdAt: supportNow(),
+    updatedAt: supportNow(),
+  };
+}
+
+function supportCaseStatusAfterMessage(senderRole, supportCase) {
+  if (supportCase.caseType === "business_platform") {
+    if (senderRole === "business") return "waiting_for_admin";
+    if (senderRole === "admin") return "waiting_for_business";
+  }
+  if (senderRole === "customer") return "waiting_for_business";
+  if (senderRole === "business") return "waiting_for_customer";
+  if (senderRole === "admin") return "admin_reviewing";
+  return supportCase.status || "open";
+}
+
+async function notifySupportParticipants({
+  supportCase,
+  senderUid,
+  title,
+  body,
+  data,
+}) {
+  const recipients = new Set();
+  if (supportCase.customerUid && supportCase.customerUid !== senderUid) {
+    recipients.add(supportCase.customerUid);
+  }
+  const db = admin.firestore();
+  if (supportCase.businessId) {
+    const businessUsers = await db.collection("users")
+        .where("businessId", "==", supportCase.businessId)
+        .where("role", "in", ["businessOwner", "staff"])
+        .limit(100)
+        .get();
+    businessUsers.docs.forEach((doc) => {
+      const user = {id: doc.id, ...doc.data()};
+      if (
+        doc.id !== senderUid &&
+        (user.role === "businessOwner" ||
+          hasBusinessPermission(user, "support"))
+      ) {
+        recipients.add(doc.id);
+      }
+    });
+  }
+  const admins = await db.collection("users")
+      .where("role", "==", "admin")
+      .limit(100)
+      .get();
+  admins.docs.forEach((doc) => {
+    const user = {id: doc.id, ...doc.data()};
+    if (doc.id !== senderUid && hasAdminCapability(user, "support")) {
+      recipients.add(doc.id);
+    }
+  });
+  const participantDocs = await db.collection("supportCases")
+      .doc(supportCase.id)
+      .collection("participants")
+      .get();
+  participantDocs.docs.forEach((doc) => {
+    const uid = String(doc.data()?.uid || doc.id).trim();
+    if (uid && uid !== senderUid && !uid.startsWith("business_")) {
+      recipients.add(uid);
+    }
+  });
+  await Promise.all(Array.from(recipients).map((uid) =>
+    sendPreferenceNotification({
+      uid,
+      preferenceKey: "supportMessages",
+      title,
+      body,
+      data,
+    }),
+  ));
+}
+
+exports.createOrOpenSupportCase = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const caller = await getUserProfile(uid);
+      const db = admin.firestore();
+      const relatedCollection = cleanText(
+          request.data?.relatedCollection,
+          120,
+      );
+      const relatedId = cleanText(request.data?.relatedId, 180);
+      const subject = cleanText(request.data?.subject, 160) || "Support";
+      const initialMessage = cleanText(request.data?.message, 4000);
+      const priority = cleanText(request.data?.priority, 32) || "normal";
+      if (!relatedCollection || !relatedId) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Related record is required",
+        );
+      }
+      if (!["normal", "urgent", "blocked"].includes(priority)) {
+        throw new HttpsError("invalid-argument", "Invalid priority");
+      }
+
+      const related = await resolveSupportRelatedRecord({
+        db,
+        collectionName: relatedCollection,
+        relatedId,
+        callerUid: uid,
+      });
+      const allowed =
+        uid === related.customerUid ||
+        canManageBusiness(caller, related.businessId) ||
+        supportCanAdminSeeAll(caller);
+      if (!allowed) {
+        throw new HttpsError("permission-denied", "Support access denied");
+      }
+      if (
+        canManageBusiness(caller, related.businessId) &&
+        !hasBusinessPermission(caller, "support")
+      ) {
+        throw new HttpsError(
+            "permission-denied",
+            "This staff account cannot manage support cases",
+        );
+      }
+
+      const caseId = supportCaseId(relatedCollection, relatedId);
+      const caseRef = db.collection("supportCases").doc(caseId);
+      const nowDate = new Date();
+      const responseDueAt = supportTimestampFromDate(
+          addBusinessDays(nowDate, 3),
+      );
+      const now = supportNow();
+
+      await db.runTransaction(async (transaction) => {
+        const existing = await transaction.get(caseRef);
+        const base = existing.exists ? existing.data() || {} : {};
+        const payload = {
+          customerUid: related.customerUid || uid,
+          customerName: cleanText(
+              base.customerName || caller.fullName ||
+                request.auth?.token?.name || "Customer",
+              160,
+          ),
+          customerEmail: cleanText(
+              base.customerEmail || caller.email ||
+                request.auth?.token?.email,
+              240,
+          ),
+          customerPhone: cleanText(base.customerPhone || caller.phone, 40),
+          businessId: related.businessId,
+          businessName: related.businessName,
+          relatedCollection,
+          relatedId,
+          relatedLabel: related.relatedLabel,
+          caseType: related.caseType,
+          subject,
+          status: base.status === "closed" ?
+            "reopened" :
+            (base.status || "open"),
+          priority,
+          escalationStatus: base.escalationStatus || "business_first",
+          assignedBusinessUserId: base.assignedBusinessUserId || null,
+          assignedAdminUid: base.assignedAdminUid || null,
+          businessResponseDueAt: base.businessResponseDueAt || responseDueAt,
+          escalationAvailableAt: base.escalationAvailableAt || responseDueAt,
+          reopenedAt: existing.exists ? now : (base.reopenedAt || null),
+          createdAt: base.createdAt || now,
+          updatedAt: now,
+        };
+        transaction.set(caseRef, payload, {merge: true});
+        transaction.set(caseRef.collection("participants").doc(uid), {
+          uid,
+          role: supportRoleForUser(caller, {
+            customerUid: related.customerUid || uid,
+            businessId: related.businessId,
+          }) || "customer",
+          displayName: supportDisplayName(caller, uid),
+          visible: true,
+          unreadCount: 0,
+          lastReadAt: now,
+          updatedAt: now,
+          createdAt: now,
+        }, {merge: true});
+        if (related.customerUid) {
+          transaction.set(
+              caseRef.collection("participants").doc(related.customerUid),
+              {
+                uid: related.customerUid,
+                role: "customer",
+                visible: true,
+                updatedAt: now,
+                createdAt: now,
+              },
+              {merge: true},
+          );
+        }
+        transaction.set(
+            caseRef.collection("participants")
+                .doc(`business_${related.businessId}`),
+            {
+              businessId: related.businessId,
+              role: "business",
+              visible: true,
+              updatedAt: now,
+              createdAt: now,
+            },
+            {merge: true},
+        );
+        transaction.set(caseRef.collection("timeline").doc(), {
+          type: existing.exists ? "reopened" : "created",
+          actorUid: uid,
+          actorRole: supportRoleForUser(caller, {
+            customerUid: related.customerUid || uid,
+            businessId: related.businessId,
+          }) || "customer",
+          actorName: supportDisplayName(caller, uid),
+          message: existing.exists ? "Support case reopened" :
+            "Support case created",
+          createdAt: now,
+        });
+        if (initialMessage) {
+          const messageRef = caseRef.collection("messages").doc();
+          const supportCase = {
+            id: caseId,
+            customerUid: related.customerUid || uid,
+            businessId: related.businessId,
+          };
+          const message = supportMessagePayload({
+            uid,
+            user: caller,
+            supportCase,
+            content: initialMessage,
+            messageType: "text",
+          });
+          transaction.set(messageRef, message);
+          transaction.set(caseRef, {
+            lastMessage: initialMessage,
+            lastMessageAt: now,
+            lastMessageSenderRole: message.senderRole,
+            lastCustomerMessageAt: message.senderRole === "customer" ?
+              now : (base.lastCustomerMessageAt || null),
+            lastBusinessMessageAt: message.senderRole === "business" ?
+              now : (base.lastBusinessMessageAt || null),
+            lastAdminMessageAt: message.senderRole === "admin" ?
+              now : (base.lastAdminMessageAt || null),
+            status: supportCaseStatusAfterMessage(message.senderRole, base),
+            updatedAt: now,
+          }, {merge: true});
+        }
+      });
+
+      return {success: true, caseId};
+    },
+);
+
+exports.createBusinessPlatformSupportCase = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const caller = await getUserProfile(uid);
+      const db = admin.firestore();
+      const businessId = cleanText(request.data?.businessId, 120);
+      const subject = cleanText(request.data?.subject, 160);
+      const initialMessage = cleanText(request.data?.message, 4000);
+      const priority = cleanText(request.data?.priority, 32) || "normal";
+
+      if (!businessId || !subject || !initialMessage) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Business, subject, and message are required",
+        );
+      }
+      if (!["normal", "urgent", "blocked"].includes(priority)) {
+        throw new HttpsError("invalid-argument", "Invalid priority");
+      }
+      if (!canManageBusiness(caller, businessId) ||
+          !hasBusinessPermission(caller, "support")) {
+        throw new HttpsError(
+            "permission-denied",
+            "This account cannot create admin support cases",
+        );
+      }
+
+      const businessDoc = await db.collection("businesses")
+          .doc(businessId)
+          .get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+      const business = businessDoc.data() || {};
+      const businessName = cleanText(
+          business.name || caller.businessName || businessId,
+          160,
+      );
+      const caseRef = db.collection("supportCases").doc();
+      const caseId = caseRef.id;
+      const now = supportNow();
+      const actorName = supportDisplayName(caller, uid);
+      const supportCase = {
+        id: caseId,
+        customerUid: "",
+        businessId,
+      };
+      const message = supportMessagePayload({
+        uid,
+        user: caller,
+        supportCase,
+        content: initialMessage,
+        messageType: "text",
+      });
+
+      await db.runTransaction(async (transaction) => {
+        transaction.set(caseRef, {
+          customerUid: "",
+          customerName: actorName,
+          customerEmail: cleanText(caller.email, 240),
+          customerPhone: cleanText(caller.phone, 40),
+          businessId,
+          businessName,
+          relatedCollection: "businesses",
+          relatedId: businessId,
+          relatedLabel: businessName,
+          caseType: "business_platform",
+          subject,
+          status: "waiting_for_admin",
+          priority,
+          escalationStatus: "escalated",
+          escalationReason: "business_platform_help",
+          escalatedAt: now,
+          assignedBusinessUserId: uid,
+          assignedAdminUid: null,
+          lastMessage: initialMessage,
+          lastMessageAt: now,
+          lastMessageSenderRole: "business",
+          lastCustomerMessageAt: null,
+          lastBusinessMessageAt: now,
+          lastAdminMessageAt: null,
+          businessResponseDueAt: null,
+          escalationAvailableAt: null,
+          createdAt: now,
+          updatedAt: now,
+        });
+        transaction.set(caseRef.collection("participants").doc(uid), {
+          uid,
+          role: "business",
+          displayName: actorName,
+          visible: true,
+          unreadCount: 0,
+          lastReadAt: now,
+          updatedAt: now,
+          createdAt: now,
+        }, {merge: true});
+        transaction.set(
+            caseRef.collection("participants").doc(`business_${businessId}`),
+            {
+              businessId,
+              role: "business",
+              visible: true,
+              updatedAt: now,
+              createdAt: now,
+            },
+            {merge: true},
+        );
+        transaction.set(caseRef.collection("messages").doc(), message);
+        transaction.set(caseRef.collection("timeline").doc(), {
+          type: "created",
+          actorUid: uid,
+          actorRole: "business",
+          actorName,
+          message: "Admin support case created",
+          createdAt: now,
+        });
+        setAdminAuditLog(transaction, {
+          action: "business_platform_support_case_created",
+          actorUid: uid,
+          targetCollection: "supportCases",
+          targetId: caseId,
+          targetLabel: `${businessName}: ${subject}`,
+          nextValue: priority,
+        });
+      });
+
+      await notifySupportParticipants({
+        supportCase: {
+          ...supportCase,
+          subject,
+          relatedCollection: "businesses",
+          relatedId: businessId,
+        },
+        senderUid: uid,
+        title: `Business admin help: ${subject}`,
+        body: initialMessage,
+        data: {
+          type: "support_message",
+          caseId,
+          relatedCollection: "businesses",
+          relatedId: businessId,
+        },
+      });
+
+      return {success: true, caseId, businessId};
+    },
+);
+
+exports.sendSupportMessage = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const user = await getUserProfile(uid);
+      const db = admin.firestore();
+      const caseId = cleanText(request.data?.caseId, 220);
+      const content = cleanText(request.data?.content, 4000);
+      const messageType = cleanText(request.data?.messageType, 32) || "text";
+      const metadata = request.data?.metadata &&
+        typeof request.data.metadata === "object" ? request.data.metadata : {};
+      const replyTo = request.data?.replyTo &&
+        typeof request.data.replyTo === "object" ? request.data.replyTo : null;
+      if (!caseId) throw new HttpsError("invalid-argument", "Case is required");
+      if (!SUPPORT_MESSAGE_TYPES.includes(messageType)) {
+        throw new HttpsError("invalid-argument", "Invalid message type");
+      }
+      if (!content && messageType === "text") {
+        throw new HttpsError("invalid-argument", "Message is required");
+      }
+      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      if (!supportCanReply(user, supportCase)) {
+        throw new HttpsError("permission-denied", "Support reply denied");
+      }
+      const senderRole = supportRoleForUser(user, supportCase);
+      const messageContent = content || messageType;
+      const now = supportNow();
+      const messageRef = ref.collection("messages").doc();
+      const message = supportMessagePayload({
+        uid,
+        user,
+        supportCase,
+        content: messageContent,
+        messageType,
+        metadata,
+        replyTo,
+      });
+      const updates = {
+        lastMessage: messageContent,
+        lastMessageAt: now,
+        lastMessageSenderRole: senderRole,
+        status: supportCaseStatusAfterMessage(senderRole, supportCase),
+        updatedAt: now,
+      };
+      if (senderRole === "customer") updates.lastCustomerMessageAt = now;
+      if (senderRole === "business") updates.lastBusinessMessageAt = now;
+      if (senderRole === "admin") updates.lastAdminMessageAt = now;
+      await db.runTransaction(async (transaction) => {
+        transaction.set(messageRef, message);
+        transaction.set(ref, updates, {merge: true});
+        transaction.set(ref.collection("timeline").doc(), {
+          type: "message_sent",
+          actorUid: uid,
+          actorRole: senderRole,
+          actorName: message.senderName,
+          message: messageContent,
+          messageId: messageRef.id,
+          createdAt: now,
+        });
+        transaction.set(ref.collection("participants").doc(uid), {
+          uid,
+          role: senderRole,
+          displayName: message.senderName,
+          visible: true,
+          unreadCount: 0,
+          lastReadAt: now,
+          updatedAt: now,
+          createdAt: now,
+        }, {merge: true});
+      });
+      await notifySupportParticipants({
+        supportCase,
+        senderUid: uid,
+        title: `Support: ${supportCase.subject || supportCase.relatedLabel}`,
+        body: messageContent,
+        data: {
+          type: "support_message",
+          caseId,
+          messageId: messageRef.id,
+          relatedCollection: supportCase.relatedCollection,
+          relatedId: supportCase.relatedId,
+        },
+      });
+      return {success: true, caseId, messageId: messageRef.id};
+    },
+);
+
+exports.uploadSupportAttachmentMetadata = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const user = await getUserProfile(uid);
+      const db = admin.firestore();
+      const caseId = cleanText(request.data?.caseId, 220);
+      const fileUrl = cleanText(
+          request.data?.fileUrl || request.data?.downloadUrl,
+          1000,
+      );
+      const filePath = cleanText(
+          request.data?.filePath || request.data?.storagePath,
+          1000,
+      );
+      const fileName = cleanText(request.data?.fileName, 220);
+      const mimeType = cleanText(
+          request.data?.mimeType || request.data?.contentType,
+          120,
+      );
+      const fileSize = Number(
+          request.data?.fileSize || request.data?.size || 0,
+      );
+      const inferredType = mimeType.startsWith("image/") ? "image" :
+        mimeType.startsWith("video/") ? "video" :
+          mimeType.startsWith("audio/") ? "voice" : "file";
+      const messageType = cleanText(
+          request.data?.messageType,
+          32,
+      ) || inferredType;
+      if (!caseId || !filePath) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Case and uploaded file are required",
+        );
+      }
+      if (!SUPPORT_MESSAGE_TYPES.includes(messageType)) {
+        throw new HttpsError("invalid-argument", "Invalid attachment type");
+      }
+      const validDocumentTypes = [
+        "application/pdf",
+        "text/plain",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument" +
+          ".wordprocessingml.document",
+      ];
+      const validFile =
+        (mimeType.startsWith("image/") && fileSize < 10 * 1024 * 1024) ||
+        (mimeType.startsWith("audio/") && fileSize < 10 * 1024 * 1024) ||
+        (mimeType.startsWith("video/") && fileSize < 50 * 1024 * 1024) ||
+        (validDocumentTypes.includes(mimeType) &&
+          fileSize < 25 * 1024 * 1024);
+      if (!validFile) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Attachment type or size denied",
+        );
+      }
+      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      if (!supportCanReply(user, supportCase)) {
+        throw new HttpsError("permission-denied", "Attachment access denied");
+      }
+      if (!filePath.startsWith(`support_cases/${caseId}/${uid}/`)) {
+        throw new HttpsError("permission-denied", "Invalid support file path");
+      }
+      const messageRef = ref.collection("messages").doc();
+      const now = supportNow();
+      const content = cleanText(request.data?.caption, 1000) ||
+        fileName || messageType;
+      const message = supportMessagePayload({
+        uid,
+        user,
+        supportCase,
+        content,
+        messageType,
+        metadata: {
+          fileUrl,
+          filePath,
+          fileName,
+          mimeType,
+          fileSize,
+          caption: cleanText(request.data?.caption, 1000),
+        },
+      });
+      await db.runTransaction(async (transaction) => {
+        transaction.set(messageRef, message);
+        transaction.set(ref, {
+          lastMessage: content,
+          lastMessageAt: now,
+          lastMessageSenderRole: message.senderRole,
+          status: supportCaseStatusAfterMessage(
+              message.senderRole,
+              supportCase,
+          ),
+          updatedAt: now,
+        }, {merge: true});
+        transaction.set(ref.collection("timeline").doc(), {
+          type: "attachment_uploaded",
+          actorUid: uid,
+          actorRole: message.senderRole,
+          actorName: message.senderName,
+          message: content,
+          messageId: messageRef.id,
+          createdAt: now,
+        });
+      });
+      return {success: true, caseId, messageId: messageRef.id};
+    },
+);
+
+exports.markSupportCaseRead = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const user = await getUserProfile(uid);
+      const db = admin.firestore();
+      const caseId = cleanText(request.data?.caseId, 220);
+      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      if (!supportCanReadCase(user, supportCase)) {
+        throw new HttpsError("permission-denied", "Support read denied");
+      }
+      await ref.collection("participants").doc(uid).set({
+        uid,
+        role: supportRoleForUser(user, supportCase),
+        displayName: supportDisplayName(user, uid),
+        unreadCount: 0,
+        lastReadAt: supportNow(),
+        updatedAt: supportNow(),
+      }, {merge: true});
+      return {success: true};
+    },
+);
+
+exports.setSupportTyping = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const user = await getUserProfile(uid);
+      const db = admin.firestore();
+      const caseId = cleanText(request.data?.caseId, 220);
+      const typing = request.data?.typing === true;
+      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      if (!supportCanReply(user, supportCase)) {
+        throw new HttpsError("permission-denied", "Support typing denied");
+      }
+      await ref.collection("participants").doc(uid).set({
+        uid,
+        typing,
+        typingAt: supportNow(),
+        updatedAt: supportNow(),
+      }, {merge: true});
+      return {success: true};
+    },
+);
+
+exports.escalateSupportCase = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const user = await getUserProfile(uid);
+      const db = admin.firestore();
+      const caseId = cleanText(request.data?.caseId, 220);
+      const reason = cleanText(request.data?.reason, 80);
+      const note = cleanText(request.data?.note, 2000);
+      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      const role = supportRoleForUser(user, supportCase);
+      if (role !== "customer" && role !== "business" &&
+          !supportCanAdminSeeAll(user)) {
+        throw new HttpsError("permission-denied", "Escalation denied");
+      }
+      const urgent = SUPPORT_URGENT_ESCALATION_REASONS.includes(reason);
+      const availableAt = supportDateFromTimestamp(
+          supportCase.escalationAvailableAt,
+      );
+      const available = urgent ||
+        supportCanAdminSeeAll(user) ||
+        !availableAt ||
+        availableAt.getTime() <= Date.now();
+      if (!available) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Platform escalation is not available yet.",
+        );
+      }
+      const now = supportNow();
+      await db.runTransaction(async (transaction) => {
+        transaction.set(ref, {
+          escalationStatus: "escalated",
+          escalationReason: reason || "unresolved",
+          escalatedAt: now,
+          status: "escalated_to_platform",
+          priority: urgent ? "urgent" : (supportCase.priority || "normal"),
+          updatedAt: now,
+        }, {merge: true});
+        transaction.set(ref.collection("timeline").doc(), {
+          type: "escalated",
+          actorUid: uid,
+          actorRole: role || "admin",
+          actorName: supportDisplayName(user, uid),
+          reason,
+          message: note || "Case escalated to admin support",
+          createdAt: now,
+        });
+      });
+      await sendPreferenceNotification({
+        uid: supportCase.customerUid,
+        preferenceKey: "supportEscalations",
+        title: "Support case escalated",
+        body: supportCase.subject || supportCase.relatedLabel || "Support",
+        data: {type: "support_escalated", caseId},
+      });
+      return {success: true, caseId};
+    },
+);
+
+exports.assignSupportCase = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const user = await getUserProfile(uid);
+      requireAdminCapability(user, "support");
+      const db = admin.firestore();
+      const caseId = cleanText(request.data?.caseId, 220);
+      const assignedAdminUid = cleanText(request.data?.assignedAdminUid, 180);
+      const assignedBusinessUserId = cleanText(
+          request.data?.assignedBusinessUserId,
+          180,
+      );
+      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      if (!supportCanReadCase(user, supportCase)) {
+        throw new HttpsError("permission-denied", "Assignment denied");
+      }
+      const now = supportNow();
+      await ref.set({
+        assignedAdminUid:
+          assignedAdminUid || supportCase.assignedAdminUid || uid,
+        assignedBusinessUserId:
+          assignedBusinessUserId || supportCase.assignedBusinessUserId || null,
+        status: "admin_reviewing",
+        updatedAt: now,
+      }, {merge: true});
+      await ref.collection("timeline").add({
+        type: "assigned",
+        actorUid: uid,
+        actorRole: "admin",
+        actorName: supportDisplayName(user, uid),
+        message: "Support case assigned",
+        createdAt: now,
+      });
+      return {success: true, caseId};
+    },
+);
+
+exports.requestSupportEvidence = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const user = await getUserProfile(uid);
+      const db = admin.firestore();
+      const caseId = cleanText(request.data?.caseId, 220);
+      const note = cleanText(request.data?.note, 2000) ||
+        "Please add more details or evidence.";
+      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      if (!supportCanReply(user, supportCase)) {
+        throw new HttpsError("permission-denied", "Evidence request denied");
+      }
+      const role = supportRoleForUser(user, supportCase);
+      if (role === "customer") {
+        throw new HttpsError(
+            "permission-denied",
+            "Customers cannot request support evidence",
+        );
+      }
+      const now = supportNow();
+      await db.runTransaction(async (transaction) => {
+        transaction.set(ref, {
+          status: role === "customer" ? "waiting_for_business" :
+            "customer_action_required",
+          updatedAt: now,
+        }, {merge: true});
+        transaction.set(ref.collection("timeline").doc(), {
+          type: "evidence_requested",
+          actorUid: uid,
+          actorRole: role,
+          actorName: supportDisplayName(user, uid),
+          message: note,
+          createdAt: now,
+        });
+        transaction.set(ref.collection("messages").doc(), {
+          senderId: uid,
+          senderRole: role,
+          senderName: supportDisplayName(user, uid),
+          content: note,
+          messageType: "system",
+          metadata: {eventType: "evidence_requested"},
+          visibility: "case",
+          readBy: {[uid]: FirestoreTimestamp.now()},
+          deletedForUsers: {},
+          editHistory: [],
+          createdAt: now,
+          updatedAt: now,
+        });
+      });
+      return {success: true, caseId};
+    },
+);
+
+exports.resolveSupportCase = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const user = await getUserProfile(uid);
+      const db = admin.firestore();
+      const caseId = cleanText(request.data?.caseId, 220);
+      const outcome = cleanText(request.data?.outcome, 80) || "resolved";
+      const note = cleanText(request.data?.note, 2000);
+      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      if (!supportCanReply(user, supportCase)) {
+        throw new HttpsError("permission-denied", "Resolve denied");
+      }
+      const role = supportRoleForUser(user, supportCase);
+      const now = supportNow();
+      await db.runTransaction(async (transaction) => {
+        transaction.set(ref, {
+          status: "resolved",
+          outcome,
+          resolutionNote: note,
+          resolvedAt: now,
+          resolvedBy: uid,
+          updatedAt: now,
+        }, {merge: true});
+        transaction.set(ref.collection("timeline").doc(), {
+          type: "resolved",
+          actorUid: uid,
+          actorRole: role,
+          actorName: supportDisplayName(user, uid),
+          outcome,
+          message: note || "Support case resolved",
+          createdAt: now,
+        });
+      });
+      return {success: true, caseId};
+    },
+);
+
+exports.reopenSupportCase = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const user = await getUserProfile(uid);
+      const db = admin.firestore();
+      const caseId = cleanText(request.data?.caseId, 220);
+      const note = cleanText(request.data?.note, 2000);
+      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      if (!supportCanReply(user, supportCase)) {
+        throw new HttpsError("permission-denied", "Reopen denied");
+      }
+      const role = supportRoleForUser(user, supportCase);
+      const now = supportNow();
+      await db.runTransaction(async (transaction) => {
+        transaction.set(ref, {
+          status: role === "customer" ? "waiting_for_business" : "open",
+          reopenedAt: now,
+          updatedAt: now,
+        }, {merge: true});
+        transaction.set(ref.collection("timeline").doc(), {
+          type: "reopened",
+          actorUid: uid,
+          actorRole: role,
+          actorName: supportDisplayName(user, uid),
+          message: note || "Support case reopened",
+          createdAt: now,
+        });
+      });
+      return {success: true, caseId};
+    },
+);
+
+exports.addSupportInternalNote = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const user = await getUserProfile(uid);
+      requireAdminCapability(user, "support");
+      const db = admin.firestore();
+      const caseId = cleanText(request.data?.caseId, 220);
+      const note = cleanText(request.data?.note, 4000);
+      if (!note) throw new HttpsError("invalid-argument", "Note is required");
+      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      if (!supportCanReadCase(user, supportCase)) {
+        throw new HttpsError("permission-denied", "Internal note denied");
+      }
+      const now = supportNow();
+      const noteRef = ref.collection("internalNotes").doc();
+      await db.runTransaction(async (transaction) => {
+        transaction.set(noteRef, {
+          note,
+          actorUid: uid,
+          actorName: supportDisplayName(user, uid),
+          createdAt: now,
+          updatedAt: now,
+        });
+        transaction.set(ref.collection("timeline").doc(), {
+          type: "internal_note_added",
+          actorUid: uid,
+          actorRole: "admin",
+          actorName: supportDisplayName(user, uid),
+          message: "Internal note added",
+          private: true,
+          createdAt: now,
+        });
+      });
+      return {success: true, caseId, noteId: noteRef.id};
+    },
+);
+
+exports.editSupportMessage = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const db = admin.firestore();
+      const caseId = cleanText(request.data?.caseId, 220);
+      const messageId = cleanText(request.data?.messageId, 220);
+      const content = cleanText(request.data?.content, 4000);
+      if (!caseId || !messageId || !content) {
+        throw new HttpsError("invalid-argument", "Message update is required");
+      }
+      const {ref} = await requireSupportCase(db, caseId);
+      const messageRef = ref.collection("messages").doc(messageId);
+      await db.runTransaction(async (transaction) => {
+        const doc = await transaction.get(messageRef);
+        if (!doc.exists) {
+          throw new HttpsError("not-found", "Message not found");
+        }
+        const message = doc.data() || {};
+        if (message.senderId !== uid || message.messageType !== "text") {
+          throw new HttpsError("permission-denied", "Message edit denied");
+        }
+        transaction.update(messageRef, {
+          content,
+          editedAt: supportNow(),
+          updatedAt: supportNow(),
+          editHistory: FirestoreFieldValue.arrayUnion({
+            content: message.content || "",
+            editedAt: FirestoreTimestamp.now(),
+          }),
+        });
+      });
+      return {success: true};
+    },
+);
+
+exports.deleteSupportMessageForMe = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const user = await getUserProfile(uid);
+      const db = admin.firestore();
+      const caseId = cleanText(request.data?.caseId, 220);
+      const messageId = cleanText(request.data?.messageId, 220);
+      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      if (!supportCanReadCase(user, supportCase)) {
+        throw new HttpsError("permission-denied", "Message delete denied");
+      }
+      await ref.collection("messages").doc(messageId).set({
+        deletedForUsers: {[uid]: true},
+        updatedAt: supportNow(),
+      }, {merge: true});
+      return {success: true};
     },
 );

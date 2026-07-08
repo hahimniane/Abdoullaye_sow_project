@@ -1948,25 +1948,23 @@ class _CarFormSheetState extends State<_CarFormSheet> {
               value: _useBusinessHoldPricing,
               onChanged: (value) =>
                   setState(() => _useBusinessHoldPricing = value),
-              title: const Text('Use business paid hold pricing'),
-              subtitle: const Text(
-                'Turn off to override hold fee for this car.',
-              ),
+              title: Text(l10n.useBusinessPaidHoldPricing),
+              subtitle: Text(l10n.useBusinessPaidHoldPricingSubtitle),
               secondary: const Icon(Icons.lock_clock_outlined),
             ),
             if (!_useBusinessHoldPricing) ...[
               const SizedBox(height: 8),
               SegmentedButton<String>(
-                segments: const [
+                segments: [
                   ButtonSegment(
                     value: 'flat',
-                    icon: Icon(Icons.payments_outlined),
-                    label: Text('Flat fee'),
+                    icon: const Icon(Icons.payments_outlined),
+                    label: Text(l10n.flatFee),
                   ),
                   ButtonSegment(
                     value: 'per_day',
-                    icon: Icon(Icons.calendar_month_outlined),
-                    label: Text('Per day'),
+                    icon: const Icon(Icons.calendar_month_outlined),
+                    label: Text(l10n.perDay),
                   ),
                 ],
                 selected: {_holdPricingMode},
@@ -1979,8 +1977,8 @@ class _CarFormSheetState extends State<_CarFormSheet> {
                     ? _holdFlatFeeController
                     : _holdDailyRateController,
                 label: _holdPricingMode == 'flat'
-                    ? 'Flat hold fee'
-                    : 'Daily hold rate',
+                    ? l10n.flatHoldFee
+                    : l10n.dailyHoldRate,
                 icon: Icons.attach_money,
                 keyboardType: TextInputType.number,
               ),

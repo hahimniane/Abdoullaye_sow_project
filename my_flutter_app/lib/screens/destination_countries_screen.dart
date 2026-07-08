@@ -10,6 +10,7 @@ import '../models/destination_country.dart';
 import '../providers/auth_provider.dart';
 import '../services/barrel_pricing_service.dart';
 import '../theme/app_colors.dart';
+import '../widgets/async_action_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/language_toggle.dart';
 
@@ -25,6 +26,9 @@ class _DestinationCountriesScreenState
     extends State<DestinationCountriesScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
+  bool _isSeeding = false;
+  bool _isSavingDestination = false;
+  bool _isSavingPickupPricing = false;
 
   @override
   void dispose() {
@@ -34,6 +38,8 @@ class _DestinationCountriesScreenState
 
   Future<void> _seed(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
+    if (_isSeeding) return;
+    setState(() => _isSeeding = true);
     try {
       await FirebaseFunctions.instance
           .httpsCallable('seedDestinationCountries')
@@ -43,6 +49,8 @@ class _DestinationCountriesScreenState
     } catch (error) {
       if (!context.mounted) return;
       showErrorSnackBar(context, _friendlyError(l10n, error));
+    } finally {
+      if (mounted) setState(() => _isSeeding = false);
     }
   }
 
@@ -256,14 +264,12 @@ class _DestinationCountriesScreenState
                       },
                       title: Text(l10n.active),
                       subtitle: isActive
-                          ? const Text(
-                              'Active destinations require a barrel shipping fee.',
-                            )
+                          ? Text(l10n.activeDestinationsRequireFee)
                           : null,
                     ),
                     const SizedBox(height: 16),
                     FilledButton(
-                      onPressed: () async {
+                      onPressed: () {
                         if (!formKey.currentState!.validate()) return;
                         Navigator.pop(context, true);
                       },
@@ -277,43 +283,54 @@ class _DestinationCountriesScreenState
         },
       ),
     );
-    if (result != true) return;
-    final id =
-        country?.id ??
-        nameController.text
-            .trim()
-            .toLowerCase()
-            .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-            .replaceAll(RegExp(r'^-|-$'), '');
-    final businessSnapshot = await _businessDestinationSnapshot(businessId);
-    final minDays = int.tryParse(minDaysController.text.trim());
-    final maxDays = int.tryParse(maxDaysController.text.trim());
-    final hasEstimate = minDays != null && maxDays != null;
-    await FirebaseFirestore.instance
-        .collection('businesses')
-        .doc(businessId)
-        .collection('destinationCountries')
-        .doc(id)
-        .set({
-          'name': nameController.text.trim(),
-          'code': codeController.text.trim(),
-          ...businessSnapshot,
-          'barrelShippingPrice':
-              double.tryParse(barrelPriceController.text.trim()) ?? 0,
-          'deliveryEstimateMinDays': hasEstimate
-              ? minDays
-              : FieldValue.delete(),
-          'deliveryEstimateMaxDays': hasEstimate
-              ? maxDays
-              : FieldValue.delete(),
-          'isActive': isActive,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-    nameController.dispose();
-    codeController.dispose();
-    barrelPriceController.dispose();
-    minDaysController.dispose();
-    maxDaysController.dispose();
+    try {
+      if (result != true) return;
+      if (!context.mounted) return;
+      if (mounted) setState(() => _isSavingDestination = true);
+      final id =
+          country?.id ??
+          nameController.text
+              .trim()
+              .toLowerCase()
+              .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+              .replaceAll(RegExp(r'^-|-$'), '');
+      final businessSnapshot = await _businessDestinationSnapshot(businessId);
+      final minDays = int.tryParse(minDaysController.text.trim());
+      final maxDays = int.tryParse(maxDaysController.text.trim());
+      final hasEstimate = minDays != null && maxDays != null;
+      await FirebaseFirestore.instance
+          .collection('businesses')
+          .doc(businessId)
+          .collection('destinationCountries')
+          .doc(id)
+          .set({
+            'name': nameController.text.trim(),
+            'code': codeController.text.trim(),
+            ...businessSnapshot,
+            'barrelShippingPrice':
+                double.tryParse(barrelPriceController.text.trim()) ?? 0,
+            'deliveryEstimateMinDays': hasEstimate
+                ? minDays
+                : FieldValue.delete(),
+            'deliveryEstimateMaxDays': hasEstimate
+                ? maxDays
+                : FieldValue.delete(),
+            'isActive': isActive,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+      if (!context.mounted) return;
+      showSuccessSnackBar(context, l10n.recordUpdated);
+    } catch (error) {
+      if (!context.mounted) return;
+      showErrorSnackBar(context, _friendlyError(l10n, error));
+    } finally {
+      if (mounted) setState(() => _isSavingDestination = false);
+      nameController.dispose();
+      codeController.dispose();
+      barrelPriceController.dispose();
+      minDaysController.dispose();
+      maxDaysController.dispose();
+    }
   }
 
   Future<void> _showPickupPricingForm(BuildContext context) async {
@@ -391,21 +408,31 @@ class _DestinationCountriesScreenState
       },
     );
 
-    if (result == true) {
-      await service.savePickupPricing(
-        BarrelPickupPricing(
-          officeAddress: officeController.text.trim(),
-          boroughPrices: {
-            for (final entry in priceControllers.entries)
-              entry.key: double.parse(entry.value.text.trim()),
-          },
-        ),
-      );
-    }
-
-    officeController.dispose();
-    for (final controller in priceControllers.values) {
-      controller.dispose();
+    try {
+      if (result == true) {
+        if (!context.mounted) return;
+        if (mounted) setState(() => _isSavingPickupPricing = true);
+        await service.savePickupPricing(
+          BarrelPickupPricing(
+            officeAddress: officeController.text.trim(),
+            boroughPrices: {
+              for (final entry in priceControllers.entries)
+                entry.key: double.parse(entry.value.text.trim()),
+            },
+          ),
+        );
+        if (!context.mounted) return;
+        showSuccessSnackBar(context, l10n.recordUpdated);
+      }
+    } catch (error) {
+      if (!context.mounted) return;
+      showErrorSnackBar(context, _friendlyError(l10n, error));
+    } finally {
+      if (mounted) setState(() => _isSavingPickupPricing = false);
+      officeController.dispose();
+      for (final controller in priceControllers.values) {
+        controller.dispose();
+      }
     }
   }
 
@@ -420,16 +447,18 @@ class _DestinationCountriesScreenState
 
   List<Widget> _actions(BuildContext context, AppLocalizations l10n) {
     return [
-      OutlinedButton.icon(
-        onPressed: () => _seed(context),
-        icon: const Icon(Icons.public),
-        label: Text(l10n.seedDefaultCountries),
+      AsyncActionButton.outlined(
+        onPressed: _isSeeding ? null : () => _seed(context),
+        icon: Icons.public,
+        label: l10n.seedDefaultCountries,
       ),
       const SizedBox(height: 12),
-      OutlinedButton.icon(
-        onPressed: () => _showPickupPricingForm(context),
-        icon: const Icon(Icons.local_shipping),
-        label: Text(l10n.barrelPickupPricing),
+      AsyncActionButton.outlined(
+        onPressed: _isSavingPickupPricing
+            ? null
+            : () => _showPickupPricingForm(context),
+        icon: Icons.local_shipping,
+        label: l10n.barrelPickupPricing,
       ),
     ];
   }
@@ -443,6 +472,9 @@ class _DestinationCountriesScreenState
     if (auth.isAdmin) return BusinessProfile.defaultBusinessName;
     return auth.businessName ?? BusinessProfile.defaultBusinessName;
   }
+
+  bool get _isBusy =>
+      _isSeeding || _isSavingDestination || _isSavingPickupPricing;
 
   Widget _searchField() {
     return TextField(
@@ -506,10 +538,7 @@ class _DestinationCountriesScreenState
       return [
         _stateMessage(
           context,
-          const Text(
-            'Seed the full country catalog, then search and activate the destinations you serve.',
-            textAlign: TextAlign.center,
-          ),
+          Text(l10n.seedCountriesEmptyInstruction, textAlign: TextAlign.center),
         ),
       ];
     }
@@ -567,27 +596,31 @@ class _DestinationCountriesScreenState
             subtitle: Text(
               [
                 if (country.displayCode.isNotEmpty) country.displayCode,
-                'Barrel: \$${country.barrelShippingPrice.toStringAsFixed(0)}',
+                l10n.barrelPriceSummary(
+                  '\$${country.barrelShippingPrice.toStringAsFixed(0)}',
+                ),
                 if (country.deliveryEstimateLabel != null)
-                  'Delivery: ${country.deliveryEstimateLabel}',
+                  l10n.deliveryEstimateSummary(country.deliveryEstimateLabel!),
               ].whereType<String>().join(' • '),
             ),
             trailing: Switch(
               value: country.isActive,
-              onChanged: canEdit
+              onChanged: canEdit && !_isBusy
                   ? (value) async {
+                      if (_isSavingDestination) return;
                       if (value && country.barrelShippingPrice <= 0) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Add a barrel shipping fee before activating this destination.',
-                            ),
+                          SnackBar(
+                            content: Text(l10n.addBarrelFeeBeforeActivating),
                           ),
                         );
                         await _showForm(context, country: country);
                         return;
                       }
                       try {
+                        if (mounted) {
+                          setState(() => _isSavingDestination = true);
+                        }
                         final businessId = _currentBusinessId(
                           context.read<AuthProvider>(),
                         );
@@ -608,11 +641,17 @@ class _DestinationCountriesScreenState
                       } catch (error) {
                         if (!context.mounted) return;
                         showErrorSnackBar(context, _friendlyError(l10n, error));
+                      } finally {
+                        if (mounted) {
+                          setState(() => _isSavingDestination = false);
+                        }
                       }
                     }
                   : null,
             ),
-            onTap: canEdit ? () => _showForm(context, country: country) : null,
+            onTap: canEdit && !_isBusy
+                ? () => _showForm(context, country: country)
+                : null,
           ),
         ),
     ];
@@ -628,24 +667,35 @@ class _DestinationCountriesScreenState
         title: Text(l10n.destinationCountries),
         actions: const [LanguageToggle()],
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('businesses')
-            .doc(businessId)
-            .collection('destinationCountries')
-            .snapshots(),
-        builder: (context, snapshot) {
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              ..._actions(context, l10n),
-              const SizedBox(height: 12),
-              _searchField(),
-              const SizedBox(height: 12),
-              ..._countryContent(context, snapshot, l10n),
-            ],
-          );
-        },
+      body: Stack(
+        children: [
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('businesses')
+                .doc(businessId)
+                .collection('destinationCountries')
+                .snapshots(),
+            builder: (context, snapshot) {
+              return ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  ..._actions(context, l10n),
+                  const SizedBox(height: 12),
+                  _searchField(),
+                  const SizedBox(height: 12),
+                  ..._countryContent(context, snapshot, l10n),
+                ],
+              );
+            },
+          ),
+          if (_isBusy)
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: LinearProgressIndicator(minHeight: 3),
+            ),
+        ],
       ),
     );
   }

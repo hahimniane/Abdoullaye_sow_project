@@ -1,13 +1,114 @@
 import 'package:flutter/material.dart';
-import '../l10n/app_localizations.dart';
-import '../models/customer_service_catalog.dart';
-import '../services/nav_prefs.dart';
-import '../widgets/app_bottom_nav.dart';
-import 'settings_screen.dart';
-import 'services_hub_screen.dart';
-import 'wallet_screen.dart';
-import 'account_profile_screen.dart';
 
+import '../l10n/app_localizations.dart';
+import '../widgets/app_bottom_nav.dart';
+import 'services_hub_screen.dart';
+import 'settings_screen.dart';
+
+// Customer service screens, reachable in-tab so the bottom navbar stays put.
+import 'send_barrel_screen.dart';
+import 'open_barrels_screen.dart';
+import 'send_freight_screen.dart';
+import 'sell_cars_screen.dart';
+import 'park_car_screen.dart';
+import 'request_transport_screen.dart';
+import 'tracking_screen.dart';
+import 'my_purchases_screen.dart';
+import 'orders_screen.dart';
+import 'wallet_screen.dart';
+import 'favorite_cars_screen.dart';
+import 'account_profile_screen.dart';
+import 'destination_countries_screen.dart';
+import 'login_screen.dart';
+import 'signup_screen.dart';
+import '../models/parked_car.dart';
+import 'parked_car_details_screen.dart';
+import '../models/barrel_shipment.dart';
+import 'barrel_shipment_details_screen.dart';
+import '../models/transport_request.dart';
+import 'transport_request_details_screen.dart';
+import 'support_inbox_screen.dart';
+import 'support_thread_screen.dart';
+
+/// Builds the customer-area screens for the *nested* tab navigators. Keeping
+/// these in the tab navigator (instead of the root navigator) is what lets the
+/// bottom navbar stay visible while a service is open. Returns null for routes
+/// that aren't part of the customer area.
+Route<dynamic>? _customerTabRoute(RouteSettings settings) {
+  Widget? page;
+  switch (settings.name) {
+    case '/barrel':
+      page = const SendBarrelScreen();
+      break;
+    case '/open-barrels':
+      page = const OpenBarrelsScreen();
+      break;
+    case '/send-freight':
+      page = const SendFreightScreen();
+      break;
+    case '/sell':
+      page = const SellCarsScreen(showBackButton: true);
+      break;
+    case '/park':
+      page = const ParkCarScreen();
+      break;
+    case '/request-transport':
+      page = const RequestTransportScreen();
+      break;
+    case '/tracking':
+      page = const TrackingScreen(showBackButton: true);
+      break;
+    case '/my-purchases':
+      page = const MyPurchasesScreen(showBackButton: true);
+      break;
+    case '/orders':
+      page = const OrdersScreen(showBackButton: true);
+      break;
+    case '/wallet':
+      page = const WalletScreen();
+      break;
+    case '/favorite-cars':
+      page = const FavoriteCarsScreen();
+      break;
+    case '/account-profile':
+      page = const AccountProfileScreen();
+      break;
+    case '/support':
+      page = const SupportInboxScreen.customer();
+      break;
+    case '/support-thread':
+      page = SupportThreadScreen(caseId: settings.arguments as String);
+      break;
+    case '/destination-countries':
+      page = const DestinationCountriesScreen();
+      break;
+    case '/login':
+      page = const LoginScreen();
+      break;
+    case '/signup':
+      page = const SignUpScreen();
+      break;
+    case '/parked-car-details':
+      page = ParkedCarDetailsScreen(parkedCar: settings.arguments as ParkedCar);
+      break;
+    case '/barrel-shipment-details':
+      page = BarrelShipmentDetailsScreen(
+        shipment: settings.arguments as BarrelShipment,
+      );
+      break;
+    case '/transport-request-details':
+      page = TransportRequestDetailsScreen(
+        request: settings.arguments as TransportRequest,
+      );
+      break;
+  }
+  if (page == null) return null;
+  return MaterialPageRoute(builder: (_) => page!, settings: settings);
+}
+
+/// The customer shell: a persistent bottom navbar over five tabs, each with its
+/// own nested navigator so opening a service never hides the bar. Services of
+/// the same nature are grouped under one tab (Shipping, Cars, Activity).
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
 
@@ -16,104 +117,111 @@ class CustomerHomeScreen extends StatefulWidget {
 }
 
 class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
-  final _navPrefs = NavPrefs();
+  static const _tabCount = 5;
 
-  // _currentIndex is only ever Home (0) or Settings (last); pinned items in
-  // between are quick shortcuts that push their own screen.
-  int _currentIndex = 0;
-  Widget? _settingsDetailScreen;
-  List<String> _pinned = List<String>.from(defaultPinnedServiceIds);
+  int _index = 0;
+  final List<GlobalKey<NavigatorState>> _navKeys = List.generate(
+    _tabCount,
+    (_) => GlobalKey<NavigatorState>(),
+  );
 
-  int get _settingsIndex => 1 + _pinned.length;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPinned();
-  }
-
-  Future<void> _loadPinned() async {
-    final pinned = await _navPrefs.pinned();
-    if (!mounted) return;
-    setState(() => _pinned = pinned);
+  Widget _root(int index) {
+    switch (index) {
+      case 0:
+        return const HomeTab();
+      case 1:
+        return const ShippingTab();
+      case 2:
+        return const CarsTab();
+      case 3:
+        return const ActivityTab();
+      default:
+        return Builder(
+          builder: (context) => SettingsScreen(
+            onOpenWallet: () => Navigator.of(context).pushNamed('/wallet'),
+            onOpenAccountProfile: () =>
+                Navigator.of(context).pushNamed('/account-profile'),
+          ),
+        );
+    }
   }
 
   void _onTap(int index) {
-    if (index == 0) {
-      setState(() {
-        _currentIndex = 0;
-        _settingsDetailScreen = null;
-      });
-    } else if (index == _settingsIndex) {
-      setState(() {
-        _currentIndex = _settingsIndex;
-        _settingsDetailScreen = null;
-      });
+    if (index == _index) {
+      // Tapping the active tab again returns to its root.
+      _navKeys[index].currentState?.popUntil((route) => route.isFirst);
     } else {
-      final service = serviceById(_pinned[index - 1]);
-      if (service != null) Navigator.pushNamed(context, service.route);
+      setState(() => _index = index);
     }
   }
 
-  void _openSettingsDetail(Widget screen) {
-    setState(() {
-      _currentIndex = _settingsIndex;
-      _settingsDetailScreen = screen;
-    });
-  }
-
-  Future<void> _openCustomize() async {
-    await Navigator.pushNamed(context, '/customize-navbar');
-    await _loadPinned();
-    if (mounted) {
-      setState(() {
-        _currentIndex = 0;
-        _settingsDetailScreen = null;
-      });
-    }
-  }
-
-  Widget _buildBody() {
-    if (_currentIndex == _settingsIndex) {
-      return _settingsDetailScreen ??
-          SettingsScreen(
-            onOpenWallet: () => _openSettingsDetail(
-              WalletScreen(onBack: () => _onTap(_settingsIndex)),
-            ),
-            onOpenAccountProfile: () => _openSettingsDetail(
-              AccountProfileScreen(onBack: () => _onTap(_settingsIndex)),
-            ),
+  Widget _tab(int index) {
+    return Navigator(
+      key: _navKeys[index],
+      onGenerateRoute: (settings) {
+        if (settings.name == null || settings.name == '/') {
+          return MaterialPageRoute(
+            builder: (_) => _root(index),
+            settings: settings,
           );
-    }
-    return ServicesHubScreen(onCustomize: _openCustomize);
+        }
+        // Unknown routes fall back to the tab root rather than crashing.
+        return _customerTabRoute(settings) ??
+            MaterialPageRoute(builder: (_) => _root(index), settings: settings);
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Scaffold(
-      body: _buildBody(),
-      bottomNavigationBar: AppBottomNav(
-        currentIndex: _currentIndex,
-        onTap: _onTap,
-        items: [
-          const AppBottomNavItem(
-            icon: Icons.home_outlined,
-            selectedIcon: Icons.home,
-            label: 'Home',
-          ),
-          for (final id in _pinned)
-            if (serviceById(id) != null)
-              AppBottomNavItem(
-                icon: serviceById(id)!.icon,
-                label: serviceById(id)!.label,
-              ),
-          AppBottomNavItem(
-            icon: Icons.settings_outlined,
-            selectedIcon: Icons.settings,
-            label: l10n.settings,
-          ),
-        ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        final nav = _navKeys[_index].currentState;
+        if (nav != null && nav.canPop()) {
+          nav.pop();
+        } else if (_index != 0) {
+          setState(() => _index = 0);
+        }
+      },
+      child: Scaffold(
+        body: IndexedStack(
+          index: _index,
+          children: [for (var i = 0; i < _tabCount; i++) _tab(i)],
+        ),
+        bottomNavigationBar: AppBottomNav(
+          currentIndex: _index,
+          onTap: _onTap,
+          items: [
+            const AppBottomNavItem(
+              icon: Icons.home_outlined,
+              selectedIcon: Icons.home,
+              label: 'Home',
+            ),
+            const AppBottomNavItem(
+              icon: Icons.local_shipping_outlined,
+              selectedIcon: Icons.local_shipping,
+              label: 'Shipping',
+            ),
+            const AppBottomNavItem(
+              icon: Icons.directions_car_outlined,
+              selectedIcon: Icons.directions_car,
+              label: 'Cars',
+            ),
+            const AppBottomNavItem(
+              icon: Icons.receipt_long_outlined,
+              selectedIcon: Icons.receipt_long,
+              label: 'Activity',
+            ),
+            AppBottomNavItem(
+              icon: Icons.settings_outlined,
+              selectedIcon: Icons.settings,
+              label: l10n.settings,
+            ),
+          ],
+        ),
       ),
     );
   }

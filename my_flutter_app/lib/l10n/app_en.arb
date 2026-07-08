@@ -204,6 +204,26 @@
   "manageCars": "Manage Cars",
   "recentActivity": "Recent Activity",
   "filterAll": "All",
+  "trackSearchHint": "Search tracking, receiver, country",
+  "filterInProgress": "In progress",
+  "filterDelivered": "Delivered",
+  "allDestinations": "All destinations",
+  "noShipmentsMatchFilters": "No shipments match your filters",
+  "ordersTitle": "My orders",
+  "ordersSearchHint": "Search orders, business, country",
+  "ordersEmpty": "Your paid orders appear here",
+  "ordersNoMatch": "No orders match your filters",
+  "orderTypeCars": "Cars",
+  "orderTypeBarrels": "Barrels",
+  "orderTypeFreight": "Freight",
+  "orderTypeTransport": "Transport",
+  "orderTypeParking": "Parking",
+  "orderStatusPending": "Pending",
+  "orderStatusActive": "Active",
+  "orderStatusInTransit": "In transit",
+  "orderStatusCompleted": "Completed",
+  "orderStatusCancelled": "Cancelled",
+  "orderStatusRefunded": "Refunded",
   "filterParking": "Parked Cars",
   "filterBarrels": "Barrel Shipments",
   "filterTransport": "Car Transport",
@@ -813,6 +833,11 @@
   "billingSummary": "Billing Summary",
   "costPerDayPdf": "Cost per Day:",
   "totalCostPdf": "Total Cost:",
+  "dateTimePdf": "Date & Time:",
+  "parkingStatusActive": "Parking Status: ACTIVE",
+  "vehicleSuccessfullyParked": "Vehicle has been successfully parked",
+  "termsAndConditions": "Terms & Conditions",
+  "parkingReceiptTerms": "• This receipt serves as proof of parking\n• Vehicle will be stored securely\n• Contact us for any inquiries\n• Valid until vehicle is retrieved",
   "peopleAndAccess": "People and access",
   "peopleAndAccessSubtitle": "Manage platform managers, business teams, and customer accounts.",
   "platformManagers": "Platform managers",
@@ -891,6 +916,73 @@
   "dailyHoldRate": "Daily hold rate",
   "maxDays": "Max days",
   "holdMaxDaysHelper": "1 to 30 days",
+  "parkingCapacityTitle": "Parking capacity",
+  "parkingCapacitySubtitle": "Set the address, spaces, and prices customers can reserve.",
+  "parkingAddress": "Parking address",
+  "parkingLatitude": "Latitude",
+  "parkingLongitude": "Longitude",
+  "totalParkingSpaces": "Total spaces",
+  "blockedParkingSpaces": "Blocked spaces",
+  "dailyParkingRate": "Daily parking rate",
+  "weeklyParkingRate": "Weekly parking rate",
+  "monthlyParkingRate": "Monthly parking rate",
+  "minimumParkingDays": "Minimum days",
+  "pickupAvailable": "Pickup available",
+  "pickupAvailableSubtitle": "Customers can request vehicle pickup before parking.",
+  "pickupFee": "Pickup fee",
+  "parkingInstructions": "Parking instructions",
+  "enterValidParkingCapacity": "Add total spaces, a positive daily rate, and valid blocked spaces before saving parking.",
+  "enterValidParkingCoordinates": "Enter valid parking latitude and longitude, or leave both blank.",
+  "customerParkingTitle": "Find parking",
+  "customerParkingSubtitle": "Choose where and when you want to park. We will show businesses with open spaces.",
+  "enterCarDetailsToReserveParking": "Enter car details to reserve parking",
+  "parkingCity": "Parking city",
+  "pleaseEnterParkingCity": "Enter the city where you want to park.",
+  "parkingStart": "Parking start",
+  "parkingEnd": "Parking end",
+  "searchParking": "Search parking",
+  "searchingParking": "Searching...",
+  "availableParkingBusinesses": "Available parking",
+  "noParkingBusinesses": "No businesses have parking available for those dates.",
+  "parkingSearchFailed": "Parking search failed. Please try again.",
+  "availableSpacesCount": "{count} spaces available",
+  "@availableSpacesCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "parkingPricePerDay": "{amount}/day",
+  "@parkingPricePerDay": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "parkingEstimatedTotal": "Estimated total: {amount}",
+  "@parkingEstimatedTotal": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "parkingDistanceMiles": "{miles} mi away",
+  "@parkingDistanceMiles": {
+    "placeholders": {
+      "miles": {}
+    }
+  },
+  "reserveParking": "Reserve parking",
+  "reservingParking": "Reserving...",
+  "parkingReservationSaved": "Parking reserved. Tracking number: {trackingCode}",
+  "@parkingReservationSaved": {
+    "placeholders": {
+      "trackingCode": {}
+    }
+  },
+  "parkingReservationFailed": "Parking could not be reserved. Please try again.",
+  "accountRequiredParking": "Sign in to reserve parking and track your vehicle.",
+  "parkingDateRangeInvalid": "Choose an end date after the parking start date.",
+  "chooseParkingBusiness": "Choose a business with available parking.",
+  "parkingPickupRequested": "Pickup requested",
+  "parkingPickupOptional": "Request pickup if the business offers it",
   "businessServicesSubtitle": "Choose what this business can offer customers.",
   "businessServicesCount": "{count} services",
   "@businessServicesCount": {
@@ -931,7 +1023,10 @@
   "registerYourBusiness": "Register your business",
   "submittingApplication": "Submitting application",
   "submitBusinessApplication": "Submit business application",
+  "businessApplicationSubmittedSetup": "Business application submitted. You can set up your dashboard now.",
   "ownerNameRequiredShort": "Owner name is required",
+  "chooseBusinessImageFirst": "Please choose a business image first.",
+  "validWebsiteRequired": "Please enter a valid website",
   "unknown": "Unknown",
   "cardReturnsSimulatedNotice": "Card returns are simulated for now. Keep this pending until real Stripe refunds are connected.",
   "noBusinessesYet": "No businesses yet.",
@@ -1157,5 +1252,521 @@
   "favoriteCarsSubtitle": "View vehicles you saved",
   "noFavoriteCarsYet": "No favorite cars yet",
   "favoriteRemoved": "Favorite removed",
-  "carNoLongerAvailable": "This car is no longer available"
+  "carNoLongerAvailable": "This car is no longer available",
+  "enterValidPaidHoldPricing": "Enter valid paid hold pricing.",
+  "useBusinessPaidHoldPricing": "Use business paid hold pricing",
+  "useBusinessPaidHoldPricingSubtitle": "Turn off to override hold fee for this car.",
+  "chooseReturnDate": "Choose return date",
+  "customizeNavbar": "Customize navbar",
+  "change": "Change",
+  "sendFreight": "Send freight",
+  "freightBookedTracking": "Freight booked. Tracking: {trackingCode}",
+  "@freightBookedTracking": {
+    "placeholders": {
+      "trackingCode": {}
+    }
+  },
+  "fillSenderReceiverPhone": "Fill sender, receiver, and phone.",
+  "enterParcelWeightKg": "Enter the parcel weight in kg.",
+  "noFreightBusinessesYet": "No freight businesses yet",
+  "noFreightBusinessesSubtitle": "Parcel freight will appear here once a business sets its air or sea rates.",
+  "searchBusinessOrCountry": "Search a business or country",
+  "noMatchFor": "No match for \"{query}\"",
+  "@noMatchFor": {
+    "placeholders": {
+      "query": {}
+    }
+  },
+  "toDestination": "To {destination}",
+  "@toDestination": {
+    "placeholders": {
+      "destination": {}
+    }
+  },
+  "airRatePerKg": "Air {rate}/kg",
+  "@airRatePerKg": {
+    "placeholders": {
+      "rate": {}
+    }
+  },
+  "seaRatePerKg": "Sea {rate}/kg",
+  "@seaRatePerKg": {
+    "placeholders": {
+      "rate": {}
+    }
+  },
+  "shippingMode": "Shipping mode",
+  "parcelWeightKg": "Parcel weight (kg)",
+  "estimatedPrice": "Estimated price",
+  "enterWeightToSeePrice": "Enter a weight to see the price",
+  "bookAndPay": "Book & pay",
+  "freightDropOffNote": "Drop your parcel at the business location. Pickup coming soon.",
+  "airFreight": "Air freight",
+  "seaFreight": "Sea freight",
+  "pricePerKg": "{price} / kg",
+  "@pricePerKg": {
+    "placeholders": {
+      "price": {}
+    }
+  },
+  "fasterDelivery": "Faster delivery",
+  "lowerCost": "Lower cost",
+  "requestCarTransport": "Request car transport",
+  "chooseBusinessAndDestination": "Choose a business and destination.",
+  "selectCarMakeModelYear": "Select the car make, model, and year.",
+  "transportRequestSentToBusiness": "Request sent to {businessName}. Tracking {trackingCode}. They will send you a price quote.",
+  "@transportRequestSentToBusiness": {
+    "placeholders": {
+      "businessName": {},
+      "trackingCode": {}
+    }
+  },
+  "couldNotSendRequest": "Could not send request: {error}",
+  "@couldNotSendRequest": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "pickPreferredDateOptional": "Pick a preferred date (optional)",
+  "whoShouldHandleTransport": "Who should handle it?",
+  "theCar": "The car",
+  "contactAndPickup": "Contact & pickup",
+  "businessDestination": "Business · destination",
+  "vinOptional": "VIN (optional)",
+  "contactPhone": "Contact phone",
+  "pickupAddressOptional": "Pickup address (optional)",
+  "notesForBusinessOptional": "Notes for the business (optional)",
+  "enterOwnerName": "Enter the owner name",
+  "enterContactPhone": "Enter a contact phone",
+  "sending": "Sending...",
+  "sendRequest": "Send request",
+  "transportQuoteNoPaymentNote": "No payment now — the business reviews your request and sends a price quote you can accept.",
+  "noTransportBusinessesYet": "No business is offering car transport yet",
+  "noTransportBusinessesSubtitle": "Check back soon — businesses add transport routes as they come online.",
+  "couldNotLoadTransportOptions": "Could not load transport options",
+  "receiverWhatsAppNumberTitle": "This receiver number is used on WhatsApp",
+  "receiverWhatsAppNumberSubtitle": "Use this only if the receiver uses a different country number on WhatsApp.",
+  "samePickup": "Same pickup",
+  "differentPickups": "Different pickups",
+  "boroughPickupAddress": "{borough} pickup address",
+  "@boroughPickupAddress": {
+    "placeholders": {
+      "borough": {}
+    }
+  },
+  "barrelsForThisDestination": "Barrels for this destination",
+  "decrease": "Decrease",
+  "increase": "Increase",
+  "edit": "Edit",
+  "remove": "Remove",
+  "barrelCartLine": "{quantity, plural, =1{1 barrel} other{{quantity} barrels}} → {receiverName}",
+  "@barrelCartLine": {
+    "placeholders": {
+      "quantity": {
+        "type": "int"
+      },
+      "receiverName": {}
+    }
+  },
+  "holdPricingSummary": "Hold pricing: {mode}{days}",
+  "@holdPricingSummary": {
+    "placeholders": {
+      "mode": {},
+      "days": {}
+    }
+  },
+  "holdDaysSuffix": " • {days} day(s)",
+  "@holdDaysSuffix": {
+    "placeholders": {
+      "days": {}
+    }
+  },
+  "flat": "Flat",
+  "forfeitureStatusLabel": "Forfeiture: {status}",
+  "@forfeitureStatusLabel": {
+    "placeholders": {
+      "status": {}
+    }
+  },
+  "holdDateReachedStaffAction": "Hold date reached. Mark this vehicle as sold or mark the customer as not shown.",
+  "extensionStatusLine": "Extension: {status}{date}{amount}",
+  "@extensionStatusLine": {
+    "placeholders": {
+      "status": {},
+      "date": {},
+      "amount": {}
+    }
+  },
+  "dateSuffix": " • {date}",
+  "@dateSuffix": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "extraAmountSuffix": " • extra {amount}",
+  "@extraAmountSuffix": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "buyerHistoryLine": "Buyer history: {completed} completed, {noShows} no-show, {forfeitures} forfeited",
+  "@buyerHistoryLine": {
+    "placeholders": {
+      "completed": {},
+      "noShows": {},
+      "forfeitures": {}
+    }
+  },
+  "markAsSold": "Mark as sold",
+  "customerDidNotCome": "Customer did not come",
+  "approveExtension": "Approve extension",
+  "rejectExtension": "Reject extension",
+  "navbarPickerInstructions": "Pick up to {count} services for quick access in your bottom bar. Drag to reorder.",
+  "@navbarPickerInstructions": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inYourNavbar": "In your navbar",
+  "nothingPinnedYet": "Nothing pinned yet — add services below.",
+  "addServices": "Add services",
+  "navbarFullMessage": "Navbar is full ({count}). Remove one to add another.",
+  "@navbarFullMessage": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "activeDestinationsRequireFee": "Active destinations require a barrel shipping fee.",
+  "seedCountriesEmptyInstruction": "Seed the full country catalog, then search and activate the destinations you serve.",
+  "barrelPriceSummary": "Barrel: {price}",
+  "@barrelPriceSummary": {
+    "placeholders": {
+      "price": {}
+    }
+  },
+  "deliveryEstimateSummary": "Delivery: {estimate}",
+  "@deliveryEstimateSummary": {
+    "placeholders": {
+      "estimate": {}
+    }
+  },
+  "businessProfileTitle": "Business profile",
+  "splashTagline": "Motorcars, barrels & passage in one place.",
+  "availableBalance": "Available balance",
+  "addMoney": "Add money",
+  "myOrders": "My orders",
+  "goodMorning": "Good morning",
+  "goodAfternoon": "Good afternoon",
+  "goodEvening": "Good evening",
+  "signInToYourWallet": "Sign in to your wallet",
+  "walletSignInSubtitle": "Track orders, balances and refunds.",
+  "shippingBusinessUnavailable": "{businessName} is not shipping to {countryName}, and no alternate business is available yet.",
+  "@shippingBusinessUnavailable": {
+    "placeholders": {
+      "businessName": {},
+      "countryName": {}
+    }
+  },
+  "shippingBusinessWillChange": "Shipping business will change",
+  "shippingBusinessChangeMessage": "{businessName} does not deliver to {countryName}. Choose another approved business to continue.",
+  "@shippingBusinessChangeMessage": {
+    "placeholders": {
+      "businessName": {},
+      "countryName": {}
+    }
+  },
+  "availableBusinesses": "Available businesses",
+  "deliveryLabel": "Delivery {value}",
+  "@deliveryLabel": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "pickupDateAndTime": "Pickup date and time",
+  "shipmentEstimate": "Shipment estimate",
+  "addProfilePicture": "Add profile picture",
+  "registerBusinessInstead": "Register your business instead",
+  "registerYourBusiness": "Register your business",
+  "businessApprovalSetupNote": "You can set up destinations, cars, and staff immediately. Customers will only see your business after platform approval.",
+  "businessProfilePicture": "Business profile picture",
+  "businessProfilePictureHelper": "Upload a logo or storefront image customers can recognize.",
+  "joinMarketplace": "Join the marketplace",
+  "businessApplicationSubtitle": "Apply once, prepare your operations, then go live when approved.",
+  "totalDaysLabel": "Total Days: {days}",
+  "@totalDaysLabel": {
+    "placeholders": {
+      "days": {}
+    }
+  },
+  "totalCostLabel": "Total Cost: {cost}",
+  "@totalCostLabel": {
+    "placeholders": {
+      "cost": {}
+    }
+  },
+  "customerRequest": "Customer request",
+  "awaitingQuote": "Awaiting quote",
+  "setPriceQuoteInstruction": "Set a price below to send this customer a quote.",
+  "barrelOrder": "Barrel order",
+  "barrelOrderSummary": "{barrelCount} barrels • {destinationCount} destinations • {businessCount} businesses",
+  "@barrelOrderSummary": {
+    "placeholders": {
+      "barrelCount": {},
+      "destinationCount": {},
+      "businessCount": {}
+    }
+  },
+  "clear": "Clear",
+  "signInToSaveBarrelShipment": "Sign in or create an account so we can securely save this barrel shipment and show it in tracking.",
+  "editDestinationPickupHelp": "Use Edit on each destination row to add or change that destination's pickup details.",
+  "dropOffOffice": "Drop-off office",
+  "businessesShippingToCountry": "Businesses shipping to this country",
+  "fixedPickupPriceForBorough": "Fixed pickup price for this borough",
+  "finalPriceConfirmedByStaff": "Final price will be confirmed by staff.",
+  "useWalletCredit": "Use wallet credit",
+  "whereAreBarrelsGoing": "Where are these barrels going?",
+  "addDestinationInstruction": "Add a destination — country, business, who receives it, and how many barrels are going there.",
+  "addDestination": "Add a destination",
+  "pleaseChooseBusiness": "Please choose a business",
+  "originalEstimatedCost": "Original estimated cost",
+  "walletCredit": "Wallet credit",
+  "cardPaymentDue": "Card payment due",
+  "addAtLeastOneDestination": "Add at least one destination to this order.",
+  "noApprovedBusinessShippingDestination": "No approved business is currently shipping to this destination.",
+  "businessOptionsUnavailable": "Business options are not available right now. Please try again in a moment.",
+  "gettingYourLocation": "Getting your location...",
+  "useMyCurrentLocation": "Use my current location",
+  "currentLocationAdded": "Current location added",
+  "choosePickupDateAndTime": "Choose pickup date and time",
+  "amountDueNow": "Amount due now",
+  "estimatedCost": "Estimated cost",
+  "platformDashboard": "Platform dashboard",
+  "platformDashboardSubtitle": "Applications, businesses, operations, refunds, and marketplace health.",
+  "supportCenter": "Support center",
+  "supportCases": "Support cases",
+  "supportInbox": "Support inbox",
+  "supportInboxSubtitle": "Customer issues, business replies, and admin escalations.",
+  "supportChat": "Support chat",
+  "getHelp": "Get help",
+  "openSupport": "Open support",
+  "openingSupport": "Opening support...",
+  "writeSupportMessage": "Write a message",
+  "sendMessage": "Send",
+  "sendingMessage": "Sending...",
+  "supportMessageRequired": "Write a message before sending.",
+  "supportNoCases": "No support cases yet",
+  "supportNoCasesSubtitle": "Cases appear here when customers ask a business for help.",
+  "supportSearch": "Search support cases",
+  "supportBusinessFirst": "Business first",
+  "supportEscalated": "Escalated",
+  "supportResolved": "Resolved",
+  "supportWaitingBusiness": "Waiting for business",
+  "supportWaitingCustomer": "Waiting for customer",
+  "supportAdminReviewing": "Admin reviewing",
+  "supportUrgent": "Urgent",
+  "supportNormal": "Normal",
+  "supportLinkedRecord": "Linked record",
+  "supportCustomer": "Customer",
+  "supportBusiness": "Business",
+  "supportPlatformAdmin": "Laawol admin",
+  "supportAskPlatform": "Ask Laawol admin to help",
+  "businessSupportAskAdmin": "Ask platform admin",
+  "businessSupportTitle": "Ask platform admin for help",
+  "businessSupportSubtitle": "Send a support request to Laawol admins about your business account, operations, payouts, or platform access.",
+  "businessSupportSubject": "Support subject",
+  "businessSupportSubjectRequired": "Enter a support subject.",
+  "supportEscalating": "Escalating...",
+  "supportEscalationTitle": "Ask Laawol admin to help",
+  "supportEscalationSubtitle": "Use this when the business cannot resolve the issue or the issue is urgent.",
+  "supportEscalationReason": "Escalation reason",
+  "supportEscalationNote": "Add details for the admin",
+  "supportEscalationUnavailable": "Admin escalation becomes available after the business response window unless the issue is urgent.",
+  "supportReasonUnresolved": "Business did not resolve it",
+  "supportReasonFraud": "Fraud or suspicious activity",
+  "supportReasonSafety": "Safety concern",
+  "supportReasonAbuse": "Abusive behavior",
+  "supportReasonPaymentNoService": "Payment taken, service not provided",
+  "supportReasonBusinessUnreachable": "Business unreachable",
+  "supportReasonTimeSensitive": "Pickup or delivery is time-sensitive",
+  "supportEvidence": "Evidence",
+  "supportAddImage": "Add image",
+  "supportAddAttachment": "Add attachment",
+  "supportAttachmentSheetTitle": "Add attachment",
+  "supportPhoto": "Photo",
+  "supportVideo": "Video",
+  "supportFile": "File",
+  "supportUploading": "Uploading...",
+  "supportRequestEvidence": "Request evidence",
+  "supportRequestingEvidence": "Requesting...",
+  "supportEvidenceNote": "What should the customer add?",
+  "supportResolve": "Mark resolved",
+  "supportResolving": "Resolving...",
+  "supportReopen": "Reopen",
+  "supportReopening": "Reopening...",
+  "supportInternalNotes": "Internal notes",
+  "supportAddInternalNote": "Add internal note",
+  "supportSavingNote": "Saving note...",
+  "supportNote": "Note",
+  "supportTimeline": "Timeline",
+  "supportActions": "Actions",
+  "supportFilters": "Filters",
+  "supportAllCases": "All cases",
+  "supportSlaBreaches": "SLA breaches",
+  "supportFraudSafety": "Fraud and safety",
+  "supportOpenFromTransaction": "Open a case with the responsible business. If unresolved, a Laawol admin can mediate.",
+  "supportCaseOpened": "Support case opened",
+  "supportActionFailed": "Support action failed",
+  "supportImageSource": "Choose an image",
+  "supportCamera": "Camera",
+  "supportGallery": "Gallery",
+  "supportReplyingTo": "Replying to {name}",
+  "@supportReplyingTo": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "supportEdited": "edited",
+  "supportReply": "Reply",
+  "supportDeleteForMe": "Delete for me",
+  "supportEditMessage": "Edit message",
+  "supportSaveEdit": "Save edit",
+  "supportCancelReply": "Cancel reply",
+  "supportCaseStatusLabel": "Status: {status}",
+  "@supportCaseStatusLabel": {
+    "placeholders": {
+      "status": {}
+    }
+  },
+  "support": "Support",
+  "supportTeam": "Support team",
+  "supportCase": "Support case",
+  "supportBusinessInbox": "Business support",
+  "supportBusinessInboxSubtitle": "Review customer cases, request evidence, and coordinate with Laawol support.",
+  "supportAdminQueue": "Support queue",
+  "supportAdminQueueSubtitle": "Assign, escalate, resolve, and document marketplace cases.",
+  "supportNewCase": "New case",
+  "supportUnavailable": "Support is unavailable",
+  "supportSignInRequired": "Sign in to open and review support cases.",
+  "supportBusinessRequired": "A business profile is required to use business support.",
+  "supportUnableToLoad": "Unable to load support",
+  "supportSearchCases": "Search cases",
+  "supportNoCasesDesc": "Support conversations and updates will appear here.",
+  "supportLastMessageFallback": "Open the case to continue the conversation.",
+  "supportStatusOpen": "Open",
+  "supportStatusWaitingCustomer": "Waiting on customer",
+  "supportStatusWaitingBusiness": "Waiting on business",
+  "supportStatusResolved": "Resolved",
+  "supportStatusClosed": "Closed",
+  "supportFilterWaiting": "Waiting",
+  "supportPriorityNormal": "Normal",
+  "supportPriorityUrgent": "Urgent",
+  "supportPriorityEscalated": "Escalated",
+  "supportCategory": "Category",
+  "supportCategoryGeneral": "General",
+  "supportCategoryPayment": "Payment",
+  "supportCategoryDelivery": "Delivery",
+  "supportCategoryVehicle": "Vehicle",
+  "supportCategoryBarrel": "Barrel",
+  "supportCategoryTransport": "Transport",
+  "supportCategoryRefund": "Refund",
+  "supportAdmin": "Admin",
+  "supportSystem": "System",
+  "supportSubject": "Subject",
+  "supportInitialMessage": "Initial message",
+  "supportCreateCase": "Create case",
+  "supportCreatingCase": "Creating case...",
+  "supportCaseActions": "Case actions",
+  "supportAssignToMe": "Assign to me",
+  "supportResolveCase": "Resolve case",
+  "supportReopenCase": "Reopen case",
+  "supportEvidenceRequested": "Evidence requested",
+  "supportEvidenceAttached": "Evidence attached",
+  "supportEvidenceUploaded": "Evidence uploaded.",
+  "supportEscalateCase": "Escalate case",
+  "supportEscalate": "Escalate",
+  "supportCaseEscalated": "Case escalated.",
+  "supportEvidenceRequest": "Evidence request",
+  "supportSendRequest": "Send request",
+  "supportSendingRequest": "Sending request...",
+  "supportEvidenceRequestSent": "Evidence request sent.",
+  "supportResolutionNote": "Resolution note",
+  "supportCaseResolved": "Case resolved.",
+  "supportReopenReason": "Reopen reason",
+  "supportCaseReopened": "Case reopened.",
+  "supportCaseAssigned": "Case assigned.",
+  "supportInternalNote": "Internal note",
+  "supportSaveNote": "Save note",
+  "supportInternalNoteSaved": "Internal note saved.",
+  "supportMessage": "Message",
+  "supportMessageHint": "Write a message...",
+  "supportSendMessage": "Send message",
+  "supportNoMessages": "No messages yet",
+  "supportNoMessagesDesc": "Send the first message to start this support thread.",
+  "supportNoInternalNotes": "No internal notes",
+  "supportNoInternalNotesDesc": "Admin notes for this case will appear here.",
+  "supportUnassigned": "Unassigned",
+  "supportResolvedComposerDisabled": "This case is resolved. Reopen it to send another message.",
+  "supportSystemMessage": "System update",
+  "supportDeletedMessage": "This message was deleted",
+  "supportAttachment": "Attachment",
+  "supportAddEvidence": "Add evidence",
+  "supportUploadImageEvidence": "Upload image evidence",
+  "supportAddFileMetadata": "Add file metadata",
+  "supportAddVoiceMetadata": "Add voice metadata",
+  "supportImageAttachment": "Image attachment",
+  "supportVoiceAttachment": "Voice message",
+  "supportFileAttachment": "File attachment",
+  "supportVideoAttachment": "Video attachment",
+  "supportOpenAttachment": "Open attachment",
+  "supportVoiceDuration": "Voice {duration}",
+  "@supportVoiceDuration": {
+    "placeholders": {
+      "duration": {}
+    }
+  },
+  "supportAttachmentSize": "{size}",
+  "@supportAttachmentSize": {
+    "placeholders": {
+      "size": {}
+    }
+  },
+  "supportFileName": "File name",
+  "supportFileUrl": "File URL",
+  "supportDurationSeconds": "Duration in seconds",
+  "supportSizeBytes": "Size in bytes",
+  "supportFileReadFailed": "Could not read that file. Please try again.",
+  "supportUnsupportedAttachmentType": "Choose a PDF, text, Word, or DOCX file.",
+  "supportAttach": "Attach",
+  "supportAttaching": "Attaching...",
+  "supportPurchaseCaseSubject": "Support for {carTitle}",
+  "@supportPurchaseCaseSubject": {
+    "placeholders": {
+      "carTitle": {}
+    }
+  },
+  "supportSharedBarrelCaseSubject": "Shared barrel support",
+  "supportPlatformSenderName": "Laawol support",
+  "supportBusinessSenderName": "Business",
+  "parkingStepWhereWhen": "Where & when",
+  "parkingStepChooseSpot": "Choose a spot",
+  "parkingStepYourCar": "Your car",
+  "parkingStepReview": "Review",
+  "parkingStepIndicator": "Step {current} of {total}",
+  "@parkingStepIndicator": {
+    "placeholders": {
+      "current": {},
+      "total": {}
+    }
+  },
+  "parkingContinue": "Continue",
+  "parkingBack": "Back",
+  "parkingReviewHeading": "Review & reserve",
+  "parkingReviewVehicle": "Vehicle",
+  "parkingReviewDates": "Dates",
+  "parkingReviewPickupYes": "Pickup requested",
+  "parkingReviewPickupNo": "No pickup"
 }

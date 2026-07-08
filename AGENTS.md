@@ -8,6 +8,8 @@ Before changing or deploying anything, follow **[docs/ENGINEERING_GUARDRAILS.md]
 
 **Reuse before you build.** Before implementing a selector, option list, or component, search the repo and reuse/extend the existing one — never fork a partial copy. Shared reference data must be complete (a country picker offers every country; a state picker every state). Consult the **Canonical sources registry** in the guardrails doc and require the same of every subagent. Curated subsets (e.g. barrel destination countries) are the explicit, named exception.
 
+**Localize every user-facing string, in both languages.** This product ships in English and French. Flutter: never hardcode copy — add keys to both `app_en.arb` and `app_fr.arb`, run `flutter gen-l10n`, use `AppLocalizations`. Web: add an English→French entry to `french-dom.ts` for every new string (including `placeholder`/`title`/`aria-label`). Verify both languages render. A string only in English is a bug. (Guardrails §5.)
+
 ## Default Manager Behavior
 
 - Start locally by identifying the user goal, the current app area, and the next blocking step.

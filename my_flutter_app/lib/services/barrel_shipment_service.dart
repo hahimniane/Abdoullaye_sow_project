@@ -1,10 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../models/barrel_shipment.dart';
 import '../models/barrel_order.dart';
+import 'stripe_config_service.dart';
 
 class BarrelAddressSuggestion {
   const BarrelAddressSuggestion({
@@ -47,6 +49,10 @@ class BarrelShipmentService {
 
   final FirebaseFunctions _functions;
   final FirebaseFirestore _firestore;
+
+  Future<void> _refreshAuthTokenIfAvailable() async {
+    await FirebaseAuth.instance.currentUser?.getIdToken(true);
+  }
 
   Future<List<BarrelAddressSuggestion>> addressSuggestions(String input) async {
     final trimmed = input.trim();
@@ -112,6 +118,7 @@ class BarrelShipmentService {
         throw Exception('Payment could not be initialized.');
       }
 
+      await StripeConfigService.ensureConfigured();
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
           paymentIntentClientSecret: clientSecret,
@@ -122,11 +129,13 @@ class BarrelShipmentService {
 
       try {
         await Stripe.instance.presentPaymentSheet();
+        await _refreshAuthTokenIfAvailable();
         await _functions.httpsCallable('completeBarrelShipmentPayment').call({
           'shipmentId': shipmentId,
         });
       } catch (_) {
         try {
+          await _refreshAuthTokenIfAvailable();
           await _functions.httpsCallable('cancelPendingBarrelShipment').call({
             'shipmentId': shipmentId,
           });
@@ -146,24 +155,48 @@ class BarrelShipmentService {
 
   Future<BarrelOrderResult> payForOrder({
     required String senderName,
-    required bool pickupRequested,
-    required String pickupAddress,
-    required String pickupBorough,
-    required DateTime? pickupDateTime,
     required List<BarrelOrderLine> lines,
+    bool? pickupRequested,
+    String? pickupAddress,
+    String? pickupBorough,
+    DateTime? pickupDateTime,
     bool useWalletBalance = false,
   }) async {
     final callable = _functions.httpsCallable('createBarrelOrderPaymentIntent');
-    final response = await callable.call<Map<String, dynamic>>({
-      'senderName': senderName,
-      'pickupRequested': pickupRequested,
-      'pickupAddress': pickupAddress,
-      'pickupBorough': pickupBorough,
-      'useWalletBalance': useWalletBalance,
-      'lines': lines.map((line) => line.toCallableJson()).toList(),
-      if (pickupDateTime != null)
-        'pickupDateTime': pickupDateTime.toUtc().toIso8601String(),
-    });
+    late final HttpsCallableResult<Map<String, dynamic>> response;
+    try {
+      response = await callable.call<Map<String, dynamic>>({
+        'senderName': senderName,
+        'useWalletBalance': useWalletBalance,
+        'lines': lines.map((line) => line.toCallableJson()).toList(),
+        if (pickupRequested != null) 'pickupRequested': pickupRequested,
+        if (pickupAddress != null) 'pickupAddress': pickupAddress,
+        if (pickupBorough != null) 'pickupBorough': pickupBorough,
+        if (pickupDateTime != null)
+          'pickupDateTime': pickupDateTime.toUtc().toIso8601String(),
+      });
+    } on FirebaseFunctionsException catch (error) {
+      if (error.code == 'not-found') {
+        if (lines.length == 1) {
+          final shipment = await _paySingleLineWithLegacyCallable(
+            senderName: senderName,
+            line: lines.single,
+            pickupRequested: pickupRequested,
+            pickupAddress: pickupAddress,
+            pickupBorough: pickupBorough,
+            pickupDateTime: pickupDateTime,
+            useWalletBalance: useWalletBalance,
+          );
+          return BarrelOrderResult(
+            orderId: shipment.orderId ?? shipment.id,
+            shipments: [shipment],
+            trackingCodes: [shipment.trackingCode],
+          );
+        }
+        throw const BarrelOrderPaymentFunctionMissingException();
+      }
+      rethrow;
+    }
 
     final data = Map<String, dynamic>.from(response.data);
     final orderId = data['orderId'] as String?;
@@ -185,6 +218,7 @@ class BarrelShipmentService {
         throw Exception('Payment could not be initialized.');
       }
 
+      await StripeConfigService.ensureConfigured();
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
           paymentIntentClientSecret: clientSecret,
@@ -195,11 +229,13 @@ class BarrelShipmentService {
 
       try {
         await Stripe.instance.presentPaymentSheet();
+        await _refreshAuthTokenIfAvailable();
         await _functions.httpsCallable('completeBarrelOrderPayment').call({
           'orderId': orderId,
         });
       } catch (_) {
         try {
+          await _refreshAuthTokenIfAvailable();
           await _functions.httpsCallable('cancelPendingBarrelOrder').call({
             'orderId': orderId,
           });
@@ -225,6 +261,41 @@ class BarrelShipmentService {
       trackingCodes: shipments
           .map((shipment) => shipment.trackingCode)
           .toList(),
+    );
+  }
+
+  Future<BarrelShipment> _paySingleLineWithLegacyCallable({
+    required String senderName,
+    required BarrelOrderLine line,
+    required bool? pickupRequested,
+    required String? pickupAddress,
+    required String? pickupBorough,
+    required DateTime? pickupDateTime,
+    required bool useWalletBalance,
+  }) {
+    final resolvedPickupRequested = pickupRequested ?? line.pickupRequested;
+    return payForShipment(
+      senderName: senderName,
+      receiverName: line.receiverName,
+      receiverPhone: line.receiverPhone,
+      destinationCountryId: line.country.id,
+      businessId: line.business.businessId,
+      quantity: line.quantity,
+      pickupRequested: resolvedPickupRequested,
+      pickupAddress: resolvedPickupRequested
+          ? (line.pickupAddress.isNotEmpty
+                ? line.pickupAddress
+                : (pickupAddress ?? ''))
+          : (pickupAddress ?? line.pickupAddress),
+      pickupBorough: resolvedPickupRequested
+          ? (line.pickupBorough.isNotEmpty
+                ? line.pickupBorough
+                : (pickupBorough ?? ''))
+          : 'Office drop-off',
+      pickupDateTime: resolvedPickupRequested
+          ? (line.pickupDateTime ?? pickupDateTime)
+          : null,
+      useWalletBalance: useWalletBalance,
     );
   }
 
@@ -300,4 +371,11 @@ class BarrelDestinationChangeResult {
       simulatedPayment: data['simulatedPayment'] == true,
     );
   }
+}
+
+class BarrelOrderPaymentFunctionMissingException implements Exception {
+  const BarrelOrderPaymentFunctionMissingException();
+
+  @override
+  String toString() => 'Barrel order payment function is not deployed.';
 }

@@ -3,55 +3,29 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 
-/// The customer home: a modern, fintech-style hub that opens with a greeting
-/// and live wallet balance, then surfaces every service as clean, grouped list
-/// rows that are easy to scan and tap.
-class ServicesHubScreen extends StatelessWidget {
-  const ServicesHubScreen({super.key, required this.onCustomize});
+/// The content of each persistent-navbar tab. Services of the same nature live
+/// together: Shipping, Cars, and Activity. These are the *roots* of the tab
+/// navigators in [CustomerHomeScreen] — opening any row pushes onto the same
+/// (nested) navigator, so the bottom bar stays visible throughout.
 
-  /// Opens the "customize navbar" editor.
-  final VoidCallback onCustomize;
+String _greeting(AppLocalizations l10n) {
+  final hour = DateTime.now().hour;
+  if (hour < 12) return l10n.goodMorning;
+  if (hour < 17) return l10n.goodAfternoon;
+  return l10n.goodEvening;
+}
 
-  static String _greeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
-  }
+/// Home tab — greeting, live wallet balance, and a few quick actions.
+class HomeTab extends StatelessWidget {
+  const HomeTab({super.key});
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final sections = <_HubSection>[
-      _HubSection('Ship & send home', [
-        _HubItem('Send a barrel', 'Ship a full barrel home',
-            Icons.local_shipping_outlined, AppColors.cobalt, '/barrel'),
-        _HubItem('Shared barrels', 'Post or join a barrel',
-            Icons.group_add_outlined, AppColors.saffron, '/open-barrels'),
-        _HubItem('Freight (parcels)', 'By weight · air or sea',
-            Icons.inventory_2_outlined, AppColors.sage, '/send-freight'),
-      ]),
-      _HubSection('Cars', [
-        _HubItem('Browse cars', 'Buy a verified car',
-            Icons.directions_car_outlined, AppColors.cobalt, '/sell'),
-        _HubItem('Park a car', 'Store with a business',
-            Icons.local_parking_outlined, AppColors.cobaltMid, '/park'),
-        _HubItem('Transport a car', 'Request through a business',
-            Icons.car_rental_outlined, AppColors.saffron, '/request-transport'),
-      ]),
-      _HubSection('Your account', [
-        _HubItem('My purchases', 'Orders & receipts',
-            Icons.receipt_long_outlined, AppColors.cobalt, '/my-purchases'),
-        _HubItem('Track a shipment', 'Follow your shipments',
-            Icons.route_outlined, AppColors.cobaltMid, '/tracking'),
-        _HubItem('Wallet', 'Balance & refunds',
-            Icons.account_balance_wallet_outlined, AppColors.sage, '/wallet'),
-      ]),
-    ];
-
     return Scaffold(
       backgroundColor: AppColors.cream,
       body: SafeArea(
@@ -60,31 +34,42 @@ class ServicesHubScreen extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 28),
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 16, 4),
-              child: _GreetingHeader(auth: auth, onCustomize: onCustomize),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+              child: _GreetingHeader(auth: auth),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
               child: _BalanceCard(auth: auth),
             ),
-            for (final section in sections) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(22, 26, 22, 12),
-                child: Text(
-                  section.title,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.ink,
-                    letterSpacing: 0.1,
+            const _SectionHeader('Quick actions'),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: _ServicesSection(
+                items: [
+                  _HubItem(
+                    'Send a barrel',
+                    'Ship a full barrel home',
+                    Icons.local_shipping_outlined,
+                    AppColors.cobalt,
+                    '/barrel',
                   ),
-                ),
+                  _HubItem(
+                    'Browse cars',
+                    'Buy a verified car',
+                    Icons.directions_car_outlined,
+                    AppColors.cobaltMid,
+                    '/sell',
+                  ),
+                  _HubItem(
+                    'Track a shipment',
+                    'Follow your shipments',
+                    Icons.route_outlined,
+                    AppColors.sage,
+                    '/tracking',
+                  ),
+                ],
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: _ServicesSection(items: section.items),
-              ),
-            ],
+            ),
           ],
         ),
       ),
@@ -92,11 +77,232 @@ class ServicesHubScreen extends StatelessWidget {
   }
 }
 
+/// Shipping tab — everything you send home.
+class ShippingTab extends StatelessWidget {
+  const ShippingTab({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const _CategoryTab(
+      title: 'Shipping',
+      subtitle: 'Send barrels, freight, and cars home.',
+      items: [
+        _HubItem(
+          'Send a barrel',
+          'Ship a full barrel home',
+          Icons.local_shipping_outlined,
+          AppColors.cobalt,
+          '/barrel',
+        ),
+        _HubItem(
+          'Shared barrels',
+          'Post or join a barrel',
+          Icons.group_add_outlined,
+          AppColors.saffron,
+          '/open-barrels',
+        ),
+        _HubItem(
+          'Freight',
+          'By weight · air or sea',
+          Icons.inventory_2_outlined,
+          AppColors.sage,
+          '/send-freight',
+        ),
+        _HubItem(
+          'Transport a car',
+          'Ship a car home',
+          Icons.car_rental_outlined,
+          AppColors.cobaltMid,
+          '/request-transport',
+        ),
+      ],
+    );
+  }
+}
+
+/// Cars tab — buy and store vehicles.
+class CarsTab extends StatelessWidget {
+  const CarsTab({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const _CategoryTab(
+      title: 'Cars',
+      subtitle: 'Buy a verified car or store one with a business.',
+      items: [
+        _HubItem(
+          'Browse cars',
+          'Buy a verified car',
+          Icons.directions_car_outlined,
+          AppColors.cobalt,
+          '/sell',
+        ),
+        _HubItem(
+          'Park a car',
+          'Store with a business',
+          Icons.local_parking_outlined,
+          AppColors.cobaltMid,
+          '/park',
+        ),
+      ],
+    );
+  }
+}
+
+/// Activity tab — orders, tracking, and money.
+class ActivityTab extends StatelessWidget {
+  const ActivityTab({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    return Scaffold(
+      backgroundColor: AppColors.cream,
+      body: SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 28),
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(22, 20, 22, 4),
+              child: _CategoryHeader(
+                title: 'Activity',
+                subtitle: 'Your orders, shipments, and wallet.',
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+              child: _BalanceCard(auth: auth),
+            ),
+            const SizedBox(height: 12),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: _ServicesSection(
+                items: [
+                  _HubItem(
+                    'Track a shipment',
+                    'Follow your shipments',
+                    Icons.route_outlined,
+                    AppColors.cobalt,
+                    '/tracking',
+                  ),
+                  _HubItem(
+                    'My orders',
+                    'Cars, barrels, freight & more',
+                    Icons.receipt_long_outlined,
+                    AppColors.cobaltMid,
+                    '/orders',
+                  ),
+                  _HubItem(
+                    'Wallet',
+                    'Balance & refunds',
+                    Icons.account_balance_wallet_outlined,
+                    AppColors.sage,
+                    '/wallet',
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A simple category landing: big title + a card of service rows.
+class _CategoryTab extends StatelessWidget {
+  const _CategoryTab({
+    required this.title,
+    required this.subtitle,
+    required this.items,
+  });
+
+  final String title;
+  final String subtitle;
+  final List<_HubItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.cream,
+      body: SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 28),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 20, 22, 4),
+              child: _CategoryHeader(title: title, subtitle: subtitle),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _ServicesSection(items: items),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryHeader extends StatelessWidget {
+  const _CategoryHeader({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w900,
+            color: AppColors.ink,
+            letterSpacing: -0.3,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: const TextStyle(color: AppColors.muted, fontSize: 14),
+        ),
+      ],
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader(this.title);
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 26, 22, 12),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w800,
+          color: AppColors.ink,
+          letterSpacing: 0.1,
+        ),
+      ),
+    );
+  }
+}
+
 class _GreetingHeader extends StatelessWidget {
-  const _GreetingHeader({required this.auth, required this.onCustomize});
+  const _GreetingHeader({required this.auth});
 
   final AuthProvider auth;
-  final VoidCallback onCustomize;
 
   @override
   Widget build(BuildContext context) {
@@ -114,8 +320,7 @@ class _GreetingHeader extends StatelessWidget {
             shape: BoxShape.circle,
             gradient: AppColors.headerGradient,
             image: photo != null && photo.isNotEmpty
-                ? DecorationImage(
-                    image: NetworkImage(photo), fit: BoxFit.cover)
+                ? DecorationImage(image: NetworkImage(photo), fit: BoxFit.cover)
                 : null,
           ),
           alignment: Alignment.center,
@@ -136,7 +341,7 @@ class _GreetingHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                ServicesHubScreen._greeting(),
+                _greeting(AppLocalizations.of(context)!),
                 style: const TextStyle(
                   color: AppColors.muted,
                   fontSize: 13,
@@ -156,11 +361,6 @@ class _GreetingHeader extends StatelessWidget {
               ),
             ],
           ),
-        ),
-        IconButton.filledTonal(
-          tooltip: 'Customize navbar',
-          onPressed: onCustomize,
-          icon: const Icon(Icons.tune, size: 20),
         ),
       ],
     );
@@ -189,12 +389,11 @@ class _BalanceCard extends StatelessWidget {
         final data = snapshot.data?.data();
         final currencyCode =
             (data?['currency'] as String?)?.toUpperCase() ?? 'USD';
-        final balance = (data?['balance'] as num?)?.toDouble() ??
+        final balance =
+            (data?['balance'] as num?)?.toDouble() ??
             (((data?['balanceCents'] as num?)?.toDouble() ?? 0) / 100);
         final currency = NumberFormat.simpleCurrency(name: currencyCode);
-        return _BalanceCardBody(
-          balanceLabel: currency.format(balance),
-        );
+        return _BalanceCardBody(balanceLabel: currency.format(balance));
       },
     );
   }
@@ -232,9 +431,9 @@ class _BalanceCardBody extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Text(
-                      'Available balance',
-                      style: TextStyle(
+                    Text(
+                      AppLocalizations.of(context)!.availableBalance,
+                      style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
@@ -264,7 +463,7 @@ class _BalanceCardBody extends StatelessWidget {
                     Expanded(
                       child: _BalanceAction(
                         icon: Icons.add,
-                        label: 'Add money',
+                        label: AppLocalizations.of(context)!.addMoney,
                         onTap: () => Navigator.pushNamed(context, '/wallet'),
                       ),
                     ),
@@ -272,9 +471,8 @@ class _BalanceCardBody extends StatelessWidget {
                     Expanded(
                       child: _BalanceAction(
                         icon: Icons.receipt_long_outlined,
-                        label: 'My orders',
-                        onTap: () =>
-                            Navigator.pushNamed(context, '/my-purchases'),
+                        label: AppLocalizations.of(context)!.myOrders,
+                        onTap: () => Navigator.pushNamed(context, '/orders'),
                       ),
                     ),
                   ],
@@ -363,9 +561,9 @@ class _SignInPromptCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Sign in to your wallet',
-                        style: TextStyle(
+                      Text(
+                        AppLocalizations.of(context)!.signInToYourWallet,
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 17,
                           fontWeight: FontWeight.w800,
@@ -373,7 +571,7 @@ class _SignInPromptCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Track orders, balances and refunds.',
+                        AppLocalizations.of(context)!.walletSignInSubtitle,
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.85),
                           fontSize: 13,
@@ -392,12 +590,6 @@ class _SignInPromptCard extends StatelessWidget {
   }
 }
 
-class _HubSection {
-  const _HubSection(this.title, this.items);
-  final String title;
-  final List<_HubItem> items;
-}
-
 class _HubItem {
   const _HubItem(this.title, this.subtitle, this.icon, this.color, this.route);
   final String title;
@@ -408,7 +600,7 @@ class _HubItem {
 }
 
 /// A rounded white card holding the rows of one section, separated by light
-/// dividers. No grid, so there are never empty cells or uneven gaps.
+/// dividers.
 class _ServicesSection extends StatelessWidget {
   const _ServicesSection({required this.items});
 
