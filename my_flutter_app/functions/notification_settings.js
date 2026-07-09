@@ -48,6 +48,8 @@ function defaultPlatformNotificationSettings() {
     pushEnabled: true,
     emailEnabled: true,
     smsEnabled: false,
+    emailProvider: "none",
+    smsProvider: "none",
     purchaseStatus: true,
     shipmentStatus: true,
     refundDecision: true,
@@ -61,15 +63,32 @@ function defaultPlatformNotificationSettings() {
   };
 }
 
+function normalizeProvider(value, allowed, fallback = "none") {
+  const clean = String(value || "").trim();
+  return allowed.has(clean) ? clean : fallback;
+}
+
 function normalizePlatformNotificationSettings(raw) {
   const defaults = defaultPlatformNotificationSettings();
   const settings = raw && typeof raw === "object" ? raw : {};
-  return Object.fromEntries(
-      Object.entries(defaults).map(([key, value]) => [
-        key,
-        value === false ? settings[key] === true : settings[key] !== false,
-      ]),
-  );
+  const normalized = {};
+  for (const [key, value] of Object.entries(defaults)) {
+    if (key === "emailProvider") {
+      normalized[key] = normalizeProvider(
+          settings[key],
+          new Set(["none", "firebaseTriggerEmail"]),
+      );
+    } else if (key === "smsProvider") {
+      normalized[key] = normalizeProvider(
+          settings[key],
+          new Set(["none", "firestoreSmsQueue"]),
+      );
+    } else {
+      normalized[key] =
+        value === false ? settings[key] === true : settings[key] !== false;
+    }
+  }
+  return normalized;
 }
 
 const NOTIFICATION_SETTING_BY_PREFERENCE = {
@@ -86,6 +105,31 @@ const NOTIFICATION_SETTING_BY_PREFERENCE = {
 function platformNotificationEnabled(settings, preferenceKey, settingKey = "") {
   const key = settingKey || NOTIFICATION_SETTING_BY_PREFERENCE[preferenceKey];
   return !key || settings[key] !== false;
+}
+
+function notificationDeliveryStatus({
+  settings,
+  prefs,
+  channel,
+  recipientAvailable,
+}) {
+  if (channel === "email") {
+    if (settings.emailEnabled === false) return "disabled";
+    if (prefs.emailNotifications === false) return "opted_out";
+    if (!recipientAvailable) return "no_recipient";
+    return settings.emailProvider === "firebaseTriggerEmail" ?
+      "queued" :
+      "provider_not_configured";
+  }
+  if (channel === "sms") {
+    if (settings.smsEnabled === false) return "disabled";
+    if (prefs.smsNotifications !== true) return "opted_out";
+    if (!recipientAvailable) return "no_recipient";
+    return settings.smsProvider === "firestoreSmsQueue" ?
+      "queued" :
+      "provider_not_configured";
+  }
+  return "disabled";
 }
 
 function notificationData(data) {
@@ -116,6 +160,7 @@ module.exports = {
   normalizeNotificationPreferences,
   normalizePlatformNotificationSettings,
   notificationData,
+  notificationDeliveryStatus,
   notificationHtml,
   platformNotificationEnabled,
 };

@@ -2608,6 +2608,8 @@ const GENERAL_DEFAULTS = {
     pushEnabled: true,
     emailEnabled: true,
     smsEnabled: false,
+    emailProvider: "none",
+    smsProvider: "none",
     purchaseStatus: true,
     shipmentStatus: true,
     refundDecision: true,
@@ -2798,7 +2800,7 @@ function MoreSettings({
   function setApplications(key: string, value: boolean) {
     setDraft((d) => ({ ...d, applications: { ...d.applications, [key]: value } }));
   }
-  function setNotifications(key: string, value: boolean) {
+  function setNotifications(key: string, value: unknown) {
     setDraft((d) => ({ ...d, notifications: { ...d.notifications, [key]: value } }));
   }
 
@@ -3106,10 +3108,28 @@ function MoreSettings({
         icon={<Send size={18} />}
         action={<button className="primary-button compact" type="button" onClick={() => runAction("Notification preferences saved", () => saveSection("notifications"))}>Save</button>}
       >
+        <div className="settings-form narrow">
+          <label>
+            Email sender provider
+            <select value={draft.notifications.emailProvider} onChange={(e) => setNotifications("emailProvider", e.target.value)}>
+              <option value="none">No email sender connected</option>
+              <option value="firebaseTriggerEmail">Firebase Trigger Email extension</option>
+            </select>
+            <small>Use the Firebase provider only after the extension is installed and configured.</small>
+          </label>
+          <label>
+            SMS sender provider
+            <select value={draft.notifications.smsProvider} onChange={(e) => setNotifications("smsProvider", e.target.value)}>
+              <option value="none">No SMS sender connected</option>
+              <option value="firestoreSmsQueue">Firestore SMS queue</option>
+            </select>
+            <small>Use the queue provider only after an SMS worker or extension is connected.</small>
+          </label>
+        </div>
         <div className="toggle-list">
           <ToggleRow label="Push notifications" checked={draft.notifications.pushEnabled} onChange={(v) => setNotifications("pushEnabled", v)} />
-          <ToggleRow label="Email delivery queue" hint="Queues email through the Firebase mail collection." checked={draft.notifications.emailEnabled} onChange={(v) => setNotifications("emailEnabled", v)} />
-          <ToggleRow label="SMS delivery queue" hint="Queues phone notifications only for users who opt in." checked={draft.notifications.smsEnabled} onChange={(v) => setNotifications("smsEnabled", v)} />
+          <ToggleRow label="Email notifications" hint="Records email deliveries; provider selection controls actual sending." checked={draft.notifications.emailEnabled} onChange={(v) => setNotifications("emailEnabled", v)} />
+          <ToggleRow label="SMS notifications" hint="Records phone deliveries only for users who opt in; provider selection controls actual sending." checked={draft.notifications.smsEnabled} onChange={(v) => setNotifications("smsEnabled", v)} />
           <ToggleRow label="Car purchase status emails" checked={draft.notifications.purchaseStatus} onChange={(v) => setNotifications("purchaseStatus", v)} />
           <ToggleRow label="Barrel shipment status emails" checked={draft.notifications.shipmentStatus} onChange={(v) => setNotifications("shipmentStatus", v)} />
           <ToggleRow label="Refund decision emails" checked={draft.notifications.refundDecision} onChange={(v) => setNotifications("refundDecision", v)} />

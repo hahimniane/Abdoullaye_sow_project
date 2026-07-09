@@ -5,6 +5,7 @@ const {
   normalizeNotificationPreferences,
   normalizePlatformNotificationSettings,
   notificationData,
+  notificationDeliveryStatus,
   notificationHtml,
   platformNotificationEnabled,
 } = require("../notification_settings");
@@ -39,12 +40,18 @@ describe("notification settings helpers", () => {
     assert.equal(defaults.pushEnabled, true);
     assert.equal(defaults.emailEnabled, true);
     assert.equal(defaults.smsEnabled, false);
+    assert.equal(defaults.emailProvider, "none");
+    assert.equal(defaults.smsProvider, "none");
 
     const enabled = normalizePlatformNotificationSettings({
       smsEnabled: true,
+      emailProvider: "firebaseTriggerEmail",
+      smsProvider: "firestoreSmsQueue",
       verificationDocuments: false,
     });
     assert.equal(enabled.smsEnabled, true);
+    assert.equal(enabled.emailProvider, "firebaseTriggerEmail");
+    assert.equal(enabled.smsProvider, "firestoreSmsQueue");
     assert.equal(enabled.verificationDocuments, false);
     assert.equal(
         platformNotificationEnabled(
@@ -53,6 +60,62 @@ describe("notification settings helpers", () => {
             "verificationDocuments",
         ),
         false,
+    );
+  });
+
+  it("marks channel deliveries as pending provider configuration", () => {
+    const settings = normalizePlatformNotificationSettings({
+      smsEnabled: true,
+    });
+    const prefs = normalizeNotificationPreferences({
+      smsNotifications: true,
+    });
+    assert.equal(
+        notificationDeliveryStatus({
+          settings,
+          prefs,
+          channel: "email",
+          recipientAvailable: true,
+        }),
+        "provider_not_configured",
+    );
+    assert.equal(
+        notificationDeliveryStatus({
+          settings,
+          prefs,
+          channel: "sms",
+          recipientAvailable: true,
+        }),
+        "provider_not_configured",
+    );
+  });
+
+  it("queues channel deliveries only when a provider is selected", () => {
+    const settings = normalizePlatformNotificationSettings({
+      smsEnabled: true,
+      emailProvider: "firebaseTriggerEmail",
+      smsProvider: "firestoreSmsQueue",
+    });
+    const prefs = normalizeNotificationPreferences({
+      smsNotifications: true,
+    });
+    assert.equal(
+        notificationDeliveryStatus({
+          settings,
+          prefs,
+          channel: "email",
+          recipientAvailable: true,
+        }),
+        "queued",
+    );
+    assert.equal(
+        notificationDeliveryStatus({
+          settings,
+          prefs,
+          channel: "sms",
+          recipientAvailable: true,
+        }),
+        "queued",
     );
   });
 

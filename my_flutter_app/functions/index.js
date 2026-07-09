@@ -40,6 +40,7 @@ const {
   normalizeNotificationPreferences,
   normalizePlatformNotificationSettings,
   notificationData,
+  notificationDeliveryStatus,
   notificationHtml,
   platformNotificationEnabled,
 } = require("./notification_settings");
@@ -1980,52 +1981,70 @@ async function queueNotificationDeliveries({
     updatedAt: now,
   };
   const email = String(user?.email || "").trim().toLowerCase();
-  if (
-    settings.emailEnabled !== false &&
-    prefs.emailNotifications !== false &&
-    isValidEmail(email)
-  ) {
+  const emailStatus = notificationDeliveryStatus({
+    settings,
+    prefs,
+    channel: "email",
+    recipientAvailable: isValidEmail(email),
+  });
+  if (emailStatus === "queued" || emailStatus === "provider_not_configured") {
     const deliveryRef = db.collection("notificationDeliveries").doc();
     batch.set(deliveryRef, {
       ...base,
       channel: "email",
-      status: "queued",
+      status: emailStatus,
+      provider: settings.emailProvider,
       to: email,
+      lastError: emailStatus === "provider_not_configured" ?
+        "Email sender provider is not connected." :
+        "",
     });
-    batch.set(db.collection("mail").doc(deliveryRef.id), {
-      to: [email],
-      message: {
-        subject: cleanTitle,
-        text: cleanBody,
-        html: notificationHtml(cleanTitle, cleanBody),
-      },
-      deliveryId: deliveryRef.id,
-      recipientUid: uid,
-      createdAt: now,
-    });
-    writes += 2;
+    writes += 1;
+    if (settings.emailProvider === "firebaseTriggerEmail") {
+      batch.set(db.collection("mail").doc(deliveryRef.id), {
+        to: [email],
+        message: {
+          subject: cleanTitle,
+          text: cleanBody,
+          html: notificationHtml(cleanTitle, cleanBody),
+        },
+        deliveryId: deliveryRef.id,
+        recipientUid: uid,
+        createdAt: now,
+      });
+      writes += 1;
+    }
   }
   const phone = String(user?.phone || user?.normalizedPhone || "").trim();
-  if (
-    settings.smsEnabled !== false &&
-    prefs.smsNotifications === true &&
-    phone
-  ) {
+  const smsStatus = notificationDeliveryStatus({
+    settings,
+    prefs,
+    channel: "sms",
+    recipientAvailable: Boolean(phone),
+  });
+  if (smsStatus === "queued" || smsStatus === "provider_not_configured") {
     const deliveryRef = db.collection("notificationDeliveries").doc();
     batch.set(deliveryRef, {
       ...base,
       channel: "sms",
-      status: "queued",
+      status: smsStatus,
+      provider: settings.smsProvider,
       to: phone,
+      lastError: smsStatus === "provider_not_configured" ?
+        "SMS sender provider is not connected." :
+        "",
     });
-    batch.set(db.collection("smsMessages").doc(deliveryRef.id), {
-      to: phone,
-      body: cleanBody || cleanTitle,
-      deliveryId: deliveryRef.id,
-      recipientUid: uid,
-      createdAt: now,
-    });
-    writes += 2;
+    writes += 1;
+    if (settings.smsProvider === "firestoreSmsQueue") {
+      batch.set(db.collection("smsMessages").doc(deliveryRef.id), {
+        to: phone,
+        body: cleanBody || cleanTitle,
+        deliveryId: deliveryRef.id,
+        recipientUid: uid,
+        createdAt: now,
+      });
+      writes += 1;
+    }
   }
   if (writes > 0) {
     await batch.commit();
