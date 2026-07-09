@@ -466,6 +466,11 @@ service cloud.firestore {
       allow create, delete: if false;
     }
 
+    match /notificationDeliveries/{deliveryId} {
+      allow read: if request.auth != null && isAdmin(request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     match /businessSupportRequests/{requestId} {
       allow read, update: if request.auth != null && isAdmin(request.auth.uid);
       allow read: if request.auth != null &&

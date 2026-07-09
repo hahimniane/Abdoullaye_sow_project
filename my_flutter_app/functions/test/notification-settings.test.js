@@ -8,6 +8,7 @@ const {
   notificationDeliveryStatus,
   notificationHtml,
   notificationProviderDeliveryUpdate,
+  notificationRetryPlan,
   platformNotificationEnabled,
 } = require("../notification_settings");
 
@@ -244,6 +245,107 @@ describe("notification settings helpers", () => {
           providerDoc: {status: "unknown"},
         }),
         null,
+    );
+  });
+
+  it("builds Firebase Trigger Email retry payloads", () => {
+    const plan = notificationRetryPlan({
+      deliveryId: "delivery_1",
+      settings: {
+        emailEnabled: true,
+        emailProvider: "firebaseTriggerEmail",
+      },
+      delivery: {
+        channel: "email",
+        to: "OWNER@EXAMPLE.COM",
+        title: "Review approved",
+        body: "Your business can now accept customers.",
+        recipientUid: "owner_1",
+      },
+    });
+
+    assert.equal(plan.ok, true);
+    assert.equal(plan.providerCollection, "mail");
+    assert.deepEqual(plan.deliveryUpdate, {
+      status: "queued",
+      provider: "firebaseTriggerEmail",
+      lastError: "",
+    });
+    assert.deepEqual(plan.providerDoc.to, ["owner@example.com"]);
+    assert.equal(plan.providerDoc.message.subject, "Review approved");
+    assert.equal(
+        plan.providerDoc.message.html,
+        "<p>Your business can now accept customers.</p>" +
+          "<hr><p><small>Review approved</small></p>",
+    );
+    assert.deepEqual(plan.existingProviderUpdate, {
+      delivery: {state: "RETRY"},
+    });
+  });
+
+  it("builds Firestore SMS retry payloads", () => {
+    const plan = notificationRetryPlan({
+      deliveryId: "delivery_2",
+      settings: {
+        smsEnabled: true,
+        smsProvider: "firestoreSmsQueue",
+      },
+      delivery: {
+        channel: "sms",
+        to: "+17185550199",
+        title: "Shipment update",
+        body: "Your shipment is ready.",
+        recipientUid: "customer_1",
+      },
+    });
+
+    assert.equal(plan.ok, true);
+    assert.equal(plan.providerCollection, "smsMessages");
+    assert.deepEqual(plan.deliveryUpdate, {
+      status: "queued",
+      provider: "firestoreSmsQueue",
+      lastError: "",
+    });
+    assert.deepEqual(plan.providerDoc, {
+      to: "+17185550199",
+      body: "Your shipment is ready.",
+      deliveryId: "delivery_2",
+      recipientUid: "customer_1",
+    });
+    assert.deepEqual(plan.existingProviderUpdate, {status: "queued"});
+  });
+
+  it("blocks retry until the matching sender provider is connected", () => {
+    assert.deepEqual(
+        notificationRetryPlan({
+          deliveryId: "delivery_3",
+          settings: {emailProvider: "none"},
+          delivery: {
+            channel: "email",
+            to: "owner@example.com",
+          },
+        }),
+        {
+          ok: false,
+          code: "email_provider_unavailable",
+          message: "Connect the Firebase Trigger Email provider " +
+            "before retrying.",
+        },
+    );
+    assert.deepEqual(
+        notificationRetryPlan({
+          deliveryId: "delivery_4",
+          settings: {smsEnabled: false, smsProvider: "firestoreSmsQueue"},
+          delivery: {
+            channel: "sms",
+            to: "+17185550199",
+          },
+        }),
+        {
+          ok: false,
+          code: "sms_provider_unavailable",
+          message: "Connect the Firestore SMS queue provider before retrying.",
+        },
     );
   });
 });

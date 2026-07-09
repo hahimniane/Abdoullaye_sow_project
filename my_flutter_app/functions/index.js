@@ -43,6 +43,7 @@ const {
   notificationDeliveryStatus,
   notificationHtml,
   notificationProviderDeliveryUpdate,
+  notificationRetryPlan,
   platformNotificationEnabled,
 } = require("./notification_settings");
 const {
@@ -2109,6 +2110,104 @@ exports.syncSmsNotificationDeliveryStatus = onDocumentWritten(
         provider: "firestoreSmsQueue",
         providerDoc: after.data() || {},
       });
+    },
+);
+
+exports.retryNotificationDelivery = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const adminUid = requireAuth(request);
+      const adminUser = await getUserProfile(adminUid);
+      requireSuperAdmin(
+          adminUser,
+          "Only super admins can retry notification deliveries",
+      );
+
+      const deliveryId = String(request.data?.deliveryId || "").trim();
+      if (!deliveryId) {
+        throw new HttpsError("invalid-argument", "Delivery ID is required");
+      }
+
+      const db = admin.firestore();
+      const deliveryRef = db.collection("notificationDeliveries")
+          .doc(deliveryId);
+      const deliveryDoc = await deliveryRef.get();
+      if (!deliveryDoc.exists) {
+        throw new HttpsError("not-found", "Notification delivery not found");
+      }
+      const delivery = deliveryDoc.data() || {};
+      const status = String(delivery.status || "").trim().toLowerCase();
+      if (!["failed", "provider_not_configured", "queued"].includes(status)) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Only queued, failed, or provider setup deliveries can be retried",
+        );
+      }
+
+      const settings = await loadPlatformNotificationSettings(db);
+      const plan = notificationRetryPlan({deliveryId, delivery, settings});
+      if (!plan.ok) {
+        throw new HttpsError(
+            "failed-precondition",
+            plan.message,
+            {code: plan.code},
+        );
+      }
+
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      const providerRef = db.collection(plan.providerCollection)
+          .doc(deliveryId);
+      const providerDoc = await providerRef.get();
+      const providerPayload = {
+        ...plan.providerDoc,
+        retryRequestedAt: now,
+        retryRequestedBy: adminUid,
+        updatedAt: now,
+      };
+      if (providerDoc.exists) {
+        Object.assign(providerPayload, plan.existingProviderUpdate);
+      } else {
+        providerPayload.createdAt = now;
+      }
+
+      const batch = db.batch();
+      batch.set(providerRef, providerPayload, {merge: true});
+      batch.set(
+          deliveryRef,
+          {
+            ...plan.deliveryUpdate,
+            retryRequestedAt: now,
+            retryRequestedBy: adminUid,
+            updatedAt: now,
+          },
+          {merge: true},
+      );
+      setAdminAuditLog(batch, {
+        action: "notification_retry",
+        actorUid: adminUid,
+        targetCollection: "notificationDeliveries",
+        targetId: deliveryId,
+        targetLabel: adminRecordLabel(
+            "notificationDeliveries",
+            deliveryId,
+            delivery,
+        ),
+        statusField: "status",
+        previousValue: String(delivery.status || ""),
+        nextValue: "queued",
+      });
+      await batch.commit();
+
+      return {
+        success: true,
+        deliveryId,
+        channel: plan.channel,
+        provider: plan.provider,
+        status: "queued",
+      };
     },
 );
 

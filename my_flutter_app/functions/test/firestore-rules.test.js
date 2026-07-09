@@ -357,6 +357,13 @@ async function seedFirestore() {
         status: "escalated_to_platform",
         escalationStatus: "escalated",
       },
+      "notificationDeliveries/delivery_a": {
+        channel: "email",
+        status: "failed",
+        recipientUid: "owner-a",
+        recipientEmail: "owner@example.com",
+        title: "Verification update",
+      },
     };
 
     for (const [docPath, data] of Object.entries(docs)) {
@@ -584,6 +591,27 @@ describe("marketplace support Firestore rules", () => {
           body: "Client write should use callable",
         }),
     );
+  });
+});
+
+describe("notification delivery Firestore rules", () => {
+  it("allows admin reads and denies client writes", async () => {
+    const adminDb = firestoreFor("support-admin");
+    const customerDb = firestoreFor("customer-support");
+    const ownerDb = firestoreFor("owner-a");
+
+    await assertSucceeds(
+        adminDb.doc("notificationDeliveries/delivery_a").get(),
+    );
+    await assertSucceeds(adminDb.collection("notificationDeliveries").get());
+
+    await assertFails(
+        customerDb.doc("notificationDeliveries/delivery_a").get(),
+    );
+    await assertFails(ownerDb.doc("notificationDeliveries/delivery_a").get());
+    await assertFails(adminDb.doc("notificationDeliveries/delivery_a").set({
+      status: "queued",
+    }, {merge: true}));
   });
 });
 

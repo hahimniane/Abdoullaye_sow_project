@@ -4046,6 +4046,95 @@ button[data-loading="true"]::before {
   font-size: 13px;
   padding: 12px 16px;
 }
+.notification-delivery-tools select {
+  min-width: 170px;
+}
+.notification-delivery-toolbar {
+  align-items: center;
+  border-bottom: 1px solid rgba(13, 148, 136, 0.12);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+  padding: 14px 16px;
+}
+.notification-delivery-stats {
+  justify-content: end;
+}
+.notification-delivery-list {
+  display: grid;
+  max-height: 620px;
+  overflow: auto;
+}
+.notification-delivery-row {
+  align-items: start;
+  border-bottom: 1px solid rgba(13, 148, 136, 0.12);
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 14px 16px;
+}
+.notification-delivery-row:last-child {
+  border-bottom: 0;
+}
+.notification-delivery-main {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.notification-delivery-title {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.notification-delivery-title strong,
+.notification-delivery-main small,
+.notification-delivery-error,
+.notification-delivery-meta dd {
+  overflow-wrap: anywhere;
+}
+.notification-delivery-main small {
+  color: var(--muted);
+  font-size: 13px;
+}
+.notification-delivery-error {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 8px;
+  color: #7a4b00;
+  font-size: 12px;
+  font-weight: 750;
+  margin: 0;
+  padding: 7px 9px;
+}
+.notification-delivery-meta {
+  display: grid;
+  gap: 8px 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+.notification-delivery-meta div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.notification-delivery-meta dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.notification-delivery-meta dd {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 750;
+  margin: 0;
+}
+.notification-delivery-actions {
+  display: flex;
+  justify-content: flex-end;
+}
 .code-block {
   background: #0f172a;
   border-radius: 8px;
@@ -4229,6 +4318,15 @@ button[data-loading="true"]::before {
 }
 @media (max-width: 720px) {
   .settings-form { grid-template-columns: minmax(0, 1fr); }
+  .notification-delivery-toolbar,
+  .notification-delivery-row,
+  .notification-delivery-meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .notification-delivery-stats,
+  .notification-delivery-actions {
+    justify-content: start;
+  }
   .commission-toolbar {
     grid-template-columns: minmax(0, 1fr);
   }

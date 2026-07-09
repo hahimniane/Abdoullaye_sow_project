@@ -333,6 +333,14 @@ const statusLabels = {
   refund_pending: "Refund pending",
   refunded: "Refunded",
   forfeited: "Forfeited",
+  queued: "Queued",
+  processing: "Processing",
+  sent: "Sent",
+  failed: "Failed",
+  provider_not_configured: "Provider setup",
+  no_recipient: "No recipient",
+  disabled: "Disabled",
+  opted_out: "Opted out",
 };
 
 type Toast = {
@@ -533,6 +541,46 @@ const previewData = {
   notifications: [
     { id: "NOTE-4", businessName: "Atlantic Exports", message: "Business application waiting for review", status: "pending", type: "business_application" },
   ],
+  notificationDeliveries: [
+    {
+      id: "delivery-email-1",
+      channel: "email",
+      provider: "firebaseTriggerEmail",
+      status: "sent",
+      to: "owner@atlanticexports.com",
+      title: "Business review update",
+      body: "Your business is approved.",
+      preferenceKey: "businessActivity",
+      createdAt: "2026-07-08",
+      providerStatus: "SUCCESS",
+      providerMessageId: "smtp-preview-1",
+    },
+    {
+      id: "delivery-email-2",
+      channel: "email",
+      provider: "firebaseTriggerEmail",
+      status: "failed",
+      to: "support@example.com",
+      title: "Support case update",
+      body: "A support case needs attention.",
+      preferenceKey: "supportActivity",
+      createdAt: "2026-07-08",
+      providerStatus: "ERROR",
+      lastError: "SMTP authentication failed",
+    },
+    {
+      id: "delivery-sms-1",
+      channel: "sms",
+      provider: "none",
+      status: "provider_not_configured",
+      to: "+17185550199",
+      title: "Shipment update",
+      body: "Your barrel shipment changed status.",
+      preferenceKey: "shipmentActivity",
+      createdAt: "2026-07-08",
+      lastError: "SMS sender provider is not connected.",
+    },
+  ],
 } satisfies Record<string, FirestoreRow[]>;
 
 function slugify(value: string) {
@@ -568,6 +616,57 @@ function countBy(rows: FirestoreRow[], field: string) {
 function statusLabel(value: unknown) {
   const key = text(value, "pending").toLowerCase() as keyof typeof statusLabels;
   return statusLabels[key] ?? text(value, "Pending");
+}
+
+const deliveryStatusFilters = [
+  { id: "action_needed", label: "Action needed" },
+  { id: "all", label: "All statuses" },
+  { id: "queued", label: "Queued" },
+  { id: "processing", label: "Processing" },
+  { id: "sent", label: "Sent" },
+  { id: "failed", label: "Failed" },
+  { id: "provider_not_configured", label: "Provider setup" },
+  { id: "no_recipient", label: "No recipient" },
+] as const;
+
+function deliveryNeedsAttention(row: FirestoreRow) {
+  return [
+    "failed",
+    "provider_not_configured",
+    "no_recipient",
+    "queued",
+  ].includes(rowStatus(row));
+}
+
+function deliveryCanRetry(row: FirestoreRow) {
+  return ["failed", "provider_not_configured", "queued"].includes(
+      rowStatus(row),
+  ) && ["email", "sms"].includes(text(row.channel, "").toLowerCase());
+}
+
+function deliverySearchText(row: FirestoreRow) {
+  return [
+    row.id,
+    row.channel,
+    row.provider,
+    row.status,
+    row.to,
+    row.title,
+    row.body,
+    row.preferenceKey,
+    row.recipientUid,
+    row.lastError,
+    row.providerStatus,
+  ].map((value) => text(value, "")).join(" ").toLowerCase();
+}
+
+function deliveryStatusClass(status: string) {
+  return [
+    "failed",
+    "provider_not_configured",
+    "no_recipient",
+    "queued",
+  ].includes(status) ? "warning" : "";
 }
 
 async function commitStatusChange({
@@ -1108,6 +1207,11 @@ export function AdminConsole() {
   );
   const applications = useAdminCollection("businessApplications", enabled, 150);
   const notifications = useAdminCollection("platformNotifications", enabled, 150);
+  const notificationDeliveries = useAdminCollection(
+    "notificationDeliveries",
+    enabled && perms.tabs.includes("settings"),
+    250,
+  );
   const supportRequests = useAdminCollection("businessSupportRequests", enabled, 500);
   const featuredBusinesses = useAdminCollection(
     "featuredBusinesses",
@@ -1130,6 +1234,9 @@ export function AdminConsole() {
   const destinationRows = previewMode ? previewData.destinations : destinations.rows;
   const applicationRows = previewMode ? previewData.applications : applications.rows;
   const notificationRows = previewMode ? previewData.notifications : notifications.rows;
+  const notificationDeliveryRows = previewMode
+    ? previewData.notificationDeliveries
+    : notificationDeliveries.rows;
   const previewBusinesses = useMemo(() => {
     if (!previewMode) return previewData.businesses;
     const previewStripeReady =
@@ -1508,6 +1615,9 @@ export function AdminConsole() {
               businesses={businessRows}
               config={rolePermsConfig}
               currentUserId={firebaseUser?.uid ?? ""}
+              notificationDeliveries={notificationDeliveryRows}
+              notificationDeliveriesError={notificationDeliveries.error}
+              notificationDeliveriesLoading={notificationDeliveries.loading}
               pricing={pricingRows}
               previewMode={previewMode}
               runAction={runAction}
@@ -2349,6 +2459,9 @@ function SettingsView({
   businesses,
   config,
   currentUserId,
+  notificationDeliveries,
+  notificationDeliveriesError,
+  notificationDeliveriesLoading,
   pricing,
   previewMode,
   runAction,
@@ -2356,6 +2469,9 @@ function SettingsView({
   businesses: FirestoreRow[];
   config: PermissionsConfig | null;
   currentUserId: string;
+  notificationDeliveries: FirestoreRow[];
+  notificationDeliveriesError: string;
+  notificationDeliveriesLoading: boolean;
   pricing: FirestoreRow[];
   previewMode: boolean;
   runAction: (label: string, action: () => Promise<unknown>) => void;
@@ -2576,6 +2692,9 @@ function SettingsView({
       <MoreSettings
         businesses={businesses}
         currentUserId={currentUserId}
+        notificationDeliveries={notificationDeliveries}
+        notificationDeliveriesError={notificationDeliveriesError}
+        notificationDeliveriesLoading={notificationDeliveriesLoading}
         pricing={pricing}
         previewMode={previewMode}
         runAction={runAction}
@@ -2724,12 +2843,18 @@ function ToggleRow({
 function MoreSettings({
   businesses,
   currentUserId,
+  notificationDeliveries,
+  notificationDeliveriesError,
+  notificationDeliveriesLoading,
   pricing,
   previewMode,
   runAction,
 }: {
   businesses: FirestoreRow[];
   currentUserId: string;
+  notificationDeliveries: FirestoreRow[];
+  notificationDeliveriesError: string;
+  notificationDeliveriesLoading: boolean;
   pricing: FirestoreRow[];
   previewMode: boolean;
   runAction: (label: string, action: () => Promise<unknown>) => void;
@@ -2738,6 +2863,8 @@ function MoreSettings({
   const [platformFeeDraft, setPlatformFeeDraft] = useState("10");
   const [businessFeeDraft, setBusinessFeeDraft] = useState("10");
   const [businessFeeSearch, setBusinessFeeSearch] = useState("");
+  const [deliverySearch, setDeliverySearch] = useState("");
+  const [deliveryStatusFilter, setDeliveryStatusFilter] = useState("action_needed");
   const [selectedBusinessIds, setSelectedBusinessIds] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   const serviceFees = useMemo(
@@ -2760,6 +2887,29 @@ function MoreSettings({
   const selectedBusinesses = useMemo(
     () => eligibleBusinesses.filter((business) => selectedSet.has(business.id)),
     [eligibleBusinesses, selectedSet],
+  );
+  const sortedDeliveryRows = useMemo(
+    () => [...notificationDeliveries].sort((a, b) =>
+      (asDate(b.createdAt)?.getTime() ?? 0) -
+        (asDate(a.createdAt)?.getTime() ?? 0),
+    ),
+    [notificationDeliveries],
+  );
+  const filteredDeliveryRows = useMemo(() => {
+    const needle = deliverySearch.trim().toLowerCase();
+    return sortedDeliveryRows.filter((row) => {
+      const status = rowStatus(row);
+      const statusMatches = deliveryStatusFilter === "all" ||
+        (deliveryStatusFilter === "action_needed"
+          ? deliveryNeedsAttention(row)
+          : status === deliveryStatusFilter);
+      const searchMatches = !needle || deliverySearchText(row).includes(needle);
+      return statusMatches && searchMatches;
+    });
+  }, [deliverySearch, deliveryStatusFilter, sortedDeliveryRows]);
+  const attentionDeliveryCount = useMemo(
+    () => sortedDeliveryRows.filter(deliveryNeedsAttention).length,
+    [sortedDeliveryRows],
   );
 
   useEffect(() => {
@@ -2884,6 +3034,13 @@ function MoreSettings({
         platformFeeUpdatedBy: currentUserId,
       }),
     ));
+  }
+
+  async function retryDelivery(row: FirestoreRow) {
+    if (previewMode) return;
+    await httpsCallable(functions, "retryNotificationDelivery")({
+      deliveryId: row.id,
+    });
   }
 
   if (!loaded) {
@@ -3140,6 +3297,132 @@ function MoreSettings({
           <ToggleRow label="Support escalation emails" checked={draft.notifications.supportEscalations} onChange={(v) => setNotifications("supportEscalations", v)} />
           <ToggleRow label="Support case status emails" checked={draft.notifications.supportCaseUpdates} onChange={(v) => setNotifications("supportCaseUpdates", v)} />
           <ToggleRow label="Notify admins of new applications" checked={draft.notifications.notifyAdmins} onChange={(v) => setNotifications("notifyAdmins", v)} />
+        </div>
+      </Panel>
+
+      <Panel
+        title="Notification delivery audit"
+        icon={<ClipboardList size={18} />}
+        action={
+          <div className="panel-tools notification-delivery-tools">
+            <select
+              aria-label="Delivery status"
+              value={deliveryStatusFilter}
+              onChange={(event) => setDeliveryStatusFilter(event.target.value)}
+            >
+              {deliveryStatusFilters.map((filter) => (
+                <option key={filter.id} value={filter.id}>
+                  {filter.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        }
+      >
+        <div className="info-band">
+          Track queued, sent, failed, and provider setup states for email and SMS notifications. Retry only after the matching provider is connected.
+        </div>
+        {notificationDeliveriesError && (
+          <div className="info-band warning">
+            <strong>Delivery audit could not load</strong>{" "}
+            <span>{notificationDeliveriesError}</span>
+          </div>
+        )}
+        <div className="notification-delivery-toolbar">
+          <SearchBox
+            value={deliverySearch}
+            onChange={setDeliverySearch}
+            placeholder="Search deliveries"
+          />
+          <div className="compact-stats notification-delivery-stats">
+            <span>Total <b>{sortedDeliveryRows.length}</b></span>
+            <span>Needs attention <b>{attentionDeliveryCount}</b></span>
+            <span>Showing <b>{filteredDeliveryRows.length}</b></span>
+          </div>
+        </div>
+        <div className="notification-delivery-list">
+          {notificationDeliveriesLoading && (
+            <EmptyState text="Loading delivery records…" />
+          )}
+          {!notificationDeliveriesLoading &&
+            filteredDeliveryRows.slice(0, 80).map((row) => {
+              const status = rowStatus(row);
+              const canRetry = deliveryCanRetry(row);
+              return (
+                <article className="notification-delivery-row" key={row.id}>
+                  <div className="notification-delivery-main">
+                    <div className="notification-delivery-title">
+                      <span className={`status-pill compact ${deliveryStatusClass(status)}`}>
+                        {statusLabel(status)}
+                      </span>
+                      <strong>{text(row.title, "Notification")}</strong>
+                    </div>
+                    <small>{text(row.body, row.id)}</small>
+                    {Boolean(row.lastError) && (
+                      <p className="notification-delivery-error">
+                        {text(row.lastError, "")}
+                      </p>
+                    )}
+                    <dl className="notification-delivery-meta">
+                      <div>
+                        <dt>Channel</dt>
+                        <dd>{text(row.channel, "Unknown")}</dd>
+                      </div>
+                      <div>
+                        <dt>Provider</dt>
+                        <dd>{text(row.provider, "none")}</dd>
+                      </div>
+                      <div>
+                        <dt>Recipient</dt>
+                        <dd>{text(row.to, "No recipient")}</dd>
+                      </div>
+                      <div>
+                        <dt>Created</dt>
+                        <dd>{formatDate(row.createdAt)}</dd>
+                      </div>
+                      <div>
+                        <dt>Provider status</dt>
+                        <dd>{text(row.providerStatus, statusLabel(status))}</dd>
+                      </div>
+                      <div>
+                        <dt>Event</dt>
+                        <dd>{text(row.preferenceKey, "General")}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                  <div className="notification-delivery-actions">
+                    <button
+                      className="secondary-button compact"
+                      disabled={!canRetry}
+                      type="button"
+                      onClick={() =>
+                        runAction("Delivery retry queued", () =>
+                          retryDelivery(row),
+                        )
+                      }
+                    >
+                      <RefreshCw size={15} />
+                      Retry delivery
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          {!notificationDeliveriesLoading && filteredDeliveryRows.length > 80 && (
+            <div className="commission-more">
+              <span>Showing</span> <b>80</b>/<b>{filteredDeliveryRows.length}</b>.{" "}
+              <span>Search to narrow the list.</span>
+            </div>
+          )}
+          {!notificationDeliveriesLoading && filteredDeliveryRows.length === 0 && (
+            <EmptyState
+              text={
+                sortedDeliveryRows.length === 0
+                  ? "No delivery records yet"
+                  : "No delivery records match this search."
+              }
+            />
+          )}
         </div>
       </Panel>
     </>

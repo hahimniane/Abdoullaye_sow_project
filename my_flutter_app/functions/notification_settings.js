@@ -271,6 +271,109 @@ function notificationProviderDeliveryUpdate({channel, provider, providerDoc}) {
   return null;
 }
 
+function retryFailure(code, message) {
+  return {ok: false, code, message};
+}
+
+function notificationRetryPlan({deliveryId, delivery, settings}) {
+  const source = delivery && typeof delivery === "object" ? delivery : {};
+  const config = normalizePlatformNotificationSettings(settings);
+  const channel = cleanString(source.channel).toLowerCase();
+  const recipientUid = cleanString(source.recipientUid);
+  const title = cleanString(source.title) || "Laawol Digital update";
+  const body = cleanString(source.body);
+  const id = cleanString(deliveryId);
+  if (!id) {
+    return retryFailure(
+        "missing_delivery_id",
+        "Delivery ID is required.",
+    );
+  }
+
+  if (channel === "email") {
+    const email = cleanString(source.to).toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return retryFailure(
+          "missing_email_recipient",
+          "This delivery does not have a valid email recipient.",
+      );
+    }
+    if (config.emailEnabled === false ||
+      config.emailProvider !== "firebaseTriggerEmail") {
+      return retryFailure(
+          "email_provider_unavailable",
+          "Connect the Firebase Trigger Email provider before retrying.",
+      );
+    }
+    return {
+      ok: true,
+      channel,
+      provider: "firebaseTriggerEmail",
+      providerCollection: "mail",
+      deliveryUpdate: {
+        status: "queued",
+        provider: "firebaseTriggerEmail",
+        lastError: "",
+      },
+      providerDoc: {
+        to: [email],
+        message: {
+          subject: title,
+          text: body,
+          html: notificationHtml(title, body),
+        },
+        deliveryId: id,
+        recipientUid,
+      },
+      existingProviderUpdate: {
+        delivery: {state: "RETRY"},
+      },
+    };
+  }
+
+  if (channel === "sms") {
+    const phone = cleanString(source.to);
+    if (!phone) {
+      return retryFailure(
+          "missing_sms_recipient",
+          "This delivery does not have a phone recipient.",
+      );
+    }
+    if (config.smsEnabled === false ||
+      config.smsProvider !== "firestoreSmsQueue") {
+      return retryFailure(
+          "sms_provider_unavailable",
+          "Connect the Firestore SMS queue provider before retrying.",
+      );
+    }
+    return {
+      ok: true,
+      channel,
+      provider: "firestoreSmsQueue",
+      providerCollection: "smsMessages",
+      deliveryUpdate: {
+        status: "queued",
+        provider: "firestoreSmsQueue",
+        lastError: "",
+      },
+      providerDoc: {
+        to: phone,
+        body: body || title,
+        deliveryId: id,
+        recipientUid,
+      },
+      existingProviderUpdate: {
+        status: "queued",
+      },
+    };
+  }
+
+  return retryFailure(
+      "unsupported_channel",
+      "Only email and SMS deliveries can be retried.",
+  );
+}
+
 module.exports = {
   defaultNotificationPreferences,
   defaultPlatformNotificationSettings,
@@ -280,5 +383,6 @@ module.exports = {
   notificationDeliveryStatus,
   notificationHtml,
   notificationProviderDeliveryUpdate,
+  notificationRetryPlan,
   platformNotificationEnabled,
 };
