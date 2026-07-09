@@ -58,6 +58,8 @@ type PanelProps = {
   businessStatus?: string;
   businessProfileImageUrl?: string;
   enabledServices?: string[];
+  onOpenDestinations?: () => void;
+  openNewToken?: number;
 };
 
 type DestinationDraft = {
@@ -385,7 +387,7 @@ function defaultPoolRolloverDraft(row?: FirestoreRow | null): PoolRolloverDraft 
   };
 }
 
-export function DestinationsPanel({ businessId }: PanelProps) {
+export function DestinationsPanel({ businessId, openNewToken = 0 }: PanelProps) {
   const destinations = useBusinessSubcollectionRows(
     "destinationCountries",
     businessId,
@@ -398,6 +400,7 @@ export function DestinationsPanel({ businessId }: PanelProps) {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  const [handledOpenToken, setHandledOpenToken] = useState(0);
 
   const rows = useMemo(
     () =>
@@ -452,6 +455,16 @@ export function DestinationsPanel({ businessId }: PanelProps) {
     setMessage("");
     setFormOpen(true);
   }
+
+  useEffect(() => {
+    const token = Number(openNewToken);
+    if (token <= 0 || token === handledOpenToken || destinations.loading) return;
+    setEditingId("");
+    setDraft({ ...emptyDestinationDraft, countryId: (availableCountries[0] ?? countries[0]).id });
+    setMessage("");
+    setFormOpen(true);
+    setHandledOpenToken(token);
+  }, [availableCountries, destinations.loading, handledOpenToken, openNewToken]);
 
   async function saveDestination() {
     if (!businessId) throw new Error("Business ID is required.");
@@ -1207,7 +1220,7 @@ function deadlineHasPassed(value: unknown) {
   return Number.isFinite(parsed) && parsed <= Date.now();
 }
 
-export function BarrelsPanel({ businessId }: PanelProps) {
+export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
   const shipments = useBusinessRows("barrelShipments", businessId, Boolean(businessId), 500);
   const pools = useBusinessRows("barrelPools", businessId, Boolean(businessId), 500);
   const balanceRequests = useBusinessRows("barrelPoolBalanceRequests", businessId, Boolean(businessId), 500);
@@ -1461,7 +1474,17 @@ export function BarrelsPanel({ businessId }: PanelProps) {
           </div>
         </div>
         {activeDestinations.length === 0 && (
-          <div className="pool-config-note">Add an active barrel destination with a price before starting a shared pool.</div>
+          <div className="pool-config-note actionable">
+            <div>
+              <strong>Destination setup needed</strong>
+              <span>Shared pools need one active priced destination before you can start one.</span>
+            </div>
+            {onOpenDestinations && (
+              <button className="lst-btn" type="button" onClick={onOpenDestinations}>
+                <MapPinned size={15} /> Set up destinations
+              </button>
+            )}
+          </div>
         )}
         {pools.loading && <LoadingState />}
         {!pools.loading && pools.rows.length === 0 && (

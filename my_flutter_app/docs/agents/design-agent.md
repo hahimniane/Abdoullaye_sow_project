@@ -77,3 +77,7 @@ Return:
   layouts.
 - User-facing text belongs in the app localization system, not inline English
   strings or one-off translation helpers; review both English and French layouts.
+- Business dashboard sidebars should reduce service clutter with operational
+  hierarchy, not flat service lists. Keep Destinations under transport/shipping,
+  and preserve search/pin affordances so businesses with many services can
+  quickly find or prioritize the sections they use most.

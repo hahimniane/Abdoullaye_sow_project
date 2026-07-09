@@ -17,7 +17,9 @@ import {
   MessageCircle,
   Package,
   ParkingCircle,
+  Search,
   Sparkles,
+  Star,
   Truck,
   UserCog,
 } from "lucide-react";
@@ -40,6 +42,13 @@ import {
   useBusinessCollection,
   useBusinessStaff,
 } from "@/lib/business-data";
+import {
+  buildBusinessSidebarGroups,
+  businessSidebarTabs,
+  normalizePinnedTabs,
+  type BusinessSidebarTab,
+  type BusinessTab,
+} from "@/lib/business-sidebar";
 import { summarizeBusinessEarnings } from "@/lib/business-earnings";
 import { db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
@@ -49,19 +58,6 @@ import {
 } from "@/lib/payout-status";
 import { confirmImportantAction } from "@/lib/action-confirmation";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
-
-type BusinessTab =
-  | "today"
-  | "profile"
-  | "listings"
-  | "purchases"
-  | "barrels"
-  | "transport"
-  | "parking"
-  | "destinations"
-  | "people"
-  | "cases"
-  | "growth";
 
 type BusinessConsoleProps = {
   firebaseUser: User;
@@ -79,25 +75,7 @@ const serviceLabels: Record<string, string> = {
   carParking: "Car parking",
 };
 
-const tabConfig: Array<{
-  id: BusinessTab;
-  label: string;
-  description: string;
-  service?: string;
-  permission?: string;
-}> = [
-  {id: "today", label: "Today", description: "Needs attention"},
-  {id: "profile", label: "Business", description: "Profile and services", permission: "profile"},
-  {id: "listings", label: "Listings", description: "Vehicles for sale", service: "carSales", permission: "listings"},
-  {id: "purchases", label: "Purchases", description: "Holds and buyers", service: "carSales", permission: "purchases"},
-  {id: "barrels", label: "Barrels", description: "Shipping queue", service: "barrelShipping", permission: "barrels"},
-  {id: "transport", label: "Transport", description: "Vehicle moves", service: "carTransport", permission: "transport"},
-  {id: "parking", label: "Parking", description: "Stored cars", service: "carParking", permission: "parking"},
-  {id: "destinations", label: "Destinations", description: "Country pricing", service: "barrelShipping", permission: "destinations"},
-  {id: "people", label: "People", description: "Owners and staff", permission: "people"},
-  {id: "cases", label: "Support", description: "Customers and admin help", permission: "support"},
-  {id: "growth", label: "Growth", description: "Plan and AI advisor", permission: "growth"},
-];
+const businessSidebarStorageKey = "laawol:business-sidebar-pins";
 
 export function BusinessConsole({
   firebaseUser,
@@ -109,6 +87,9 @@ export function BusinessConsole({
   const previewMode = Boolean(previewBusiness);
   const [activeTab, setActiveTab] = useState<BusinessTab>("today");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarFilter, setSidebarFilter] = useState("");
+  const [pinnedTabs, setPinnedTabs] = useState<BusinessTab[]>(readPinnedTabs);
+  const [destinationSetupRequest, setDestinationSetupRequest] = useState(0);
   const [business, setBusiness] = useState<FirestoreRow | null>(previewBusiness);
   const [businessError, setBusinessError] = useState("");
   const enabled = Boolean(businessId && !previewMode);
@@ -159,7 +140,7 @@ export function BusinessConsole({
   const cars = useBusinessCollection("cars", businessId, enabled && canManageListings, null);
 
   const visibleTabs = useMemo(() => {
-    return tabConfig.filter((tab) => {
+    return businessSidebarTabs.filter((tab) => {
       const serviceAllowed = !tab.service ||
         services.has(tab.service) ||
         (tab.id === "listings" && cars.rows.length > 0);
@@ -170,10 +151,41 @@ export function BusinessConsole({
   }, [cars.rows.length, profile, services]);
 
   useEffect(() => {
+    setPinnedTabs((current) => {
+      const next = normalizePinnedTabs(current, visibleTabs);
+      if (next.length === current.length && next.every((id, index) => id === current[index])) {
+        return current;
+      }
+      writePinnedTabs(next);
+      return next;
+    });
+  }, [visibleTabs]);
+
+  useEffect(() => {
     if (!visibleTabs.some((tab) => tab.id === activeTab)) {
       setActiveTab("today");
     }
   }, [activeTab, visibleTabs]);
+
+  const sidebarGroups = useMemo(
+    () => buildBusinessSidebarGroups(visibleTabs, pinnedTabs, sidebarFilter),
+    [pinnedTabs, sidebarFilter, visibleTabs],
+  );
+
+  const togglePinnedTab = useCallback((tabId: BusinessTab) => {
+    setPinnedTabs((current) => {
+      const next = current.includes(tabId)
+        ? current.filter((id) => id !== tabId)
+        : [...current, tabId];
+      writePinnedTabs(next);
+      return next;
+    });
+  }, []);
+
+  const openDestinationSetup = useCallback(() => {
+    setDestinationSetupRequest((value) => value + 1);
+    setActiveTab("destinations");
+  }, []);
 
   const purchases = useBusinessCollection("carPurchases", businessId, enabled && services.has("carSales"), 500);
   const shipments = useBusinessCollection("barrelShipments", businessId, enabled && services.has("barrelShipping"), 500);
@@ -234,25 +246,39 @@ export function BusinessConsole({
       </header>
 
       <main className={`workspace ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
-        <nav className="sidebar" aria-label="Business sections">
-          <div className="nav-group">
-            <span className="nav-group-label">Workspace</span>
-            {visibleTabs.map((tab) => (
-              <button
-                className={activeTab === tab.id ? "active" : ""}
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                title={tab.label}
-                type="button"
-              >
-                {tabIcon(tab.id)}
-                <span className="nav-text">
-                  <b>{tab.label}</b>
-                  <small>{tab.description}</small>
-                </span>
+        <nav className="sidebar business-sidebar" aria-label="Business sections">
+          <div className="sidebar-search" role="search">
+            <Search size={15} />
+            <input
+              aria-label="Filter business sections"
+              onChange={(event) => setSidebarFilter(event.target.value)}
+              placeholder="Filter services..."
+              value={sidebarFilter}
+            />
+            {sidebarFilter.trim() && (
+              <button className="sidebar-clear" onClick={() => setSidebarFilter("")} type="button">
+                Clear
               </button>
-            ))}
+            )}
           </div>
+          {sidebarGroups.length === 0 && (
+            <div className="sidebar-empty">No sections match this filter.</div>
+          )}
+          {sidebarGroups.map((group) => (
+            <div className="nav-group" key={group.id}>
+              <span className="nav-group-label">{group.label}</span>
+              {group.tabs.map((tab) => (
+                <BusinessNavItem
+                  active={activeTab === tab.id}
+                  key={tab.id}
+                  onOpen={() => setActiveTab(tab.id)}
+                  onTogglePin={() => togglePinnedTab(tab.id)}
+                  pinned={pinnedTabs.includes(tab.id)}
+                  tab={tab}
+                />
+              ))}
+            </div>
+          ))}
         </nav>
 
         <section className="content">
@@ -305,7 +331,7 @@ export function BusinessConsole({
             <PurchasesPanel businessId={businessId} />
           )}
           {activeTab === "barrels" && (
-            <BarrelsPanel businessId={businessId} />
+            <BarrelsPanel businessId={businessId} onOpenDestinations={openDestinationSetup} />
           )}
           {activeTab === "transport" && (
             <TransportPanel businessId={businessId} />
@@ -314,7 +340,7 @@ export function BusinessConsole({
             <ParkingPanel businessId={businessId} businessName={businessName} />
           )}
           {activeTab === "destinations" && (
-            <DestinationsPanel businessId={businessId} />
+            <DestinationsPanel businessId={businessId} openNewToken={destinationSetupRequest} />
           )}
           {activeTab === "people" && (
             <BusinessPeoplePanel
@@ -346,6 +372,64 @@ export function BusinessConsole({
           )}
         </section>
       </main>
+    </div>
+  );
+}
+
+function readPinnedTabs() {
+  if (typeof window === "undefined") return [] as BusinessTab[];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(businessSidebarStorageKey) ?? "[]");
+    return Array.isArray(parsed)
+      ? normalizePinnedTabs(parsed, businessSidebarTabs)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePinnedTabs(tabs: readonly BusinessTab[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(businessSidebarStorageKey, JSON.stringify(tabs));
+}
+
+function BusinessNavItem({
+  active,
+  pinned,
+  tab,
+  onOpen,
+  onTogglePin,
+}: {
+  active: boolean;
+  pinned: boolean;
+  tab: BusinessSidebarTab;
+  onOpen: () => void;
+  onTogglePin: () => void;
+}) {
+  const pinTitle = pinned ? `Unpin ${tab.label}` : `Pin ${tab.label}`;
+  return (
+    <div className={`nav-row ${active ? "active" : ""}`}>
+      <button
+        className={active ? "nav-main active" : "nav-main"}
+        onClick={onOpen}
+        title={tab.label}
+        type="button"
+      >
+        {tabIcon(tab.id)}
+        <span className="nav-text">
+          <b>{tab.label}</b>
+          <small>{tab.description}</small>
+        </span>
+      </button>
+      <button
+        aria-label={pinTitle}
+        className={pinned ? "nav-pin is-pinned" : "nav-pin"}
+        onClick={onTogglePin}
+        title={pinTitle}
+        type="button"
+      >
+        <Star fill={pinned ? "currentColor" : "none"} size={13} />
+      </button>
     </div>
   );
 }
