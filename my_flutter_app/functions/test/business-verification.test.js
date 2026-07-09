@@ -6,9 +6,11 @@ const {describe, it} = require("node:test");
 
 const {
   VALID_BUSINESS_VERIFICATION_DOCUMENT_IDS,
+  buildBusinessVerificationBypassUpdate,
   buildBusinessVerificationDocumentSubmissionUpdate,
   buildBusinessVerificationStoragePath,
   buildBusinessVerificationReviewUpdate,
+  businessServicesForVerification,
   businessVerificationApprovalReadiness,
   cleanBusinessVerificationUploadPayload,
   cleanVerificationDocumentUpdates,
@@ -299,6 +301,31 @@ describe("business verification review helpers", () => {
     );
   });
 
+  it("reads services from legacy business service fields", () => {
+    assert.deepEqual(
+        businessServicesForVerification({
+          businessServices: ["carSales", "carParking"],
+          enabledServices: [],
+        }),
+        ["carSales", "carParking"],
+    );
+
+    const readiness = businessVerificationApprovalReadiness({
+      businessServices: ["carSales"],
+      stripeAccountId: "acct_ready",
+      chargesEnabled: true,
+      payoutsEnabled: true,
+      verificationReview: {
+        documents: {
+          dealerLicense: {status: "verified"},
+        },
+      },
+    });
+
+    assert.equal(readiness.ready, true);
+    assert.deepEqual(readiness.requiredDocumentIds, ["dealerLicense"]);
+  });
+
   it("allows approval only after Stripe and platform documents are ready",
       () => {
         const ready = businessVerificationApprovalReadiness({
@@ -339,4 +366,85 @@ describe("business verification review helpers", () => {
             ["Dealer license or sales authorization"],
         );
       });
+
+  it("allows platform document bypass only after Stripe is ready", () => {
+    const blocked = businessVerificationApprovalReadiness({
+      enabledServices: ["carSales"],
+      stripeAccountId: "acct_ready",
+      chargesEnabled: true,
+      payoutsEnabled: true,
+      verificationDocuments: {
+        dealerLicense: {status: "submitted", path: "docs/dealer.pdf"},
+      },
+    });
+    assert.equal(blocked.ready, false);
+
+    const bypassed = businessVerificationApprovalReadiness({
+      enabledServices: ["carSales"],
+      stripeAccountId: "acct_ready",
+      chargesEnabled: true,
+      payoutsEnabled: true,
+      verificationDocuments: {
+        dealerLicense: {status: "submitted", path: "docs/dealer.pdf"},
+      },
+    }, {allowPlatformDocumentBypass: true});
+    assert.equal(bypassed.ready, true);
+    assert.equal(bypassed.platformDocumentsBypassed, true);
+    assert.deepEqual(bypassed.blockers, []);
+
+    const missingStripe = businessVerificationApprovalReadiness({
+      enabledServices: ["carSales"],
+      verificationDocuments: {
+        dealerLicense: {status: "submitted", path: "docs/dealer.pdf"},
+      },
+    }, {allowPlatformDocumentBypass: true});
+    assert.equal(missingStripe.ready, false);
+    assert.deepEqual(missingStripe.blockers, [
+      "Stripe verification",
+      "Dealer license or sales authorization",
+    ]);
+  });
+
+  it("builds an audited platform document bypass update", () => {
+    const timestamp = Symbol("timestamp");
+    assert.deepEqual(
+        buildBusinessVerificationBypassUpdate({
+          business: {
+            enabledServices: ["carSales"],
+            stripeAccountId: "acct_ready",
+            chargesEnabled: true,
+            payoutsEnabled: true,
+          },
+          note: "Approved based on prior offline review.",
+          adminUid: "admin-a",
+          timestamp,
+        }),
+        {
+          "verificationReview.documents.dealerLicense": {
+            status: "not_applicable",
+            note: "Approved based on prior offline review.",
+            updatedAt: timestamp,
+            updatedBy: "admin-a",
+            bypassed: true,
+          },
+          "verificationReview.note": "Approved based on prior offline review.",
+          "verificationReview.platformDocumentsBypassed": true,
+          "verificationReview.platformDocumentsBypassedAt": timestamp,
+          "verificationReview.platformDocumentsBypassedBy": "admin-a",
+          "verificationReview.updatedAt": timestamp,
+          "verificationReview.updatedBy": "admin-a",
+          updatedAt: timestamp,
+          updatedBy: "admin-a",
+        },
+    );
+
+    assert.throws(
+        () => buildBusinessVerificationBypassUpdate({
+          business: {enabledServices: ["carSales"]},
+          adminUid: "admin-a",
+          timestamp,
+        }),
+        /Stripe verification must be complete/,
+    );
+  });
 });

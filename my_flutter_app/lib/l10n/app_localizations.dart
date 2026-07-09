@@ -5588,6 +5588,24 @@ abstract class AppLocalizations {
   /// **'Notification preferences'**
   String get notificationPreferences;
 
+  /// No description provided for @pushNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Push notifications'**
+  String get pushNotifications;
+
+  /// No description provided for @emailNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Email notifications'**
+  String get emailNotifications;
+
+  /// No description provided for @smsNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'SMS notifications'**
+  String get smsNotifications;
+
   /// No description provided for @carActivityNotifications.
   ///
   /// In en, this message translates to:

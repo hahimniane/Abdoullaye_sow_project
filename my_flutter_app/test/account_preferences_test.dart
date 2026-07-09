@@ -6,6 +6,9 @@ void main() {
   test('notification preferences default to important activity enabled', () {
     final prefs = NotificationPreferences.fromMap(null);
 
+    expect(prefs.pushNotifications, isTrue);
+    expect(prefs.emailNotifications, isTrue);
+    expect(prefs.smsNotifications, isFalse);
     expect(prefs.carActivity, isTrue);
     expect(prefs.shipmentActivity, isTrue);
     expect(prefs.walletActivity, isTrue);
@@ -20,9 +23,13 @@ void main() {
     final prefs = NotificationPreferences.defaults.copyWith(
       shipmentActivity: false,
       walletActivity: false,
+      smsNotifications: true,
     );
 
     expect(prefs.toMap(), {
+      'pushNotifications': true,
+      'emailNotifications': true,
+      'smsNotifications': true,
       'carActivity': true,
       'shipmentActivity': false,
       'walletActivity': false,
@@ -39,6 +46,10 @@ void main() {
     expect(
       NotificationPreferences.fromMap(prefs.toMap()).walletActivity,
       isFalse,
+    );
+    expect(
+      NotificationPreferences.fromMap(prefs.toMap()).smsNotifications,
+      isTrue,
     );
     final supportDisabled = NotificationPreferences.fromMap({
       'supportActivity': false,

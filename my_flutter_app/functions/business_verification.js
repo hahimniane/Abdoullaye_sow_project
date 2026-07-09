@@ -86,6 +86,21 @@ function stringList(value) {
   return value.map((item) => cleanString(item)).filter(Boolean);
 }
 
+function uniqueStringList(values) {
+  return Array.from(
+      new Set(values.map((item) => cleanString(item)).filter(Boolean)),
+  );
+}
+
+function businessServicesForVerification(business) {
+  return uniqueStringList([
+    ...stringList(business?.enabledServices),
+    ...stringList(business?.businessServices),
+    ...stringList(business?.services),
+    ...stringList(business?.serviceIds),
+  ]);
+}
+
 function objectValue(value) {
   return value && typeof value === "object" && !Array.isArray(value) ?
     value :
@@ -183,8 +198,8 @@ function requiredBusinessVerificationDocuments(services) {
   );
 }
 
-function businessVerificationApprovalReadiness(business) {
-  const services = stringList(business?.enabledServices);
+function businessVerificationApprovalReadiness(business, options = {}) {
+  const services = businessServicesForVerification(business);
   const requiredDocuments = requiredBusinessVerificationDocuments(services);
   const documentBlockers = requiredDocuments
       .map((requirement) => ({
@@ -202,15 +217,63 @@ function businessVerificationApprovalReadiness(business) {
     business?.payoutsEnabled === true;
   const blockers = [
     ...(stripeReady ? [] : ["Stripe verification"]),
-    ...documentBlockers.map((document) => document.label),
+    ...(options.allowPlatformDocumentBypass && stripeReady ?
+      [] :
+      documentBlockers.map((document) => document.label)),
   ];
+  const platformDocumentsBypassed =
+    Boolean(options.allowPlatformDocumentBypass) &&
+    stripeReady &&
+    documentBlockers.length > 0;
   return {
-    ready: stripeReady && documentBlockers.length === 0,
+    ready: stripeReady && (documentBlockers.length === 0 ||
+      platformDocumentsBypassed),
     stripeReady,
     requiredDocumentIds: requiredDocuments.map((document) => document.id),
     documentBlockers,
     blockers,
+    platformDocumentsBypassed,
   };
+}
+
+function buildBusinessVerificationBypassUpdate({
+  business,
+  note,
+  adminUid,
+  timestamp,
+}) {
+  const readiness = businessVerificationApprovalReadiness(business, {
+    allowPlatformDocumentBypass: true,
+  });
+  if (!readiness.stripeReady) {
+    throw new Error(
+        "Stripe verification must be complete before bypassing " +
+        "platform documents",
+    );
+  }
+  const bypassNote = cleanString(note) ||
+    "Platform document checklist bypassed by an administrator after " +
+      "Stripe verification completed.";
+  const update = {
+    "verificationReview.note": bypassNote,
+    "verificationReview.platformDocumentsBypassed": true,
+    "verificationReview.platformDocumentsBypassedAt": timestamp,
+    "verificationReview.platformDocumentsBypassedBy": adminUid,
+    "verificationReview.updatedAt": timestamp,
+    "verificationReview.updatedBy": adminUid,
+    updatedAt: timestamp,
+    updatedBy: adminUid,
+  };
+  for (const document of readiness.documentBlockers) {
+    update[`verificationReview.documents.${document.id}`] = {
+      status: "not_applicable",
+      note: bypassNote,
+      updatedAt: timestamp,
+      updatedBy: adminUid,
+      bypassed: true,
+    };
+  }
+  return update;
 }
 
 function buildBusinessVerificationReviewUpdate({
@@ -408,9 +471,11 @@ module.exports = {
   VALID_BUSINESS_VERIFICATION_DOCUMENT_IDS,
   VALID_BUSINESS_VERIFICATION_CONTENT_TYPES,
   VALID_VERIFICATION_STATUSES,
+  buildBusinessVerificationBypassUpdate,
   buildBusinessVerificationDocumentSubmissionUpdate,
   buildBusinessVerificationStoragePath,
   buildBusinessVerificationReviewUpdate,
+  businessServicesForVerification,
   businessVerificationApprovalReadiness,
   cleanBusinessVerificationUploadPayload,
   cleanVerificationDocumentUpdates,

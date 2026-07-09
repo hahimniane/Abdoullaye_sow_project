@@ -113,10 +113,19 @@ export function businessServiceLabel(serviceId: string): string {
   return SERVICE_LABELS[serviceId] ?? serviceId;
 }
 
+function serviceListFromValue(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item)).filter(Boolean);
+}
+
 export function businessServicesFromRow(row: FirestoreRow): string[] {
-  return Array.isArray(row.enabledServices)
-    ? row.enabledServices.map((item) => String(item)).filter(Boolean)
-    : [];
+  const services = [
+    ...serviceListFromValue(row.enabledServices),
+    ...serviceListFromValue(row.businessServices),
+    ...serviceListFromValue(row.services),
+    ...serviceListFromValue(row.serviceIds),
+  ];
+  return Array.from(new Set(services));
 }
 
 export function requiredBusinessVerificationDocuments(

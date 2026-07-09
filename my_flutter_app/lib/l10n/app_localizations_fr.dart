@@ -3071,6 +3071,15 @@ class AppLocalizationsFr extends AppLocalizations {
   String get notificationPreferences => 'Préférences de notification';
 
   @override
+  String get pushNotifications => 'Notifications push';
+
+  @override
+  String get emailNotifications => 'Notifications par email';
+
+  @override
+  String get smsNotifications => 'Notifications par SMS';
+
+  @override
   String get carActivityNotifications =>
       'Mises à jour d’achat et de réservation de voitures';
 

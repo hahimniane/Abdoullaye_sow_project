@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   buildBusinessVerificationChecklist,
+  businessServicesFromRow,
   businessVerificationActionCount,
   requiredBusinessVerificationDocuments,
   resolveBusinessStripeVerification,
@@ -43,6 +44,32 @@ test("business verification checklist detects submitted evidence in map fields",
   assert.equal(byId.dealerLicense.status, "submitted");
   assert.equal(byId.dealerLicense.evidence.label, "dealer.pdf");
   assert.equal(checklist.summary.approvalReady, false);
+});
+
+test("business verification checklist accepts legacy business service fields", () => {
+  const services = businessServicesFromRow({
+    id: "biz_legacy",
+    businessServices: ["carSales", "carParking"],
+    enabledServices: [],
+  });
+
+  assert.deepEqual(services, ["carSales", "carParking"]);
+
+  const checklist = buildBusinessVerificationChecklist({
+    id: "biz_legacy",
+    businessServices: ["carSales"],
+    verificationDocuments: {
+      dealerLicense: {
+        fileName: "dealer-license.pdf",
+        url: "https://storage.example.com/dealer-license.pdf",
+      },
+    },
+  });
+
+  assert.equal(checklist.items.length, 1);
+  assert.equal(checklist.items[0].id, "dealerLicense");
+  assert.equal(checklist.items[0].evidence.present, true);
+  assert.equal(checklist.items[0].status, "submitted");
 });
 
 test("business verification checklist treats verified and not-applicable items as approvable", () => {

@@ -25,14 +25,24 @@ const {
   buildFeaturingRequestUpdate,
 } = require("./featured_business");
 const {
+  buildBusinessVerificationBypassUpdate,
   buildBusinessVerificationDocumentSubmissionUpdate,
   buildBusinessVerificationReviewUpdate,
+  businessServicesForVerification,
   businessVerificationApprovalReadiness,
   cleanBusinessVerificationUploadPayload,
 } = require("./business_verification");
 const {
   buildStripeAccountBusinessUpdate,
 } = require("./stripe_connect_status");
+const {
+  defaultNotificationPreferences,
+  normalizeNotificationPreferences,
+  normalizePlatformNotificationSettings,
+  notificationData,
+  notificationHtml,
+  platformNotificationEnabled,
+} = require("./notification_settings");
 const {
   buildOpenBarrelMirrorPayload,
   isValidStripeSecretKey,
@@ -808,10 +818,18 @@ function statusUpdatePayload({statusField, previousStatus, nextStatus, uid}) {
   };
 }
 
-function assertBusinessApprovalReady(business, enabledServices) {
+function assertBusinessApprovalReady(
+    business,
+    enabledServices,
+    options = {},
+) {
   const readiness = businessVerificationApprovalReadiness({
     ...(business || {}),
-    enabledServices: enabledServices || business?.enabledServices || [],
+    enabledServices: enabledServices ||
+      businessServicesForVerification(business || {}),
+  }, {
+    allowPlatformDocumentBypass:
+      options.allowPlatformDocumentBypass === true,
   });
   if (readiness.ready) return readiness;
   const suffix = readiness.blockers.length ?
@@ -1929,46 +1947,95 @@ function normalizePhoneAlias(value) {
   return String(value || "").replace(/\D/g, "");
 }
 
-function defaultNotificationPreferences() {
-  return {
-    carActivity: true,
-    shipmentActivity: true,
-    walletActivity: true,
-    businessActivity: true,
-    supportActivity: true,
-    supportMessages: true,
-    supportEscalations: true,
-    supportCaseUpdates: true,
-  };
+async function loadPlatformNotificationSettings(db) {
+  const snap = await db.collection("platformConfig").doc("general").get();
+  const data = snap.exists ? snap.data() : {};
+  return normalizePlatformNotificationSettings(data?.notifications);
 }
 
-function normalizeNotificationPreferences(raw) {
-  const defaults = defaultNotificationPreferences();
-  const prefs = raw && typeof raw === "object" ? raw : {};
-  return {
-    carActivity: prefs.carActivity !== false && defaults.carActivity,
-    shipmentActivity:
-      prefs.shipmentActivity !== false && defaults.shipmentActivity,
-    walletActivity: prefs.walletActivity !== false && defaults.walletActivity,
-    businessActivity:
-      prefs.businessActivity !== false && defaults.businessActivity,
-    supportActivity:
-      prefs.supportActivity !== false && defaults.supportActivity,
-    supportMessages:
-      prefs.supportMessages !== false && prefs.supportActivity !== false &&
-        defaults.supportMessages,
-    supportEscalations:
-      prefs.supportEscalations !== false && prefs.supportActivity !== false &&
-        defaults.supportEscalations,
-    supportCaseUpdates:
-      prefs.supportCaseUpdates !== false && prefs.supportActivity !== false &&
-        defaults.supportCaseUpdates,
+async function queueNotificationDeliveries({
+  db,
+  uid,
+  user,
+  settings,
+  prefs,
+  preferenceKey,
+  title,
+  body,
+  data,
+}) {
+  const cleanTitle = String(title || "Laawol Digital update").trim();
+  const cleanBody = String(body || "").trim();
+  const cleanData = notificationData(data);
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const batch = db.batch();
+  let writes = 0;
+  const base = {
+    preferenceKey,
+    title: cleanTitle,
+    body: cleanBody,
+    data: cleanData,
+    recipientUid: uid,
+    createdAt: now,
+    updatedAt: now,
   };
+  const email = String(user?.email || "").trim().toLowerCase();
+  if (
+    settings.emailEnabled !== false &&
+    prefs.emailNotifications !== false &&
+    isValidEmail(email)
+  ) {
+    const deliveryRef = db.collection("notificationDeliveries").doc();
+    batch.set(deliveryRef, {
+      ...base,
+      channel: "email",
+      status: "queued",
+      to: email,
+    });
+    batch.set(db.collection("mail").doc(deliveryRef.id), {
+      to: [email],
+      message: {
+        subject: cleanTitle,
+        text: cleanBody,
+        html: notificationHtml(cleanTitle, cleanBody),
+      },
+      deliveryId: deliveryRef.id,
+      recipientUid: uid,
+      createdAt: now,
+    });
+    writes += 2;
+  }
+  const phone = String(user?.phone || user?.normalizedPhone || "").trim();
+  if (
+    settings.smsEnabled !== false &&
+    prefs.smsNotifications === true &&
+    phone
+  ) {
+    const deliveryRef = db.collection("notificationDeliveries").doc();
+    batch.set(deliveryRef, {
+      ...base,
+      channel: "sms",
+      status: "queued",
+      to: phone,
+    });
+    batch.set(db.collection("smsMessages").doc(deliveryRef.id), {
+      to: phone,
+      body: cleanBody || cleanTitle,
+      deliveryId: deliveryRef.id,
+      recipientUid: uid,
+      createdAt: now,
+    });
+    writes += 2;
+  }
+  if (writes > 0) {
+    await batch.commit();
+  }
 }
 
 async function sendPreferenceNotification({
   uid,
   preferenceKey,
+  settingKey = "",
   title,
   body,
   data = {},
@@ -1977,10 +2044,28 @@ async function sendPreferenceNotification({
   const db = admin.firestore();
   const userSnap = await db.collection("users").doc(uid).get();
   if (!userSnap.exists) return;
+  const user = userSnap.data() || {};
   const prefs = normalizeNotificationPreferences(
-      userSnap.data()?.notificationPreferences,
+      user.notificationPreferences,
   );
   if (prefs[preferenceKey] === false) return;
+  const settings = await loadPlatformNotificationSettings(db);
+  if (!platformNotificationEnabled(settings, preferenceKey, settingKey)) return;
+
+  await queueNotificationDeliveries({
+    db,
+    uid,
+    user,
+    settings,
+    prefs,
+    preferenceKey,
+    title,
+    body,
+    data,
+  });
+  if (settings.pushEnabled === false || prefs.pushNotifications === false) {
+    return;
+  }
 
   const tokensSnap = await db.collection("users")
       .doc(uid)
@@ -2024,6 +2109,61 @@ async function sendPreferenceNotification({
     logger.warn("Push notification send failed", {uid, code});
     return Promise.resolve();
   }));
+}
+
+async function notifyAdminsForPlatformEvent({
+  capability,
+  settingKey,
+  title,
+  body,
+  data = {},
+}) {
+  const db = admin.firestore();
+  const settings = await loadPlatformNotificationSettings(db);
+  if (settings.notifyAdmins === false || settings[settingKey] === false) {
+    return;
+  }
+  const admins = await db.collection("users")
+      .where("role", "==", "admin")
+      .limit(100)
+      .get();
+  await Promise.all(admins.docs.map((doc) => {
+    const user = {id: doc.id, ...doc.data()};
+    if (capability && !hasAdminCapability(user, capability)) {
+      return Promise.resolve();
+    }
+    return sendPreferenceNotification({
+      uid: doc.id,
+      preferenceKey: "businessActivity",
+      settingKey,
+      title,
+      body,
+      data,
+    });
+  }));
+}
+
+async function safeSendPreferenceNotification(payload) {
+  try {
+    await sendPreferenceNotification(payload);
+  } catch (error) {
+    logger.warn("Notification delivery failed", {
+      preferenceKey: payload?.preferenceKey || "",
+      uid: payload?.uid || "",
+      error: error?.message || String(error),
+    });
+  }
+}
+
+async function safeNotifyAdminsForPlatformEvent(payload) {
+  try {
+    await notifyAdminsForPlatformEvent(payload);
+  } catch (error) {
+    logger.warn("Admin notification delivery failed", {
+      settingKey: payload?.settingKey || "",
+      error: error?.message || String(error),
+    });
+  }
 }
 
 function statusChanged(event) {
@@ -3425,6 +3565,21 @@ exports.submitBusinessApplication = onCall(
         }
       });
 
+      if (responseStatus !== "approved") {
+        await safeNotifyAdminsForPlatformEvent({
+          capability: "businesses",
+          settingKey: "newApplication",
+          title: "New business application",
+          body: `${profile.name} is waiting for platform approval.`,
+          data: {
+            type: "business_application",
+            businessId,
+            applicationId: applicationRef.id,
+            status: responseStatus,
+          },
+        });
+      }
+
       return {
         success: true,
         businessId,
@@ -3689,7 +3844,9 @@ exports.updateAdminRecordStatus = onCall(
       if (collectionName === "businesses" && nextStatus === "approved") {
         assertBusinessApprovalReady(
             current,
-            normalizeBusinessServices(current.enabledServices),
+            normalizeBusinessServices(
+                businessServicesForVerification(current),
+            ),
         );
       }
       const previousStatus = current[config.statusField] || "";
@@ -3844,6 +4001,23 @@ exports.updateBusinessVerificationReview = onCall(
       });
       await batch.commit();
 
+      const business = businessDoc.data() || {};
+      if (business.ownerUid) {
+        await safeSendPreferenceNotification({
+          uid: business.ownerUid,
+          preferenceKey: "businessActivity",
+          settingKey: "verificationDocuments",
+          title: "Business verification updated",
+          body:
+            String(request.data?.note || "").trim() ||
+            "Laawol reviewed your business verification checklist.",
+          data: {
+            type: "business_verification_review",
+            businessId,
+          },
+        });
+      }
+
       return {success: true, businessId};
     },
 );
@@ -3902,6 +4076,20 @@ exports.submitBusinessVerificationDocument = onCall(
         nextValue: String(request.data?.documentId || ""),
       });
       await batch.commit();
+
+      await safeNotifyAdminsForPlatformEvent({
+        capability: "businesses",
+        settingKey: "verificationDocuments",
+        title: "Business document submitted",
+        body:
+          `${businessDoc.data()?.name || businessId} submitted ` +
+          `${request.data?.documentId || "a verification document"}.`,
+        data: {
+          type: "business_verification_document",
+          businessId,
+          documentId: String(request.data?.documentId || ""),
+        },
+      });
 
       return {success: true, businessId};
     },
@@ -4003,6 +4191,20 @@ exports.uploadBusinessVerificationDocument = onCall(
       });
       await batch.commit();
 
+      await safeNotifyAdminsForPlatformEvent({
+        capability: "businesses",
+        settingKey: "verificationDocuments",
+        title: "Business document uploaded",
+        body:
+          `${businessDoc.data()?.name || businessId} uploaded ` +
+          `${upload.documentId}.`,
+        data: {
+          type: "business_verification_document",
+          businessId,
+          documentId: upload.documentId,
+        },
+      });
+
       return {
         success: true,
         businessId,
@@ -4040,6 +4242,8 @@ exports.reviewBusinessApplication = onCall(
         serviceNote,
         ownerUid,
         reviewNote,
+        platformDocumentBypass,
+        platformDocumentBypassNote,
       } = request.data || {};
       if (!businessId || !action) {
         throw new HttpsError(
@@ -4091,16 +4295,24 @@ exports.reviewBusinessApplication = onCall(
       if (profile.website) {
         profile.website = requireValidWebsite(profile.website);
       }
+      const currentServices = businessServicesForVerification(current);
       const normalizedServices = normalizeBusinessServices(
           enabledServices,
-          current.enabledServices || DEFAULT_BUSINESS_SERVICES,
+          currentServices.length ? currentServices : DEFAULT_BUSINESS_SERVICES,
       );
+      const approveWithPlatformBypass =
+        nextStatus === "approved" && platformDocumentBypass === true;
+      let approvalReadiness = null;
       if (nextStatus === "approved") {
-        assertBusinessApprovalReady(current, normalizedServices);
+        approvalReadiness = assertBusinessApprovalReady(
+            current,
+            normalizedServices,
+            {allowPlatformDocumentBypass: approveWithPlatformBypass},
+        );
       }
 
       const now = admin.firestore.FieldValue.serverTimestamp();
-      await businessRef.set({
+      const businessUpdate = {
         ...profile,
         enabledServices: normalizedServices,
         ownerUid: ownerUid || current.ownerUid || "",
@@ -4110,18 +4322,22 @@ exports.reviewBusinessApplication = onCall(
         reviewedBy: adminUid,
         reviewNote: String(reviewNote || "").trim(),
         updatedAt: now,
-      }, {merge: true});
+      };
+      const bypassUpdate =
+        approveWithPlatformBypass &&
+        approvalReadiness?.platformDocumentsBypassed === true ?
+          buildBusinessVerificationBypassUpdate({
+            business: {
+              ...current,
+              enabledServices: normalizedServices,
+            },
+            note: platformDocumentBypassNote || reviewNote,
+            adminUid,
+            timestamp: now,
+          }) :
+          {};
 
       const resolvedOwnerUid = ownerUid || current.ownerUid;
-      if (resolvedOwnerUid) {
-        await db.collection("users").doc(resolvedOwnerUid).set({
-          role: "businessOwner",
-          businessId,
-          businessName: profile.name,
-          businessServices: normalizedServices,
-          updatedAt: now,
-        }, {merge: true});
-      }
 
       const applicationDocs = await db.collection("businessApplications")
           .where("businessId", "==", businessId)
@@ -4132,6 +4348,19 @@ exports.reviewBusinessApplication = onCall(
           .where("type", "==", "business_application")
           .get();
       const batch = db.batch();
+      batch.update(businessRef, {
+        ...businessUpdate,
+        ...bypassUpdate,
+      });
+      if (resolvedOwnerUid) {
+        batch.set(db.collection("users").doc(resolvedOwnerUid), {
+          role: "businessOwner",
+          businessId,
+          businessName: profile.name,
+          businessServices: normalizedServices,
+          updatedAt: now,
+        }, {merge: true});
+      }
       applicationDocs.docs.forEach((doc) => {
         batch.update(doc.ref, {
           status: nextStatus,
@@ -4179,6 +4408,21 @@ exports.reviewBusinessApplication = onCall(
         state: profile.state,
         postalCode: profile.postalCode,
       });
+
+      if (resolvedOwnerUid) {
+        await safeSendPreferenceNotification({
+          uid: resolvedOwnerUid,
+          preferenceKey: "businessActivity",
+          settingKey: "businessLifecycle",
+          title: "Business application update",
+          body: `Your business is now ${nextStatus.replace(/_/g, " ")}.`,
+          data: {
+            type: "business_application_status",
+            businessId,
+            status: nextStatus,
+          },
+        });
+      }
 
       return {
         success: true,

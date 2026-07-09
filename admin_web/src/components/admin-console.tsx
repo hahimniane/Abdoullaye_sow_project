@@ -1130,6 +1130,29 @@ export function AdminConsole() {
   const destinationRows = previewMode ? previewData.destinations : destinations.rows;
   const applicationRows = previewMode ? previewData.applications : applications.rows;
   const notificationRows = previewMode ? previewData.notifications : notifications.rows;
+  const previewBusinesses = useMemo(() => {
+    if (!previewMode) return previewData.businesses;
+    const previewStripeReady =
+      typeof window !== "undefined" &&
+      new URL(window.location.href).searchParams.get("stripe") === "ready";
+    if (!previewStripeReady) return previewData.businesses;
+    return previewData.businesses.map((business) =>
+      business.id === "atlantic_exports"
+        ? {
+            ...business,
+            stripeAccountId: "acct_atlantic_ready",
+            chargesEnabled: true,
+            payoutsEnabled: true,
+            stripeRequirements: {
+              currentlyDue: [],
+              pastDue: [],
+              pendingVerification: [],
+              disabledReason: "",
+            },
+          }
+        : business,
+    );
+  }, [previewMode]);
   const supportRequestRows = previewMode
     ? previewData.supportRequests
     : supportRequests.rows;
@@ -1165,7 +1188,7 @@ export function AdminConsole() {
         supportRequestRows,
       ]);
   const businessRows = previewMode
-    ? previewData.businesses
+    ? previewBusinesses
     : businessDirectory(businesses.rows, [
         carRows,
         shipmentRows,
@@ -2582,10 +2605,18 @@ const GENERAL_DEFAULTS = {
     autoApprove: false,
   },
   notifications: {
+    pushEnabled: true,
+    emailEnabled: true,
+    smsEnabled: false,
     purchaseStatus: true,
     shipmentStatus: true,
     refundDecision: true,
     newApplication: true,
+    businessLifecycle: true,
+    verificationDocuments: true,
+    supportMessages: true,
+    supportEscalations: true,
+    supportCaseUpdates: true,
     notifyAdmins: true,
   },
 };
@@ -3076,10 +3107,18 @@ function MoreSettings({
         action={<button className="primary-button compact" type="button" onClick={() => runAction("Notification preferences saved", () => saveSection("notifications"))}>Save</button>}
       >
         <div className="toggle-list">
+          <ToggleRow label="Push notifications" checked={draft.notifications.pushEnabled} onChange={(v) => setNotifications("pushEnabled", v)} />
+          <ToggleRow label="Email delivery queue" hint="Queues email through the Firebase mail collection." checked={draft.notifications.emailEnabled} onChange={(v) => setNotifications("emailEnabled", v)} />
+          <ToggleRow label="SMS delivery queue" hint="Queues phone notifications only for users who opt in." checked={draft.notifications.smsEnabled} onChange={(v) => setNotifications("smsEnabled", v)} />
           <ToggleRow label="Car purchase status emails" checked={draft.notifications.purchaseStatus} onChange={(v) => setNotifications("purchaseStatus", v)} />
           <ToggleRow label="Barrel shipment status emails" checked={draft.notifications.shipmentStatus} onChange={(v) => setNotifications("shipmentStatus", v)} />
           <ToggleRow label="Refund decision emails" checked={draft.notifications.refundDecision} onChange={(v) => setNotifications("refundDecision", v)} />
           <ToggleRow label="New business application emails" checked={draft.notifications.newApplication} onChange={(v) => setNotifications("newApplication", v)} />
+          <ToggleRow label="Business lifecycle emails" checked={draft.notifications.businessLifecycle} onChange={(v) => setNotifications("businessLifecycle", v)} />
+          <ToggleRow label="Verification document emails" checked={draft.notifications.verificationDocuments} onChange={(v) => setNotifications("verificationDocuments", v)} />
+          <ToggleRow label="Support message emails" checked={draft.notifications.supportMessages} onChange={(v) => setNotifications("supportMessages", v)} />
+          <ToggleRow label="Support escalation emails" checked={draft.notifications.supportEscalations} onChange={(v) => setNotifications("supportEscalations", v)} />
+          <ToggleRow label="Support case status emails" checked={draft.notifications.supportCaseUpdates} onChange={(v) => setNotifications("supportCaseUpdates", v)} />
           <ToggleRow label="Notify admins of new applications" checked={draft.notifications.notifyAdmins} onChange={(v) => setNotifications("notifyAdmins", v)} />
         </div>
       </Panel>
@@ -4500,6 +4539,7 @@ function BusinessVerificationPanel({
   onRefreshStripe,
   onSave,
   onApprove,
+  onApproveWithBypass,
   onRequestChanges,
   runAction,
 }: {
@@ -4514,6 +4554,7 @@ function BusinessVerificationPanel({
   onRefreshStripe: () => Promise<void>;
   onSave: () => Promise<void>;
   onApprove: () => Promise<void>;
+  onApproveWithBypass: () => Promise<void>;
   onRequestChanges: () => Promise<void>;
   runAction: (label: string, action: () => Promise<unknown>) => void;
 }) {
@@ -4521,6 +4562,8 @@ function BusinessVerificationPanel({
   const blockers = platformBlockers + (stripe.ready ? 0 : 1);
   const approvalReady = stripe.ready && summary.approvalReady;
   const approved = rowStatus(business) === "approved";
+  const canApproveWithBypass =
+    !approved && stripe.ready && !summary.approvalReady;
   const canVerifySubmitted = items.some((item) => item.status === "submitted");
   const stripeDueCount = stripe.currentlyDue.length + stripe.pastDue.length;
 
@@ -4541,6 +4584,12 @@ function BusinessVerificationPanel({
           {stripe.ready ? "Stripe complete" : "Stripe blocked"}
         </span>
       </div>
+
+      {canApproveWithBypass && (
+        <div className="info-band">
+          Stripe is complete. If the remaining Laawol documents are not needed for this business, use the bypass approval action so the override is recorded on the verification review.
+        </div>
+      )}
 
       <div className="verification-summary-grid">
         <div><b>{summary.total}</b><span>Platform docs</span></div>
@@ -4679,6 +4728,17 @@ function BusinessVerificationPanel({
         >
           Approve business
         </button>
+        {canApproveWithBypass && (
+          <button
+            className="primary-button warning"
+            type="button"
+            onClick={() =>
+              runAction("Business approved with document bypass", onApproveWithBypass)
+            }
+          >
+            Bypass platform docs and approve
+          </button>
+        )}
       </div>
     </div>
   );
@@ -4900,8 +4960,15 @@ function BusinessWorkspace({
     });
   }
 
-  async function reviewBusiness(action: "approve" | "request_changes") {
-    if (action === "approve" && !businessApprovalReady) {
+  async function reviewBusiness(
+    action: "approve" | "request_changes",
+    options: { platformDocumentBypass?: boolean } = {},
+  ) {
+    const approveWithBypass =
+      action === "approve" &&
+      options.platformDocumentBypass === true &&
+      stripeVerification.ready;
+    if (action === "approve" && !businessApprovalReady && !approveWithBypass) {
       throw new Error("Complete Stripe verification and required platform documents before approval.");
     }
     await saveVerificationReview();
@@ -4918,6 +4985,8 @@ function BusinessWorkspace({
       serviceNote: text(business.serviceNote, ""),
       ownerUid: text(business.ownerUid, ""),
       reviewNote: reviewNote.trim(),
+      platformDocumentBypass: approveWithBypass,
+      platformDocumentBypassNote: reviewNote.trim(),
     });
   }
 
@@ -5065,6 +5134,9 @@ function BusinessWorkspace({
                 onRefreshStripe={refreshStripeVerification}
                 onSave={saveVerificationReview}
                 onApprove={() => reviewBusiness("approve")}
+                onApproveWithBypass={() =>
+                  reviewBusiness("approve", { platformDocumentBypass: true })
+                }
                 onRequestChanges={() => reviewBusiness("request_changes")}
                 runAction={runAction}
               />

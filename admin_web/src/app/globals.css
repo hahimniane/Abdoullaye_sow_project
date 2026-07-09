@@ -1706,6 +1706,16 @@ button[data-loading="true"]::before {
   background: linear-gradient(135deg, #072f2c, var(--brand));
 }
 
+.primary-button.warning {
+  background: #92400e;
+  border-color: rgba(146, 64, 14, 0.9);
+  box-shadow: 0 8px 18px rgba(146, 64, 14, 0.16);
+}
+
+.primary-button.warning:hover {
+  background: #78350f;
+}
+
 .secondary-button {
   background: rgba(204, 251, 241, 0.46);
   border: 1px solid rgba(13, 148, 136, 0.25);

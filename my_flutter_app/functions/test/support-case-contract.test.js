@@ -51,12 +51,16 @@ describe("support case callable contract", () => {
         path.join(__dirname, "..", "index.js"),
         "utf8",
     );
+    const notificationSource = fs.readFileSync(
+        path.join(__dirname, "..", "notification_settings.js"),
+        "utf8",
+    );
     assert.match(source, /SUPPORT_URGENT_ESCALATION_REASONS/);
     assert.match(source, /addBusinessDays\(nowDate, 3\)/);
     assert.match(source, /escalationAvailableAt/);
-    assert.match(source, /supportMessages/);
-    assert.match(source, /supportEscalations/);
-    assert.match(source, /supportCaseUpdates/);
+    assert.match(notificationSource, /supportMessages/);
+    assert.match(notificationSource, /supportEscalations/);
+    assert.match(notificationSource, /supportCaseUpdates/);
   });
 
   it("keeps wallet refund support cases platform-owned when no business exists",

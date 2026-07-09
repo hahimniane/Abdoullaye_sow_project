@@ -281,6 +281,27 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
               child: Column(
                 children: [
                   _PreferenceSwitch(
+                    title: l10n.pushNotifications,
+                    value: _preferences.pushNotifications,
+                    onChanged: (value) => _updatePreferences(
+                      _preferences.copyWith(pushNotifications: value),
+                    ),
+                  ),
+                  _PreferenceSwitch(
+                    title: l10n.emailNotifications,
+                    value: _preferences.emailNotifications,
+                    onChanged: (value) => _updatePreferences(
+                      _preferences.copyWith(emailNotifications: value),
+                    ),
+                  ),
+                  _PreferenceSwitch(
+                    title: l10n.smsNotifications,
+                    value: _preferences.smsNotifications,
+                    onChanged: (value) => _updatePreferences(
+                      _preferences.copyWith(smsNotifications: value),
+                    ),
+                  ),
+                  _PreferenceSwitch(
                     title: l10n.carActivityNotifications,
                     value: _preferences.carActivity,
                     onChanged: (value) => _updatePreferences(

@@ -3010,6 +3010,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationPreferences => 'Notification preferences';
 
   @override
+  String get pushNotifications => 'Push notifications';
+
+  @override
+  String get emailNotifications => 'Email notifications';
+
+  @override
+  String get smsNotifications => 'SMS notifications';
+
+  @override
   String get carActivityNotifications => 'Car purchase and reservation updates';
 
   @override
