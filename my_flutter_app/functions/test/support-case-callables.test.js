@@ -89,6 +89,13 @@ async function timelineTypes(caseId) {
   return snapshot.docs.map((doc) => doc.data().type).sort();
 }
 
+async function notificationDeliveriesWhere(predicate) {
+  const snapshot = await db.collection("notificationDeliveries").get();
+  return snapshot.docs
+      .map((doc) => ({id: doc.id, ...doc.data()}))
+      .filter(predicate);
+}
+
 describe("support case callable lifecycle", () => {
   before(seedSupportFixture);
 
@@ -184,6 +191,18 @@ describe("support case callable lifecycle", () => {
           auth: {uid: ADMIN_UID},
           data: {caseId, note: "Please upload the receipt and pickup proof."},
         });
+        const evidenceRequestDeliveries = await notificationDeliveriesWhere(
+            (row) => row.data?.caseId === caseId &&
+              row.data?.event === "evidence_requested",
+        );
+        assert.ok(
+            evidenceRequestDeliveries.some((row) =>
+              row.preferenceKey === "supportCaseUpdates" &&
+              row.recipientUid === CUSTOMER_UID,
+            ),
+            "evidence requests notify the customer through support updates",
+        );
+
         const internalNote = await functions.addSupportInternalNote.run({
           auth: {uid: ADMIN_UID},
           data: {caseId, note: "Business payout review may be needed."},
@@ -211,6 +230,19 @@ describe("support case callable lifecycle", () => {
           },
         });
         assert.ok(attachment.messageId);
+        const attachmentDeliveries = await notificationDeliveriesWhere(
+            (row) => row.data?.caseId === caseId &&
+              row.data?.messageId === attachment.messageId &&
+              row.data?.attachment === "true",
+        );
+        assert.ok(
+            attachmentDeliveries.some((row) =>
+              row.preferenceKey === "supportMessages" &&
+              row.recipientUid === ADMIN_UID,
+            ),
+            "support attachments notify admins like support messages",
+        );
+
         await assert.rejects(
             () => functions.uploadSupportAttachmentMetadata.run({
               auth: {uid: CUSTOMER_UID},
@@ -273,6 +305,18 @@ describe("support case callable lifecycle", () => {
             note: "Business agreed to reschedule pickup.",
           },
         });
+        const resolvedDeliveries = await notificationDeliveriesWhere(
+            (row) => row.data?.caseId === caseId &&
+              row.data?.event === "resolved",
+        );
+        assert.ok(
+            resolvedDeliveries.some((row) =>
+              row.preferenceKey === "supportCaseUpdates" &&
+              row.recipientUid === CUSTOMER_UID,
+            ),
+            "resolving support cases notifies the customer",
+        );
+
         caseDoc = await db.collection("supportCases").doc(caseId).get();
         assert.equal(caseDoc.get("status"), "resolved");
         assert.equal(caseDoc.get("outcome"), "business_resolved");
@@ -283,6 +327,17 @@ describe("support case callable lifecycle", () => {
         });
         caseDoc = await db.collection("supportCases").doc(caseId).get();
         assert.equal(caseDoc.get("status"), "waiting_for_business");
+        const reopenedDeliveries = await notificationDeliveriesWhere(
+            (row) => row.data?.caseId === caseId &&
+              row.data?.event === "reopened",
+        );
+        assert.ok(
+            reopenedDeliveries.some((row) =>
+              row.preferenceKey === "supportCaseUpdates" &&
+              row.recipientUid === ADMIN_UID,
+            ),
+            "reopening support cases notifies support admins",
+        );
 
         const types = await timelineTypes(caseId);
         for (const expected of [

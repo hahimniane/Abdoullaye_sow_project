@@ -14319,6 +14319,7 @@ function supportCaseStatusAfterMessage(senderRole, supportCase) {
 async function notifySupportParticipants({
   supportCase,
   senderUid,
+  preferenceKey = "supportMessages",
   title,
   body,
   data,
@@ -14368,7 +14369,7 @@ async function notifySupportParticipants({
   await Promise.all(Array.from(recipients).map((uid) =>
     sendPreferenceNotification({
       uid,
-      preferenceKey: "supportMessages",
+      preferenceKey,
       title,
       body,
       data,
@@ -14907,6 +14908,21 @@ exports.uploadSupportAttachmentMetadata = onCall(
           createdAt: now,
         });
       });
+      await notifySupportParticipants({
+        supportCase,
+        senderUid: uid,
+        preferenceKey: "supportMessages",
+        title: `Support: ${supportCase.subject || supportCase.relatedLabel}`,
+        body: content,
+        data: {
+          type: "support_message",
+          attachment: true,
+          caseId,
+          messageId: messageRef.id,
+          relatedCollection: supportCase.relatedCollection,
+          relatedId: supportCase.relatedId,
+        },
+      });
       return {success: true, caseId, messageId: messageRef.id};
     },
 );
@@ -15119,6 +15135,20 @@ exports.requestSupportEvidence = onCall(
           updatedAt: now,
         });
       });
+      await notifySupportParticipants({
+        supportCase,
+        senderUid: uid,
+        preferenceKey: "supportCaseUpdates",
+        title: "Support case needs more information",
+        body: note,
+        data: {
+          type: "support_case_update",
+          event: "evidence_requested",
+          caseId,
+          relatedCollection: supportCase.relatedCollection,
+          relatedId: supportCase.relatedId,
+        },
+      });
       return {success: true, caseId};
     },
 );
@@ -15160,6 +15190,22 @@ exports.resolveSupportCase = onCall(
           createdAt: now,
         });
       });
+      await notifySupportParticipants({
+        supportCase,
+        senderUid: uid,
+        preferenceKey: "supportCaseUpdates",
+        title: "Support case resolved",
+        body: note || supportCase.subject || supportCase.relatedLabel ||
+          "Your support case was resolved.",
+        data: {
+          type: "support_case_update",
+          event: "resolved",
+          caseId,
+          outcome,
+          relatedCollection: supportCase.relatedCollection,
+          relatedId: supportCase.relatedId,
+        },
+      });
       return {success: true, caseId};
     },
 );
@@ -15195,6 +15241,21 @@ exports.reopenSupportCase = onCall(
           message: note || "Support case reopened",
           createdAt: now,
         });
+      });
+      await notifySupportParticipants({
+        supportCase,
+        senderUid: uid,
+        preferenceKey: "supportCaseUpdates",
+        title: "Support case reopened",
+        body: note || supportCase.subject || supportCase.relatedLabel ||
+          "A support case was reopened.",
+        data: {
+          type: "support_case_update",
+          event: "reopened",
+          caseId,
+          relatedCollection: supportCase.relatedCollection,
+          relatedId: supportCase.relatedId,
+        },
       });
       return {success: true, caseId};
     },
