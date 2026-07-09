@@ -25,6 +25,9 @@ const {
   buildFeaturingRequestUpdate,
 } = require("./featured_business");
 const {
+  coerceReviewWebsite,
+} = require("./business_profile_validation");
+const {
   buildBusinessVerificationBypassUpdate,
   buildBusinessVerificationDocumentSubmissionUpdate,
   buildBusinessVerificationReviewUpdate,
@@ -4580,7 +4583,7 @@ exports.reviewBusinessApplication = onCall(
         name: name || current.name,
         phone: phone || current.phone,
         email: email || current.email,
-        website: website ?? current.website,
+        website: coerceReviewWebsite(website ?? current.website),
         profileImageUrl: profileImageUrl ?? current.profileImageUrl,
         profileImagePath: profileImagePath ?? current.profileImagePath,
         serviceNote: serviceNote ?? current.serviceNote,

@@ -25,11 +25,14 @@ import {
   type BusinessVerificationSummary,
   type BusinessStripeVerification,
 } from "@/lib/business-verification";
+import type {
+  ActionConfirmationOptions,
+  ActionRunner,
+} from "@/lib/action-confirmation";
 import { db, functions, storage } from "@/lib/firebase";
 import { formatDate, text } from "@/lib/format";
 import type { FirestoreRow } from "@/types/admin";
 
-type ActionRunner = (label: string, action: () => Promise<unknown>) => Promise<void> | void;
 type ToastCallback = (type: "success" | "error", message: string) => void;
 
 export type BusinessProfilePanelProps = {
@@ -202,54 +205,63 @@ export function BusinessProfilePanel({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await run("Business profile saved", async () => {
-      if (!businessId) throw new Error("Business account is not configured.");
-      if (!draft.name.trim()) throw new Error("Business name is required.");
-      const holdFlatFee = Number(draft.carHoldFlatFee);
-      const holdDailyRate = Number(draft.carHoldDailyRate);
-      const holdMaxDays = Number(draft.carHoldMaxDays);
-      if (draft.enabledServices.length === 0) throw new Error("Select at least one service.");
-      if (
-        (draft.carHoldPricingMode === "flat" && (!Number.isFinite(holdFlatFee) || holdFlatFee <= 0)) ||
-        (draft.carHoldPricingMode === "per_day" && (!Number.isFinite(holdDailyRate) || holdDailyRate <= 0)) ||
-        !Number.isInteger(holdMaxDays) ||
-        holdMaxDays < 1 ||
-        holdMaxDays > 30
-      ) {
-        throw new Error("Enter valid paid hold pricing.");
-      }
+    await run(
+      "Business profile saved",
+      async () => {
+        if (!businessId) throw new Error("Business account is not configured.");
+        if (!draft.name.trim()) throw new Error("Business name is required.");
+        const holdFlatFee = Number(draft.carHoldFlatFee);
+        const holdDailyRate = Number(draft.carHoldDailyRate);
+        const holdMaxDays = Number(draft.carHoldMaxDays);
+        if (draft.enabledServices.length === 0) throw new Error("Select at least one service.");
+        if (
+          (draft.carHoldPricingMode === "flat" && (!Number.isFinite(holdFlatFee) || holdFlatFee <= 0)) ||
+          (draft.carHoldPricingMode === "per_day" && (!Number.isFinite(holdDailyRate) || holdDailyRate <= 0)) ||
+          !Number.isInteger(holdMaxDays) ||
+          holdMaxDays < 1 ||
+          holdMaxDays > 30
+        ) {
+          throw new Error("Enter valid paid hold pricing.");
+        }
 
-      let profileImageUrl = draft.profileImageUrl.trim();
-      let profileImagePath = draft.profileImagePath.trim();
-      if (imageFile) {
-        const uploaded = await uploadBusinessProfileImage(businessId, imageFile);
-        profileImageUrl = uploaded.url;
-        profileImagePath = uploaded.path;
-      }
+        let profileImageUrl = draft.profileImageUrl.trim();
+        let profileImagePath = draft.profileImagePath.trim();
+        if (imageFile) {
+          const uploaded = await uploadBusinessProfileImage(businessId, imageFile);
+          profileImageUrl = uploaded.url;
+          profileImagePath = uploaded.path;
+        }
 
-      await httpsCallable(functions, "updateBusinessProfile")({
-        businessId,
-        name: draft.name.trim(),
-        phone: draft.phone.trim(),
-        email: draft.email.trim().toLowerCase(),
-        website: draft.website.trim(),
-        serviceNote: draft.serviceNote.trim(),
-        enabledServices: draft.enabledServices,
-        carHoldPricingMode: draft.carHoldPricingMode,
-        carHoldFlatFee: holdFlatFee,
-        carHoldDailyRate: holdDailyRate,
-        carHoldMaxDays: holdMaxDays,
-        profileImageUrl,
-        profileImagePath,
-      });
+        await httpsCallable(functions, "updateBusinessProfile")({
+          businessId,
+          name: draft.name.trim(),
+          phone: draft.phone.trim(),
+          email: draft.email.trim().toLowerCase(),
+          website: draft.website.trim(),
+          serviceNote: draft.serviceNote.trim(),
+          enabledServices: draft.enabledServices,
+          carHoldPricingMode: draft.carHoldPricingMode,
+          carHoldFlatFee: holdFlatFee,
+          carHoldDailyRate: holdDailyRate,
+          carHoldMaxDays: holdMaxDays,
+          profileImageUrl,
+          profileImagePath,
+        });
 
-      setDraft((current) => ({
-        ...current,
-        profileImageUrl,
-        profileImagePath,
-      }));
-      setImageFile(null);
-    });
+        setDraft((current) => ({
+          ...current,
+          profileImageUrl,
+          profileImagePath,
+        }));
+        setImageFile(null);
+      },
+      {
+        confirm:
+          "Save these business profile changes? Public details, services, or paid hold pricing may change.",
+        confirmFr:
+          "Enregistrer ces modifications du profil entreprise ? Les informations publiques, les services ou les tarifs de réservation peuvent changer.",
+      },
+    );
   }
 
   const logoPreview = imageFile ? URL.createObjectURL(imageFile) : draft.profileImageUrl;
@@ -718,33 +730,51 @@ export function BusinessPeoplePanel({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await run("Business staff created", async () => {
-      if (!businessId) throw new Error("Business account is not configured.");
-      if (!draft.fullName.trim()) throw new Error("Enter a staff name.");
-      if (!draft.email.trim()) throw new Error("Enter a staff email.");
-      if (draft.password.length < 6) throw new Error("Password must be at least 6 characters.");
+    await run(
+      "Business staff created",
+      async () => {
+        if (!businessId) throw new Error("Business account is not configured.");
+        if (!draft.fullName.trim()) throw new Error("Enter a staff name.");
+        if (!draft.email.trim()) throw new Error("Enter a staff email.");
+        if (draft.password.length < 6) throw new Error("Password must be at least 6 characters.");
 
-      await httpsCallable(functions, "createStaffUser")({
-        businessId,
-        fullName: draft.fullName.trim(),
-        email: draft.email.trim().toLowerCase(),
-        phone: draft.phone.trim(),
-        password: draft.password,
-        businessPermissions: draft.businessPermissions,
-      });
-      setDraft(emptyStaffDraft);
-      setFormOpen(false);
-    });
+        await httpsCallable(functions, "createStaffUser")({
+          businessId,
+          fullName: draft.fullName.trim(),
+          email: draft.email.trim().toLowerCase(),
+          phone: draft.phone.trim(),
+          password: draft.password,
+          businessPermissions: draft.businessPermissions,
+        });
+        setDraft(emptyStaffDraft);
+        setFormOpen(false);
+      },
+      {
+        confirm:
+          "Create this staff account with the selected permissions?",
+        confirmFr:
+          "Créer ce compte employé avec les autorisations sélectionnées ?",
+      },
+    );
   }
 
   async function saveStaffPermissions(row: FirestoreRow) {
-    await run("Staff permissions saved", async () => {
-      await httpsCallable(functions, "updateBusinessStaffPermissions")({
-        businessId,
-        staffUid: row.id,
-        businessPermissions: rowPermissions(row),
-      });
-    });
+    await run(
+      "Staff permissions saved",
+      async () => {
+        await httpsCallable(functions, "updateBusinessStaffPermissions")({
+          businessId,
+          staffUid: row.id,
+          businessPermissions: rowPermissions(row),
+        });
+      },
+      {
+        confirm:
+          `Save permission changes for ${text(row.fullName ?? row.email, row.id)}?`,
+        confirmFr:
+          `Enregistrer les changements d’autorisations pour ${text(row.fullName ?? row.email, row.id)} ?`,
+      },
+    );
   }
 
   return (
@@ -918,14 +948,18 @@ function useActionFeedback(runAction?: ActionRunner, toast?: ToastCallback) {
   const [busyLabel, setBusyLabel] = useState("");
   const [error, setError] = useState("");
 
-  async function run(label: string, action: () => Promise<unknown>) {
+  async function run(
+    label: string,
+    action: () => Promise<unknown>,
+    options?: ActionConfirmationOptions,
+  ) {
     if (busy) return;
     setBusy(true);
     setBusyLabel(label);
     setError("");
     try {
       if (runAction) {
-        await runAction(label, action);
+        await runAction(label, action, options);
       } else {
         await action();
         toast?.("success", label);

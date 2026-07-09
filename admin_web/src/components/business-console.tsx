@@ -47,6 +47,7 @@ import {
   resolveBusinessPayoutStatus,
   type BusinessPayoutStatus,
 } from "@/lib/payout-status";
+import { confirmImportantAction } from "@/lib/action-confirmation";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
 
 type BusinessTab =
@@ -111,6 +112,17 @@ export function BusinessConsole({
   const [business, setBusiness] = useState<FirestoreRow | null>(previewBusiness);
   const [businessError, setBusinessError] = useState("");
   const enabled = Boolean(businessId && !previewMode);
+
+  const handleSignOut = useCallback(async () => {
+    if (
+      confirmImportantAction(
+        "Sign out? You will need to sign in again to continue.",
+        "Se déconnecter ? Vous devrez vous reconnecter pour continuer.",
+      )
+    ) {
+      await onSignOut();
+    }
+  }, [onSignOut]);
 
   useEffect(() => {
     if (previewMode) {
@@ -215,7 +227,7 @@ export function BusinessConsole({
             <span className="admin-chip-name">{text(profile.fullName ?? firebaseUser.email, "Business user")}</span>
             <span className="admin-role-tag">{profile.role === "businessOwner" ? "Owner" : "Staff"}</span>
           </div>
-          <button className="icon-button" onClick={onSignOut} title="Sign out" type="button">
+          <button className="icon-button" onClick={handleSignOut} title="Sign out" type="button">
             <LogOut size={18} />
           </button>
         </div>

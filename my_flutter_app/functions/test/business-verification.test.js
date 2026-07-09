@@ -16,6 +16,11 @@ const {
   cleanVerificationDocumentUpdates,
   requiredBusinessVerificationDocuments,
 } = require("../business_verification");
+const {
+  coerceReviewWebsite,
+  isValidWebsite,
+  normalizeWebsite,
+} = require("../business_profile_validation");
 
 describe("business verification review helpers", () => {
   it("exports the review and submission callables", () => {
@@ -70,6 +75,22 @@ describe("business verification review helpers", () => {
     assert.match(source, /country:\s*current\.country/);
     assert.match(source, /state:\s*current\.state/);
     assert.match(source, /postalCode:\s*current\.postalCode/);
+  });
+
+  it("does not block business review on a legacy invalid website", () => {
+    assert.equal(normalizeWebsite("example.com"), "https://example.com");
+    assert.equal(isValidWebsite("example.com"), true);
+    assert.equal(coerceReviewWebsite("example.com"), "https://example.com");
+    assert.equal(coerceReviewWebsite("not available"), "");
+
+    const source = fs.readFileSync(
+        path.join(__dirname, "..", "index.js"),
+        "utf8",
+    );
+    assert.match(
+        source,
+        /website:\s*coerceReviewWebsite\(website \?\? current\.website\)/,
+    );
   });
 
   it("does not requeue already approved business applications", () => {

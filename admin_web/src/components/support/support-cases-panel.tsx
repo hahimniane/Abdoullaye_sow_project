@@ -38,9 +38,11 @@ import {
 
 import { db, functions, storage } from "@/lib/firebase";
 import { asDate, formatDate, formatMoney, text } from "@/lib/format";
+import type {
+  ActionConfirmationOptions,
+  ActionRunner,
+} from "@/lib/action-confirmation";
 import type { FirestoreRow } from "@/types/admin";
-
-type ActionRunner = (label: string, action: () => Promise<unknown>) => Promise<void> | void;
 
 export type SupportCasesPanelProps = {
   scope: "business" | "admin";
@@ -366,7 +368,12 @@ export function SupportCasesPanel({
 
   const selectedCase = rows.find((row) => row.id === selectedId) ?? null;
 
-  async function call(label: string, name: string, payload: Record<string, unknown>) {
+  async function call(
+    label: string,
+    name: string,
+    payload: Record<string, unknown>,
+    options?: ActionConfirmationOptions,
+  ) {
     if (busyAction) return;
     const action = async () => {
       await httpsCallable(functions, name)(payload);
@@ -375,7 +382,7 @@ export function SupportCasesPanel({
     setBusyAction(label);
     if (runAction) {
       try {
-        await runAction(label, action);
+        await runAction(label, action, options);
       } finally {
         setBusyAction("");
       }
@@ -592,7 +599,12 @@ function SupportThread({
   currentUid: string;
   currentName: string;
   canReply: boolean;
-  onCall: (label: string, name: string, payload: Record<string, unknown>) => Promise<void>;
+  onCall: (
+    label: string,
+    name: string,
+    payload: Record<string, unknown>,
+    options?: ActionConfirmationOptions,
+  ) => Promise<void>;
   busyAction: string;
 }) {
   const caseId = supportCase.id;
@@ -648,40 +660,94 @@ function SupportThread({
 
   async function requestInfo() {
     const note = reply.trim();
-    await onCall("More information requested", "requestSupportEvidence", {
-      caseId,
-      ...(note ? { note } : {}),
-    });
+    await onCall(
+      "More information requested",
+      "requestSupportEvidence",
+      {
+        caseId,
+        ...(note ? { note } : {}),
+      },
+      {
+        confirm:
+          "Request more information on this support case?",
+        confirmFr:
+          "Demander plus d’informations sur ce dossier de support ?",
+      },
+    );
     setReply("");
   }
 
   async function resolve() {
     const note = reply.trim();
-    await onCall("Case resolved", "resolveSupportCase", {
-      caseId,
-      outcome: "resolved",
-      ...(note ? { note } : {}),
-    });
+    await onCall(
+      "Case resolved",
+      "resolveSupportCase",
+      {
+        caseId,
+        outcome: "resolved",
+        ...(note ? { note } : {}),
+      },
+      {
+        confirm:
+          "Resolve this support case?",
+        confirmFr:
+          "Résoudre ce dossier de support ?",
+      },
+    );
     setReply("");
   }
 
   async function reopen() {
-    await onCall("Case reopened", "reopenSupportCase", { caseId });
+    await onCall(
+      "Case reopened",
+      "reopenSupportCase",
+      { caseId },
+      {
+        confirm:
+          "Reopen this support case?",
+        confirmFr:
+          "Rouvrir ce dossier de support ?",
+      },
+    );
   }
 
   async function escalate() {
     const note = reply.trim();
-    await onCall("Escalated to admin", "escalateSupportCase", {
-      caseId,
-      reason: escalateReason,
-      ...(note ? { note } : {}),
-    });
+    await onCall(
+      "Escalated to admin",
+      "escalateSupportCase",
+      {
+        caseId,
+        reason: escalateReason,
+        ...(note ? { note } : {}),
+      },
+      {
+        confirm:
+          "Escalate this case to the admin team?",
+        confirmFr:
+          "Transférer ce dossier à l’équipe admin ?",
+      },
+    );
     setReply("");
     setShowEscalate(false);
   }
 
   async function claim() {
-    await onCall("Case claimed", "assignSupportCase", { caseId });
+    await onCall(
+      "Case claimed",
+      "assignSupportCase",
+      { caseId },
+      {
+        confirm:
+          claimedByOther
+            ? `Take over this case from ${claimerName}?`
+            : "Claim this support case?",
+        confirmFr:
+          claimedByOther
+            ? `Reprendre ce dossier à ${claimerName} ?`
+            : "Prendre en charge ce dossier de support ?",
+      },
+    );
   }
 
   async function addNote() {

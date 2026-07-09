@@ -47,6 +47,7 @@ import {
   destinationCountryOptionForRow,
   withSelectedDestinationCountry,
 } from "@/lib/destination-countries";
+import { confirmImportantAction } from "@/lib/action-confirmation";
 import { currentLanguage, formatDate, formatMoney, text } from "@/lib/format";
 import { US_STATE_OPTIONS, citiesForState, withSelected } from "@/lib/us-locations";
 import type { FirestoreRow } from "@/types/admin";
@@ -1248,7 +1249,14 @@ export function BarrelsPanel({ businessId }: PanelProps) {
     [destinations.rows],
   );
 
-  async function run(id: string, label: string, action: () => Promise<unknown>) {
+  async function run(
+    id: string,
+    label: string,
+    action: () => Promise<unknown>,
+    confirm?: string,
+    confirmFr?: string,
+  ) {
+    if (confirm && !confirmImportantAction(confirm, confirmFr)) return;
     setBusyId(id);
     setMessage("");
     try {
@@ -1520,8 +1528,34 @@ export function BarrelsPanel({ businessId }: PanelProps) {
                       <div className="pool-request" key={participant.uid}>
                         <span>{shareRequestSummary(participant.sharesClaimed)}</span>
                         <div className="row-actions">
-                          <button className="lst-btn" disabled={busy} type="button" onClick={() => run(`pool-${row.id}`, "Joiner accepted.", () => decideJoin(row, participant.uid, "accept"))}>Approve</button>
-                          <button className="lst-btn ghost" disabled={busy} type="button" onClick={() => run(`pool-${row.id}`, "Joiner rejected.", () => decideJoin(row, participant.uid, "reject"))}>Reject</button>
+                          <button
+                            className="lst-btn"
+                            disabled={busy}
+                            type="button"
+                            onClick={() => run(
+                              `pool-${row.id}`,
+                              "Joiner accepted.",
+                              () => decideJoin(row, participant.uid, "accept"),
+                              "Approve this shared-barrel join request?",
+                              "Approuver cette demande de participation au baril partagé ?",
+                            )}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            className="lst-btn ghost"
+                            disabled={busy}
+                            type="button"
+                            onClick={() => run(
+                              `pool-${row.id}`,
+                              "Joiner rejected.",
+                              () => decideJoin(row, participant.uid, "reject"),
+                              "Reject this shared-barrel join request?",
+                              "Rejeter cette demande de participation au baril partagé ?",
+                            )}
+                          >
+                            Reject
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -1542,10 +1576,16 @@ export function BarrelsPanel({ businessId }: PanelProps) {
                             className="lst-btn"
                             disabled={busy}
                             type="button"
-                            onClick={() => {
-                              const note = window.prompt("Collection note (optional)") || "";
-                              run(`pool-${row.id}`, "Shared barrel balance collected.", () => markBalanceCollected(request.id, note));
-                            }}
+	                            onClick={() => {
+	                              const note = window.prompt("Collection note (optional)") || "";
+	                              run(
+	                                `pool-${row.id}`,
+	                                "Shared barrel balance collected.",
+	                                () => markBalanceCollected(request.id, note),
+	                                "Mark this shared barrel balance as collected?",
+	                                "Marquer ce solde de baril partagé comme encaissé ?",
+	                              );
+	                            }}
                           >
                             <CheckCircle2 size={15} /> Mark collected
                           </button>
@@ -1555,10 +1595,33 @@ export function BarrelsPanel({ businessId }: PanelProps) {
                   </div>
                 )}
                 <div className="pur-actions">
-                  <button className="lst-btn" disabled={!canSeal || busy} type="button" onClick={() => run(`pool-${row.id}`, "Pool sealed into a shipment.", () => sealPool(row))}>
+                  <button
+                    className="lst-btn"
+                    disabled={!canSeal || busy}
+                    type="button"
+                    onClick={() => run(
+                      `pool-${row.id}`,
+                      "Pool sealed into a shipment.",
+                      () => sealPool(row),
+                      "Seal this shared barrel pool into a shipment?",
+                      "Sceller ce baril partagé en expédition ?",
+                    )}
+                  >
                     <CheckCircle2 size={15} /> Seal pool
                   </button>
-                  <button className="lst-btn ghost" disabled={!canSealUnderfilled || busy} title={canSealUnderfilled ? "Seal after deadline" : "Underfilled pools can only ship after the join deadline"} type="button" onClick={() => run(`pool-${row.id}`, "Underfilled pool sealed into a shipment.", () => sealPool(row, true))}>
+                  <button
+                    className="lst-btn ghost"
+                    disabled={!canSealUnderfilled || busy}
+                    title={canSealUnderfilled ? "Seal after deadline" : "Underfilled pools can only ship after the join deadline"}
+                    type="button"
+                    onClick={() => run(
+                      `pool-${row.id}`,
+                      "Underfilled pool sealed into a shipment.",
+                      () => sealPool(row, true),
+                      "Seal this underfilled pool into a shipment?",
+                      "Sceller ce baril incomplet en expédition ?",
+                    )}
+                  >
                     <CheckCircle2 size={15} /> Seal underfilled
                   </button>
                   <button className="lst-btn ghost" disabled={!canRollToBusinessHeld || busy} title={canRollToBusinessHeld ? "Continue matching at the business" : "Only underfilled pools past the join deadline can roll over"} type="button" onClick={() => openRollPool(row)}>
@@ -1567,7 +1630,18 @@ export function BarrelsPanel({ businessId }: PanelProps) {
                   <button className="lst-btn ghost" disabled={!canAdjust || busy} type="button" onClick={() => openAdjustPool(row)}>
                     <Pencil size={15} /> Adjust shares
                   </button>
-                  <button className="lst-btn ghost" disabled={status === "sealed" || status === "cancelled" || busy} type="button" onClick={() => run(`pool-${row.id}`, "Pool cancelled.", () => cancelPool(row))}>
+                  <button
+                    className="lst-btn ghost"
+                    disabled={status === "sealed" || status === "cancelled" || busy}
+                    type="button"
+                    onClick={() => run(
+                      `pool-${row.id}`,
+                      "Pool cancelled.",
+                      () => cancelPool(row),
+                      "Cancel this shared barrel pool?",
+                      "Annuler ce baril partagé ?",
+                    )}
+                  >
                     <XCircle size={15} /> Cancel pool
                   </button>
                 </div>
@@ -1609,7 +1683,18 @@ export function BarrelsPanel({ businessId }: PanelProps) {
             </div>
             <footer className="lst-modal-foot">
               <button className="lst-btn ghost" type="button" onClick={closeAdjustPool}>Cancel</button>
-              <button className="lst-add" type="button" disabled={busyId === `pool-adjust-${adjustingPool.id}`} onClick={() => run(`pool-adjust-${adjustingPool.id}`, "Pool capacity adjusted.", savePoolAdjustment)}>
+	              <button
+	                className="lst-add"
+	                type="button"
+	                disabled={busyId === `pool-adjust-${adjustingPool.id}`}
+	                onClick={() => run(
+	                  `pool-adjust-${adjustingPool.id}`,
+	                  "Pool capacity adjusted.",
+	                  savePoolAdjustment,
+	                  "Save this shared-barrel capacity adjustment?",
+	                  "Enregistrer cet ajustement de capacité du baril partagé ?",
+	                )}
+	              >
                 <Save size={16} /> Save adjustment
               </button>
             </footer>
@@ -1648,7 +1733,18 @@ export function BarrelsPanel({ businessId }: PanelProps) {
             </div>
             <footer className="lst-modal-foot">
               <button className="lst-btn ghost" type="button" onClick={closeRollPool}>Cancel</button>
-              <button className="lst-add" type="button" disabled={busyId === `pool-roll-${rollingPool.id}`} onClick={() => run(`pool-roll-${rollingPool.id}`, "Pool rolled into business-held matching.", savePoolRollover)}>
+	              <button
+	                className="lst-add"
+	                type="button"
+	                disabled={busyId === `pool-roll-${rollingPool.id}`}
+	                onClick={() => run(
+	                  `pool-roll-${rollingPool.id}`,
+	                  "Pool rolled into business-held matching.",
+	                  savePoolRollover,
+	                  "Roll this pool into business-held matching?",
+	                  "Basculer ce baril vers la mise en relation gérée par l’entreprise ?",
+	                )}
+	              >
                 <RotateCcw size={16} /> Roll pool
               </button>
             </footer>
@@ -1753,7 +1849,18 @@ export function BarrelsPanel({ businessId }: PanelProps) {
             </div>
             <footer className="lst-modal-foot">
               <button className="lst-btn ghost" type="button" onClick={closePoolForm}>Cancel</button>
-              <button className="lst-add" type="button" disabled={busyId === "pool-create"} onClick={() => run("pool-create", "Shared barrel pool opened.", savePool)}>
+	              <button
+	                className="lst-add"
+	                type="button"
+	                disabled={busyId === "pool-create"}
+	                onClick={() => run(
+	                  "pool-create",
+	                  "Shared barrel pool opened.",
+	                  savePool,
+	                  "Open this shared barrel pool?",
+	                  "Ouvrir ce baril partagé ?",
+	                )}
+	              >
                 <Save size={16} /> Open pool
               </button>
             </footer>
@@ -1813,7 +1920,17 @@ export function BarrelsPanel({ businessId }: PanelProps) {
 
               <div className="pur-actions">
                 <label className="bar-field"><span>Update status</span>
-                  <select value={status} disabled={busy} onChange={(event) => run(row.id, "Shipment updated.", () => updateStatus(row, event.target.value))}>
+	                  <select
+	                    value={status}
+	                    disabled={busy}
+	                    onChange={(event) => run(
+	                      row.id,
+	                      "Shipment updated.",
+	                      () => updateStatus(row, event.target.value),
+	                      `Change shipment status to ${statusLabel(event.target.value)}?`,
+	                      `Changer le statut de l’expédition en ${statusLabel(event.target.value)} ?`,
+	                    )}
+	                  >
                     {barrelStatuses.map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}
                   </select>
                 </label>
@@ -2322,7 +2439,14 @@ export function PurchasesPanel({ businessId }: PanelProps) {
 
   const actionCount = useMemo(() => purchases.rows.filter(purchaseNeedsAction).length, [purchases.rows]);
 
-  async function runHold(purchaseId: string, label: string, action: () => Promise<unknown>) {
+  async function runHold(
+    purchaseId: string,
+    label: string,
+    action: () => Promise<unknown>,
+    confirm?: string,
+    confirmFr?: string,
+  ) {
+    if (confirm && !confirmImportantAction(confirm, confirmFr)) return;
     setBusyId(purchaseId);
     setMessage("");
     try {
@@ -2437,13 +2561,35 @@ export function PurchasesPanel({ businessId }: PanelProps) {
               <div className="pur-actions">
                 {holdActive ? (
                   <>
-                    <button className="lst-btn" type="button" disabled={busy} onClick={() => runHold(row.id, "Hold marked sold.", () => httpsCallable(functions, "markPaidHoldSold")({ purchaseId: row.id }))}>
+                    <button
+                      className="lst-btn"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => runHold(
+                        row.id,
+                        "Hold marked sold.",
+                        () => httpsCallable(functions, "markPaidHoldSold")({ purchaseId: row.id }),
+                        "Mark this paid hold as sold?",
+                        "Marquer cette réservation payée comme vendue ?",
+                      )}
+                    >
                       <CheckCircle2 size={15} /> Mark sold
                     </button>
                     {status === "hold_review_required" && (
                       <>
                         <input className="pur-note" value={note} disabled={busy} placeholder="No-show note (optional)" onChange={(event) => setNoteById((values) => ({ ...values, [row.id]: event.target.value }))} />
-                        <button className="lst-btn ghost danger" type="button" disabled={busy} onClick={() => runHold(row.id, "Marked no-show.", () => httpsCallable(functions, "markPaidHoldNoShow")({ purchaseId: row.id, note }))}>
+                        <button
+                          className="lst-btn ghost danger"
+                          type="button"
+                          disabled={busy}
+                          onClick={() => runHold(
+                            row.id,
+                            "Marked no-show.",
+                            () => httpsCallable(functions, "markPaidHoldNoShow")({ purchaseId: row.id, note }),
+                            "Mark this customer as a no-show?",
+                            "Marquer ce client comme absent ?",
+                          )}
+                        >
                           <XCircle size={15} /> No-show
                         </button>
                       </>
@@ -2451,20 +2597,64 @@ export function PurchasesPanel({ businessId }: PanelProps) {
                   </>
                 ) : (
                   <>
-                    <button className="lst-btn" type="button" disabled={busy} onClick={() => runHold(row.id, "Marked completed.", () => finalize(row.id, "completed", note))}>
+                    <button
+                      className="lst-btn"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => runHold(
+                        row.id,
+                        "Marked completed.",
+                        () => finalize(row.id, "completed", note),
+                        "Mark this purchase as completed?",
+                        "Marquer cet achat comme terminé ?",
+                      )}
+                    >
                       <CheckCircle2 size={15} /> Completed
                     </button>
-                    <button className="lst-btn ghost danger" type="button" disabled={busy} onClick={() => runHold(row.id, "Cancelled — deposit refund queued with the platform.", async () => { await finalize(row.id, "cancelled", note); })}>
+                    <button
+                      className="lst-btn ghost danger"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => runHold(
+                        row.id,
+                        "Cancelled — deposit refund queued with the platform.",
+                        async () => { await finalize(row.id, "cancelled", note); },
+                        "Cancel this purchase and queue the deposit refund?",
+                        "Annuler cet achat et mettre le remboursement de l’acompte en file ?",
+                      )}
+                    >
                       <RotateCcw size={14} /> Cancel &amp; refund
                     </button>
                   </>
                 )}
                 {row.extensionRequestStatus === "pending" && (
                   <>
-                    <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => runHold(row.id, "Extension approved.", () => httpsCallable(functions, "decidePaidHoldExtension")({ purchaseId: row.id, decision: "approved" }))}>
+                    <button
+                      className="lst-btn ghost"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => runHold(
+                        row.id,
+                        "Extension approved.",
+                        () => httpsCallable(functions, "decidePaidHoldExtension")({ purchaseId: row.id, decision: "approved" }),
+                        "Approve this hold extension request?",
+                        "Approuver cette demande de prolongation de réservation ?",
+                      )}
+                    >
                       <Clock3 size={14} /> Approve extension
                     </button>
-                    <button className="lst-btn ghost danger" type="button" disabled={busy} onClick={() => runHold(row.id, "Extension rejected.", () => httpsCallable(functions, "decidePaidHoldExtension")({ purchaseId: row.id, decision: "rejected" }))}>
+                    <button
+                      className="lst-btn ghost danger"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => runHold(
+                        row.id,
+                        "Extension rejected.",
+                        () => httpsCallable(functions, "decidePaidHoldExtension")({ purchaseId: row.id, decision: "rejected" }),
+                        "Reject this hold extension request?",
+                        "Rejeter cette demande de prolongation de réservation ?",
+                      )}
+                    >
                       Reject
                     </button>
                   </>

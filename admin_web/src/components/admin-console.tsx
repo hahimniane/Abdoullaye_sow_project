@@ -75,6 +75,11 @@ import {
 import { asDate, formatDate, formatMoney, text } from "@/lib/format";
 import type { FirestoreRow, Role, UserProfile } from "@/types/admin";
 import { SupportCasesPanel } from "@/components/support/support-cases-panel";
+import {
+  confirmImportantAction,
+  type ActionConfirmationOptions,
+  type ActionRunner,
+} from "@/lib/action-confirmation";
 
 const tabs = [
   "today",
@@ -1378,7 +1383,17 @@ export function AdminConsole() {
   }, []);
 
   const runAction = useCallback(
-    async (label: string, action: () => Promise<unknown>) => {
+    async (
+      label: string,
+      action: () => Promise<unknown>,
+      options: ActionConfirmationOptions = {},
+    ) => {
+      if (
+        options.confirm &&
+        !confirmImportantAction(options.confirm, options.confirmFr)
+      ) {
+        return;
+      }
       const id = actionSequence.current + 1;
       actionSequence.current = id;
       const activeElement = document.activeElement;
@@ -1417,6 +1432,21 @@ export function AdminConsole() {
     },
     [notify, previewMode],
   );
+
+  const handleSignOut = useCallback(async () => {
+    if (previewMode) {
+      setPreviewMode(false);
+      return;
+    }
+    if (
+      confirmImportantAction(
+        "Sign out? You will need to sign in again to continue.",
+        "Se déconnecter ? Vous devrez vous reconnecter pour continuer.",
+      )
+    ) {
+      await signOut(auth);
+    }
+  }, [previewMode]);
 
   if (booting) {
     return (
@@ -1471,7 +1501,7 @@ export function AdminConsole() {
             <span className="admin-chip-name">{previewMode ? "Preview Administrator" : text(profile?.fullName ?? firebaseUser?.email, "Administrator")}</span>
             <span className="admin-role-tag">{perms.label}</span>
           </button>
-          <button className="icon-button" onClick={() => previewMode ? setPreviewMode(false) : signOut(auth)} title="Sign out">
+          <button className="icon-button" onClick={handleSignOut} title="Sign out">
             <LogOut size={18} />
           </button>
         </div>
@@ -2225,7 +2255,7 @@ function UsersView({
   error: string;
   currentUserId: string;
   refreshUsers: () => void;
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
   canManage: boolean;
   permsConfig: PermissionsConfig | null;
 }) {
@@ -2314,8 +2344,15 @@ function UsersView({
                     disabled={isCurrentUser}
                     value={roleOptions.some((option) => option.key === adminRole) ? adminRole : "superAdmin"}
                     onChange={(event) =>
-                      runAction("Admin role updated", () =>
-                        setAdminRole(user.id, event.target.value),
+                      runAction(
+                        "Admin role updated",
+                        () => setAdminRole(user.id, event.target.value),
+                        {
+                          confirm:
+                            `Change admin access for ${userDisplayName(user)}?`,
+                          confirmFr:
+                            `Modifier l’accès admin de ${userDisplayName(user)} ?`,
+                        },
                       )
                     }
                   >
@@ -2331,11 +2368,16 @@ function UsersView({
                 {canManage && !isCurrentUser ? (
                   <button
                     className="danger-button"
-                    onClick={() => {
-                      if (window.confirm(`Delete ${text(user.email ?? user.fullName, user.id)}?`)) {
-                        runAction("User deleted", () => deleteUser(user.id));
-                      }
-                    }}
+                    onClick={() => runAction(
+                      "User deleted",
+                      () => deleteUser(user.id),
+                      {
+                        confirm:
+                          `Delete ${text(user.email ?? user.fullName, user.id)}? This cannot be undone from the console.`,
+                        confirmFr:
+                          `Supprimer ${text(user.email ?? user.fullName, user.id)} ? Cette action ne peut pas être annulée depuis la console.`,
+                      },
+                    )}
                   >
                     <X size={15} />
                     Delete
@@ -2365,8 +2407,15 @@ function UsersView({
                   <select
                     value={text(user.role, "customer")}
                     onChange={(event) =>
-                      runAction("User role updated", () =>
-                        updateRole(user.id, event.target.value as Role),
+                      runAction(
+                        "User role updated",
+                        () => updateRole(user.id, event.target.value as Role),
+                        {
+                          confirm:
+                            `Change account role for ${userDisplayName(user)}?`,
+                          confirmFr:
+                            `Modifier le rôle du compte de ${userDisplayName(user)} ?`,
+                        },
                       )
                     }
                   >
@@ -2378,11 +2427,16 @@ function UsersView({
                   </select>
                   <button
                     className="danger-button"
-                    onClick={() => {
-                      if (window.confirm(`Delete ${text(user.email ?? user.fullName, user.id)}?`)) {
-                        runAction("User deleted", () => deleteUser(user.id));
-                      }
-                    }}
+                    onClick={() => runAction(
+                      "User deleted",
+                      () => deleteUser(user.id),
+                      {
+                        confirm:
+                          `Delete ${text(user.email ?? user.fullName, user.id)}? This cannot be undone from the console.`,
+                        confirmFr:
+                          `Supprimer ${text(user.email ?? user.fullName, user.id)} ? Cette action ne peut pas être annulée depuis la console.`,
+                      },
+                    )}
                   >
                     <X size={15} />
                     Delete
@@ -2414,7 +2468,16 @@ function UsersView({
               {canManage && user.hasAuth === true && user.hasProfile === false ? (
                   <button
                     onClick={() =>
-                      runAction("User profile created", () => createMissingProfile(user.id))
+                      runAction(
+                        "User profile created",
+                        () => createMissingProfile(user.id),
+                        {
+                          confirm:
+                            `Create a user profile for ${userDisplayName(user)}?`,
+                          confirmFr:
+                            `Créer un profil utilisateur pour ${userDisplayName(user)} ?`,
+                        },
+                      )
                     }
                   >
                     <Check size={15} />
@@ -2474,7 +2537,7 @@ function SettingsView({
   notificationDeliveriesLoading: boolean;
   pricing: FirestoreRow[];
   previewMode: boolean;
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
 }) {
   const [draft, setDraft] = useState<Record<string, RoleConfig>>(() => buildRolesDraft(config));
   const [saved, setSaved] = useState(true);
@@ -2591,7 +2654,21 @@ function SettingsView({
               <RefreshCw size={15} />
               Reset
             </button>
-            <button className="primary-button" type="button" disabled={saved} onClick={() => runAction("Roles & permissions saved", save)}>
+            <button
+              className="primary-button"
+              type="button"
+              disabled={saved}
+              onClick={() => runAction(
+                "Roles & permissions saved",
+                save,
+                {
+                  confirm:
+                    "Save role and permission changes? Admin access may change immediately.",
+                  confirmFr:
+                    "Enregistrer les changements de rôles et d’autorisations ? L’accès admin peut changer immédiatement.",
+                },
+              )}
+            >
               {saved ? "Saved" : "Save changes"}
             </button>
           </div>
@@ -2857,7 +2934,7 @@ function MoreSettings({
   notificationDeliveriesLoading: boolean;
   pricing: FirestoreRow[];
   previewMode: boolean;
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
 }) {
   const [draft, setDraft] = useState<GeneralSettings>(() => mergeGeneral(undefined));
   const [platformFeeDraft, setPlatformFeeDraft] = useState("10");
@@ -3069,7 +3146,24 @@ function MoreSettings({
       <Panel
         title="Platform transaction fee"
         icon={<BadgeDollarSign size={18} />}
-        action={<button className="primary-button compact" type="button" onClick={() => runAction("Platform fee saved", savePlatformFee)}>Save</button>}
+        action={
+          <button
+            className="primary-button compact"
+            type="button"
+            onClick={() => runAction(
+              "Platform fee saved",
+              savePlatformFee,
+              {
+                confirm:
+                  "Save the platform transaction fee? New checkout calculations may use this value.",
+                confirmFr:
+                  "Enregistrer les frais de transaction plateforme ? Les nouveaux paiements peuvent utiliser cette valeur.",
+              },
+            )}
+          >
+            Save
+          </button>
+        }
       >
         <div className="info-band">
           This percentage is kept by the platform from each paid customer transaction before calculating the business payout. It is saved to the live payment pricing record used by backend checkout functions.
@@ -3143,8 +3237,15 @@ function MoreSettings({
             type="button"
             disabled={selectedBusinesses.length === 0}
             onClick={() =>
-              runAction("Business commissions saved", () =>
-                saveBusinessCommission(selectedBusinesses),
+              runAction(
+                "Business commissions saved",
+                () => saveBusinessCommission(selectedBusinesses),
+                {
+                  confirm:
+                    `Set commission override for ${selectedBusinesses.length} selected business${selectedBusinesses.length === 1 ? "" : "es"}?`,
+                  confirmFr:
+                    `Définir la commission spécifique pour ${selectedBusinesses.length} entreprise${selectedBusinesses.length === 1 ? "" : "s"} sélectionnée${selectedBusinesses.length === 1 ? "" : "s"} ?`,
+                },
               )
             }
           >
@@ -3156,8 +3257,15 @@ function MoreSettings({
             type="button"
             disabled={eligibleBusinesses.length === 0}
             onClick={() =>
-              runAction("All business commissions saved", () =>
-                saveBusinessCommission(eligibleBusinesses),
+              runAction(
+                "All business commissions saved",
+                () => saveBusinessCommission(eligibleBusinesses),
+                {
+                  confirm:
+                    `Set commission override for all ${eligibleBusinesses.length} eligible businesses?`,
+                  confirmFr:
+                    `Définir la commission spécifique pour les ${eligibleBusinesses.length} entreprises admissibles ?`,
+                },
               )
             }
           >
@@ -3168,8 +3276,15 @@ function MoreSettings({
             type="button"
             disabled={selectedBusinesses.length === 0}
             onClick={() =>
-              runAction("Business commissions reset", () =>
-                resetBusinessCommission(selectedBusinesses),
+              runAction(
+                "Business commissions reset",
+                () => resetBusinessCommission(selectedBusinesses),
+                {
+                  confirm:
+                    `Reset commission override for ${selectedBusinesses.length} selected business${selectedBusinesses.length === 1 ? "" : "es"}?`,
+                  confirmFr:
+                    `Réinitialiser la commission spécifique pour ${selectedBusinesses.length} entreprise${selectedBusinesses.length === 1 ? "" : "s"} sélectionnée${selectedBusinesses.length === 1 ? "" : "s"} ?`,
+                },
               )
             }
           >
@@ -3219,7 +3334,24 @@ function MoreSettings({
       <Panel
         title="Internal platform branding"
         icon={<Store size={18} />}
-        action={<button className="primary-button compact" type="button" onClick={() => runAction("Branding saved", () => saveSection("branding"))}>Save</button>}
+        action={
+          <button
+            className="primary-button compact"
+            type="button"
+            onClick={() => runAction(
+              "Branding saved",
+              () => saveSection("branding"),
+              {
+                confirm:
+                  "Save internal platform branding changes?",
+                confirmFr:
+                  "Enregistrer les changements d’image de marque interne ?",
+              },
+            )}
+          >
+            Save
+          </button>
+        }
       >
         <div className="info-band">
           These settings stay in the admin and app configuration. Public website copy and marketing contact details are managed from Website.
@@ -3237,7 +3369,24 @@ function MoreSettings({
       <Panel
         title="Default barrel pricing & destinations"
         icon={<BadgeDollarSign size={18} />}
-        action={<button className="primary-button compact" type="button" onClick={() => runAction("Shipping defaults saved", () => saveSection("shipping"))}>Save</button>}
+        action={
+          <button
+            className="primary-button compact"
+            type="button"
+            onClick={() => runAction(
+              "Shipping defaults saved",
+              () => saveSection("shipping"),
+              {
+                confirm:
+                  "Save default barrel pricing and destination changes?",
+                confirmFr:
+                  "Enregistrer les changements des tarifs et destinations par défaut des barils ?",
+              },
+            )}
+          >
+            Save
+          </button>
+        }
       >
         <div className="settings-form narrow">
           <label>Default barrel price (USD)<input inputMode="decimal" value={String(draft.shipping.defaultBarrelPrice ?? "")} onChange={(e) => setShipping("defaultBarrelPrice", e.target.value)} placeholder="e.g. 275" /></label>
@@ -3262,7 +3411,24 @@ function MoreSettings({
       <Panel
         title="Business application requirements"
         icon={<Building2 size={18} />}
-        action={<button className="primary-button compact" type="button" onClick={() => runAction("Application rules saved", () => saveSection("applications"))}>Save</button>}
+        action={
+          <button
+            className="primary-button compact"
+            type="button"
+            onClick={() => runAction(
+              "Application rules saved",
+              () => saveSection("applications"),
+              {
+                confirm:
+                  "Save business application rule changes?",
+                confirmFr:
+                  "Enregistrer les changements des règles de candidature entreprise ?",
+              },
+            )}
+          >
+            Save
+          </button>
+        }
       >
         <div className="toggle-list">
           <ToggleRow label="Require business documents" hint="Applicants must upload verification documents" checked={draft.applications.requireDocuments} onChange={(v) => setApplications("requireDocuments", v)} />
@@ -3276,7 +3442,24 @@ function MoreSettings({
       <Panel
         title="Notifications & email preferences"
         icon={<Send size={18} />}
-        action={<button className="primary-button compact" type="button" onClick={() => runAction("Notification preferences saved", () => saveSection("notifications"))}>Save</button>}
+        action={
+          <button
+            className="primary-button compact"
+            type="button"
+            onClick={() => runAction(
+              "Notification preferences saved",
+              () => saveSection("notifications"),
+              {
+                confirm:
+                  "Save platform notification settings? Email and SMS routing may change.",
+                confirmFr:
+                  "Enregistrer les paramètres de notification plateforme ? L’acheminement email et SMS peut changer.",
+              },
+            )}
+          >
+            Save
+          </button>
+        }
       >
         <div className="settings-form narrow">
           <label>
@@ -3669,7 +3852,7 @@ function WebsiteView({
   currentUserId: string;
   featuredBusinesses: FirestoreRow[];
   previewMode: boolean;
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
 }) {
   const [homeDraft, setHomeDraft] = useState<WebsiteHomeDraft>(() => mergeWebsiteHome(undefined));
   const [contactDraft, setContactDraft] = useState<WebsiteContactDraft>(() => mergeWebsiteContact(undefined));
@@ -3920,14 +4103,46 @@ function WebsiteView({
         </div>
         <div className="website-panel-footer">
           <ToggleRow label="Show featured businesses" checked={homeDraft.featured.enabled} onChange={(value) => setFeatured("enabled", value)} />
-          <button className="primary-button compact" type="button" onClick={() => runAction("Website content saved", saveHome)}>Save content</button>
+          <button
+            className="primary-button compact"
+            type="button"
+            onClick={() => runAction(
+              "Website content saved",
+              saveHome,
+              {
+                confirm:
+                  "Save homepage content changes to the public website?",
+                confirmFr:
+                  "Enregistrer les changements de la page d’accueil sur le site public ?",
+              },
+            )}
+          >
+            Save content
+          </button>
         </div>
       </Panel>
 
       <Panel
         title="Public website contact"
         icon={<Send size={18} />}
-        action={<button className="primary-button compact" type="button" onClick={() => runAction("Website contact saved", saveContact)}>Save</button>}
+        action={
+          <button
+            className="primary-button compact"
+            type="button"
+            onClick={() => runAction(
+              "Website contact saved",
+              saveContact,
+              {
+                confirm:
+                  "Save public website contact changes?",
+                confirmFr:
+                  "Enregistrer les changements des contacts publics du site ?",
+              },
+            )}
+          >
+            Save
+          </button>
+        }
       >
         <div className="info-band">
           These fields are public. Keep private platform settings in Settings; only marketing-safe contact details belong here.
@@ -4025,7 +4240,21 @@ function WebsiteView({
             )}
             <div className="panel-tools">
               <button className="ghost-button" type="button" onClick={clearFeatureForm}>Clear</button>
-              <button className="primary-button compact" type="button" disabled={!featureDraft.businessId} onClick={() => runAction("Featured business published", () => publishDraft())}>
+              <button
+                className="primary-button compact"
+                type="button"
+                disabled={!featureDraft.businessId}
+                onClick={() => runAction(
+                  "Featured business published",
+                  () => publishDraft(),
+                  {
+                    confirm:
+                      "Publish these featured business changes on the public website?",
+                    confirmFr:
+                      "Publier ces changements d’entreprise mise en avant sur le site public ?",
+                  },
+                )}
+              >
                 {editingId ? "Save featured" : "Publish"}
               </button>
             </div>
@@ -4068,12 +4297,38 @@ function WebsiteView({
                   Down
                 </button>
                 <button className="secondary-button compact" type="button" onClick={() => editFeatured(row)}>Edit</button>
-                <button className="secondary-button compact" type="button" onClick={() => runAction("Featured business updated", () => publishExisting(row, {active: row.active === false}))}>{row.active === false ? "Show" : "Hide"}</button>
-                <button className="danger-button compact" type="button" onClick={() => {
-                  if (window.confirm(`Remove ${text(row.displayName, row.id)} from the public site?`)) {
-                    runAction("Featured business removed", () => unpublish(row));
-                  }
-                }}>Remove</button>
+                <button
+                  className="secondary-button compact"
+                  type="button"
+                  onClick={() => runAction(
+                    "Featured business updated",
+                    () => publishExisting(row, {active: row.active === false}),
+                    {
+                      confirm:
+                        `${row.active === false ? "Show" : "Hide"} ${text(row.displayName, row.id)} on the public website?`,
+                      confirmFr:
+                        `${row.active === false ? "Afficher" : "Masquer"} ${text(row.displayName, row.id)} sur le site public ?`,
+                    },
+                  )}
+                >
+                  {row.active === false ? "Show" : "Hide"}
+                </button>
+                <button
+                  className="danger-button compact"
+                  type="button"
+                  onClick={() => runAction(
+                    "Featured business removed",
+                    () => unpublish(row),
+                    {
+                      confirm:
+                        `Remove ${text(row.displayName, row.id)} from the public site?`,
+                      confirmFr:
+                        `Retirer ${text(row.displayName, row.id)} du site public ?`,
+                    },
+                  )}
+                >
+                  Remove
+                </button>
               </div>
             </article>
           ))}
@@ -4099,7 +4354,7 @@ function AdminAccountPanel({
   perms: Perms;
   profile: UserProfile | null;
   onProfileUpdated: (profile: UserProfile | null) => void;
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
 }) {
   const [fullName, setFullName] = useState(text(profile?.fullName, ""));
   const [phone, setPhone] = useState(text(profile?.phone ?? firebaseUser?.phoneNumber, ""));
@@ -4221,7 +4476,16 @@ function AdminAccountPanel({
           className="account-form"
           onSubmit={(event) => {
             event.preventDefault();
-            runAction("Profile updated", () => saveProfile());
+            runAction(
+              "Profile updated",
+              () => saveProfile(),
+              {
+                confirm:
+                  "Save your admin profile changes?",
+                confirmFr:
+                  "Enregistrer les changements de votre profil admin ?",
+              },
+            );
           }}
         >
           <section className="account-photo-row">
@@ -4314,7 +4578,7 @@ function CreatePersonForms({
   runAction,
   roleOptions,
 }: {
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
   roleOptions: Array<{ key: string; label: string }>;
 }) {
   const [fullName, setFullName] = useState("");
@@ -4347,7 +4611,16 @@ function CreatePersonForms({
   return (
     <form
       className="inline-form"
-      onSubmit={(event) => runAction("Platform manager created", () => submit(event))}
+      onSubmit={(event) => runAction(
+        "Platform manager created",
+        () => submit(event),
+        {
+          confirm:
+            "Create this platform manager account?",
+          confirmFr:
+            "Créer ce compte gestionnaire de plateforme ?",
+        },
+      )}
     >
       <span className="form-note strong">Platform manager</span>
       <input required autoComplete="name" name="fullName" placeholder="Name" value={fullName} onChange={(event) => setFullName(event.target.value)} />
@@ -4430,7 +4703,7 @@ function BusinessesView({
   applications: FirestoreRow[];
   notifications: FirestoreRow[];
   supportRequests: FirestoreRow[];
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
 }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -4571,10 +4844,19 @@ function BusinessesView({
       {showAddForm && (
         <form
           className="add-business-form"
-          onSubmit={(event) => runAction("Business saved", async () => {
-            await saveBusiness(event);
-            setShowAddForm(false);
-          })}
+          onSubmit={(event) => runAction(
+            "Business saved",
+            async () => {
+              await saveBusiness(event);
+              setShowAddForm(false);
+            },
+            {
+              confirm:
+                "Save this business record?",
+              confirmFr:
+                "Enregistrer ce dossier entreprise ?",
+            },
+          )}
         >
           <div className="add-business-grid">
             <input required placeholder="Business name" value={name} onChange={(event) => setName(event.target.value)} />
@@ -4675,7 +4957,7 @@ function CreateBusinessStaffForm({
   runAction,
 }: {
   business: FirestoreRow;
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
 }) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -4704,7 +4986,16 @@ function CreateBusinessStaffForm({
   return (
     <form
       className="membership-form staff-create-form"
-      onSubmit={(event) => runAction("Business staff created", () => submit(event))}
+      onSubmit={(event) => runAction(
+        "Business staff created",
+        () => submit(event),
+        {
+          confirm:
+            `Create this staff account for ${text(business.name, business.id)}?`,
+          confirmFr:
+            `Créer ce compte employé pour ${text(business.name, business.id)} ?`,
+        },
+      )}
     >
       <span className="form-note strong">New staff for {text(business.name, business.id)}</span>
       <input required autoComplete="name" name={`staff-name-${business.id}`} placeholder="Name" value={fullName} onChange={(event) => setFullName(event.target.value)} />
@@ -4725,7 +5016,7 @@ function BusinessSupportRequestForm({
   businesses: FirestoreRow[];
   draft: SupportDraft;
   onDraftChange: (draft: SupportDraft) => void;
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
 }) {
   const businessOptions = businesses.filter((business) => business._inferred !== true);
   const selectedBusiness = businessOptions.find((business) => business.id === draft.businessId);
@@ -4752,7 +5043,16 @@ function BusinessSupportRequestForm({
   return (
     <form
       className="support-request-form"
-      onSubmit={(event) => runAction("Support request sent", () => submit(event))}
+      onSubmit={(event) => runAction(
+        "Support request sent",
+        () => submit(event),
+        {
+          confirm:
+            "Send this support request?",
+          confirmFr:
+            "Envoyer cette demande de support ?",
+        },
+      )}
     >
       <div className="support-request-grid">
         <label>
@@ -4939,7 +5239,7 @@ function BusinessVerificationPanel({
   onApprove: () => Promise<void>;
   onApproveWithBypass: () => Promise<void>;
   onRequestChanges: () => Promise<void>;
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
 }) {
   const platformBlockers = summary.missing + summary.submitted + summary.needsChanges;
   const blockers = platformBlockers + (stripe.ready ? 0 : 1);
@@ -5091,7 +5391,16 @@ function BusinessVerificationPanel({
         <button
           className="secondary-button"
           type="button"
-          onClick={() => runAction("Business verification saved", onSave)}
+          onClick={() => runAction(
+            "Business verification saved",
+            onSave,
+            {
+              confirm:
+                "Save this business verification checklist?",
+              confirmFr:
+                "Enregistrer cette liste de vérification entreprise ?",
+            },
+          )}
         >
           Save checklist
         </button>
@@ -5099,7 +5408,16 @@ function BusinessVerificationPanel({
           className="secondary-button"
           disabled={approved}
           type="button"
-          onClick={() => runAction("Business changes requested", onRequestChanges)}
+          onClick={() => runAction(
+            "Business changes requested",
+            onRequestChanges,
+            {
+              confirm:
+                "Request changes from this business? They will need to respond before approval.",
+              confirmFr:
+                "Demander des modifications à cette entreprise ? Elle devra répondre avant l’approbation.",
+            },
+          )}
         >
           Request changes
         </button>
@@ -5107,7 +5425,16 @@ function BusinessVerificationPanel({
           className="primary-button"
           disabled={approved || !approvalReady}
           type="button"
-          onClick={() => runAction("Business approved", onApprove)}
+          onClick={() => runAction(
+            "Business approved",
+            onApprove,
+            {
+              confirm:
+                "Approve this business? Customers will be able to see and use this business after approval.",
+              confirmFr:
+                "Approuver cette entreprise ? Les clients pourront voir et utiliser cette entreprise après approbation.",
+            },
+          )}
         >
           Approve business
         </button>
@@ -5116,7 +5443,16 @@ function BusinessVerificationPanel({
             className="primary-button warning"
             type="button"
             onClick={() =>
-              runAction("Business approved with document bypass", onApproveWithBypass)
+              runAction(
+                "Business approved with document bypass",
+                onApproveWithBypass,
+                {
+                  confirm:
+                    "Bypass Laawol documents and approve this business? Stripe is complete, and this override will be saved on the verification review.",
+                  confirmFr:
+                    "Contourner les documents Laawol et approuver cette entreprise ? Stripe est terminé, et cette exception sera enregistrée dans l’examen de vérification.",
+                },
+              )
             }
           >
             Bypass platform docs and approve
@@ -5166,7 +5502,7 @@ function BusinessWorkspace({
     role: "businessOwner" | "staff" | "customer";
     businessId?: string;
   }) => Promise<void>;
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
 }) {
   const [section, setSection] = useState<WorkspaceSection>("overview");
   const [selectedUserId, setSelectedUserId] = useState("");
@@ -5300,15 +5636,25 @@ function BusinessWorkspace({
   function assignSelectedUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedUserId) return;
-    return runAction("Business membership updated", async () => {
-      await updateMembership({
-        userId: selectedUserId,
-        role: selectedRole,
-        businessId: business.id,
-      });
-      setSelectedUserId("");
-      setSelectedRole("staff");
-    });
+    const selectedUser = assignableUsers.find((user) => user.id === selectedUserId);
+    return runAction(
+      "Business membership updated",
+      async () => {
+        await updateMembership({
+          userId: selectedUserId,
+          role: selectedRole,
+          businessId: business.id,
+        });
+        setSelectedUserId("");
+        setSelectedRole("staff");
+      },
+      {
+        confirm:
+          `Assign ${selectedUser ? userDisplayName(selectedUser) : selectedUserId} to ${text(business.name, business.id)} as ${selectedRole === "businessOwner" ? "business head" : "staff"}?`,
+        confirmFr:
+          `Assigner ${selectedUser ? userDisplayName(selectedUser) : selectedUserId} à ${text(business.name, business.id)} comme ${selectedRole === "businessOwner" ? "responsable entreprise" : "employé"} ?`,
+      },
+    );
   }
 
   function setVerificationStatus(documentId: string, status: VerificationStatus) {
@@ -5392,12 +5738,19 @@ function BusinessWorkspace({
               <select
                 value={text(business.status, "pending")}
                 onChange={(event) =>
-                  runAction("Business status updated", () =>
-                    commitStatusChange({
-                      collectionName: "businesses",
-                      targetId: business.id,
-                      nextStatus: event.target.value,
-                    }),
+                  runAction(
+                    "Business status updated",
+                    () => commitStatusChange({
+                        collectionName: "businesses",
+                        targetId: business.id,
+                        nextStatus: event.target.value,
+                      }),
+                    {
+                      confirm:
+                        `Change ${text(business.name, business.id)} status to ${statusLabel(event.target.value)}?`,
+                      confirmFr:
+                        `Changer le statut de ${text(business.name, business.id)} en ${statusLabel(event.target.value)} ?`,
+                    },
                   )
                 }
               >
@@ -5439,7 +5792,16 @@ function BusinessWorkspace({
           <p>This business was inferred from existing marketplace or operations records. Create a profile document before assigning people or editing status.</p>
           <button
             className="primary-button"
-            onClick={() => runAction("Business profile created", () => createMissingBusinessProfile(business))}
+            onClick={() => runAction(
+              "Business profile created",
+              () => createMissingBusinessProfile(business),
+              {
+                confirm:
+                  `Create a business profile for ${text(business.name, business.id)}?`,
+                confirmFr:
+                  `Créer un profil entreprise pour ${text(business.name, business.id)} ?`,
+              },
+            )}
           >
             <Building2 size={16} />
             Create business profile
@@ -5561,12 +5923,19 @@ function BusinessWorkspace({
                         <select
                           value={text(user.role, "staff")}
                           onChange={(event) =>
-                            runAction("Business membership updated", () =>
-                              updateMembership({
-                                userId: user.id,
-                                role: event.target.value as "businessOwner" | "staff" | "customer",
-                                businessId: business.id,
-                              }),
+                            runAction(
+                              "Business membership updated",
+                              () => updateMembership({
+                                  userId: user.id,
+                                  role: event.target.value as "businessOwner" | "staff" | "customer",
+                                  businessId: business.id,
+                                }),
+                              {
+                                confirm:
+                                  `Change ${userDisplayName(user)} to ${event.target.value === "customer" ? "customer" : event.target.value === "businessOwner" ? "business head" : "staff"}?`,
+                                confirmFr:
+                                  `Changer ${userDisplayName(user)} en ${event.target.value === "customer" ? "client" : event.target.value === "businessOwner" ? "responsable entreprise" : "employé"} ?`,
+                              },
                             )
                           }
                         >
@@ -5618,8 +5987,15 @@ function BusinessWorkspace({
                         <select
                           value={text(listing.status, "active")}
                           onChange={(event) =>
-                            runAction("Listing status updated", () =>
-                              commitStatusChange({ collectionName: "cars", targetId: listing.id, nextStatus: event.target.value }),
+                            runAction(
+                              "Listing status updated",
+                              () => commitStatusChange({ collectionName: "cars", targetId: listing.id, nextStatus: event.target.value }),
+                              {
+                                confirm:
+                                  `Change ${listingTitle(listing)} status to ${statusLabel(event.target.value)}?`,
+                                confirmFr:
+                                  `Changer le statut de ${listingTitle(listing)} en ${statusLabel(event.target.value)} ?`,
+                              },
                             )
                           }
                         >
@@ -5629,11 +6005,16 @@ function BusinessWorkspace({
                         </select>
                         <button
                           className="danger-button"
-                          onClick={() => {
-                            if (window.confirm(`Delete ${listingTitle(listing)}?`)) {
-                              runAction("Listing deleted", () => deleteAdminRecord("cars", listing.id));
-                            }
-                          }}
+                          onClick={() => runAction(
+                            "Listing deleted",
+                            () => deleteAdminRecord("cars", listing.id),
+                            {
+                              confirm:
+                                `Delete ${listingTitle(listing)}? This cannot be undone from the console.`,
+                              confirmFr:
+                                `Supprimer ${listingTitle(listing)} ? Cette action ne peut pas être annulée depuis la console.`,
+                            },
+                          )}
                         >
                           <X size={15} />
                         </button>
@@ -5736,7 +6117,7 @@ function BusinessDestinationsPanel({
 }: {
   business: FirestoreRow;
   destinations: FirestoreRow[];
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
 }) {
   const [search, setSearch] = useState("");
   const activeCount = countWhere(destinations, (item) => item.isActive === true);
@@ -5770,10 +6151,17 @@ function BusinessDestinationsPanel({
         <button
           className="secondary-button"
           onClick={() =>
-            runAction("Business destination list seeded", () =>
-              httpsCallable(functions, "seedDestinationCountries")({
-                businessId: business.id,
-              }),
+            runAction(
+              "Business destination list seeded",
+              () => httpsCallable(functions, "seedDestinationCountries")({
+                  businessId: business.id,
+                }),
+              {
+                confirm:
+                  `Seed destination countries for ${text(business.name, business.id)}?`,
+                confirmFr:
+                  `Ajouter les pays de destination pour ${text(business.name, business.id)} ?`,
+              },
             )
           }
           type="button"
@@ -5947,7 +6335,7 @@ function OperationsView({
   transports: FirestoreRow[];
   parkedCars: FirestoreRow[];
   purchases: FirestoreRow[];
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
   canService: (serviceId: string) => boolean;
 }) {
   const modules = useMemo(
@@ -6208,7 +6596,7 @@ function MarketplaceView({
   errors: string[];
   loading: boolean;
   refreshDestinations: () => void;
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
 }) {
   const [destinationSearch, setDestinationSearch] = useState("");
   const [listingSearch, setListingSearch] = useState("");
@@ -6492,7 +6880,7 @@ function MarketplaceBusinessCard({
   business: FirestoreRow;
   listings: FirestoreRow[];
   totalListings: number;
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
 }) {
   const statusCounts = countBy(listings, "status");
   return (
@@ -6536,7 +6924,7 @@ function MarketplaceListingRow({
   runAction,
 }: {
   listing: FirestoreRow;
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
 }) {
   const [open, setOpen] = useState(false);
   const details = carListingDetails(listing);
@@ -6584,12 +6972,19 @@ function MarketplaceListingRow({
       <select
         value={text(listing.status, "active")}
         onChange={(event) =>
-          runAction("Listing status updated", () =>
-            commitStatusChange({
-              collectionName: "cars",
-              targetId: listing.id,
-              nextStatus: event.target.value,
-            }),
+          runAction(
+            "Listing status updated",
+            () => commitStatusChange({
+                collectionName: "cars",
+                targetId: listing.id,
+                nextStatus: event.target.value,
+              }),
+            {
+              confirm:
+                `Change ${listingTitle(listing)} status to ${statusLabel(event.target.value)}?`,
+              confirmFr:
+                `Changer le statut de ${listingTitle(listing)} en ${statusLabel(event.target.value)} ?`,
+            },
           )
         }
       >
@@ -6601,11 +6996,16 @@ function MarketplaceListingRow({
       </select>
       <button
         className="danger-button"
-        onClick={() => {
-          if (window.confirm(`Delete ${listingTitle(listing)}?`)) {
-            runAction("Listing deleted", () => deleteAdminRecord("cars", listing.id));
-          }
-        }}
+        onClick={() => runAction(
+          "Listing deleted",
+          () => deleteAdminRecord("cars", listing.id),
+          {
+            confirm:
+              `Delete ${listingTitle(listing)}? This cannot be undone from the console.`,
+            confirmFr:
+              `Supprimer ${listingTitle(listing)} ? Cette action ne peut pas être annulée depuis la console.`,
+          },
+        )}
       >
         <X size={15} />
         Delete
@@ -6619,7 +7019,7 @@ function DestinationCoverageRow({
   runAction,
 }: {
   destination: FirestoreRow;
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
 }) {
   const [price, setPrice] = useState(String(destination.barrelShippingPrice ?? ""));
   const [minDays, setMinDays] = useState(String(destination.deliveryEstimateMinDays ?? ""));
@@ -6746,7 +7146,16 @@ function DestinationCoverageRow({
       <button
         aria-label={`Save ${text(destination.name, destination.id)} destination`}
         className="secondary-button"
-        onClick={() => runAction("Destination updated", save)}
+        onClick={() => runAction(
+          "Destination updated",
+          save,
+          {
+            confirm:
+              `Save destination changes for ${text(destination.name, destination.id)}?`,
+            confirmFr:
+              `Enregistrer les changements de destination pour ${text(destination.name, destination.id)} ?`,
+          },
+        )}
       >
         <Check size={15} />
         Save
@@ -7160,7 +7569,7 @@ function RefundRequestRow({
   user?: FirestoreRow;
   canManage: boolean;
   reviewRefund: (requestId: string, decision: "completed" | "rejected", note: string) => Promise<void>;
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
 }) {
   const [note, setNote] = useState("");
   const status = rowStatus(item);
@@ -7206,18 +7615,32 @@ function RefundRequestRow({
           <div className="row-actions">
             <button
               className="secondary-button"
-              onClick={() => runAction("Refund request completed", () => reviewRefund(item.id, "completed", note))}
+              onClick={() => runAction(
+                "Refund request completed",
+                () => reviewRefund(item.id, "completed", note),
+                {
+                  confirm:
+                    "Mark this refund request completed?",
+                  confirmFr:
+                    "Marquer cette demande de remboursement comme terminée ?",
+                },
+              )}
             >
               <Check size={15} />
               Complete
             </button>
             <button
               className="danger-button"
-              onClick={() => {
-                if (window.confirm("Return this pending amount to the customer's wallet?")) {
-                  runAction("Refund request rejected", () => reviewRefund(item.id, "rejected", note));
-                }
-              }}
+              onClick={() => runAction(
+                "Refund request rejected",
+                () => reviewRefund(item.id, "rejected", note),
+                {
+                  confirm:
+                    "Return this pending amount to the customer's wallet?",
+                  confirmFr:
+                    "Renvoyer ce montant en attente dans le portefeuille du client ?",
+                },
+              )}
             >
               <X size={15} />
               Reject
@@ -7260,7 +7683,7 @@ function FinanceView({
   parkedCars: FirestoreRow[];
   purchases: FirestoreRow[];
   supportRequests: FirestoreRow[];
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
   canManage: boolean;
   canSendSupport: boolean;
 }) {
@@ -7519,7 +7942,7 @@ function FinanceLedgerRecordRow({
   canManage: boolean;
   canSendSupport: boolean;
   markBalanceCollected: (requestId: string, note: string) => Promise<void>;
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
   onMessageBusiness: () => void;
 }) {
   const canCollectBalance =
@@ -7557,7 +7980,16 @@ function FinanceLedgerRecordRow({
             className="secondary-button"
             onClick={() => {
               const note = window.prompt("Collection note (optional)") || "";
-              runAction("Shared barrel balance collected", () => markBalanceCollected(row.sourceId, note));
+              runAction(
+                "Shared barrel balance collected",
+                () => markBalanceCollected(row.sourceId, note),
+                {
+                  confirm:
+                    "Mark this shared barrel balance as collected?",
+                  confirmFr:
+                    "Marquer ce solde de baril partagé comme encaissé ?",
+                },
+              );
             }}
             type="button"
           >
@@ -7584,7 +8016,7 @@ function ToolsView({
   runAction,
 }: {
   businesses: FirestoreRow[];
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
 }) {
   const [destinationBusinessId, setDestinationBusinessId] = useState("");
   const [legacyBusinessName, setLegacyBusinessName] = useState("");
@@ -7645,8 +8077,15 @@ function ToolsView({
           <button
             className="secondary-button"
             onClick={() =>
-              runAction("Default business migration complete", () =>
-                httpsCallable(functions, "migrateDefaultBusiness")({}),
+              runAction(
+                "Default business migration complete",
+                () => httpsCallable(functions, "migrateDefaultBusiness")({}),
+                {
+                  confirm:
+                    "Run the default business migration now?",
+                  confirmFr:
+                    "Lancer maintenant la migration de l’entreprise par défaut ?",
+                },
               )
             }
           >
@@ -7656,10 +8095,17 @@ function ToolsView({
           <button
             className="secondary-button"
             onClick={() =>
-              runAction("Destination country seed complete", () =>
-                httpsCallable(functions, "seedDestinationCountries")({
-                  businessId: selectedBusinessId,
-                }),
+              runAction(
+                "Destination country seed complete",
+                () => httpsCallable(functions, "seedDestinationCountries")({
+                    businessId: selectedBusinessId,
+                  }),
+                {
+                  confirm:
+                    "Seed destination countries for the selected business?",
+                  confirmFr:
+                    "Ajouter les pays de destination pour l’entreprise sélectionnée ?",
+                },
               )
             }
             disabled={!selectedBusinessId}
@@ -7728,7 +8174,16 @@ function ToolsView({
             className="secondary-button"
             disabled={!selectedBusinessId}
             onClick={() =>
-              runAction("Legacy car backfill dry run complete", runCarBackfillDryRun)
+              runAction(
+                "Legacy car backfill dry run complete",
+                runCarBackfillDryRun,
+                {
+                  confirm:
+                    "Run a dry run for the legacy car backfill?",
+                  confirmFr:
+                    "Lancer une simulation du rattachement des anciennes voitures ?",
+                },
+              )
             }
             type="button"
           >
@@ -7739,7 +8194,16 @@ function ToolsView({
             className="primary-button"
             disabled={!selectedBusinessId || reviewedBackfillCarIds.length === 0}
             onClick={() =>
-              runAction("Legacy car backfill applied", applyReviewedCarBackfill)
+              runAction(
+                "Legacy car backfill applied",
+                applyReviewedCarBackfill,
+                {
+                  confirm:
+                    `Apply legacy car backfill to ${reviewedBackfillCarIds.length} reviewed car ID${reviewedBackfillCarIds.length === 1 ? "" : "s"}?`,
+                  confirmFr:
+                    `Appliquer le rattachement des anciennes voitures à ${reviewedBackfillCarIds.length} identifiant${reviewedBackfillCarIds.length === 1 ? "" : "s"} vérifié${reviewedBackfillCarIds.length === 1 ? "" : "s"} ?`,
+                },
+              )
             }
             type="button"
           >
@@ -7795,7 +8259,7 @@ function CollectionRow({
   collectionName: string;
   title: string;
   details?: (item: FirestoreRow) => Array<[string, string]>;
-  runAction: (label: string, action: () => Promise<unknown>) => void;
+  runAction: ActionRunner;
   typeBadge?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -7826,12 +8290,19 @@ function CollectionRow({
       <select
         value={text(item[statusField], "pending")}
         onChange={(event) =>
-          runAction(`${title} updated`, () =>
-            commitStatusChange({
-              collectionName,
-              targetId: item.id,
-              nextStatus: event.target.value,
-            }),
+          runAction(
+            `${title} updated`,
+            () => commitStatusChange({
+                collectionName,
+                targetId: item.id,
+                nextStatus: event.target.value,
+              }),
+            {
+              confirm:
+                `Change ${label(item)} status to ${statusLabel(event.target.value)}?`,
+              confirmFr:
+                `Changer le statut de ${label(item)} en ${statusLabel(event.target.value)} ?`,
+            },
           )
         }
       >
@@ -7843,13 +8314,16 @@ function CollectionRow({
       </select>
       <button
         className="danger-button"
-        onClick={() => {
-          if (window.confirm(`Delete ${label(item)}?`)) {
-            runAction(`${title} item deleted`, () =>
-              deleteAdminRecord(collectionName, item.id),
-            );
-          }
-        }}
+        onClick={() => runAction(
+          `${title} item deleted`,
+          () => deleteAdminRecord(collectionName, item.id),
+          {
+            confirm:
+              `Delete ${label(item)}? This cannot be undone from the console.`,
+            confirmFr:
+              `Supprimer ${label(item)} ? Cette action ne peut pas être annulée depuis la console.`,
+          },
+        )}
       >
         <X size={15} />
         Delete
