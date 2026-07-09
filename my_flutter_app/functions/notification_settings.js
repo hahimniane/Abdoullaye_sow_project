@@ -154,6 +154,123 @@ function notificationHtml(title, body) {
   ].join("");
 }
 
+function cleanString(value) {
+  return String(value || "").trim();
+}
+
+function cleanStringArray(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => cleanString(item)).filter(Boolean);
+}
+
+function cleanNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+const FIREBASE_TRIGGER_EMAIL_STATUS = {
+  PENDING: "queued",
+  RETRY: "queued",
+  PROCESSING: "processing",
+  SUCCESS: "sent",
+  ERROR: "failed",
+};
+
+const FIRESTORE_SMS_STATUS = {
+  pending: "queued",
+  queued: "queued",
+  retry: "queued",
+  processing: "processing",
+  sending: "processing",
+  sent: "sent",
+  success: "sent",
+  delivered: "sent",
+  failed: "failed",
+  error: "failed",
+  undelivered: "failed",
+};
+
+function withDefinedValues(value) {
+  return Object.fromEntries(
+      Object.entries(value).filter(([, entry]) => entry !== undefined),
+  );
+}
+
+function firebaseTriggerEmailDeliveryUpdate(providerDoc) {
+  const source = providerDoc && typeof providerDoc === "object" ?
+    providerDoc :
+    {};
+  const delivery = source.delivery && typeof source.delivery === "object" ?
+    source.delivery :
+    {};
+  const rawState = cleanString(delivery.state).toUpperCase();
+  const status = FIREBASE_TRIGGER_EMAIL_STATUS[rawState];
+  if (!status) return null;
+
+  const info = delivery.info && typeof delivery.info === "object" ?
+    delivery.info :
+    {};
+  const attempts = cleanNumber(delivery.attempts);
+  return withDefinedValues({
+    status,
+    providerStatus: rawState,
+    providerAttempts: attempts === null ? undefined : attempts,
+    providerMessageId: cleanString(info.messageId),
+    providerAccepted: cleanStringArray(info.accepted),
+    providerRejected: cleanStringArray(info.rejected),
+    providerPending: cleanStringArray(info.pending),
+    providerResponse: cleanString(info.response),
+    providerStartedAt: delivery.startTime || null,
+    providerEndedAt: delivery.endTime || null,
+    lastError: status === "failed" ?
+      cleanString(delivery.error) || "Email delivery failed." :
+      "",
+  });
+}
+
+function firestoreSmsDeliveryUpdate(providerDoc) {
+  const source = providerDoc && typeof providerDoc === "object" ?
+    providerDoc :
+    {};
+  const delivery = source.delivery && typeof source.delivery === "object" ?
+    source.delivery :
+    {};
+  const rawStatus = cleanString(
+      source.status || delivery.status || delivery.state,
+  ).toLowerCase();
+  const status = FIRESTORE_SMS_STATUS[rawStatus];
+  if (!status) return null;
+
+  const providerMessageId = cleanString(
+      source.messageId || delivery.messageId || source.sid || delivery.sid,
+  );
+  const providerResponse = cleanString(source.response || delivery.response);
+  const providerError = cleanString(
+      source.lastError || delivery.lastError || source.error || delivery.error,
+  );
+  return withDefinedValues({
+    status,
+    providerStatus: rawStatus,
+    providerMessageId,
+    providerResponse,
+    providerStartedAt: delivery.startTime || source.startedAt || null,
+    providerEndedAt: delivery.endTime || source.completedAt || null,
+    lastError: status === "failed" ?
+      providerError || "SMS delivery failed." :
+      "",
+  });
+}
+
+function notificationProviderDeliveryUpdate({channel, provider, providerDoc}) {
+  if (channel === "email" && provider === "firebaseTriggerEmail") {
+    return firebaseTriggerEmailDeliveryUpdate(providerDoc);
+  }
+  if (channel === "sms" && provider === "firestoreSmsQueue") {
+    return firestoreSmsDeliveryUpdate(providerDoc);
+  }
+  return null;
+}
+
 module.exports = {
   defaultNotificationPreferences,
   defaultPlatformNotificationSettings,
@@ -162,5 +279,6 @@ module.exports = {
   notificationData,
   notificationDeliveryStatus,
   notificationHtml,
+  notificationProviderDeliveryUpdate,
   platformNotificationEnabled,
 };

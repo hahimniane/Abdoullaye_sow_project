@@ -42,6 +42,7 @@ const {
   notificationData,
   notificationDeliveryStatus,
   notificationHtml,
+  notificationProviderDeliveryUpdate,
   platformNotificationEnabled,
 } = require("./notification_settings");
 const {
@@ -2050,6 +2051,66 @@ async function queueNotificationDeliveries({
     await batch.commit();
   }
 }
+
+async function syncNotificationDeliveryFromProvider({
+  deliveryId,
+  channel,
+  provider,
+  providerDoc,
+}) {
+  const update = notificationProviderDeliveryUpdate({
+    channel,
+    provider,
+    providerDoc,
+  });
+  if (!update) return;
+
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const payload = {
+    ...update,
+    providerUpdatedAt: now,
+    updatedAt: now,
+  };
+  if (update.status === "sent") {
+    payload.sentAt = update.providerEndedAt || now;
+  }
+  if (update.status === "failed") {
+    payload.failedAt = update.providerEndedAt || now;
+  }
+
+  await admin.firestore()
+      .collection("notificationDeliveries")
+      .doc(deliveryId)
+      .set(payload, {merge: true});
+}
+
+exports.syncEmailNotificationDeliveryStatus = onDocumentWritten(
+    "mail/{deliveryId}",
+    async (event) => {
+      const after = event.data?.after;
+      if (!after?.exists) return;
+      await syncNotificationDeliveryFromProvider({
+        deliveryId: event.params.deliveryId,
+        channel: "email",
+        provider: "firebaseTriggerEmail",
+        providerDoc: after.data() || {},
+      });
+    },
+);
+
+exports.syncSmsNotificationDeliveryStatus = onDocumentWritten(
+    "smsMessages/{deliveryId}",
+    async (event) => {
+      const after = event.data?.after;
+      if (!after?.exists) return;
+      await syncNotificationDeliveryFromProvider({
+        deliveryId: event.params.deliveryId,
+        channel: "sms",
+        provider: "firestoreSmsQueue",
+        providerDoc: after.data() || {},
+      });
+    },
+);
 
 async function sendPreferenceNotification({
   uid,

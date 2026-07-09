@@ -7,6 +7,7 @@ const {
   notificationData,
   notificationDeliveryStatus,
   notificationHtml,
+  notificationProviderDeliveryUpdate,
   platformNotificationEnabled,
 } = require("../notification_settings");
 
@@ -127,6 +128,122 @@ describe("notification settings helpers", () => {
     assert.equal(
         notificationHtml("Review <now>", "A & B"),
         "<p>A &amp; B</p><hr><p><small>Review &lt;now&gt;</small></p>",
+    );
+  });
+
+  it("maps Firebase Trigger Email delivery success details", () => {
+    const update = notificationProviderDeliveryUpdate({
+      channel: "email",
+      provider: "firebaseTriggerEmail",
+      providerDoc: {
+        delivery: {
+          state: "SUCCESS",
+          attempts: 2,
+          info: {
+            messageId: "smtp-message-1",
+            accepted: ["owner@example.com"],
+            rejected: [],
+            pending: ["backup@example.com"],
+            response: "250 Message accepted",
+          },
+        },
+      },
+    });
+
+    assert.deepEqual(update, {
+      status: "sent",
+      providerStatus: "SUCCESS",
+      providerAttempts: 2,
+      providerMessageId: "smtp-message-1",
+      providerAccepted: ["owner@example.com"],
+      providerRejected: [],
+      providerPending: ["backup@example.com"],
+      providerResponse: "250 Message accepted",
+      providerStartedAt: null,
+      providerEndedAt: null,
+      lastError: "",
+    });
+  });
+
+  it("maps Firebase Trigger Email processing and errors", () => {
+    assert.equal(
+        notificationProviderDeliveryUpdate({
+          channel: "email",
+          provider: "firebaseTriggerEmail",
+          providerDoc: {delivery: {state: "PROCESSING"}},
+        }).status,
+        "processing",
+    );
+
+    const update = notificationProviderDeliveryUpdate({
+      channel: "email",
+      provider: "firebaseTriggerEmail",
+      providerDoc: {
+        delivery: {
+          state: "ERROR",
+          error: "SMTP authentication failed",
+        },
+      },
+    });
+
+    assert.equal(update.status, "failed");
+    assert.equal(update.providerStatus, "ERROR");
+    assert.equal(update.lastError, "SMTP authentication failed");
+  });
+
+  it("maps generic Firestore SMS worker delivery states", () => {
+    assert.deepEqual(
+        notificationProviderDeliveryUpdate({
+          channel: "sms",
+          provider: "firestoreSmsQueue",
+          providerDoc: {
+            status: "delivered",
+            sid: "sms-1",
+            response: "delivered",
+          },
+        }),
+        {
+          status: "sent",
+          providerStatus: "delivered",
+          providerMessageId: "sms-1",
+          providerResponse: "delivered",
+          providerStartedAt: null,
+          providerEndedAt: null,
+          lastError: "",
+        },
+    );
+
+    const failed = notificationProviderDeliveryUpdate({
+      channel: "sms",
+      provider: "firestoreSmsQueue",
+      providerDoc: {
+        delivery: {
+          state: "error",
+          error: "Carrier rejected the message",
+        },
+      },
+    });
+
+    assert.equal(failed.status, "failed");
+    assert.equal(failed.lastError, "Carrier rejected the message");
+  });
+
+  it("ignores provider records without a known delivery state", () => {
+    assert.equal(
+        notificationProviderDeliveryUpdate({
+          channel: "email",
+          provider: "firebaseTriggerEmail",
+          providerDoc: {delivery: {state: "BOUNCED"}},
+        }),
+        null,
+    );
+    assert.equal(
+        notificationProviderDeliveryUpdate({
+          channel: "sms",
+          provider: "firestoreSmsQueue",
+          providerDoc: {status: "unknown"},
+        }),
+        null,
     );
   });
 });
