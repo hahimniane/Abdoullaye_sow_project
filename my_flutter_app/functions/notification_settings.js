@@ -275,6 +275,43 @@ function retryFailure(code, message) {
   return {ok: false, code, message};
 }
 
+function notificationTestReadiness({channel, settings}) {
+  const config = normalizePlatformNotificationSettings(settings);
+  const cleanChannel = cleanString(channel).toLowerCase();
+  if (cleanChannel === "email") {
+    if (config.emailEnabled === false ||
+      config.emailProvider !== "firebaseTriggerEmail") {
+      return retryFailure(
+          "email_provider_unavailable",
+          "Connect the Firebase Trigger Email provider before testing.",
+      );
+    }
+    return {
+      ok: true,
+      channel: "email",
+      provider: "firebaseTriggerEmail",
+    };
+  }
+  if (cleanChannel === "sms") {
+    if (config.smsEnabled === false ||
+      config.smsProvider !== "firestoreSmsQueue") {
+      return retryFailure(
+          "sms_provider_unavailable",
+          "Connect the Firestore SMS queue provider before testing.",
+      );
+    }
+    return {
+      ok: true,
+      channel: "sms",
+      provider: "firestoreSmsQueue",
+    };
+  }
+  return retryFailure(
+      "unsupported_channel",
+      "Choose email or SMS for the notification test.",
+  );
+}
+
 function notificationRetryPlan({deliveryId, delivery, settings}) {
   const source = delivery && typeof delivery === "object" ? delivery : {};
   const config = normalizePlatformNotificationSettings(settings);
@@ -384,5 +421,6 @@ module.exports = {
   notificationHtml,
   notificationProviderDeliveryUpdate,
   notificationRetryPlan,
+  notificationTestReadiness,
   platformNotificationEnabled,
 };

@@ -9,6 +9,7 @@ const {
   notificationHtml,
   notificationProviderDeliveryUpdate,
   notificationRetryPlan,
+  notificationTestReadiness,
   platformNotificationEnabled,
 } = require("../notification_settings");
 
@@ -345,6 +346,43 @@ describe("notification settings helpers", () => {
           ok: false,
           code: "sms_provider_unavailable",
           message: "Connect the Firestore SMS queue provider before retrying.",
+        },
+    );
+  });
+
+  it("blocks notification tests until their provider is connected", () => {
+    assert.deepEqual(
+        notificationTestReadiness({
+          channel: "email",
+          settings: {emailProvider: "none"},
+        }),
+        {
+          ok: false,
+          code: "email_provider_unavailable",
+          message: "Connect the Firebase Trigger Email provider " +
+            "before testing.",
+        },
+    );
+    assert.deepEqual(
+        notificationTestReadiness({
+          channel: "sms",
+          settings: {smsEnabled: true, smsProvider: "firestoreSmsQueue"},
+        }),
+        {
+          ok: true,
+          channel: "sms",
+          provider: "firestoreSmsQueue",
+        },
+    );
+    assert.deepEqual(
+        notificationTestReadiness({
+          channel: "push",
+          settings: {},
+        }),
+        {
+          ok: false,
+          code: "unsupported_channel",
+          message: "Choose email or SMS for the notification test.",
         },
     );
   });

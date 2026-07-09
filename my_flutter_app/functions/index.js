@@ -44,6 +44,7 @@ const {
   notificationHtml,
   notificationProviderDeliveryUpdate,
   notificationRetryPlan,
+  notificationTestReadiness,
   platformNotificationEnabled,
 } = require("./notification_settings");
 const {
@@ -1967,12 +1968,14 @@ async function queueNotificationDeliveries({
   body,
   data,
 }) {
+  if (!uid) return [];
   const cleanTitle = String(title || "Laawol Digital update").trim();
   const cleanBody = String(body || "").trim();
   const cleanData = notificationData(data);
   const now = admin.firestore.FieldValue.serverTimestamp();
   const batch = db.batch();
   let writes = 0;
+  const results = [];
   const base = {
     preferenceKey,
     title: cleanTitle,
@@ -1989,8 +1992,15 @@ async function queueNotificationDeliveries({
     channel: "email",
     recipientAvailable: isValidEmail(email),
   });
+  const emailResult = {
+    channel: "email",
+    status: emailStatus,
+    provider: settings.emailProvider,
+    to: email,
+  };
   if (emailStatus === "queued" || emailStatus === "provider_not_configured") {
     const deliveryRef = db.collection("notificationDeliveries").doc();
+    emailResult.deliveryId = deliveryRef.id;
     batch.set(deliveryRef, {
       ...base,
       channel: "email",
@@ -2017,6 +2027,7 @@ async function queueNotificationDeliveries({
       writes += 1;
     }
   }
+  results.push(emailResult);
   const phone = String(user?.phone || user?.normalizedPhone || "").trim();
   const smsStatus = notificationDeliveryStatus({
     settings,
@@ -2024,8 +2035,15 @@ async function queueNotificationDeliveries({
     channel: "sms",
     recipientAvailable: Boolean(phone),
   });
+  const smsResult = {
+    channel: "sms",
+    status: smsStatus,
+    provider: settings.smsProvider,
+    to: phone,
+  };
   if (smsStatus === "queued" || smsStatus === "provider_not_configured") {
     const deliveryRef = db.collection("notificationDeliveries").doc();
+    smsResult.deliveryId = deliveryRef.id;
     batch.set(deliveryRef, {
       ...base,
       channel: "sms",
@@ -2048,9 +2066,11 @@ async function queueNotificationDeliveries({
       writes += 1;
     }
   }
+  results.push(smsResult);
   if (writes > 0) {
     await batch.commit();
   }
+  return results;
 }
 
 async function syncNotificationDeliveryFromProvider({
@@ -2207,6 +2227,114 @@ exports.retryNotificationDelivery = onCall(
         channel: plan.channel,
         provider: plan.provider,
         status: "queued",
+      };
+    },
+);
+
+exports.sendTestNotificationDelivery = onCall(
+    {
+      enforceAppCheck: false,
+      cors: true,
+    },
+    async (request) => {
+      const adminUid = requireAuth(request);
+      const adminUser = await getUserProfile(adminUid);
+      requireSuperAdmin(
+          adminUser,
+          "Only super admins can send notification tests",
+      );
+
+      const channel = String(request.data?.channel || "")
+          .trim()
+          .toLowerCase();
+      if (!["email", "sms"].includes(channel)) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Choose email or SMS for the notification test",
+        );
+      }
+
+      const db = admin.firestore();
+      const userDoc = await db.collection("users").doc(adminUid).get();
+      const user = userDoc.exists ? userDoc.data() || {} : adminUser;
+      const email = String(user.email || adminUser.email || "")
+          .trim()
+          .toLowerCase();
+      const phone = String(user.phone || user.normalizedPhone || "").trim();
+      if (channel === "email" && !isValidEmail(email)) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Your admin account needs a valid email before testing email.",
+        );
+      }
+      if (channel === "sms" && !phone) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Your admin account needs a phone number before testing SMS.",
+        );
+      }
+
+      const settings = await loadPlatformNotificationSettings(db);
+      const readiness = notificationTestReadiness({channel, settings});
+      if (!readiness.ok) {
+        throw new HttpsError(
+            "failed-precondition",
+            readiness.message,
+            {code: readiness.code},
+        );
+      }
+
+      const forcedPrefs = normalizeNotificationPreferences({
+        ...user.notificationPreferences,
+        emailNotifications: channel === "email",
+        smsNotifications: channel === "sms",
+      });
+      const deliveries = await queueNotificationDeliveries({
+        db,
+        uid: adminUid,
+        user: {
+          ...user,
+          email,
+          phone,
+        },
+        settings,
+        prefs: forcedPrefs,
+        preferenceKey: "supportActivity",
+        title: "Laawol Digital test notification",
+        body: "This confirms your notification provider is connected.",
+        data: {
+          type: "notification_test",
+          channel,
+        },
+      });
+      const result = deliveries.find((item) => item.channel === channel);
+      if (!result?.deliveryId) {
+        throw new HttpsError(
+            "failed-precondition",
+            "The notification test could not be queued.",
+            {status: result?.status || "unknown"},
+        );
+      }
+
+      await db.collection("adminAuditLogs").add({
+        action: "notification_test",
+        actorUid: adminUid,
+        targetCollection: "notificationDeliveries",
+        targetId: result.deliveryId,
+        targetLabel: `${channel} notification test`,
+        statusField: "status",
+        previousValue: "",
+        nextValue: result.status,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      return {
+        success: true,
+        deliveryId: result.deliveryId,
+        channel,
+        provider: result.provider,
+        status: result.status,
+        to: result.to,
       };
     },
 );

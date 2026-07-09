@@ -2911,6 +2911,12 @@ function MoreSettings({
     () => sortedDeliveryRows.filter(deliveryNeedsAttention).length,
     [sortedDeliveryRows],
   );
+  const emailProviderReady =
+    draft.notifications.emailEnabled &&
+    draft.notifications.emailProvider === "firebaseTriggerEmail";
+  const smsProviderReady =
+    draft.notifications.smsEnabled &&
+    draft.notifications.smsProvider === "firestoreSmsQueue";
 
   useEffect(() => {
     let active = true;
@@ -3040,6 +3046,13 @@ function MoreSettings({
     if (previewMode) return;
     await httpsCallable(functions, "retryNotificationDelivery")({
       deliveryId: row.id,
+    });
+  }
+
+  async function sendNotificationTest(channel: "email" | "sms") {
+    if (previewMode) return;
+    await httpsCallable(functions, "sendTestNotificationDelivery")({
+      channel,
     });
   }
 
@@ -3282,6 +3295,73 @@ function MoreSettings({
             </select>
             <small>Use the queue provider only after an SMS worker or extension is connected.</small>
           </label>
+        </div>
+        <div className="provider-setup-grid">
+          <article className="provider-setup-card">
+            <header>
+              <span className={`status-pill compact ${emailProviderReady ? "good" : "warning"}`}>
+                {emailProviderReady ? "Ready to test" : "Setup needed"}
+              </span>
+              <strong>Email provider</strong>
+            </header>
+            <p>Firebase Trigger Email must be installed with the Firestore collection set to mail and valid SMTP credentials.</p>
+            <div className="provider-setup-actions">
+              <a
+                className="secondary-button compact"
+                href="https://console.firebase.google.com/project/car-selling-flutter-app/extensions"
+                rel="noreferrer"
+                target="_blank"
+              >
+                <ArrowUpRight size={15} />
+                Open Firebase Extensions
+              </a>
+              <a
+                className="ghost-button compact"
+                href="https://firebase.google.com/docs/extensions/official/firestore-send-email"
+                rel="noreferrer"
+                target="_blank"
+              >
+                Setup guide
+              </a>
+              <button
+                className="primary-button compact"
+                disabled={!emailProviderReady}
+                type="button"
+                onClick={() =>
+                  runAction("Email test queued", () =>
+                    sendNotificationTest("email"),
+                  )
+                }
+              >
+                <Send size={15} />
+                Send email test
+              </button>
+            </div>
+          </article>
+          <article className="provider-setup-card">
+            <header>
+              <span className={`status-pill compact ${smsProviderReady ? "good" : "warning"}`}>
+                {smsProviderReady ? "Ready to test" : "Setup needed"}
+              </span>
+              <strong>SMS provider</strong>
+            </header>
+            <p>A Firestore SMS worker must process smsMessages records and write delivery status back to each record.</p>
+            <div className="provider-setup-actions">
+              <button
+                className="primary-button compact"
+                disabled={!smsProviderReady}
+                type="button"
+                onClick={() =>
+                  runAction("SMS test queued", () =>
+                    sendNotificationTest("sms"),
+                  )
+                }
+              >
+                <Send size={15} />
+                Send SMS test
+              </button>
+            </div>
+          </article>
         </div>
         <div className="toggle-list">
           <ToggleRow label="Push notifications" checked={draft.notifications.pushEnabled} onChange={(v) => setNotifications("pushEnabled", v)} />
