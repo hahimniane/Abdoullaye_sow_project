@@ -15,6 +15,15 @@ const BUSINESS_ID = "support-flow-business";
 const SHIPMENT_ID = "support-flow-shipment";
 
 async function seedSupportFixture() {
+  try {
+    await admin.auth().createUser({
+      uid: ADMIN_UID,
+      email: "admin@example.test",
+      emailVerified: true,
+    });
+  } catch (error) {
+    if (error.code !== "auth/uid-already-exists") throw error;
+  }
   await Promise.all([
     db.collection("users").doc(CUSTOMER_UID).set({
       role: "customer",

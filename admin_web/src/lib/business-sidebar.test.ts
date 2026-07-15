@@ -15,7 +15,7 @@ describe("business sidebar navigation", () => {
     assert.equal(transport?.label, "Transport & shipping");
     assert.deepEqual(
       transport?.tabs.map((tab) => tab.id),
-      ["barrels", "transport", "destinations", "parking"],
+      ["barrels", "freight", "transport", "destinations", "parking"],
     );
   });
 

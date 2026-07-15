@@ -61,6 +61,17 @@ const {
   simulatedPoolBalanceIntent,
   hasRemainingSharedPoolBalanceDue,
 } = require("./shared_barrel");
+const {
+  PAYMENT_STATES,
+  buildReconciliationDecision,
+  buildStripeEventClaim,
+  paymentIntentIdempotencyKey,
+  routePaymentIntentMetadata,
+} = require("./payment_reconciliation");
+const {
+  FreightSettlementStatus,
+  calculateFreightSettlement,
+} = require("./freight_settlement");
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
@@ -75,11 +86,14 @@ const DEFAULT_HOLD_MAX_DAYS = 14;
 const PURCHASE_CURRENCY = "usd";
 const SHIPMENT_CURRENCY = "usd";
 const SIMULATE_PAYMENTS = runtimePaymentSimulationEnabled(process.env);
+// Firebase emulators do not issue real App Check attestations. Every deployed
+// callable requires an attested first-party client; local emulator suites keep
+// enforcement off so they can exercise the same handlers deterministically.
+const ENFORCE_APP_CHECK = process.env.FUNCTIONS_EMULATOR !== "true";
 const DEFAULT_BUSINESS_ID = "keren_auto_sales";
 const DEFAULT_BUSINESS_NAME = "Keren";
 const MAX_BARREL_QUANTITY = 20;
 const MAX_BARREL_ORDER_LINES = 10;
-const PLATFORM_ADMIN_EMAIL = "admin@gmail.com";
 const VALID_BUSINESS_SERVICES = [
   "barrelShipping",
   "sharedBarrels",
@@ -93,6 +107,7 @@ const VALID_BUSINESS_PERMISSIONS = [
   "listings",
   "purchases",
   "barrels",
+  "freight",
   "transport",
   "parking",
   "destinations",
@@ -167,236 +182,259 @@ function requireAuth(request) {
   return request.auth.uid;
 }
 
-exports.ensurePlatformAdminProfile = onCall(async (request) => {
-  const uid = requireAuth(request);
-  const email = (request.auth.token.email || "").toLowerCase();
-  if (email !== PLATFORM_ADMIN_EMAIL) {
-    throw new HttpsError(
-        "permission-denied",
-        "This account is not the platform administrator",
-    );
-  }
+function callableClientAddress(request) {
+  const rawRequest = request.rawRequest;
+  const forwarded = String(rawRequest?.headers?.["x-forwarded-for"] || "")
+      .split(",")[0]
+      .trim();
+  return forwarded || String(rawRequest?.ip || "unknown");
+}
 
-  const now = admin.firestore.FieldValue.serverTimestamp();
-  await admin.firestore().collection("users").doc(uid).set(
-      {
-        email,
-        fullName: "Platform Administrator",
-        role: "admin",
-        businessId: admin.firestore.FieldValue.delete(),
-        businessName: admin.firestore.FieldValue.delete(),
-        businessServices: admin.firestore.FieldValue.delete(),
-        platformAdmin: true,
-        adminRole: "superAdmin",
-        updatedAt: now,
-        createdAt: now,
-      },
-      {merge: true},
-  );
+async function enforceCallableRateLimit(request, {
+  name,
+  limit,
+  windowSeconds,
+}) {
+  if (process.env.FUNCTIONS_EMULATOR === "true") return;
+  const identity = request.auth?.uid || callableClientAddress(request);
+  const bucket = crypto.createHash("sha256")
+      .update(`${name}:${identity}`)
+      .digest("hex");
+  const ref = admin.firestore().collection("callableRateLimits").doc(bucket);
+  const nowMs = Date.now();
+  const windowMs = Math.max(1, Number(windowSeconds)) * 1000;
+  const maxCalls = Math.max(1, Number(limit));
 
-  return {
-    success: true,
-    role: "admin",
-    email,
-  };
-});
-
-exports.resolveSignInIdentifier = onCall(async (request) => {
-  const identifier = String(request.data?.identifier || "").trim();
-  if (!identifier) {
-    throw new HttpsError("invalid-argument", "Enter an email or phone number");
-  }
-  if (identifier.includes("@")) {
-    if (!isValidEmail(identifier)) {
-      throw new HttpsError("invalid-argument", "Enter a valid email address");
-    }
-    return {email: identifier.toLowerCase()};
-  }
-
-  requireValidPhoneNumber(identifier, "Phone");
-  const alias = normalizePhoneAlias(identifier);
-  const doc = await admin.firestore()
-      .collection("phoneSignInAliases")
-      .doc(alias)
-      .get();
-  if (!doc.exists) {
-    throw new HttpsError("not-found", "No account found for this phone");
-  }
-  const email = String(doc.data()?.email || "").trim().toLowerCase();
-  if (!email) {
-    throw new HttpsError("not-found", "No account found for this phone");
-  }
-  return {email};
-});
-
-exports.createCustomerUser = onCall(async (request) => {
-  const email = String(request.data?.email || "").trim().toLowerCase();
-  const password = String(request.data?.password || "");
-  const fullName = String(request.data?.fullName || "").trim();
-  const phone = String(request.data?.phone || "").trim();
-
-  if (!isValidEmail(email)) {
-    throw new HttpsError("invalid-argument", "Enter a valid email address");
-  }
-  if (password.length < 6) {
-    throw new HttpsError(
-        "invalid-argument",
-        "Password must be at least 6 characters",
-    );
-  }
-  if (!fullName) {
-    throw new HttpsError("invalid-argument", "Full name is required");
-  }
-  requireValidPhoneNumber(phone, "Phone");
-
-  const db = admin.firestore();
-  const normalizedPhone = normalizePhoneAlias(phone);
-  const aliasRef = db.collection("phoneSignInAliases").doc(normalizedPhone);
-  const existingAlias = await aliasRef.get();
-  if (existingAlias.exists) {
-    throw new HttpsError(
-        "already-exists",
-        "An account already uses this phone number",
-    );
-  }
-
-  let userRecord;
-  try {
-    userRecord = await admin.auth().createUser({
-      email,
-      password,
-      displayName: fullName,
-    });
-  } catch (error) {
-    if (error.code === "auth/email-already-exists") {
+  await admin.firestore().runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const current = snapshot.data() || {};
+    const startedAtMs = Number(current.startedAtMs || 0);
+    const activeWindow = startedAtMs > 0 && nowMs - startedAtMs < windowMs;
+    const count = activeWindow ? Number(current.count || 0) : 0;
+    if (count >= maxCalls) {
       throw new HttpsError(
-          "already-exists",
-          "An account already exists with this email",
+          "resource-exhausted",
+          "Too many requests. Please wait and try again.",
       );
     }
-    if (error.code === "auth/invalid-email") {
-      throw new HttpsError("invalid-argument", "Enter a valid email address");
-    }
-    logger.error("Failed to create customer auth user", error);
-    throw new HttpsError("internal", "Could not create account");
-  }
+    transaction.set(ref, {
+      endpoint: name,
+      identityHash: bucket,
+      startedAtMs: activeWindow ? startedAtMs : nowMs,
+      count: count + 1,
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+      expiresAt: admin.firestore.Timestamp.fromMillis(nowMs + windowMs * 2),
+    }, {merge: true});
+  });
+}
 
-  try {
-    const now = admin.firestore.FieldValue.serverTimestamp();
-    await db.runTransaction(async (transaction) => {
-      const aliasSnap = await transaction.get(aliasRef);
-      if (aliasSnap.exists) {
+exports.resolveSignInIdentifier = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      await enforceCallableRateLimit(request, {
+        name: "resolveSignInIdentifier",
+        limit: 8,
+        windowSeconds: 60,
+      });
+      const identifier = String(request.data?.identifier || "").trim();
+      if (!identifier) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Enter an email address",
+        );
+      }
+      if (!isValidEmail(identifier)) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Enter a valid email address",
+        );
+      }
+      return {email: identifier.toLowerCase()};
+    },
+);
+
+exports.createCustomerUser = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      await enforceCallableRateLimit(request, {
+        name: "createCustomerUser",
+        limit: 4,
+        windowSeconds: 60 * 60,
+      });
+      const email = String(request.data?.email || "").trim().toLowerCase();
+      const password = String(request.data?.password || "");
+      const fullName = String(request.data?.fullName || "").trim();
+      const phone = String(request.data?.phone || "").trim();
+
+      if (!isValidEmail(email)) {
+        throw new HttpsError("invalid-argument", "Enter a valid email address");
+      }
+      if (password.length < 6) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Password must be at least 6 characters",
+        );
+      }
+      if (!fullName) {
+        throw new HttpsError("invalid-argument", "Full name is required");
+      }
+      requireValidPhoneNumber(phone, "Phone");
+
+      const db = admin.firestore();
+      const normalizedPhone = normalizePhoneAlias(phone);
+      const aliasRef = db.collection("phoneSignInAliases").doc(normalizedPhone);
+      const existingAlias = await aliasRef.get();
+      if (existingAlias.exists) {
         throw new HttpsError(
             "already-exists",
             "An account already uses this phone number",
         );
       }
-      transaction.set(db.collection("users").doc(userRecord.uid), {
-        email,
-        fullName,
-        phone,
-        normalizedPhone,
-        role: "customer",
-        notificationPreferences: defaultNotificationPreferences(),
-        createdAt: now,
-        updatedAt: now,
-      });
-      transaction.set(aliasRef, {
+
+      let userRecord;
+      try {
+        userRecord = await admin.auth().createUser({
+          email,
+          password,
+          displayName: fullName,
+        });
+      } catch (error) {
+        if (error.code === "auth/email-already-exists") {
+          throw new HttpsError(
+              "already-exists",
+              "An account already exists with this email",
+          );
+        }
+        if (error.code === "auth/invalid-email") {
+          throw new HttpsError(
+              "invalid-argument",
+              "Enter a valid email address",
+          );
+        }
+        logger.error("Failed to create customer auth user", error);
+        throw new HttpsError("internal", "Could not create account");
+      }
+
+      try {
+        const now = FirestoreFieldValue.serverTimestamp();
+        await db.runTransaction(async (transaction) => {
+          const aliasSnap = await transaction.get(aliasRef);
+          if (aliasSnap.exists) {
+            throw new HttpsError(
+                "already-exists",
+                "An account already uses this phone number",
+            );
+          }
+          transaction.set(db.collection("users").doc(userRecord.uid), {
+            email,
+            fullName,
+            phone,
+            normalizedPhone,
+            role: "customer",
+            notificationPreferences: defaultNotificationPreferences(),
+            createdAt: now,
+            updatedAt: now,
+          });
+          transaction.set(aliasRef, {
+            uid: userRecord.uid,
+            email,
+            phone,
+            createdAt: now,
+            updatedAt: now,
+          });
+        });
+      } catch (error) {
+        await admin.auth().deleteUser(userRecord.uid).catch((deleteError) => {
+          logger.error("Failed to roll back customer auth user", deleteError);
+        });
+        if (error instanceof HttpsError) throw error;
+        logger.error("Failed to create customer profile", error);
+        throw new HttpsError("internal", "Could not create account profile");
+      }
+
+      return {
         uid: userRecord.uid,
         email,
-        phone,
-        createdAt: now,
-        updatedAt: now,
-      });
-    });
-  } catch (error) {
-    await admin.auth().deleteUser(userRecord.uid).catch((deleteError) => {
-      logger.error("Failed to roll back customer auth user", deleteError);
-    });
-    if (error instanceof HttpsError) throw error;
-    logger.error("Failed to create customer profile", error);
-    throw new HttpsError("internal", "Could not create account profile");
-  }
+        normalizedPhone,
+        notificationPreferences: defaultNotificationPreferences(),
+      };
+    },
+);
 
-  return {
-    uid: userRecord.uid,
-    email,
-    normalizedPhone,
-    notificationPreferences: defaultNotificationPreferences(),
-  };
-});
-
-exports.updateCustomerProfile = onCall(async (request) => {
-  const uid = requireAuth(request);
-  const fullName = String(request.data?.fullName || "").trim();
-  const phone = String(request.data?.phone || "").trim();
-  const profileImageUrl =
+exports.updateCustomerProfile = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const fullName = String(request.data?.fullName || "").trim();
+      const phone = String(request.data?.phone || "").trim();
+      const profileImageUrl =
     String(request.data?.profileImageUrl || "").trim();
-  const profileImagePath =
+      const profileImagePath =
     String(request.data?.profileImagePath || "").trim();
-  const notificationPreferences = normalizeNotificationPreferences(
-      request.data?.notificationPreferences,
-  );
-
-  if (!fullName) {
-    throw new HttpsError("invalid-argument", "Full name is required");
-  }
-  requireValidPhoneNumber(phone, "Phone");
-
-  const db = admin.firestore();
-  const userRef = db.collection("users").doc(uid);
-  const normalizedPhone = normalizePhoneAlias(phone);
-  const nextAliasRef = db.collection("phoneSignInAliases").doc(
-      normalizedPhone,
-  );
-  const email = String(request.auth.token.email || "").toLowerCase();
-  const now = admin.firestore.FieldValue.serverTimestamp();
-
-  await db.runTransaction(async (transaction) => {
-    const userSnap = await transaction.get(userRef);
-    if (!userSnap.exists) {
-      throw new HttpsError("not-found", "User profile not found");
-    }
-    const current = userSnap.data() || {};
-    const currentAlias = String(current.normalizedPhone || "");
-    const nextAliasSnap = await transaction.get(nextAliasRef);
-    if (nextAliasSnap.exists && nextAliasSnap.data()?.uid !== uid) {
-      throw new HttpsError(
-          "already-exists",
-          "An account already uses this phone number",
+      const notificationPreferences = normalizeNotificationPreferences(
+          request.data?.notificationPreferences,
       );
-    }
 
-    if (currentAlias && currentAlias !== normalizedPhone) {
-      transaction.delete(db.collection("phoneSignInAliases").doc(
-          currentAlias,
-      ));
-    }
-    transaction.set(nextAliasRef, {
-      uid,
-      email,
-      phone,
-      updatedAt: now,
-      createdAt: nextAliasSnap.exists ?
+      if (!fullName) {
+        throw new HttpsError("invalid-argument", "Full name is required");
+      }
+      requireValidPhoneNumber(phone, "Phone");
+
+      const db = admin.firestore();
+      const userRef = db.collection("users").doc(uid);
+      const normalizedPhone = normalizePhoneAlias(phone);
+      const nextAliasRef = db.collection("phoneSignInAliases").doc(
+          normalizedPhone,
+      );
+      const email = String(request.auth.token.email || "").toLowerCase();
+      const now = FirestoreFieldValue.serverTimestamp();
+
+      await db.runTransaction(async (transaction) => {
+        const userSnap = await transaction.get(userRef);
+        if (!userSnap.exists) {
+          throw new HttpsError("not-found", "User profile not found");
+        }
+        const current = userSnap.data() || {};
+        const currentAlias = String(current.normalizedPhone || "");
+        const nextAliasSnap = await transaction.get(nextAliasRef);
+        if (nextAliasSnap.exists && nextAliasSnap.data()?.uid !== uid) {
+          throw new HttpsError(
+              "already-exists",
+              "An account already uses this phone number",
+          );
+        }
+
+        if (currentAlias && currentAlias !== normalizedPhone) {
+          transaction.delete(db.collection("phoneSignInAliases").doc(
+              currentAlias,
+          ));
+        }
+        transaction.set(nextAliasRef, {
+          uid,
+          email,
+          phone,
+          updatedAt: now,
+          createdAt: nextAliasSnap.exists ?
         nextAliasSnap.data()?.createdAt || now :
         now,
-    }, {merge: true});
+        }, {merge: true});
 
-    const updates = {
-      fullName,
-      phone,
-      normalizedPhone,
-      notificationPreferences,
-      updatedAt: now,
-    };
-    if (profileImageUrl) updates.profileImageUrl = profileImageUrl;
-    if (profileImagePath) updates.profileImagePath = profileImagePath;
-    transaction.set(userRef, updates, {merge: true});
-  });
+        const updates = {
+          fullName,
+          phone,
+          normalizedPhone,
+          notificationPreferences,
+          updatedAt: now,
+        };
+        if (profileImageUrl) updates.profileImageUrl = profileImageUrl;
+        if (profileImagePath) updates.profileImagePath = profileImagePath;
+        transaction.set(userRef, updates, {merge: true});
+      });
 
-  await admin.auth().updateUser(uid, {displayName: fullName});
-  return {success: true, normalizedPhone, notificationPreferences};
-});
+      await admin.auth().updateUser(uid, {displayName: fullName});
+      return {success: true, normalizedPhone, notificationPreferences};
+    },
+);
 
 exports.notifyCarPurchaseStatus = onDocumentUpdated(
     "carPurchases/{purchaseId}",
@@ -498,7 +536,7 @@ exports.unpublishSuspendedFeaturedBusiness = onDocumentUpdated(
         featureStatus: "none",
         featureNote:
           "Automatically unpublished because the business is not approved.",
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
       }, {merge: true});
     },
 );
@@ -520,6 +558,13 @@ async function getUserProfile(uid) {
   }
   const user = {id: doc.id, ...doc.data()};
   if (user.role === "admin") {
+    const authUser = await admin.auth().getUser(uid);
+    if (authUser.emailVerified !== true) {
+      throw new HttpsError(
+          "permission-denied",
+          "Verify your administrator email before using platform access",
+      );
+    }
     const role = platformAdminRole(user);
     if (role === "superAdmin") {
       user.effectiveCapabilities = [
@@ -659,7 +704,7 @@ function requireServiceAccessForCollection(user, collectionName, message) {
 
 exports.updateCurrentAdminProfile = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -689,7 +734,7 @@ exports.updateCurrentAdminProfile = onCall(
           authUser.phoneNumber === phone &&
           request.data?.phoneVerified === true,
       );
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       const update = {
         fullName,
         phone,
@@ -702,7 +747,7 @@ exports.updateCurrentAdminProfile = onCall(
       if (phoneVerified) {
         update.phoneVerifiedAt = now;
       } else {
-        update.phoneVerifiedAt = admin.firestore.FieldValue.delete();
+        update.phoneVerifiedAt = FirestoreFieldValue.delete();
       }
 
       const db = admin.firestore();
@@ -741,10 +786,9 @@ exports.updateCurrentAdminProfile = onCall(
 
 function platformAdminRole(user) {
   if (user.role !== "admin") return "";
-  // Any assigned adminRole (built-in or custom) is used as-is; an admin with
-  // no role is treated as the legacy super admin.
-  const role = String(user.adminRole || "").trim();
-  return role || "superAdmin";
+  // Platform access is explicit. A partially provisioned legacy admin must not
+  // silently become a super admin because its role field is absent.
+  return String(user.adminRole || "").trim();
 }
 
 function hasAdminCapability(user, capability) {
@@ -814,7 +858,7 @@ function statusConfigForCollection(collectionName) {
 }
 
 function statusUpdatePayload({statusField, previousStatus, nextStatus, uid}) {
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  const now = FirestoreFieldValue.serverTimestamp();
   return {
     [statusField]: nextStatus,
     updatedAt: now,
@@ -884,7 +928,10 @@ function setAdminAuditLog(batch, {
     targetId,
     targetPath: `${targetCollection}/${targetId}`,
     targetLabel: String(targetLabel || targetId),
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FirestoreFieldValue.serverTimestamp(),
+    expiresAt: admin.firestore.Timestamp.fromMillis(
+        Date.now() + 400 * 24 * 60 * 60 * 1000,
+    ),
   };
   if (statusField) payload.statusField = statusField;
   if (previousValue !== undefined) payload.previousValue = previousValue;
@@ -894,7 +941,7 @@ function setAdminAuditLog(batch, {
 
 exports.publishFeaturedBusiness = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -923,7 +970,7 @@ exports.publishFeaturedBusiness = onCall(
         business,
         data: request.data || {},
         adminUid,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        timestamp: FirestoreFieldValue.serverTimestamp(),
         validateWebsite: requireValidWebsite,
       });
       if (feature.missing) {
@@ -931,7 +978,7 @@ exports.publishFeaturedBusiness = onCall(
         await businessRef.set({
           featureStatus: "requested",
           featureNote: note,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
           updatedBy: adminUid,
         }, {merge: true});
         throw new HttpsError("failed-precondition", note);
@@ -947,10 +994,10 @@ exports.publishFeaturedBusiness = onCall(
         marketingBlurb: feature.payload.blurb,
         featureConsent: true,
         featureStatus: "approved",
-        featureNote: admin.firestore.FieldValue.delete(),
+        featureNote: FirestoreFieldValue.delete(),
         featureOrder: feature.payload.order,
         logoUrl: feature.payload.logoUrl,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
         updatedBy: adminUid,
       }, {merge: true});
       setAdminAuditLog(batch, {
@@ -968,7 +1015,7 @@ exports.publishFeaturedBusiness = onCall(
 
 exports.unpublishFeaturedBusiness = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -989,8 +1036,8 @@ exports.unpublishFeaturedBusiness = onCall(
       batch.delete(db.collection("featuredBusinesses").doc(businessId));
       batch.set(db.collection("businesses").doc(businessId), {
         featureStatus: "none",
-        featureNote: admin.firestore.FieldValue.delete(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        featureNote: FirestoreFieldValue.delete(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
         updatedBy: adminUid,
       }, {merge: true});
       setAdminAuditLog(batch, {
@@ -1006,7 +1053,7 @@ exports.unpublishFeaturedBusiness = onCall(
 
 exports.requestFeaturing = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -1032,9 +1079,9 @@ exports.requestFeaturing = onCall(
       const requestUpdate = buildFeaturingRequestUpdate({
         data: request.data || {},
         business: businessDoc.data() || {},
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        timestamp: FirestoreFieldValue.serverTimestamp(),
         updatedBy: callerUid,
-        deleteValue: admin.firestore.FieldValue.delete(),
+        deleteValue: FirestoreFieldValue.delete(),
       });
       if (requestUpdate.missing) {
         const note = `Missing: ${requestUpdate.missing.join(", ")}`;
@@ -1057,11 +1104,9 @@ function canManageBusiness(user, businessId) {
 }
 
 function normalizeBusinessServices(raw, fallback = DEFAULT_BUSINESS_SERVICES) {
-  const incoming = Array.isArray(raw) ? raw : [];
-  const services = VALID_BUSINESS_SERVICES.filter((service) =>
-    incoming.includes(service),
-  );
-  return services.length ? services : [...fallback];
+  if (raw === undefined || raw === null) return [...fallback];
+  if (!Array.isArray(raw)) return [];
+  return VALID_BUSINESS_SERVICES.filter((service) => raw.includes(service));
 }
 
 function normalizeBusinessPermissions(raw) {
@@ -1321,7 +1366,7 @@ function hasBusinessPermission(user, section) {
   if (user.role === "admin" || user.role === "businessOwner") return true;
   const permissions = Array.isArray(user.businessPermissions) ?
     user.businessPermissions : [];
-  return permissions.length === 0 || permissions.includes(section);
+  return permissions.includes(section);
 }
 
 async function requireBusinessPermission(uid, businessId, section) {
@@ -1382,7 +1427,7 @@ async function getApprovedBusinessDestination({businessId, countryId}) {
 
 exports.listActiveBarrelDestinationOptions = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async () => {
@@ -1395,7 +1440,10 @@ exports.listActiveBarrelDestinationOptions = onCall(
       for (const businessDoc of businesses.docs) {
         const business = businessDoc.data();
         const services = normalizeBusinessServices(business.enabledServices);
-        if (!services.includes("barrelShipping")) continue;
+        const offersBarrels = services.includes("barrelShipping") ||
+          services.includes("sharedBarrels");
+        const offersFreight = services.includes("freight");
+        if (!offersBarrels && !offersFreight) continue;
 
         const destinations = await businessDoc.ref
             .collection("destinationCountries")
@@ -1405,7 +1453,18 @@ exports.listActiveBarrelDestinationOptions = onCall(
         destinations.docs.forEach((destinationDoc) => {
           const country = destinationDoc.data();
           const price = Number(country.barrelShippingPrice || 0);
-          if (!Number.isFinite(price) || price <= 0) return;
+          const freightAirPricePerKg =
+            Number(country.freightAirPricePerKg || 0);
+          const freightSeaPricePerKg =
+            Number(country.freightSeaPricePerKg || 0);
+          const hasBarrelRate = offersBarrels &&
+            Number.isFinite(price) && price > 0;
+          const hasFreightRate = offersFreight &&
+            ((Number.isFinite(freightAirPricePerKg) &&
+              freightAirPricePerKg > 0) ||
+             (Number.isFinite(freightSeaPricePerKg) &&
+              freightSeaPricePerKg > 0));
+          if (!hasBarrelRate && !hasFreightRate) return;
 
           options.push({
             id: `${businessDoc.id}_${destinationDoc.id}`,
@@ -1415,6 +1474,12 @@ exports.listActiveBarrelDestinationOptions = onCall(
             businessEmail: business.email || "",
             businessWebsite: business.website || "",
             businessProfileImageUrl: business.profileImageUrl || "",
+            businessAddress: [
+              business.addressLine1,
+              business.city,
+              business.state,
+              business.postalCode,
+            ].filter(Boolean).join(", "),
             enabledServices: services,
             serviceNote: business.serviceNote || "",
             businessStatus: "approved",
@@ -1424,9 +1489,14 @@ exports.listActiveBarrelDestinationOptions = onCall(
               code: country.code || "",
               isActive: country.isActive === true,
               sortOrder: Number(country.sortOrder || 0),
-              barrelShippingPrice: price,
-              freightAirPricePerKg: Number(country.freightAirPricePerKg || 0),
-              freightSeaPricePerKg: Number(country.freightSeaPricePerKg || 0),
+              barrelShippingPrice:
+                Number.isFinite(price) && price > 0 ? price : 0,
+              freightAirPricePerKg:
+                Number.isFinite(freightAirPricePerKg) ?
+                  freightAirPricePerKg : 0,
+              freightSeaPricePerKg:
+                Number.isFinite(freightSeaPricePerKg) ?
+                  freightSeaPricePerKg : 0,
               destinationNote: country.destinationNote || "",
               ...deliveryEstimateFromCountry(country),
             },
@@ -1446,7 +1516,7 @@ exports.listActiveBarrelDestinationOptions = onCall(
 // transport is quoted by the business after the request is submitted.
 exports.listTransportBusinessOptions = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async () => {
@@ -1506,7 +1576,7 @@ exports.listTransportBusinessOptions = onCall(
 // "pending" with quoteStatus "awaitingQuote" and the business sets the price.
 exports.createTransportRequest = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -1583,7 +1653,7 @@ exports.createTransportRequest = onCall(
 
       const trackingCode =
           await generateTrackingCode("TR", "transportRequests");
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       const docData = {
         trackingCode,
         ownerName,
@@ -1679,7 +1749,13 @@ async function createStripePaymentIntent(params) {
   });
   return stripeRequest("/payment_intents", {
     method: "POST",
-    headers: {"Content-Type": "application/x-www-form-urlencoded"},
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Idempotency-Key": paymentIntentIdempotencyKey({
+        paymentType: params.metadata.paymentType,
+        stableDomainIds: params.metadata,
+      }),
+    },
     body,
   });
 }
@@ -1729,7 +1805,7 @@ async function retrieveStripeAccount(accountId) {
 
 function stripeAccountBusinessUpdate(account) {
   return buildStripeAccountBusinessUpdate(account, {
-    serverTimestamp: admin.firestore.FieldValue.serverTimestamp,
+    serverTimestamp: FirestoreFieldValue.serverTimestamp,
   });
 }
 
@@ -1746,6 +1822,18 @@ async function createStripeTransfer(params) {
     body.set(`metadata[${key}]`, String(value));
   });
   return stripeFormRequest("/transfers", body, {
+    idempotencyKey: params.idempotencyKey,
+  });
+}
+
+async function createStripeRefund(params) {
+  const body = new URLSearchParams();
+  body.set("payment_intent", params.paymentIntentId);
+  body.set("amount", String(params.amount));
+  Object.entries(params.metadata || {}).forEach(([key, value]) => {
+    body.set(`metadata[${key}]`, String(value));
+  });
+  return stripeFormRequest("/refunds", body, {
     idempotencyKey: params.idempotencyKey,
   });
 }
@@ -1840,7 +1928,7 @@ async function updateBusinessProEntitlement({
   const inactive = isInactiveSubscriptionStatus(status);
   const plan = active ? "pro" : inactive ? "free" : undefined;
   const db = admin.firestore();
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  const now = FirestoreFieldValue.serverTimestamp();
   const subscription = {
     businessId,
     source,
@@ -1975,7 +2063,7 @@ async function queueNotificationDeliveries({
   const cleanTitle = String(title || "Laawol Digital update").trim();
   const cleanBody = String(body || "").trim();
   const cleanData = notificationData(data);
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  const now = FirestoreFieldValue.serverTimestamp();
   const batch = db.batch();
   let writes = 0;
   const results = [];
@@ -2089,7 +2177,7 @@ async function syncNotificationDeliveryFromProvider({
   });
   if (!update) return;
 
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  const now = FirestoreFieldValue.serverTimestamp();
   const payload = {
     ...update,
     providerUpdatedAt: now,
@@ -2138,7 +2226,7 @@ exports.syncSmsNotificationDeliveryStatus = onDocumentWritten(
 
 exports.retryNotificationDelivery = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -2180,7 +2268,7 @@ exports.retryNotificationDelivery = onCall(
         );
       }
 
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       const providerRef = db.collection(plan.providerCollection)
           .doc(deliveryId);
       const providerDoc = await providerRef.get();
@@ -2236,7 +2324,7 @@ exports.retryNotificationDelivery = onCall(
 
 exports.sendTestNotificationDelivery = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -2328,7 +2416,10 @@ exports.sendTestNotificationDelivery = onCall(
         statusField: "status",
         previousValue: "",
         nextValue: result.status,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FirestoreFieldValue.serverTimestamp(),
+        expiresAt: admin.firestore.Timestamp.fromMillis(
+            Date.now() + 400 * 24 * 60 * 60 * 1000,
+        ),
       });
 
       return {
@@ -2373,6 +2464,9 @@ async function sendPreferenceNotification({
     body,
     data,
   });
+  // Emulator workflows must never reach real FCM/OAuth endpoints. Keep the
+  // local delivery ledger above so notification behavior remains testable.
+  if (process.env.FUNCTIONS_EMULATOR === "true") return;
   if (settings.pushEnabled === false || prefs.pushNotifications === false) {
     return;
   }
@@ -2412,7 +2506,7 @@ async function sendPreferenceNotification({
           .doc(tokenDocs[index].id)
           .set({
             enabled: false,
-            disabledAt: admin.firestore.FieldValue.serverTimestamp(),
+            disabledAt: FirestoreFieldValue.serverTimestamp(),
             errorCode: code,
           }, {merge: true});
     }
@@ -2756,7 +2850,7 @@ async function propagateBusinessSnapshot({
 }) {
   const db = admin.firestore();
   const writes = [];
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  const now = FirestoreFieldValue.serverTimestamp();
 
   const destinations = await db.collection("businesses")
       .doc(businessId)
@@ -2864,12 +2958,12 @@ async function creditWallet({
   const db = admin.firestore();
   const walletRef = db.collection("wallets").doc(customerUid);
   const creditRef = walletRef.collection("transactions").doc();
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  const now = FirestoreFieldValue.serverTimestamp();
   transaction.set(walletRef, {
     customerUid,
     currency: SHIPMENT_CURRENCY,
-    balanceCents: admin.firestore.FieldValue.increment(amountCents),
-    balance: admin.firestore.FieldValue.increment(
+    balanceCents: FirestoreFieldValue.increment(amountCents),
+    balance: FirestoreFieldValue.increment(
         dollarsFromCents(amountCents),
     ),
     updatedAt: now,
@@ -2914,12 +3008,12 @@ async function debitWallet({
   if (appliedCents <= 0) return 0;
 
   const debitRef = walletRef.collection("transactions").doc();
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  const now = FirestoreFieldValue.serverTimestamp();
   transaction.set(walletRef, {
     customerUid,
     currency: SHIPMENT_CURRENCY,
-    balanceCents: admin.firestore.FieldValue.increment(-appliedCents),
-    balance: admin.firestore.FieldValue.increment(
+    balanceCents: FirestoreFieldValue.increment(-appliedCents),
+    balance: FirestoreFieldValue.increment(
         -dollarsFromCents(appliedCents),
     ),
     updatedAt: now,
@@ -2941,7 +3035,7 @@ async function debitWallet({
 
 exports.requestWalletCardRefund = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -2964,16 +3058,16 @@ exports.requestWalletCardRefund = onCall(
         }
 
         const amount = dollarsFromCents(balanceCents);
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
         transaction.set(walletRef, {
           customerUid,
           currency: wallet.currency || SHIPMENT_CURRENCY,
-          balanceCents: admin.firestore.FieldValue.increment(-balanceCents),
-          balance: admin.firestore.FieldValue.increment(-amount),
-          pendingRefundCents: admin.firestore.FieldValue.increment(
+          balanceCents: FirestoreFieldValue.increment(-balanceCents),
+          balance: FirestoreFieldValue.increment(-amount),
+          pendingRefundCents: FirestoreFieldValue.increment(
               balanceCents,
           ),
-          pendingRefund: admin.firestore.FieldValue.increment(amount),
+          pendingRefund: FirestoreFieldValue.increment(amount),
           updatedAt: now,
         }, {merge: true});
         transaction.set(debitRef, {
@@ -3010,7 +3104,7 @@ exports.requestWalletCardRefund = onCall(
 
 exports.reviewWalletRefundRequest = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -3082,22 +3176,22 @@ exports.reviewWalletRefundRequest = onCall(
         }
         const amount = dollarsFromCents(amountCents);
         const currency = freshRequest.currency || SHIPMENT_CURRENCY;
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
 
         const walletUpdate = {
           customerUid,
           currency,
-          pendingRefundCents: admin.firestore.FieldValue.increment(
+          pendingRefundCents: FirestoreFieldValue.increment(
               -amountCents,
           ),
-          pendingRefund: admin.firestore.FieldValue.increment(-amount),
+          pendingRefund: FirestoreFieldValue.increment(-amount),
           updatedAt: now,
         };
         if (decision === "rejected") {
-          walletUpdate.balanceCents = admin.firestore.FieldValue.increment(
+          walletUpdate.balanceCents = FirestoreFieldValue.increment(
               amountCents,
           );
-          walletUpdate.balance = admin.firestore.FieldValue.increment(amount);
+          walletUpdate.balance = FirestoreFieldValue.increment(amount);
         }
         transaction.set(walletRef, walletUpdate, {merge: true});
 
@@ -3152,7 +3246,7 @@ exports.reviewWalletRefundRequest = onCall(
 
 exports.sendBusinessSupportRequest = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -3205,7 +3299,7 @@ exports.sendBusinessSupportRequest = onCall(
         throw new HttpsError("not-found", "Business not found");
       }
       const business = businessDoc.data() || {};
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       const requestRef = db.collection("businessSupportRequests").doc();
       const notificationRef = db.collection("platformNotifications").doc();
       const actorLabel = adminUser.fullName || adminUser.email || adminUid;
@@ -3271,11 +3365,16 @@ exports.sendBusinessSupportRequest = onCall(
 
 exports.requestBusinessSupport = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
       const callerUid = requireAuth(request);
+      await enforceCallableRateLimit(request, {
+        name: "generateBusinessInsights",
+        limit: 6,
+        windowSeconds: 60 * 60,
+      });
       const businessId = cleanText(request.data?.businessId, 120);
       const priority = cleanText(request.data?.priority, 32) || "normal";
       const subject = cleanText(request.data?.subject, 160);
@@ -3322,7 +3421,7 @@ exports.requestBusinessSupport = onCall(
         throw new HttpsError("not-found", "Business not found");
       }
       const business = businessDoc.data() || {};
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       const requestRef = db.collection("businessSupportRequests").doc();
       const notificationRef = db.collection("platformNotifications").doc();
       const actorLabel =
@@ -3391,7 +3490,7 @@ exports.requestBusinessSupport = onCall(
 
 exports.createBusinessProCheckout = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey, businessProPriceId],
     },
@@ -3450,7 +3549,7 @@ exports.createBusinessProCheckout = onCall(
           checkoutSessionId: session.id,
           status: "checkout_started",
           priceId,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
           updatedBy: callerUid,
         },
       }, {merge: true});
@@ -3465,7 +3564,7 @@ exports.createBusinessProCheckout = onCall(
 
 exports.createBusinessStripeAccountLink = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -3518,7 +3617,7 @@ exports.createBusinessStripeAccountLink = onCall(
 
 exports.refreshBusinessStripeAccountStatus = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -3573,10 +3672,176 @@ exports.refreshBusinessStripeAccountStatus = onCall(
     },
 );
 
+const PAYMENT_COMPLETION_EXPORTS = Object.freeze({
+  parking_deposit: "completeParkingReservation",
+  barrel_pool_deposit: "completeBarrelPoolDepositPayment",
+  barrel_pool_join: "completeBarrelPoolDepositPayment",
+  barrel_pool_balance: "completeBarrelPoolBalancePayment",
+  barrel_shipment: "completeBarrelShipmentPayment",
+  barrel_order: "completeBarrelOrderPayment",
+  freight_shipment: "completeFreightShipmentPayment",
+  freight_settlement_adjustment: "completeFreightSettlementPayment",
+  reservation_deposit: "completeCarDepositReservation",
+  full_purchase: "completeCarPurchase",
+  hold_extension: "completePaidHoldExtensionPayment",
+});
+
+function paymentCompletionData(target) {
+  const identity = target.identity;
+  switch (target.paymentType) {
+    case "parking_deposit":
+      return {reservationId: identity.reservationId};
+    case "barrel_pool_deposit":
+    case "barrel_pool_join":
+      return {poolId: identity.poolId};
+    case "barrel_pool_balance":
+      return {requestId: identity.requestId};
+    case "barrel_shipment":
+    case "freight_shipment":
+      return {shipmentId: identity.shipmentId};
+    case "freight_settlement_adjustment":
+      return {
+        settlementId: identity.settlementId,
+        attemptId: identity.attemptId,
+      };
+    case "barrel_order":
+      return {orderId: identity.orderId};
+    case "reservation_deposit":
+    case "full_purchase":
+    case "hold_extension":
+      return {purchaseId: identity.purchaseId};
+    default:
+      throw new Error(`Unsupported payment completion: ${target.paymentType}`);
+  }
+}
+
+async function claimStripeWebhookEvent(event) {
+  const db = admin.firestore();
+  const claim = buildStripeEventClaim(event);
+  const ref = db.doc(claim.path);
+  const nowMillis = Date.now();
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const existing = snapshot.exists ? snapshot.data() || {} : {};
+    if (existing.status === "completed" || existing.status === "ignored") {
+      return false;
+    }
+    const startedAt = existing.processingStartedAt?.toMillis?.() || 0;
+    if (existing.status === "processing" &&
+        nowMillis - startedAt < 5 * 60 * 1000) {
+      return false;
+    }
+    transaction.set(ref, {
+      ...claim.data,
+      attemptCount: FirestoreFieldValue.increment(1),
+      processingStartedAt:
+        FirestoreFieldValue.serverTimestamp(),
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+      expiresAt: admin.firestore.Timestamp.fromMillis(
+          nowMillis + 90 * 24 * 60 * 60 * 1000,
+      ),
+    }, {merge: true});
+    return true;
+  });
+}
+
+async function finishStripeWebhookEvent(eventId, status, details = {}) {
+  await admin.firestore().collection("stripeWebhookEvents").doc(eventId).set({
+    status,
+    ...details,
+    completedAt: FirestoreFieldValue.serverTimestamp(),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  }, {merge: true});
+}
+
+async function paymentIntentForStripeEvent(event) {
+  const object = event?.data?.object || {};
+  if (String(event?.type || "").startsWith("payment_intent.")) {
+    return object;
+  }
+  let paymentIntentId = String(object.payment_intent || "").trim();
+  const chargeId = String(object.charge || "").trim();
+  if (!paymentIntentId && chargeId.startsWith("ch_")) {
+    const charge = await stripeRequest(`/charges/${chargeId}`);
+    paymentIntentId = String(charge.payment_intent || "").trim();
+  }
+  if (!paymentIntentId) return null;
+  return retrieveStripePaymentIntent(paymentIntentId);
+}
+
+async function loadAndValidatePaymentTarget({event, intent}) {
+  const target = routePaymentIntentMetadata(intent.metadata);
+  const snapshot = await admin.firestore().doc(target.path).get();
+  if (!snapshot.exists) {
+    throw new Error(`Payment target not found: ${target.path}`);
+  }
+  const document = {id: snapshot.id, data: snapshot.data() || {}};
+  const decision = buildReconciliationDecision({
+    target,
+    intent,
+    document,
+    event,
+  });
+  return {target, decision};
+}
+
+async function runPaymentCompletion(target) {
+  const exportName = PAYMENT_COMPLETION_EXPORTS[target.paymentType];
+  const callable = exports[exportName];
+  if (!callable || typeof callable.run !== "function") {
+    throw new Error(`Payment completion handler unavailable: ${exportName}`);
+  }
+  await callable.run({
+    auth: {
+      uid: target.customerUid,
+      token: {uid: target.customerUid},
+    },
+    data: paymentCompletionData(target),
+  });
+}
+
+async function reconcileStripePaymentEvent(event) {
+  const intent = await paymentIntentForStripeEvent(event);
+  const paymentType = String(intent?.metadata?.paymentType || "").trim();
+  if (!intent || !PAYMENT_COMPLETION_EXPORTS[paymentType]) return false;
+  const {target, decision} = await loadAndValidatePaymentTarget({
+    event,
+    intent,
+  });
+  const ref = admin.firestore().doc(target.path);
+  if (decision.state === PAYMENT_STATES.SUCCEEDED) {
+    if (decision.changed) {
+      await runPaymentCompletion(target);
+    }
+    await ref.set({
+      stripeReconciliationState: PAYMENT_STATES.SUCCEEDED,
+      stripeLastEventId: event.id,
+      stripeLastEventCreated: Number(event.created || 0),
+      stripeReconciledAt: FirestoreFieldValue.serverTimestamp(),
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    }, {merge: true});
+    return true;
+  }
+  if (decision.changed) {
+    await ref.set({
+      ...decision.patch,
+      stripeReconciledAt: FirestoreFieldValue.serverTimestamp(),
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    }, {merge: true});
+  } else {
+    await ref.set({
+      stripeReconciliationCheckedAt:
+        FirestoreFieldValue.serverTimestamp(),
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    }, {merge: true});
+  }
+  return true;
+}
+
 exports.handleBusinessProStripeWebhook = onRequest(
     {
       cors: false,
-      secrets: [stripeWebhookSecret],
+      secrets: [stripeWebhookSecret, stripeSecretKey],
     },
     async (req, res) => {
       if (req.method !== "POST") {
@@ -3601,6 +3866,12 @@ exports.handleBusinessProStripeWebhook = onRequest(
 
       const object = event?.data?.object || {};
       try {
+        const claimed = await claimStripeWebhookEvent(event);
+        if (!claimed) {
+          res.status(200).json({received: true, duplicate: true});
+          return;
+        }
+        const paymentHandled = await reconcileStripePaymentEvent(event);
         if (event.type === "account.updated") {
           const accountId = object.id || "";
           const businessId = object.metadata?.businessId ||
@@ -3647,8 +3918,21 @@ exports.handleBusinessProStripeWebhook = onRequest(
             source: event.type,
           });
         }
+        await finishStripeWebhookEvent(
+            event.id,
+            paymentHandled ? "completed" : "ignored",
+            {paymentHandled},
+        );
         res.status(200).json({received: true});
       } catch (error) {
+        if (event?.id) {
+          await finishStripeWebhookEvent(event.id, "failed", {
+            errorMessage: String(error.message || "Webhook failed").slice(
+                0,
+                500,
+            ),
+          }).catch(() => {});
+        }
         logger.error("Business Pro webhook failed", {
           type: event.type,
           message: error.message,
@@ -3658,9 +3942,180 @@ exports.handleBusinessProStripeWebhook = onRequest(
     },
 );
 
+const STALE_PAYMENT_SCANS = Object.freeze([
+  {id: "parking", collection: "parkedCars", intent: "stripePaymentIntentId"},
+  {
+    id: "shared_barrel_deposits",
+    collectionGroup: "participants",
+    intentArray: "stripePaymentIntentIds",
+  },
+  {
+    id: "shared_barrel_balances",
+    collection: "barrelPoolBalanceRequests",
+    intent: "stripePaymentIntentId",
+  },
+  {
+    id: "barrel_shipments",
+    collection: "barrelShipments",
+    intent: "stripePaymentIntentId",
+  },
+  {
+    id: "barrel_orders",
+    collection: "barrelOrders",
+    intent: "stripePaymentIntentId",
+  },
+  {
+    id: "freight_shipments",
+    collection: "freightShipments",
+    intent: "stripePaymentIntentId",
+  },
+  {
+    id: "freight_settlement_adjustments",
+    collectionGroup: "paymentAttempts",
+    intent: "stripePaymentIntentId",
+  },
+  {
+    id: "car_purchases",
+    collection: "carPurchases",
+    intent: "stripePaymentIntentId",
+  },
+  {
+    id: "hold_extensions",
+    collection: "carPurchases",
+    statusField: "extensionPaymentStatus",
+    intent: "extensionPaymentIntentId",
+  },
+]);
+
+function stalePaymentIntentId(scan, data) {
+  if (scan.intentArray) {
+    const values = Array.isArray(data[scan.intentArray]) ?
+      data[scan.intentArray] : [];
+    return String(values[values.length - 1] || "").trim();
+  }
+  return String(data[scan.intent] || "").trim();
+}
+
+async function recordPaymentReconciliationFailure(scan, snapshot, error) {
+  const key = crypto.createHash("sha256")
+      .update(`${scan.id}:${snapshot.ref.path}`)
+      .digest("hex");
+  await admin.firestore().collection("paymentReconciliationFailures")
+      .doc(key).set({
+        scanId: scan.id,
+        documentPath: snapshot.ref.path,
+        errorCode: String(error.code || error.name || "unknown").slice(0, 100),
+        errorMessage: String(error.message || "Unknown error").slice(0, 500),
+        occurrenceCount: FirestoreFieldValue.increment(1),
+        lastOccurredAt: FirestoreFieldValue.serverTimestamp(),
+        status: "open",
+      }, {merge: true});
+}
+
+exports.reconcileStaleStripePayments = onSchedule(
+    {
+      schedule: "every 10 minutes",
+      timeZone: "America/New_York",
+      timeoutSeconds: 540,
+      secrets: [stripeSecretKey],
+    },
+    async () => {
+      const db = admin.firestore();
+      const cutoff = admin.firestore.Timestamp.fromMillis(
+          Date.now() - 10 * 60 * 1000,
+      );
+      const deadline = Date.now() + 8 * 60 * 1000;
+      let checked = 0;
+      let reconciled = 0;
+      for (const scan of STALE_PAYMENT_SCANS) {
+        let cursor = null;
+        do {
+          const source = scan.collectionGroup ?
+            db.collectionGroup(scan.collectionGroup) :
+            db.collection(scan.collection);
+          const statusField = scan.statusField || "paymentStatus";
+          let query = source
+              .where(statusField, "in", ["pending", "processing"])
+              .where("updatedAt", "<=", cutoff)
+              .orderBy("updatedAt")
+              .orderBy(admin.firestore.FieldPath.documentId())
+              .limit(100);
+          if (cursor) query = query.startAfter(cursor);
+          const page = await query.get();
+          for (const snapshot of page.docs) {
+            checked += 1;
+            const intentId = stalePaymentIntentId(scan, snapshot.data() || {});
+            if (!intentId || intentId.startsWith("simulated_")) continue;
+            try {
+              const intent = await retrieveStripePaymentIntent(intentId);
+              const event = {
+                id: `evt_reconcile_${crypto.createHash("sha256")
+                    .update(`${intent.id}:${intent.status}`)
+                    .digest("hex").slice(0, 32)}`,
+                type: `payment_intent.${intent.status}`,
+                created: Math.floor(Date.now() / 1000),
+                data: {object: intent},
+              };
+              if (await reconcileStripePaymentEvent(event)) reconciled += 1;
+            } catch (error) {
+              logger.error("Stale payment reconciliation failed", {
+                scanId: scan.id,
+                documentPath: snapshot.ref.path,
+                message: error.message,
+              });
+              await recordPaymentReconciliationFailure(
+                  scan,
+                  snapshot,
+                  error,
+              );
+            }
+          }
+          cursor = page.docs[page.docs.length - 1] || null;
+          if (page.size < 100) break;
+        } while (Date.now() < deadline);
+        if (Date.now() >= deadline) break;
+      }
+      logger.info("Stale Stripe payment reconciliation finished", {
+        checked,
+        reconciled,
+        deadlineReached: Date.now() >= deadline,
+      });
+    },
+);
+
+exports.notifyPaymentReconciliationFailure = onDocumentWritten(
+    "paymentReconciliationFailures/{failureId}",
+    async (event) => {
+      const after = event.data?.after;
+      if (!after?.exists) return;
+      const beforeCount = Number(
+          event.data?.before?.data()?.occurrenceCount || 0,
+      );
+      const failure = after.data() || {};
+      const occurrenceCount = Number(failure.occurrenceCount || 0);
+      if (occurrenceCount <= beforeCount) return;
+      const failureId = event.params.failureId;
+      await admin.firestore().collection("platformNotifications")
+          .doc(`payment_reconciliation_${failureId}`).set({
+            type: "payment_reconciliation_failure",
+            severity: "urgent",
+            status: "pending",
+            title: "Payment reconciliation needs attention",
+            message: "A Stripe payment could not be reconciled safely.",
+            targetRole: "financeManager",
+            relatedCollection: "paymentReconciliationFailures",
+            relatedId: failureId,
+            relatedPath: String(failure.documentPath || ""),
+            occurrenceCount,
+            createdAt: FirestoreFieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          }, {merge: true});
+    },
+);
+
 exports.generateBusinessInsights = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [anthropicApiKey],
       timeoutSeconds: 120,
@@ -3709,7 +4164,7 @@ exports.generateBusinessInsights = onCall(
         cards: insight.cards,
         rawText: insight.rawText,
         status: "ready",
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FirestoreFieldValue.serverTimestamp(),
         createdBy: callerUid,
       };
       await insightRef.set(payload);
@@ -3724,7 +4179,7 @@ exports.generateBusinessInsights = onCall(
 
 exports.submitBusinessApplication = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -3797,7 +4252,7 @@ exports.submitBusinessApplication = onCall(
       const businessRef = db.collection("businesses").doc(businessId);
       const applicationRef = db.collection("businessApplications").doc();
       const notificationRef = db.collection("platformNotifications").doc();
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       let responseStatus = "pending";
       const profile = businessPublicFields({
         name: businessName,
@@ -3902,7 +4357,7 @@ exports.submitBusinessApplication = onCall(
 
 exports.createAdminBusiness = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -3983,7 +4438,7 @@ exports.createAdminBusiness = onCall(
         );
       }
 
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       const batch = db.batch();
       batch.set(businessRef, {
         ...profile,
@@ -4017,7 +4472,7 @@ exports.createAdminBusiness = onCall(
 
 exports.createMissingBusinessProfile = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -4067,7 +4522,7 @@ exports.createMissingBusinessProfile = onCall(
             "Business profile already exists",
         );
       }
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       const batch = db.batch();
       batch.set(businessRef, {
         ...profile,
@@ -4113,7 +4568,7 @@ exports.createMissingBusinessProfile = onCall(
 
 exports.updateAdminRecordStatus = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -4212,7 +4667,7 @@ exports.updateAdminRecordStatus = onCall(
 
 exports.deleteAdminRecord = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -4257,7 +4712,7 @@ exports.deleteAdminRecord = onCall(
 
 exports.updateBusinessVerificationReview = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -4287,7 +4742,7 @@ exports.updateBusinessVerificationReview = onCall(
           documents: request.data?.documents,
           note: request.data?.note,
           adminUid,
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          timestamp: FirestoreFieldValue.serverTimestamp(),
         });
       } catch (error) {
         throw new HttpsError(
@@ -4334,7 +4789,7 @@ exports.updateBusinessVerificationReview = onCall(
 
 exports.submitBusinessVerificationDocument = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -4356,7 +4811,7 @@ exports.submitBusinessVerificationDocument = onCall(
           contentType: request.data?.contentType,
           size: request.data?.size,
           uid: callerUid,
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          timestamp: FirestoreFieldValue.serverTimestamp(),
         });
       } catch (error) {
         throw new HttpsError(
@@ -4407,7 +4862,7 @@ exports.submitBusinessVerificationDocument = onCall(
 
 exports.uploadBusinessVerificationDocument = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       memory: "512MiB",
       timeoutSeconds: 60,
@@ -4482,7 +4937,7 @@ exports.uploadBusinessVerificationDocument = onCall(
         contentType: upload.contentType,
         size: upload.size,
         uid: callerUid,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        timestamp: FirestoreFieldValue.serverTimestamp(),
       });
 
       const batch = db.batch();
@@ -4527,7 +4982,7 @@ exports.uploadBusinessVerificationDocument = onCall(
 
 exports.reviewBusinessApplication = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -4621,7 +5076,7 @@ exports.reviewBusinessApplication = onCall(
         );
       }
 
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       const businessUpdate = {
         ...profile,
         enabledServices: normalizedServices,
@@ -4745,7 +5200,7 @@ exports.reviewBusinessApplication = onCall(
 
 exports.updateBusinessProfile = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -4848,7 +5303,7 @@ exports.updateBusinessProfile = onCall(
         );
       }
 
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       await businessRef.set({
         ...profile,
         enabledServices: normalizedServices,
@@ -5112,7 +5567,7 @@ function parkingOptionFromBusiness({
 
 exports.listParkingOptions = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -5190,7 +5645,7 @@ exports.listParkingOptions = onCall(
 
 exports.createParkingReservation = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -5292,7 +5747,7 @@ exports.createParkingReservation = onCall(
         );
         const connectReady = !!business.stripeAccountId &&
           business.payoutsEnabled === true;
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
         transaction.set(reservationRef, {
           trackingCode,
           customerUid,
@@ -5354,14 +5809,14 @@ exports.createParkingReservation = onCall(
           });
           await reservationRef.update({
             stripePaymentIntentId: paymentIntent.id,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           });
         } catch (error) {
           await reservationRef.update({
             status: "cancelled",
             paymentStatus: "failed",
             cancellationReason: "parking_payment_intent_failed",
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           });
           throw error;
         }
@@ -5388,7 +5843,7 @@ exports.createParkingReservation = onCall(
 
 exports.completeParkingReservation = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -5419,7 +5874,7 @@ exports.completeParkingReservation = onCall(
       if (intent.status !== "succeeded") {
         await reservationRef.update({
           paymentStatus: intent.status,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
         throw new HttpsError(
             "failed-precondition",
@@ -5429,7 +5884,7 @@ exports.completeParkingReservation = onCall(
       await reservationRef.update({
         status: "reserved",
         paymentStatus: "succeeded",
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
       await issueBusinessPayoutTransfer({
         ref: reservationRef,
@@ -5447,7 +5902,7 @@ exports.completeParkingReservation = onCall(
 
 exports.cancelPendingParkingReservation = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -5472,7 +5927,7 @@ exports.cancelPendingParkingReservation = onCall(
         status: "cancelled",
         paymentStatus: "cancelled",
         cancellationReason: "customer_payment_cancelled",
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
       return {success: true, reservationId: cleanReservationId};
     },
@@ -5617,14 +6072,11 @@ function pickupFeeForBorough(pricing, borough) {
  */
 exports.createStaffUser = onCall(
     {
-      enforceAppCheck: false, // Set to true in production if using App Check
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
-      logger.info("createStaffUser called", {
-        uid: request.auth?.uid,
-        data: request.data,
-      });
+      logger.info("createStaffUser called", {uid: request.auth?.uid});
 
       // Verify that the request is authenticated
       if (!request.auth) {
@@ -5742,7 +6194,7 @@ exports.createStaffUser = onCall(
               business.enabledServices,
           ),
           businessPermissions: staffPermissions,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: FirestoreFieldValue.serverTimestamp(),
           createdBy: callerUid,
         });
         setAdminAuditLog(batch, {
@@ -5814,7 +6266,7 @@ exports.createStaffUser = onCall(
 
 exports.updateBusinessStaffPermissions = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -5857,7 +6309,7 @@ exports.updateBusinessStaffPermissions = onCall(
       const batch = db.batch();
       batch.set(staffRef, {
         businessPermissions: permissions,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
         updatedBy: callerUid,
       }, {merge: true});
       setAdminAuditLog(batch, {
@@ -5880,7 +6332,7 @@ exports.updateBusinessStaffPermissions = onCall(
 
 exports.createPlatformManager = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -5932,7 +6384,7 @@ exports.createPlatformManager = onCall(
           role: "admin",
           platformAdmin: true,
           adminRole,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: FirestoreFieldValue.serverTimestamp(),
           createdBy: callerUid,
         });
         setAdminAuditLog(batch, {
@@ -5989,7 +6441,7 @@ exports.createPlatformManager = onCall(
 
 exports.setPlatformAdminRole = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -6028,7 +6480,7 @@ exports.setPlatformAdminRole = onCall(
           {
             adminRole,
             platformAdmin: true,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
             updatedBy: callerUid,
           },
           {merge: true},
@@ -6050,90 +6502,40 @@ exports.setPlatformAdminRole = onCall(
 
 exports.listPlatformUsers = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
       const callerUid = requireAuth(request);
       const caller = await getUserProfile(callerUid);
-      if (caller.role !== "admin") {
-        throw new HttpsError(
-            "permission-denied",
-            "Only platform admins can list users",
-        );
-      }
+      requireAdminCapability(
+          caller,
+          "users",
+          "Only people administrators can list users",
+      );
 
       const maxResults = Math.min(
           Math.max(Number(request.data?.maxResults) || 1000, 1),
           1000,
       );
       const pageToken = String(request.data?.pageToken || "") || undefined;
-      const db = admin.firestore();
-      const [authPage, profileSnapshot] = await Promise.all([
-        admin.auth().listUsers(maxResults, pageToken),
-        db.collection("users").get(),
-      ]);
-      const profiles = new Map();
-      profileSnapshot.docs.forEach((doc) => {
-        profiles.set(doc.id, {id: doc.id, ...doc.data()});
-      });
-
-      const authUids = new Set(authPage.users.map((userRecord) => {
-        return userRecord.uid;
-      }));
+      const authPage = await admin.auth().listUsers(maxResults, pageToken);
       const users = authPage.users.map((userRecord) => {
-        const profile = profiles.get(userRecord.uid) || {};
-        const hasProfile = profiles.has(userRecord.uid);
         return {
           id: userRecord.uid,
           uid: userRecord.uid,
-          email: profile.email || userRecord.email || "",
-          fullName: profile.fullName || userRecord.displayName || "",
-          phone: profile.phone || userRecord.phoneNumber || "",
-          profileImageUrl: profile.profileImageUrl || userRecord.photoURL || "",
-          profileImagePath: profile.profileImagePath || "",
-          phoneVerified: profile.phoneVerified === true,
-          phoneVerifiedAt: profile.phoneVerifiedAt || "",
-          role: profile.role || "missing_profile",
-          adminRole: profile.adminRole || "",
-          platformAdmin: profile.platformAdmin === true,
-          businessId: profile.businessId || "",
-          businessName: profile.businessName || "",
+          email: userRecord.email || "",
+          fullName: userRecord.displayName || "",
+          phone: userRecord.phoneNumber || "",
+          profileImageUrl: userRecord.photoURL || "",
+          role: "missing_profile",
           disabled: userRecord.disabled,
           emailVerified: userRecord.emailVerified,
-          createdAt: profile.createdAt || userRecord.metadata.creationTime,
-          updatedAt: profile.updatedAt || "",
+          createdAt: userRecord.metadata.creationTime,
           lastSignInAt: userRecord.metadata.lastSignInTime || "",
-          hasProfile,
+          hasProfile: false,
           hasAuth: true,
         };
-      });
-      profileSnapshot.docs.forEach((doc) => {
-        if (authUids.has(doc.id)) return;
-        const profile = doc.data() || {};
-        users.push({
-          id: doc.id,
-          uid: profile.uid || doc.id,
-          email: profile.email || "",
-          fullName: profile.fullName || "",
-          phone: profile.phone || "",
-          profileImageUrl: profile.profileImageUrl || "",
-          profileImagePath: profile.profileImagePath || "",
-          phoneVerified: profile.phoneVerified === true,
-          phoneVerifiedAt: profile.phoneVerifiedAt || "",
-          role: profile.role || "customer",
-          adminRole: profile.adminRole || "",
-          platformAdmin: profile.platformAdmin === true,
-          businessId: profile.businessId || "",
-          businessName: profile.businessName || "",
-          disabled: false,
-          emailVerified: null,
-          createdAt: profile.createdAt || "",
-          updatedAt: profile.updatedAt || "",
-          lastSignInAt: "",
-          hasProfile: true,
-          hasAuth: false,
-        });
       });
 
       return {
@@ -6145,7 +6547,7 @@ exports.listPlatformUsers = onCall(
 
 exports.createMissingUserProfile = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -6163,7 +6565,7 @@ exports.createMissingUserProfile = onCall(
       }
 
       const userRecord = await admin.auth().getUser(userId);
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       const db = admin.firestore();
       const batch = db.batch();
       batch.set(
@@ -6199,7 +6601,7 @@ exports.createMissingUserProfile = onCall(
 
 exports.updateBusinessMembership = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -6258,7 +6660,7 @@ exports.updateBusinessMembership = onCall(
       }
       const current = userDoc.data() || {};
       const batch = db.batch();
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
 
       let business = null;
       if (role === "businessOwner" || role === "staff") {
@@ -6304,19 +6706,19 @@ exports.updateBusinessMembership = onCall(
           businessId,
           businessName,
           businessServices: normalizeBusinessServices(business.enabledServices),
-          platformAdmin: admin.firestore.FieldValue.delete(),
-          adminRole: admin.firestore.FieldValue.delete(),
+          platformAdmin: FirestoreFieldValue.delete(),
+          adminRole: FirestoreFieldValue.delete(),
           updatedAt: now,
           updatedBy: callerUid,
         });
       } else {
         batch.update(userRef, {
           role: "customer",
-          businessId: admin.firestore.FieldValue.delete(),
-          businessName: admin.firestore.FieldValue.delete(),
-          businessServices: admin.firestore.FieldValue.delete(),
-          platformAdmin: admin.firestore.FieldValue.delete(),
-          adminRole: admin.firestore.FieldValue.delete(),
+          businessId: FirestoreFieldValue.delete(),
+          businessName: FirestoreFieldValue.delete(),
+          businessServices: FirestoreFieldValue.delete(),
+          platformAdmin: FirestoreFieldValue.delete(),
+          adminRole: FirestoreFieldValue.delete(),
           updatedAt: now,
           updatedBy: callerUid,
         });
@@ -6349,14 +6751,11 @@ exports.updateBusinessMembership = onCall(
  */
 exports.updateUserRole = onCall(
     {
-      enforceAppCheck: false, // Set to true in production if using App Check
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
-      logger.info("updateUserRole called", {
-        uid: request.auth?.uid,
-        data: request.data,
-      });
+      logger.info("updateUserRole called", {uid: request.auth?.uid});
 
       // Verify that the request is authenticated
       if (!request.auth) {
@@ -6430,17 +6829,17 @@ exports.updateUserRole = onCall(
         const batch = db.batch();
         const updatePayload = {
           role: newRole,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
           updatedBy: callerUid,
         };
         if (newRole === "customer" || newRole === "admin") {
-          updatePayload.businessId = admin.firestore.FieldValue.delete();
-          updatePayload.businessName = admin.firestore.FieldValue.delete();
-          updatePayload.businessServices = admin.firestore.FieldValue.delete();
+          updatePayload.businessId = FirestoreFieldValue.delete();
+          updatePayload.businessName = FirestoreFieldValue.delete();
+          updatePayload.businessServices = FirestoreFieldValue.delete();
         }
         if (newRole === "customer") {
-          updatePayload.platformAdmin = admin.firestore.FieldValue.delete();
-          updatePayload.adminRole = admin.firestore.FieldValue.delete();
+          updatePayload.platformAdmin = FirestoreFieldValue.delete();
+          updatePayload.adminRole = FirestoreFieldValue.delete();
         }
         if (newRole === "admin") {
           updatePayload.platformAdmin = true;
@@ -6494,14 +6893,11 @@ exports.updateUserRole = onCall(
  */
 exports.deleteUser = onCall(
     {
-      enforceAppCheck: false, // Set to true in production if using App Check
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
-      logger.info("deleteUser called", {
-        uid: request.auth?.uid,
-        data: request.data,
-      });
+      logger.info("deleteUser called", {uid: request.auth?.uid});
 
       // Verify that the request is authenticated
       if (!request.auth) {
@@ -6598,7 +6994,7 @@ exports.deleteUser = onCall(
 
 exports.seedDestinationCountries = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -6638,7 +7034,7 @@ exports.seedDestinationCountries = onCall(
       );
       const existingDocs = await db.getAll(...refs);
       const batch = db.batch();
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       ALL_COUNTRIES.forEach((country, index) => {
         const existingData = existingDocs[index].data() || {};
         batch.set(
@@ -6680,7 +7076,7 @@ exports.seedDestinationCountries = onCall(
 
 exports.listDestinationCoverage = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -6726,7 +7122,7 @@ exports.listDestinationCoverage = onCall(
 
 exports.updateDestinationCoverage = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -6812,17 +7208,17 @@ exports.updateDestinationCoverage = onCall(
         barrelShippingPrice: price,
         isActive,
         destinationNote: destinationNote ||
-          admin.firestore.FieldValue.delete(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          FirestoreFieldValue.delete(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
       };
       if (hasEstimate) {
         payload.deliveryEstimateMinDays = minDays;
         payload.deliveryEstimateMaxDays = maxDays;
       } else {
         payload.deliveryEstimateMinDays =
-          admin.firestore.FieldValue.delete();
+          FirestoreFieldValue.delete();
         payload.deliveryEstimateMaxDays =
-          admin.firestore.FieldValue.delete();
+          FirestoreFieldValue.delete();
       }
       const previousDoc = await destinationRef.get();
       const previous = previousDoc.data() || {};
@@ -6850,7 +7246,7 @@ exports.updateDestinationCoverage = onCall(
 
 exports.migrateDefaultBusiness = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -6862,7 +7258,7 @@ exports.migrateDefaultBusiness = onCall(
       );
 
       const db = admin.firestore();
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       const businessRef = db.collection("businesses").doc(DEFAULT_BUSINESS_ID);
       const businessDoc = await businessRef.get();
       const businessData = {
@@ -6977,7 +7373,7 @@ exports.migrateDefaultBusiness = onCall(
 
 exports.backfillBusinessCarListings = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -7043,7 +7439,7 @@ exports.backfillBusinessCarListings = onCall(
         allowAssigned: reassignExplicitCarIds,
         targetBusinessId: businessId,
       });
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       const update = buildBusinessCarBackfillPayload({
         businessId,
         business,
@@ -7086,12 +7482,17 @@ exports.backfillBusinessCarListings = onCall(
 
 exports.suggestPickupAddresses = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [googleMapsApiKey],
     },
     async (request) => {
       requireAuth(request);
+      await enforceCallableRateLimit(request, {
+        name: "suggestPickupAddresses",
+        limit: 30,
+        windowSeconds: 60,
+      });
       const input = String(request.data?.input || "").trim();
       if (!input) {
         return [];
@@ -7342,9 +7743,9 @@ function participantPublicSummary(participant) {
     paymentStatus: participant.paymentStatus || "pending",
     pickupRequested: participant.pickupRequested === true,
     createdAt:
-      participant.createdAt || admin.firestore.FieldValue.serverTimestamp(),
+      participant.createdAt || FirestoreFieldValue.serverTimestamp(),
     updatedAt:
-      participant.updatedAt || admin.firestore.FieldValue.serverTimestamp(),
+      participant.updatedAt || FirestoreFieldValue.serverTimestamp(),
   };
 }
 
@@ -7469,15 +7870,15 @@ function queuePoolParticipantRefund({
   const notificationRef = db.collection("platformNotifications").doc();
   const walletRef = db.collection("wallets").doc(uid);
   const walletTransactionRef = walletRef.collection("transactions").doc();
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  const now = FirestoreFieldValue.serverTimestamp();
 
   transaction.set(walletRef, {
     customerUid: uid,
     currency,
-    pendingRefundCents: admin.firestore.FieldValue.increment(
+    pendingRefundCents: FirestoreFieldValue.increment(
         refundableCents,
     ),
-    pendingRefund: admin.firestore.FieldValue.increment(amount),
+    pendingRefund: FirestoreFieldValue.increment(amount),
     updatedAt: now,
   }, {merge: true});
   transaction.set(walletTransactionRef, {
@@ -7583,7 +7984,7 @@ function queuePoolParticipantBalancePayment({
   const underfilledAmount = dollarsFromCents(underfilledAmountCents);
   const requestRef = db.collection("barrelPoolBalanceRequests").doc();
   const notificationRef = db.collection("platformNotifications").doc();
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  const now = FirestoreFieldValue.serverTimestamp();
 
   batch.set(requestRef, {
     customerUid: uid,
@@ -7700,7 +8101,7 @@ function setUserBarrelPoolMembership({
 
 exports.createBarrelPool = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -7790,7 +8191,7 @@ exports.createBarrelPool = onCall(
       );
       const trackingCode = await generateTrackingCode("BP", "barrelPools");
       const userRecord = await admin.auth().getUser(customerUid);
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       let walletAppliedCents = 0;
       let cardDepositCents = 0;
       await db.runTransaction(async (transaction) => {
@@ -7940,12 +8341,12 @@ exports.createBarrelPool = onCall(
           });
           await participantRef.update({
             stripePaymentIntentIds:
-              admin.firestore.FieldValue.arrayUnion(paymentIntent.id),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              FirestoreFieldValue.arrayUnion(paymentIntent.id),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           });
         } catch (error) {
           await db.runTransaction(async (transaction) => {
-            const failedAt = admin.firestore.FieldValue.serverTimestamp();
+            const failedAt = FirestoreFieldValue.serverTimestamp();
             transaction.update(poolRef, {
               status: "cancelled",
               paymentStatus: "failed",
@@ -8033,7 +8434,7 @@ exports.createBarrelPool = onCall(
 
 exports.createBusinessBarrelPool = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -8093,7 +8494,7 @@ exports.createBusinessBarrelPool = onCall(
       const db = admin.firestore();
       const poolRef = db.collection("barrelPools").doc();
       const trackingCode = await generateTrackingCode("BP", "barrelPools");
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       const participantId = cleanText(request.data?.customerUid, 128)
           .replace(/[/.]/g, "_") || `dropoff_${poolRef.id}`;
       const participantInput = normalizedReservedShares > 0 ?
@@ -8236,7 +8637,7 @@ exports.createBusinessBarrelPool = onCall(
 
 exports.adjustBarrelPoolCapacity = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -8298,7 +8699,7 @@ exports.adjustBarrelPoolCapacity = onCall(
               openShares,
           )) :
           Number(pool.maxJoiners || 1);
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
         const nextPool = {
           ...pool,
           totalShares,
@@ -8322,7 +8723,7 @@ exports.adjustBarrelPoolCapacity = onCall(
             adjustedBy: callerUid,
             adjustedAt: now,
           },
-          shareAdjustmentCount: admin.firestore.FieldValue.increment(1),
+          shareAdjustmentCount: FirestoreFieldValue.increment(1),
           updatedAt: now,
         });
 
@@ -8348,7 +8749,7 @@ exports.adjustBarrelPoolCapacity = onCall(
 
 exports.rollBarrelPoolToBusinessHeld = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -8411,7 +8812,7 @@ exports.rollBarrelPoolToBusinessHeld = onCall(
             openShares,
             activeJoiners,
         );
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
         const nextPool = {
           ...pool,
           origin: "businessHeld",
@@ -8435,7 +8836,7 @@ exports.rollBarrelPoolToBusinessHeld = onCall(
             rolledBy: callerUid,
             rolledAt: now,
           },
-          rolloverCount: admin.firestore.FieldValue.increment(1),
+          rolloverCount: FirestoreFieldValue.increment(1),
           updatedAt: now,
         });
 
@@ -8461,7 +8862,7 @@ exports.rollBarrelPoolToBusinessHeld = onCall(
 
 exports.requestJoinBarrelPool = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -8676,8 +9077,8 @@ exports.requestJoinBarrelPool = onCall(
             connectReady: false,
           }),
           ...payment,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: FirestoreFieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
         };
         const nextPoolStatus = poolStatusFor(
             nextOpenShares,
@@ -8700,7 +9101,7 @@ exports.requestJoinBarrelPool = onCall(
           status: nextPoolStatus,
           [`publicParticipants.${customerUid}`]:
             participantPublicSummary(participant),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
         setUserBarrelPoolMembership({
           transaction,
@@ -8746,8 +9147,8 @@ exports.requestJoinBarrelPool = onCall(
           });
           await participantRef.update({
             stripePaymentIntentIds:
-              admin.firestore.FieldValue.arrayUnion(paymentIntent.id),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              FirestoreFieldValue.arrayUnion(paymentIntent.id),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           });
         } catch (error) {
           await db.runTransaction(async (transaction) => {
@@ -8759,7 +9160,7 @@ exports.requestJoinBarrelPool = onCall(
             const pool = poolDoc.data() || {};
             const participant = participantDoc.data() || {};
             const shares = Number(participant.sharesClaimed || sharesClaimed);
-            const failedAt = admin.firestore.FieldValue.serverTimestamp();
+            const failedAt = FirestoreFieldValue.serverTimestamp();
             const wasRequested =
               String(participant.joinStatus || joinStatusForPayment) ===
               "requested";
@@ -8859,7 +9260,7 @@ exports.requestJoinBarrelPool = onCall(
 
 exports.completeBarrelPoolDepositPayment = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -8917,14 +9318,14 @@ exports.completeBarrelPoolDepositPayment = onCall(
           await Promise.all([
             participantRef.update({
               paymentStatus: intent.status,
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: FirestoreFieldValue.serverTimestamp(),
             }),
             poolRef.update({
               [`publicParticipants.${customerUid}.paymentStatus`]:
                 intent.status,
               [`publicParticipants.${customerUid}.updatedAt`]:
-                admin.firestore.FieldValue.serverTimestamp(),
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                FirestoreFieldValue.serverTimestamp(),
+              updatedAt: FirestoreFieldValue.serverTimestamp(),
             }),
           ]);
           throw new HttpsError(
@@ -8935,7 +9336,7 @@ exports.completeBarrelPoolDepositPayment = onCall(
         sourceTransaction = stripeSourceTransactionFromIntent(intent);
       }
 
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       const nextStatus = pool.status === "pending_payment" ?
         poolStatusFor(
             Number(pool.openShares || 0),
@@ -8985,7 +9386,7 @@ exports.completeBarrelPoolDepositPayment = onCall(
 
 exports.cancelPendingBarrelPoolDeposit = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -9022,14 +9423,14 @@ exports.cancelPendingBarrelPoolDeposit = onCall(
           await Promise.all([
             participantRef.update({
               paymentStatus: intent.status,
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: FirestoreFieldValue.serverTimestamp(),
             }),
             poolRef.update({
               [`publicParticipants.${customerUid}.paymentStatus`]:
                 intent.status,
               [`publicParticipants.${customerUid}.updatedAt`]:
-                admin.firestore.FieldValue.serverTimestamp(),
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                FirestoreFieldValue.serverTimestamp(),
+              updatedAt: FirestoreFieldValue.serverTimestamp(),
             }),
           ]);
           return {success: true, poolId};
@@ -9045,7 +9446,7 @@ exports.cancelPendingBarrelPoolDeposit = onCall(
         const freshPool = freshPoolDoc.data() || {};
         const freshParticipant = freshParticipantDoc.data() || {};
         if (freshParticipant.paymentStatus !== "pending") return;
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
         const shares = Number(freshParticipant.sharesClaimed || 0);
         const isOwner = freshParticipant.role === "owner" ||
           freshPool.createdByUid === customerUid;
@@ -9160,7 +9561,7 @@ exports.cancelPendingBarrelPoolDeposit = onCall(
 
 exports.decideBarrelPoolJoin = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -9198,7 +9599,7 @@ exports.decideBarrelPoolJoin = onCall(
           return;
         }
         const shares = Number(participant.sharesClaimed || 0);
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
         const depositSettled =
           participant.paymentStatus === "succeeded" ||
           participant.paymentStatus === "collected_by_business";
@@ -9280,10 +9681,10 @@ exports.decideBarrelPoolJoin = onCall(
           refundableAmount: 0,
           walletRefundRequestId: depositSettled ?
             refundRequest?.refundRequestId || "" :
-            admin.firestore.FieldValue.delete(),
+            FirestoreFieldValue.delete(),
           refundRequestedAt: depositSettled ?
             now :
-            admin.firestore.FieldValue.delete(),
+            FirestoreFieldValue.delete(),
           updatedAt: now,
         });
         if (!depositSettled) {
@@ -9335,7 +9736,7 @@ exports.decideBarrelPoolJoin = onCall(
 
 exports.leaveBarrelPool = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -9376,7 +9777,7 @@ exports.leaveBarrelPool = onCall(
           );
         }
         const shares = Number(participant.sharesClaimed || 0);
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
         const isRequested = joinStatus === "requested";
         const shouldRefund = isRequested || participantWithinPoolGrace(
             participant,
@@ -9432,11 +9833,11 @@ exports.leaveBarrelPool = onCall(
           refundableAmount: 0,
           walletRefundRequestId: shouldRefund ?
             refundRequest?.refundRequestId || "" :
-            admin.firestore.FieldValue.delete(),
+            FirestoreFieldValue.delete(),
           leftAt: now,
           refundRequestedAt: shouldRefund ?
             now :
-            admin.firestore.FieldValue.delete(),
+            FirestoreFieldValue.delete(),
           depositForfeitureStatus: shouldRefund ? "none" : "forfeited",
           updatedAt: now,
         });
@@ -9446,9 +9847,9 @@ exports.leaveBarrelPool = onCall(
           requestedShares: nextRequestedShares,
           acceptedShares: nextAcceptedShares,
           forfeitedDepositAmountCents:
-            admin.firestore.FieldValue.increment(forfeitedCents),
+            FirestoreFieldValue.increment(forfeitedCents),
           forfeitedDepositAmount:
-            admin.firestore.FieldValue.increment(
+            FirestoreFieldValue.increment(
                 dollarsFromCents(forfeitedCents),
             ),
           status: poolStatusFor(nextOpenShares, nextTakenShares),
@@ -9497,7 +9898,7 @@ exports.leaveBarrelPool = onCall(
 
 exports.cancelBarrelPool = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -9517,7 +9918,7 @@ exports.cancelBarrelPool = onCall(
       await requirePoolDecisionMaker(callerUid, pool);
       const participants = await poolRef.collection("participants").get();
       await db.runTransaction(async (transaction) => {
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
         const ownerCancellation = callerUid === pool.createdByUid;
         const nextPool = {
           ...pool,
@@ -9560,9 +9961,9 @@ exports.cancelBarrelPool = onCall(
             });
             transaction.update(poolRef, {
               forfeitedDepositAmountCents:
-                admin.firestore.FieldValue.increment(forfeitedCents),
+                FirestoreFieldValue.increment(forfeitedCents),
               forfeitedDepositAmount:
-                admin.firestore.FieldValue.increment(
+                FirestoreFieldValue.increment(
                     dollarsFromCents(forfeitedCents),
                 ),
             });
@@ -9616,7 +10017,7 @@ exports.cancelBarrelPool = onCall(
 
 exports.sealBarrelPool = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -9707,7 +10108,7 @@ exports.sealBarrelPool = onCall(
           .map((item) => cleanText(item.receiverName, 120))
           .filter(Boolean)
           .join(", ");
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       const batch = db.batch();
       const participantBalanceWithUnderfill = (participant) =>
         Number(participant.balanceAmountCents || 0) +
@@ -9857,7 +10258,7 @@ exports.sealBarrelPool = onCall(
           }),
           ...(balanceIntentId ? {
             balanceStripePaymentIntentIds:
-              admin.firestore.FieldValue.arrayUnion(balanceIntentId),
+              FirestoreFieldValue.arrayUnion(balanceIntentId),
           } : {}),
         };
         batch.update(
@@ -9921,7 +10322,7 @@ exports.sealBarrelPool = onCall(
 
 exports.createBarrelPoolBalancePaymentIntent = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -10048,7 +10449,7 @@ exports.createBarrelPoolBalancePaymentIntent = onCall(
           paymentType: "barrel_pool_balance",
         },
       });
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       await Promise.all([
         requestRef.update({
           stripePaymentIntentId: paymentIntent.id,
@@ -10056,7 +10457,7 @@ exports.createBarrelPoolBalancePaymentIntent = onCall(
         }),
         participantRef.update({
           balanceStripePaymentIntentIds:
-            admin.firestore.FieldValue.arrayUnion(paymentIntent.id),
+            FirestoreFieldValue.arrayUnion(paymentIntent.id),
           updatedAt: now,
         }),
       ]);
@@ -10072,7 +10473,7 @@ exports.createBarrelPoolBalancePaymentIntent = onCall(
 
 exports.completeBarrelPoolBalancePayment = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -10129,7 +10530,7 @@ exports.completeBarrelPoolBalancePayment = onCall(
         if (intent.status !== "succeeded") {
           await requestRef.update({
             paymentStatus: intent.status,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           });
           throw new HttpsError(
               "failed-precondition",
@@ -10201,7 +10602,7 @@ exports.completeBarrelPoolBalancePayment = onCall(
               "Shared barrel participant not found",
           );
         }
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
         const amount = dollarsFromCents(amountCents);
         transaction.update(participantRef, {
           paymentStatus: "succeeded",
@@ -10280,7 +10681,7 @@ exports.completeBarrelPoolBalancePayment = onCall(
 
 exports.markBarrelPoolBalanceCollected = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -10398,7 +10799,7 @@ exports.markBarrelPoolBalanceCollected = onCall(
           );
         }
 
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
         const amount = dollarsFromCents(amountCents);
         const currency = freshRequest.currency || pool.currency ||
           SHIPMENT_CURRENCY;
@@ -10512,7 +10913,7 @@ exports.expireBarrelPools = onSchedule(
           if (!["open", "partially_filled"].includes(String(pool.status))) {
             return;
           }
-          const now = admin.firestore.FieldValue.serverTimestamp();
+          const now = FirestoreFieldValue.serverTimestamp();
           const nextPool = {
             ...pool,
             status: "expired",
@@ -10545,10 +10946,10 @@ exports.expireBarrelPools = onSchedule(
               walletRefundRequestId:
                 participant.paymentStatus === "succeeded" ?
                 refundRequest?.refundRequestId || "" :
-                admin.firestore.FieldValue.delete(),
+                FirestoreFieldValue.delete(),
               refundRequestedAt: participant.paymentStatus === "succeeded" ?
                 now :
-                admin.firestore.FieldValue.delete(),
+                FirestoreFieldValue.delete(),
               updatedAt: now,
             });
             transaction.update(poolRef, {
@@ -10588,7 +10989,7 @@ exports.syncOpenBarrelMirror = onDocumentWritten(
         return;
       }
       const pool = event.data.after.data() || {};
-      const timestamp = admin.firestore.FieldValue.serverTimestamp();
+      const timestamp = FirestoreFieldValue.serverTimestamp();
       const payload = buildOpenBarrelMirrorPayload({
         poolId: event.params.poolId,
         pool,
@@ -10743,6 +11144,14 @@ async function issueBusinessPayoutTransfer({
 }) {
   if (SIMULATE_PAYMENTS) return;
   if (data[payoutStatusField] === "paid") return;
+  if (Number(data.freightPricingVersion || 0) >= 2 &&
+      data.priceSettlementStatus !== FreightSettlementStatus.SETTLED) {
+    logger.warn("Blocked unsettled freight payout", {
+      documentPath: ref.path,
+      priceSettlementStatus: data.priceSettlementStatus || "missing",
+    });
+    return;
+  }
   const rawPayoutCents = payoutCents ??
     data.businessPayoutCents ??
     data.businessPayoutAmountCents ??
@@ -10764,7 +11173,7 @@ async function issueBusinessPayoutTransfer({
   ) {
     await ref.update({
       [payoutStatusField]: "pending_account",
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
     });
     return;
   }
@@ -10791,8 +11200,8 @@ async function issueBusinessPayoutTransfer({
     await ref.update({
       [payoutStatusField]: "paid",
       [payoutTransferIdField]: transfer.id,
-      [paidOutAtField]: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      [paidOutAtField]: FirestoreFieldValue.serverTimestamp(),
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
     });
   } catch (error) {
     logger.error("Barrel transfer failed", {
@@ -10804,7 +11213,7 @@ async function issueBusinessPayoutTransfer({
     await ref.update({
       [payoutStatusField]: "failed",
       [payoutErrorField]: error.message || "Stripe transfer failed",
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
     });
   }
 }
@@ -10843,6 +11252,11 @@ async function retryPendingBusinessTransfersForBusiness(businessId) {
     snapshot.docs
         .filter((doc) => {
           const data = doc.data();
+          if (serviceType === "freight_shipment" &&
+              Number(data.freightPricingVersion || 0) >= 2 &&
+              data.priceSettlementStatus !== FreightSettlementStatus.SETTLED) {
+            return false;
+          }
           return data.paymentStatus === "succeeded" ||
             data.extensionPaymentStatus === "succeeded";
         })
@@ -10890,7 +11304,7 @@ async function retryPendingBusinessTransfersForBusiness(businessId) {
 
 exports.createBarrelShipmentPaymentIntent = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -10977,7 +11391,7 @@ exports.createBarrelShipmentPaymentIntent = onCall(
 
       const shipmentRef = db.collection("barrelShipments").doc();
       const trackingCode = await generateTrackingCode("BS", "barrelShipments");
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       const cleanPickupAddress = wantsPickup ?
         String(pickupAddress).trim() :
         pricing.officeAddress;
@@ -11063,8 +11477,8 @@ exports.createBarrelShipmentPaymentIntent = onCall(
           paymentStatus: "succeeded",
           status: "pending",
           stripePaymentIntentId: `simulated_barrel_${shipmentRef.id}`,
-          paidAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          paidAt: FirestoreFieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
         return {
           shipmentId: shipmentRef.id,
@@ -11091,13 +11505,13 @@ exports.createBarrelShipmentPaymentIntent = onCall(
         });
         await shipmentRef.update({
           stripePaymentIntentId: paymentIntent.id,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
       } catch (error) {
         await shipmentRef.update({
           paymentStatus: "failed",
           status: "cancelled",
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
         if (walletAppliedCents > 0) {
           await db.runTransaction(async (transaction) => {
@@ -11128,7 +11542,7 @@ exports.createBarrelShipmentPaymentIntent = onCall(
 
 exports.createBarrelOrderPaymentIntent = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -11298,7 +11712,7 @@ exports.createBarrelOrderPaymentIntent = onCall(
             await generateTrackingCode("BS", "barrelShipments"),
         );
       }
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       let walletAppliedCents = 0;
 
       await db.runTransaction(async (transaction) => {
@@ -11429,15 +11843,15 @@ exports.createBarrelOrderPaymentIntent = onCall(
             paymentStatus: "succeeded",
             status: "pending",
             stripePaymentIntentId: `simulated_barrel_order_${orderRef.id}`,
-            paidAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            paidAt: FirestoreFieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           }),
           ...shipmentRefs.map((ref) => ref.update({
             paymentStatus: "succeeded",
             status: "pending",
             stripePaymentIntentId: `simulated_barrel_order_${orderRef.id}`,
-            paidAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            paidAt: FirestoreFieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           })),
         ]);
         return {
@@ -11464,11 +11878,11 @@ exports.createBarrelOrderPaymentIntent = onCall(
         await Promise.all([
           orderRef.update({
             stripePaymentIntentId: paymentIntent.id,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           }),
           ...shipmentRefs.map((ref) => ref.update({
             stripePaymentIntentId: paymentIntent.id,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           })),
         ]);
       } catch (error) {
@@ -11476,12 +11890,12 @@ exports.createBarrelOrderPaymentIntent = onCall(
           orderRef.update({
             paymentStatus: "failed",
             status: "cancelled",
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           }),
           ...shipmentRefs.map((ref) => ref.update({
             paymentStatus: "failed",
             status: "cancelled",
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           })),
         ]);
         if (walletAppliedCents > 0) {
@@ -11514,7 +11928,7 @@ exports.createBarrelOrderPaymentIntent = onCall(
 
 exports.completeBarrelShipmentPayment = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -11535,7 +11949,6 @@ exports.completeBarrelShipmentPayment = onCall(
       if (shipment.customerUid !== customerUid) {
         throw new HttpsError("permission-denied", "Shipment access denied");
       }
-
       if (
         SIMULATE_PAYMENTS ||
         String(shipment.stripePaymentIntentId || "").startsWith("simulated_")
@@ -11543,8 +11956,8 @@ exports.completeBarrelShipmentPayment = onCall(
         await shipmentRef.update({
           paymentStatus: "succeeded",
           status: "pending",
-          paidAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          paidAt: FirestoreFieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
         return {
           success: true,
@@ -11560,7 +11973,7 @@ exports.completeBarrelShipmentPayment = onCall(
       if (intent.status !== "succeeded") {
         await shipmentRef.update({
           paymentStatus: intent.status,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
         throw new HttpsError(
             "failed-precondition",
@@ -11571,8 +11984,8 @@ exports.completeBarrelShipmentPayment = onCall(
       await shipmentRef.update({
         paymentStatus: "succeeded",
         status: "pending",
-        paidAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        paidAt: FirestoreFieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
       await issueBarrelShipmentTransfer({
         shipmentRef,
@@ -11594,7 +12007,7 @@ exports.completeBarrelShipmentPayment = onCall(
 
 exports.cancelPendingBarrelShipment = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -11624,7 +12037,7 @@ exports.cancelPendingBarrelShipment = onCall(
         if (intent.status === "succeeded" || intent.status === "processing") {
           await shipmentRef.update({
             paymentStatus: intent.status,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           });
           return {success: true, shipmentId};
         }
@@ -11637,7 +12050,7 @@ exports.cancelPendingBarrelShipment = onCall(
             paymentStatus: "cancelled",
             status: "cancelled",
             walletAppliedReversed: true,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           });
           await creditWallet({
             transaction,
@@ -11654,7 +12067,7 @@ exports.cancelPendingBarrelShipment = onCall(
         await shipmentRef.update({
           paymentStatus: "cancelled",
           status: "cancelled",
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
       }
       return {success: true, shipmentId};
@@ -11663,7 +12076,7 @@ exports.cancelPendingBarrelShipment = onCall(
 
 exports.completeBarrelOrderPayment = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -11703,7 +12116,7 @@ exports.completeBarrelOrderPayment = onCall(
         if (intent.status !== "succeeded") {
           await orderRef.update({
             paymentStatus: intent.status,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           });
           throw new HttpsError(
               "failed-precondition",
@@ -11733,7 +12146,7 @@ exports.completeBarrelOrderPayment = onCall(
           .where("orderId", "==", orderId)
           .get();
       const batch = db.batch();
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       batch.update(orderRef, {
         paymentStatus: "succeeded",
         status: "pending",
@@ -11766,7 +12179,7 @@ exports.completeBarrelOrderPayment = onCall(
 
 exports.cancelPendingBarrelOrder = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -11796,7 +12209,7 @@ exports.cancelPendingBarrelOrder = onCall(
         if (intent.status === "succeeded" || intent.status === "processing") {
           await orderRef.update({
             paymentStatus: intent.status,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           });
           return {success: true, orderId};
         }
@@ -11807,7 +12220,7 @@ exports.cancelPendingBarrelOrder = onCall(
           .get();
       const walletAppliedCents = Number(order.walletAppliedCents || 0);
       await db.runTransaction(async (transaction) => {
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
         transaction.update(orderRef, {
           paymentStatus: "cancelled",
           status: "cancelled",
@@ -11842,9 +12255,13 @@ exports.cancelPendingBarrelOrder = onCall(
 
 // ===== Freight shipments (parcels priced by weight, by air or sea) =====
 function normalizeFreightMode(value) {
-  return String(value || "sea").trim().toLowerCase() === "air" ?
-    "air" :
-    "sea";
+  const mode = String(value || "").trim().toLowerCase();
+  if (mode === "air" || mode === "sea") return mode;
+  throw new HttpsError(
+      "invalid-argument",
+      "Freight mode must be air or sea",
+      {reason: "invalid_freight_mode"},
+  );
 }
 
 async function getApprovedFreightDestination({businessId, countryId, mode}) {
@@ -11894,7 +12311,7 @@ async function getApprovedFreightDestination({businessId, countryId, mode}) {
 
 exports.createFreightShipmentPaymentIntent = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -11976,6 +12393,7 @@ exports.createFreightShipmentPaymentIntent = onCall(
       const shippingFee =
         Math.round(parcelWeightKg * pricePerKg * 100) / 100;
       const shippingFeeCents = Math.round(shippingFee * 100);
+      const pickupFeeCents = Math.round(pickup.fee * 100);
       const total = shippingFee + pickup.fee;
       if (!Number.isFinite(total) || total <= 0) {
         throw new HttpsError("failed-precondition", "Invalid shipment total");
@@ -11984,7 +12402,7 @@ exports.createFreightShipmentPaymentIntent = onCall(
 
       const shipmentRef = db.collection("freightShipments").doc();
       const trackingCode = await generateTrackingCode("FR", "freightShipments");
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       const cleanPickupAddress = wantsPickup ?
         String(pickupAddress).trim() :
         pricing.officeAddress;
@@ -12022,8 +12440,12 @@ exports.createFreightShipmentPaymentIntent = onCall(
           businessName: business.name || DEFAULT_BUSINESS_NAME,
           ...deliveryEstimate,
           mode: freightMode,
+          freightPricingVersion: 2,
+          settlementVersion: 1,
+          estimatedWeightKg: parcelWeightKg,
           weightKg: parcelWeightKg,
           pricePerKg,
+          pricePerKgCents: Math.round(pricePerKg * 100),
           customerUid,
           customerEmail: userRecord.email || "",
           pickupRequested: wantsPickup,
@@ -12033,21 +12455,33 @@ exports.createFreightShipmentPaymentIntent = onCall(
             "Office drop-off",
           pickupMiles: pickup.miles,
           pickupFee: pickup.fee,
+          pickupFeeCents,
           shippingFee,
+          estimatedShippingFee: shippingFee,
+          estimatedShippingFeeCents: shippingFeeCents,
+          estimatedTotal: total,
+          estimatedTotalCents: totalCents,
           pricingPendingReview: false,
           ...(pickupAppointment && {
             pickupDateTime:
               admin.firestore.Timestamp.fromDate(pickupAppointment),
           }),
           price: total,
+          currency: SHIPMENT_CURRENCY,
           platformFeePct,
           ...payoutFields,
+          payoutStatus: "awaiting_settlement",
           walletAppliedAmount: dollarsFromCents(walletAppliedCents),
           walletAppliedCents,
           cardChargeAmount: dollarsFromCents(chargeCents),
           cardChargeAmountCents: chargeCents,
           paymentStatus: chargeCents === 0 ? "succeeded" : "pending",
-          status: chargeCents === 0 ? "pending" : "pending_payment",
+          priceSettlementStatus: chargeCents === 0 ?
+            FreightSettlementStatus.AWAITING_WEIGHT :
+            FreightSettlementStatus.AWAITING_ESTIMATE_PAYMENT,
+          weightVerificationStatus: "awaiting_business",
+          status: chargeCents === 0 ?
+            "awaiting_weight_confirmation" : "pending_payment",
           ...(chargeCents === 0 && {paidAt: now}),
           createdAt: now,
           updatedAt: now,
@@ -12056,14 +12490,6 @@ exports.createFreightShipmentPaymentIntent = onCall(
 
       const chargeCents = totalCents - walletAppliedCents;
       if (chargeCents === 0) {
-        if (!SIMULATE_PAYMENTS) {
-          const snapshot = await shipmentRef.get();
-          await issueBusinessPayoutTransfer({
-            ref: shipmentRef,
-            data: snapshot.data() || {},
-            serviceType: "freight_shipment",
-          });
-        }
         return {
           shipmentId: shipmentRef.id,
           trackingCode,
@@ -12076,10 +12502,11 @@ exports.createFreightShipmentPaymentIntent = onCall(
       if (SIMULATE_PAYMENTS) {
         await shipmentRef.update({
           paymentStatus: "succeeded",
-          status: "pending",
+          priceSettlementStatus: FreightSettlementStatus.AWAITING_WEIGHT,
+          status: "awaiting_weight_confirmation",
           stripePaymentIntentId: `simulated_freight_${shipmentRef.id}`,
-          paidAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          paidAt: FirestoreFieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
         return {
           shipmentId: shipmentRef.id,
@@ -12106,13 +12533,13 @@ exports.createFreightShipmentPaymentIntent = onCall(
         });
         await shipmentRef.update({
           stripePaymentIntentId: paymentIntent.id,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
       } catch (error) {
         await shipmentRef.update({
           paymentStatus: "failed",
           status: "cancelled",
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
         if (walletAppliedCents > 0) {
           await db.runTransaction(async (transaction) => {
@@ -12143,7 +12570,7 @@ exports.createFreightShipmentPaymentIntent = onCall(
 
 exports.completeFreightShipmentPayment = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -12164,6 +12591,13 @@ exports.completeFreightShipmentPayment = onCall(
       if (shipment.customerUid !== customerUid) {
         throw new HttpsError("permission-denied", "Shipment access denied");
       }
+      const pricingVersion = Number(shipment.freightPricingVersion || 1);
+      const versionTwo = pricingVersion >= 2;
+      const paidStatus = versionTwo ?
+        "awaiting_weight_confirmation" : "pending";
+      const settlementUpdate = versionTwo ? {
+        priceSettlementStatus: FreightSettlementStatus.AWAITING_WEIGHT,
+      } : {};
 
       if (
         SIMULATE_PAYMENTS ||
@@ -12171,9 +12605,10 @@ exports.completeFreightShipmentPayment = onCall(
       ) {
         await shipmentRef.update({
           paymentStatus: "succeeded",
-          status: "pending",
-          paidAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          ...settlementUpdate,
+          status: paidStatus,
+          paidAt: FirestoreFieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
         return {
           success: true,
@@ -12189,7 +12624,7 @@ exports.completeFreightShipmentPayment = onCall(
       if (intent.status !== "succeeded") {
         await shipmentRef.update({
           paymentStatus: intent.status,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
         throw new HttpsError(
             "failed-precondition",
@@ -12199,20 +12634,19 @@ exports.completeFreightShipmentPayment = onCall(
 
       await shipmentRef.update({
         paymentStatus: "succeeded",
-        status: "pending",
-        paidAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        ...settlementUpdate,
+        status: paidStatus,
+        paidAt: FirestoreFieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
-      await issueBusinessPayoutTransfer({
-        ref: shipmentRef,
-        data: {
-          ...shipment,
-          paymentStatus: "succeeded",
-          status: "pending",
-        },
-        sourceTransaction: stripeSourceTransactionFromIntent(intent),
-        serviceType: "freight_shipment",
-      });
+      if (!versionTwo) {
+        await issueBusinessPayoutTransfer({
+          ref: shipmentRef,
+          data: {...shipment, paymentStatus: "succeeded", status: paidStatus},
+          sourceTransaction: stripeSourceTransactionFromIntent(intent),
+          serviceType: "freight_shipment",
+        });
+      }
 
       return {
         success: true,
@@ -12224,7 +12658,7 @@ exports.completeFreightShipmentPayment = onCall(
 
 exports.cancelPendingFreightShipment = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -12254,7 +12688,7 @@ exports.cancelPendingFreightShipment = onCall(
         if (intent.status === "succeeded" || intent.status === "processing") {
           await shipmentRef.update({
             paymentStatus: intent.status,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           });
           return {success: true, shipmentId};
         }
@@ -12267,7 +12701,7 @@ exports.cancelPendingFreightShipment = onCall(
             paymentStatus: "cancelled",
             status: "cancelled",
             walletAppliedReversed: true,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           });
           await creditWallet({
             transaction,
@@ -12284,10 +12718,729 @@ exports.cancelPendingFreightShipment = onCall(
         await shipmentRef.update({
           paymentStatus: "cancelled",
           status: "cancelled",
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
       }
       return {success: true, shipmentId};
+    },
+);
+
+function freightSettlementDocumentId(shipmentId, version = 1) {
+  return `${shipmentId}_v${version}`;
+}
+
+function freightSettlementResponse(settlement) {
+  return {
+    settlementId: settlement.settlementId,
+    shipmentId: settlement.shipmentId,
+    verifiedWeightKg: settlement.verifiedWeightKg,
+    estimatedTotal: dollarsFromCents(settlement.estimatedTotalCents),
+    finalTotal: dollarsFromCents(settlement.finalTotalCents),
+    difference: dollarsFromCents(settlement.adjustmentCents),
+    balanceDue: dollarsFromCents(settlement.balanceDueCents),
+    refundDue: dollarsFromCents(settlement.refundDueCents),
+    priceSettlementStatus: settlement.priceSettlementStatus,
+    customerActionRequired:
+      settlement.priceSettlementStatus ===
+        FreightSettlementStatus.BALANCE_DUE ||
+      settlement.priceSettlementStatus ===
+        FreightSettlementStatus.BALANCE_PAYMENT_PENDING,
+  };
+}
+
+async function processFreightSettlementRefund({settlementRef, shipmentRef}) {
+  const db = admin.firestore();
+  try {
+    let settlementDoc = await settlementRef.get();
+    if (!settlementDoc.exists) {
+      throw new HttpsError("not-found", "Freight settlement not found");
+    }
+    let settlement = settlementDoc.data() || {};
+    if (settlement.priceSettlementStatus === FreightSettlementStatus.SETTLED) {
+      return settlement;
+    }
+
+    const cardRefundCents = Number(settlement.refundCardCents || 0);
+    if (cardRefundCents > 0 && settlement.cardRefundStatus !== "succeeded") {
+      let refund;
+      if (SIMULATE_PAYMENTS) {
+        refund = {id: `simulated_refund_${settlement.settlementId}`};
+      } else {
+        const shipmentDoc = await shipmentRef.get();
+        const paymentIntentId = String(
+            shipmentDoc.get("stripePaymentIntentId") || "",
+        ).trim();
+        if (!paymentIntentId) {
+          throw new Error("Initial freight card payment is missing");
+        }
+        refund = await createStripeRefund({
+          paymentIntentId,
+          amount: cardRefundCents,
+          idempotencyKey:
+            `freight-refund-v1-${settlement.shipmentId}-` +
+            `${settlement.settlementVersion || 1}`,
+          metadata: {
+            shipmentId: settlement.shipmentId,
+            settlementId: settlement.settlementId,
+            paymentType: "freight_settlement_refund",
+          },
+        });
+      }
+      await settlementRef.set({
+        cardRefundStatus: "succeeded",
+        stripeRefundId: refund.id,
+        cardRefundedCents: cardRefundCents,
+        cardRefundedAmount: dollarsFromCents(cardRefundCents),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+    }
+
+    await db.runTransaction(async (transaction) => {
+      const fresh = await transaction.get(settlementRef);
+      settlement = fresh.data() || {};
+      const walletRefundCents = Number(settlement.refundWalletCents || 0);
+      if (walletRefundCents <= 0 ||
+          settlement.walletRefundStatus === "succeeded") return;
+      const walletRef = db.collection("wallets").doc(settlement.customerUid);
+      const walletTransactionRef = walletRef.collection("transactions")
+          .doc(`freight_refund_${settlement.settlementId}`);
+      const now = FirestoreFieldValue.serverTimestamp();
+      transaction.set(walletRef, {
+        customerUid: settlement.customerUid,
+        currency: SHIPMENT_CURRENCY,
+        balanceCents: FirestoreFieldValue.increment(walletRefundCents),
+        balance: FirestoreFieldValue.increment(
+            dollarsFromCents(walletRefundCents),
+        ),
+        updatedAt: now,
+      }, {merge: true});
+      transaction.set(walletTransactionRef, {
+        type: "credit",
+        reason: "freight_weight_adjustment_refund",
+        amountCents: walletRefundCents,
+        amount: dollarsFromCents(walletRefundCents),
+        currency: SHIPMENT_CURRENCY,
+        shipmentId: settlement.shipmentId,
+        settlementId: settlement.settlementId,
+        trackingCode: settlement.trackingCode || "",
+        businessId: settlement.businessId || "",
+        businessName: settlement.businessName || "",
+        createdAt: now,
+      });
+      transaction.update(settlementRef, {
+        walletRefundStatus: "succeeded",
+        walletRefundedCents: walletRefundCents,
+        walletRefundedAmount: dollarsFromCents(walletRefundCents),
+        updatedAt: now,
+      });
+    });
+
+    settlementDoc = await settlementRef.get();
+    settlement = settlementDoc.data() || {};
+    const cardReady = Number(settlement.refundCardCents || 0) <= 0 ||
+      settlement.cardRefundStatus === "succeeded";
+    const walletReady = Number(settlement.refundWalletCents || 0) <= 0 ||
+      settlement.walletRefundStatus === "succeeded";
+    if (!cardReady || !walletReady) {
+      throw new Error("Freight refund is incomplete");
+    }
+
+    const businessDoc = await db.collection("businesses")
+        .doc(settlement.businessId).get();
+    const business = businessDoc.exists ? businessDoc.data() || {} : {};
+    const payoutFields = servicePayoutFields({
+      grossCents: Number(settlement.finalShippingFeeCents || 0),
+      platformFeePct: Number(settlement.platformFeePct || 0),
+      connectReady:
+        !!business.stripeAccountId && business.payoutsEnabled === true,
+    });
+    const now = FirestoreFieldValue.serverTimestamp();
+    await db.runTransaction(async (transaction) => {
+      const fresh = await transaction.get(settlementRef);
+      const current = fresh.data() || {};
+      if (current.priceSettlementStatus === FreightSettlementStatus.SETTLED) {
+        return;
+      }
+      transaction.update(settlementRef, {
+        priceSettlementStatus: FreightSettlementStatus.SETTLED,
+        refundStatus: "completed",
+        settledAt: now,
+        updatedAt: now,
+      });
+      transaction.update(shipmentRef, {
+        priceSettlementStatus: FreightSettlementStatus.SETTLED,
+        refundStatus: "completed",
+        refundCompletedAt: now,
+        price: dollarsFromCents(current.finalTotalCents),
+        shippingFee: dollarsFromCents(current.finalShippingFeeCents),
+        ...payoutFields,
+        status: "pending",
+        updatedAt: now,
+      });
+    });
+    const shipmentDoc = await shipmentRef.get();
+    await issueBusinessPayoutTransfer({
+      ref: shipmentRef,
+      data: shipmentDoc.data() || {},
+      serviceType: "freight_shipment_final",
+      idempotencySuffix: `${settlement.shipmentId}_freight_final_v1`,
+    });
+    return (await settlementRef.get()).data() || settlement;
+  } catch (error) {
+    logger.error("Freight settlement refund failed", {
+      settlementPath: settlementRef.path,
+      message: error.message,
+    });
+    await Promise.all([
+      settlementRef.set({
+        priceSettlementStatus: FreightSettlementStatus.NEEDS_ATTENTION,
+        refundStatus: "failed",
+        settlementError: String(error.message || "Refund failed").slice(0, 500),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true}),
+      shipmentRef.set({
+        priceSettlementStatus: FreightSettlementStatus.NEEDS_ATTENTION,
+        status: "settlement_processing",
+        settlementError: String(error.message || "Refund failed").slice(0, 500),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true}),
+    ]);
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError(
+        "internal",
+        "The weight was saved, but the refund needs attention. Retry safely.",
+    );
+  }
+}
+
+exports.confirmFreightShipmentWeight = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const callerUid = requireAuth(request);
+      const shipmentId = String(request.data?.shipmentId || "").trim();
+      const verifiedWeightKg = Number(request.data?.verifiedWeightKg);
+      if (!shipmentId) {
+        throw new HttpsError("invalid-argument", "Shipment ID is required");
+      }
+      if (!Number.isFinite(verifiedWeightKg) || verifiedWeightKg <= 0 ||
+          verifiedWeightKg > 100000) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Verified weight must be greater than zero",
+        );
+      }
+
+      const db = admin.firestore();
+      const shipmentRef = db.collection("freightShipments").doc(shipmentId);
+      const initialShipmentDoc = await shipmentRef.get();
+      if (!initialShipmentDoc.exists) {
+        throw new HttpsError("not-found", "Shipment not found");
+      }
+      const initialShipment = initialShipmentDoc.data() || {};
+      await requireBusinessPermission(
+          callerUid,
+          String(initialShipment.businessId || ""),
+          "freight",
+      );
+      if (Number(initialShipment.freightPricingVersion || 1) < 2) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Legacy freight cannot be recalculated",
+        );
+      }
+      const businessDoc = await db.collection("businesses")
+          .doc(initialShipment.businessId).get();
+      const business = businessDoc.exists ? businessDoc.data() || {} : {};
+      const settlementId = freightSettlementDocumentId(shipmentId, 1);
+      const settlementRef = db.collection("freightSettlements")
+          .doc(settlementId);
+
+      let result;
+      await db.runTransaction(async (transaction) => {
+        const [shipmentDoc, existingSettlementDoc] = await Promise.all([
+          transaction.get(shipmentRef),
+          transaction.get(settlementRef),
+        ]);
+        const shipment = shipmentDoc.data() || {};
+        if (shipment.paymentStatus !== "succeeded") {
+          throw new HttpsError(
+              "failed-precondition",
+              "The estimate must be paid before weight confirmation",
+          );
+        }
+        if (existingSettlementDoc.exists) {
+          const existing = existingSettlementDoc.data() || {};
+          if (Math.abs(Number(existing.verifiedWeightKg) - verifiedWeightKg) >
+              0.0005) {
+            throw new HttpsError(
+                "already-exists",
+                "The verified weight is already locked. Contact support " +
+                  "to correct it.",
+            );
+          }
+          result = existing;
+          return;
+        }
+
+        let calculation;
+        try {
+          calculation = calculateFreightSettlement({
+            estimatedTotalCents: Number(
+                shipment.estimatedTotalCents ??
+                  centsFromDollars(shipment.price),
+            ),
+            verifiedWeightKg,
+            pricePerKg: Number(shipment.pricePerKg || 0),
+            pickupFeeCents: Number(
+                shipment.pickupFeeCents ?? centsFromDollars(shipment.pickupFee),
+            ),
+            originalCardCents: Number(shipment.cardChargeAmountCents || 0),
+          });
+        } catch (error) {
+          throw new HttpsError("failed-precondition", error.message);
+        }
+        const now = FirestoreFieldValue.serverTimestamp();
+        const payoutFields = servicePayoutFields({
+          grossCents: calculation.finalShippingFeeCents,
+          platformFeePct: Number(shipment.platformFeePct || 0),
+          connectReady:
+            !!business.stripeAccountId && business.payoutsEnabled === true,
+        });
+        const shipmentStatus = calculation.balanceDueCents > 0 ?
+          "awaiting_balance_payment" :
+          calculation.refundDueCents > 0 ? "settlement_processing" : "pending";
+        const settlement = {
+          settlementId,
+          settlementVersion: 1,
+          shipmentId,
+          trackingCode: shipment.trackingCode || "",
+          customerUid: shipment.customerUid,
+          businessId: shipment.businessId,
+          businessName: shipment.businessName || "",
+          currency: shipment.currency || SHIPMENT_CURRENCY,
+          platformFeePct: Number(shipment.platformFeePct || 0),
+          estimatedWeightKg: Number(
+              shipment.estimatedWeightKg ?? shipment.weightKg,
+          ),
+          estimatedTotalCents: Number(
+              shipment.estimatedTotalCents ?? centsFromDollars(shipment.price),
+          ),
+          ...calculation,
+          initialWalletAppliedCents: Number(shipment.walletAppliedCents || 0),
+          initialCardChargeCents: Number(shipment.cardChargeAmountCents || 0),
+          weightConfirmedByUid: callerUid,
+          weightConfirmedAt: now,
+          cardRefundStatus: calculation.refundCardCents > 0 ?
+            "pending" : "not_required",
+          walletRefundStatus: calculation.refundWalletCents > 0 ?
+            "pending" : "not_required",
+          refundStatus: calculation.refundDueCents > 0 ?
+            "processing" : "not_required",
+          createdAt: now,
+          updatedAt: now,
+        };
+        result = settlement;
+        transaction.create(settlementRef, settlement);
+        transaction.update(shipmentRef, {
+          settlementId,
+          settlementVersion: 1,
+          verifiedWeightKg: calculation.verifiedWeightKg,
+          finalShippingFeeCents: calculation.finalShippingFeeCents,
+          finalShippingFee: dollarsFromCents(
+              calculation.finalShippingFeeCents,
+          ),
+          finalTotalCents: calculation.finalTotalCents,
+          finalTotal: dollarsFromCents(calculation.finalTotalCents),
+          settlementDifferenceCents: calculation.adjustmentCents,
+          balanceDueCents: calculation.balanceDueCents,
+          balanceDue: dollarsFromCents(calculation.balanceDueCents),
+          refundDueCents: calculation.refundDueCents,
+          refundDue: dollarsFromCents(calculation.refundDueCents),
+          refundCardCents: calculation.refundCardCents,
+          refundWalletCents: calculation.refundWalletCents,
+          priceSettlementStatus: calculation.priceSettlementStatus,
+          weightVerificationStatus: "confirmed",
+          weightConfirmedByUid: callerUid,
+          weightConfirmedAt: now,
+          status: shipmentStatus,
+          ...(calculation.priceSettlementStatus ===
+            FreightSettlementStatus.SETTLED ? {
+              price: dollarsFromCents(calculation.finalTotalCents),
+              shippingFee: dollarsFromCents(
+                  calculation.finalShippingFeeCents,
+              ),
+              ...payoutFields,
+              settledAt: now,
+            } : {
+              payoutStatus: calculation.balanceDueCents > 0 ?
+                "awaiting_balance" : "awaiting_refund",
+            }),
+          updatedAt: now,
+        });
+      });
+
+      if (result.priceSettlementStatus ===
+          FreightSettlementStatus.REFUND_PROCESSING ||
+          (result.refundDueCents > 0 &&
+           result.priceSettlementStatus ===
+             FreightSettlementStatus.NEEDS_ATTENTION)) {
+        result = await processFreightSettlementRefund({
+          settlementRef,
+          shipmentRef,
+        });
+      } else if (result.priceSettlementStatus ===
+          FreightSettlementStatus.SETTLED) {
+        const shipmentDoc = await shipmentRef.get();
+        await issueBusinessPayoutTransfer({
+          ref: shipmentRef,
+          data: shipmentDoc.data() || {},
+          serviceType: "freight_shipment_final",
+          idempotencySuffix: `${shipmentId}_freight_final_v1`,
+        });
+      }
+      return freightSettlementResponse(result);
+    },
+);
+
+async function applyFreightSettlementPayment({
+  settlementId,
+  attemptId,
+  customerUid,
+  intent,
+}) {
+  const db = admin.firestore();
+  const settlementRef = db.collection("freightSettlements").doc(settlementId);
+  const attemptRef = settlementRef.collection("paymentAttempts").doc(attemptId);
+  const settlementDoc = await settlementRef.get();
+  if (!settlementDoc.exists) {
+    throw new HttpsError("not-found", "Freight settlement not found");
+  }
+  const settlement = settlementDoc.data() || {};
+  const shipmentRef = db.collection("freightShipments")
+      .doc(settlement.shipmentId);
+  const businessDoc = await db.collection("businesses")
+      .doc(settlement.businessId).get();
+  const business = businessDoc.exists ? businessDoc.data() || {} : {};
+  const payoutFields = servicePayoutFields({
+    grossCents: Number(settlement.finalShippingFeeCents || 0),
+    platformFeePct: Number(settlement.platformFeePct || 0),
+    connectReady:
+      !!business.stripeAccountId && business.payoutsEnabled === true,
+  });
+  const now = FirestoreFieldValue.serverTimestamp();
+  await db.runTransaction(async (transaction) => {
+    const [freshSettlementDoc, attemptDoc] = await Promise.all([
+      transaction.get(settlementRef),
+      transaction.get(attemptRef),
+    ]);
+    if (!attemptDoc.exists) {
+      throw new HttpsError("not-found", "Freight payment attempt not found");
+    }
+    const freshSettlement = freshSettlementDoc.data() || {};
+    const attempt = attemptDoc.data() || {};
+    if (attempt.customerUid !== customerUid) {
+      throw new HttpsError("permission-denied", "Settlement access denied");
+    }
+    if (attempt.applicationStatus === "applied" ||
+        freshSettlement.priceSettlementStatus ===
+          FreightSettlementStatus.SETTLED) return;
+    if (!SIMULATE_PAYMENTS && intent?.status !== "succeeded") {
+      throw new HttpsError(
+          "failed-precondition",
+          `Payment is ${intent?.status || "unavailable"}`,
+      );
+    }
+    transaction.update(attemptRef, {
+      paymentStatus: "succeeded",
+      applicationStatus: "applied",
+      appliedAt: now,
+      updatedAt: now,
+    });
+    transaction.update(settlementRef, {
+      priceSettlementStatus: FreightSettlementStatus.SETTLED,
+      additionalCardChargeCents: Number(attempt.cardChargeAmountCents || 0),
+      settledAt: now,
+      updatedAt: now,
+    });
+    transaction.update(shipmentRef, {
+      priceSettlementStatus: FreightSettlementStatus.SETTLED,
+      balancePaymentStatus: "succeeded",
+      balancePaidAt: now,
+      price: dollarsFromCents(freshSettlement.finalTotalCents),
+      shippingFee: dollarsFromCents(freshSettlement.finalShippingFeeCents),
+      balanceDue: 0,
+      balanceDueCents: 0,
+      ...payoutFields,
+      status: "pending",
+      settledAt: now,
+      updatedAt: now,
+    });
+  });
+  const shipmentDoc = await shipmentRef.get();
+  await issueBusinessPayoutTransfer({
+    ref: shipmentRef,
+    data: shipmentDoc.data() || {},
+    serviceType: "freight_shipment_final",
+    idempotencySuffix: `${settlement.shipmentId}_freight_final_v1`,
+  });
+  return shipmentDoc.data() || {};
+}
+
+exports.createFreightSettlementPayment = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const shipmentId = String(request.data?.shipmentId || "").trim();
+      if (!shipmentId) {
+        throw new HttpsError("invalid-argument", "Shipment ID is required");
+      }
+      const db = admin.firestore();
+      const shipmentRef = db.collection("freightShipments").doc(shipmentId);
+      const shipmentDoc = await shipmentRef.get();
+      if (!shipmentDoc.exists) {
+        throw new HttpsError("not-found", "Shipment not found");
+      }
+      const shipment = shipmentDoc.data() || {};
+      if (shipment.customerUid !== customerUid) {
+        throw new HttpsError("permission-denied", "Shipment access denied");
+      }
+      const settlementId = String(shipment.settlementId || "").trim();
+      if (!settlementId) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Weight is not confirmed yet",
+        );
+      }
+      const settlementRef = db.collection("freightSettlements")
+          .doc(settlementId);
+      const settlementDoc = await settlementRef.get();
+      if (!settlementDoc.exists) {
+        throw new HttpsError("not-found", "Freight settlement not found");
+      }
+      const settlement = settlementDoc.data() || {};
+      if (settlement.priceSettlementStatus ===
+          FreightSettlementStatus.SETTLED) {
+        return {settlementId, shipmentId, alreadySettled: true};
+      }
+      if (![FreightSettlementStatus.BALANCE_DUE,
+        FreightSettlementStatus.BALANCE_PAYMENT_PENDING].includes(
+          settlement.priceSettlementStatus,
+      )) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This freight settlement has no payable balance",
+        );
+      }
+      const attemptId = "balance_v1";
+      const attemptRef = settlementRef.collection("paymentAttempts")
+          .doc(attemptId);
+      let attemptDoc = await attemptRef.get();
+      const balanceDueCents = Number(settlement.balanceDueCents || 0);
+      if (!attemptDoc.exists) {
+        const now = FirestoreFieldValue.serverTimestamp();
+        await attemptRef.create({
+          attemptId,
+          settlementId,
+          shipmentId,
+          customerUid,
+          businessId: settlement.businessId,
+          currency: settlement.currency || SHIPMENT_CURRENCY,
+          cardChargeAmountCents: balanceDueCents,
+          cardChargeAmount: dollarsFromCents(balanceDueCents),
+          paymentStatus: "pending",
+          applicationStatus: "pending",
+          createdAt: now,
+          updatedAt: now,
+        });
+        attemptDoc = await attemptRef.get();
+      }
+      const attempt = attemptDoc.data() || {};
+
+      if (SIMULATE_PAYMENTS) {
+        if (!attempt.stripePaymentIntentId) {
+          await attemptRef.update({
+            stripePaymentIntentId: `simulated_freight_balance_${settlementId}`,
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          });
+        }
+        await applyFreightSettlementPayment({
+          settlementId,
+          attemptId,
+          customerUid,
+          intent: {status: "succeeded"},
+        });
+        return {
+          settlementId,
+          attemptId,
+          shipmentId,
+          simulatedPayment: true,
+          cardChargeAmount: dollarsFromCents(balanceDueCents),
+        };
+      }
+
+      if (attempt.stripePaymentIntentId) {
+        const existingIntent = await retrieveStripePaymentIntent(
+            attempt.stripePaymentIntentId,
+        );
+        if (existingIntent.status === "succeeded") {
+          await applyFreightSettlementPayment({
+            settlementId,
+            attemptId,
+            customerUid,
+            intent: existingIntent,
+          });
+          return {settlementId, attemptId, shipmentId, alreadySettled: true};
+        }
+        return {
+          settlementId,
+          attemptId,
+          shipmentId,
+          clientSecret: existingIntent.client_secret,
+          cardChargeAmount: dollarsFromCents(balanceDueCents),
+        };
+      }
+
+      try {
+        const paymentIntent = await createStripePaymentIntent({
+          amount: balanceDueCents,
+          currency: settlement.currency || SHIPMENT_CURRENCY,
+          metadata: {
+            settlementId,
+            attemptId,
+            shipmentId,
+            customerUid,
+            businessId: settlement.businessId,
+            paymentType: "freight_settlement_adjustment",
+          },
+        });
+        await Promise.all([
+          attemptRef.update({
+            stripePaymentIntentId: paymentIntent.id,
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          }),
+          settlementRef.update({
+            priceSettlementStatus:
+              FreightSettlementStatus.BALANCE_PAYMENT_PENDING,
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          }),
+          shipmentRef.update({
+            priceSettlementStatus:
+              FreightSettlementStatus.BALANCE_PAYMENT_PENDING,
+            balancePaymentStatus: "pending",
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          }),
+        ]);
+        return {
+          settlementId,
+          attemptId,
+          shipmentId,
+          clientSecret: paymentIntent.client_secret,
+          cardChargeAmount: dollarsFromCents(balanceDueCents),
+        };
+      } catch (error) {
+        await Promise.all([
+          attemptRef.set({
+            paymentStatus: "failed",
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          }, {merge: true}),
+          settlementRef.set({
+            priceSettlementStatus: FreightSettlementStatus.BALANCE_DUE,
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          }, {merge: true}),
+          shipmentRef.set({
+            priceSettlementStatus: FreightSettlementStatus.BALANCE_DUE,
+            balancePaymentStatus: "failed",
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          }, {merge: true}),
+        ]);
+        throw error;
+      }
+    },
+);
+
+exports.completeFreightSettlementPayment = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const settlementId = String(request.data?.settlementId || "").trim();
+      const attemptId = String(request.data?.attemptId || "").trim();
+      if (!settlementId || !attemptId) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Settlement ID and attempt ID are required",
+        );
+      }
+      const attemptRef = admin.firestore().collection("freightSettlements")
+          .doc(settlementId).collection("paymentAttempts").doc(attemptId);
+      const attemptDoc = await attemptRef.get();
+      if (!attemptDoc.exists) {
+        throw new HttpsError("not-found", "Freight payment attempt not found");
+      }
+      const attempt = attemptDoc.data() || {};
+      if (attempt.customerUid !== customerUid) {
+        throw new HttpsError("permission-denied", "Settlement access denied");
+      }
+      if (attempt.applicationStatus === "applied") {
+        return {success: true, settlementId, attemptId};
+      }
+      let intent = {status: "succeeded"};
+      if (!SIMULATE_PAYMENTS &&
+          !String(attempt.stripePaymentIntentId || "")
+              .startsWith("simulated_")) {
+        intent = await retrieveStripePaymentIntent(
+            attempt.stripePaymentIntentId,
+        );
+      }
+      await applyFreightSettlementPayment({
+        settlementId,
+        attemptId,
+        customerUid,
+        intent,
+      });
+      return {success: true, settlementId, attemptId};
+    },
+);
+
+exports.retryFreightSettlementRefunds = onSchedule(
+    {
+      schedule: "every 10 minutes",
+      timeZone: "America/New_York",
+      timeoutSeconds: 480,
+      secrets: [stripeSecretKey],
+    },
+    async () => {
+      const db = admin.firestore();
+      const snapshot = await db.collection("freightSettlements")
+          .where("priceSettlementStatus", "in", [
+            FreightSettlementStatus.REFUND_PROCESSING,
+            FreightSettlementStatus.NEEDS_ATTENTION,
+          ])
+          .limit(50)
+          .get();
+      const results = await Promise.allSettled(snapshot.docs
+          .filter((doc) => Number(doc.get("refundDueCents") || 0) > 0)
+          .map((doc) => processFreightSettlementRefund({
+            settlementRef: doc.ref,
+            shipmentRef: db.collection("freightShipments")
+                .doc(doc.get("shipmentId")),
+          })));
+      const failed = results.filter((result) => result.status === "rejected");
+      logger.info("Freight refund retry completed", {
+        checked: results.length,
+        failed: failed.length,
+      });
     },
 );
 
@@ -12313,7 +13466,7 @@ exports.notifyFreightShipmentStatus = onDocumentUpdated(
 
 exports.changeBarrelShipmentDestination = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -12376,17 +13529,17 @@ exports.changeBarrelShipmentDestination = onCall(
         businessName: business.name || DEFAULT_BUSINESS_NAME,
         deliveryEstimateMinDays:
           deliveryEstimate.deliveryEstimateMinDays ??
-          admin.firestore.FieldValue.delete(),
+          FirestoreFieldValue.delete(),
         deliveryEstimateMaxDays:
           deliveryEstimate.deliveryEstimateMaxDays ??
-          admin.firestore.FieldValue.delete(),
+          FirestoreFieldValue.delete(),
         deliveryEstimateLabel:
           deliveryEstimate.deliveryEstimateLabel ??
-          admin.firestore.FieldValue.delete(),
+          FirestoreFieldValue.delete(),
         shippingFee,
         price: dollarsFromCents(newTotalCents),
-        destinationChangedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        destinationChangedAt: FirestoreFieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
       };
 
       if (differenceCents > 0) {
@@ -12458,7 +13611,7 @@ exports.changeBarrelShipmentDestination = onCall(
 
 exports.createCarDepositPaymentIntent = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -12536,7 +13689,7 @@ exports.createCarDepositPaymentIntent = onCall(
       }
 
       const purchaseRef = db.collection("carPurchases").doc();
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       await purchaseRef.set({
         carId,
         carTitle: car.title || `${car.make || ""} ${car.model || ""}`.trim(),
@@ -12585,7 +13738,7 @@ exports.createCarDepositPaymentIntent = onCall(
                   "This car is no longer available",
               );
             }
-            const paidAt = admin.firestore.FieldValue.serverTimestamp();
+            const paidAt = FirestoreFieldValue.serverTimestamp();
             transaction.update(purchaseRef, {
               paymentStatus: "succeeded",
               purchaseStatus: "reserved",
@@ -12601,7 +13754,7 @@ exports.createCarDepositPaymentIntent = onCall(
             });
             transaction.set(db.collection("users").doc(buyerUid), {
               "carBuyerReliability.paidHolds":
-                admin.firestore.FieldValue.increment(1),
+                FirestoreFieldValue.increment(1),
               "carBuyerReliability.updatedAt": paidAt,
             }, {merge: true});
           });
@@ -12609,7 +13762,7 @@ exports.createCarDepositPaymentIntent = onCall(
           await purchaseRef.update({
             paymentStatus: "failed",
             purchaseStatus: "cancelled",
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           });
           throw error;
         }
@@ -12634,7 +13787,7 @@ exports.createCarDepositPaymentIntent = onCall(
 
       await purchaseRef.update({
         stripePaymentIntentId: paymentIntent.id,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
 
       return {
@@ -12646,7 +13799,7 @@ exports.createCarDepositPaymentIntent = onCall(
 
 exports.createCarViewingReservation = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -12690,7 +13843,7 @@ exports.createCarViewingReservation = onCall(
       const carBusiness = await requireActiveBusinessForCar(listedCar);
 
       const purchaseRef = db.collection("carPurchases").doc();
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
 
       await db.runTransaction(async (transaction) => {
         const lockedCarDoc = await transaction.get(carRef);
@@ -12763,7 +13916,7 @@ exports.createCarViewingReservation = onCall(
 
 exports.updateCarViewingReservation = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -12823,7 +13976,7 @@ exports.updateCarViewingReservation = onCall(
 
         const carRef = db.collection("cars").doc(purchase.carId);
         const carDoc = await transaction.get(carRef);
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
         transaction.update(purchaseRef, {
           appointmentStart: admin.firestore.Timestamp.fromDate(appointment),
           appointmentLabel: String(appointmentLabel).trim(),
@@ -12838,8 +13991,8 @@ exports.updateCarViewingReservation = onCall(
         ) {
           transaction.update(carRef, {
             status: "active",
-            reservedPurchaseId: admin.firestore.FieldValue.delete(),
-            reservationType: admin.firestore.FieldValue.delete(),
+            reservedPurchaseId: FirestoreFieldValue.delete(),
+            reservationType: FirestoreFieldValue.delete(),
             updatedAt: now,
           });
         }
@@ -12851,7 +14004,7 @@ exports.updateCarViewingReservation = onCall(
 
 exports.cancelCarViewingReservation = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -12897,7 +14050,7 @@ exports.cancelCarViewingReservation = onCall(
 
         const carRef = db.collection("cars").doc(purchase.carId);
         const carDoc = await transaction.get(carRef);
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
         transaction.update(purchaseRef, {
           purchaseStatus: "cancelled",
           paymentStatus: "cancelled",
@@ -12910,8 +14063,8 @@ exports.cancelCarViewingReservation = onCall(
         ) {
           transaction.update(carRef, {
             status: "active",
-            reservedPurchaseId: admin.firestore.FieldValue.delete(),
-            reservationType: admin.firestore.FieldValue.delete(),
+            reservedPurchaseId: FirestoreFieldValue.delete(),
+            reservationType: FirestoreFieldValue.delete(),
             updatedAt: now,
           });
         }
@@ -12923,7 +14076,7 @@ exports.cancelCarViewingReservation = onCall(
 
 exports.createCarPurchasePaymentIntent = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -12995,7 +14148,7 @@ exports.createCarPurchasePaymentIntent = onCall(
         platformFeePct,
         connectReady,
       });
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
 
       await db.runTransaction(async (transaction) => {
         const lockedCarDoc = await transaction.get(carRef);
@@ -13057,7 +14210,7 @@ exports.createCarPurchasePaymentIntent = onCall(
                 "This car is no longer available",
             );
           }
-          const paidAt = admin.firestore.FieldValue.serverTimestamp();
+          const paidAt = FirestoreFieldValue.serverTimestamp();
           transaction.update(purchaseRef, {
             paymentStatus: "succeeded",
             purchaseStatus: "completed",
@@ -13067,8 +14220,8 @@ exports.createCarPurchasePaymentIntent = onCall(
           });
           transaction.update(carRef, {
             status: "sold",
-            reservedPurchaseId: admin.firestore.FieldValue.delete(),
-            reservationType: admin.firestore.FieldValue.delete(),
+            reservedPurchaseId: FirestoreFieldValue.delete(),
+            reservationType: FirestoreFieldValue.delete(),
             soldPurchaseId: purchaseRef.id,
             soldInfo: {
               customerName: String(buyerName).trim(),
@@ -13103,20 +14256,20 @@ exports.createCarPurchasePaymentIntent = onCall(
 
         await purchaseRef.update({
           stripePaymentIntentId: paymentIntent.id,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
       } catch (error) {
         await Promise.all([
           purchaseRef.update({
             paymentStatus: "failed",
             purchaseStatus: "cancelled",
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           }),
           carRef.update({
             status: "active",
-            reservedPurchaseId: admin.firestore.FieldValue.delete(),
-            reservationType: admin.firestore.FieldValue.delete(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            reservedPurchaseId: FirestoreFieldValue.delete(),
+            reservationType: FirestoreFieldValue.delete(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           }),
         ]);
         throw error;
@@ -13131,7 +14284,7 @@ exports.createCarPurchasePaymentIntent = onCall(
 
 exports.completeCarPurchase = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -13179,7 +14332,7 @@ exports.completeCarPurchase = onCall(
       if (intent.status !== "succeeded") {
         await purchaseRef.update({
           paymentStatus: intent.status,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
         throw new HttpsError(
             "failed-precondition",
@@ -13203,7 +14356,7 @@ exports.completeCarPurchase = onCall(
               "This car is no longer available",
           );
         }
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
         transaction.update(purchaseRef, {
           paymentStatus: "succeeded",
           purchaseStatus: "completed",
@@ -13211,8 +14364,8 @@ exports.completeCarPurchase = onCall(
         });
         transaction.update(carRef, {
           status: "sold",
-          reservedPurchaseId: admin.firestore.FieldValue.delete(),
-          reservationType: admin.firestore.FieldValue.delete(),
+          reservedPurchaseId: FirestoreFieldValue.delete(),
+          reservationType: FirestoreFieldValue.delete(),
           soldPurchaseId: purchaseId,
           soldInfo: {
             customerName: purchase.buyerName,
@@ -13245,7 +14398,7 @@ exports.completeCarPurchase = onCall(
 
 exports.cancelPendingCarPurchase = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -13277,7 +14430,7 @@ exports.cancelPendingCarPurchase = onCall(
         if (intent.status === "succeeded" || intent.status === "processing") {
           await purchaseRef.update({
             paymentStatus: intent.status,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           });
           return {success: true, purchaseId};
         }
@@ -13286,7 +14439,7 @@ exports.cancelPendingCarPurchase = onCall(
       const carRef = db.collection("cars").doc(purchase.carId);
       await db.runTransaction(async (transaction) => {
         const carDoc = await transaction.get(carRef);
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
         transaction.update(purchaseRef, {
           paymentStatus: "cancelled",
           purchaseStatus: "cancelled",
@@ -13299,8 +14452,8 @@ exports.cancelPendingCarPurchase = onCall(
         ) {
           transaction.update(carRef, {
             status: "active",
-            reservedPurchaseId: admin.firestore.FieldValue.delete(),
-            reservationType: admin.firestore.FieldValue.delete(),
+            reservedPurchaseId: FirestoreFieldValue.delete(),
+            reservationType: FirestoreFieldValue.delete(),
             updatedAt: now,
           });
         }
@@ -13315,7 +14468,7 @@ exports.cancelPendingCarPurchase = onCall(
 
 exports.completeCarDepositReservation = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -13354,7 +14507,7 @@ exports.completeCarDepositReservation = onCall(
       if (intent.status !== "succeeded") {
         await purchaseRef.update({
           paymentStatus: intent.status,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
         throw new HttpsError(
             "failed-precondition",
@@ -13375,7 +14528,7 @@ exports.completeCarDepositReservation = onCall(
               "This car is no longer available",
           );
         }
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
         transaction.update(purchaseRef, {
           paymentStatus: "succeeded",
           purchaseStatus: "reserved",
@@ -13389,7 +14542,7 @@ exports.completeCarDepositReservation = onCall(
         });
         transaction.set(db.collection("users").doc(buyerUid), {
           "carBuyerReliability.paidHolds":
-            admin.firestore.FieldValue.increment(1),
+            FirestoreFieldValue.increment(1),
           "carBuyerReliability.updatedAt": now,
         }, {merge: true});
       });
@@ -13413,7 +14566,7 @@ exports.completeCarDepositReservation = onCall(
 
 exports.markPaidHoldSold = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -13447,7 +14600,7 @@ exports.markPaidHoldSold = onCall(
               "This car is already marked sold to another buyer.",
           );
         }
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
         transaction.update(purchaseRef, {
           purchaseStatus: "completed",
           depositForfeitureStatus: "completed",
@@ -13458,8 +14611,8 @@ exports.markPaidHoldSold = onCall(
         if (carDoc.exists) {
           transaction.update(carRef, {
             status: "sold",
-            reservedPurchaseId: admin.firestore.FieldValue.delete(),
-            reservationType: admin.firestore.FieldValue.delete(),
+            reservedPurchaseId: FirestoreFieldValue.delete(),
+            reservationType: FirestoreFieldValue.delete(),
             soldPurchaseId: purchaseId,
             soldInfo: {
               customerName: purchase.buyerName,
@@ -13474,7 +14627,7 @@ exports.markPaidHoldSold = onCall(
         }
         transaction.set(db.collection("users").doc(purchase.buyerUid), {
           "carBuyerReliability.completedHolds":
-            admin.firestore.FieldValue.increment(1),
+            FirestoreFieldValue.increment(1),
           "carBuyerReliability.lastCompletedHoldAt": now,
           "carBuyerReliability.updatedAt": now,
         }, {merge: true});
@@ -13485,7 +14638,7 @@ exports.markPaidHoldSold = onCall(
 
 exports.markPaidHoldNoShow = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -13508,7 +14661,7 @@ exports.markPaidHoldNoShow = onCall(
         assertHoldLapsed(purchase);
         const carRef = db.collection("cars").doc(purchase.carId);
         const carDoc = await transaction.get(carRef);
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
         transaction.update(purchaseRef, {
           purchaseStatus: "no_show",
           depositForfeitureStatus: "forfeited",
@@ -13524,16 +14677,16 @@ exports.markPaidHoldNoShow = onCall(
         ) {
           transaction.update(carRef, {
             status: "active",
-            reservedPurchaseId: admin.firestore.FieldValue.delete(),
-            reservationType: admin.firestore.FieldValue.delete(),
+            reservedPurchaseId: FirestoreFieldValue.delete(),
+            reservationType: FirestoreFieldValue.delete(),
             updatedAt: now,
           });
         }
         transaction.set(db.collection("users").doc(purchase.buyerUid), {
           "carBuyerReliability.noShows":
-            admin.firestore.FieldValue.increment(1),
+            FirestoreFieldValue.increment(1),
           "carBuyerReliability.forfeitures":
-            admin.firestore.FieldValue.increment(1),
+            FirestoreFieldValue.increment(1),
           "carBuyerReliability.lastNoShowAt": now,
           "carBuyerReliability.updatedAt": now,
         }, {merge: true});
@@ -13548,7 +14701,7 @@ exports.markPaidHoldNoShow = onCall(
 // notifies the platform instead of silently keeping the customer's money.
 exports.businessFinalizeCarPurchase = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -13581,7 +14734,7 @@ exports.businessFinalizeCarPurchase = onCall(
         const carRef = purchase.carId ?
           db.collection("cars").doc(purchase.carId) : null;
         const carDoc = carRef ? await transaction.get(carRef) : null;
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
         const isViewing = purchaseIsViewing(purchase);
         const trimmedNote = String(note || "").trim();
 
@@ -13608,8 +14761,8 @@ exports.businessFinalizeCarPurchase = onCall(
               transaction.update(carRef, {
                 status: "sold",
                 soldPurchaseId: purchaseId,
-                reservedPurchaseId: admin.firestore.FieldValue.delete(),
-                reservationType: admin.firestore.FieldValue.delete(),
+                reservedPurchaseId: FirestoreFieldValue.delete(),
+                reservationType: FirestoreFieldValue.delete(),
                 soldInfo: {
                   customerName: purchase.buyerName || "",
                   customerPhone: purchase.buyerPhone || "",
@@ -13625,8 +14778,8 @@ exports.businessFinalizeCarPurchase = onCall(
             } else {
               transaction.update(carRef, {
                 status: "active",
-                reservedPurchaseId: admin.firestore.FieldValue.delete(),
-                reservationType: admin.firestore.FieldValue.delete(),
+                reservedPurchaseId: FirestoreFieldValue.delete(),
+                reservationType: FirestoreFieldValue.delete(),
                 updatedAt: now,
               });
             }
@@ -13651,8 +14804,8 @@ exports.businessFinalizeCarPurchase = onCall(
         if (carDoc && carDoc.exists) {
           transaction.update(carRef, {
             status: "active",
-            reservedPurchaseId: admin.firestore.FieldValue.delete(),
-            reservationType: admin.firestore.FieldValue.delete(),
+            reservedPurchaseId: FirestoreFieldValue.delete(),
+            reservationType: FirestoreFieldValue.delete(),
             updatedAt: now,
           });
         }
@@ -13687,7 +14840,7 @@ exports.businessFinalizeCarPurchase = onCall(
 
 exports.requestPaidHoldExtension = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -13732,8 +14885,10 @@ exports.requestPaidHoldExtension = onCall(
         business: carBusiness.business,
         holdUntilDate: requestedHoldUntilDate,
       });
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
+      const extensionId = crypto.randomUUID();
       await purchaseRef.update({
+        extensionId,
         extensionRequestStatus: "pending",
         extensionRequestedHoldUntilDate:
           admin.firestore.Timestamp.fromDate(quote.holdDate),
@@ -13745,10 +14900,10 @@ exports.requestPaidHoldExtension = onCall(
         extensionHoldPricingMode: quote.holdPricingMode,
         extensionHoldRateAmount: quote.holdRateAmount,
         extensionRequestedAt: now,
-        extensionDecidedAt: admin.firestore.FieldValue.delete(),
-        extensionDecidedBy: admin.firestore.FieldValue.delete(),
-        extensionPaymentIntentId: admin.firestore.FieldValue.delete(),
-        extensionPaymentStatus: admin.firestore.FieldValue.delete(),
+        extensionDecidedAt: FirestoreFieldValue.delete(),
+        extensionDecidedBy: FirestoreFieldValue.delete(),
+        extensionPaymentIntentId: FirestoreFieldValue.delete(),
+        extensionPaymentStatus: FirestoreFieldValue.delete(),
         updatedAt: now,
       });
       return {success: true, purchaseId};
@@ -13757,7 +14912,7 @@ exports.requestPaidHoldExtension = onCall(
 
 exports.decidePaidHoldExtension = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -13782,7 +14937,7 @@ exports.decidePaidHoldExtension = onCall(
             "No pending extension request",
         );
       }
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       await purchaseRef.update({
         extensionRequestStatus: decision,
         extensionDecidedAt: now,
@@ -13795,7 +14950,7 @@ exports.decidePaidHoldExtension = onCall(
 
 exports.createPaidHoldExtensionPaymentIntent = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -13854,7 +15009,7 @@ exports.createPaidHoldExtensionPaymentIntent = onCall(
       });
 
       async function applyExtension(paymentIntentId, paymentStatus) {
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FirestoreFieldValue.serverTimestamp();
         await purchaseRef.update({
           holdUntilDate: purchase.extensionRequestedHoldUntilDate,
           holdExpiresAt: purchase.extensionRequestedHoldExpiresAt,
@@ -13888,6 +15043,7 @@ exports.createPaidHoldExtensionPaymentIntent = onCall(
         currency: DEPOSIT_CURRENCY,
         metadata: {
           purchaseId,
+          extensionId: purchase.extensionId,
           buyerUid,
           businessId: purchase.businessId || "",
           paymentType: "hold_extension",
@@ -13901,7 +15057,7 @@ exports.createPaidHoldExtensionPaymentIntent = onCall(
         extensionBusinessPayoutCents:
           extensionPayoutFields.businessPayoutCents,
         extensionPayoutStatus: extensionPayoutFields.payoutStatus,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
       return {purchaseId, clientSecret: paymentIntent.client_secret};
     },
@@ -13909,7 +15065,7 @@ exports.createPaidHoldExtensionPaymentIntent = onCall(
 
 exports.completePaidHoldExtensionPayment = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       secrets: [stripeSecretKey],
     },
@@ -13940,7 +15096,7 @@ exports.completePaidHoldExtensionPayment = onCall(
         if (intent.status !== "succeeded") {
           await purchaseRef.update({
             extensionPaymentStatus: intent.status,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
           });
           throw new HttpsError(
               "failed-precondition",
@@ -13949,7 +15105,7 @@ exports.completePaidHoldExtensionPayment = onCall(
         }
         sourceTransaction = stripeSourceTransactionFromIntent(intent);
       }
-      const now = admin.firestore.FieldValue.serverTimestamp();
+      const now = FirestoreFieldValue.serverTimestamp();
       await purchaseRef.update({
         holdUntilDate: purchase.extensionRequestedHoldUntilDate,
         holdExpiresAt: purchase.extensionRequestedHoldExpiresAt,
@@ -13989,47 +15145,58 @@ exports.expirePaidCarHolds = onSchedule(
     {
       schedule: "every 1 hours",
       timeZone: "America/New_York",
+      timeoutSeconds: 540,
     },
     async () => {
       const db = admin.firestore();
       const now = admin.firestore.Timestamp.now();
-      const expired = await db.collection("carPurchases")
-          .where("paymentType", "==", "reservation_deposit")
-          .where("purchaseStatus", "==", "reserved")
-          .where("holdExpiresAt", "<=", now)
-          .limit(100)
-          .get();
-
-      for (const purchaseDoc of expired.docs) {
-        await db.runTransaction(async (transaction) => {
-          const purchaseRef = purchaseDoc.ref;
-          const lockedPurchase = await transaction.get(purchaseRef);
-          if (!lockedPurchase.exists) return;
-          const purchase = lockedPurchase.data();
-          if (
-            purchase.purchaseStatus !== "reserved" ||
-            purchase.paymentType !== "reservation_deposit"
-          ) {
-            return;
-          }
-          const carRef = db.collection("cars").doc(purchase.carId);
-          const carDoc = await transaction.get(carRef);
-          const updateTime = admin.firestore.FieldValue.serverTimestamp();
-          transaction.update(purchaseRef, {
-            purchaseStatus: "hold_review_required",
-            depositForfeitureStatus: "review_pending",
-            holdReviewRequiredAt: updateTime,
-            updatedAt: updateTime,
+      const deadline = Date.now() + 8 * 60 * 1000;
+      let expiredCount = 0;
+      while (Date.now() < deadline) {
+        const expired = await db.collection("carPurchases")
+            .where("paymentType", "==", "reservation_deposit")
+            .where("purchaseStatus", "==", "reserved")
+            .where("holdExpiresAt", "<=", now)
+            .orderBy("holdExpiresAt")
+            .limit(100)
+            .get();
+        if (expired.empty) break;
+        for (const purchaseDoc of expired.docs) {
+          await db.runTransaction(async (transaction) => {
+            const purchaseRef = purchaseDoc.ref;
+            const lockedPurchase = await transaction.get(purchaseRef);
+            if (!lockedPurchase.exists) return;
+            const purchase = lockedPurchase.data();
+            if (
+              purchase.purchaseStatus !== "reserved" ||
+              purchase.paymentType !== "reservation_deposit"
+            ) {
+              return;
+            }
+            const carRef = db.collection("cars").doc(purchase.carId);
+            const carDoc = await transaction.get(carRef);
+            const updateTime = FirestoreFieldValue.serverTimestamp();
+            transaction.update(purchaseRef, {
+              purchaseStatus: "hold_review_required",
+              depositForfeitureStatus: "review_pending",
+              holdReviewRequiredAt: updateTime,
+              updatedAt: updateTime,
+            });
+            if (carDoc.exists &&
+                carDoc.data().status === "reserved" &&
+                carDoc.data().reservedPurchaseId === purchaseRef.id) {
+              transaction.update(carRef, {updatedAt: updateTime});
+            }
           });
-          if (carDoc.exists &&
-              carDoc.data().status === "reserved" &&
-              carDoc.data().reservedPurchaseId === purchaseRef.id) {
-            transaction.update(carRef, {updatedAt: updateTime});
-          }
-        });
+          expiredCount += 1;
+        }
+        if (expired.size < 100) break;
       }
 
-      logger.info("Expired paid car holds", {count: expired.size});
+      logger.info("Expired paid car holds", {
+        count: expiredCount,
+        deadlineReached: Date.now() >= deadline,
+      });
     },
 );
 
@@ -14382,7 +15549,7 @@ async function notifySupportParticipants({
 
 exports.createOrOpenSupportCase = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -14562,7 +15729,7 @@ exports.createOrOpenSupportCase = onCall(
 
 exports.createBusinessPlatformSupportCase = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -14714,7 +15881,7 @@ exports.createBusinessPlatformSupportCase = onCall(
 
 exports.sendSupportMessage = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -14804,7 +15971,7 @@ exports.sendSupportMessage = onCall(
 
 exports.uploadSupportAttachmentMetadata = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -14932,7 +16099,7 @@ exports.uploadSupportAttachmentMetadata = onCall(
 
 exports.markSupportCaseRead = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -14958,7 +16125,7 @@ exports.markSupportCaseRead = onCall(
 
 exports.setSupportTyping = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -14983,7 +16150,7 @@ exports.setSupportTyping = onCall(
 
 exports.escalateSupportCase = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -15046,7 +16213,7 @@ exports.escalateSupportCase = onCall(
 
 exports.assignSupportCase = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -15087,7 +16254,7 @@ exports.assignSupportCase = onCall(
 
 exports.requestSupportEvidence = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -15158,7 +16325,7 @@ exports.requestSupportEvidence = onCall(
 
 exports.resolveSupportCase = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -15215,7 +16382,7 @@ exports.resolveSupportCase = onCall(
 
 exports.reopenSupportCase = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -15266,7 +16433,7 @@ exports.reopenSupportCase = onCall(
 
 exports.addSupportInternalNote = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -15307,7 +16474,7 @@ exports.addSupportInternalNote = onCall(
 
 exports.editSupportMessage = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {
@@ -15346,7 +16513,7 @@ exports.editSupportMessage = onCall(
 
 exports.deleteSupportMessageForMe = onCall(
     {
-      enforceAppCheck: false,
+      enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
     async (request) => {

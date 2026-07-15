@@ -1,0 +1,302 @@
+#!/usr/bin/env node
+
+const admin = require("firebase-admin");
+
+if (!process.env.FIRESTORE_EMULATOR_HOST ||
+    !process.env.FIREBASE_AUTH_EMULATOR_HOST) {
+  throw new Error(
+      "Refusing to seed without Firestore and Auth emulator hosts",
+  );
+}
+
+const projectId = process.env.GCLOUD_PROJECT || "demo-laawol-e2e";
+admin.initializeApp({projectId});
+const db = admin.firestore();
+
+const accounts = [
+  {
+    uid: "e2e-customer",
+    email: "e2e.customer@laawol.test",
+    password: "E2eLocal123!",
+    displayName: "E2E Customer",
+  },
+  {
+    uid: "e2e-business-owner",
+    email: "e2e.business@laawol.test",
+    password: "E2eLocal123!",
+    displayName: "E2E Freight Owner",
+  },
+  {
+    uid: "e2e-platform-admin",
+    email: "e2e.admin@laawol.test",
+    password: "E2eLocal123!",
+    displayName: "E2E Platform Admin",
+  },
+];
+
+async function upsertAccount(account) {
+  try {
+    await admin.auth().getUser(account.uid);
+    await admin.auth().updateUser(account.uid, account);
+  } catch (error) {
+    if (error.code !== "auth/user-not-found") throw error;
+    await admin.auth().createUser({...account, emailVerified: true});
+  }
+}
+
+async function main() {
+  await Promise.all(accounts.map(upsertAccount));
+  const now = admin.firestore.Timestamp.now();
+  const later = admin.firestore.Timestamp.fromMillis(
+      Date.now() + 14 * 24 * 60 * 60 * 1000,
+  );
+  const businessId = "e2e-logistics";
+  const batch = db.batch();
+  const set = (path, data) => batch.set(db.doc(path), data, {merge: true});
+
+  set("users/e2e-customer", {
+    role: "customer",
+    fullName: "E2E Customer",
+    email: "e2e.customer@laawol.test",
+    language: "en",
+  });
+  set("users/e2e-business-owner", {
+    role: "businessOwner",
+    businessId,
+    fullName: "E2E Freight Owner",
+    email: "e2e.business@laawol.test",
+    businessPermissions: [
+      "overview", "destinations", "barrels", "freight", "transport",
+      "parking", "cars", "purchases", "earnings", "profile", "support",
+    ],
+  });
+  set("users/e2e-platform-admin", {
+    role: "admin",
+    platformAdmin: true,
+    fullName: "E2E Platform Admin",
+    email: "e2e.admin@laawol.test",
+  });
+  set(`businesses/${businessId}`, {
+    name: "E2E Atlantic Logistics",
+    status: "approved",
+    ownerUid: "e2e-business-owner",
+    phone: "+17185550120",
+    email: "e2e.business@laawol.test",
+    addressLine1: "100 Test Freight Avenue",
+    city: "Bronx",
+    state: "NY",
+    postalCode: "10451",
+    enabledServices: [
+      "barrelShipping", "sharedBarrels", "freight", "carSales",
+      "carParking", "carTransport",
+    ],
+    parkingCity: "Bronx",
+    parkingAddressLine1: "100 Test Freight Avenue",
+    parkingTotalSpaces: 8,
+    parkingBlockedSpaces: 0,
+    parkingDailyRate: 25,
+    parkingWeeklyRate: 140,
+    parkingMonthlyRate: 500,
+    parkingMinimumDays: 1,
+    parkingPickupAvailable: true,
+    parkingPickupFee: 40,
+    createdAt: now,
+    updatedAt: now,
+  });
+  set(`businesses/${businessId}/destinationCountries/gn`, {
+    countryId: "gn",
+    name: "Guinea",
+    code: "GN",
+    isActive: true,
+    barrelShippingPrice: 225,
+    freightAirPricePerKg: 12.5,
+    freightSeaPricePerKg: 5,
+    deliveryEstimateMinDays: 10,
+    deliveryEstimateMaxDays: 20,
+    updatedAt: now,
+  });
+  set("shipmentPricing/barrelPickup", {
+    officeAddress: "100 Test Freight Avenue, Bronx, NY 10451",
+    boroughPrices: {
+      Bronx: 40,
+      Manhattan: 64,
+      Queens: 84,
+      Brooklyn: 108,
+      "Staten Island": 148,
+    },
+    freightPlatformFeePct: 0.1,
+    barrelPlatformFeePct: 0.1,
+  });
+  set("shipmentPricing/serviceFees", {
+    parkingPlatformFeePct: 0.1,
+    carPurchasePlatformFeePct: 0.1,
+    carDepositPlatformFeePct: 0.1,
+  });
+  set("freightShipments/freight-e2e-balance", {
+    trackingCode: "FR-E2E-BALANCE",
+    senderName: "E2E Customer",
+    senderAddress: "100 Test Freight Avenue, Bronx, NY 10451",
+    receiverName: "Aissatou Diallo",
+    receiverPhone: "+224620000001",
+    destinationCountryId: "gn",
+    destinationCountryName: "Guinea",
+    businessId,
+    businessName: "E2E Atlantic Logistics",
+    mode: "air",
+    freightPricingVersion: 2,
+    settlementVersion: 1,
+    estimatedWeightKg: 10,
+    weightKg: 10,
+    pricePerKg: 12.5,
+    pricePerKgCents: 1250,
+    pickupFee: 0,
+    pickupFeeCents: 0,
+    estimatedShippingFee: 125,
+    estimatedShippingFeeCents: 12500,
+    estimatedTotal: 125,
+    estimatedTotalCents: 12500,
+    price: 125,
+    customerUid: "e2e-customer",
+    customerEmail: "e2e.customer@laawol.test",
+    cardChargeAmount: 125,
+    cardChargeAmountCents: 12500,
+    walletAppliedAmount: 0,
+    walletAppliedCents: 0,
+    stripePaymentIntentId: "simulated_freight_e2e_balance",
+    paymentStatus: "succeeded",
+    priceSettlementStatus: "awaiting_weight",
+    weightVerificationStatus: "awaiting_business",
+    payoutStatus: "awaiting_settlement",
+    platformFeePct: 0.1,
+    status: "awaiting_weight_confirmation",
+    paidAt: now,
+    createdAt: now,
+    updatedAt: now,
+  });
+  set("barrelShipments/barrel-e2e", {
+    trackingCode: "BR-E2E-001",
+    customerUid: "e2e-customer",
+    customerEmail: "e2e.customer@laawol.test",
+    senderName: "E2E Customer",
+    receiverName: "Mamadou Bah",
+    receiverPhone: "+224620000002",
+    destinationCountryId: "gn",
+    destinationCountryName: "Guinea",
+    businessId,
+    businessName: "E2E Atlantic Logistics",
+    price: 225,
+    paymentStatus: "succeeded",
+    status: "pending",
+    createdAt: now,
+    updatedAt: now,
+  });
+  set("barrelPools/pool-e2e", {
+    destinationCountryId: "gn",
+    destinationCountryName: "Guinea",
+    businessId,
+    businessName: "E2E Atlantic Logistics",
+    creatorUid: "e2e-business-owner",
+    status: "open",
+    totalShares: 4,
+    acceptedShares: 2,
+    requestedShares: 0,
+    takenShares: 2,
+    openShares: 2,
+    pricePerBarrel: 225,
+    joinDeadline: later,
+    createdAt: now,
+    updatedAt: now,
+  });
+  set("openBarrels/pool-e2e", {
+    poolId: "pool-e2e",
+    destinationCountryId: "gn",
+    destinationCountryName: "Guinea",
+    businessId,
+    businessName: "E2E Atlantic Logistics",
+    status: "open",
+    totalShares: 4,
+    acceptedShares: 2,
+    requestedShares: 0,
+    takenShares: 2,
+    openShares: 2,
+    pricePerBarrel: 225,
+    joinDeadline: later,
+    updatedAt: now,
+  });
+  set("transportRequests/transport-e2e", {
+    trackingCode: "TR-E2E-001",
+    customerUid: "e2e-customer",
+    ownerName: "E2E Customer",
+    carMake: "Toyota",
+    carModel: "Camry",
+    carYear: 2022,
+    destinationCountryId: "gn",
+    destinationCountryName: "Guinea",
+    businessId,
+    businessName: "E2E Atlantic Logistics",
+    status: "pending",
+    price: 0,
+    createdAt: now,
+    updatedAt: now,
+  });
+  set("parkedCars/parking-e2e", {
+    customerUid: "e2e-customer",
+    customerName: "E2E Customer",
+    businessId,
+    businessName: "E2E Atlantic Logistics",
+    vehicleTitle: "2021 Honda Accord",
+    paymentStatus: "succeeded",
+    parkingStatus: "reserved",
+    status: "reserved",
+    totalCost: 75,
+    totalCostCents: 7500,
+    createdAt: now,
+    updatedAt: now,
+  });
+  set("cars/car-e2e", {
+    businessId,
+    businessName: "E2E Atlantic Logistics",
+    title: "2020 Toyota RAV4 XLE",
+    make: "Toyota",
+    model: "RAV4",
+    year: 2020,
+    price: 22000,
+    mileage: 42000,
+    condition: "used",
+    bodyType: "suv",
+    transmission: "automatic",
+    fuelType: "gas",
+    drivetrain: "awd",
+    exteriorColor: "silver",
+    status: "available",
+    createdAt: now,
+    updatedAt: now,
+  });
+  set("carPurchases/purchase-e2e", {
+    buyerUid: "e2e-customer",
+    buyerName: "E2E Customer",
+    businessId,
+    businessName: "E2E Atlantic Logistics",
+    carId: "car-e2e",
+    carTitle: "2020 Toyota RAV4 XLE",
+    paymentStatus: "succeeded",
+    purchaseStatus: "reserved",
+    depositAmount: 500,
+    depositAmountCents: 50000,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  await batch.commit();
+  process.stdout.write(JSON.stringify({
+    projectId,
+    businessId,
+    accounts: accounts.map(({uid, email}) => ({uid, email})),
+    password: "E2eLocal123!",
+  }, null, 2) + "\n");
+}
+
+main().catch((error) => {
+  process.stderr.write(`${error.stack || error}\n`);
+  process.exitCode = 1;
+});

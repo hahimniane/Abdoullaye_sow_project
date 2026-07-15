@@ -100,8 +100,12 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   country/city fields should be selectable rather than free text.
 - Firestore rules tests for business-scoped collections should cover both point
   reads and query/list reads. Staff `businessPermissions` are section-scoped for
-  writes, and missing/empty/non-list permissions intentionally mean full staff
-  access under current rules.
+  writes, and missing, empty, or malformed permissions must fail closed. Use the
+  explicit-access migration dry run before enabling those rules on legacy data.
+- Callable emulator suites that exercise platform-admin behavior must start both
+  Auth and Firestore emulators and seed an `emailVerified: true` Auth user. The
+  support suite's canonical command is `npm run test:support`; do not bypass the
+  production admin email-verification lookup in tests.
 - Business dashboard listing queries must remain uncapped for `cars` while still
   scoped by `businessId`; if a business cannot see older posted cars, first
   check whether those legacy car documents are missing the matching
@@ -121,3 +125,20 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   after both success and failure.
 - For Flutter UI changes, run or report a hardcoded-string audit for touched
   files and verify `flutter gen-l10n` plus `flutter analyze` after ARB edits.
+- Every listed transacting service needs an acceptance contract spanning
+  configuration, customer discovery/booking, callable lifecycle, Firestore
+  rules, payment reconciliation, customer orders/tracking, operator
+  fulfillment, earnings, and English/French rendering. A callable accepting a
+  payment is not sufficient evidence that the service is operational.
+- Local iPhone E2E uses the Xcode beta toolchain explicitly:
+  `DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer`. Maestro also
+  needs Java 21 and should clear the simulator keychain before auth tests,
+  because Firebase credentials survive an app-data reset in the iOS Keychain.
+  With limited disk/RAM, run emulator suites sequentially and keep one seeded
+  project (`car-selling-flutter-app`) for the browser/iPhone acceptance pass.
+- The current iOS toolchain may require the `objective_c` package hook to derive
+  `DEVELOPER_DIR` from Xcode's compiler path. Treat that as a local cache
+  workaround, not a product fix; retest after Flutter or `objective_c` upgrades.
+- Rebuilt-title regressions must cover required boolean creation, invalid or
+  missing rule rejection, legacy-null display as Not provided, edit persistence,
+  buyer card/detail visibility, admin review/filtering, and English/French copy.

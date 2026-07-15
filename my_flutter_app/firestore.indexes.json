@@ -49,7 +49,107 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "parkedCars",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "paymentStatus", "order": "ASCENDING"},
+        {"fieldPath": "updatedAt", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "participants",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {"fieldPath": "paymentStatus", "order": "ASCENDING"},
+        {"fieldPath": "updatedAt", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "barrelPoolBalanceRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "paymentStatus", "order": "ASCENDING"},
+        {"fieldPath": "updatedAt", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "barrelShipments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "paymentStatus", "order": "ASCENDING"},
+        {"fieldPath": "updatedAt", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "barrelOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "paymentStatus", "order": "ASCENDING"},
+        {"fieldPath": "updatedAt", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "freightShipments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "paymentStatus", "order": "ASCENDING"},
+        {"fieldPath": "updatedAt", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "paymentAttempts",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {"fieldPath": "paymentStatus", "order": "ASCENDING"},
+        {"fieldPath": "updatedAt", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "carPurchases",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "paymentStatus", "order": "ASCENDING"},
+        {"fieldPath": "updatedAt", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "carPurchases",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "extensionPaymentStatus", "order": "ASCENDING"},
+        {"fieldPath": "updatedAt", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "carPurchases",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "paymentType", "order": "ASCENDING"},
+        {"fieldPath": "purchaseStatus", "order": "ASCENDING"},
+        {"fieldPath": "holdExpiresAt", "order": "ASCENDING"}
+      ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "callableRateLimits",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "stripeWebhookEvents",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "adminAuditLogs",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    }
+  ]
 }

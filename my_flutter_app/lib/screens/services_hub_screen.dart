@@ -26,6 +26,7 @@ class HomeTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColors.cream,
       body: SafeArea(
@@ -41,28 +42,28 @@ class HomeTab extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
               child: _BalanceCard(auth: auth),
             ),
-            const _SectionHeader('Quick actions'),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
+            _SectionHeader(l10n.hubQuickActions),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: _ServicesSection(
                 items: [
                   _HubItem(
-                    'Send a barrel',
-                    'Ship a full barrel home',
+                    l10n.hubSendBarrel,
+                    l10n.hubShipFullBarrel,
                     Icons.local_shipping_outlined,
                     AppColors.cobalt,
                     '/barrel',
                   ),
                   _HubItem(
-                    'Browse cars',
-                    'Buy a verified car',
+                    l10n.hubBrowseCars,
+                    l10n.hubBuyVerifiedCar,
                     Icons.directions_car_outlined,
                     AppColors.cobaltMid,
                     '/sell',
                   ),
                   _HubItem(
-                    'Track a shipment',
-                    'Follow your shipments',
+                    l10n.trackShipment,
+                    l10n.hubFollowShipments,
                     Icons.route_outlined,
                     AppColors.sage,
                     '/tracking',
@@ -83,34 +84,35 @@ class ShippingTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _CategoryTab(
-      title: 'Shipping',
-      subtitle: 'Send barrels, freight, and cars home.',
+    final l10n = AppLocalizations.of(context)!;
+    return _CategoryTab(
+      title: l10n.hubShipping,
+      subtitle: l10n.hubShippingSubtitle,
       items: [
         _HubItem(
-          'Send a barrel',
-          'Ship a full barrel home',
+          l10n.hubSendBarrel,
+          l10n.hubShipFullBarrel,
           Icons.local_shipping_outlined,
           AppColors.cobalt,
           '/barrel',
         ),
         _HubItem(
-          'Shared barrels',
-          'Post or join a barrel',
+          l10n.hubSharedBarrels,
+          l10n.hubSharedBarrelsSubtitle,
           Icons.group_add_outlined,
           AppColors.saffron,
           '/open-barrels',
         ),
         _HubItem(
-          'Freight',
-          'By weight · air or sea',
+          l10n.orderTypeFreight,
+          l10n.hubFreightSubtitle,
           Icons.inventory_2_outlined,
           AppColors.sage,
           '/send-freight',
         ),
         _HubItem(
-          'Transport a car',
-          'Ship a car home',
+          l10n.hubTransportCar,
+          l10n.hubShipCarHome,
           Icons.car_rental_outlined,
           AppColors.cobaltMid,
           '/request-transport',
@@ -126,20 +128,21 @@ class CarsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _CategoryTab(
-      title: 'Cars',
-      subtitle: 'Buy a verified car or store one with a business.',
+    final l10n = AppLocalizations.of(context)!;
+    return _CategoryTab(
+      title: l10n.cars,
+      subtitle: l10n.hubCarsSubtitle,
       items: [
         _HubItem(
-          'Browse cars',
-          'Buy a verified car',
+          l10n.hubBrowseCars,
+          l10n.hubBuyVerifiedCar,
           Icons.directions_car_outlined,
           AppColors.cobalt,
           '/sell',
         ),
         _HubItem(
-          'Park a car',
-          'Store with a business',
+          l10n.parkACar,
+          l10n.hubParkCarSubtitle,
           Icons.local_parking_outlined,
           AppColors.cobaltMid,
           '/park',
@@ -156,6 +159,7 @@ class ActivityTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColors.cream,
       body: SafeArea(
@@ -163,11 +167,11 @@ class ActivityTab extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 28),
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(22, 20, 22, 4),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 20, 22, 4),
               child: _CategoryHeader(
-                title: 'Activity',
-                subtitle: 'Your orders, shipments, and wallet.',
+                title: l10n.activity,
+                subtitle: l10n.hubActivitySubtitle,
               ),
             ),
             Padding(
@@ -175,27 +179,27 @@ class ActivityTab extends StatelessWidget {
               child: _BalanceCard(auth: auth),
             ),
             const SizedBox(height: 12),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: _ServicesSection(
                 items: [
                   _HubItem(
-                    'Track a shipment',
-                    'Follow your shipments',
+                    l10n.trackShipment,
+                    l10n.hubFollowShipments,
                     Icons.route_outlined,
                     AppColors.cobalt,
                     '/tracking',
                   ),
                   _HubItem(
-                    'My orders',
-                    'Cars, barrels, freight & more',
+                    l10n.myOrders,
+                    l10n.hubOrdersSubtitle,
                     Icons.receipt_long_outlined,
                     AppColors.cobaltMid,
                     '/orders',
                   ),
                   _HubItem(
-                    'Wallet',
-                    'Balance & refunds',
+                    l10n.walletTitle,
+                    l10n.hubWalletSubtitle,
                     Icons.account_balance_wallet_outlined,
                     AppColors.sage,
                     '/wallet',
@@ -307,7 +311,9 @@ class _GreetingHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final signedIn = auth.isAuthenticated;
-    final name = signedIn ? auth.buyerName : 'there';
+    final name = signedIn
+        ? auth.buyerName
+        : AppLocalizations.of(context)!.hubGuestName;
     final photo = auth.profileImageUrl;
     final initial = (name.isNotEmpty ? name[0] : '?').toUpperCase();
 

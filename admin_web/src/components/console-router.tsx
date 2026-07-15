@@ -23,7 +23,14 @@ const previewBusinessProfile: UserProfile = {
   email: "owner@atlanticexports.com",
   businessId: "atlantic_exports",
   businessName: "Atlantic Exports",
-  businessServices: ["barrelShipping", "sharedBarrels", "freight"],
+  businessServices: [
+    "barrelShipping",
+    "sharedBarrels",
+    "freight",
+    "carSales",
+    "carTransport",
+    "carParking",
+  ],
 };
 
 const previewBusiness: FirestoreRow = {
@@ -32,9 +39,16 @@ const previewBusiness: FirestoreRow = {
   phone: "+1 201 555 0120",
   email: "owner@atlanticexports.com",
   website: "https://atlanticexports.example.com",
-  serviceNote: "Barrel and parcel forwarding for West Africa.",
+  serviceNote: "Vehicle and shipping services for West Africa.",
   status: "changes_requested",
-  enabledServices: ["barrelShipping", "sharedBarrels", "freight"],
+  enabledServices: [
+    "barrelShipping",
+    "sharedBarrels",
+    "freight",
+    "carSales",
+    "carTransport",
+    "carParking",
+  ],
   stripeAccountId: "acct_atlantic_pending",
   chargesEnabled: false,
   payoutsEnabled: false,
@@ -61,6 +75,25 @@ const previewBusiness: FirestoreRow = {
     },
   },
 };
+
+const PROFILE_LOAD_TIMEOUT_MS = 15_000;
+
+async function loadProfile(uid: string) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      getDoc(doc(db, "users", uid)),
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error("profile-load-timeout")),
+          PROFILE_LOAD_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
 
 type PreviewStripeState = "none" | "pending" | "ready";
 
@@ -111,6 +144,7 @@ export function ConsoleRouter() {
   const [previewMode, setPreviewMode] = useState(false);
   const [previewConsole, setPreviewConsole] = useState<"admin" | "business">("admin");
   const [previewStripeState, setPreviewStripeState] = useState<PreviewStripeState>("none");
+  const [profileRetry, setProfileRetry] = useState(0);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -124,7 +158,9 @@ export function ConsoleRouter() {
       setBooting(false);
       return undefined;
     }
-    return onAuthStateChanged(auth, async (user) => {
+    let active = true;
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!active) return;
       setFirebaseUser(user);
       setProfile(null);
       setAuthError("");
@@ -132,20 +168,27 @@ export function ConsoleRouter() {
         setBooting(false);
         return;
       }
+      setBooting(true);
       try {
-        const snap = await getDoc(doc(db, "users", user.uid));
+        const snap = await loadProfile(user.uid);
+        if (!active) return;
         if (!snap.exists()) {
           setAuthError("Your account profile is missing. Contact Laawol support.");
           return;
         }
         setProfile({id: snap.id, ...snap.data()} as UserProfile);
-      } catch (error) {
-        setAuthError(error instanceof Error ? error.message : String(error));
+      } catch {
+        if (!active) return;
+        setAuthError("The connection is slow. We could not safely load your account role.");
       } finally {
-        setBooting(false);
+        if (active) setBooting(false);
       }
     });
-  }, []);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [profileRetry]);
 
   if (booting) {
     return (
@@ -173,6 +216,15 @@ export function ConsoleRouter() {
   }
 
   if (!firebaseUser || !profile) {
+    if (firebaseUser && authError) {
+      return (
+        <ConsoleLoadError
+          message={authError}
+          onRetry={() => setProfileRetry((value) => value + 1)}
+          onSignOut={() => signOut(auth)}
+        />
+      );
+    }
     return <RoleSignInCard authError={authError} />;
   }
 
@@ -193,6 +245,34 @@ export function ConsoleRouter() {
   return (
     <div className="app-shell">
       <RoleSignInCard authError="Cette console est réservée aux administrateurs de la plateforme, aux propriétaires d’entreprise et au personnel d’entreprise." />
+    </div>
+  );
+}
+
+function ConsoleLoadError({
+  message,
+  onRetry,
+  onSignOut,
+}: {
+  message: string;
+  onRetry: () => void;
+  onSignOut: () => void;
+}) {
+  return (
+    <div className="app-shell">
+      <div className="center-panel">
+        <h2>We could not open your console</h2>
+        <p>{message}</p>
+        <p>Retry without signing out or losing your session.</p>
+        <div className="button-row">
+          <button className="primary-button" type="button" onClick={onRetry}>
+            <RefreshCw size={16} /> Retry
+          </button>
+          <button className="secondary-button" type="button" onClick={onSignOut}>
+            Sign out
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

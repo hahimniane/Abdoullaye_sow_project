@@ -30,6 +30,7 @@ function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: options.cwd || ROOT,
     encoding: "utf8",
+    env: options.env || process.env,
     stdio: options.stdio || "inherit",
   });
   if (result.status !== 0) {
@@ -89,5 +90,10 @@ run("rsync", [...common, `${ADMIN_DIR}/`, `${dest}/admin/`]);
 
 console.log(`\nPublishing business console -> ${dest}/business/`);
 run("rsync", [...common, `${ADMIN_DIR}/`, `${dest}/business/`]);
+
+console.log("\nRunning read-only static smoke checks...");
+run("node", [path.join(__dirname, "post-deploy-smoke.mjs")], {
+  env: {...process.env, SMOKE_SCOPE: "static"},
+});
 
 console.log("\nStatic SSH deploy complete.");

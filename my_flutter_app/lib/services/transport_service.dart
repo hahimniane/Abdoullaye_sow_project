@@ -28,12 +28,7 @@ class TransportService {
           ),
         )
         .where(
-          (option) =>
-              option.isAvailable &&
-              hasBusinessService(
-                option.enabledServices,
-                BusinessServiceKey.carTransport,
-              ),
+          (option) => option.isAvailableFor(BusinessServiceKey.carTransport),
         )
         .toList();
   }

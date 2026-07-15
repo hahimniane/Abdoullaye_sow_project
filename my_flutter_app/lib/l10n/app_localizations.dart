@@ -1280,6 +1280,12 @@ abstract class AppLocalizations {
   /// **'Barrel Shipments'**
   String get filterBarrels;
 
+  /// No description provided for @filterFreight.
+  ///
+  /// In en, this message translates to:
+  /// **'Freight'**
+  String get filterFreight;
+
   /// No description provided for @filterTransport.
   ///
   /// In en, this message translates to:
@@ -1723,6 +1729,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Mileage'**
   String get carMileage;
+
+  /// No description provided for @rebuiltTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rebuilt title'**
+  String get rebuiltTitle;
+
+  /// No description provided for @rebuiltTitleQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Rebuilt title?'**
+  String get rebuiltTitleQuestion;
+
+  /// No description provided for @rebuiltTitleYes.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes — rebuilt title'**
+  String get rebuiltTitleYes;
+
+  /// No description provided for @rebuiltTitleNo.
+  ///
+  /// In en, this message translates to:
+  /// **'No — not a rebuilt title'**
+  String get rebuiltTitleNo;
+
+  /// No description provided for @rebuiltTitleUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Not provided'**
+  String get rebuiltTitleUnknown;
+
+  /// No description provided for @rebuiltTitleDisclosureHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Required. Buyers will see this disclosure.'**
+  String get rebuiltTitleDisclosureHelp;
 
   /// No description provided for @sellingPrice.
   ///
@@ -5744,6 +5786,12 @@ abstract class AppLocalizations {
   /// **'Freight booked. Tracking: {trackingCode}'**
   String freightBookedTracking(Object trackingCode);
 
+  /// No description provided for @freightEstimatePaidTracking.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimate paid. Tracking: {trackingCode}'**
+  String freightEstimatePaidTracking(Object trackingCode);
+
   /// No description provided for @fillSenderReceiverPhone.
   ///
   /// In en, this message translates to:
@@ -5767,6 +5815,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Parcel freight will appear here once a business sets its air or sea rates.'**
   String get noFreightBusinessesSubtitle;
+
+  /// No description provided for @couldNotLoadFreightOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load freight options. Check your connection and try again.'**
+  String get couldNotLoadFreightOptions;
+
+  /// No description provided for @freightBookingFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t create this freight shipment. Please try again.'**
+  String get freightBookingFailed;
+
+  /// No description provided for @approvedBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved business'**
+  String get approvedBusiness;
+
+  /// No description provided for @freightDeliveryEstimateDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery: {minimum}-{maximum} days'**
+  String freightDeliveryEstimateDays(int minimum, int maximum);
 
   /// No description provided for @searchBusinessOrCountry.
   ///
@@ -5804,6 +5876,12 @@ abstract class AppLocalizations {
   /// **'Shipping mode'**
   String get shippingMode;
 
+  /// No description provided for @invalidFreightMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose air or sea freight.'**
+  String get invalidFreightMode;
+
   /// No description provided for @parcelWeightKg.
   ///
   /// In en, this message translates to:
@@ -5815,6 +5893,120 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Estimated price'**
   String get estimatedPrice;
+
+  /// No description provided for @estimatedWeight.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated weight'**
+  String get estimatedWeight;
+
+  /// No description provided for @estimatedWeightKg.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated weight (kg)'**
+  String get estimatedWeightKg;
+
+  /// No description provided for @estimatedTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated total'**
+  String get estimatedTotal;
+
+  /// No description provided for @freightEstimateExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'You are paying an estimate based on the weight you entered. The business will confirm the weight after drop-off.'**
+  String get freightEstimateExplanation;
+
+  /// No description provided for @payEstimate.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay estimate'**
+  String get payEstimate;
+
+  /// No description provided for @estimatePaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimate paid'**
+  String get estimatePaid;
+
+  /// No description provided for @awaitingConfirmedWeight.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting confirmed weight'**
+  String get awaitingConfirmedWeight;
+
+  /// No description provided for @verifiedWeight.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed weight'**
+  String get verifiedWeight;
+
+  /// No description provided for @finalTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Final total'**
+  String get finalTotal;
+
+  /// No description provided for @additionalPaymentRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Additional payment required'**
+  String get additionalPaymentRequired;
+
+  /// No description provided for @payBalanceAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay balance of {amount}'**
+  String payBalanceAmount(Object amount);
+
+  /// No description provided for @refundDueAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Refund due: {amount}'**
+  String refundDueAmount(Object amount);
+
+  /// No description provided for @refundProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'Refund processing'**
+  String get refundProcessing;
+
+  /// No description provided for @refundCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Refund completed'**
+  String get refundCompleted;
+
+  /// No description provided for @freightSettled.
+  ///
+  /// In en, this message translates to:
+  /// **'Settled'**
+  String get freightSettled;
+
+  /// No description provided for @shipmentHeldForBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Your parcel will be held until the balance is paid.'**
+  String get shipmentHeldForBalance;
+
+  /// No description provided for @settlementNeedsAttention.
+  ///
+  /// In en, this message translates to:
+  /// **'Settlement needs attention'**
+  String get settlementNeedsAttention;
+
+  /// No description provided for @paymentProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment processing…'**
+  String get paymentProcessing;
+
+  /// No description provided for @couldNotPayBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not pay the balance. Try again.'**
+  String get couldNotPayBalance;
 
   /// No description provided for @enterWeightToSeePrice.
   ///
@@ -5833,6 +6025,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Drop your parcel at the business location. Pickup coming soon.'**
   String get freightDropOffNote;
+
+  /// No description provided for @freightDropOffAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop-off: {address}'**
+  String freightDropOffAddress(Object address);
+
+  /// No description provided for @freightBusinessPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Business phone: {phone}'**
+  String freightBusinessPhone(Object phone);
 
   /// No description provided for @airFreight.
   ///
@@ -5998,6 +6202,39 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Use this only if the receiver uses a different country number on WhatsApp.'**
   String get receiverWhatsAppNumberSubtitle;
+
+  /// No description provided for @invalidPhoneWithCountryCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid phone number with country code.'**
+  String get invalidPhoneWithCountryCode;
+
+  /// No description provided for @invalidInternationalPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid international phone number.'**
+  String get invalidInternationalPhone;
+
+  /// No description provided for @whatsAppDifferentCountryRequiresCode.
+  ///
+  /// In en, this message translates to:
+  /// **'For WhatsApp numbers from another country, include + and the country code.'**
+  String get whatsAppDifferentCountryRequiresCode;
+
+  /// No description provided for @receiverPhoneMustMatchDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Receiver number must match {destinationName} ({prefix}) or mark it as a WhatsApp number.'**
+  String receiverPhoneMustMatchDestination(
+    Object destinationName,
+    Object prefix,
+  );
+
+  /// No description provided for @readyForPickup.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready for pickup'**
+  String get readyForPickup;
 
   /// No description provided for @samePickup.
   ///
@@ -6191,6 +6428,36 @@ abstract class AppLocalizations {
   /// **'Motorcars, barrels & passage in one place.'**
   String get splashTagline;
 
+  /// No description provided for @splashMarketplace.
+  ///
+  /// In en, this message translates to:
+  /// **'MARKETPLACE'**
+  String get splashMarketplace;
+
+  /// No description provided for @splashOpening.
+  ///
+  /// In en, this message translates to:
+  /// **'OPENING LAAWOL'**
+  String get splashOpening;
+
+  /// No description provided for @accountProfileUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The connection is slow. We could not safely load your account role.'**
+  String get accountProfileUnavailable;
+
+  /// No description provided for @accountProfileMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account profile is missing. Contact Laawol support.'**
+  String get accountProfileMissing;
+
+  /// No description provided for @accountProfileRetryHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry without signing out or losing your session.'**
+  String get accountProfileRetryHelp;
+
   /// No description provided for @addMoney.
   ///
   /// In en, this message translates to:
@@ -6316,6 +6583,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Apply once, prepare your operations, then go live when approved.'**
   String get businessApplicationSubtitle;
+
+  /// No description provided for @businessOperations.
+  ///
+  /// In en, this message translates to:
+  /// **'Business operations'**
+  String get businessOperations;
+
+  /// No description provided for @businessOperationsWebNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage freight, barrels, transport, parking, destinations, staff, and payouts in the secure business console. This avoids entering a customer booking or payment flow by mistake.'**
+  String get businessOperationsWebNote;
+
+  /// No description provided for @businessCarsMobileNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle listings and purchases are also available in the mobile tabs below.'**
+  String get businessCarsMobileNote;
+
+  /// No description provided for @openBusinessConsole.
+  ///
+  /// In en, this message translates to:
+  /// **'Open business console'**
+  String get openBusinessConsole;
+
+  /// No description provided for @openingBusinessConsole.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening business console...'**
+  String get openingBusinessConsole;
+
+  /// No description provided for @businessConsoleOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the business console. Visit business.laawoldigital.com in your browser.'**
+  String get businessConsoleOpenFailed;
+
+  /// No description provided for @businessChangesRequestedBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'A platform admin requested changes. You can keep editing your setup while the business stays hidden from customers.'**
+  String get businessChangesRequestedBanner;
+
+  /// No description provided for @businessPendingApprovalBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Your business is pending platform approval. You can set up destinations, cars, and staff now; customers will see it after approval.'**
+  String get businessPendingApprovalBanner;
 
   /// No description provided for @totalDaysLabel.
   ///
@@ -7652,6 +7967,120 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No pickup'**
   String get parkingReviewPickupNo;
+
+  /// No description provided for @hubGuestName.
+  ///
+  /// In en, this message translates to:
+  /// **'there'**
+  String get hubGuestName;
+
+  /// No description provided for @hubQuickActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick actions'**
+  String get hubQuickActions;
+
+  /// No description provided for @hubSendBarrel.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a barrel'**
+  String get hubSendBarrel;
+
+  /// No description provided for @hubShipFullBarrel.
+  ///
+  /// In en, this message translates to:
+  /// **'Ship a full barrel home'**
+  String get hubShipFullBarrel;
+
+  /// No description provided for @hubBrowseCars.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse cars'**
+  String get hubBrowseCars;
+
+  /// No description provided for @hubBuyVerifiedCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Buy a verified car'**
+  String get hubBuyVerifiedCar;
+
+  /// No description provided for @hubFollowShipments.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow your shipments'**
+  String get hubFollowShipments;
+
+  /// No description provided for @hubShipping.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipping'**
+  String get hubShipping;
+
+  /// No description provided for @hubShippingSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send barrels, freight, and cars home.'**
+  String get hubShippingSubtitle;
+
+  /// No description provided for @hubSharedBarrels.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared barrels'**
+  String get hubSharedBarrels;
+
+  /// No description provided for @hubSharedBarrelsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Post or join a barrel'**
+  String get hubSharedBarrelsSubtitle;
+
+  /// No description provided for @hubFreightSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'By weight · air or sea'**
+  String get hubFreightSubtitle;
+
+  /// No description provided for @hubTransportCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport a car'**
+  String get hubTransportCar;
+
+  /// No description provided for @hubShipCarHome.
+  ///
+  /// In en, this message translates to:
+  /// **'Ship a car home'**
+  String get hubShipCarHome;
+
+  /// No description provided for @hubCarsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Buy a verified car or store one with a business.'**
+  String get hubCarsSubtitle;
+
+  /// No description provided for @hubParkCarSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Store with a business'**
+  String get hubParkCarSubtitle;
+
+  /// No description provided for @hubActivitySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your orders, shipments, and wallet.'**
+  String get hubActivitySubtitle;
+
+  /// No description provided for @hubOrdersSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cars, barrels, freight & more'**
+  String get hubOrdersSubtitle;
+
+  /// No description provided for @hubWalletSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance & refunds'**
+  String get hubWalletSubtitle;
 }
 
 class _AppLocalizationsDelegate

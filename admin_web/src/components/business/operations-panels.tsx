@@ -48,6 +48,7 @@ import {
   withSelectedDestinationCountry,
 } from "@/lib/destination-countries";
 import { confirmImportantAction } from "@/lib/action-confirmation";
+import { destinationRateError } from "@/lib/destination-pricing";
 import { currentLanguage, formatDate, formatMoney, text } from "@/lib/format";
 import { US_STATE_OPTIONS, citiesForState, withSelected } from "@/lib/us-locations";
 import type { FirestoreRow } from "@/types/admin";
@@ -65,6 +66,8 @@ type PanelProps = {
 type DestinationDraft = {
   countryId: string;
   price: string;
+  freightAirPrice: string;
+  freightSeaPrice: string;
   minDays: string;
   maxDays: string;
   note: string;
@@ -81,6 +84,7 @@ type ListingDraft = {
   mileage: string;
   status: string;
   condition: string;
+  isRebuiltTitle: boolean | null;
   bodyType: string;
   transmission: string;
   fuelType: string;
@@ -286,6 +290,8 @@ const parkingStatuses = ["active", "completed", "cancelled"];
 const emptyDestinationDraft: DestinationDraft = {
   countryId: countries[0].id,
   price: "",
+  freightAirPrice: "",
+  freightSeaPrice: "",
   minDays: "",
   maxDays: "",
   note: "",
@@ -302,6 +308,7 @@ const emptyListingDraft: ListingDraft = {
   mileage: "",
   status: "draft",
   condition: "",
+  isRebuiltTitle: null,
   bodyType: "",
   transmission: "",
   fuelType: "",
@@ -387,7 +394,7 @@ function defaultPoolRolloverDraft(row?: FirestoreRow | null): PoolRolloverDraft 
   };
 }
 
-export function DestinationsPanel({ businessId, openNewToken = 0 }: PanelProps) {
+export function DestinationsPanel({ businessId, enabledServices = [], openNewToken = 0 }: PanelProps) {
   const destinations = useBusinessSubcollectionRows(
     "destinationCountries",
     businessId,
@@ -410,7 +417,7 @@ export function DestinationsPanel({ businessId, openNewToken = 0 }: PanelProps) 
     [destinations.rows],
   );
   const filteredRows = useMemo(
-    () => filterRows(rows, search, ["name", "destinationCountryName", "code", "countryCode", "barrelShippingPrice"]),
+    () => filterRows(rows, search, ["name", "destinationCountryName", "code", "countryCode", "barrelShippingPrice", "freightAirPricePerKg", "freightSeaPricePerKg"]),
     [rows, search],
   );
   const activeCount = rows.filter((row) => row.isActive !== false).length;
@@ -447,6 +454,8 @@ export function DestinationsPanel({ businessId, openNewToken = 0 }: PanelProps) 
     setDraft({
       countryId: row.id,
       price: numberString(row.barrelShippingPrice),
+      freightAirPrice: numberString(row.freightAirPricePerKg),
+      freightSeaPrice: numberString(row.freightSeaPricePerKg),
       minDays: numberString(row.deliveryEstimateMinDays),
       maxDays: numberString(row.deliveryEstimateMaxDays),
       note: text(row.destinationNote, ""),
@@ -473,11 +482,16 @@ export function DestinationsPanel({ businessId, openNewToken = 0 }: PanelProps) 
       destinationCountryOptionForRow(editingRow ?? { id: draft.countryId });
     if (!country) throw new Error("Select a supported country.");
     const price = Number(draft.price);
+    const freightAirPrice = Number(draft.freightAirPrice || 0);
+    const freightSeaPrice = Number(draft.freightSeaPrice || 0);
     const minDays = Number(draft.minDays);
     const maxDays = Number(draft.maxDays);
-    if (!Number.isFinite(price) || price <= 0) {
-      throw new Error("Enter a barrel shipping price greater than zero.");
-    }
+    const rateError = destinationRateError(enabledServices, {
+      barrelShippingPrice: Number.isFinite(price) ? price : 0,
+      freightAirPricePerKg: Number.isFinite(freightAirPrice) ? freightAirPrice : 0,
+      freightSeaPricePerKg: Number.isFinite(freightSeaPrice) ? freightSeaPrice : 0,
+    });
+    if (rateError) throw new Error(rateError);
     if (!Number.isInteger(minDays) || !Number.isInteger(maxDays) || minDays <= 0 || maxDays < minDays) {
       throw new Error("Enter a valid min/max delivery day range.");
     }
@@ -490,7 +504,9 @@ export function DestinationsPanel({ businessId, openNewToken = 0 }: PanelProps) 
         destinationCountryName: country.name,
         countryCode: country.code,
         code: country.code,
-        barrelShippingPrice: price,
+        barrelShippingPrice: Number.isFinite(price) && price > 0 ? price : 0,
+        freightAirPricePerKg: Number.isFinite(freightAirPrice) && freightAirPrice > 0 ? freightAirPrice : 0,
+        freightSeaPricePerKg: Number.isFinite(freightSeaPrice) && freightSeaPrice > 0 ? freightSeaPrice : 0,
         deliveryEstimateMinDays: minDays,
         deliveryEstimateMaxDays: maxDays,
         destinationNote: draft.note.trim(),
@@ -506,9 +522,12 @@ export function DestinationsPanel({ businessId, openNewToken = 0 }: PanelProps) 
   }
 
   async function setActive(row: FirestoreRow, isActive: boolean) {
-    if (isActive && !(Number(row.barrelShippingPrice) > 0)) {
-      throw new Error("Add a shipping price greater than zero before activating.");
-    }
+    const rateError = destinationRateError(enabledServices, {
+      barrelShippingPrice: Number(row.barrelShippingPrice ?? 0),
+      freightAirPricePerKg: Number(row.freightAirPricePerKg ?? 0),
+      freightSeaPricePerKg: Number(row.freightSeaPricePerKg ?? 0),
+    });
+    if (isActive && rateError) throw new Error(rateError);
     await setDoc(
       doc(db, "businesses", businessId, "destinationCountries", row.id),
       { businessId, isActive, updatedAt: serverTimestamp() },
@@ -521,7 +540,7 @@ export function DestinationsPanel({ businessId, openNewToken = 0 }: PanelProps) 
       <header className="lst-head">
         <div className="lst-head-text">
           <h2>Shipping destinations</h2>
-          <p>{rows.length === 0 ? "Set a price per country so customers can ship barrels there." : `${rows.length} destination${rows.length === 1 ? "" : "s"} · ${activeCount} active`}</p>
+          <p>{rows.length === 0 ? "Set barrel and freight prices for each country you serve." : `${rows.length} destination${rows.length === 1 ? "" : "s"} · ${activeCount} active`}</p>
         </div>
         <div className="lst-head-actions">
           <StatusText busy={busy} message={message} />
@@ -537,7 +556,7 @@ export function DestinationsPanel({ businessId, openNewToken = 0 }: PanelProps) 
         <div className="lst-search">
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search destinations…" />
         </div>
-        <button className="lst-btn ghost" type="button" disabled={filteredRows.length === 0} onClick={() => downloadCsv("destinations.csv", filteredRows, ["name", "code", "barrelShippingPrice", "deliveryEstimateMinDays", "deliveryEstimateMaxDays", "isActive", "updatedAt"])}>
+        <button className="lst-btn ghost" type="button" disabled={filteredRows.length === 0} onClick={() => downloadCsv("destinations.csv", filteredRows, ["name", "code", "barrelShippingPrice", "freightAirPricePerKg", "freightSeaPricePerKg", "deliveryEstimateMinDays", "deliveryEstimateMaxDays", "isActive", "updatedAt"])}>
           <Download size={15} /> Export CSV
         </button>
       </div>
@@ -547,7 +566,7 @@ export function DestinationsPanel({ businessId, openNewToken = 0 }: PanelProps) 
         <div className="lst-empty">
           <div className="lst-empty-icon"><MapPinned size={30} /></div>
           <h3>No destinations yet</h3>
-          <p>Add the countries you ship barrels to and set a price for each.</p>
+          <p>Add the countries you ship to and set barrel or freight prices.</p>
           <button className="lst-add" type="button" onClick={openNew}><Plus size={17} /> Add your first destination</button>
         </div>
       )}
@@ -569,7 +588,8 @@ export function DestinationsPanel({ businessId, openNewToken = 0 }: PanelProps) 
                 </div>
                 <span className={`lst-badge ${active ? "ok" : "muted"}`}>{active ? "Active" : "Inactive"}</span>
               </div>
-              <div className="dst-price">{formatMoney(row.barrelShippingPrice)} <small>/ barrel</small></div>
+              {enabledServices.includes("barrelShipping") && <div className="dst-price">{formatMoney(row.barrelShippingPrice)} <small>/ barrel</small></div>}
+              {enabledServices.includes("freight") && <div className="dst-note">Air freight: {formatMoney(row.freightAirPricePerKg)} / kg · Sea freight: {formatMoney(row.freightSeaPricePerKg)} / kg</div>}
               {Boolean(text(row.destinationNote, "")) && <div className="dst-note">{text(row.destinationNote, "")}</div>}
               <div className="dst-foot">
                 <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => editDestination(row)}><Pencil size={14} /> Edit</button>
@@ -600,9 +620,15 @@ export function DestinationsPanel({ businessId, openNewToken = 0 }: PanelProps) 
                     ))}
                   </select>
                 </label>
-                <label className="lst-field"><span>Price per barrel (USD)</span>
+                {enabledServices.includes("barrelShipping") && <label className="lst-field"><span>Price per barrel (USD)</span>
                   <input inputMode="decimal" value={draft.price} onChange={(event) => setDraft((value) => ({ ...value, price: event.target.value }))} placeholder="250" />
-                </label>
+                </label>}
+                {enabledServices.includes("freight") && <label className="lst-field"><span>Air freight per kg (USD)</span>
+                  <input inputMode="decimal" value={draft.freightAirPrice} onChange={(event) => setDraft((value) => ({ ...value, freightAirPrice: event.target.value }))} placeholder="8" />
+                </label>}
+                {enabledServices.includes("freight") && <label className="lst-field"><span>Sea freight per kg (USD)</span>
+                  <input inputMode="decimal" value={draft.freightSeaPrice} onChange={(event) => setDraft((value) => ({ ...value, freightSeaPrice: event.target.value }))} placeholder="4" />
+                </label>}
                 <label className="lst-field"><span>&nbsp;</span>
                   <label className="lst-check" style={{ padding: "10px 0 0" }}>
                     <input type="checkbox" checked={draft.isActive} onChange={(event) => setDraft((value) => ({ ...value, isActive: event.target.checked }))} />
@@ -735,6 +761,7 @@ export function ListingsPanel({
       mileage: text(row.mileage, ""),
       status: text(row.status, "draft"),
       condition: text(row.condition, ""),
+      isRebuiltTitle: typeof row.isRebuiltTitle === "boolean" ? row.isRebuiltTitle : null,
       bodyType: text(row.bodyType, ""),
       transmission: text(row.transmission, ""),
       fuelType: text(row.fuelType, ""),
@@ -773,6 +800,9 @@ export function ListingsPanel({
     if (!Number.isFinite(price) || price < 0) {
       throw new Error("Enter a valid price.");
     }
+    if (draft.isRebuiltTitle === null) {
+      throw new Error("Select whether this vehicle has a rebuilt title.");
+    }
 
     if (images.length === 0) {
       throw new Error("Add at least one photo.");
@@ -810,6 +840,7 @@ export function ListingsPanel({
         mileage: draft.mileage.trim(),
         status: draft.status,
         condition: draft.condition,
+        isRebuiltTitle: draft.isRebuiltTitle,
         bodyType: draft.bodyType,
         transmission: draft.transmission,
         fuelType: draft.fuelType,
@@ -907,7 +938,7 @@ export function ListingsPanel({
             </button>
           </div>
         )}
-        <button className="lst-btn ghost" type="button" disabled={filteredRows.length === 0} onClick={() => downloadCsv("listings.csv", filteredRows, ["title", "make", "model", "year", "price", "status", "locationCity", "locationState", "updatedAt"])}>
+        <button className="lst-btn ghost" type="button" disabled={filteredRows.length === 0} onClick={() => downloadCsv("listings.csv", filteredRows, ["title", "make", "model", "year", "price", "status", "isRebuiltTitle", "locationCity", "locationState", "updatedAt"])}>
           <Download size={15} /> Export CSV
         </button>
       </div>
@@ -930,6 +961,7 @@ export function ListingsPanel({
           const image = firstImageUrl(row);
           const status = text(row.status, "draft");
           const selected = selectedIds.includes(row.id);
+          const rebuiltTitle = typeof row.isRebuiltTitle === "boolean" ? row.isRebuiltTitle : null;
           return (
             <article className={`lst-card ${selected ? "selected" : ""}`} key={row.id}>
               <div className="lst-card-media">
@@ -953,6 +985,9 @@ export function ListingsPanel({
                 <div className="lst-card-price">{formatMoney(row.price)}</div>
                 <div className="lst-card-meta">
                   {[text(row.mileage, "") ? `${text(row.mileage, "")} mi` : "", listingLocation(row), formatDate(row.updatedAt ?? row.createdAt)].filter(Boolean).join(" · ")}
+                </div>
+                <div className="lst-card-meta">
+                  <strong>Rebuilt title:</strong> {rebuiltTitle === null ? "Not provided" : rebuiltTitle ? "Yes" : "No"}
                 </div>
               </div>
               <div className="lst-card-foot">
@@ -998,6 +1033,21 @@ export function ListingsPanel({
                     <option value="">Select condition</option>
                     {conditionOptions.map((option) => (<option key={option} value={option}>{optionLabel(option)}</option>))}
                   </select>
+                </label>
+                <label className="lst-field"><span>Rebuilt title?</span>
+                  <select
+                    required
+                    value={draft.isRebuiltTitle === null ? "" : String(draft.isRebuiltTitle)}
+                    onChange={(event) => setDraft((value) => ({
+                      ...value,
+                      isRebuiltTitle: event.target.value === "" ? null : event.target.value === "true",
+                    }))}
+                  >
+                    <option value="">Not provided</option>
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                  <small>Required. Buyers will see this disclosure.</small>
                 </label>
                 <label className="lst-field"><span>Body type</span>
                   <select value={draft.bodyType} onChange={(event) => setDraft((value) => ({ ...value, bodyType: event.target.value }))}>
@@ -1434,7 +1484,11 @@ export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
       <header className="lst-head">
         <div className="lst-head-text">
           <h2>Barrel shipments</h2>
-          <p>{shipments.rows.length === 0 ? "Barrels customers send through your business appear here." : `${shipments.rows.length} shipment${shipments.rows.length === 1 ? "" : "s"}`}</p>
+          <p>{shipments.rows.length === 0
+            ? "Barrels customers send through your business appear here."
+            : currentLanguage() === "fr"
+              ? `${shipments.rows.length} expédition${shipments.rows.length === 1 ? "" : "s"}`
+              : `${shipments.rows.length} shipment${shipments.rows.length === 1 ? "" : "s"}`}</p>
         </div>
         <div className="lst-head-actions"><StatusText busy={Boolean(busyId)} message={message} /></div>
       </header>
@@ -1461,7 +1515,11 @@ export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
         <div className="lst-subhead">
           <div>
             <h3>Shared barrel pools</h3>
-            <p>{pools.rows.length === 0 ? "Open pooled barrels, approve joiners, and seal full barrels into tracked shipments." : `${pools.rows.length} pool${pools.rows.length === 1 ? "" : "s"}`}</p>
+            <p>{pools.rows.length === 0
+              ? "Open pooled barrels, approve joiners, and seal full barrels into tracked shipments."
+              : currentLanguage() === "fr"
+                ? `${pools.rows.length} baril partagé${pools.rows.length === 1 ? "" : "s"}`
+                : `${pools.rows.length} pool${pools.rows.length === 1 ? "" : "s"}`}</p>
           </div>
           <div className="pool-head-actions">
             <button className="lst-add" type="button" disabled={activeDestinations.length === 0 || Boolean(busyId)} onClick={openPoolForm}>
@@ -1957,6 +2015,148 @@ export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
                     {barrelStatuses.map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}
                   </select>
                 </label>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+export function FreightPanel({ businessId }: PanelProps) {
+  const freight = useBusinessRows("freightShipments", businessId, Boolean(businessId), 500);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [message, setMessage] = useState("");
+  const [busyId, setBusyId] = useState("");
+  const [weightDrafts, setWeightDrafts] = useState<Record<string, string>>({});
+
+  const searched = useMemo(
+    () => filterRows(freight.rows, search, ["trackingCode", "senderName", "receiverName", "receiverPhone", "destinationCountryName", "freightMode", "status", "paymentStatus"]),
+    [freight.rows, search],
+  );
+  const filteredRows = useMemo(
+    () => (filter === "all" ? searched : searched.filter((row) => text(row.status, "") === filter)),
+    [filter, searched],
+  );
+
+  async function updateStatus(row: FirestoreRow, status: string) {
+    const versionTwo = Number(row.freightPricingVersion ?? 0) >= 2;
+    const settlementReady = !versionTwo || text(row.priceSettlementStatus, "") === "settled";
+    if (["in_transit", "ready_for_pickup", "completed"].includes(status) && !settlementReady) {
+      setMessage("Fulfillment is locked until the verified weight is settled.");
+      return;
+    }
+    if (["completed", "cancelled"].includes(status) && !confirmImportantAction(
+      `Change this freight shipment to ${statusLabel(status)}?`,
+      `Passer cette expédition de fret au statut ${statusLabel(status)} ?`,
+    )) return;
+    setBusyId(row.id);
+    setMessage("");
+    try {
+      await setDoc(
+        doc(db, "freightShipments", row.id),
+        { businessId, status, statusUpdatedAt: serverTimestamp(), updatedAt: serverTimestamp() },
+        { merge: true },
+      );
+      setMessage("Freight shipment updated.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Update failed.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function confirmWeight(row: FirestoreRow) {
+    const verifiedWeightKg = Number(weightDrafts[row.id] ?? "");
+    if (!Number.isFinite(verifiedWeightKg) || verifiedWeightKg <= 0) {
+      setMessage("Enter a verified weight greater than zero.");
+      return;
+    }
+    const rate = Number(row.pricePerKg ?? row.ratePerKg ?? 0);
+    const pickup = Number(row.pickupFee ?? 0);
+    const finalTotal = verifiedWeightKg * rate + pickup;
+    const estimatedTotal = Number(row.estimatedTotal ?? row.price ?? 0);
+    const difference = finalTotal - estimatedTotal;
+    const adjustment = Math.abs(difference) < 0.005
+      ? "No price change"
+      : difference > 0
+        ? `Customer owes ${formatMoney(difference)}`
+        : `Refund customer ${formatMoney(-difference)}`;
+    if (!confirmImportantAction(
+      `Confirm ${verifiedWeightKg.toLocaleString()} kg as the final weight? ${adjustment}. Financial adjustments may begin immediately.`,
+      `Confirmer ${verifiedWeightKg.toLocaleString()} kg comme poids final ? ${difference > 0 ? `Le client doit payer ${formatMoney(difference)}` : difference < 0 ? `Rembourser ${formatMoney(-difference)} au client` : "Aucun changement de prix"}. Les ajustements financiers peuvent commencer immédiatement.`,
+    )) return;
+    setBusyId(row.id);
+    setMessage("");
+    try {
+      await httpsCallable(functions, "confirmFreightShipmentWeight")({
+        shipmentId: row.id,
+        verifiedWeightKg,
+      });
+      setMessage("Verified weight and final price saved.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not confirm the weight. Try again.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  return (
+    <section className="lst">
+      <header className="lst-head">
+        <div className="lst-head-text">
+          <h2>Freight shipments</h2>
+          <p>{freight.rows.length === 0
+            ? "Paid parcel shipments will appear here for fulfillment."
+            : currentLanguage() === "fr"
+              ? `${freight.rows.length} expédition${freight.rows.length === 1 ? "" : "s"}`
+              : `${freight.rows.length} shipment${freight.rows.length === 1 ? "" : "s"}`}</p>
+        </div>
+        <StatusText busy={Boolean(busyId)} message={message} />
+      </header>
+      {freight.error && <div className="error-box">{freight.error}</div>}
+      <div className="lst-toolbar">
+        <div className="lst-search"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search freight tracking, sender, receiver…" /></div>
+        <select className="lst-status-select" style={{ flex: "0 0 auto", minWidth: 150 }} value={filter} onChange={(event) => setFilter(event.target.value)}>
+          <option value="all">All statuses</option>
+          {["pending_payment", "awaiting_weight_confirmation", "awaiting_balance_payment", "settlement_processing", "pending", "in_transit", "ready_for_pickup", "completed", "cancelled"].map((status) => (<option key={status} value={status}>{statusLabel(status)}</option>))}
+        </select>
+        <button className="lst-btn ghost" type="button" disabled={filteredRows.length === 0} onClick={() => downloadCsv("freight-shipments.csv", filteredRows, ["trackingCode", "senderName", "receiverName", "receiverPhone", "destinationCountryName", "freightMode", "estimatedWeightKg", "verifiedWeightKg", "pricePerKg", "estimatedTotal", "finalTotal", "priceSettlementStatus", "paymentStatus", "status", "updatedAt"])}><Download size={15} /> Export CSV</button>
+      </div>
+      {freight.loading && <LoadingState />}
+      {!freight.loading && freight.rows.length === 0 && (
+        <div className="lst-empty"><div className="lst-empty-icon"><Package size={30} /></div><h3>No freight shipments yet</h3><p>Configure air or sea rates under Destinations so customers can book freight.</p></div>
+      )}
+      {!freight.loading && freight.rows.length > 0 && filteredRows.length === 0 && <EmptyState text="No freight shipments match this filter." />}
+      <div className="pur-grid">
+        {filteredRows.map((row) => {
+          const status = text(row.status, "pending");
+          const paymentStatus = text(row.paymentStatus, "pending");
+          const busy = busyId === row.id;
+          const paymentReady = ["paid", "succeeded", "completed"].includes(paymentStatus);
+          const versionTwo = Number(row.freightPricingVersion ?? 0) >= 2;
+          const settlementStatus = text(row.priceSettlementStatus, versionTwo ? "awaiting_weight" : "legacy_settled");
+          const settlementReady = !versionTwo || settlementStatus === "settled";
+          const estimatedWeight = Number(row.estimatedWeightKg ?? row.weightKg ?? 0);
+          const verifiedWeight = Number(row.verifiedWeightKg ?? 0);
+          return (
+            <article className="pur-card" key={row.id}>
+              <div className="pur-head"><div className="pur-title"><strong>{text(row.trackingCode, row.id)}</strong><span className="pur-kind">{statusLabel(text(row.mode ?? row.freightMode, "freight"))}</span></div><span className={`lst-badge ${barrelTone(status)}`}>{statusLabel(status)}</span></div>
+              <div className="pur-info">
+                <div><span>Sender</span><b>{text(row.senderName, "—")}</b></div><div><span>Receiver</span><b>{text(row.receiverName, "—")}</b></div>
+                <div><span>Receiver phone</span><b>{text(row.receiverPhone, "—")}</b></div><div><span>Destination</span><b>{text(row.destinationCountryName, "—")}</b></div>
+                <div><span>Estimated weight</span><b>{estimatedWeight.toLocaleString()} kg</b></div><div><span>Verified weight</span><b>{verifiedWeight > 0 ? `${verifiedWeight.toLocaleString()} kg` : "—"}</b></div>
+                <div><span>Rate locked at booking</span><b>{formatMoney(row.pricePerKg ?? row.ratePerKg)} / kg</b></div><div><span>Estimated total</span><b>{formatMoney(row.estimatedTotal ?? row.price ?? row.total)}</b></div>
+                <div><span>Final total</span><b>{row.finalTotal == null ? "—" : formatMoney(row.finalTotal)}</b></div><div><span>Settlement</span><b>{statusLabel(settlementStatus)}</b></div>
+                <div><span>Payment</span><b>{statusLabel(paymentStatus)}</b></div><div><span>Created</span><b>{formatDate(row.createdAt)}</b></div>
+              </div>
+              {!paymentReady && <div className="pur-notice warn"><AlertTriangle size={15} /> Fulfillment is locked until payment succeeds.</div>}
+              {paymentReady && !settlementReady && <div className="pur-notice warn"><AlertTriangle size={15} /> {settlementStatus === "balance_due" || settlementStatus === "balance_payment_pending" ? "Waiting for customer payment. Fulfillment remains locked." : settlementStatus === "needs_attention" ? "Settlement needs attention. Contact support before fulfillment." : "Confirm the parcel weight before fulfillment."}</div>}
+              <div className="pur-actions">
+                {versionTwo && verifiedWeight <= 0 && <label className="bar-field"><span>Enter verified weight</span><input aria-label="Enter verified weight" inputMode="decimal" value={weightDrafts[row.id] ?? ""} onChange={(event) => setWeightDrafts((current) => ({ ...current, [row.id]: event.target.value }))} placeholder="0.0" /><button className="lst-btn primary" type="button" disabled={busy || !paymentReady} onClick={() => confirmWeight(row)}>Confirm weight and final price</button></label>}
+                <label className="bar-field"><span>Update status</span><select value={status} disabled={busy || !paymentReady || !settlementReady} onChange={(event) => updateStatus(row, event.target.value)}>{["pending_payment", "awaiting_weight_confirmation", "awaiting_balance_payment", "settlement_processing", "pending", "in_transit", "ready_for_pickup", "completed", "cancelled"].map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}</select></label>
               </div>
             </article>
           );
@@ -3000,9 +3200,14 @@ function statusLabel(value: unknown) {
   const labels: Record<"en" | "fr", Record<string, string>> = {
     en: {
       active: "Active",
+      air: "Air freight",
       all: "All",
       approved: "Approved",
+      awaiting_balance_payment: "Awaiting balance payment",
+      awaiting_weight: "Awaiting confirmed weight",
+      awaiting_weight_confirmation: "Awaiting confirmed weight",
       balance_due: "Balance due",
+      balance_payment_pending: "Balance payment pending",
       businessheld: "Business-held",
       cancelled: "Cancelled",
       closed: "Closed",
@@ -3028,12 +3233,19 @@ function statusLabel(value: unknown) {
       pending_payment: "Pending payment",
       pending_seal: "Pending seal",
       ready_for_pickup: "Ready for pickup",
+      refund_processing: "Refund processing",
       refund_pending: "Refund pending",
       refunded: "Refunded",
       rejected: "Rejected",
       reserved: "Reserved",
       resolved: "Resolved",
       scheduled: "Scheduled",
+      settlement_processing: "Settlement processing",
+      settled: "Settled",
+      sea: "Sea freight",
+      succeeded: "Succeeded",
+      freight: "Freight",
+      needs_attention: "Needs attention",
       sealed: "Sealed",
       sold: "Sold",
       unknown: "Unknown",
@@ -3042,9 +3254,14 @@ function statusLabel(value: unknown) {
     },
     fr: {
       active: "Actif",
+      air: "Fret aérien",
       all: "Tous",
       approved: "Approuvé",
+      awaiting_balance_payment: "En attente du paiement du solde",
+      awaiting_weight: "En attente du poids confirmé",
+      awaiting_weight_confirmation: "En attente du poids confirmé",
       balance_due: "Solde dû",
+      balance_payment_pending: "Paiement du solde en attente",
       businessheld: "Géré par l’entreprise",
       cancelled: "Annulé",
       closed: "Fermé",
@@ -3070,12 +3287,19 @@ function statusLabel(value: unknown) {
       pending_payment: "Paiement en attente",
       pending_seal: "En attente de scellement",
       ready_for_pickup: "Prêt pour collecte",
+      refund_processing: "Remboursement en cours",
       refund_pending: "Remboursement en attente",
       refunded: "Remboursé",
       rejected: "Rejeté",
       reserved: "Réservé",
       resolved: "Résolu",
       scheduled: "Planifié",
+      settlement_processing: "Règlement en cours",
+      settled: "Finalisé",
+      sea: "Fret maritime",
+      succeeded: "Réussi",
+      freight: "Fret",
+      needs_attention: "Intervention requise",
       sealed: "Scellé",
       sold: "Vendu",
       unknown: "Inconnu",

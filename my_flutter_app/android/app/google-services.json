@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:577373430777:android:9a27a422f3d043b6125328",
+        "mobilesdk_app_id": "1:577373430777:android:8d017189d7d3e183125328",
         "android_client_info": {
-          "package_name": "com.autosales.corp"
+          "package_name": "com.laawoldigital.app"
         }
       },
       "oauth_client": [],

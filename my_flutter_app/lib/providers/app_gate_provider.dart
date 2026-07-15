@@ -59,6 +59,23 @@ class AppGateProvider extends ChangeNotifier {
     _appConfigLoader = () async => const <String, dynamic>{};
   }
 
+  AppGateProvider.localEmulator()
+    : _connectivity = null,
+      _firestore = null,
+      _packageInfoLoader = (() async => PackageInfo(
+        appName: 'Laawol Digital',
+        packageName: 'local-emulator',
+        version: '0.0.0',
+        buildNumber: '0',
+      )),
+      _urlLauncher = ((url) async => false),
+      _status = AppGateStatus.ready,
+      _hasCompletedInitialCheck = true,
+      _lastOnline = true {
+    _connectivityChecker = () async => const [ConnectivityResult.other];
+    _appConfigLoader = () async => const <String, dynamic>{};
+  }
+
   final Connectivity? _connectivity;
   final FirebaseFirestore? _firestore;
   final Future<PackageInfo> Function() _packageInfoLoader;

@@ -456,7 +456,7 @@ class _CarList extends StatelessWidget {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(20, 2, 20, 24),
       itemCount: cars.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 14),
+      separatorBuilder: (_, _) => const SizedBox(height: 14),
       itemBuilder: (context, index) {
         final car = cars[index];
         return _CarListTile(
@@ -2087,6 +2087,19 @@ class _CarListTile extends StatelessWidget {
                             icon: Icons.verified_outlined,
                             label: _carBrowserOptionLabel(l10n, car.condition),
                           ),
+                        _SpecChip(
+                          icon: car.isRebuiltTitle == true
+                              ? Icons.report_outlined
+                              : car.isRebuiltTitle == null
+                              ? Icons.help_outline
+                              : Icons.verified_outlined,
+                          label: car.isRebuiltTitle == true
+                              ? l10n.rebuiltTitleYes
+                              : car.isRebuiltTitle == null
+                              ? '${l10n.rebuiltTitle}: ${l10n.rebuiltTitleUnknown}'
+                              : l10n.rebuiltTitleNo,
+                          emphasized: car.isRebuiltTitle != false,
+                        ),
                         if (car.transmission.isNotEmpty)
                           _SpecChip(
                             icon: Icons.settings_suggest_outlined,

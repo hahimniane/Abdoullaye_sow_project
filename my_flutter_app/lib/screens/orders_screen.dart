@@ -100,10 +100,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   bool get _loading =>
-      _cars == null &&
-      _barrels == null &&
-      _freight == null &&
-      _transport == null &&
+      _cars == null ||
+      _barrels == null ||
+      _freight == null ||
+      _transport == null ||
       _parking == null;
 
   List<CustomerOrder> _allOrders() {
@@ -211,7 +211,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   : ListView.separated(
                       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                       itemCount: filtered.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
                       itemBuilder: (context, index) => _OrderCard(
                         order: filtered[index],
                         onTap: () => _open(filtered[index]),

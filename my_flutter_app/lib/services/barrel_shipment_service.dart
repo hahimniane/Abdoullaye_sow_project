@@ -169,9 +169,9 @@ class BarrelShipmentService {
         'senderName': senderName,
         'useWalletBalance': useWalletBalance,
         'lines': lines.map((line) => line.toCallableJson()).toList(),
-        if (pickupRequested != null) 'pickupRequested': pickupRequested,
-        if (pickupAddress != null) 'pickupAddress': pickupAddress,
-        if (pickupBorough != null) 'pickupBorough': pickupBorough,
+        'pickupRequested': ?pickupRequested,
+        'pickupAddress': ?pickupAddress,
+        'pickupBorough': ?pickupBorough,
         if (pickupDateTime != null)
           'pickupDateTime': pickupDateTime.toUtc().toIso8601String(),
       });

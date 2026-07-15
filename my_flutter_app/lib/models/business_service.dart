@@ -83,16 +83,13 @@ const defaultBusinessServiceValues = <String>[
 ];
 
 List<String> normalizeBusinessServices(dynamic raw) {
-  final values = raw is Iterable
-      ? raw.map((item) => item.toString()).toSet()
-      : <String>{};
-  final normalized = <String>[
+  if (raw == null) return List<String>.from(defaultBusinessServiceValues);
+  if (raw is! Iterable) return const <String>[];
+  final values = raw.map((item) => item.toString()).toSet();
+  return <String>[
     for (final service in businessServiceCatalog)
       if (values.contains(service.key.value)) service.key.value,
   ];
-  return normalized.isEmpty
-      ? List<String>.from(defaultBusinessServiceValues)
-      : normalized;
 }
 
 bool hasBusinessService(Iterable<String> services, BusinessServiceKey key) {

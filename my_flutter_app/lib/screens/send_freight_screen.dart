@@ -1,3 +1,4 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -6,6 +7,8 @@ import '../models/business_destination_option.dart';
 import '../models/business_service.dart';
 import '../services/business_service.dart';
 import '../services/freight_shipment_service.dart';
+import '../utils/phone_number_validator.dart';
+import '../utils/receiver_phone_rules.dart';
 
 /// Customer screen to send a parcel/box by freight, priced by weight,
 /// by air or sea. Search-first: find a business + destination, then book.
@@ -31,7 +34,9 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   String _query = '';
   String _mode = 'sea';
   bool _loading = true;
+  bool _loadFailed = false;
   bool _busy = false;
+  bool _receiverPhoneIsWhatsappOnly = false;
 
   @override
   void initState() {
@@ -50,6 +55,12 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   }
 
   Future<void> _load() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _loadFailed = false;
+      });
+    }
     try {
       final all = await _businessService.activeDestinationOptions().first;
       final options =
@@ -69,10 +80,14 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       setState(() {
         _options = options;
         _loading = false;
+        _loadFailed = false;
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _loadFailed = true;
+      });
     }
   }
 
@@ -103,6 +118,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   void _select(BusinessDestinationOption o) {
     setState(() {
       _selected = o;
+      _receiverPhoneIsWhatsappOnly = false;
       final modes = _availableModes(o);
       _mode = modes.contains(_mode)
           ? _mode
@@ -119,9 +135,22 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     final option = _selected;
     if (option == null) return;
     if (_senderController.text.trim().isEmpty ||
-        _receiverController.text.trim().isEmpty ||
-        _phoneController.text.trim().isEmpty) {
+        _receiverController.text.trim().isEmpty) {
       _snack(l10n.fillSenderReceiverPhone);
+      return;
+    }
+    final phoneError = ReceiverPhoneRules.validate(
+      value: _phoneController.text,
+      destination: option.country,
+      allowDifferentCountry: _receiverPhoneIsWhatsappOnly,
+      requiredMessage: l10n.pleaseEnterReceiverPhone,
+      invalidPhoneMessage: l10n.invalidPhoneWithCountryCode,
+      invalidInternationalPhoneMessage: l10n.invalidInternationalPhone,
+      whatsAppCountryCodeMessage: l10n.whatsAppDifferentCountryRequiresCode,
+      destinationMismatchMessage: l10n.receiverPhoneMustMatchDestination,
+    );
+    if (phoneError != null) {
+      _snack(phoneError);
       return;
     }
     if (_weightKg <= 0) {
@@ -141,15 +170,23 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       );
       if (!mounted) return;
       final code = shipment['trackingCode']?.toString() ?? '';
+      final messenger = ScaffoldMessenger.of(context);
       Navigator.pop(context);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.freightBookedTracking(code))));
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.freightEstimatePaidTracking(code))),
+      );
     } catch (error) {
       if (!mounted) return;
+      final details =
+          error is FirebaseFunctionsException && error.details is Map
+          ? Map<String, dynamic>.from(error.details as Map)
+          : const <String, dynamic>{};
+      final message = details['reason'] == 'invalid_freight_mode'
+          ? l10n.invalidFreightMode
+          : l10n.freightBookingFailed;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
+      ).showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -166,9 +203,40 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       appBar: AppBar(title: Text(l10n.sendFreight)),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
+          : _loadFailed
+          ? _loadErrorState(theme)
           : _options.isEmpty
           ? _emptyState(theme)
           : (_selected == null ? _searchList(theme) : _bookingForm(theme)),
+    );
+  }
+
+  Widget _loadErrorState(ThemeData theme) {
+    final l10n = AppLocalizations.of(context)!;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_off_outlined, size: 56, color: theme.hintColor),
+            const SizedBox(height: 14),
+            Text(
+              l10n.couldNotLoadFreightOptions,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: _load,
+              icon: const Icon(Icons.refresh),
+              label: Text(l10n.retry),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -305,6 +373,20 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                               '\$${o.country.freightSeaPricePerKg.toStringAsFixed(2)}',
                             ),
                           ),
+                        _ratePill(
+                          theme,
+                          Icons.verified_outlined,
+                          l10n.approvedBusiness,
+                        ),
+                        if (o.country.hasDeliveryEstimate)
+                          _ratePill(
+                            theme,
+                            Icons.schedule_outlined,
+                            l10n.freightDeliveryEstimateDays(
+                              o.country.deliveryEstimateMinDays!,
+                              o.country.deliveryEstimateMaxDays!,
+                            ),
+                          ),
                       ],
                     ),
                   ],
@@ -341,6 +423,10 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     final l10n = AppLocalizations.of(context)!;
     final o = _selected!;
     final modes = _availableModes(o);
+    final showWhatsapp = ReceiverPhoneRules.isDifferentCountryNumber(
+      value: _phoneController.text,
+      destination: o.country,
+    );
     return ListView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
@@ -388,7 +474,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
-            labelText: l10n.parcelWeightKg,
+            labelText: l10n.estimatedWeightKg,
             prefixIcon: const Icon(Icons.scale_outlined),
           ),
         ),
@@ -406,8 +492,34 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         TextField(
           controller: _phoneController,
           keyboardType: TextInputType.phone,
+          inputFormatters: PhoneNumberValidator.allowedInputFormatters,
+          onChanged: (_) => setState(() {
+            if (!ReceiverPhoneRules.isDifferentCountryNumber(
+              value: _phoneController.text,
+              destination: o.country,
+            )) {
+              _receiverPhoneIsWhatsappOnly = false;
+            }
+          }),
           decoration: InputDecoration(labelText: l10n.receiverPhone),
         ),
+        if (showWhatsapp)
+          CheckboxListTile(
+            value: _receiverPhoneIsWhatsappOnly,
+            onChanged: _busy
+                ? null
+                : (checked) => setState(
+                    () => _receiverPhoneIsWhatsappOnly = checked ?? false,
+                  ),
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            controlAffinity: ListTileControlAffinity.leading,
+            title: Text(
+              l10n.receiverWhatsAppNumberTitle,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            subtitle: Text(l10n.receiverWhatsAppNumberSubtitle),
+          ),
         const SizedBox(height: 18),
         Card(
           elevation: 0,
@@ -422,7 +534,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        l10n.estimatedPrice,
+                        l10n.estimatedTotal,
                         style: theme.textTheme.labelMedium,
                       ),
                       Text(
@@ -447,6 +559,12 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
             ),
           ),
         ),
+        const SizedBox(height: 10),
+        Text(
+          l10n.freightEstimateExplanation,
+          style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+          textAlign: TextAlign.center,
+        ),
         const SizedBox(height: 18),
         FilledButton.icon(
           onPressed: _busy || _price <= 0 ? null : _submit,
@@ -457,7 +575,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.local_shipping_outlined),
-          label: Text(l10n.bookAndPay),
+          label: Text(l10n.payEstimate),
         ),
         const SizedBox(height: 8),
         Text(
@@ -465,6 +583,25 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
           style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
           textAlign: TextAlign.center,
         ),
+        if ((o.businessAddress ?? '').trim().isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            l10n.freightDropOffAddress(o.businessAddress!.trim()),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurface,
+              fontWeight: FontWeight.w700,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+        if ((o.businessPhone ?? '').trim().isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            l10n.freightBusinessPhone(o.businessPhone!.trim()),
+            style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ],
     );
   }

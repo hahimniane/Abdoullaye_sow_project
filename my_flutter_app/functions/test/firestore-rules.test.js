@@ -19,13 +19,13 @@ let testEnv;
 
 function firestoreFor(uid) {
   return uid ?
-    testEnv.authenticatedContext(uid).firestore() :
+    testEnv.authenticatedContext(uid, {email_verified: true}).firestore() :
     testEnv.unauthenticatedContext().firestore();
 }
 
 function storageFor(uid) {
   return uid ?
-    testEnv.authenticatedContext(uid).storage() :
+    testEnv.authenticatedContext(uid, {email_verified: true}).storage() :
     testEnv.unauthenticatedContext().storage();
 }
 
@@ -109,6 +109,11 @@ async function seedFirestore() {
         platformAdmin: true,
         email: "platform@example.com",
       },
+      "users/operations-admin": {
+        role: "admin",
+        adminRole: "operationsManager",
+        email: "operations@example.com",
+      },
       "users/content-admin": {
         role: "admin",
         adminRole: "contentManager",
@@ -152,11 +157,28 @@ async function seedFirestore() {
         businessName: "Business A",
         businessPermissions: ["barrels"],
       },
+      "users/staff-freight-a": {
+        role: "staff",
+        businessId: "biz_a",
+        businessName: "Business A",
+        businessPermissions: ["freight"],
+      },
       "users/staff-support-a": {
         role: "staff",
         businessId: "biz_a",
         businessName: "Business A",
         businessPermissions: ["support"],
+      },
+      "users/staff-missing-permissions-a": {
+        role: "staff",
+        businessId: "biz_a",
+        businessName: "Business A",
+      },
+      "users/staff-empty-permissions-a": {
+        role: "staff",
+        businessId: "biz_a",
+        businessName: "Business A",
+        businessPermissions: [],
       },
       "users/customer-owner": {
         role: "customer",
@@ -221,6 +243,62 @@ async function seedFirestore() {
         businessId: "biz_b",
         customerName: "Customer B",
         parkingStatus: "active",
+      },
+      "freightShipments/freight_a": {
+        businessId: "biz_a",
+        customerUid: "customer-owner",
+        trackingCode: "FR-A",
+        senderName: "Sender A",
+        receiverName: "Receiver A",
+        price: 100,
+        paymentStatus: "succeeded",
+        status: "pending",
+      },
+      "freightShipments/freight_b": {
+        businessId: "biz_b",
+        customerUid: "customer-other",
+        trackingCode: "FR-B",
+        senderName: "Sender B",
+        receiverName: "Receiver B",
+        price: 200,
+        paymentStatus: "succeeded",
+        status: "pending",
+      },
+      "freightShipments/freight_v2_unsettled": {
+        businessId: "biz_a",
+        customerUid: "customer-owner",
+        trackingCode: "FR-V2-PENDING",
+        freightPricingVersion: 2,
+        priceSettlementStatus: "balance_due",
+        paymentStatus: "succeeded",
+        status: "awaiting_balance_payment",
+      },
+      "freightShipments/freight_v2_settled": {
+        businessId: "biz_a",
+        customerUid: "customer-owner",
+        trackingCode: "FR-V2-SETTLED",
+        freightPricingVersion: 2,
+        priceSettlementStatus: "settled",
+        paymentStatus: "succeeded",
+        status: "pending",
+      },
+      "freightSettlements/freight_v2_unsettled_v1": {
+        settlementId: "freight_v2_unsettled_v1",
+        shipmentId: "freight_v2_unsettled",
+        businessId: "biz_a",
+        customerUid: "customer-owner",
+        priceSettlementStatus: "balance_due",
+      },
+      "carPurchases/purchase_a": {
+        businessId: "biz_a",
+        buyerUid: "customer-owner",
+        carId: "car_a_1",
+        depositAmount: 500,
+        paymentStatus: "pending",
+        purchaseStatus: "pending",
+      },
+      "shipmentPricing/serviceFees": {
+        platformFeePercent: 5,
       },
       "businessSupportRequests/support_a": {
         businessId: "biz_a",
@@ -364,6 +442,10 @@ async function seedFirestore() {
         recipientEmail: "owner@example.com",
         title: "Verification update",
       },
+      "platformNotifications/notification_a": {
+        title: "Review needed",
+        read: false,
+      },
     };
 
     for (const [docPath, data] of Object.entries(docs)) {
@@ -484,6 +566,108 @@ describe("business dashboard Firestore rules", () => {
     }, {merge: true}));
   });
 
+  it("requires an explicit rebuilt-title disclosure on new car listings",
+      async () => {
+        const ownerDb = firestoreFor("owner-a");
+        const listing = {
+          businessId: "biz_a",
+          title: "Disclosure test car",
+          status: "active",
+        };
+
+        await assertFails(ownerDb.doc("cars/new_missing_disclosure").set({
+          ...listing,
+        }));
+        await assertFails(ownerDb.doc("cars/new_invalid_disclosure").set({
+          ...listing,
+          isRebuiltTitle: "no",
+        }));
+        await assertSucceeds(ownerDb.doc("cars/new_rebuilt_title").set({
+          ...listing,
+          isRebuiltTitle: true,
+        }));
+        await assertSucceeds(ownerDb.doc("cars/new_not_rebuilt_title").set({
+          ...listing,
+          isRebuiltTitle: false,
+        }));
+
+        await assertSucceeds(ownerDb.doc("cars/car_a_1").set({
+          isRebuiltTitle: false,
+        }, {merge: true}));
+        await assertFails(ownerDb.doc("cars/car_a_2").set({
+          isRebuiltTitle: "unknown",
+        }, {merge: true}));
+      });
+
+  it("lets freight staff fulfill only their business without changing money",
+      async () => {
+        const staffDb = firestoreFor("staff-freight-a");
+        await assertSucceeds(staffDb.doc("freightShipments/freight_a").get());
+        await assertFails(staffDb.doc("freightShipments/freight_b").get());
+        await assertSucceeds(staffDb.doc("freightShipments/freight_a").set({
+          status: "in_transit",
+          trackingNumber: "CARRIER-123",
+        }, {merge: true}));
+        await assertFails(staffDb.doc("freightShipments/freight_a").set({
+          price: 1,
+          paymentStatus: "refunded",
+        }, {merge: true}));
+        await assertFails(
+            staffDb.doc("freightShipments/freight_v2_unsettled").set({
+              status: "in_transit",
+            }, {merge: true}),
+        );
+        await assertSucceeds(
+            staffDb.doc("freightShipments/freight_v2_settled").set({
+              status: "in_transit",
+            }, {merge: true}),
+        );
+        await assertFails(
+            staffDb.doc("freightSettlements/freight_v2_unsettled_v1").set({
+              verifiedWeightKg: 1,
+            }, {merge: true}),
+        );
+      });
+
+  it("lets the freight customer read their shipment but not another one",
+      async () => {
+        const customerDb = firestoreFor("customer-owner");
+        await assertSucceeds(
+            customerDb.doc("freightShipments/freight_a").get(),
+        );
+        await assertFails(
+            customerDb.doc("freightShipments/freight_b").get(),
+        );
+      });
+
+  it("fails closed when staff permissions are missing or empty", async () => {
+    for (const uid of [
+      "staff-missing-permissions-a",
+      "staff-empty-permissions-a",
+    ]) {
+      const staffDb = firestoreFor(uid);
+
+      await assertFails(staffDb.doc("cars/car_a_1").set({
+        status: "sold",
+      }, {merge: true}));
+      await assertFails(staffDb.doc("parkedCars/park_a").set({
+        parkingStatus: "completed",
+      }, {merge: true}));
+    }
+  });
+
+  it("keeps business owners authorized when staff access fails closed",
+      async () => {
+        const ownerDb = firestoreFor("owner-a");
+
+        await assertSucceeds(ownerDb.doc("cars/car_a_1").set({
+          status: "sold",
+        }, {merge: true}));
+        await assertSucceeds(ownerDb.doc("parkedCars/park_a").set({
+          parkingStatus: "completed",
+        }, {merge: true}));
+      });
+
   it("denies changing a foreign record into staff scope", async () => {
     const staffDb = firestoreFor("staff-listings-a");
 
@@ -502,6 +686,216 @@ describe("business dashboard Firestore rules", () => {
     );
     await assertFails(staffDb.doc("businessSupportRequests/support_b").get());
   });
+});
+
+describe("server-authoritative and granular admin Firestore rules", () => {
+  it("allows a safe minimal customer profile to be created by its owner",
+      async () => {
+        const uid = "new-customer";
+        const email = "new-customer@example.com";
+        const customerDb = testEnv.authenticatedContext(uid, {
+          email,
+          email_verified: false,
+        }).firestore();
+
+        await assertSucceeds(customerDb.doc(`users/${uid}`).set({
+          role: "customer",
+          email,
+          fullName: "New Customer",
+          phone: "+15555550199",
+          notificationPreferences: {orderActivity: true},
+        }));
+
+        const profile = await assertSucceeds(
+            customerDb.doc(`users/${uid}`).get(),
+        );
+        assert.equal(profile.get("role"), "customer");
+        assert.equal(profile.get("email"), email);
+      });
+
+  it("denies self-asserted roles, verification, business, trust, and money",
+      async () => {
+        const forgedProfiles = [
+          ["admin-role", {role: "admin"}],
+          ["staff-role", {role: "staff"}],
+          ["owner-role", {role: "businessOwner"}],
+          ["admin-access", {adminRole: "superAdmin", platformAdmin: true}],
+          ["phone-verification", {
+            phoneVerified: true,
+            phoneVerifiedAt: new Date(),
+          }],
+          ["identity-verification", {
+            emailVerified: true,
+            identityVerified: true,
+            verificationStatus: "approved",
+          }],
+          ["business-access", {
+            businessId: "biz_a",
+            businessName: "Business A",
+            businessPermissions: ["freight", "finance"],
+            businessServices: ["freight"],
+          }],
+          ["reliability", {
+            carBuyerReliability: {
+              paidHolds: 100,
+              completedHolds: 100,
+              noShows: 0,
+              forfeitures: 0,
+            },
+          }],
+          ["wallet", {
+            walletBalance: 100000,
+            walletCredit: 100000,
+            balanceCents: 10000000,
+          }],
+          ["payment", {
+            paymentStatus: "succeeded",
+            stripeCustomerId: "cus_forged",
+          }],
+          ["server-identity", {
+            normalizedPhone: "15555550199",
+            createdAt: new Date(),
+            updatedBy: "super-admin",
+          }],
+        ];
+
+        for (const [label, forgedFields] of forgedProfiles) {
+          const uid = `forger-${label}`;
+          const email = `${uid}@example.com`;
+          const customerDb = testEnv.authenticatedContext(uid, {
+            email,
+            email_verified: false,
+          }).firestore();
+          await assertFails(customerDb.doc(`users/${uid}`).set({
+            role: "customer",
+            email,
+            fullName: "Forged Customer",
+            ...forgedFields,
+          }));
+        }
+      });
+
+  it("denies adding server-authoritative fields to an existing customer",
+      async () => {
+        const customerDb = firestoreFor("customer-owner");
+        for (const forgedFields of [
+          {phoneVerified: true},
+          {role: "admin"},
+          {businessId: "biz_a", businessPermissions: ["finance"]},
+          {carBuyerReliability: {completedHolds: 100}},
+          {walletBalance: 100000},
+          {paymentStatus: "succeeded"},
+        ]) {
+          await assertFails(customerDb.doc("users/customer-owner").set(
+              forgedFields,
+              {merge: true},
+          ));
+        }
+      });
+
+  it("denies every direct customer purchase create, including forged money",
+      async () => {
+        const customerDb = firestoreFor("customer-owner");
+
+        await assertFails(customerDb.doc("carPurchases/client_purchase").set({
+          businessId: "biz_a",
+          buyerUid: "customer-owner",
+          carId: "car_a_1",
+          depositAmount: 500,
+          paymentStatus: "pending",
+          purchaseStatus: "pending",
+        }));
+        await assertFails(customerDb.doc("carPurchases/forged_purchase").set({
+          businessId: "biz_a",
+          buyerUid: "customer-owner",
+          carId: "car_a_1",
+          depositAmount: 1,
+          paymentStatus: "succeeded",
+          purchaseStatus: "completed",
+          stripePaymentIntentId: "forged",
+        }));
+      });
+
+  it("allows only the matching admin capability for direct writes",
+      async () => {
+        const operationsDb = firestoreFor("operations-admin");
+        const financeDb = firestoreFor("finance-admin");
+        const supportDb = firestoreFor("support-admin");
+        const contentDb = firestoreFor("content-admin");
+        const legacyAdminDb = firestoreFor("platform-admin");
+
+        await assertSucceeds(operationsDb.doc("parkedCars/park_a").set({
+          parkingStatus: "completed",
+        }, {merge: true}));
+        await assertSucceeds(operationsDb.doc("cars/car_a_1").set({
+          status: "sold",
+        }, {merge: true}));
+        await assertSucceeds(operationsDb.doc("carPurchases/purchase_a").set({
+          purchaseStatus: "completed",
+        }, {merge: true}));
+        await assertFails(operationsDb.doc("shipmentPricing/serviceFees").set({
+          platformFeePercent: 7,
+        }, {merge: true}));
+
+        await assertSucceeds(financeDb.doc("shipmentPricing/serviceFees").set({
+          platformFeePercent: 6,
+        }, {merge: true}));
+        await assertFails(financeDb.doc("cars/car_a_2").set({
+          status: "sold",
+        }, {merge: true}));
+        await assertFails(financeDb.doc("parkedCars/park_b").set({
+          parkingStatus: "completed",
+        }, {merge: true}));
+
+        await assertSucceeds(
+            supportDb.doc("platformNotifications/notification_a").set({
+              read: true,
+            }, {merge: true}),
+        );
+        await assertFails(supportDb.doc("cars/car_a_2").set({
+          status: "sold",
+        }, {merge: true}));
+        await assertFails(contentDb.doc("parkedCars/park_b").set({
+          parkingStatus: "completed",
+        }, {merge: true}));
+        await assertFails(legacyAdminDb.doc("cars/car_a_2").set({
+          status: "sold",
+        }, {merge: true}));
+      });
+
+  it("keeps internal security state inaccessible to every client",
+      async () => {
+        for (const uid of ["customer-owner", "super-admin"]) {
+          const db = firestoreFor(uid);
+          for (const path of [
+            "callableRateLimits/secret",
+            "stripeWebhookEvents/event_secret",
+            "paymentReconciliationFailures/failure_secret",
+          ]) {
+            await assertFails(db.doc(path).get());
+            await assertFails(db.doc(path).set({count: 0}));
+          }
+        }
+      });
+
+  it("denies platform access until the administrator email is verified",
+      async () => {
+        const unverifiedDb = testEnv.authenticatedContext(
+            "super-admin",
+            {email_verified: false},
+        ).firestore();
+        const unverifiedStorage = testEnv.authenticatedContext(
+            "super-admin",
+            {email_verified: false},
+        ).storage();
+
+        await assertFails(unverifiedDb.doc("cars/car_a_1").set({
+          status: "sold",
+        }, {merge: true}));
+        await assertFails(
+            putLogo(unverifiedStorage, "biz_a", "unverified-admin.png"),
+        );
+      });
 });
 
 describe("marketplace support Firestore rules", () => {
@@ -749,9 +1143,9 @@ describe("featured business logo Storage rules", () => {
     );
   });
 
-  it("allows platform admins and owning business owners to upload logos",
+  it("allows business-capable admins and owners to upload logos",
       async () => {
-        await assertSucceeds(
+        await assertFails(
             putLogo(
                 storageForToken("admin-email-only", {email: "admin@gmail.com"}),
                 "biz_a",
@@ -761,14 +1155,17 @@ describe("featured business logo Storage rules", () => {
         await assertSucceeds(
             putLogo(storageFor("super-admin"), "biz_a", "super.png"),
         );
-        await assertSucceeds(
+        await assertFails(
             putLogo(storageFor("platform-admin"), "biz_a", "platform.png"),
         );
-        await assertSucceeds(
+        await assertFails(
             putLogo(storageFor("content-admin"), "biz_a", "admin.png"),
         );
-        await assertSucceeds(
+        await assertFails(
             putLogo(storageFor("finance-admin"), "biz_a", "finance.png"),
+        );
+        await assertSucceeds(
+            putLogo(storageFor("operations-admin"), "biz_a", "operations.png"),
         );
         await assertSucceeds(
             putLogo(storageFor("owner-a"), "biz_a", "owner.png"),
@@ -781,6 +1178,13 @@ describe("featured business logo Storage rules", () => {
     );
     await assertFails(
         putLogo(storageFor("owner-a"), "biz_b", "cross.png"),
+    );
+    await assertFails(
+        putLogo(
+            storageFor("staff-missing-permissions-a"),
+            "biz_a",
+            "missing-permissions.png",
+        ),
     );
   });
 
@@ -831,6 +1235,13 @@ describe("business profile image Storage rules", () => {
                 storageFor("owner-a"),
                 "biz_b",
                 "cross.jpg",
+            ),
+        );
+        await assertFails(
+            putBusinessProfileImage(
+                storageFor("staff-empty-permissions-a"),
+                "biz_a",
+                "empty-permissions.jpg",
             ),
         );
         await assertFails(
@@ -996,6 +1407,14 @@ describe("car listing image Storage rules", () => {
         );
         await assertSucceeds(
             putCarImage(
+                storageFor("operations-admin"),
+                "biz_a",
+                "car_a_1",
+                "operations.jpg",
+            ),
+        );
+        await assertSucceeds(
+            putCarImage(
                 storageFor("owner-a"),
                 "biz_a",
                 "car_a_1",
@@ -1029,6 +1448,22 @@ describe("car listing image Storage rules", () => {
                 "biz_b",
                 "car_b_1",
                 "cross-staff.jpg",
+            ),
+        );
+        await assertFails(
+            putCarImage(
+                storageFor("staff-missing-permissions-a"),
+                "biz_a",
+                "car_a_1",
+                "missing-permissions.jpg",
+            ),
+        );
+        await assertFails(
+            putCarImage(
+                storageFor("finance-admin"),
+                "biz_a",
+                "car_a_1",
+                "finance.jpg",
             ),
         );
       });
@@ -1112,6 +1547,22 @@ describe("support attachment Storage rules", () => {
                 "case_a",
                 "other-user",
                 "wrong-owner.pdf",
+            ),
+        );
+        await assertFails(
+            putSupportAttachment(
+                storageFor("staff-empty-permissions-a"),
+                "case_a",
+                "staff-empty-permissions-a",
+                "empty-permissions.pdf",
+            ),
+        );
+        await assertFails(
+            putSupportAttachment(
+                storageFor("content-admin"),
+                "case_a",
+                "content-admin",
+                "content.pdf",
             ),
         );
         await assertFails(

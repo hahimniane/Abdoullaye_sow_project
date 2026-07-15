@@ -65,9 +65,6 @@ class FreightShipmentService {
       );
       try {
         await Stripe.instance.presentPaymentSheet();
-        await _functions.httpsCallable('completeFreightShipmentPayment').call({
-          'shipmentId': shipmentId,
-        });
       } catch (_) {
         try {
           await _functions.httpsCallable('cancelPendingFreightShipment').call({
@@ -78,8 +75,57 @@ class FreightShipmentService {
         }
         rethrow;
       }
+      try {
+        await _functions.httpsCallable('completeFreightShipmentPayment').call({
+          'shipmentId': shipmentId,
+        });
+      } catch (_) {
+        // Stripe already accepted the payment. The signed webhook and stale
+        // payment reconciler will finish the idempotent domain transition;
+        // cancelling here could race that completion and strand the payout.
+      }
     }
 
+    final snapshot = await _firestore
+        .collection('freightShipments')
+        .doc(shipmentId)
+        .get();
+    return {'id': snapshot.id, ...?snapshot.data()};
+  }
+
+  /// Lets the customer explicitly pay a positive verified-weight adjustment.
+  /// Dismissing the sheet leaves the shipment and attempt recoverable.
+  Future<Map<String, dynamic>> payFreightBalance({
+    required String shipmentId,
+  }) async {
+    final response = await _functions
+        .httpsCallable('createFreightSettlementPayment')
+        .call<Map<String, dynamic>>({'shipmentId': shipmentId});
+    final data = Map<String, dynamic>.from(response.data);
+    if (data['alreadySettled'] != true && data['simulatedPayment'] != true) {
+      final clientSecret = data['clientSecret'] as String?;
+      final settlementId = data['settlementId'] as String?;
+      final attemptId = data['attemptId'] as String?;
+      if (clientSecret == null ||
+          clientSecret.isEmpty ||
+          settlementId == null ||
+          attemptId == null) {
+        throw Exception('Balance payment could not be initialized.');
+      }
+      await StripeConfigService.ensureConfigured();
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          paymentIntentClientSecret: clientSecret,
+          merchantDisplayName: 'Laawol',
+          style: ThemeMode.system,
+        ),
+      );
+      await Stripe.instance.presentPaymentSheet();
+      await _functions.httpsCallable('completeFreightSettlementPayment').call({
+        'settlementId': settlementId,
+        'attemptId': attemptId,
+      });
+    }
     final snapshot = await _firestore
         .collection('freightShipments')
         .doc(shipmentId)

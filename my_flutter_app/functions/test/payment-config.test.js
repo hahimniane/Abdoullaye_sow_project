@@ -62,6 +62,36 @@ describe("payment runtime configuration", () => {
     }
   });
 
+  it("makes Stripe webhooks authoritative and idempotent", () => {
+    const script = `
+      process.env.GCLOUD_PROJECT = "demo-test";
+      const functions = require("./index");
+      const endpoint = functions.handleBusinessProStripeWebhook.__endpoint;
+      process.stdout.write(JSON.stringify(
+        (endpoint.secretEnvironmentVariables || []).map((secret) => secret.key)
+      ));
+    `;
+    const output = execFileSync(process.execPath, ["-e", script], {
+      cwd: __dirname + "/..",
+      env: {...process.env, GCLOUD_PROJECT: "demo-test"},
+      encoding: "utf8",
+    });
+    assert.deepEqual(JSON.parse(output), [
+      "STRIPE_WEBHOOK_SECRET",
+      "STRIPE_SECRET_KEY",
+    ]);
+
+    const source = fs.readFileSync(
+        path.join(__dirname, "..", "index.js"),
+        "utf8",
+    );
+    assert.match(source, /claimStripeWebhookEvent\(event\)/);
+    assert.match(source, /reconcileStripePaymentEvent\(event\)/);
+    assert.match(source, /runPaymentCompletion\(target\)/);
+    assert.match(source, /Idempotency-Key/);
+    assert.match(source, /exports\.reconcileStaleStripePayments/);
+  });
+
   it("guards unauthenticated barrel order completion recovery", () => {
     const source = fs.readFileSync(
         path.join(__dirname, "..", "index.js"),

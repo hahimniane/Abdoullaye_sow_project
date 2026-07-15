@@ -198,7 +198,7 @@ class StaffPurchaseManagementScreen extends StatelessWidget {
           return ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: purchases.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               final purchase = purchases[index];
               return _StaffPurchaseCard(

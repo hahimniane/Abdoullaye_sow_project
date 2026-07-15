@@ -5,10 +5,19 @@ import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  DEFAULT_PRODUCTION_PROJECT,
+  appCheckWebConfig,
+  deploymentMode,
+  paymentModeEvidence,
+  stripeKeyMode,
+} from "./preflight-lib.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const PROJECT_ID = process.env.FIREBASE_PROJECT || "car-selling-flutter-app";
+const PRODUCTION_PROJECT_ID = process.env.PRODUCTION_FIREBASE_PROJECT ||
+  DEFAULT_PRODUCTION_PROJECT;
 const SCOPE = process.env.PREFLIGHT_SCOPE || "full";
 const VALID_SCOPES = new Set(["backend", "full", "static"]);
 const STATIC_TRANSPORT = process.env.STATIC_TRANSPORT || "ftp";
@@ -21,6 +30,11 @@ if (!VALID_SCOPES.has(SCOPE)) {
 const checks = [];
 const checksStatic = SCOPE === "static" || SCOPE === "full";
 const checksBackend = SCOPE === "backend" || SCOPE === "full";
+const resolvedDeploymentMode = deploymentMode({
+  projectId: PROJECT_ID,
+  productionProjectId: PRODUCTION_PROJECT_ID,
+  deployEnvironment: process.env.DEPLOY_ENV,
+});
 
 function addCheck(name, ok, detail = "") {
   checks.push({ name, ok, detail });
@@ -89,7 +103,46 @@ console.log(
   );
 }
 
+// Production releases must correspond to a successful CI run for the exact
+// commit being deployed. The GitHub CLI is used so private repositories work
+// with the operator's existing authenticated session.
+if (resolvedDeploymentMode.mode === "production") {
+  const head = run("git", ["rev-parse", "HEAD"]);
+  const commit = head.stdout.trim();
+  const ci = commit ? run("gh", [
+    "run", "list",
+    "--workflow", "CI",
+    "--commit", commit,
+    "--json", "conclusion,status,headSha,url",
+    "--limit", "10",
+  ]) : {ok: false, stdout: ""};
+  let greenRun;
+  try {
+    const runs = JSON.parse(ci.stdout || "[]");
+    greenRun = runs.find((item) =>
+      item.headSha === commit && item.status === "completed" &&
+      item.conclusion === "success");
+  } catch {
+    greenRun = null;
+  }
+  const overridden = process.env.ALLOW_UNVERIFIED_CI === "1";
+  addCheck(
+      "Green CI for deployed commit",
+      Boolean(greenRun) || overridden,
+      greenRun ? greenRun.url :
+        overridden ? "OVERRIDDEN via ALLOW_UNVERIFIED_CI=1" :
+          "install/authenticate gh and push the commit until required CI is green",
+  );
+}
+
 if (checksStatic) {
+  const appCheck = appCheckWebConfig({
+    siteKey: process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY,
+    debugToken: process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_DEBUG_TOKEN,
+    production: resolvedDeploymentMode.mode === "production",
+  });
+  addCheck("Admin/business App Check configuration", appCheck.ok, appCheck.detail);
+
   if (STATIC_TRANSPORT === "ssh") {
     addCheck(
         "Static transport",
@@ -122,7 +175,7 @@ if (checksStatic) {
   // Build from source so the deployed bundle always matches the committed
   // source — never a stale or hand-edited admin_web/out. `next build` also runs
   // the TypeScript compiler, so a type error fails the deploy here.
-  const adminBuildOk = adminTestsOk &&
+  const adminBuildOk = adminTestsOk && appCheck.ok &&
     runInherit("npm", ["--prefix", adminDir, "run", "build"]);
   addCheck("Admin/business build from source", adminBuildOk);
 
@@ -136,6 +189,32 @@ if (checksStatic) {
 }
 
 if (checksBackend) {
+  const functionsDir = path.join(ROOT, "my_flutter_app", "functions");
+  const mode = resolvedDeploymentMode;
+  addCheck("Deployment environment is explicit and safe", mode.ok, mode.detail);
+
+  const paymentEvidence = paymentModeEvidence({
+    functionsDir,
+    processValue: process.env.SIMULATE_PAYMENTS,
+  });
+  addCheck(
+      "Production payment simulation is disabled",
+      mode.mode !== "production" || !paymentEvidence.simulationEnabled,
+      paymentEvidence.simulationEnabled ?
+        `enabled by ${paymentEvidence.enabledSources.join(", ")}` :
+        "SIMULATE_PAYMENTS is not enabled",
+  );
+
+  const functionsLintOk = runInherit("npm", ["run", "lint"], {
+    cwd: functionsDir,
+  });
+  addCheck("Cloud Functions lint", functionsLintOk);
+
+  const functionsTestsOk = functionsLintOk && runInherit("npm", ["test"], {
+    cwd: functionsDir,
+  });
+  addCheck("Cloud Functions unit/emulator/rules tests", functionsTestsOk);
+
   const firebaseLogin = run("firebase", ["login:list"]);
   addCheck(
       "Firebase CLI authenticated",
@@ -165,14 +244,21 @@ if (checksBackend) {
       .map((line) => line.trim())
       .filter(Boolean)
       .at(-1) || "";
-  const stripeKeyShapeOk = /^sk_(test|live)_/.test(secretPayload);
+  const secretMode = stripeKeyMode(secretPayload);
+  const stripeKeyOk = mode.mode === "production" ?
+    secretMode === "live" :
+    paymentEvidence.simulationEnabled || secretMode !== "invalid";
   addCheck(
-      "Stripe secret shape",
-      stripeSecret.ok && stripeKeyShapeOk,
-      stripeSecret.ok ?
-        (stripeKeyShapeOk ? "STRIPE_SECRET_KEY looks like a Stripe secret key" :
-          "STRIPE_SECRET_KEY does not start with sk_test_ or sk_live_") :
-        "STRIPE_SECRET_KEY could not be accessed",
+      "Stripe key matches deployment mode",
+      mode.ok && stripeKeyOk &&
+        (stripeSecret.ok || (mode.mode !== "production" &&
+          paymentEvidence.simulationEnabled)),
+      mode.mode === "production" ?
+        (secretMode === "live" ? "live Stripe key is configured" :
+          "production requires STRIPE_SECRET_KEY to start with sk_live_") :
+        paymentEvidence.simulationEnabled ?
+          "non-production payment simulation; Stripe secret is optional" :
+          `${secretMode} Stripe key`,
   );
 
   const indexes = run("firebase", [

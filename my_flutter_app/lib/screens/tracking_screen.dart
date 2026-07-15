@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,8 +8,9 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
-import '../models/barrel_shipment.dart';
+import '../models/customer_order.dart';
 import '../providers/auth_provider.dart';
+import '../services/freight_shipment_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/barrel_receipt_generator.dart';
 import '../widgets/app_back_button.dart';
@@ -15,10 +18,116 @@ import '../widgets/language_toggle.dart';
 
 enum _StatusFilter { inProgress, delivered, all }
 
+const barrelTrackingCollection = 'barrelShipments';
+const freightTrackingCollection = 'freightShipments';
+const trackingShipmentCollections = <String>[
+  barrelTrackingCollection,
+  freightTrackingCollection,
+];
+
+abstract interface class CustomerTrackingRepository {
+  Stream<List<CustomerTrackingShipment>> watchCustomerShipments(
+    String customerUid,
+  );
+}
+
+class FirestoreCustomerTrackingRepository
+    implements CustomerTrackingRepository {
+  FirestoreCustomerTrackingRepository({FirebaseFirestore? firestore})
+    : _firestore = firestore ?? FirebaseFirestore.instance;
+
+  final FirebaseFirestore _firestore;
+
+  @override
+  Stream<List<CustomerTrackingShipment>> watchCustomerShipments(
+    String customerUid,
+  ) {
+    late StreamController<List<CustomerTrackingShipment>> controller;
+    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? barrelSub;
+    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? freightSub;
+    var barrels = <CustomerTrackingShipment>[];
+    var freight = <CustomerTrackingShipment>[];
+    var barrelsReady = false;
+    var freightReady = false;
+    Object? barrelError;
+    Object? freightError;
+
+    void emitWhenReady() {
+      if (!barrelsReady || !freightReady || controller.isClosed) return;
+      if (barrelError != null && freightError != null) {
+        controller.addError(barrelError!);
+        return;
+      }
+      final combined = [...barrels, ...freight]
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      controller.add(combined);
+    }
+
+    controller = StreamController<List<CustomerTrackingShipment>>(
+      onListen: () {
+        barrelSub = _firestore
+            .collection(barrelTrackingCollection)
+            .where('customerUid', isEqualTo: customerUid)
+            .snapshots()
+            .listen(
+              (snapshot) {
+                barrelError = null;
+                barrelsReady = true;
+                barrels = snapshot.docs
+                    .map(CustomerTrackingShipment.fromBarrel)
+                    .toList();
+                emitWhenReady();
+              },
+              onError: (Object error) {
+                barrelError = error;
+                barrelsReady = true;
+                barrels = const [];
+                emitWhenReady();
+              },
+            );
+        freightSub = _firestore
+            .collection(freightTrackingCollection)
+            .where('customerUid', isEqualTo: customerUid)
+            .snapshots()
+            .listen(
+              (snapshot) {
+                freightError = null;
+                freightReady = true;
+                freight = snapshot.docs
+                    .map(CustomerTrackingShipment.fromFreight)
+                    .toList();
+                emitWhenReady();
+              },
+              onError: (Object error) {
+                freightError = error;
+                freightReady = true;
+                freight = const [];
+                emitWhenReady();
+              },
+            );
+      },
+      onCancel: () async {
+        await barrelSub?.cancel();
+        await freightSub?.cancel();
+      },
+    );
+    return controller.stream;
+  }
+}
+
 class TrackingScreen extends StatefulWidget {
-  const TrackingScreen({super.key, this.showBackButton = false});
+  const TrackingScreen({
+    super.key,
+    this.showBackButton = false,
+    this.repository,
+    this.customerUidOverride,
+    this.freightService,
+  });
 
   final bool showBackButton;
+  final CustomerTrackingRepository? repository;
+  final String? customerUidOverride;
+  final FreightShipmentService? freightService;
 
   @override
   State<TrackingScreen> createState() => _TrackingScreenState();
@@ -33,6 +142,51 @@ class _TrackingScreenState extends State<TrackingScreen> {
   String _query = '';
   _StatusFilter _status = _StatusFilter.inProgress;
   String? _destination;
+  late CustomerTrackingRepository _repository;
+  String? _streamCustomerUid;
+  Stream<List<CustomerTrackingShipment>>? _shipmentsStream;
+  FreightShipmentService? _freightService;
+  final Set<String> _balancePayments = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _repository = widget.repository ?? FirestoreCustomerTrackingRepository();
+    _freightService = widget.freightService;
+  }
+
+  @override
+  void didUpdateWidget(covariant TrackingScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.repository != widget.repository) {
+      _repository = widget.repository ?? FirestoreCustomerTrackingRepository();
+      _streamCustomerUid = null;
+      _shipmentsStream = null;
+    }
+    if (oldWidget.freightService != widget.freightService) {
+      _freightService = widget.freightService;
+    }
+  }
+
+  Future<void> _payFreightBalance(CustomerTrackingShipment shipment) async {
+    final l10n = AppLocalizations.of(context)!;
+    setState(() => _balancePayments.add(shipment.id));
+    try {
+      final service = _freightService ??= FreightShipmentService();
+      await service.payFreightBalance(shipmentId: shipment.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.freightSettled)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.couldNotPayBalance)));
+    } finally {
+      if (mounted) setState(() => _balancePayments.remove(shipment.id));
+    }
+  }
 
   @override
   void dispose() {
@@ -54,10 +208,10 @@ class _TrackingScreenState extends State<TrackingScreen> {
     }
   }
 
-  bool _inProgress(BarrelShipment s) =>
+  bool _inProgress(CustomerTrackingShipment s) =>
       s.status != 'completed' && s.status != 'cancelled';
 
-  bool _matchesStatus(BarrelShipment s) {
+  bool _matchesStatus(CustomerTrackingShipment s) {
     switch (_status) {
       case _StatusFilter.inProgress:
         return _inProgress(s);
@@ -68,7 +222,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
     }
   }
 
-  bool _matchesQuery(BarrelShipment s) {
+  bool _matchesQuery(CustomerTrackingShipment s) {
     if (_query.isEmpty) return true;
     final q = _query.toLowerCase();
     return s.trackingCode.toLowerCase().contains(q) ||
@@ -86,13 +240,23 @@ class _TrackingScreenState extends State<TrackingScreen> {
     });
   }
 
+  Stream<List<CustomerTrackingShipment>> _streamFor(String customerUid) {
+    if (_streamCustomerUid != customerUid || _shipmentsStream == null) {
+      _streamCustomerUid = customerUid;
+      _shipmentsStream = _repository.watchCustomerShipments(customerUid);
+    }
+    return _shipmentsStream!;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final auth = context.watch<AuthProvider>();
-    final user = auth.user;
+    final user = widget.customerUidOverride == null
+        ? context.watch<AuthProvider>().user
+        : null;
+    final customerUid = widget.customerUidOverride ?? user?.uid;
 
-    if (user == null) {
+    if (customerUid == null) {
       return Scaffold(
         backgroundColor: AppColors.lightBg,
         body: SafeArea(
@@ -110,11 +274,8 @@ class _TrackingScreenState extends State<TrackingScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.lightBg,
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('barrelShipments')
-            .where('customerUid', isEqualTo: user.uid)
-            .snapshots(),
+      body: StreamBuilder<List<CustomerTrackingShipment>>(
+        stream: _streamFor(customerUid),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return SafeArea(
@@ -132,9 +293,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final shipments =
-              snapshot.data!.docs.map(BarrelShipment.fromFirestore).toList()
-                ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          final shipments = snapshot.data!;
 
           if (shipments.isEmpty) {
             return SafeArea(
@@ -217,13 +376,23 @@ class _TrackingScreenState extends State<TrackingScreen> {
                             physics: const AlwaysScrollableScrollPhysics(),
                             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                             itemCount: groups.length,
-                            separatorBuilder: (_, __) =>
+                            separatorBuilder: (_, _) =>
                                 const SizedBox(height: 12),
                             itemBuilder: (context, index) {
                               final group = groups[index];
                               if (group.shipments.length == 1) {
                                 return _ShipmentCard(
                                   shipment: group.shipments.single,
+                                  balancePaymentBusy: _balancePayments.contains(
+                                    group.shipments.single.id,
+                                  ),
+                                  onPayBalance:
+                                      group.shipments.single.isFreight &&
+                                          group.shipments.single.balanceDue > 0
+                                      ? () => _payFreightBalance(
+                                          group.shipments.single,
+                                        )
+                                      : null,
                                 );
                               }
                               return _ShipmentGroupCard(group: group);
@@ -244,15 +413,20 @@ class _ShipmentGroup {
   const _ShipmentGroup({required this.id, required this.shipments});
 
   final String id;
-  final List<BarrelShipment> shipments;
+  final List<CustomerTrackingShipment> shipments;
 
-  BarrelShipment get latest => shipments.first;
+  CustomerTrackingShipment get latest => shipments.first;
 
-  static List<_ShipmentGroup> fromShipments(List<BarrelShipment> shipments) {
-    final grouped = <String, List<BarrelShipment>>{};
+  static List<_ShipmentGroup> fromShipments(
+    List<CustomerTrackingShipment> shipments,
+  ) {
+    final grouped = <String, List<CustomerTrackingShipment>>{};
     for (final shipment in shipments) {
-      final key = shipment.orderId?.trim().isNotEmpty == true
-          ? 'order:${shipment.orderId}'
+      final orderId = shipment.barrelShipment?.orderId;
+      final key = shipment.isFreight
+          ? 'freight:${shipment.id}'
+          : orderId?.trim().isNotEmpty == true
+          ? 'order:$orderId'
           : 'shipment:${shipment.id}';
       grouped.putIfAbsent(key, () => []).add(shipment);
     }
@@ -318,8 +492,12 @@ class _ShipmentGroupCard extends StatelessWidget {
 
   Future<void> _downloadReceipt(BuildContext context) async {
     await generateBarrelOrderReceipt(
-      orderId: group.latest.orderId ?? group.latest.id,
-      shipments: group.shipments,
+      orderId:
+          group.latest.barrelShipment?.orderId ??
+          group.latest.barrelShipment!.id,
+      shipments: group.shipments
+          .map((shipment) => shipment.barrelShipment!)
+          .toList(),
     );
   }
 
@@ -333,13 +511,14 @@ class _ShipmentGroupCard extends StatelessWidget {
     );
     final barrelCount = group.shipments.fold<int>(
       0,
-      (runningTotal, shipment) => runningTotal + shipment.quantity,
+      (runningTotal, shipment) =>
+          runningTotal + shipment.barrelShipment!.quantity,
     );
     final businesses = {
       for (final shipment in group.shipments) shipment.businessName,
     }.where((name) => name.trim().isNotEmpty).length;
     final pickupCount = group.shipments
-        .where((shipment) => shipment.pickupRequested)
+        .where((shipment) => shipment.barrelShipment!.pickupRequested)
         .length;
 
     return Card(
@@ -445,7 +624,7 @@ class _ShipmentGroupCard extends StatelessWidget {
 class _ShipmentGroupLine extends StatelessWidget {
   const _ShipmentGroupLine({required this.shipment});
 
-  final BarrelShipment shipment;
+  final CustomerTrackingShipment shipment;
 
   @override
   Widget build(BuildContext context) {
@@ -454,7 +633,7 @@ class _ShipmentGroupLine extends StatelessWidget {
       onTap: () => Navigator.pushNamed(
         context,
         '/barrel-shipment-details',
-        arguments: shipment,
+        arguments: shipment.barrelShipment,
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
@@ -534,9 +713,15 @@ class _InfoChip extends StatelessWidget {
 }
 
 class _ShipmentCard extends StatelessWidget {
-  const _ShipmentCard({required this.shipment});
+  const _ShipmentCard({
+    required this.shipment,
+    this.onPayBalance,
+    this.balancePaymentBusy = false,
+  });
 
-  final BarrelShipment shipment;
+  final CustomerTrackingShipment shipment;
+  final VoidCallback? onPayBalance;
+  final bool balancePaymentBusy;
 
   Future<void> _copyTrackingNumber(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: shipment.trackingCode));
@@ -548,7 +733,7 @@ class _ShipmentCard extends StatelessWidget {
   }
 
   Future<void> _downloadReceipt(BuildContext context) async {
-    await generateBarrelShipmentReceipt(shipment: shipment);
+    await generateBarrelShipmentReceipt(shipment: shipment.barrelShipment!);
   }
 
   @override
@@ -556,20 +741,28 @@ class _ShipmentCard extends StatelessWidget {
     final currency = NumberFormat.simpleCurrency();
     final l10n = AppLocalizations.of(context)!;
     final createdAt = DateFormat.yMMMd().add_jm().format(shipment.createdAt);
-    final pickupDate = shipment.pickupDateTime == null
+    final barrel = shipment.barrelShipment;
+    final pickupDate = barrel?.pickupDateTime == null
         ? null
-        : DateFormat.MMMd().add_jm().format(shipment.pickupDateTime!);
+        : DateFormat.MMMd().add_jm().format(barrel!.pickupDateTime!);
+    final freightMode = shipment.mode == 'air'
+        ? l10n.airFreight
+        : shipment.mode == 'sea'
+        ? l10n.seaFreight
+        : l10n.orderTypeFreight;
 
     return Card(
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: () => Navigator.pushNamed(
-          context,
-          '/barrel-shipment-details',
-          arguments: shipment,
-        ),
+        onTap: shipment.isFreight
+            ? null
+            : () => Navigator.pushNamed(
+                context,
+                '/barrel-shipment-details',
+                arguments: barrel,
+              ),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -607,26 +800,64 @@ class _ShipmentCard extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               _DetailLine(
-                icon: shipment.pickupRequested
+                icon: shipment.isFreight
+                    ? Icons.inventory_2_outlined
+                    : barrel!.pickupRequested
                     ? Icons.home_work_outlined
                     : Icons.storefront_outlined,
-                text: shipment.pickupRequested
+                text: shipment.isFreight
+                    ? l10n.freightDropOffNote
+                    : barrel!.pickupRequested
                     ? (pickupDate == null
                           ? l10n.pickupRequested
                           : l10n.pickupRequestedWithDate(pickupDate))
                     : l10n.customerDropOffAtOffice,
               ),
+              if (shipment.isFreight) ...[
+                const SizedBox(height: 8),
+                _DetailLine(
+                  icon: shipment.mode == 'air'
+                      ? Icons.flight_outlined
+                      : Icons.directions_boat_outlined,
+                  text: shipment.estimatedWeightKg > 0
+                      ? '$freightMode • ${l10n.estimatedWeight}: '
+                            '${shipment.estimatedWeightKg.toStringAsFixed(1)} kg'
+                      : freightMode,
+                ),
+                if (shipment.verifiedWeightKg != null) ...[
+                  const SizedBox(height: 8),
+                  _DetailLine(
+                    icon: Icons.verified_outlined,
+                    text:
+                        '${l10n.verifiedWeight}: '
+                        '${shipment.verifiedWeightKg!.toStringAsFixed(1)} kg',
+                  ),
+                ],
+              ],
               const SizedBox(height: 8),
               _DetailLine(
                 icon: Icons.payments_outlined,
-                text:
-                    '${currency.format(shipment.price)} • ${paymentLabel(l10n, shipment.paymentStatus)}',
+                text: shipment.isFreight
+                    ? _freightAmountLabel(l10n, currency)
+                    : '${currency.format(shipment.price)} • '
+                          '${paymentLabel(l10n, shipment.paymentStatus)}',
               ),
-              if (shipment.deliveryEstimateLabel != null) ...[
+              if (shipment.isFreight &&
+                  shipment.priceSettlementStatus.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                _DetailLine(
+                  icon: Icons.account_balance_wallet_outlined,
+                  text: freightSettlementLabel(
+                    l10n,
+                    shipment.priceSettlementStatus,
+                  ),
+                ),
+              ],
+              if (barrel?.deliveryEstimateLabel != null) ...[
                 const SizedBox(height: 8),
                 _DetailLine(
                   icon: Icons.schedule_outlined,
-                  text: l10n.deliveryWithLabel(shipment.deliveryEstimateLabel!),
+                  text: l10n.deliveryWithLabel(barrel!.deliveryEstimateLabel!),
                 ),
               ],
               const SizedBox(height: 8),
@@ -640,16 +871,34 @@ class _ShipmentCard extends StatelessWidget {
                     label: Text(l10n.copy),
                   ),
                   const SizedBox(width: 8),
-                  OutlinedButton.icon(
-                    onPressed: () => _downloadReceipt(context),
-                    icon: const Icon(Icons.receipt_long, size: 18),
-                    label: Text(l10n.receipt),
-                  ),
-                  const Spacer(),
-                  Icon(
-                    Icons.chevron_right,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                  if (!shipment.isFreight) ...[
+                    OutlinedButton.icon(
+                      onPressed: () => _downloadReceipt(context),
+                      icon: const Icon(Icons.receipt_long, size: 18),
+                      label: Text(l10n.receipt),
+                    ),
+                  ],
+                  if (onPayBalance != null) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: balancePaymentBusy ? null : onPayBalance,
+                        child: Text(
+                          balancePaymentBusy
+                              ? l10n.paymentProcessing
+                              : l10n.payBalanceAmount(
+                                  currency.format(shipment.balanceDue),
+                                ),
+                        ),
+                      ),
+                    ),
+                  ] else
+                    const Spacer(),
+                  if (!shipment.isFreight)
+                    Icon(
+                      Icons.chevron_right,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                 ],
               ),
             ],
@@ -665,8 +914,16 @@ class _ShipmentCard extends StatelessWidget {
         return l10n.pendingPayment;
       case 'pending':
         return l10n.requested;
+      case 'awaiting_weight_confirmation':
+        return l10n.awaitingConfirmedWeight;
+      case 'awaiting_balance_payment':
+        return l10n.additionalPaymentRequired;
+      case 'settlement_processing':
+        return l10n.refundProcessing;
       case 'in_transit':
         return l10n.inTransit;
+      case 'ready_for_pickup':
+        return l10n.readyForPickup;
       case 'completed':
         return l10n.completed;
       case 'cancelled':
@@ -682,9 +939,15 @@ class _ShipmentCard extends StatelessWidget {
         return AppColors.sage;
       case 'in_transit':
         return AppColors.cobalt;
+      case 'ready_for_pickup':
+        return AppColors.sage;
       case 'cancelled':
         return AppColors.errorRed;
       case 'pending_payment':
+        return AppColors.warn;
+      case 'awaiting_weight_confirmation':
+      case 'awaiting_balance_payment':
+      case 'settlement_processing':
         return AppColors.warn;
       default:
         return AppColors.saffron;
@@ -703,6 +966,36 @@ class _ShipmentCard extends StatelessWidget {
         return l10n.paymentCancelled;
       default:
         return paymentStatus.replaceAll('_', ' ');
+    }
+  }
+
+  String _freightAmountLabel(AppLocalizations l10n, NumberFormat currency) {
+    if (shipment.priceSettlementStatus == 'settled' &&
+        shipment.finalTotal != null) {
+      return '${l10n.finalTotal}: ${currency.format(shipment.finalTotal)}';
+    }
+    if (shipment.refundDue > 0) {
+      return l10n.refundDueAmount(currency.format(shipment.refundDue));
+    }
+    return '${l10n.estimatedTotal}: '
+        '${currency.format(shipment.estimatedTotal)} • ${l10n.estimatePaid}';
+  }
+
+  static String freightSettlementLabel(AppLocalizations l10n, String status) {
+    switch (status) {
+      case 'awaiting_weight':
+        return l10n.awaitingConfirmedWeight;
+      case 'balance_due':
+      case 'balance_payment_pending':
+        return l10n.additionalPaymentRequired;
+      case 'refund_processing':
+        return l10n.refundProcessing;
+      case 'settled':
+        return l10n.freightSettled;
+      case 'needs_attention':
+        return l10n.settlementNeedsAttention;
+      default:
+        return status.replaceAll('_', ' ');
     }
   }
 }

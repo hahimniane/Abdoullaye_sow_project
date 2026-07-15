@@ -188,7 +188,7 @@ class _SupportInboxScreenState extends State<SupportInboxScreen> {
                   return ListView.separated(
                     padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
                     itemCount: cases.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final supportCase = cases[index];
                       return _SupportCaseCard(
@@ -232,7 +232,7 @@ class _SupportFilters extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 20),
         scrollDirection: Axis.horizontal,
         itemCount: filters.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final filter = filters[index];
           final active = selected == filter.$1;

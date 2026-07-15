@@ -5,8 +5,12 @@ import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../utils/app_feedback.dart';
-import '../utils/phone_number_validator.dart';
 import '../widgets/app_snackbars.dart';
+
+@visibleForTesting
+bool isValidLoginEmail(String value) {
+  return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$').hasMatch(value.trim());
+}
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -59,13 +63,13 @@ class _LoginScreenState extends State<LoginScreen>
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
     try {
-      final identifier = _emailController.text.trim();
+      final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
 
-      debugPrint('🔵 LoginScreen: Attempting login for: $identifier');
+      debugPrint('🔵 LoginScreen: Attempting email login');
       debugPrint('🔵 LoginScreen: Calling authProvider.authenticate()...');
 
-      final success = await authProvider.authenticate(identifier, password);
+      final success = await authProvider.authenticate(email, password);
 
       debugPrint('🔵 LoginScreen: Authentication result: $success');
       debugPrint('🔵 LoginScreen: isStaff: ${authProvider.isStaff}');
@@ -198,10 +202,10 @@ class _LoginScreenState extends State<LoginScreen>
                                       decoration: InputDecoration(
                                         labelText: AppLocalizations.of(
                                           context,
-                                        )!.emailOrPhone,
+                                        )!.email,
                                         hintText: AppLocalizations.of(
                                           context,
-                                        )!.enterEmailOrPhone,
+                                        )!.pleaseEnterEmail,
                                         prefixIcon: const Icon(
                                           Icons.alternate_email_outlined,
                                         ),
@@ -235,23 +239,12 @@ class _LoginScreenState extends State<LoginScreen>
                                         if (trimmed.isEmpty) {
                                           return AppLocalizations.of(
                                             context,
-                                          )!.pleaseEnterEmailOrPhone;
+                                          )!.pleaseEnterEmail;
                                         }
-                                        final looksLikeEmail = trimmed.contains(
-                                          '@',
-                                        );
-                                        final validEmail = RegExp(
-                                          r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$',
-                                        ).hasMatch(trimmed);
-                                        final validPhone =
-                                            PhoneNumberValidator.isValid(
-                                              trimmed,
-                                            );
-                                        if ((looksLikeEmail && !validEmail) ||
-                                            (!looksLikeEmail && !validPhone)) {
+                                        if (!isValidLoginEmail(trimmed)) {
                                           return AppLocalizations.of(
                                             context,
-                                          )!.pleaseEnterValidEmailOrPhone;
+                                          )!.validEmailRequired;
                                         }
                                         return null;
                                       },

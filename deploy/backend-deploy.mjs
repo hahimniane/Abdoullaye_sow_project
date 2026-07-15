@@ -1,6 +1,8 @@
 // Guarded Firebase backend deploy for Laawol.
 //
-// Runs backend preflight first, then deploys rules/indexes/storage/functions.
+// Runs backend preflight first, then deploys the compatible backend set through
+// one Firebase CLI invocation. Functions are listed first so a callable update
+// is available before rules that may depend on it.
 // This script is intentionally separate from Hostinger FTP static upload.
 
 import { execFileSync } from "node:child_process";
@@ -33,22 +35,18 @@ try {
   process.exit(1);
 }
 
-console.log("\nDeploying Firestore rules/indexes and Storage rules...");
+console.log("\nDeploying Functions, rules, indexes, and Storage as one release...");
 run("firebase", [
   "deploy",
   "--only",
-  "firestore:rules,firestore:indexes,storage",
+  "functions,firestore:rules,firestore:indexes,storage",
   "--project",
   PROJECT_ID,
 ], {cwd: APP_DIR});
 
-console.log("\nDeploying Cloud Functions...");
-run("firebase", [
-  "deploy",
-  "--only",
-  "functions",
-  "--project",
-  PROJECT_ID,
-], {cwd: APP_DIR});
+console.log("\nRunning read-only backend smoke checks...");
+run("node", [path.join(__dirname, "post-deploy-smoke.mjs")], {
+  env: {...process.env, SMOKE_SCOPE: "backend"},
+});
 
 console.log("\nBackend deploy complete.");

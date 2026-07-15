@@ -4,9 +4,11 @@ This guide explains how to deploy the Firebase Cloud Functions that enable admin
 
 ## Prerequisites
 
-1. Firebase CLI installed (`npm install -g firebase-tools`)
-2. You're logged in to Firebase (`firebase login`)
-3. Your Firebase project is selected
+1. Firebase CLI 14.22.0 installed (`npm install -g firebase-tools@14.22.0`)
+2. Java 21 or newer installed for emulator-backed tests
+3. GitHub CLI installed and authenticated (`gh auth status`)
+4. You're logged in to Firebase (`firebase login`)
+5. Your Firebase project is selected
 
 ## Steps to Deploy
 
@@ -27,19 +29,23 @@ If you haven't already, select your Firebase project:
 firebase use your-project-id
 ```
 
-### 3. Deploy the Functions
+### 3. Deploy the guarded backend release
 
-Deploy all functions:
-
-```bash
-firebase deploy --only functions
-```
-
-Or deploy specific functions:
+Do not call `firebase deploy` directly. The guarded release runs lint, the full
+unit/emulator/rules suite, validates production payment mode, performs a dry
+run, and deploys Functions plus rules/indexes/storage as one release command:
 
 ```bash
-firebase deploy --only functions:createStaffUser,functions:updateUserRole,functions:deleteUser
+cd deploy
+DEPLOY_ENV=production \
+FIREBASE_PROJECT=car-selling-flutter-app \
+npm run deploy:backend
 ```
+
+Targeted direct deploys bypass the repository release gate and are not a normal
+operational procedure. If incident response genuinely requires one, first run
+`npm run preflight:backend`, record the reason and exact commit, and run the
+post-deploy backend smoke check immediately afterward.
 
 ### 4. Verify Deployment
 
@@ -108,7 +114,7 @@ Monitor function execution in the Firebase Console:
 ## Common Issues
 
 ### Function Not Found
-- Ensure functions are deployed: `firebase deploy --only functions`
+- Run the guarded backend release and its post-deploy smoke check
 - Check function names match exactly in client code
 
 ### Permission Denied
@@ -121,13 +127,13 @@ Monitor function execution in the Firebase Console:
 
 ## Environment Configuration
 
-If you need to set environment variables:
+Use Firebase Functions secrets for confidential values:
 
 ```bash
-firebase functions:config:set app.name="Your App Name"
+firebase functions:secrets:set SECRET_NAME --project car-selling-flutter-app
 ```
 
-Then redeploy the functions.
+Then use the guarded backend release command above.
 
 ## Rollback
 

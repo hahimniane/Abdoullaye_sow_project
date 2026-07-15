@@ -81,3 +81,11 @@ Return:
   hierarchy, not flat service lists. Keep Destinations under transport/shipping,
   and preserve search/pin affordances so businesses with many services can
   quickly find or prioritize the sections they use most.
+- Freight UI must show estimated weight/total and confirmed weight/final total
+  as separate concepts. Use settlement labels for money state and operational
+  labels for fulfillment state; when a balance is due, keep the amount and
+  payment action visible together on narrow mobile screens.
+- Vehicle listings must require an explicit rebuilt-title Yes/No disclosure.
+  Show it in seller edit/review, customer cards/details, and admin review in
+  English and French. Missing legacy values must say Not provided/Unknown and
+  must never be presented as No or “clean title.”

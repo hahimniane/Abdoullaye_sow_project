@@ -314,9 +314,8 @@ class SupportService implements SupportRepository {
   }) async {
     await _functions.httpsCallable('assignSupportCase').call({
       'caseId': caseId,
-      if (assignedAdminUid != null) 'assignedAdminUid': assignedAdminUid,
-      if (assignedBusinessUserId != null)
-        'assignedBusinessUserId': assignedBusinessUserId,
+      'assignedAdminUid': ?assignedAdminUid,
+      'assignedBusinessUserId': ?assignedBusinessUserId,
     });
   }
 
@@ -407,7 +406,7 @@ class SupportService implements SupportRepository {
       'mimeType': mimeType,
       'fileSize': uploadBytes.length,
       'messageType': messageType,
-      if (durationSeconds != null) 'durationSeconds': durationSeconds,
+      'durationSeconds': ?durationSeconds,
       if (caption.trim().isNotEmpty) 'caption': caption.trim(),
     });
   }
@@ -435,8 +434,8 @@ class SupportService implements SupportRepository {
       'fileName': fileName,
       'mimeType': mimeType,
       'messageType': messageType,
-      if (fileSize != null) 'fileSize': fileSize,
-      if (durationSeconds != null) 'durationSeconds': durationSeconds,
+      'fileSize': ?fileSize,
+      'durationSeconds': ?durationSeconds,
       if (caption.trim().isNotEmpty) 'caption': caption.trim(),
     });
   }

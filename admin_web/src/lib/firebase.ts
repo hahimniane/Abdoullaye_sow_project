@@ -1,4 +1,5 @@
 import { initializeApp, getApps } from "firebase/app";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 import { connectAuthEmulator, getAuth } from "firebase/auth";
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
@@ -24,6 +25,54 @@ const firebaseConfig = {
 };
 
 export const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+
+type AppCheckRuntime = typeof globalThis & {
+  FIREBASE_APPCHECK_DEBUG_TOKEN?: boolean | string;
+  __laawolAppCheckInitialized?: boolean;
+};
+
+const appCheckRuntime = globalThis as AppCheckRuntime;
+const useFirebaseEmulators =
+  process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true";
+const appCheckSiteKey =
+  process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY?.trim() ?? "";
+const appCheckDebugToken =
+  process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_DEBUG_TOKEN?.trim() ?? "";
+
+if (
+  typeof window !== "undefined" &&
+  !useFirebaseEmulators &&
+  !appCheckRuntime.__laawolAppCheckInitialized
+) {
+  const production = process.env.NODE_ENV === "production";
+  if (production && !appCheckSiteKey) {
+    throw new Error(
+      "NEXT_PUBLIC_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY is required in production.",
+    );
+  }
+  if (production && appCheckDebugToken) {
+    throw new Error(
+      "NEXT_PUBLIC_FIREBASE_APP_CHECK_DEBUG_TOKEN must not be set in production.",
+    );
+  }
+
+  // Local preview remains opt-in: set a registered debug token to exercise App
+  // Check without shipping a debug provider path in production.
+  if (production || appCheckDebugToken) {
+    if (!production) {
+      appCheckRuntime.FIREBASE_APPCHECK_DEBUG_TOKEN =
+        appCheckDebugToken === "true" ? true : appCheckDebugToken;
+    }
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(
+        appCheckSiteKey || "debug-provider-not-used",
+      ),
+      isTokenAutoRefreshEnabled: true,
+    });
+    appCheckRuntime.__laawolAppCheckInitialized = true;
+  }
+}
+
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const functions = getFunctions(app);
@@ -34,7 +83,7 @@ export const storage = getStorage(app);
 // unaffected. Mirrors the Flutter app's USE_FIREBASE_EMULATORS switch.
 if (
   typeof window !== "undefined" &&
-  process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true" &&
+  useFirebaseEmulators &&
   !(globalThis as { __laawolEmulatorsConnected?: boolean }).__laawolEmulatorsConnected
 ) {
   (globalThis as { __laawolEmulatorsConnected?: boolean }).__laawolEmulatorsConnected = true;

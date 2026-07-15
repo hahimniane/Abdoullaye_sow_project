@@ -42,6 +42,20 @@ the Stripe secret shape, the shared barrel Firestore indexes, and a Firebase
 Functions dry-run so project API blockers are visible before the real deploy.
 It does not print secret values and it does not deploy.
 
+Backend preflight also runs Functions lint plus the complete
+unit/callable/Firestore/Storage emulator suite. Java 21 or newer and Firebase
+CLI `14.22.0` must be available locally. For the production project it rejects
+`SIMULATE_PAYMENTS` and requires `STRIPE_SECRET_KEY` to be a live key. A
+non-production project must be explicitly labeled, for example:
+
+```bash
+DEPLOY_ENV=test FIREBASE_PROJECT=demo-laawol npm run preflight:backend
+```
+
+Production preflight also requires an authenticated `gh` CLI and a successful
+`CI` workflow run for the exact commit being deployed. `ALLOW_UNVERIFIED_CI=1`
+is an emergency-only, logged override; it is not a routine deployment option.
+
 For path-specific checks, run:
 
 ```bash
@@ -67,9 +81,12 @@ FTP_PASS=your_ftp_password \
 REMOTE_ROOT=public_html \
 REMOTE_ADMIN=public_html/admin \
 REMOTE_BUSINESS=public_html/business \
-FTP_SECURE=false \
+FTP_SECURE=true \
 node deploy.mjs
 ```
+
+Plain FTP and invalid TLS certificates are rejected. If the host cannot provide
+a valid FTPS endpoint, use the preferred SSH deployment instead.
 
 Both scripts run the public CMS/privacy verifier and confirm the admin static
 build exists before upload. The SSH script uses `rsync --delete` on each target
@@ -94,3 +111,17 @@ fixing the backend preflight checks:
 ```bash
 npm run deploy:backend
 ```
+
+The guarded command deploys Functions, Firestore rules/indexes, and Storage
+rules through one Firebase CLI invocation, then runs read-only backend smoke
+checks. Do not replace it with a direct `firebase deploy` command.
+The legacy `my_flutter_app/functions` `npm run deploy` script is also a bypass:
+do not use it for production.
+
+Both static deployment commands run read-only HTTP smoke checks after upload.
+They can also be run independently with `npm run smoke:static` and
+`npm run smoke:backend`.
+
+Mobile binaries follow [RELEASE_ARTIFACTS.md](./RELEASE_ARTIFACTS.md); new
+AAB/APK/IPA outputs must live in the CI/release artifact store with commit and
+checksum provenance, not in Git.

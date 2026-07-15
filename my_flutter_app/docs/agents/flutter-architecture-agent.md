@@ -117,3 +117,19 @@ Add future project conventions and repeated architectural decisions here.
 - New or changed user-facing strings must use `AppLocalizations` and ARB
   placeholders. Do not add hardcoded English UI text or local `copy(en, fr)`
   helpers when an ARB key is the right source of truth.
+- Destination availability is service-specific. Freight requires an air or sea
+  per-kg rate, barrels/shared barrels require a barrel rate, and quoted car
+  transport requires only an approved active destination. Do not reuse the
+  barrel-only `isAvailable` predicate for another service.
+- Every `CustomerOrder` marked trackable must have a registered source/parser in
+  `CustomerTrackingRepository` and an appropriate tracking card/action before
+  Orders routes it to `/tracking`.
+- Freight pricing is a two-stage contract: the booking charge is a provisional
+  estimate, a business-only weight confirmation creates one deterministic
+  versioned settlement, and fulfillment/payout stays locked until that
+  settlement is complete. Preserve estimated and final amounts separately;
+  never overwrite the estimate or treat operational status as payment status.
+- Store rebuilt-title disclosure as nullable `isRebuiltTitle` for legacy
+  compatibility, require a real boolean on new vehicle listings, and preserve
+  null as an explicit unknown display state. Never default missing values to
+  false or infer a clean title.

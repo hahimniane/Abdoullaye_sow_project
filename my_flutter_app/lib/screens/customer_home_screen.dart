@@ -195,25 +195,25 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           currentIndex: _index,
           onTap: _onTap,
           items: [
-            const AppBottomNavItem(
+            AppBottomNavItem(
               icon: Icons.home_outlined,
               selectedIcon: Icons.home,
-              label: 'Home',
+              label: l10n.home,
             ),
-            const AppBottomNavItem(
+            AppBottomNavItem(
               icon: Icons.local_shipping_outlined,
               selectedIcon: Icons.local_shipping,
-              label: 'Shipping',
+              label: l10n.hubShipping,
             ),
-            const AppBottomNavItem(
+            AppBottomNavItem(
               icon: Icons.directions_car_outlined,
               selectedIcon: Icons.directions_car,
-              label: 'Cars',
+              label: l10n.cars,
             ),
-            const AppBottomNavItem(
+            AppBottomNavItem(
               icon: Icons.receipt_long_outlined,
               selectedIcon: Icons.receipt_long,
-              label: 'Activity',
+              label: l10n.activity,
             ),
             AppBottomNavItem(
               icon: Icons.settings_outlined,

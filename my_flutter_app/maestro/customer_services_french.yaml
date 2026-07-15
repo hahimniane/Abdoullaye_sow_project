@@ -1,0 +1,18 @@
+appId: com.laawoldigital.app
+name: Customer service hub renders in French
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "(?s).*E2E Customer.*"
+    timeout: 30000
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "(?s).*Favorite cars.*"
+    timeout: 20000
+- tapOn: "English"
+- tapOn: "Expédition"
+- assertVisible: "(?s).*Envoyer un baril.*"
+- assertVisible: "(?s).*Barils partagés.*"
+- assertVisible: "(?s).*Fret.*"
+- assertVisible: "(?s).*Transporter une voiture.*"
+- takeScreenshot: "output/ios-e2e/services-hub-fr"

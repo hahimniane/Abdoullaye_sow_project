@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:file_picker/file_picker.dart';
+import 'package:file_selector/file_selector.dart' show XTypeGroup, openFile;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -140,27 +140,30 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
   Future<void> _pickDocument() async {
     final l10n = AppLocalizations.of(context)!;
     if (_uploading) return;
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['pdf', 'txt', 'doc', 'docx'],
-      withData: true,
+    const documentTypes = XTypeGroup(
+      label: 'documents',
+      extensions: <String>['pdf', 'txt', 'doc', 'docx'],
     );
-    final pickedFile = result?.files.single;
+    final pickedFile = await openFile(
+      acceptedTypeGroups: const <XTypeGroup>[documentTypes],
+    );
     if (pickedFile == null) return;
-    final bytes = pickedFile.bytes;
     final mimeType = _documentMimeType(pickedFile.name);
-    if (bytes == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.supportFileReadFailed)));
-      return;
-    }
     if (mimeType == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n.supportUnsupportedAttachmentType)),
       );
+      return;
+    }
+    late final List<int> bytes;
+    try {
+      bytes = await pickedFile.readAsBytes();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.supportFileReadFailed)));
       return;
     }
     await _uploadAttachmentBytes(

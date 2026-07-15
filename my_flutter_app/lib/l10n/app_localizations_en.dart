@@ -637,6 +637,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filterBarrels => 'Barrel Shipments';
 
   @override
+  String get filterFreight => 'Freight';
+
+  @override
   String get filterTransport => 'Car Transport';
 
   @override
@@ -881,6 +884,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get carMileage => 'Mileage';
+
+  @override
+  String get rebuiltTitle => 'Rebuilt title';
+
+  @override
+  String get rebuiltTitleQuestion => 'Rebuilt title?';
+
+  @override
+  String get rebuiltTitleYes => 'Yes — rebuilt title';
+
+  @override
+  String get rebuiltTitleNo => 'No — not a rebuilt title';
+
+  @override
+  String get rebuiltTitleUnknown => 'Not provided';
+
+  @override
+  String get rebuiltTitleDisclosureHelp =>
+      'Required. Buyers will see this disclosure.';
 
   @override
   String get sellingPrice => 'Listing Price';
@@ -3091,6 +3113,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String freightEstimatePaidTracking(Object trackingCode) {
+    return 'Estimate paid. Tracking: $trackingCode';
+  }
+
+  @override
   String get fillSenderReceiverPhone => 'Fill sender, receiver, and phone.';
 
   @override
@@ -3102,6 +3129,22 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get noFreightBusinessesSubtitle =>
       'Parcel freight will appear here once a business sets its air or sea rates.';
+
+  @override
+  String get couldNotLoadFreightOptions =>
+      'Could not load freight options. Check your connection and try again.';
+
+  @override
+  String get freightBookingFailed =>
+      'We couldn\'t create this freight shipment. Please try again.';
+
+  @override
+  String get approvedBusiness => 'Approved business';
+
+  @override
+  String freightDeliveryEstimateDays(int minimum, int maximum) {
+    return 'Delivery: $minimum-$maximum days';
+  }
 
   @override
   String get searchBusinessOrCountry => 'Search a business or country';
@@ -3130,10 +3173,76 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shippingMode => 'Shipping mode';
 
   @override
+  String get invalidFreightMode => 'Choose air or sea freight.';
+
+  @override
   String get parcelWeightKg => 'Parcel weight (kg)';
 
   @override
   String get estimatedPrice => 'Estimated price';
+
+  @override
+  String get estimatedWeight => 'Estimated weight';
+
+  @override
+  String get estimatedWeightKg => 'Estimated weight (kg)';
+
+  @override
+  String get estimatedTotal => 'Estimated total';
+
+  @override
+  String get freightEstimateExplanation =>
+      'You are paying an estimate based on the weight you entered. The business will confirm the weight after drop-off.';
+
+  @override
+  String get payEstimate => 'Pay estimate';
+
+  @override
+  String get estimatePaid => 'Estimate paid';
+
+  @override
+  String get awaitingConfirmedWeight => 'Awaiting confirmed weight';
+
+  @override
+  String get verifiedWeight => 'Confirmed weight';
+
+  @override
+  String get finalTotal => 'Final total';
+
+  @override
+  String get additionalPaymentRequired => 'Additional payment required';
+
+  @override
+  String payBalanceAmount(Object amount) {
+    return 'Pay balance of $amount';
+  }
+
+  @override
+  String refundDueAmount(Object amount) {
+    return 'Refund due: $amount';
+  }
+
+  @override
+  String get refundProcessing => 'Refund processing';
+
+  @override
+  String get refundCompleted => 'Refund completed';
+
+  @override
+  String get freightSettled => 'Settled';
+
+  @override
+  String get shipmentHeldForBalance =>
+      'Your parcel will be held until the balance is paid.';
+
+  @override
+  String get settlementNeedsAttention => 'Settlement needs attention';
+
+  @override
+  String get paymentProcessing => 'Payment processing…';
+
+  @override
+  String get couldNotPayBalance => 'Could not pay the balance. Try again.';
 
   @override
   String get enterWeightToSeePrice => 'Enter a weight to see the price';
@@ -3144,6 +3253,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get freightDropOffNote =>
       'Drop your parcel at the business location. Pickup coming soon.';
+
+  @override
+  String freightDropOffAddress(Object address) {
+    return 'Drop-off: $address';
+  }
+
+  @override
+  String freightBusinessPhone(Object phone) {
+    return 'Business phone: $phone';
+  }
 
   @override
   String get airFreight => 'Air freight';
@@ -3240,6 +3359,29 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get receiverWhatsAppNumberSubtitle =>
       'Use this only if the receiver uses a different country number on WhatsApp.';
+
+  @override
+  String get invalidPhoneWithCountryCode =>
+      'Enter a valid phone number with country code.';
+
+  @override
+  String get invalidInternationalPhone =>
+      'Enter a valid international phone number.';
+
+  @override
+  String get whatsAppDifferentCountryRequiresCode =>
+      'For WhatsApp numbers from another country, include + and the country code.';
+
+  @override
+  String receiverPhoneMustMatchDestination(
+    Object destinationName,
+    Object prefix,
+  ) {
+    return 'Receiver number must match $destinationName ($prefix) or mark it as a WhatsApp number.';
+  }
+
+  @override
+  String get readyForPickup => 'Ready for pickup';
 
   @override
   String get samePickup => 'Same pickup';
@@ -3377,6 +3519,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get splashTagline => 'Motorcars, barrels & passage in one place.';
 
   @override
+  String get splashMarketplace => 'MARKETPLACE';
+
+  @override
+  String get splashOpening => 'OPENING LAAWOL';
+
+  @override
+  String get accountProfileUnavailable =>
+      'The connection is slow. We could not safely load your account role.';
+
+  @override
+  String get accountProfileMissing =>
+      'Your account profile is missing. Contact Laawol support.';
+
+  @override
+  String get accountProfileRetryHelp =>
+      'Retry without signing out or losing your session.';
+
+  @override
   String get addMoney => 'Add money';
 
   @override
@@ -3450,6 +3610,35 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get businessApplicationSubtitle =>
       'Apply once, prepare your operations, then go live when approved.';
+
+  @override
+  String get businessOperations => 'Business operations';
+
+  @override
+  String get businessOperationsWebNote =>
+      'Manage freight, barrels, transport, parking, destinations, staff, and payouts in the secure business console. This avoids entering a customer booking or payment flow by mistake.';
+
+  @override
+  String get businessCarsMobileNote =>
+      'Vehicle listings and purchases are also available in the mobile tabs below.';
+
+  @override
+  String get openBusinessConsole => 'Open business console';
+
+  @override
+  String get openingBusinessConsole => 'Opening business console...';
+
+  @override
+  String get businessConsoleOpenFailed =>
+      'Could not open the business console. Visit business.laawoldigital.com in your browser.';
+
+  @override
+  String get businessChangesRequestedBanner =>
+      'A platform admin requested changes. You can keep editing your setup while the business stays hidden from customers.';
+
+  @override
+  String get businessPendingApprovalBanner =>
+      'Your business is pending platform approval. You can set up destinations, cars, and staff now; customers will see it after approval.';
 
   @override
   String totalDaysLabel(Object days) {
@@ -4167,4 +4356,62 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get parkingReviewPickupNo => 'No pickup';
+
+  @override
+  String get hubGuestName => 'there';
+
+  @override
+  String get hubQuickActions => 'Quick actions';
+
+  @override
+  String get hubSendBarrel => 'Send a barrel';
+
+  @override
+  String get hubShipFullBarrel => 'Ship a full barrel home';
+
+  @override
+  String get hubBrowseCars => 'Browse cars';
+
+  @override
+  String get hubBuyVerifiedCar => 'Buy a verified car';
+
+  @override
+  String get hubFollowShipments => 'Follow your shipments';
+
+  @override
+  String get hubShipping => 'Shipping';
+
+  @override
+  String get hubShippingSubtitle => 'Send barrels, freight, and cars home.';
+
+  @override
+  String get hubSharedBarrels => 'Shared barrels';
+
+  @override
+  String get hubSharedBarrelsSubtitle => 'Post or join a barrel';
+
+  @override
+  String get hubFreightSubtitle => 'By weight · air or sea';
+
+  @override
+  String get hubTransportCar => 'Transport a car';
+
+  @override
+  String get hubShipCarHome => 'Ship a car home';
+
+  @override
+  String get hubCarsSubtitle =>
+      'Buy a verified car or store one with a business.';
+
+  @override
+  String get hubParkCarSubtitle => 'Store with a business';
+
+  @override
+  String get hubActivitySubtitle => 'Your orders, shipments, and wallet.';
+
+  @override
+  String get hubOrdersSubtitle => 'Cars, barrels, freight & more';
+
+  @override
+  String get hubWalletSubtitle => 'Balance & refunds';
 }

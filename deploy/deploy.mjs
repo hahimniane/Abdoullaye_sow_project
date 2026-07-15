@@ -31,7 +31,7 @@ const cfg = {
   host: process.env.FTP_HOST,
   user: process.env.FTP_USER,
   password: process.env.FTP_PASS,
-  secure: String(process.env.FTP_SECURE || "false").toLowerCase() === "true",
+  secure: String(process.env.FTP_SECURE || "true").toLowerCase() === "true",
   remoteRoot: process.env.REMOTE_ROOT || "public_html",
   remoteAdmin: process.env.REMOTE_ADMIN || "public_html/admin",
   remoteBusiness: process.env.REMOTE_BUSINESS || "public_html/business",
@@ -70,7 +70,7 @@ try {
     user: cfg.user,
     password: cfg.password,
     secure: cfg.secure,
-    secureOptions: { rejectUnauthorized: false },
+    secureOptions: { rejectUnauthorized: true },
   });
   console.log("Connected to", cfg.host, "as", cfg.user);
 
@@ -100,6 +100,12 @@ try {
     await client.uploadFromDir(ADMIN_DIR, cfg.remoteBusiness);
     console.log("Business console uploaded.");
   }
+
+  console.log("\nRunning read-only static smoke checks...");
+  execFileSync("node", [path.join(__dirname, "post-deploy-smoke.mjs")], {
+    env: {...process.env, SMOKE_SCOPE: "static"},
+    stdio: "inherit",
+  });
 
   console.log("\n✅ Deploy complete.");
 } catch (err) {

@@ -32,7 +32,11 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
-import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
+import {
+  getDownloadURL,
+  ref as storageRef,
+  uploadBytes,
+} from "firebase/storage";
 import {
   Activity,
   ArrowUpRight,
@@ -99,7 +103,10 @@ type Tab = (typeof tabs)[number];
 const navGroups: Array<{ label: string; tabs: Tab[] }> = [
   { label: "Overview", tabs: ["today"] },
   { label: "Network", tabs: ["businesses", "people"] },
-  { label: "Queues", tabs: ["marketplace", "operations", "finance", "support"] },
+  {
+    label: "Queues",
+    tabs: ["marketplace", "operations", "finance", "support"],
+  },
   { label: "System", tabs: ["website", "tools", "settings"] },
 ];
 
@@ -111,20 +118,49 @@ const businessRoleOptions = ["businessOwner", "staff"] as const;
 // are stored in Firestore (platformConfig/permissions). Each role grants each
 // console SECTION an access level ("none" | "view" | "manage") AND may be
 // limited to a set of platform SERVICES. The backend reads the same config.
-type AdminCapability = "users" | "businesses" | "marketplace" | "operations" | "finance" | "support" | "website";
+type AdminCapability =
+  | "users"
+  | "businesses"
+  | "marketplace"
+  | "operations"
+  | "finance"
+  | "support"
+  | "website";
 type AccessLevel = "none" | "view" | "manage";
 
-const EDITABLE_SECTIONS: Array<{ tab: Tab; key: string; cap: AdminCapability; label: string }> = [
+const EDITABLE_SECTIONS: Array<{
+  tab: Tab;
+  key: string;
+  cap: AdminCapability;
+  label: string;
+}> = [
   { tab: "people", key: "people", cap: "users", label: "People & access" },
-  { tab: "businesses", key: "businesses", cap: "businesses", label: "Businesses" },
-  { tab: "marketplace", key: "marketplace", cap: "marketplace", label: "Marketplace" },
-  { tab: "operations", key: "operations", cap: "operations", label: "Operations" },
+  {
+    tab: "businesses",
+    key: "businesses",
+    cap: "businesses",
+    label: "Businesses",
+  },
+  {
+    tab: "marketplace",
+    key: "marketplace",
+    cap: "marketplace",
+    label: "Marketplace",
+  },
+  {
+    tab: "operations",
+    key: "operations",
+    cap: "operations",
+    label: "Operations",
+  },
   { tab: "finance", key: "finance", cap: "finance", label: "Finance" },
   { tab: "website", key: "website", cap: "website", label: "Website" },
 ];
-const EDITABLE_CAPS: Array<{ key: string; cap: AdminCapability; label: string }> = [
-  { key: "support", cap: "support", label: "Reply to support requests" },
-];
+const EDITABLE_CAPS: Array<{
+  key: string;
+  cap: AdminCapability;
+  label: string;
+}> = [{ key: "support", cap: "support", label: "Reply to support requests" }];
 const ACCESS_LEVELS: AccessLevel[] = ["none", "view", "manage"];
 
 // Canonical platform services a role can be scoped to.
@@ -154,14 +190,75 @@ const ROLE_LABELS_BUILTIN: Record<string, string> = {
 };
 
 const DEFAULT_ROLES: Record<string, RoleConfig> = {
-  operationsManager: { label: "Operations manager", builtIn: true, services: [], sections: { people: "view", businesses: "manage", marketplace: "manage", operations: "manage", finance: "none", website: "manage", support: "manage" } },
-  financeManager: { label: "Finance manager", builtIn: true, services: [], sections: { people: "view", businesses: "none", marketplace: "none", operations: "view", finance: "manage", website: "none", support: "manage" } },
-  supportAdmin: { label: "Support admin", builtIn: true, services: [], sections: { people: "view", businesses: "view", marketplace: "view", operations: "view", finance: "none", website: "none", support: "manage" } },
-  contentManager: { label: "Content manager", builtIn: true, services: [], sections: { people: "view", businesses: "view", marketplace: "none", operations: "none", finance: "none", website: "manage", support: "none" } },
+  operationsManager: {
+    label: "Operations manager",
+    builtIn: true,
+    services: [],
+    sections: {
+      people: "view",
+      businesses: "manage",
+      marketplace: "manage",
+      operations: "manage",
+      finance: "none",
+      website: "manage",
+      support: "manage",
+    },
+  },
+  financeManager: {
+    label: "Finance manager",
+    builtIn: true,
+    services: [],
+    sections: {
+      people: "view",
+      businesses: "none",
+      marketplace: "none",
+      operations: "view",
+      finance: "manage",
+      website: "none",
+      support: "manage",
+    },
+  },
+  supportAdmin: {
+    label: "Support admin",
+    builtIn: true,
+    services: [],
+    sections: {
+      people: "view",
+      businesses: "view",
+      marketplace: "view",
+      operations: "view",
+      finance: "none",
+      website: "none",
+      support: "manage",
+    },
+  },
+  contentManager: {
+    label: "Content manager",
+    builtIn: true,
+    services: [],
+    sections: {
+      people: "view",
+      businesses: "view",
+      marketplace: "none",
+      operations: "none",
+      finance: "none",
+      website: "manage",
+      support: "none",
+    },
+  },
 };
 
 const SUPER_ADMIN_TABS: Tab[] = [
-  "today", "businesses", "people", "marketplace", "operations", "finance", "support", "website", "tools", "settings",
+  "today",
+  "businesses",
+  "people",
+  "marketplace",
+  "operations",
+  "finance",
+  "support",
+  "website",
+  "tools",
+  "settings",
 ];
 
 type Perms = {
@@ -174,10 +271,16 @@ type Perms = {
 };
 
 // Built-in defaults overlaid with any stored config (custom + edited roles).
-function mergedRoles(config: PermissionsConfig | null): Record<string, RoleConfig> {
+function mergedRoles(
+  config: PermissionsConfig | null,
+): Record<string, RoleConfig> {
   const roles: Record<string, RoleConfig> = {};
   for (const [key, value] of Object.entries(DEFAULT_ROLES)) {
-    roles[key] = { ...value, sections: { ...value.sections }, services: [...value.services] };
+    roles[key] = {
+      ...value,
+      sections: { ...value.sections },
+      services: [...value.services],
+    };
   }
   for (const [key, value] of Object.entries(config?.roles ?? {})) {
     const base = roles[key];
@@ -185,7 +288,9 @@ function mergedRoles(config: PermissionsConfig | null): Record<string, RoleConfi
       label: text(value.label, base?.label ?? key),
       builtIn: base?.builtIn ?? false,
       sections: { ...(base?.sections ?? {}), ...(value.sections ?? {}) },
-      services: Array.isArray(value.services) ? value.services : base?.services ?? [],
+      services: Array.isArray(value.services)
+        ? value.services
+        : (base?.services ?? []),
     };
   }
   return roles;
@@ -193,10 +298,16 @@ function mergedRoles(config: PermissionsConfig | null): Record<string, RoleConfi
 
 function roleLabel(roleKey: string, config: PermissionsConfig | null): string {
   if (roleKey === "superAdmin") return ROLE_LABELS_BUILTIN.superAdmin;
-  return mergedRoles(config)[roleKey]?.label ?? ROLE_LABELS_BUILTIN[roleKey] ?? roleKey;
+  return (
+    mergedRoles(config)[roleKey]?.label ??
+    ROLE_LABELS_BUILTIN[roleKey] ??
+    roleKey
+  );
 }
 
-function roleOptionList(config: PermissionsConfig | null): Array<{ key: string; label: string }> {
+function roleOptionList(
+  config: PermissionsConfig | null,
+): Array<{ key: string; label: string }> {
   const roles = mergedRoles(config);
   return [
     { key: "superAdmin", label: ROLE_LABELS_BUILTIN.superAdmin },
@@ -213,15 +324,23 @@ function resolvePerms(
   const effective = previewMode ? "superAdmin" : raw || "superAdmin";
   if (effective === "superAdmin") {
     return {
-      role: "superAdmin", label: ROLE_LABELS_BUILTIN.superAdmin, tabs: SUPER_ADMIN_TABS,
-      can: () => true, services: null, canService: () => true,
+      role: "superAdmin",
+      label: ROLE_LABELS_BUILTIN.superAdmin,
+      tabs: SUPER_ADMIN_TABS,
+      can: () => true,
+      services: null,
+      canService: () => true,
     };
   }
   const role = mergedRoles(config)[effective];
   if (!role) {
     return {
-      role: effective, label: roleLabel(effective, config), tabs: ["today"],
-      can: () => false, services: [], canService: () => false,
+      role: effective,
+      label: roleLabel(effective, config),
+      tabs: ["today"],
+      can: () => false,
+      services: [],
+      canService: () => false,
     };
   }
   const allowedTabs: Tab[] = ["today"];
@@ -239,10 +358,13 @@ function resolvePerms(
   if (caps.has("support")) allowedTabs.push("support");
   const services = role.services.length ? role.services : null;
   return {
-    role: effective, label: role.label, tabs: allowedTabs,
+    role: effective,
+    label: role.label,
+    tabs: allowedTabs,
     can: (capability) => caps.has(capability),
     services,
-    canService: (serviceId) => services === null || services.includes(serviceId),
+    canService: (serviceId) =>
+      services === null || services.includes(serviceId),
   };
 }
 
@@ -255,13 +377,20 @@ function useRolePermissionsConfig(enabled: boolean): PermissionsConfig | null {
     }
     return onSnapshot(
       doc(db, "platformConfig", "permissions"),
-      (snap) => setConfig(snap.exists() ? (snap.data() as PermissionsConfig) : {}),
+      (snap) =>
+        setConfig(snap.exists() ? (snap.data() as PermissionsConfig) : {}),
       () => setConfig({}),
     );
   }, [enabled]);
   return config;
 }
-const businessStatuses = ["pending", "approved", "suspended", "changes_requested", "rejected"];
+const businessStatuses = [
+  "pending",
+  "approved",
+  "suspended",
+  "changes_requested",
+  "rejected",
+];
 const listingStatuses = ["active", "inactive", "reserved", "sold"];
 const operationalStatuses = [
   "pending",
@@ -273,6 +402,14 @@ const operationalStatuses = [
   "sold",
   "reserved",
   "inactive",
+];
+const freightStatuses = [
+  "pending_payment",
+  "pending",
+  "in_transit",
+  "ready_for_pickup",
+  "completed",
+  "cancelled",
 ];
 const purchaseStatuses = [
   "pending",
@@ -334,9 +471,23 @@ const statusLabels = {
   verified: "Verified",
   no_show: "No show",
   balance_due: "Balance due",
+  awaiting_estimate_payment: "Awaiting estimate payment",
+  awaiting_weight: "Awaiting weight",
+  awaiting_weight_confirmation: "Awaiting weight confirmation",
+  awaiting_balance_payment: "Awaiting balance payment",
+  balance_payment_pending: "Balance payment pending",
+  settlement_processing: "Settlement processing",
+  refund_processing: "Refund processing",
+  settled: "Settled",
+  needs_attention: "Needs attention",
   collected_by_business: "Collected by business",
   refund_pending: "Refund pending",
   refunded: "Refunded",
+  air: "Air",
+  sea: "Sea",
+  confirmed: "Confirmed",
+  succeeded: "Succeeded",
+  blocked_pending_settlement: "Blocked pending settlement",
   forfeited: "Forfeited",
   queued: "Queued",
   processing: "Processing",
@@ -413,28 +564,72 @@ function emptySupportDraft(businessId = ""): SupportDraft {
 function loadingActionLabel(label: string) {
   const value = label.trim();
   const lower = value.toLowerCase();
-  if (lower.includes("destination") && lower.includes("updated")) return "Updating destination...";
-  if (lower.includes("profile") && lower.includes("updated")) return "Saving profile...";
-  if (lower.includes("photo") && lower.includes("uploaded")) return "Uploading photo...";
-  if (lower.includes("phone") && lower.includes("sent")) return "Sending phone code...";
-  if (lower.includes("phone") && lower.includes("confirmed")) return "Confirming phone...";
-  if (lower.includes("refund") && lower.includes("completed")) return "Completing refund request...";
-  if (lower.includes("refund") && lower.includes("rejected")) return "Rejecting refund request...";
-  if (lower.includes("deleted")) return value.replace(/deleted/i, "Deleting...");
-  if (lower.includes("created")) return value.replace(/created/i, "Creating...");
-  if (lower.includes("updated")) return value.replace(/updated/i, "Updating...");
+  if (lower.includes("destination") && lower.includes("updated"))
+    return "Updating destination...";
+  if (lower.includes("profile") && lower.includes("updated"))
+    return "Saving profile...";
+  if (lower.includes("photo") && lower.includes("uploaded"))
+    return "Uploading photo...";
+  if (lower.includes("phone") && lower.includes("sent"))
+    return "Sending phone code...";
+  if (lower.includes("phone") && lower.includes("confirmed"))
+    return "Confirming phone...";
+  if (lower.includes("refund") && lower.includes("completed"))
+    return "Completing refund request...";
+  if (lower.includes("refund") && lower.includes("rejected"))
+    return "Rejecting refund request...";
+  if (lower.includes("deleted"))
+    return value.replace(/deleted/i, "Deleting...");
+  if (lower.includes("created"))
+    return value.replace(/created/i, "Creating...");
+  if (lower.includes("updated"))
+    return value.replace(/updated/i, "Updating...");
   if (lower.includes("saved")) return value.replace(/saved/i, "Saving...");
-  if (lower.includes("complete")) return value.replace(/complete/i, "Running...");
+  if (lower.includes("complete"))
+    return value.replace(/complete/i, "Running...");
   return `${value}...`;
 }
 
 const previewData = {
   users: [
-    { id: "admin-preview", fullName: "Platform Administrator", email: "admin@laawoldigital.com", role: "admin" },
-    { id: "owner-keren", fullName: "Keren Manager", email: "owner@kerenautos.com", role: "businessOwner", businessName: "Keren Auto Sales" },
-    { id: "staff-yard", fullName: "Yard Staff", email: "yard@laawoldigital.com", role: "staff", businessName: "Keren Auto Sales" },
-    { id: "customer-a", fullName: "Mamadou Diallo", email: "mamadou@example.com", phone: "+1 718 555 0199", role: "customer" },
-    { id: "contact-aissatou", fullName: "Aissatou Bah", email: "aissatou@example.com", phone: "+1 718 555 0134", role: "missing_profile", businessName: "Keren Auto Sales", hasProfile: false, _inferred: true, _sourceCode: "VX-BRL-1048" },
+    {
+      id: "admin-preview",
+      fullName: "Platform Administrator",
+      email: "admin@laawoldigital.com",
+      role: "admin",
+    },
+    {
+      id: "owner-keren",
+      fullName: "Keren Manager",
+      email: "owner@kerenautos.com",
+      role: "businessOwner",
+      businessName: "Keren Auto Sales",
+    },
+    {
+      id: "staff-yard",
+      fullName: "Yard Staff",
+      email: "yard@laawoldigital.com",
+      role: "staff",
+      businessName: "Keren Auto Sales",
+    },
+    {
+      id: "customer-a",
+      fullName: "Mamadou Diallo",
+      email: "mamadou@example.com",
+      phone: "+1 718 555 0199",
+      role: "customer",
+    },
+    {
+      id: "contact-aissatou",
+      fullName: "Aissatou Bah",
+      email: "aissatou@example.com",
+      phone: "+1 718 555 0134",
+      role: "missing_profile",
+      businessName: "Keren Auto Sales",
+      hasProfile: false,
+      _inferred: true,
+      _sourceCode: "VX-BRL-1048",
+    },
   ],
   businesses: [
     {
@@ -443,10 +638,16 @@ const previewData = {
       phone: "+1 718 555 0110",
       email: "ops@kerenautos.com",
       status: "approved",
-      enabledServices: ["carSales", "carParking", "carTransport", "barrelShipping"],
+      enabledServices: [
+        "carSales",
+        "carParking",
+        "carTransport",
+        "barrelShipping",
+      ],
       serviceNote: "Cars, parking, transport, barrel shipping",
       featureConsent: true,
-      marketingBlurb: "Cars, parking, transport, and shipping support for customers moving between the U.S. and West Africa.",
+      marketingBlurb:
+        "Cars, parking, transport, and shipping support for customers moving between the U.S. and West Africa.",
       logoUrl: "https://placehold.co/256x256?text=K",
       stripeAccountId: "acct_keren_ready",
       chargesEnabled: true,
@@ -473,7 +674,8 @@ const previewData = {
       status: "pending",
       enabledServices: ["barrelShipping", "sharedBarrels", "freight"],
       featureStatus: "requested",
-      marketingBlurb: "Barrel and shared-load shipping with clear destination pricing.",
+      marketingBlurb:
+        "Barrel and shared-load shipping with clear destination pricing.",
       serviceNote: "Pending document review",
       stripeAccountId: "acct_atlantic_pending",
       chargesEnabled: false,
@@ -485,66 +687,327 @@ const previewData = {
         disabledReason: "requirements.pending_verification",
       },
       verificationDocuments: {
-        shippingAuthority: {fileName: "Warehouse agreement.pdf", url: "https://example.com/warehouse.pdf"},
+        shippingAuthority: {
+          fileName: "Warehouse agreement.pdf",
+          url: "https://example.com/warehouse.pdf",
+        },
       },
       verificationReview: {
         documents: {
-          shippingAuthority: {status: "needs_changes", note: "Agreement must show current year."},
+          shippingAuthority: {
+            status: "needs_changes",
+            note: "Agreement must show current year.",
+          },
         },
         note: "Send Stripe updates through Stripe. Laawol only needs the current warehouse proof before approval.",
       },
     },
   ],
   featuredBusinesses: [
-    { id: "keren_auto_sales", businessId: "keren_auto_sales", displayName: "Keren Auto Sales", logoUrl: "https://placehold.co/256x256?text=K", blurb: "Cars, parking, transport, and shipping support for the road home.", services: ["carSales", "carParking", "carTransport"], order: 1, active: true },
+    {
+      id: "keren_auto_sales",
+      businessId: "keren_auto_sales",
+      displayName: "Keren Auto Sales",
+      logoUrl: "https://placehold.co/256x256?text=K",
+      blurb:
+        "Cars, parking, transport, and shipping support for the road home.",
+      services: ["carSales", "carParking", "carTransport"],
+      order: 1,
+      active: true,
+    },
   ],
   cars: [
-    { id: "camry-2021", title: "2021 Toyota Camry SE", make: "Toyota", model: "Camry", year: "2021", price: 18500, status: "active", businessName: "Keren Auto Sales", locationCity: "Bronx", locationState: "NY" },
-    { id: "rav4-2020", title: "2020 Toyota RAV4 XLE", make: "Toyota", model: "RAV4", year: "2020", price: 22800, status: "reserved", businessName: "Keren Auto Sales", locationCity: "Newark", locationState: "NJ" },
-    { id: "accord-2019", title: "2019 Honda Accord Sport", make: "Honda", model: "Accord", year: "2019", price: 17100, status: "active", businessName: "Keren Auto Sales", locationCity: "Queens", locationState: "NY" },
-    { id: "escape-2018", title: "2018 Ford Escape SEL", make: "Ford", model: "Escape", year: "2018", price: 12900, status: "sold", businessName: "Keren Auto Sales", locationCity: "Brooklyn", locationState: "NY" },
-    { id: "civic-2022", title: "2022 Honda Civic EX", make: "Honda", model: "Civic", year: "2022", price: 21400, status: "inactive", businessName: "Atlantic Exports", locationCity: "Jersey City", locationState: "NJ" },
+    {
+      id: "camry-2021",
+      title: "2021 Toyota Camry SE",
+      make: "Toyota",
+      model: "Camry",
+      year: "2021",
+      price: 18500,
+      status: "active",
+      businessName: "Keren Auto Sales",
+      locationCity: "Bronx",
+      locationState: "NY",
+    },
+    {
+      id: "rav4-2020",
+      title: "2020 Toyota RAV4 XLE",
+      make: "Toyota",
+      model: "RAV4",
+      year: "2020",
+      price: 22800,
+      status: "reserved",
+      businessName: "Keren Auto Sales",
+      locationCity: "Newark",
+      locationState: "NJ",
+    },
+    {
+      id: "accord-2019",
+      title: "2019 Honda Accord Sport",
+      make: "Honda",
+      model: "Accord",
+      year: "2019",
+      price: 17100,
+      isRebuiltTitle: false,
+      status: "active",
+      businessName: "Keren Auto Sales",
+      locationCity: "Queens",
+      locationState: "NY",
+    },
+    {
+      id: "escape-2018",
+      title: "2018 Ford Escape SEL",
+      make: "Ford",
+      model: "Escape",
+      year: "2018",
+      price: 12900,
+      isRebuiltTitle: true,
+      status: "sold",
+      businessName: "Keren Auto Sales",
+      locationCity: "Brooklyn",
+      locationState: "NY",
+    },
+    {
+      id: "civic-2022",
+      title: "2022 Honda Civic EX",
+      make: "Honda",
+      model: "Civic",
+      year: "2022",
+      price: 21400,
+      status: "inactive",
+      businessName: "Atlantic Exports",
+      locationCity: "Jersey City",
+      locationState: "NJ",
+    },
   ],
   barrelShipments: [
-    { id: "SHIP-1048", trackingCode: "VX-BRL-1048", receiverName: "Aissatou Bah", businessName: "Keren Auto Sales", destinationCountryName: "Guinea", price: 275, status: "pending", customerEmail: "aissatou@example.com" },
-    { id: "SHIP-1042", trackingCode: "VX-BRL-1042", receiverName: "Ibrahima Sow", businessName: "Keren Auto Sales", destinationCountryName: "Senegal", price: 310, status: "completed", customerEmail: "ibrahima@example.com" },
+    {
+      id: "SHIP-1048",
+      trackingCode: "VX-BRL-1048",
+      receiverName: "Aissatou Bah",
+      businessName: "Keren Auto Sales",
+      destinationCountryName: "Guinea",
+      price: 275,
+      status: "pending",
+      customerEmail: "aissatou@example.com",
+    },
+    {
+      id: "SHIP-1042",
+      trackingCode: "VX-BRL-1042",
+      receiverName: "Ibrahima Sow",
+      businessName: "Keren Auto Sales",
+      destinationCountryName: "Senegal",
+      price: 310,
+      status: "completed",
+      customerEmail: "ibrahima@example.com",
+    },
+  ],
+  freightShipments: [
+    {
+      id: "FRT-2084",
+      trackingCode: "LW-FRT-2084",
+      senderName: "Mamadou Diallo",
+      receiverName: "Aminata Kamara",
+      receiverPhone: "+232 76 123456",
+      businessId: "atlantic_exports",
+      businessName: "Atlantic Exports",
+      destinationCountryName: "Sierra Leone",
+      mode: "sea",
+      status: "awaiting_balance_payment",
+      paymentStatus: "succeeded",
+      estimatedWeightKg: 20,
+      verifiedWeightKg: 23.5,
+      weightVerificationStatus: "confirmed",
+      pricePerKg: 8,
+      estimatedTotal: 160,
+      finalTotal: 188,
+      balanceDue: 28,
+      refundDue: 0,
+      priceSettlementStatus: "balance_due",
+      payoutStatus: "blocked_pending_settlement",
+      weightConfirmedAt: "2026-07-14T14:30:00.000Z",
+      weightConfirmedByUid: "staff-atlantic-1",
+      statusUpdatedAt: "2026-07-14T14:31:00.000Z",
+      statusUpdatedBy: "staff-atlantic-1",
+    },
   ],
   transportRequests: [
-    { id: "TR-302", trackingCode: "VX-TR-302", ownerName: "Mamadou Diallo", carMake: "Toyota", carModel: "Camry", carYear: "2021", status: "scheduled", price: 450, businessName: "Keren Auto Sales" },
+    {
+      id: "TR-302",
+      trackingCode: "VX-TR-302",
+      ownerName: "Mamadou Diallo",
+      carMake: "Toyota",
+      carModel: "Camry",
+      carYear: "2021",
+      status: "scheduled",
+      price: 450,
+      businessName: "Keren Auto Sales",
+    },
   ],
   parkedCars: [
-    { id: "PK-88", trackingCode: "VX-PK-88", ownerName: "Fatou Camara", carMake: "Honda", carModel: "CR-V", carYear: "2018", status: "active", totalCost: 140, businessName: "Keren Auto Sales" },
+    {
+      id: "PK-88",
+      trackingCode: "VX-PK-88",
+      ownerName: "Fatou Camara",
+      carMake: "Honda",
+      carModel: "CR-V",
+      carYear: "2018",
+      status: "active",
+      totalCost: 140,
+      businessName: "Keren Auto Sales",
+    },
   ],
   purchases: [
-    { id: "PUR-77", carTitle: "2020 Toyota RAV4 XLE", buyerName: "Mamadou Diallo", buyerEmail: "mamadou@example.com", depositAmount: 500, depositCurrency: "USD", paymentStatus: "paid", purchaseStatus: "pending", businessName: "Keren Auto Sales" },
+    {
+      id: "PUR-77",
+      carTitle: "2020 Toyota RAV4 XLE",
+      buyerName: "Mamadou Diallo",
+      buyerEmail: "mamadou@example.com",
+      depositAmount: 500,
+      depositCurrency: "USD",
+      paymentStatus: "paid",
+      purchaseStatus: "pending",
+      businessName: "Keren Auto Sales",
+    },
   ],
   refunds: [
-    { id: "RF-17", customerUid: "customer-a", customerEmail: "aissatou@example.com", amount: 125, amountCents: 12500, currency: "USD", status: "pending", businessName: "Keren Auto Sales" },
+    {
+      id: "RF-17",
+      customerUid: "customer-a",
+      customerEmail: "aissatou@example.com",
+      amount: 125,
+      amountCents: 12500,
+      currency: "USD",
+      status: "pending",
+      businessName: "Keren Auto Sales",
+    },
   ],
   wallets: [
-    { id: "customer-a", customerUid: "customer-a", balance: 45, balanceCents: 4500, pendingRefund: 125, pendingRefundCents: 12500, currency: "USD" },
+    {
+      id: "customer-a",
+      customerUid: "customer-a",
+      balance: 45,
+      balanceCents: 4500,
+      pendingRefund: 125,
+      pendingRefundCents: 12500,
+      currency: "USD",
+    },
   ],
   walletTransactions: [
-    { id: "WT-1", _parentId: "customer-a", type: "debit", reason: "card_refund_requested", amount: 125, amountCents: 12500, currency: "USD", status: "pending", refundRequestId: "RF-17", createdAt: "2026-06-20", businessName: "Keren Auto Sales", customerEmail: "aissatou@example.com" },
-    { id: "WT-2", _parentId: "customer-a", type: "credit", reason: "shipment_adjustment", amount: 45, amountCents: 4500, currency: "USD", status: "completed", createdAt: "2026-06-18", businessName: "Keren Auto Sales", customerEmail: "mamadou@example.com" },
+    {
+      id: "WT-1",
+      _parentId: "customer-a",
+      type: "debit",
+      reason: "card_refund_requested",
+      amount: 125,
+      amountCents: 12500,
+      currency: "USD",
+      status: "pending",
+      refundRequestId: "RF-17",
+      createdAt: "2026-06-20",
+      businessName: "Keren Auto Sales",
+      customerEmail: "aissatou@example.com",
+    },
+    {
+      id: "WT-2",
+      _parentId: "customer-a",
+      type: "credit",
+      reason: "shipment_adjustment",
+      amount: 45,
+      amountCents: 4500,
+      currency: "USD",
+      status: "completed",
+      createdAt: "2026-06-18",
+      businessName: "Keren Auto Sales",
+      customerEmail: "mamadou@example.com",
+    },
   ],
   supportRequests: [
-    { id: "SR-1", businessId: "keren_auto_sales", businessName: "Keren Auto Sales", subject: "Confirm card return for RF-17", priority: "urgent", status: "open", customerEmail: "aissatou@example.com", relatedLabel: "Refund RF-17", createdAt: "2026-06-20" },
+    {
+      id: "SR-1",
+      businessId: "keren_auto_sales",
+      businessName: "Keren Auto Sales",
+      subject: "Confirm card return for RF-17",
+      priority: "urgent",
+      status: "open",
+      customerEmail: "aissatou@example.com",
+      relatedLabel: "Refund RF-17",
+      createdAt: "2026-06-20",
+    },
   ],
   pricing: [
-    { id: "guinea", destinationCountryName: "Guinea", businessName: "Keren Auto Sales", price: 275, status: "active" },
-    { id: "senegal", destinationCountryName: "Senegal", businessName: "Keren Auto Sales", price: 310, status: "active" },
+    {
+      id: "guinea",
+      destinationCountryName: "Guinea",
+      businessName: "Keren Auto Sales",
+      price: 275,
+      status: "active",
+    },
+    {
+      id: "senegal",
+      destinationCountryName: "Senegal",
+      businessName: "Keren Auto Sales",
+      price: 310,
+      status: "active",
+    },
   ],
   destinations: [
-    { id: "guinea", businessId: "keren_auto_sales", name: "Guinea", code: "GN", businessName: "Keren Auto Sales", barrelShippingPrice: 275, deliveryEstimateMinDays: 21, deliveryEstimateMaxDays: 28, destinationNote: "Conakry warehouse receives cleared barrels Monday through Friday.", isActive: true },
-    { id: "senegal", businessId: "keren_auto_sales", name: "Senegal", code: "SN", businessName: "Keren Auto Sales", barrelShippingPrice: 310, deliveryEstimateMinDays: 24, deliveryEstimateMaxDays: 31, destinationNote: "Dakar pickup requires receiver ID and tracking code.", isActive: true },
-    { id: "gambia", businessId: "keren_auto_sales", name: "Gambia", code: "GM", businessName: "Keren Auto Sales", barrelShippingPrice: 295, deliveryEstimateMinDays: 24, deliveryEstimateMaxDays: 31, destinationNote: "Banjul route runs through the Senegal dispatch partner.", isActive: true },
+    {
+      id: "guinea",
+      businessId: "keren_auto_sales",
+      name: "Guinea",
+      code: "GN",
+      businessName: "Keren Auto Sales",
+      barrelShippingPrice: 275,
+      deliveryEstimateMinDays: 21,
+      deliveryEstimateMaxDays: 28,
+      destinationNote:
+        "Conakry warehouse receives cleared barrels Monday through Friday.",
+      isActive: true,
+    },
+    {
+      id: "senegal",
+      businessId: "keren_auto_sales",
+      name: "Senegal",
+      code: "SN",
+      businessName: "Keren Auto Sales",
+      barrelShippingPrice: 310,
+      deliveryEstimateMinDays: 24,
+      deliveryEstimateMaxDays: 31,
+      destinationNote: "Dakar pickup requires receiver ID and tracking code.",
+      isActive: true,
+    },
+    {
+      id: "gambia",
+      businessId: "keren_auto_sales",
+      name: "Gambia",
+      code: "GM",
+      businessName: "Keren Auto Sales",
+      barrelShippingPrice: 295,
+      deliveryEstimateMinDays: 24,
+      deliveryEstimateMaxDays: 31,
+      destinationNote:
+        "Banjul route runs through the Senegal dispatch partner.",
+      isActive: true,
+    },
   ],
   applications: [
-    { id: "APP-9", businessName: "Atlantic Exports", applicantEmail: "owner@atlanticexports.com", status: "pending", type: "business_application" },
+    {
+      id: "APP-9",
+      businessName: "Atlantic Exports",
+      applicantEmail: "owner@atlanticexports.com",
+      status: "pending",
+      type: "business_application",
+    },
   ],
   notifications: [
-    { id: "NOTE-4", businessName: "Atlantic Exports", message: "Business application waiting for review", status: "pending", type: "business_application" },
+    {
+      id: "NOTE-4",
+      businessName: "Atlantic Exports",
+      message: "Business application waiting for review",
+      status: "pending",
+      type: "business_application",
+    },
   ],
   notificationDeliveries: [
     {
@@ -606,7 +1069,10 @@ function rowStatus(row: FirestoreRow, field = "status") {
   return text(row[field], "pending").toLowerCase();
 }
 
-function countWhere(rows: FirestoreRow[], predicate: (row: FirestoreRow) => boolean) {
+function countWhere(
+  rows: FirestoreRow[],
+  predicate: (row: FirestoreRow) => boolean,
+) {
   return rows.reduce((total, row) => total + (predicate(row) ? 1 : 0), 0);
 }
 
@@ -644,9 +1110,10 @@ function deliveryNeedsAttention(row: FirestoreRow) {
 }
 
 function deliveryCanRetry(row: FirestoreRow) {
-  return ["failed", "provider_not_configured", "queued"].includes(
-      rowStatus(row),
-  ) && ["email", "sms"].includes(text(row.channel, "").toLowerCase());
+  return (
+    ["failed", "provider_not_configured", "queued"].includes(rowStatus(row)) &&
+    ["email", "sms"].includes(text(row.channel, "").toLowerCase())
+  );
 }
 
 function deliverySearchText(row: FirestoreRow) {
@@ -662,7 +1129,10 @@ function deliverySearchText(row: FirestoreRow) {
     row.recipientUid,
     row.lastError,
     row.providerStatus,
-  ].map((value) => text(value, "")).join(" ").toLowerCase();
+  ]
+    .map((value) => text(value, ""))
+    .join(" ")
+    .toLowerCase();
 }
 
 function deliveryStatusClass(status: string) {
@@ -671,7 +1141,9 @@ function deliveryStatusClass(status: string) {
     "provider_not_configured",
     "no_recipient",
     "queued",
-  ].includes(status) ? "warning" : "";
+  ].includes(status)
+    ? "warning"
+    : "";
 }
 
 async function commitStatusChange({
@@ -683,7 +1155,10 @@ async function commitStatusChange({
   targetId: string;
   nextStatus: string;
 }) {
-  await httpsCallable(functions, "updateAdminRecordStatus")({
+  await httpsCallable(
+    functions,
+    "updateAdminRecordStatus",
+  )({
     collectionName,
     recordId: targetId,
     status: nextStatus,
@@ -691,14 +1166,20 @@ async function commitStatusChange({
 }
 
 async function deleteAdminRecord(collectionName: string, recordId: string) {
-  await httpsCallable(functions, "deleteAdminRecord")({
+  await httpsCallable(
+    functions,
+    "deleteAdminRecord",
+  )({
     collectionName,
     recordId,
   });
 }
 
 async function sendBusinessSupportRequest(draft: SupportDraft) {
-  await httpsCallable(functions, "sendBusinessSupportRequest")({
+  await httpsCallable(
+    functions,
+    "sendBusinessSupportRequest",
+  )({
     businessId: draft.businessId.trim(),
     priority: draft.priority,
     subject: draft.subject.trim(),
@@ -722,11 +1203,17 @@ function optionalMoney(value: unknown, currency = "USD") {
   return formatMoney(value, currency);
 }
 
+function optionalWeightKg(value: unknown) {
+  if (value === undefined || value === null || value === "") return "";
+  const weight = Number(value);
+  return Number.isFinite(weight) ? `${weight.toLocaleString()} kg` : "";
+}
+
 function countryFlag(code: unknown) {
   const value = text(code, "").trim().toUpperCase();
   if (!/^[A-Z]{2}$/.test(value)) return "🏳";
   return String.fromCodePoint(
-      ...[...value].map((char) => char.charCodeAt(0) - 65 + 0x1F1E6),
+    ...[...value].map((char) => char.charCodeAt(0) - 65 + 0x1f1e6),
   );
 }
 
@@ -746,7 +1233,9 @@ function urgencyRank(item: { kind: string; status: string }) {
 }
 
 function businessKey(id: unknown, name: unknown) {
-  return text(id ?? name, "").trim().toLowerCase();
+  return text(id ?? name, "")
+    .trim()
+    .toLowerCase();
 }
 
 function businessDirectory(
@@ -768,9 +1257,15 @@ function businessDirectory(
       const id = text(row.businessId, slugify(name));
       const idKey = businessKey(id, name);
       const nameKey = businessKey(null, name);
-      if (known.has(idKey) || known.has(nameKey) || inferred.has(idKey) || inferred.has(nameKey)) {
+      if (
+        known.has(idKey) ||
+        known.has(nameKey) ||
+        inferred.has(idKey) ||
+        inferred.has(nameKey)
+      ) {
         const existing = inferred.get(idKey) ?? inferred.get(nameKey);
-        if (existing) existing._sourceCount = numberValue(existing._sourceCount) + 1;
+        if (existing)
+          existing._sourceCount = numberValue(existing._sourceCount) + 1;
         continue;
       }
       const business = {
@@ -789,15 +1284,14 @@ function businessDirectory(
     }
   }
 
-  return [
-    ...businesses,
-    ...Array.from(new Set(inferred.values())),
-  ].sort((a, b) => {
+  return [...businesses, ...Array.from(new Set(inferred.values()))].sort(
+    (a, b) => {
     const aMissing = a._inferred === true ? 1 : 0;
     const bMissing = b._inferred === true ? 1 : 0;
     if (aMissing !== bMissing) return bMissing - aMissing;
     return text(a.name, a.id).localeCompare(text(b.name, b.id));
-  });
+    },
+  );
 }
 
 function userKeys(user: FirestoreRow) {
@@ -816,7 +1310,11 @@ function userKeys(user: FirestoreRow) {
 function mergeUserDirectoryRow(target: FirestoreRow, source: FirestoreRow) {
   Object.entries(source).forEach(([key, value]) => {
     if (value === undefined || value === null || value === "") return;
-    if (target[key] === undefined || target[key] === null || target[key] === "") {
+    if (
+      target[key] === undefined ||
+      target[key] === null ||
+      target[key] === ""
+    ) {
       target[key] = value;
     }
   });
@@ -866,7 +1364,8 @@ function userContactsFromRow(row: FirestoreRow) {
     const fullName = text(candidate.fullName, "");
     const uid = text(candidate.uid, "");
     if (!email && !phone && !fullName && !uid) return [];
-    return [{
+    return [
+      {
       id: uid || email || phone || slugify(fullName),
       uid,
       fullName,
@@ -879,13 +1378,16 @@ function userContactsFromRow(row: FirestoreRow) {
       _inferred: true,
       _sourceId: row.id,
       _sourceCode: row.trackingCode ?? row.purchaseCode ?? row.id,
-    }];
+      },
+    ];
   });
 }
 
 function isBusinessMember(user: FirestoreRow) {
   const role = text(user.role, "");
-  return (role === "businessOwner" || role === "staff") && user._inferred !== true;
+  return (
+    (role === "businessOwner" || role === "staff") && user._inferred !== true
+  );
 }
 
 function isPlatformAdmin(user: FirestoreRow) {
@@ -937,7 +1439,9 @@ function userMeta(user: FirestoreRow) {
     user.disabled ? "Disabled" : "",
     user.emailVerified === false ? "Email not verified" : "",
     user._inferred ? `Seen in ${text(user._sourceCode, "records")}` : "",
-  ].filter(Boolean).join(" • ");
+  ]
+    .filter(Boolean)
+    .join(" • ");
 }
 
 function userDirectory(
@@ -970,12 +1474,17 @@ function userDirectory(
   }
 
   authUsers.forEach((user) => upsert(user));
-  profiles.forEach((profile) => upsert({
+  profiles.forEach((profile) =>
+    upsert(
+      {
     ...profile,
     uid: profile.uid ?? profile.id,
     hasProfile: true,
     _inferred: false,
-  }, true));
+      },
+      true,
+    ),
+  );
   contactSources
       .flatMap((rows) => rows.flatMap(userContactsFromRow))
       .forEach((user) => upsert(user));
@@ -1006,11 +1515,13 @@ function useAdminCollection(name: string, enabled: boolean, max = 150) {
     const unsubscribe = onSnapshot(
       query(collection(db, name), limit(max)),
       (snapshot) => {
-        setRows(snapshot.docs.map((item) => ({
+        setRows(
+          snapshot.docs.map((item) => ({
           id: item.id,
           _path: item.ref.path,
           ...item.data(),
-        })));
+          })),
+        );
         setLoading(false);
         setError("");
       },
@@ -1041,13 +1552,15 @@ function useAdminCollectionGroup(name: string, enabled: boolean, max = 500) {
     const unsubscribe = onSnapshot(
       query(collectionGroup(db, name), limit(max)),
       (snapshot) => {
-        setRows(snapshot.docs.map((item) => ({
+        setRows(
+          snapshot.docs.map((item) => ({
           id: item.id,
           _path: item.ref.path,
           _parentId: item.ref.parent.parent?.id ?? "",
           _parentPath: item.ref.parent.parent?.path ?? "",
           ...item.data(),
-        })));
+          })),
+        );
         setLoading(false);
         setError("");
       },
@@ -1079,7 +1592,8 @@ function useAdminAuthUsers(enabled: boolean) {
 
     let active = true;
     const backendReady = process.env.NEXT_PUBLIC_ADMIN_BACKEND_READY === "1";
-    const forceAuthUsers = new URL(window.location.href).searchParams.get("authUsers") === "1";
+    const forceAuthUsers =
+      new URL(window.location.href).searchParams.get("authUsers") === "1";
     if (!backendReady && !forceAuthUsers) {
       setRows([]);
       setLoading(false);
@@ -1091,16 +1605,38 @@ function useAdminAuthUsers(enabled: boolean) {
 
     setLoading(true);
     setError("");
-    httpsCallable(functions, "listPlatformUsers")({maxResults: 1000})
-        .then((result) => {
+    const loadEveryAuthPage = async () => {
+      const users: FirestoreRow[] = [];
+      let pageToken = "";
+      do {
+        const result = await httpsCallable(
+          functions,
+          "listPlatformUsers",
+        )({
+          maxResults: 500,
+          pageToken,
+        });
+        const data = result.data as {
+          users?: FirestoreRow[];
+          pageToken?: string;
+        };
+        users.push(...(data.users ?? []));
+        pageToken = data.pageToken ?? "";
+      } while (pageToken && active);
+      return users;
+    };
+
+    loadEveryAuthPage()
+      .then((users) => {
           if (!active) return;
-          const data = result.data as {users?: FirestoreRow[]};
-          setRows(data.users ?? []);
+        setRows(users);
         })
         .catch((listError) => {
           if (!active) return;
           setRows([]);
-          setError("Firebase Auth user listing is unavailable. Showing profile and activity records.");
+        setError(
+          "Firebase Auth user listing is unavailable. Showing profile and activity records.",
+        );
         })
         .finally(() => {
           if (active) setLoading(false);
@@ -1141,13 +1677,15 @@ function useAdminDestinationCoverage(enabled: boolean) {
           businessId: item.ref.parent.parent?.id ?? "",
           ...item.data(),
         }));
-        setRows(destinationRows.sort((a, b) => {
+        setRows(
+          destinationRows.sort((a, b) => {
           const businessCompare = text(a.businessName, "").localeCompare(
               text(b.businessName, ""),
           );
           if (businessCompare !== 0) return businessCompare;
           return text(a.name, a.id).localeCompare(text(b.name, b.id));
-        }));
+          }),
+        );
         setLoading(false);
         setError("");
       },
@@ -1195,38 +1733,120 @@ export function AdminConsole() {
     }
   }, [perms, activeTab]);
 
-  const userProfiles = useAdminCollection("users", enabled, 1000);
-  const businesses = useAdminCollection("businesses", enabled, 500);
-  const cars = useAdminCollection("cars", enabled, 1000);
-  const barrelShipments = useAdminCollection("barrelShipments", enabled, 1000);
-  const transportRequests = useAdminCollection("transportRequests", enabled, 1000);
-  const parkedCars = useAdminCollection("parkedCars", enabled, 1000);
-  const purchases = useAdminCollection("carPurchases", enabled, 1000);
-  const refunds = useAdminCollection("walletRefundRequests", enabled, 500);
-  const barrelPoolBalances = useAdminCollection("barrelPoolBalanceRequests", enabled, 500);
-  const wallets = useAdminCollection("wallets", enabled, 1000);
-  const walletTransactions = useAdminCollectionGroup("transactions", enabled, 1000);
-  const pricing = useAdminCollection("shipmentPricing", enabled, 500);
+  const tabNeeds = (...required: Tab[]) =>
+    enabled && required.includes(activeTab);
+  const userProfiles = useAdminCollection(
+    "users",
+    tabNeeds("today", "people", "businesses", "support"),
+    1000,
+  );
+  const businesses = useAdminCollection(
+    "businesses",
+    tabNeeds(
+      "today",
+      "businesses",
+      "marketplace",
+      "operations",
+      "finance",
+      "support",
+      "website",
+    ),
+    500,
+  );
+  const cars = useAdminCollection(
+    "cars",
+    tabNeeds("today", "businesses", "marketplace", "operations"),
+    1000,
+  );
+  const barrelShipments = useAdminCollection(
+    "barrelShipments",
+    tabNeeds("today", "businesses", "operations", "finance", "support"),
+    1000,
+  );
+  const freightShipments = useAdminCollection(
+    "freightShipments",
+    tabNeeds("today", "businesses", "operations", "finance", "support"),
+    1000,
+  );
+  const transportRequests = useAdminCollection(
+    "transportRequests",
+    tabNeeds("today", "businesses", "operations", "support"),
+    1000,
+  );
+  const parkedCars = useAdminCollection(
+    "parkedCars",
+    tabNeeds("today", "businesses", "operations", "support"),
+    1000,
+  );
+  const purchases = useAdminCollection(
+    "carPurchases",
+    tabNeeds("today", "businesses", "operations", "finance", "support"),
+    1000,
+  );
+  const refunds = useAdminCollection(
+    "walletRefundRequests",
+    tabNeeds("today", "finance", "support"),
+    500,
+  );
+  const barrelPoolBalances = useAdminCollection(
+    "barrelPoolBalanceRequests",
+    tabNeeds("today", "finance", "support"),
+    500,
+  );
+  const wallets = useAdminCollection(
+    "wallets",
+    tabNeeds("today", "finance", "support"),
+    1000,
+  );
+  const walletTransactions = useAdminCollectionGroup(
+    "transactions",
+    tabNeeds("today", "finance", "support"),
+    1000,
+  );
+  const pricing = useAdminCollection(
+    "shipmentPricing",
+    tabNeeds("marketplace", "settings"),
+    500,
+  );
   const destinations = useAdminDestinationCoverage(
     enabled && (activeTab === "businesses" || activeTab === "marketplace"),
   );
-  const applications = useAdminCollection("businessApplications", enabled, 150);
-  const notifications = useAdminCollection("platformNotifications", enabled, 150);
+  const applications = useAdminCollection(
+    "businessApplications",
+    tabNeeds("today", "businesses"),
+    150,
+  );
+  const notifications = useAdminCollection(
+    "platformNotifications",
+    tabNeeds("today", "businesses", "support", "website"),
+    150,
+  );
   const notificationDeliveries = useAdminCollection(
     "notificationDeliveries",
     enabled && perms.tabs.includes("settings"),
     250,
   );
-  const supportRequests = useAdminCollection("businessSupportRequests", enabled, 500);
+  const supportRequests = useAdminCollection(
+    "businessSupportRequests",
+    tabNeeds("today", "businesses", "support"),
+    500,
+  );
   const featuredBusinesses = useAdminCollection(
     "featuredBusinesses",
     enabled && perms.tabs.includes("website"),
     200,
   );
-  const authUsers = useAdminAuthUsers(enabled);
+  const authUsers = useAdminAuthUsers(tabNeeds("people"));
   const carRows = previewMode ? previewData.cars : cars.rows;
-  const shipmentRows = previewMode ? previewData.barrelShipments : barrelShipments.rows;
-  const transportRows = previewMode ? previewData.transportRequests : transportRequests.rows;
+  const shipmentRows = previewMode
+    ? previewData.barrelShipments
+    : barrelShipments.rows;
+  const freightRows = previewMode
+    ? previewData.freightShipments
+    : freightShipments.rows;
+  const transportRows = previewMode
+    ? previewData.transportRequests
+    : transportRequests.rows;
   const parkedRows = previewMode ? previewData.parkedCars : parkedCars.rows;
   const purchaseRows = previewMode ? previewData.purchases : purchases.rows;
   const refundRows = previewMode ? previewData.refunds : refunds.rows;
@@ -1236,9 +1856,15 @@ export function AdminConsole() {
     ? previewData.walletTransactions
     : walletTransactions.rows;
   const pricingRows = previewMode ? previewData.pricing : pricing.rows;
-  const destinationRows = previewMode ? previewData.destinations : destinations.rows;
-  const applicationRows = previewMode ? previewData.applications : applications.rows;
-  const notificationRows = previewMode ? previewData.notifications : notifications.rows;
+  const destinationRows = previewMode
+    ? previewData.destinations
+    : destinations.rows;
+  const applicationRows = previewMode
+    ? previewData.applications
+    : applications.rows;
+  const notificationRows = previewMode
+    ? previewData.notifications
+    : notifications.rows;
   const notificationDeliveryRows = previewMode
     ? previewData.notificationDeliveries
     : notificationDeliveries.rows;
@@ -1339,32 +1965,18 @@ export function AdminConsole() {
       }
 
       try {
-        if ((user.email ?? "").toLowerCase() === "admin@gmail.com") {
-          // Best-effort: ensure the platform-admin profile exists on first
-          // login. This must never freeze the console, so it is bounded by a
-          // timeout and its failures are ignored — the profile read below is
-          // the source of truth for access.
-          try {
-            await Promise.race([
-              httpsCallable(functions, "ensurePlatformAdminProfile")(),
-              new Promise((_, reject) =>
-                setTimeout(
-                  () => reject(new Error("ensurePlatformAdminProfile timed out")),
-                  8000,
-                ),
-              ),
-            ]);
-          } catch {
-            // Ignore — fall through to the authoritative profile read.
-          }
-        }
         const profileSnapshot = await getDoc(doc(db, "users", user.uid));
         const userProfile = profileSnapshot.exists()
-          ? ({ id: profileSnapshot.id, ...profileSnapshot.data() } as UserProfile)
+          ? ({
+              id: profileSnapshot.id,
+              ...profileSnapshot.data(),
+            } as UserProfile)
           : null;
         setProfile(userProfile);
         if (userProfile?.role !== "admin") {
-          setAuthError("This console is restricted to platform administrators.");
+          setAuthError(
+            "This console is restricted to platform administrators.",
+          );
         }
       } catch (error) {
         setAuthError(error instanceof Error ? error.message : String(error));
@@ -1397,8 +2009,9 @@ export function AdminConsole() {
       const id = actionSequence.current + 1;
       actionSequence.current = id;
       const activeElement = document.activeElement;
-      const trigger = activeElement instanceof HTMLElement
-        ? activeElement.closest("button") as HTMLButtonElement | null
+      const trigger =
+        activeElement instanceof HTMLElement
+          ? (activeElement.closest("button") as HTMLButtonElement | null)
         : null;
       const triggerWasDisabled = trigger?.disabled ?? false;
       if (trigger) {
@@ -1474,14 +2087,22 @@ export function AdminConsole() {
           <button
             className="sidebar-toggle topbar-menu"
             onClick={() => setSidebarCollapsed((value) => !value)}
-            title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
+            title={
+              sidebarCollapsed ? "Expand navigation" : "Collapse navigation"
+            }
             type="button"
           >
             <Menu size={20} />
           </button>
           <div className="brand-badge">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="Laawol" width={20} height={20} style={{ borderRadius: 5, display: "block" }} />
+            <img
+              src="/logo.png"
+              alt="Laawol"
+              width={20}
+              height={20}
+              style={{ borderRadius: 5, display: "block" }}
+            />
             <span>Laawol Digital</span>
           </div>
           <div className="topbar-heading">
@@ -1498,19 +2119,35 @@ export function AdminConsole() {
             type="button"
           >
             <Shield size={18} />
-            <span className="admin-chip-name">{previewMode ? "Preview Administrator" : text(profile?.fullName ?? firebaseUser?.email, "Administrator")}</span>
+            <span className="admin-chip-name">
+              {previewMode
+                ? "Preview Administrator"
+                : text(
+                    profile?.fullName ?? firebaseUser?.email,
+                    "Administrator",
+                  )}
+            </span>
             <span className="admin-role-tag">{perms.label}</span>
           </button>
-          <button className="icon-button" onClick={handleSignOut} title="Sign out">
+          <button
+            className="icon-button"
+            onClick={handleSignOut}
+            title="Sign out"
+          >
             <LogOut size={18} />
           </button>
         </div>
       </header>
 
-      <main className={`workspace ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+      <main
+        className={`workspace ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}
+      >
         <nav className="sidebar" aria-label="Admin sections">
           {navGroups
-            .map((group) => ({ ...group, tabs: group.tabs.filter((tab) => perms.tabs.includes(tab)) }))
+            .map((group) => ({
+              ...group,
+              tabs: group.tabs.filter((tab) => perms.tabs.includes(tab)),
+            }))
             .filter((group) => group.tabs.length > 0)
             .map((group) => (
             <div className="nav-group" key={group.label}>
@@ -1540,6 +2177,7 @@ export function AdminConsole() {
               businesses={businessRows}
               cars={carRows}
               barrelShipments={shipmentRows}
+              freightShipments={freightRows}
               transportRequests={transportRows}
               parkedCars={parkedRows}
               purchases={purchaseRows}
@@ -1552,7 +2190,9 @@ export function AdminConsole() {
             <UsersView
               users={userRows}
               loading={userProfiles.loading || authUsers.loading}
-              error={[userProfiles.error, authUsers.error].filter(Boolean).join(" ")}
+              error={[userProfiles.error, authUsers.error]
+                .filter(Boolean)
+                .join(" ")}
               currentUserId={firebaseUser?.uid ?? ""}
               refreshUsers={authUsers.refresh}
               runAction={runAction}
@@ -1581,6 +2221,7 @@ export function AdminConsole() {
           {activeTab === "operations" && (
             <OperationsView
               shipments={shipmentRows}
+              freightShipments={freightRows}
               transports={transportRows}
               parkedCars={parkedRows}
               purchases={purchaseRows}
@@ -1594,7 +2235,9 @@ export function AdminConsole() {
               businesses={businessRows}
               pricing={pricingRows}
               destinations={destinationRows}
-              errors={[cars.error, pricing.error, destinations.error].filter(Boolean)}
+              errors={[cars.error, pricing.error, destinations.error].filter(
+                Boolean,
+              )}
               loading={cars.loading || pricing.loading || destinations.loading}
               refreshDestinations={destinations.refresh}
               runAction={runAction}
@@ -1623,7 +2266,10 @@ export function AdminConsole() {
             <SupportCasesPanel
               scope="admin"
               currentUid={firebaseUser?.uid ?? ""}
-              currentName={text(profile?.fullName ?? firebaseUser?.email, "Platform")}
+              currentName={text(
+                profile?.fullName ?? firebaseUser?.email,
+                "Platform",
+              )}
               canReply={perms.can("support")}
               runAction={runAction}
             />
@@ -1715,7 +2361,13 @@ function SignInCard({ authError }: { authError: string }) {
       <div className="login-header">
         <div className="brand-mark">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Laawol" width={34} height={34} style={{ borderRadius: 8, display: "block" }} />
+          <img
+            src="/logo.png"
+            alt="Laawol"
+            width={34}
+            height={34}
+            style={{ borderRadius: 8, display: "block" }}
+          />
         </div>
         <div>
           <h1>Laawol Digital Admin</h1>
@@ -1745,7 +2397,9 @@ function SignInCard({ authError }: { authError: string }) {
             onChange={(event) => setPassword(event.target.value)}
           />
         </label>
-        {(error || authError) && <div className="error-box">{error || authError}</div>}
+        {(error || authError) && (
+          <div className="error-box">{error || authError}</div>
+        )}
         <button
           className="primary-button"
           data-loading={submitting ? "true" : undefined}
@@ -1781,6 +2435,7 @@ function Today(props: {
   businesses: FirestoreRow[];
   cars: FirestoreRow[];
   barrelShipments: FirestoreRow[];
+  freightShipments: FirestoreRow[];
   transportRequests: FirestoreRow[];
   parkedCars: FirestoreRow[];
   purchases: FirestoreRow[];
@@ -1788,14 +2443,41 @@ function Today(props: {
   applications: FirestoreRow[];
   navigate: (tab: Tab) => void;
 }) {
-  const pendingBusinesses = countWhere(props.businesses, (item) => rowStatus(item) === "pending");
-  const approvedBusinesses = countWhere(props.businesses, (item) => rowStatus(item) === "approved");
-  const missingProfiles = countWhere(props.businesses, (item) => item._inferred === true);
-  const activeListings = countWhere(props.cars, (item) => rowStatus(item) === "active");
-  const pendingShipments = countWhere(props.barrelShipments, (item) => rowStatus(item) === "pending");
-  const pendingPurchases = countWhere(props.purchases, (item) => rowStatus(item, "purchaseStatus") === "pending");
-  const pendingRefunds = props.refunds.filter((item) => rowStatus(item) === "pending");
-  const pendingRefundAmount = pendingRefunds.reduce((total, item) => total + numberValue(item.amount), 0);
+  const pendingBusinesses = countWhere(
+    props.businesses,
+    (item) => rowStatus(item) === "pending",
+  );
+  const approvedBusinesses = countWhere(
+    props.businesses,
+    (item) => rowStatus(item) === "approved",
+  );
+  const missingProfiles = countWhere(
+    props.businesses,
+    (item) => item._inferred === true,
+  );
+  const activeListings = countWhere(
+    props.cars,
+    (item) => rowStatus(item) === "active",
+  );
+  const pendingShipments = countWhere(
+    props.barrelShipments,
+    (item) => rowStatus(item) === "pending",
+  );
+  const pendingFreight = countWhere(
+    props.freightShipments,
+    (item) => rowStatus(item) === "pending",
+  );
+  const pendingPurchases = countWhere(
+    props.purchases,
+    (item) => rowStatus(item, "purchaseStatus") === "pending",
+  );
+  const pendingRefunds = props.refunds.filter(
+    (item) => rowStatus(item) === "pending",
+  );
+  const pendingRefundAmount = pendingRefunds.reduce(
+    (total, item) => total + numberValue(item.amount),
+    0,
+  );
 
   const queue = [
     ...props.businesses
@@ -1805,7 +2487,10 @@ function Today(props: {
         kind: "business" as const,
         target: "businesses" as Tab,
         label: text(item.name, "Business application"),
-        meta: [item.phone, item.email, item.ownerName].filter(Boolean).join(" • ") || "Awaiting partner approval",
+        meta:
+          [item.phone, item.email, item.ownerName]
+            .filter(Boolean)
+            .join(" • ") || "Awaiting partner approval",
         status: text(item.status, "pending"),
         cta: "Review business",
       })),
@@ -1816,7 +2501,9 @@ function Today(props: {
         kind: "business" as const,
         target: "businesses" as Tab,
         label: text(item.businessName ?? item.name, "Business application"),
-        meta: [text(item.type, "application"), item.applicantEmail].filter(Boolean).join(" • "),
+        meta: [text(item.type, "application"), item.applicantEmail]
+          .filter(Boolean)
+          .join(" • "),
         status: text(item.status, "pending"),
         cta: "Open application",
       })),
@@ -1827,7 +2514,12 @@ function Today(props: {
         kind: "refund" as const,
         target: "finance" as Tab,
         label: `${formatMoney(item.amount, text(item.currency, "USD"))} card return`,
-        meta: [text(item.customerEmail, "Customer"), text(item.businessName, "")].filter(Boolean).join(" • "),
+        meta: [
+          text(item.customerEmail, "Customer"),
+          text(item.businessName, ""),
+        ]
+          .filter(Boolean)
+          .join(" • "),
         status: "pending",
         cta: "Resolve refund",
       })),
@@ -1838,7 +2530,12 @@ function Today(props: {
         kind: "purchase" as const,
         target: "operations" as Tab,
         label: text(item.carTitle, "Car purchase"),
-        meta: [text(item.buyerName ?? item.buyerEmail, "Buyer"), text(item.businessName, "")].filter(Boolean).join(" • "),
+        meta: [
+          text(item.buyerName ?? item.buyerEmail, "Buyer"),
+          text(item.businessName, ""),
+        ]
+          .filter(Boolean)
+          .join(" • "),
         status: "pending",
         cta: "Open purchase",
       })),
@@ -1849,7 +2546,29 @@ function Today(props: {
         kind: "shipment" as const,
         target: "operations" as Tab,
         label: `${text(item.trackingCode, item.id)} • ${text(item.receiverName, "Receiver")}`,
-        meta: [text(item.businessName, "Business"), text(item.destinationCountryName, "")].filter(Boolean).join(" • "),
+        meta: [
+          text(item.businessName, "Business"),
+          text(item.destinationCountryName, ""),
+        ]
+          .filter(Boolean)
+          .join(" • "),
+        status: "pending",
+        cta: "Open shipment",
+      })),
+    ...props.freightShipments
+      .filter((item) => item.status === "pending")
+      .map((item) => ({
+        id: item.id,
+        kind: "shipment" as const,
+        target: "operations" as Tab,
+        label: `${text(item.trackingCode, item.id)} • ${text(item.receiverName, "Receiver")}`,
+        meta: [
+          text(item.businessName, "Business"),
+          "Freight",
+          text(item.destinationCountryName, ""),
+        ]
+          .filter(Boolean)
+          .join(" • "),
         status: "pending",
         cta: "Open shipment",
       })),
@@ -1866,13 +2585,25 @@ function Today(props: {
 
   const businessSegments = Object.entries(businessStatusCounts)
     .sort((a, b) => b[1] - a[1])
-    .map(([key, value]) => ({ label: statusLabel(key), value, color: statusColor(key) }));
+    .map(([key, value]) => ({
+      label: statusLabel(key),
+      value,
+      color: statusColor(key),
+    }));
   const listingSegments = Object.entries(carStatuses)
     .sort((a, b) => b[1] - a[1])
-    .map(([key, value]) => ({ label: statusLabel(key), value, color: statusColor(key) }));
+    .map(([key, value]) => ({
+      label: statusLabel(key),
+      value,
+      color: statusColor(key),
+    }));
   const accountBars = [
     { label: "Admins", value: roleCounts.admin ?? 0, color: "#0d9488" },
-    { label: "Owners", value: roleCounts.businessowner ?? roleCounts.businessOwner ?? 0, color: "#14b8a6" },
+    {
+      label: "Owners",
+      value: roleCounts.businessowner ?? roleCounts.businessOwner ?? 0,
+      color: "#14b8a6",
+    },
     { label: "Staff", value: roleCounts.staff ?? 0, color: "#f59e0b" },
     { label: "Customers", value: roleCounts.customer ?? 0, color: "#2563eb" },
   ];
@@ -1891,6 +2622,12 @@ function Today(props: {
       meta: `${pendingShipments} open of ${props.barrelShipments.length} records`,
     },
     {
+      label: "Freight shipments",
+      value: pendingFreight,
+      total: Math.max(props.freightShipments.length, 1),
+      meta: `${pendingFreight} open of ${props.freightShipments.length} records`,
+    },
+    {
       label: "Car purchases",
       value: pendingPurchases,
       total: Math.max(props.purchases.length, 1),
@@ -1907,16 +2644,19 @@ function Today(props: {
   const kpis = [
     {
       label: "Needs review",
-      value: pendingBusinesses + props.applications.filter((item) => rowStatus(item) === "pending").length,
+      value:
+        pendingBusinesses +
+        props.applications.filter((item) => rowStatus(item) === "pending")
+          .length,
       tone: "attention" as const,
       meta: "Businesses & applications",
       target: "businesses" as Tab,
     },
     {
       label: "Open shipments",
-      value: pendingShipments,
+      value: pendingShipments + pendingFreight,
       tone: "neutral" as const,
-      meta: `${props.barrelShipments.length} barrel records`,
+      meta: `${props.barrelShipments.length} barrel · ${props.freightShipments.length} freight records`,
       target: "operations" as Tab,
     },
     {
@@ -1947,9 +2687,17 @@ function Today(props: {
           </p>
         </div>
         <div className="page-hero-stats">
-          <span>Approved partners <b>{approvedBusinesses}</b></span>
-          <span>Active listings <b>{activeListings}</b></span>
-          {missingProfiles > 0 && <span className="warn">Missing profiles <b>{missingProfiles}</b></span>}
+          <span>
+            Approved partners <b>{approvedBusinesses}</b>
+          </span>
+          <span>
+            Active listings <b>{activeListings}</b>
+          </span>
+          {missingProfiles > 0 && (
+            <span className="warn">
+              Missing profiles <b>{missingProfiles}</b>
+            </span>
+          )}
         </div>
       </section>
 
@@ -1970,9 +2718,17 @@ function Today(props: {
       </section>
 
       <section className="chart-grid">
-        <DonutChart title="Businesses" total={props.businesses.length} segments={businessSegments} />
+        <DonutChart
+          title="Businesses"
+          total={props.businesses.length}
+          segments={businessSegments}
+        />
         <BarChart title="Accounts by role" bars={accountBars} />
-        <DonutChart title="Listings" total={props.cars.length} segments={listingSegments} />
+        <DonutChart
+          title="Listings"
+          total={props.cars.length}
+          segments={listingSegments}
+        />
       </section>
 
       <div className="today-layout">
@@ -1984,7 +2740,10 @@ function Today(props: {
           {visibleQueue.length ? (
             <div className="worklist">
               {visibleQueue.map((item) => (
-                <article className={`worklist-row ${item.kind}`} key={`${item.kind}-${item.id}`}>
+                <article
+                  className={`worklist-row ${item.kind}`}
+                  key={`${item.kind}-${item.id}`}
+                >
                   <span className={`work-tag ${item.kind}`}>{item.kind}</span>
                   <div className="worklist-main">
                     <strong>{item.label}</strong>
@@ -2002,7 +2761,8 @@ function Today(props: {
               ))}
               {totalOpen > visibleQueue.length && (
                 <div className="worklist-more">
-                  {totalOpen - visibleQueue.length} more open items across the queues.
+                  {totalOpen - visibleQueue.length} more open items across the
+                  queues.
                 </div>
               )}
             </div>
@@ -2015,14 +2775,25 @@ function Today(props: {
           <Panel title="Network health" icon={<Users size={18} />}>
             <div className="insight-grid">
               <Insight label="Admins" value={roleCounts.admin ?? 0} />
-              <Insight label="Owners" value={roleCounts.businessowner ?? roleCounts.businessOwner ?? 0} />
+              <Insight
+                label="Owners"
+                value={
+                  roleCounts.businessowner ?? roleCounts.businessOwner ?? 0
+                }
+              />
               <Insight label="Staff" value={roleCounts.staff ?? 0} />
               <Insight label="Customers" value={roleCounts.customer ?? 0} />
             </div>
             <div className="status-strip">
-              <span>Pending <b>{pendingBusinesses}</b></span>
-              <span>Approved <b>{approvedBusinesses}</b></span>
-              <span>Applications <b>{props.applications.length}</b></span>
+              <span>
+                Pending <b>{pendingBusinesses}</b>
+              </span>
+              <span>
+                Approved <b>{approvedBusinesses}</b>
+              </span>
+              <span>
+                Applications <b>{props.applications.length}</b>
+              </span>
             </div>
           </Panel>
 
@@ -2148,8 +2919,22 @@ function DonutChart({
         <span className="chart-total">{total.toLocaleString()}</span>
       </div>
       <div className="donut-wrap">
-        <svg className="donut" viewBox="0 0 100 100" width="128" height="128" role="img" aria-label={`${title} by status`}>
-          <circle cx="50" cy="50" r={radius} fill="none" stroke="var(--paper-soft)" strokeWidth="15" />
+        <svg
+          className="donut"
+          viewBox="0 0 100 100"
+          width="128"
+          height="128"
+          role="img"
+          aria-label={`${title} by status`}
+        >
+          <circle
+            cx="50"
+            cy="50"
+            r={radius}
+            fill="none"
+            stroke="var(--paper-soft)"
+            strokeWidth="15"
+          />
           {sum > 0 &&
             segments.map((seg, index) => {
               const length = (seg.value / sum) * circumference;
@@ -2203,7 +2988,13 @@ function BarChart({ title, bars }: { title: string; bars: ChartSegment[] }) {
           <div className="bar-row" key={bar.label}>
             <span className="bar-label">{bar.label}</span>
             <div className="bar-track">
-              <span className="bar-fill" style={{ width: `${Math.round((bar.value / max) * 100)}%`, background: bar.color }} />
+              <span
+                className="bar-fill"
+                style={{
+                  width: `${Math.round((bar.value / max) * 100)}%`,
+                  background: bar.color,
+                }}
+              />
             </div>
             <b>{bar.value}</b>
           </div>
@@ -2292,7 +3083,10 @@ function UsersView({
   }
 
   async function setAdminRole(userId: string, adminRole: string) {
-    await httpsCallable(functions, "setPlatformAdminRole")({ userId, adminRole });
+    await httpsCallable(
+      functions,
+      "setPlatformAdminRole",
+    )({ userId, adminRole });
   }
 
   return (
@@ -2301,26 +3095,47 @@ function UsersView({
         title="Access management"
         description="Manage platform administrators and global customer support. Business-linked people and records live under Businesses."
         stats={[
-          ["Admins", String(countWhere(users, (item) => rowStatus(item, "role") === "admin"))],
+          [
+            "Admins",
+            String(
+              countWhere(users, (item) => rowStatus(item, "role") === "admin"),
+            ),
+          ],
           ["Business people", String(businessMemberCount)],
           ["Customers", String(countWhere(users, isCustomerAccount))],
           ["Global contacts", String(contactReferences.length)],
         ]}
       />
       <div className="tool-row">
-        <SearchBox value={search} onChange={setSearch} placeholder="Search users" />
-        {canManage && <CreatePersonForms runAction={runAction} roleOptions={roleOptions.filter((option) => option.key !== "superAdmin")} />}
+        <SearchBox
+          value={search}
+          onChange={setSearch}
+          placeholder="Search users"
+        />
+        {canManage && (
+          <CreatePersonForms
+            runAction={runAction}
+            roleOptions={roleOptions.filter(
+              (option) => option.key !== "superAdmin",
+            )}
+          />
+        )}
       </div>
       {!canManage && (
         <div className="info-band">
-          You have view access to people. Managing administrators, roles, and accounts requires the Super admin or User-management privilege.
+          You have view access to people. Managing administrators, roles, and
+          accounts requires the Super admin or User-management privilege.
         </div>
       )}
       <Panel
         title="Platform admins"
         icon={<Users size={18} />}
         action={
-          <button className="secondary-button" disabled={loading} onClick={refreshUsers}>
+          <button
+            className="secondary-button"
+            disabled={loading}
+            onClick={refreshUsers}
+          >
             <RefreshCw className={loading ? "spin" : ""} size={15} />
             Refresh Auth
           </button>
@@ -2330,28 +3145,35 @@ function UsersView({
         {loading && <div className="empty-state">Loading user accounts...</div>}
         <div className="table">
           {platformAdmins.map((user) => {
-            const isCurrentUser = text(user.uid ?? user.id, "") === currentUserId;
+            const isCurrentUser =
+              text(user.uid ?? user.id, "") === currentUserId;
             const adminRole = text(user.adminRole, "superAdmin");
             return (
               <div className="table-row admin-row" key={user.id}>
                 <div>
                   <strong>{userDisplayName(user)}</strong>
-                  <small>{[userMeta(user), isCurrentUser ? "Signed in" : ""].filter(Boolean).join(" • ")}</small>
+                  <small>
+                    {[userMeta(user), isCurrentUser ? "Signed in" : ""]
+                      .filter(Boolean)
+                      .join(" • ")}
+                  </small>
                 </div>
                 {canManage ? (
                   <select
                     aria-label="Access role"
                     disabled={isCurrentUser}
-                    value={roleOptions.some((option) => option.key === adminRole) ? adminRole : "superAdmin"}
+                    value={
+                      roleOptions.some((option) => option.key === adminRole)
+                        ? adminRole
+                        : "superAdmin"
+                    }
                     onChange={(event) =>
                       runAction(
                         "Admin role updated",
                         () => setAdminRole(user.id, event.target.value),
                         {
-                          confirm:
-                            `Change admin access for ${userDisplayName(user)}?`,
-                          confirmFr:
-                            `Modifier l’accès admin de ${userDisplayName(user)} ?`,
+                          confirm: `Change admin access for ${userDisplayName(user)}?`,
+                          confirmFr: `Modifier l’accès admin de ${userDisplayName(user)} ?`,
                         },
                       )
                     }
@@ -2363,33 +3185,35 @@ function UsersView({
                     ))}
                   </select>
                 ) : (
-                  <span className="admin-role-pill">{roleLabel(adminRole, permsConfig)}</span>
+                  <span className="admin-role-pill">
+                    {roleLabel(adminRole, permsConfig)}
+                  </span>
                 )}
                 {canManage && !isCurrentUser ? (
                   <button
                     className="danger-button"
-                    onClick={() => runAction(
-                      "User deleted",
-                      () => deleteUser(user.id),
-                      {
-                        confirm:
-                          `Delete ${text(user.email ?? user.fullName, user.id)}? This cannot be undone from the console.`,
-                        confirmFr:
-                          `Supprimer ${text(user.email ?? user.fullName, user.id)} ? Cette action ne peut pas être annulée depuis la console.`,
-                      },
-                    )}
+                    onClick={() =>
+                      runAction("User deleted", () => deleteUser(user.id), {
+                        confirm: `Delete ${text(user.email ?? user.fullName, user.id)}? This cannot be undone from the console.`,
+                        confirmFr: `Supprimer ${text(user.email ?? user.fullName, user.id)} ? Cette action ne peut pas être annulée depuis la console.`,
+                      })
+                    }
                   >
                     <X size={15} />
                     Delete
                   </button>
                 ) : (
-                  <span className="muted-action">{isCurrentUser ? "You" : "—"}</span>
+                  <span className="muted-action">
+                    {isCurrentUser ? "You" : "—"}
+                  </span>
                 )}
               </div>
             );
           })}
           {!loading && platformAdmins.length === 0 && (
-            <div className="empty-state">No platform administrators match this search.</div>
+            <div className="empty-state">
+              No platform administrators match this search.
+            </div>
           )}
         </div>
       </Panel>
@@ -2411,10 +3235,8 @@ function UsersView({
                         "User role updated",
                         () => updateRole(user.id, event.target.value as Role),
                         {
-                          confirm:
-                            `Change account role for ${userDisplayName(user)}?`,
-                          confirmFr:
-                            `Modifier le rôle du compte de ${userDisplayName(user)} ?`,
+                          confirm: `Change account role for ${userDisplayName(user)}?`,
+                          confirmFr: `Modifier le rôle du compte de ${userDisplayName(user)} ?`,
                         },
                       )
                     }
@@ -2427,16 +3249,12 @@ function UsersView({
                   </select>
                   <button
                     className="danger-button"
-                    onClick={() => runAction(
-                      "User deleted",
-                      () => deleteUser(user.id),
-                      {
-                        confirm:
-                          `Delete ${text(user.email ?? user.fullName, user.id)}? This cannot be undone from the console.`,
-                        confirmFr:
-                          `Supprimer ${text(user.email ?? user.fullName, user.id)} ? Cette action ne peut pas être annulée depuis la console.`,
-                      },
-                    )}
+                    onClick={() =>
+                      runAction("User deleted", () => deleteUser(user.id), {
+                        confirm: `Delete ${text(user.email ?? user.fullName, user.id)}? This cannot be undone from the console.`,
+                        confirmFr: `Supprimer ${text(user.email ?? user.fullName, user.id)} ? Cette action ne peut pas être annulée depuis la console.`,
+                      })
+                    }
                   >
                     <X size={15} />
                     Delete
@@ -2448,14 +3266,21 @@ function UsersView({
             </div>
           ))}
           {!loading && customerAccounts.length === 0 && (
-            <div className="empty-state">No customer accounts match this search.</div>
+            <div className="empty-state">
+              No customer accounts match this search.
+            </div>
           )}
         </div>
       </Panel>
 
-      <Panel title="Contact-only support references" icon={<ClipboardList size={18} />}>
+      <Panel
+        title="Contact-only support references"
+        icon={<ClipboardList size={18} />}
+      >
         <div className="list-summary">
-          These people were found on shipments, purchases, refunds, or service records. They are not editable accounts unless Firebase Auth has a matching user.
+          These people were found on shipments, purchases, refunds, or service
+          records. They are not editable accounts unless Firebase Auth has a
+          matching user.
         </div>
         <div className="table">
           {contactReferences.map((user) => (
@@ -2465,17 +3290,17 @@ function UsersView({
                 <small>{userMeta(user)}</small>
               </div>
               <span className="status-pill warning">Contact only</span>
-              {canManage && user.hasAuth === true && user.hasProfile === false ? (
+              {canManage &&
+              user.hasAuth === true &&
+              user.hasProfile === false ? (
                   <button
                     onClick={() =>
                       runAction(
                         "User profile created",
                         () => createMissingProfile(user.id),
                         {
-                          confirm:
-                            `Create a user profile for ${userDisplayName(user)}?`,
-                          confirmFr:
-                            `Créer un profil utilisateur pour ${userDisplayName(user)} ?`,
+                        confirm: `Create a user profile for ${userDisplayName(user)}?`,
+                        confirmFr: `Créer un profil utilisateur pour ${userDisplayName(user)} ?`,
                         },
                       )
                     }
@@ -2491,7 +3316,9 @@ function UsersView({
             </div>
           ))}
           {!loading && contactReferences.length === 0 && (
-            <div className="empty-state">No contact-only references match this search.</div>
+            <div className="empty-state">
+              No contact-only references match this search.
+            </div>
           )}
         </div>
       </Panel>
@@ -2499,7 +3326,9 @@ function UsersView({
   );
 }
 
-function buildRolesDraft(config: PermissionsConfig | null): Record<string, RoleConfig> {
+function buildRolesDraft(
+  config: PermissionsConfig | null,
+): Record<string, RoleConfig> {
   const roles = mergedRoles(config);
   const draft: Record<string, RoleConfig> = {};
   for (const [key, value] of Object.entries(roles)) {
@@ -2513,9 +3342,21 @@ function buildRolesDraft(config: PermissionsConfig | null): Record<string, RoleC
   return draft;
 }
 
-const SETTINGS_SECTION_ROWS: Array<{ key: string; label: string; levels: AccessLevel[] }> = [
-  ...EDITABLE_SECTIONS.map((section) => ({ key: section.key, label: section.label, levels: ACCESS_LEVELS })),
-  ...EDITABLE_CAPS.map((extra) => ({ key: extra.key, label: extra.label, levels: ["none", "manage"] as AccessLevel[] })),
+const SETTINGS_SECTION_ROWS: Array<{
+  key: string;
+  label: string;
+  levels: AccessLevel[];
+}> = [
+  ...EDITABLE_SECTIONS.map((section) => ({
+    key: section.key,
+    label: section.label,
+    levels: ACCESS_LEVELS,
+  })),
+  ...EDITABLE_CAPS.map((extra) => ({
+    key: extra.key,
+    label: extra.label,
+    levels: ["none", "manage"] as AccessLevel[],
+  })),
 ];
 
 function SettingsView({
@@ -2539,7 +3380,9 @@ function SettingsView({
   previewMode: boolean;
   runAction: ActionRunner;
 }) {
-  const [draft, setDraft] = useState<Record<string, RoleConfig>>(() => buildRolesDraft(config));
+  const [draft, setDraft] = useState<Record<string, RoleConfig>>(() =>
+    buildRolesDraft(config),
+  );
   const [saved, setSaved] = useState(true);
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
@@ -2555,14 +3398,24 @@ function SettingsView({
     if (focusKey && newRoleInputRef.current) {
       newRoleInputRef.current.focus();
       newRoleInputRef.current.select();
-      newRoleInputRef.current.scrollIntoView({ block: "center", behavior: "smooth" });
+      newRoleInputRef.current.scrollIntoView({
+        block: "center",
+        behavior: "smooth",
+      });
       setFocusKey(null);
     }
   }, [focusKey]);
 
   function update(roleKey: string, mutate: (role: RoleConfig) => void) {
     setDraft((current) => {
-      const next = { ...current, [roleKey]: { ...current[roleKey], sections: { ...current[roleKey].sections }, services: [...current[roleKey].services] } };
+      const next = {
+        ...current,
+        [roleKey]: {
+          ...current[roleKey],
+          sections: { ...current[roleKey].sections },
+          services: [...current[roleKey].services],
+        },
+      };
       mutate(next[roleKey]);
       return next;
     });
@@ -2570,7 +3423,9 @@ function SettingsView({
   }
 
   function setSection(roleKey: string, sectionKey: string, level: AccessLevel) {
-    update(roleKey, (role) => { role.sections[sectionKey] = level; });
+    update(roleKey, (role) => {
+      role.sections[sectionKey] = level;
+    });
   }
   function toggleService(roleKey: string, serviceId: string) {
     update(roleKey, (role) => {
@@ -2580,7 +3435,9 @@ function SettingsView({
     });
   }
   function setLabel(roleKey: string, label: string) {
-    update(roleKey, (role) => { role.label = label; });
+    update(roleKey, (role) => {
+      role.label = label;
+    });
   }
   function addRole() {
     const key = `role_${Date.now().toString(36)}`;
@@ -2589,7 +3446,15 @@ function SettingsView({
       [key]: {
         label: "New role",
         builtIn: false,
-        sections: { people: "none", businesses: "none", marketplace: "none", operations: "none", finance: "none", website: "none", support: "none" },
+        sections: {
+          people: "none",
+          businesses: "none",
+          marketplace: "none",
+          operations: "none",
+          finance: "none",
+          website: "none",
+          support: "none",
+        },
         services: [],
       },
     }));
@@ -2646,11 +3511,19 @@ function SettingsView({
         icon={<Shield size={18} />}
         action={
           <div className="panel-tools">
-            <button className="secondary-button" type="button" onClick={addRole}>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={addRole}
+            >
               <Check size={15} />
               Add role
             </button>
-            <button className="ghost-button" type="button" onClick={resetDefaults}>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={resetDefaults}
+            >
               <RefreshCw size={15} />
               Reset
             </button>
@@ -2658,16 +3531,14 @@ function SettingsView({
               className="primary-button"
               type="button"
               disabled={saved}
-              onClick={() => runAction(
-                "Roles & permissions saved",
-                save,
-                {
+              onClick={() =>
+                runAction("Roles & permissions saved", save, {
                   confirm:
                     "Save role and permission changes? Admin access may change immediately.",
                   confirmFr:
                     "Enregistrer les changements de rôles et d’autorisations ? L’accès admin peut changer immédiatement.",
-                },
-              )}
+                })
+              }
             >
               {saved ? "Saved" : "Save changes"}
             </button>
@@ -2675,7 +3546,10 @@ function SettingsView({
         }
       >
         <div className="info-band">
-          <strong>Super admin</strong> always has full access. For every other role, set each section to <b>None</b>, <b>View</b>, or <b>Manage</b>, and optionally limit it to specific services. Add as many roles as you need.
+          <strong>Super admin</strong> always has full access. For every other
+          role, set each section to <b>None</b>, <b>View</b>, or <b>Manage</b>,
+          and optionally limit it to specific services. Add as many roles as you
+          need.
         </div>
         <div className="role-card-grid">
           {roleKeys.map((roleKey) => {
@@ -2685,10 +3559,23 @@ function SettingsView({
                 <article className="role-card confirming" key={roleKey}>
                   <div className="role-delete-confirm">
                     <strong>Delete “{role.label || "this role"}”?</strong>
-                    <p>Admins assigned to it keep dashboard-only access until you reassign them.</p>
+                    <p>
+                      Admins assigned to it keep dashboard-only access until you
+                      reassign them.
+                    </p>
                     <div className="role-delete-actions">
-                      <button className="ghost-button" type="button" onClick={() => setPendingDelete(null)}>Cancel</button>
-                      <button className="danger-button" type="button" onClick={() => confirmDelete(roleKey)}>
+                      <button
+                        className="ghost-button"
+                        type="button"
+                        onClick={() => setPendingDelete(null)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="danger-button"
+                        type="button"
+                        onClick={() => confirmDelete(roleKey)}
+                      >
                         <X size={15} />
                         Delete role
                       </button>
@@ -2711,13 +3598,20 @@ function SettingsView({
                       className="role-name-input"
                       value={role.label}
                       placeholder="Role name"
-                      onChange={(event) => setLabel(roleKey, event.target.value)}
+                      onChange={(event) =>
+                        setLabel(roleKey, event.target.value)
+                      }
                       onFocus={(event) => event.target.select()}
                       aria-label="Role name"
                     />
                   )}
                   {!role.builtIn && (
-                    <button className="icon-danger" type="button" title="Delete role" onClick={() => setPendingDelete(roleKey)}>
+                    <button
+                      className="icon-danger"
+                      type="button"
+                      title="Delete role"
+                      onClick={() => setPendingDelete(roleKey)}
+                    >
                       <X size={15} />
                     </button>
                   )}
@@ -2735,7 +3629,11 @@ function SettingsView({
                             className={`level-${level} ${(role.sections[row.key] ?? "none") === level ? "active" : ""}`}
                             onClick={() => setSection(roleKey, row.key, level)}
                           >
-                            {level === "none" ? "None" : level === "view" ? "View" : "Manage"}
+                            {level === "none"
+                              ? "None"
+                              : level === "view"
+                                ? "View"
+                                : "Manage"}
                           </button>
                         ))}
                       </div>
@@ -2745,11 +3643,19 @@ function SettingsView({
 
                 <div className="role-services">
                   <span className="role-services-label">
-                    Limited to services <small>{role.services.length ? "" : "(all services)"}</small>
+                    Limited to services{" "}
+                    <small>
+                      {role.services.length ? "" : "(all services)"}
+                    </small>
                   </span>
                   <div className="service-checks">
                     {PLATFORM_SERVICES.map((service) => (
-                      <label key={service.id} className={role.services.includes(service.id) ? "on" : ""}>
+                      <label
+                        key={service.id}
+                        className={
+                          role.services.includes(service.id) ? "on" : ""
+                        }
+                      >
                         <input
                           type="checkbox"
                           checked={role.services.includes(service.id)}
@@ -2853,7 +3759,9 @@ function percentLabelFromRate(value: unknown) {
 }
 
 function businessCommissionRate(business: FirestoreRow) {
-  const rate = Number(business.platformFeePct ?? business.platformCommissionPct);
+  const rate = Number(
+    business.platformFeePct ?? business.platformCommissionPct,
+  );
   return Number.isFinite(rate) && rate >= 0 && rate < 1 ? rate : null;
 }
 
@@ -2866,14 +3774,21 @@ function businessSearchText(business: FirestoreRow) {
     business.phone,
     business.city,
     business.state,
-  ].map((value) => text(value, "").toLowerCase()).join(" ");
+  ]
+    .map((value) => text(value, "").toLowerCase())
+    .join(" ");
 }
 
-function mergeGeneral(data: Record<string, unknown> | undefined): GeneralSettings {
+function mergeGeneral(
+  data: Record<string, unknown> | undefined,
+): GeneralSettings {
   const d = data ?? {};
   const shipping = (d.shipping as { destinations?: unknown }) ?? {};
   return {
-    branding: { ...GENERAL_DEFAULTS.branding, ...((d.branding as object) ?? {}) },
+    branding: {
+      ...GENERAL_DEFAULTS.branding,
+      ...((d.branding as object) ?? {}),
+    },
     shipping: {
       ...GENERAL_DEFAULTS.shipping,
       ...((d.shipping as object) ?? {}),
@@ -2881,8 +3796,14 @@ function mergeGeneral(data: Record<string, unknown> | undefined): GeneralSetting
         ? (shipping.destinations as FirestoreRow[])
         : [],
     },
-    applications: { ...GENERAL_DEFAULTS.applications, ...((d.applications as object) ?? {}) },
-    notifications: { ...GENERAL_DEFAULTS.notifications, ...((d.notifications as object) ?? {}) },
+    applications: {
+      ...GENERAL_DEFAULTS.applications,
+      ...((d.applications as object) ?? {}),
+    },
+    notifications: {
+      ...GENERAL_DEFAULTS.notifications,
+      ...((d.notifications as object) ?? {}),
+    },
   };
 }
 
@@ -2936,19 +3857,23 @@ function MoreSettings({
   previewMode: boolean;
   runAction: ActionRunner;
 }) {
-  const [draft, setDraft] = useState<GeneralSettings>(() => mergeGeneral(undefined));
+  const [draft, setDraft] = useState<GeneralSettings>(() =>
+    mergeGeneral(undefined),
+  );
   const [platformFeeDraft, setPlatformFeeDraft] = useState("10");
   const [businessFeeDraft, setBusinessFeeDraft] = useState("10");
   const [businessFeeSearch, setBusinessFeeSearch] = useState("");
   const [deliverySearch, setDeliverySearch] = useState("");
-  const [deliveryStatusFilter, setDeliveryStatusFilter] = useState("action_needed");
+  const [deliveryStatusFilter, setDeliveryStatusFilter] =
+    useState("action_needed");
   const [selectedBusinessIds, setSelectedBusinessIds] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   const serviceFees = useMemo(
     () => pricing.find((row) => row.id === "serviceFees") ?? null,
     [pricing],
   );
-  const defaultPlatformFeeLabel = percentLabelFromRate(serviceFees?.platformFeePct) || "10%";
+  const defaultPlatformFeeLabel =
+    percentLabelFromRate(serviceFees?.platformFeePct) || "10%";
   const eligibleBusinesses = useMemo(
     () => businesses.filter((business) => business._inferred !== true),
     [businesses],
@@ -2960,13 +3885,18 @@ function MoreSettings({
       businessSearchText(business).includes(needle),
     );
   }, [businessFeeSearch, eligibleBusinesses]);
-  const selectedSet = useMemo(() => new Set(selectedBusinessIds), [selectedBusinessIds]);
+  const selectedSet = useMemo(
+    () => new Set(selectedBusinessIds),
+    [selectedBusinessIds],
+  );
   const selectedBusinesses = useMemo(
     () => eligibleBusinesses.filter((business) => selectedSet.has(business.id)),
     [eligibleBusinesses, selectedSet],
   );
   const sortedDeliveryRows = useMemo(
-    () => [...notificationDeliveries].sort((a, b) =>
+    () =>
+      [...notificationDeliveries].sort(
+        (a, b) =>
       (asDate(b.createdAt)?.getTime() ?? 0) -
         (asDate(a.createdAt)?.getTime() ?? 0),
     ),
@@ -2976,7 +3906,8 @@ function MoreSettings({
     const needle = deliverySearch.trim().toLowerCase();
     return sortedDeliveryRows.filter((row) => {
       const status = rowStatus(row);
-      const statusMatches = deliveryStatusFilter === "all" ||
+      const statusMatches =
+        deliveryStatusFilter === "all" ||
         (deliveryStatusFilter === "action_needed"
           ? deliveryNeedsAttention(row)
           : status === deliveryStatusFilter);
@@ -3000,7 +3931,9 @@ function MoreSettings({
     if (previewMode) {
       setDraft(mergeGeneral(undefined));
       setLoaded(true);
-      return () => { active = false; };
+      return () => {
+        active = false;
+      };
     }
     getDoc(doc(db, "platformConfig", "general"))
       .then((snap) => {
@@ -3009,8 +3942,12 @@ function MoreSettings({
           setLoaded(true);
         }
       })
-      .catch(() => { if (active) setLoaded(true); });
-    return () => { active = false; };
+      .catch(() => {
+        if (active) setLoaded(true);
+      });
+    return () => {
+      active = false;
+    };
   }, [previewMode]);
 
   useEffect(() => {
@@ -3031,10 +3968,16 @@ function MoreSettings({
     setDraft((d) => ({ ...d, shipping: { ...d.shipping, [key]: value } }));
   }
   function setApplications(key: string, value: boolean) {
-    setDraft((d) => ({ ...d, applications: { ...d.applications, [key]: value } }));
+    setDraft((d) => ({
+      ...d,
+      applications: { ...d.applications, [key]: value },
+    }));
   }
   function setNotifications(key: string, value: unknown) {
-    setDraft((d) => ({ ...d, notifications: { ...d.notifications, [key]: value } }));
+    setDraft((d) => ({
+      ...d,
+      notifications: { ...d.notifications, [key]: value },
+    }));
   }
 
   function addDestination() {
@@ -3046,18 +3989,27 @@ function MoreSettings({
   function setDestination(index: number, key: string, value: string) {
     setShipping(
       "destinations",
-      draft.shipping.destinations.map((row, i) => (i === index ? { ...row, [key]: value } : row)),
+      draft.shipping.destinations.map((row, i) =>
+        i === index ? { ...row, [key]: value } : row,
+      ),
     );
   }
   function removeDestination(index: number) {
-    setShipping("destinations", draft.shipping.destinations.filter((_, i) => i !== index));
+    setShipping(
+      "destinations",
+      draft.shipping.destinations.filter((_, i) => i !== index),
+    );
   }
 
   async function saveSection(section: keyof GeneralSettings) {
     if (previewMode) return;
     await setDoc(
       doc(db, "platformConfig", "general"),
-      { [section]: draft[section], updatedAt: serverTimestamp(), updatedBy: currentUserId },
+      {
+        [section]: draft[section],
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUserId,
+      },
       { merge: true },
     );
   }
@@ -3086,14 +4038,17 @@ function MoreSettings({
 
   function selectBusinessRows(rows: FirestoreRow[]) {
     const ids = rows.map((business) => business.id);
-    setSelectedBusinessIds((current) => Array.from(new Set([...current, ...ids])));
+    setSelectedBusinessIds((current) =>
+      Array.from(new Set([...current, ...ids])),
+    );
   }
 
   async function saveBusinessCommission(targets: FirestoreRow[]) {
     if (targets.length === 0) throw new Error("Select at least one business.");
     const rate = rateFromPercentInput(businessFeeDraft);
     if (previewMode) return;
-    await Promise.all(targets.map((business) =>
+    await Promise.all(
+      targets.map((business) =>
       setDoc(
         doc(db, "businesses", business.id),
         {
@@ -3150,23 +4105,23 @@ function MoreSettings({
           <button
             className="primary-button compact"
             type="button"
-            onClick={() => runAction(
-              "Platform fee saved",
-              savePlatformFee,
-              {
+            onClick={() =>
+              runAction("Platform fee saved", savePlatformFee, {
                 confirm:
                   "Save the platform transaction fee? New checkout calculations may use this value.",
                 confirmFr:
                   "Enregistrer les frais de transaction plateforme ? Les nouveaux paiements peuvent utiliser cette valeur.",
-              },
-            )}
+              })
+            }
           >
             Save
           </button>
         }
       >
         <div className="info-band">
-          This percentage is kept by the platform from each paid customer transaction before calculating the business payout. It is saved to the live payment pricing record used by backend checkout functions.
+          This percentage is kept by the platform from each paid customer
+          transaction before calculating the business payout. It is saved to the
+          live payment pricing record used by backend checkout functions.
         </div>
         <div className="settings-form narrow">
           <label>
@@ -3208,7 +4163,10 @@ function MoreSettings({
         }
       >
         <div className="info-band">
-          <span>Business overrides are used before the default platform transaction fee.</span>{" "}
+          <span>
+            Business overrides are used before the default platform transaction
+            fee.
+          </span>{" "}
           <span>Current default</span>: <b>{defaultPlatformFeeLabel}</b>.
         </div>
         <div className="commission-toolbar">
@@ -3241,10 +4199,8 @@ function MoreSettings({
                 "Business commissions saved",
                 () => saveBusinessCommission(selectedBusinesses),
                 {
-                  confirm:
-                    `Set commission override for ${selectedBusinesses.length} selected business${selectedBusinesses.length === 1 ? "" : "es"}?`,
-                  confirmFr:
-                    `Définir la commission spécifique pour ${selectedBusinesses.length} entreprise${selectedBusinesses.length === 1 ? "" : "s"} sélectionnée${selectedBusinesses.length === 1 ? "" : "s"} ?`,
+                  confirm: `Set commission override for ${selectedBusinesses.length} selected business${selectedBusinesses.length === 1 ? "" : "es"}?`,
+                  confirmFr: `Définir la commission spécifique pour ${selectedBusinesses.length} entreprise${selectedBusinesses.length === 1 ? "" : "s"} sélectionnée${selectedBusinesses.length === 1 ? "" : "s"} ?`,
                 },
               )
             }
@@ -3261,10 +4217,8 @@ function MoreSettings({
                 "All business commissions saved",
                 () => saveBusinessCommission(eligibleBusinesses),
                 {
-                  confirm:
-                    `Set commission override for all ${eligibleBusinesses.length} eligible businesses?`,
-                  confirmFr:
-                    `Définir la commission spécifique pour les ${eligibleBusinesses.length} entreprises admissibles ?`,
+                  confirm: `Set commission override for all ${eligibleBusinesses.length} eligible businesses?`,
+                  confirmFr: `Définir la commission spécifique pour les ${eligibleBusinesses.length} entreprises admissibles ?`,
                 },
               )
             }
@@ -3280,10 +4234,8 @@ function MoreSettings({
                 "Business commissions reset",
                 () => resetBusinessCommission(selectedBusinesses),
                 {
-                  confirm:
-                    `Reset commission override for ${selectedBusinesses.length} selected business${selectedBusinesses.length === 1 ? "" : "es"}?`,
-                  confirmFr:
-                    `Réinitialiser la commission spécifique pour ${selectedBusinesses.length} entreprise${selectedBusinesses.length === 1 ? "" : "s"} sélectionnée${selectedBusinesses.length === 1 ? "" : "s"} ?`,
+                  confirm: `Reset commission override for ${selectedBusinesses.length} selected business${selectedBusinesses.length === 1 ? "" : "es"}?`,
+                  confirmFr: `Réinitialiser la commission spécifique pour ${selectedBusinesses.length} entreprise${selectedBusinesses.length === 1 ? "" : "s"} sélectionnée${selectedBusinesses.length === 1 ? "" : "s"} ?`,
                 },
               )
             }
@@ -3296,25 +4248,40 @@ function MoreSettings({
             const overrideRate = businessCommissionRate(business);
             const checked = selectedSet.has(business.id);
             return (
-              <label className={`commission-row ${checked ? "selected" : ""}`} key={business.id}>
+              <label
+                className={`commission-row ${checked ? "selected" : ""}`}
+                key={business.id}
+              >
                 <input
                   type="checkbox"
                   checked={checked}
                   onChange={() => toggleBusinessSelection(business.id)}
                 />
                 <span className="commission-business">
-                  <b>{text(business.name ?? business.businessName, business.id)}</b>
+                  <b>
+                    {text(business.name ?? business.businessName, business.id)}
+                  </b>
                   <small>{text(business.email, business.id)}</small>
                 </span>
-                <span className="commission-status">{statusLabels[rowStatus(business) as keyof typeof statusLabels] ?? rowStatus(business)}</span>
-                <span className={overrideRate === null ? "commission-default" : "commission-override"}>
-                  {overrideRate === null
-                    ? (
+                <span className="commission-status">
+                  {statusLabels[
+                    rowStatus(business) as keyof typeof statusLabels
+                  ] ?? rowStatus(business)}
+                </span>
+                <span
+                  className={
+                    overrideRate === null
+                      ? "commission-default"
+                      : "commission-override"
+                  }
+                >
+                  {overrideRate === null ? (
                         <>
                           <span>Default</span> {defaultPlatformFeeLabel}
                         </>
-                      )
-                    : percentLabelFromRate(overrideRate)}
+                  ) : (
+                    percentLabelFromRate(overrideRate)
+                  )}
                 </span>
               </label>
             );
@@ -3326,7 +4293,13 @@ function MoreSettings({
             </div>
           )}
           {filteredBusinesses.length === 0 && (
-            <EmptyState text={eligibleBusinesses.length === 0 ? "No businesses loaded" : "No businesses match this search."} />
+            <EmptyState
+              text={
+                eligibleBusinesses.length === 0
+                  ? "No businesses loaded"
+                  : "No businesses match this search."
+              }
+            />
           )}
         </div>
       </Panel>
@@ -3338,31 +4311,66 @@ function MoreSettings({
           <button
             className="primary-button compact"
             type="button"
-            onClick={() => runAction(
-              "Branding saved",
-              () => saveSection("branding"),
-              {
-                confirm:
-                  "Save internal platform branding changes?",
+            onClick={() =>
+              runAction("Branding saved", () => saveSection("branding"), {
+                confirm: "Save internal platform branding changes?",
                 confirmFr:
                   "Enregistrer les changements d’image de marque interne ?",
-              },
-            )}
+              })
+            }
           >
             Save
           </button>
         }
       >
         <div className="info-band">
-          These settings stay in the admin and app configuration. Public website copy and marketing contact details are managed from Website.
+          These settings stay in the admin and app configuration. Public website
+          copy and marketing contact details are managed from Website.
         </div>
         <div className="settings-form">
-          <label>Platform name<input value={draft.branding.platformName} onChange={(e) => setBranding("platformName", e.target.value)} /></label>
-          <label>Tagline<input value={draft.branding.tagline} onChange={(e) => setBranding("tagline", e.target.value)} /></label>
-          <label>Support email<input type="email" value={draft.branding.supportEmail} onChange={(e) => setBranding("supportEmail", e.target.value)} /></label>
-          <label>Support phone<input value={draft.branding.supportPhone} onChange={(e) => setBranding("supportPhone", e.target.value)} /></label>
-          <label>WhatsApp<input value={draft.branding.whatsapp} onChange={(e) => setBranding("whatsapp", e.target.value)} /></label>
-          <label>Address<input value={draft.branding.address} onChange={(e) => setBranding("address", e.target.value)} /></label>
+          <label>
+            Platform name
+            <input
+              value={draft.branding.platformName}
+              onChange={(e) => setBranding("platformName", e.target.value)}
+            />
+          </label>
+          <label>
+            Tagline
+            <input
+              value={draft.branding.tagline}
+              onChange={(e) => setBranding("tagline", e.target.value)}
+            />
+          </label>
+          <label>
+            Support email
+            <input
+              type="email"
+              value={draft.branding.supportEmail}
+              onChange={(e) => setBranding("supportEmail", e.target.value)}
+            />
+          </label>
+          <label>
+            Support phone
+            <input
+              value={draft.branding.supportPhone}
+              onChange={(e) => setBranding("supportPhone", e.target.value)}
+            />
+          </label>
+          <label>
+            WhatsApp
+            <input
+              value={draft.branding.whatsapp}
+              onChange={(e) => setBranding("whatsapp", e.target.value)}
+            />
+          </label>
+          <label>
+            Address
+            <input
+              value={draft.branding.address}
+              onChange={(e) => setBranding("address", e.target.value)}
+            />
+          </label>
         </div>
       </Panel>
 
@@ -3373,7 +4381,8 @@ function MoreSettings({
           <button
             className="primary-button compact"
             type="button"
-            onClick={() => runAction(
+            onClick={() =>
+              runAction(
               "Shipping defaults saved",
               () => saveSection("shipping"),
               {
@@ -3382,29 +4391,89 @@ function MoreSettings({
                 confirmFr:
                   "Enregistrer les changements des tarifs et destinations par défaut des barils ?",
               },
-            )}
+              )
+            }
           >
             Save
           </button>
         }
       >
         <div className="settings-form narrow">
-          <label>Default barrel price (USD)<input inputMode="decimal" value={String(draft.shipping.defaultBarrelPrice ?? "")} onChange={(e) => setShipping("defaultBarrelPrice", e.target.value)} placeholder="e.g. 275" /></label>
+          <label>
+            Default barrel price (USD)
+            <input
+              inputMode="decimal"
+              value={String(draft.shipping.defaultBarrelPrice ?? "")}
+              onChange={(e) =>
+                setShipping("defaultBarrelPrice", e.target.value)
+              }
+              placeholder="e.g. 275"
+            />
+          </label>
         </div>
         <div className="dest-editor">
-          <div className="dest-editor-head"><span>Country</span><span>Code</span><span>Price</span><span>Min days</span><span>Max days</span><span></span></div>
+          <div className="dest-editor-head">
+            <span>Country</span>
+            <span>Code</span>
+            <span>Price</span>
+            <span>Min days</span>
+            <span>Max days</span>
+            <span></span>
+          </div>
           {draft.shipping.destinations.map((row, index) => (
             <div className="dest-editor-row" key={index}>
-              <input placeholder="Country" value={text(row.name, "")} onChange={(e) => setDestination(index, "name", e.target.value)} />
-              <input placeholder="Code" value={text(row.code, "")} onChange={(e) => setDestination(index, "code", e.target.value)} />
-              <input placeholder="Price" inputMode="decimal" value={text(row.price, "")} onChange={(e) => setDestination(index, "price", e.target.value)} />
-              <input placeholder="Min" inputMode="numeric" value={text(row.minDays, "")} onChange={(e) => setDestination(index, "minDays", e.target.value)} />
-              <input placeholder="Max" inputMode="numeric" value={text(row.maxDays, "")} onChange={(e) => setDestination(index, "maxDays", e.target.value)} />
-              <button className="icon-danger" type="button" title="Remove" onClick={() => removeDestination(index)}><X size={15} /></button>
+              <input
+                placeholder="Country"
+                value={text(row.name, "")}
+                onChange={(e) => setDestination(index, "name", e.target.value)}
+              />
+              <input
+                placeholder="Code"
+                value={text(row.code, "")}
+                onChange={(e) => setDestination(index, "code", e.target.value)}
+              />
+              <input
+                placeholder="Price"
+                inputMode="decimal"
+                value={text(row.price, "")}
+                onChange={(e) => setDestination(index, "price", e.target.value)}
+              />
+              <input
+                placeholder="Min"
+                inputMode="numeric"
+                value={text(row.minDays, "")}
+                onChange={(e) =>
+                  setDestination(index, "minDays", e.target.value)
+                }
+              />
+              <input
+                placeholder="Max"
+                inputMode="numeric"
+                value={text(row.maxDays, "")}
+                onChange={(e) =>
+                  setDestination(index, "maxDays", e.target.value)
+                }
+              />
+              <button
+                className="icon-danger"
+                type="button"
+                title="Remove"
+                onClick={() => removeDestination(index)}
+              >
+                <X size={15} />
+              </button>
             </div>
           ))}
-          {draft.shipping.destinations.length === 0 && <EmptyState text="No default destinations yet." />}
-          <button className="secondary-button" type="button" onClick={addDestination}>Add destination</button>
+          {draft.shipping.destinations.length === 0 && (
+            <EmptyState text="No default destinations yet." />
+          )}
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={addDestination}
+          >
+            Add destination
+          </button>
         </div>
       </Panel>
 
@@ -3415,27 +4484,50 @@ function MoreSettings({
           <button
             className="primary-button compact"
             type="button"
-            onClick={() => runAction(
+            onClick={() =>
+              runAction(
               "Application rules saved",
               () => saveSection("applications"),
               {
-                confirm:
-                  "Save business application rule changes?",
+                  confirm: "Save business application rule changes?",
                 confirmFr:
                   "Enregistrer les changements des règles de candidature entreprise ?",
               },
-            )}
+              )
+            }
           >
             Save
           </button>
         }
       >
         <div className="toggle-list">
-          <ToggleRow label="Require business documents" hint="Applicants must upload verification documents" checked={draft.applications.requireDocuments} onChange={(v) => setApplications("requireDocuments", v)} />
-          <ToggleRow label="Require phone number" checked={draft.applications.requirePhone} onChange={(v) => setApplications("requirePhone", v)} />
-          <ToggleRow label="Require business address" checked={draft.applications.requireAddress} onChange={(v) => setApplications("requireAddress", v)} />
-          <ToggleRow label="Require at least one service" checked={draft.applications.requireService} onChange={(v) => setApplications("requireService", v)} />
-          <ToggleRow label="Auto-approve new businesses" hint="Skip manual review (not recommended)" checked={draft.applications.autoApprove} onChange={(v) => setApplications("autoApprove", v)} />
+          <ToggleRow
+            label="Require business documents"
+            hint="Applicants must upload verification documents"
+            checked={draft.applications.requireDocuments}
+            onChange={(v) => setApplications("requireDocuments", v)}
+          />
+          <ToggleRow
+            label="Require phone number"
+            checked={draft.applications.requirePhone}
+            onChange={(v) => setApplications("requirePhone", v)}
+          />
+          <ToggleRow
+            label="Require business address"
+            checked={draft.applications.requireAddress}
+            onChange={(v) => setApplications("requireAddress", v)}
+          />
+          <ToggleRow
+            label="Require at least one service"
+            checked={draft.applications.requireService}
+            onChange={(v) => setApplications("requireService", v)}
+          />
+          <ToggleRow
+            label="Auto-approve new businesses"
+            hint="Skip manual review (not recommended)"
+            checked={draft.applications.autoApprove}
+            onChange={(v) => setApplications("autoApprove", v)}
+          />
         </div>
       </Panel>
 
@@ -3446,7 +4538,8 @@ function MoreSettings({
           <button
             className="primary-button compact"
             type="button"
-            onClick={() => runAction(
+            onClick={() =>
+              runAction(
               "Notification preferences saved",
               () => saveSection("notifications"),
               {
@@ -3455,7 +4548,8 @@ function MoreSettings({
                 confirmFr:
                   "Enregistrer les paramètres de notification plateforme ? L’acheminement email et SMS peut changer.",
               },
-            )}
+              )
+            }
           >
             Save
           </button>
@@ -3464,30 +4558,51 @@ function MoreSettings({
         <div className="settings-form narrow">
           <label>
             Email sender provider
-            <select value={draft.notifications.emailProvider} onChange={(e) => setNotifications("emailProvider", e.target.value)}>
+            <select
+              value={draft.notifications.emailProvider}
+              onChange={(e) =>
+                setNotifications("emailProvider", e.target.value)
+              }
+            >
               <option value="none">No email sender connected</option>
-              <option value="firebaseTriggerEmail">Firebase Trigger Email extension</option>
+              <option value="firebaseTriggerEmail">
+                Firebase Trigger Email extension
+              </option>
             </select>
-            <small>Use the Firebase provider only after the extension is installed and configured.</small>
+            <small>
+              Use the Firebase provider only after the extension is installed
+              and configured.
+            </small>
           </label>
           <label>
             SMS sender provider
-            <select value={draft.notifications.smsProvider} onChange={(e) => setNotifications("smsProvider", e.target.value)}>
+            <select
+              value={draft.notifications.smsProvider}
+              onChange={(e) => setNotifications("smsProvider", e.target.value)}
+            >
               <option value="none">No SMS sender connected</option>
               <option value="firestoreSmsQueue">Firestore SMS queue</option>
             </select>
-            <small>Use the queue provider only after an SMS worker or extension is connected.</small>
+            <small>
+              Use the queue provider only after an SMS worker or extension is
+              connected.
+            </small>
           </label>
         </div>
         <div className="provider-setup-grid">
           <article className="provider-setup-card">
             <header>
-              <span className={`status-pill compact ${emailProviderReady ? "good" : "warning"}`}>
+              <span
+                className={`status-pill compact ${emailProviderReady ? "good" : "warning"}`}
+              >
                 {emailProviderReady ? "Ready to test" : "Setup needed"}
               </span>
               <strong>Email provider</strong>
             </header>
-            <p>Firebase Trigger Email must be installed with the Firestore collection set to mail and valid SMTP credentials.</p>
+            <p>
+              Firebase Trigger Email must be installed with the Firestore
+              collection set to mail and valid SMTP credentials.
+            </p>
             <div className="provider-setup-actions">
               <a
                 className="secondary-button compact"
@@ -3523,12 +4638,17 @@ function MoreSettings({
           </article>
           <article className="provider-setup-card">
             <header>
-              <span className={`status-pill compact ${smsProviderReady ? "good" : "warning"}`}>
+              <span
+                className={`status-pill compact ${smsProviderReady ? "good" : "warning"}`}
+              >
                 {smsProviderReady ? "Ready to test" : "Setup needed"}
               </span>
               <strong>SMS provider</strong>
             </header>
-            <p>A Firestore SMS worker must process smsMessages records and write delivery status back to each record.</p>
+            <p>
+              A Firestore SMS worker must process smsMessages records and write
+              delivery status back to each record.
+            </p>
             <div className="provider-setup-actions">
               <button
                 className="primary-button compact"
@@ -3547,19 +4667,73 @@ function MoreSettings({
           </article>
         </div>
         <div className="toggle-list">
-          <ToggleRow label="Push notifications" checked={draft.notifications.pushEnabled} onChange={(v) => setNotifications("pushEnabled", v)} />
-          <ToggleRow label="Email notifications" hint="Records email deliveries; provider selection controls actual sending." checked={draft.notifications.emailEnabled} onChange={(v) => setNotifications("emailEnabled", v)} />
-          <ToggleRow label="SMS notifications" hint="Records phone deliveries only for users who opt in; provider selection controls actual sending." checked={draft.notifications.smsEnabled} onChange={(v) => setNotifications("smsEnabled", v)} />
-          <ToggleRow label="Car purchase status emails" checked={draft.notifications.purchaseStatus} onChange={(v) => setNotifications("purchaseStatus", v)} />
-          <ToggleRow label="Barrel shipment status emails" checked={draft.notifications.shipmentStatus} onChange={(v) => setNotifications("shipmentStatus", v)} />
-          <ToggleRow label="Refund decision emails" checked={draft.notifications.refundDecision} onChange={(v) => setNotifications("refundDecision", v)} />
-          <ToggleRow label="New business application emails" checked={draft.notifications.newApplication} onChange={(v) => setNotifications("newApplication", v)} />
-          <ToggleRow label="Business lifecycle emails" checked={draft.notifications.businessLifecycle} onChange={(v) => setNotifications("businessLifecycle", v)} />
-          <ToggleRow label="Verification document emails" checked={draft.notifications.verificationDocuments} onChange={(v) => setNotifications("verificationDocuments", v)} />
-          <ToggleRow label="Support message emails" checked={draft.notifications.supportMessages} onChange={(v) => setNotifications("supportMessages", v)} />
-          <ToggleRow label="Support escalation emails" checked={draft.notifications.supportEscalations} onChange={(v) => setNotifications("supportEscalations", v)} />
-          <ToggleRow label="Support case status emails" checked={draft.notifications.supportCaseUpdates} onChange={(v) => setNotifications("supportCaseUpdates", v)} />
-          <ToggleRow label="Notify admins of new applications" checked={draft.notifications.notifyAdmins} onChange={(v) => setNotifications("notifyAdmins", v)} />
+          <ToggleRow
+            label="Push notifications"
+            checked={draft.notifications.pushEnabled}
+            onChange={(v) => setNotifications("pushEnabled", v)}
+          />
+          <ToggleRow
+            label="Email notifications"
+            hint="Records email deliveries; provider selection controls actual sending."
+            checked={draft.notifications.emailEnabled}
+            onChange={(v) => setNotifications("emailEnabled", v)}
+          />
+          <ToggleRow
+            label="SMS notifications"
+            hint="Records phone deliveries only for users who opt in; provider selection controls actual sending."
+            checked={draft.notifications.smsEnabled}
+            onChange={(v) => setNotifications("smsEnabled", v)}
+          />
+          <ToggleRow
+            label="Car purchase status emails"
+            checked={draft.notifications.purchaseStatus}
+            onChange={(v) => setNotifications("purchaseStatus", v)}
+          />
+          <ToggleRow
+            label="Barrel shipment status emails"
+            checked={draft.notifications.shipmentStatus}
+            onChange={(v) => setNotifications("shipmentStatus", v)}
+          />
+          <ToggleRow
+            label="Refund decision emails"
+            checked={draft.notifications.refundDecision}
+            onChange={(v) => setNotifications("refundDecision", v)}
+          />
+          <ToggleRow
+            label="New business application emails"
+            checked={draft.notifications.newApplication}
+            onChange={(v) => setNotifications("newApplication", v)}
+          />
+          <ToggleRow
+            label="Business lifecycle emails"
+            checked={draft.notifications.businessLifecycle}
+            onChange={(v) => setNotifications("businessLifecycle", v)}
+          />
+          <ToggleRow
+            label="Verification document emails"
+            checked={draft.notifications.verificationDocuments}
+            onChange={(v) => setNotifications("verificationDocuments", v)}
+          />
+          <ToggleRow
+            label="Support message emails"
+            checked={draft.notifications.supportMessages}
+            onChange={(v) => setNotifications("supportMessages", v)}
+          />
+          <ToggleRow
+            label="Support escalation emails"
+            checked={draft.notifications.supportEscalations}
+            onChange={(v) => setNotifications("supportEscalations", v)}
+          />
+          <ToggleRow
+            label="Support case status emails"
+            checked={draft.notifications.supportCaseUpdates}
+            onChange={(v) => setNotifications("supportCaseUpdates", v)}
+          />
+          <ToggleRow
+            label="Notify admins of new applications"
+            checked={draft.notifications.notifyAdmins}
+            onChange={(v) => setNotifications("notifyAdmins", v)}
+          />
         </div>
       </Panel>
 
@@ -3583,7 +4757,9 @@ function MoreSettings({
         }
       >
         <div className="info-band">
-          Track queued, sent, failed, and provider setup states for email and SMS notifications. Retry only after the matching provider is connected.
+          Track queued, sent, failed, and provider setup states for email and
+          SMS notifications. Retry only after the matching provider is
+          connected.
         </div>
         {notificationDeliveriesError && (
           <div className="info-band warning">
@@ -3598,9 +4774,15 @@ function MoreSettings({
             placeholder="Search deliveries"
           />
           <div className="compact-stats notification-delivery-stats">
-            <span>Total <b>{sortedDeliveryRows.length}</b></span>
-            <span>Needs attention <b>{attentionDeliveryCount}</b></span>
-            <span>Showing <b>{filteredDeliveryRows.length}</b></span>
+            <span>
+              Total <b>{sortedDeliveryRows.length}</b>
+            </span>
+            <span>
+              Needs attention <b>{attentionDeliveryCount}</b>
+            </span>
+            <span>
+              Showing <b>{filteredDeliveryRows.length}</b>
+            </span>
           </div>
         </div>
         <div className="notification-delivery-list">
@@ -3615,7 +4797,9 @@ function MoreSettings({
                 <article className="notification-delivery-row" key={row.id}>
                   <div className="notification-delivery-main">
                     <div className="notification-delivery-title">
-                      <span className={`status-pill compact ${deliveryStatusClass(status)}`}>
+                      <span
+                        className={`status-pill compact ${deliveryStatusClass(status)}`}
+                      >
                         {statusLabel(status)}
                       </span>
                       <strong>{text(row.title, "Notification")}</strong>
@@ -3671,13 +4855,16 @@ function MoreSettings({
                 </article>
               );
             })}
-          {!notificationDeliveriesLoading && filteredDeliveryRows.length > 80 && (
+          {!notificationDeliveriesLoading &&
+            filteredDeliveryRows.length > 80 && (
             <div className="commission-more">
-              <span>Showing</span> <b>80</b>/<b>{filteredDeliveryRows.length}</b>.{" "}
+                <span>Showing</span> <b>80</b>/
+                <b>{filteredDeliveryRows.length}</b>.{" "}
               <span>Search to narrow the list.</span>
             </div>
           )}
-          {!notificationDeliveriesLoading && filteredDeliveryRows.length === 0 && (
+          {!notificationDeliveriesLoading &&
+            filteredDeliveryRows.length === 0 && (
             <EmptyState
               text={
                 sortedDeliveryRows.length === 0
@@ -3696,7 +4883,8 @@ const WEBSITE_HOME_DEFAULTS = {
   hero: {
     eyebrow: "Marketplace de services de confiance",
     headline: "Trouvez la bonne entreprise pour la route vers le pays.",
-    subheadline: "Laawol Digital est une plateforme où des entreprises inscrites proposent des services pour la diaspora : expédition, voitures, approvisionnement, restauration et aide professionnelle. Nous rassemblons les prix, le suivi, l’assistance et la responsabilité au même endroit pour que les clients choisissent en confiance.",
+    subheadline:
+      "Laawol Digital est une plateforme où des entreprises inscrites proposent des services pour la diaspora : expédition, voitures, approvisionnement, restauration et aide professionnelle. Nous rassemblons les prix, le suivi, l’assistance et la responsabilité au même endroit pour que les clients choisissent en confiance.",
     primaryCtaLabel: "Télécharger l’application",
     primaryCtaHref: "app.html",
     secondaryCtaLabel: "Découvrir les services",
@@ -3705,11 +4893,13 @@ const WEBSITE_HOME_DEFAULTS = {
   featured: {
     enabled: true,
     heading: "Entreprises mises en avant",
-    subheading: "Une sélection de partenaires approuvés avec des profils publics validés.",
+    subheading:
+      "Une sélection de partenaires approuvés avec des profils publics validés.",
     maxToShow: 6,
   },
   sections: {
-    servicesIntro: "Les entreprises s’inscrivent sur Laawol pour proposer les services qu’elles maîtrisent. Vous voyez leurs trajets, leurs prix, leurs détails de service et leurs statuts au même endroit, avec l’assistance de la plateforme si un point demande de l’attention.",
+    servicesIntro:
+      "Les entreprises s’inscrivent sur Laawol pour proposer les services qu’elles maîtrisent. Vous voyez leurs trajets, leurs prix, leurs détails de service et leurs statuts au même endroit, avec l’assistance de la plateforme si un point demande de l’attention.",
   },
 };
 
@@ -3737,16 +4927,26 @@ type FeaturedDraft = {
   featureConsent: boolean;
 };
 
-function mergeWebsiteHome(data: Record<string, unknown> | undefined): WebsiteHomeDraft {
+function mergeWebsiteHome(
+  data: Record<string, unknown> | undefined,
+): WebsiteHomeDraft {
   const d = data ?? {};
   return {
     hero: { ...WEBSITE_HOME_DEFAULTS.hero, ...((d.hero as object) ?? {}) },
-    featured: { ...WEBSITE_HOME_DEFAULTS.featured, ...((d.featured as object) ?? {}) },
-    sections: { ...WEBSITE_HOME_DEFAULTS.sections, ...((d.sections as object) ?? {}) },
+    featured: {
+      ...WEBSITE_HOME_DEFAULTS.featured,
+      ...((d.featured as object) ?? {}),
+    },
+    sections: {
+      ...WEBSITE_HOME_DEFAULTS.sections,
+      ...((d.sections as object) ?? {}),
+    },
   };
 }
 
-function mergeWebsiteContact(data: Record<string, unknown> | undefined): WebsiteContactDraft {
+function mergeWebsiteContact(
+  data: Record<string, unknown> | undefined,
+): WebsiteContactDraft {
   return {
     ...WEBSITE_CONTACT_DEFAULTS,
     ...((data as object) ?? {}),
@@ -3765,7 +4965,10 @@ function featuredServices(row: FirestoreRow) {
 }
 
 function servicesFromText(value: string) {
-  return value.split(",").map((item) => item.trim()).filter(Boolean);
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function toggleStringValue(values: string[], value: string, enabled: boolean) {
@@ -3774,7 +4977,10 @@ function toggleStringValue(values: string[], value: string, enabled: boolean) {
 }
 
 function locationCountry(row: FirestoreRow | undefined) {
-  return text(row?.country ?? row?.countryName ?? row?.locationCountry, "").trim();
+  return text(
+    row?.country ?? row?.countryName ?? row?.locationCountry,
+    "",
+  ).trim();
 }
 
 function locationCity(row: FirestoreRow | undefined) {
@@ -3820,7 +5026,8 @@ function draftFromBusiness(
     websiteUrl: text(featured?.websiteUrl ?? business?.website, ""),
     order: String(featured?.order ?? business?.featureOrder ?? nextOrder),
     active: featured?.active !== false,
-    featureConsent: featured?.featureConsent === true || business?.featureConsent === true,
+    featureConsent:
+      featured?.featureConsent === true || business?.featureConsent === true,
   };
 }
 
@@ -3828,14 +5035,22 @@ function emptyFeaturedDraft(nextOrder = 1): FeaturedDraft {
   return draftFromBusiness(undefined, undefined, nextOrder);
 }
 
-function missingFeatureItems(business: FirestoreRow | undefined, draft: FeaturedDraft) {
-  const services = draft.servicesText.split(",").map((item) => item.trim()).filter(Boolean);
+function missingFeatureItems(
+  business: FirestoreRow | undefined,
+  draft: FeaturedDraft,
+) {
+  const services = draft.servicesText
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
   const missing = [];
-  if (text(business?.status, "") !== "approved") missing.push("approved business status");
+  if (text(business?.status, "") !== "approved")
+    missing.push("approved business status");
   if (!draft.displayName.trim()) missing.push("display name");
   if (!draft.logoUrl.trim()) missing.push("logo");
   if (!draft.blurb.trim()) missing.push("short blurb");
-  if (draft.blurb.trim().length > 140) missing.push("blurb under 140 characters");
+  if (draft.blurb.trim().length > 140)
+    missing.push("blurb under 140 characters");
   if (services.length === 0) missing.push("at least one service");
   if (!draft.featureConsent) missing.push("feature consent");
   return missing;
@@ -3854,10 +5069,16 @@ function WebsiteView({
   previewMode: boolean;
   runAction: ActionRunner;
 }) {
-  const [homeDraft, setHomeDraft] = useState<WebsiteHomeDraft>(() => mergeWebsiteHome(undefined));
-  const [contactDraft, setContactDraft] = useState<WebsiteContactDraft>(() => mergeWebsiteContact(undefined));
+  const [homeDraft, setHomeDraft] = useState<WebsiteHomeDraft>(() =>
+    mergeWebsiteHome(undefined),
+  );
+  const [contactDraft, setContactDraft] = useState<WebsiteContactDraft>(() =>
+    mergeWebsiteContact(undefined),
+  );
   const [loaded, setLoaded] = useState(false);
-  const [featureDraft, setFeatureDraft] = useState<FeaturedDraft>(() => emptyFeaturedDraft());
+  const [featureDraft, setFeatureDraft] = useState<FeaturedDraft>(() =>
+    emptyFeaturedDraft(),
+  );
   const [editingId, setEditingId] = useState("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
@@ -3869,9 +5090,15 @@ function WebsiteView({
     });
   }, [featuredBusinesses]);
   const nextOrder = sortedFeatured.length + 1;
-  const selectedBusiness = businesses.find((business) => business.id === featureDraft.businessId);
-  const requests = businesses.filter((business) => text(business.featureStatus, "") === "requested");
-  const eligibleBusinesses = businesses.filter((business) => business._inferred !== true);
+  const selectedBusiness = businesses.find(
+    (business) => business.id === featureDraft.businessId,
+  );
+  const requests = businesses.filter(
+    (business) => text(business.featureStatus, "") === "requested",
+  );
+  const eligibleBusinesses = businesses.filter(
+    (business) => business._inferred !== true,
+  );
   const locationOptions = useMemo(() => {
     const countryValues = [
       ...eligibleBusinesses.map(locationCountry),
@@ -3880,17 +5107,27 @@ function WebsiteView({
     const selectedCountry = featureDraft.country.trim();
     const cityValues = [
       ...eligibleBusinesses
-          .filter((business) => !selectedCountry || locationCountry(business) === selectedCountry)
+        .filter(
+          (business) =>
+            !selectedCountry || locationCountry(business) === selectedCountry,
+        )
           .map(locationCity),
       ...sortedFeatured
-          .filter((row) => !selectedCountry || locationCountry(row) === selectedCountry)
+        .filter(
+          (row) => !selectedCountry || locationCountry(row) === selectedCountry,
+        )
           .map(locationCity),
     ];
     return {
       countries: sortedLocationValues(countryValues, featureDraft.country),
       cities: sortedLocationValues(cityValues, featureDraft.city),
     };
-  }, [eligibleBusinesses, sortedFeatured, featureDraft.country, featureDraft.city]);
+  }, [
+    eligibleBusinesses,
+    sortedFeatured,
+    featureDraft.country,
+    featureDraft.city,
+  ]);
 
   useEffect(() => {
     let active = true;
@@ -3898,7 +5135,9 @@ function WebsiteView({
       setHomeDraft(mergeWebsiteHome(undefined));
       setContactDraft(mergeWebsiteContact(undefined));
       setLoaded(true);
-      return () => { active = false; };
+      return () => {
+        active = false;
+      };
     }
     Promise.all([
       getDoc(doc(db, "websiteContent", "home")),
@@ -3954,7 +5193,9 @@ function WebsiteView({
   }
   function selectBusiness(businessId: string) {
     const business = businesses.find((row) => row.id === businessId);
-    const featured = sortedFeatured.find((row) => text(row.businessId ?? row.id, "") === businessId);
+    const featured = sortedFeatured.find(
+      (row) => text(row.businessId ?? row.id, "") === businessId,
+    );
     setFeatureDraft(draftFromBusiness(business, featured, nextOrder));
     setEditingId(featured ? text(featured.businessId ?? featured.id, "") : "");
   }
@@ -3970,32 +5211,46 @@ function WebsiteView({
   }
   async function saveHome() {
     if (previewMode) return;
-    await setDoc(doc(db, "websiteContent", "home"), {
+    await setDoc(
+      doc(db, "websiteContent", "home"),
+      {
       ...homeDraft,
       featured: {
         ...homeDraft.featured,
-        maxToShow: Math.max(1, Math.min(8, Number(homeDraft.featured.maxToShow) || 6)),
+          maxToShow: Math.max(
+            1,
+            Math.min(8, Number(homeDraft.featured.maxToShow) || 6),
+          ),
       },
       updatedAt: serverTimestamp(),
       updatedBy: currentUserId,
-    }, {merge: true});
+      },
+      { merge: true },
+    );
   }
   async function saveContact() {
     if (previewMode) return;
-    await setDoc(doc(db, "websiteContent", "contact"), {
+    await setDoc(
+      doc(db, "websiteContent", "contact"),
+      {
       ...contactDraft,
       updatedAt: serverTimestamp(),
       updatedBy: currentUserId,
-    }, {merge: true});
+      },
+      { merge: true },
+    );
   }
   async function uploadLogo(file: File) {
-    if (!featureDraft.businessId) throw new Error("Choose a business before uploading a logo.");
+    if (!featureDraft.businessId)
+      throw new Error("Choose a business before uploading a logo.");
     const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
     const path = `businessLogos/${featureDraft.businessId}/logo_${Date.now()}.${extension}`;
     const target = storageRef(storage, path);
     setUploadingLogo(true);
     try {
-      await uploadBytes(target, file, {contentType: file.type || "image/jpeg"});
+      await uploadBytes(target, file, {
+        contentType: file.type || "image/jpeg",
+      });
       const url = await getDownloadURL(target);
       setFeatureField("logoUrl", url);
     } finally {
@@ -4007,7 +5262,10 @@ function WebsiteView({
     const business = businesses.find((row) => row.id === next.businessId);
     const missing = missingFeatureItems(business, next);
     if (missing.length > 0) throw new Error(`Missing: ${missing.join(", ")}`);
-    await httpsCallable(functions, "publishFeaturedBusiness")({
+    await httpsCallable(
+      functions,
+      "publishFeaturedBusiness",
+    )({
       businessId: next.businessId,
       displayName: next.displayName.trim(),
       logoUrl: next.logoUrl.trim(),
@@ -4022,7 +5280,10 @@ function WebsiteView({
     });
     clearFeatureForm();
   }
-  async function publishExisting(row: FirestoreRow, patch: Partial<FeaturedDraft>) {
+  async function publishExisting(
+    row: FirestoreRow,
+    patch: Partial<FeaturedDraft>,
+  ) {
     const businessId = text(row.businessId ?? row.id, "");
     const business = businesses.find((item) => item.id === businessId);
     const draft = {
@@ -4030,7 +5291,10 @@ function WebsiteView({
       ...patch,
     };
     const services = servicesFromText(draft.servicesText);
-    await httpsCallable(functions, "publishFeaturedBusiness")({
+    await httpsCallable(
+      functions,
+      "publishFeaturedBusiness",
+    )({
       businessId,
       displayName: draft.displayName.trim(),
       logoUrl: draft.logoUrl.trim(),
@@ -4056,7 +5320,10 @@ function WebsiteView({
     ]);
   }
   async function unpublish(row: FirestoreRow) {
-    await httpsCallable(functions, "unpublishFeaturedBusiness")({
+    await httpsCallable(
+      functions,
+      "unpublishFeaturedBusiness",
+    )({
       businessId: text(row.businessId ?? row.id, ""),
     });
   }
@@ -4086,36 +5353,119 @@ function WebsiteView({
       <Panel
         title="Homepage content"
         icon={<Store size={18} />}
-        action={<a className="secondary-button compact" href="https://laawoldigital.com" target="_blank" rel="noreferrer"><ArrowUpRight size={15} />View site</a>}
+        action={
+          <a
+            className="secondary-button compact"
+            href="https://laawoldigital.com"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <ArrowUpRight size={15} />
+            View site
+          </a>
+        }
       >
         <div className="settings-form">
-          <label>Hero eyebrow<input value={homeDraft.hero.eyebrow} onChange={(e) => setHero("eyebrow", e.target.value)} /></label>
-          <label>Headline<input value={homeDraft.hero.headline} onChange={(e) => setHero("headline", e.target.value)} /></label>
-          <label className="wide-field">Subheadline<textarea value={homeDraft.hero.subheadline} onChange={(e) => setHero("subheadline", e.target.value)} rows={4} /></label>
-          <label>Primary CTA label<input value={homeDraft.hero.primaryCtaLabel} onChange={(e) => setHero("primaryCtaLabel", e.target.value)} /></label>
-          <label>Primary CTA href<input value={homeDraft.hero.primaryCtaHref} onChange={(e) => setHero("primaryCtaHref", e.target.value)} /></label>
-          <label>Secondary CTA label<input value={homeDraft.hero.secondaryCtaLabel} onChange={(e) => setHero("secondaryCtaLabel", e.target.value)} /></label>
-          <label>Secondary CTA href<input value={homeDraft.hero.secondaryCtaHref} onChange={(e) => setHero("secondaryCtaHref", e.target.value)} /></label>
-          <label>Featured heading<input value={homeDraft.featured.heading} onChange={(e) => setFeatured("heading", e.target.value)} /></label>
-          <label>Featured max<input type="number" min="1" max="8" value={String(homeDraft.featured.maxToShow)} onChange={(e) => setFeatured("maxToShow", Number(e.target.value))} /></label>
-          <label className="wide-field">Featured subheading<textarea value={homeDraft.featured.subheading} onChange={(e) => setFeatured("subheading", e.target.value)} rows={3} /></label>
-          <label className="wide-field">Services intro<textarea value={homeDraft.sections.servicesIntro} onChange={(e) => setSection("servicesIntro", e.target.value)} rows={3} /></label>
+          <label>
+            Hero eyebrow
+            <input
+              value={homeDraft.hero.eyebrow}
+              onChange={(e) => setHero("eyebrow", e.target.value)}
+            />
+          </label>
+          <label>
+            Headline
+            <input
+              value={homeDraft.hero.headline}
+              onChange={(e) => setHero("headline", e.target.value)}
+            />
+          </label>
+          <label className="wide-field">
+            Subheadline
+            <textarea
+              value={homeDraft.hero.subheadline}
+              onChange={(e) => setHero("subheadline", e.target.value)}
+              rows={4}
+            />
+          </label>
+          <label>
+            Primary CTA label
+            <input
+              value={homeDraft.hero.primaryCtaLabel}
+              onChange={(e) => setHero("primaryCtaLabel", e.target.value)}
+            />
+          </label>
+          <label>
+            Primary CTA href
+            <input
+              value={homeDraft.hero.primaryCtaHref}
+              onChange={(e) => setHero("primaryCtaHref", e.target.value)}
+            />
+          </label>
+          <label>
+            Secondary CTA label
+            <input
+              value={homeDraft.hero.secondaryCtaLabel}
+              onChange={(e) => setHero("secondaryCtaLabel", e.target.value)}
+            />
+          </label>
+          <label>
+            Secondary CTA href
+            <input
+              value={homeDraft.hero.secondaryCtaHref}
+              onChange={(e) => setHero("secondaryCtaHref", e.target.value)}
+            />
+          </label>
+          <label>
+            Featured heading
+            <input
+              value={homeDraft.featured.heading}
+              onChange={(e) => setFeatured("heading", e.target.value)}
+            />
+          </label>
+          <label>
+            Featured max
+            <input
+              type="number"
+              min="1"
+              max="8"
+              value={String(homeDraft.featured.maxToShow)}
+              onChange={(e) => setFeatured("maxToShow", Number(e.target.value))}
+            />
+          </label>
+          <label className="wide-field">
+            Featured subheading
+            <textarea
+              value={homeDraft.featured.subheading}
+              onChange={(e) => setFeatured("subheading", e.target.value)}
+              rows={3}
+            />
+          </label>
+          <label className="wide-field">
+            Services intro
+            <textarea
+              value={homeDraft.sections.servicesIntro}
+              onChange={(e) => setSection("servicesIntro", e.target.value)}
+              rows={3}
+            />
+          </label>
         </div>
         <div className="website-panel-footer">
-          <ToggleRow label="Show featured businesses" checked={homeDraft.featured.enabled} onChange={(value) => setFeatured("enabled", value)} />
+          <ToggleRow
+            label="Show featured businesses"
+            checked={homeDraft.featured.enabled}
+            onChange={(value) => setFeatured("enabled", value)}
+          />
           <button
             className="primary-button compact"
             type="button"
-            onClick={() => runAction(
-              "Website content saved",
-              saveHome,
-              {
-                confirm:
-                  "Save homepage content changes to the public website?",
+            onClick={() =>
+              runAction("Website content saved", saveHome, {
+                confirm: "Save homepage content changes to the public website?",
                 confirmFr:
                   "Enregistrer les changements de la page d’accueil sur le site public ?",
-              },
-            )}
+              })
+            }
           >
             Save content
           </button>
@@ -4129,29 +5479,52 @@ function WebsiteView({
           <button
             className="primary-button compact"
             type="button"
-            onClick={() => runAction(
-              "Website contact saved",
-              saveContact,
-              {
-                confirm:
-                  "Save public website contact changes?",
+            onClick={() =>
+              runAction("Website contact saved", saveContact, {
+                confirm: "Save public website contact changes?",
                 confirmFr:
                   "Enregistrer les changements des contacts publics du site ?",
-              },
-            )}
+              })
+            }
           >
             Save
           </button>
         }
       >
         <div className="info-band">
-          These fields are public. Keep private platform settings in Settings; only marketing-safe contact details belong here.
+          These fields are public. Keep private platform settings in Settings;
+          only marketing-safe contact details belong here.
         </div>
         <div className="settings-form">
-          <label>Support email<input type="email" value={contactDraft.supportEmail} onChange={(e) => setContact("supportEmail", e.target.value)} /></label>
-          <label>Support phone<input value={contactDraft.supportPhone} onChange={(e) => setContact("supportPhone", e.target.value)} /></label>
-          <label>WhatsApp<input value={contactDraft.whatsapp} onChange={(e) => setContact("whatsapp", e.target.value)} /></label>
-          <label>Address<input value={contactDraft.address} onChange={(e) => setContact("address", e.target.value)} /></label>
+          <label>
+            Support email
+            <input
+              type="email"
+              value={contactDraft.supportEmail}
+              onChange={(e) => setContact("supportEmail", e.target.value)}
+            />
+          </label>
+          <label>
+            Support phone
+            <input
+              value={contactDraft.supportPhone}
+              onChange={(e) => setContact("supportPhone", e.target.value)}
+            />
+          </label>
+          <label>
+            WhatsApp
+            <input
+              value={contactDraft.whatsapp}
+              onChange={(e) => setContact("whatsapp", e.target.value)}
+            />
+          </label>
+          <label>
+            Address
+            <input
+              value={contactDraft.address}
+              onChange={(e) => setContact("address", e.target.value)}
+            />
+          </label>
         </div>
       </Panel>
 
@@ -4165,72 +5538,158 @@ function WebsiteView({
                 <article className="website-request-row" key={business.id}>
                   <div>
                     <strong>{text(business.name, business.id)}</strong>
-                    <small>{missing.length ? `Missing: ${missing.join(", ")}` : "Ready to review"}</small>
+                    <small>
+                      {missing.length
+                        ? `Missing: ${missing.join(", ")}`
+                        : "Ready to review"}
+                    </small>
                   </div>
-                  <button className="secondary-button compact" type="button" onClick={() => selectBusiness(business.id)}>Review</button>
+                  <button
+                    className="secondary-button compact"
+                    type="button"
+                    onClick={() => selectBusiness(business.id)}
+                  >
+                    Review
+                  </button>
                 </article>
               );
             })}
-            {requests.length === 0 && <EmptyState text="No featuring requests yet." />}
+            {requests.length === 0 && (
+              <EmptyState text="No featuring requests yet." />
+            )}
           </div>
         </Panel>
 
-        <Panel title={editingId ? "Edit featured business" : "Add featured business"} icon={<Building2 size={18} />}>
+        <Panel
+          title={editingId ? "Edit featured business" : "Add featured business"}
+          icon={<Building2 size={18} />}
+        >
           <div className="settings-form website-feature-form">
-            <label className="wide-field">Business
-              <select value={featureDraft.businessId} onChange={(event) => selectBusiness(event.target.value)}>
+            <label className="wide-field">
+              Business
+              <select
+                value={featureDraft.businessId}
+                onChange={(event) => selectBusiness(event.target.value)}
+              >
                 <option value="">Choose a business</option>
                 {eligibleBusinesses.map((business) => (
-                  <option key={business.id} value={business.id}>{text(business.name, business.id)}</option>
+                  <option key={business.id} value={business.id}>
+                    {text(business.name, business.id)}
+                  </option>
                 ))}
               </select>
             </label>
-            <label>Display name<input value={featureDraft.displayName} onChange={(e) => setFeatureField("displayName", e.target.value)} /></label>
-            <label>Order<input inputMode="numeric" value={featureDraft.order} onChange={(e) => setFeatureField("order", e.target.value)} /></label>
-            <label className="wide-field">Logo URL<input value={featureDraft.logoUrl} onChange={(e) => setFeatureField("logoUrl", e.target.value)} /></label>
-            <label className="wide-field">Upload logo
-              <input type="file" accept="image/*" disabled={!featureDraft.businessId || uploadingLogo} onChange={(event) => {
+            <label>
+              Display name
+              <input
+                value={featureDraft.displayName}
+                onChange={(e) => setFeatureField("displayName", e.target.value)}
+              />
+            </label>
+            <label>
+              Order
+              <input
+                inputMode="numeric"
+                value={featureDraft.order}
+                onChange={(e) => setFeatureField("order", e.target.value)}
+              />
+            </label>
+            <label className="wide-field">
+              Logo URL
+              <input
+                value={featureDraft.logoUrl}
+                onChange={(e) => setFeatureField("logoUrl", e.target.value)}
+              />
+            </label>
+            <label className="wide-field">
+              Upload logo
+              <input
+                type="file"
+                accept="image/*"
+                disabled={!featureDraft.businessId || uploadingLogo}
+                onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (!file) return;
                 runAction("Logo uploaded", () => uploadLogo(file));
                 event.target.value = "";
-              }} />
+                }}
+              />
             </label>
-            <label className="wide-field">Short blurb ({featureDraft.blurb.length}/140)<textarea value={featureDraft.blurb} onChange={(e) => setFeatureField("blurb", e.target.value)} maxLength={140} rows={3} /></label>
+            <label className="wide-field">
+              Short blurb ({featureDraft.blurb.length}/140)
+              <textarea
+                value={featureDraft.blurb}
+                onChange={(e) => setFeatureField("blurb", e.target.value)}
+                maxLength={140}
+                rows={3}
+              />
+            </label>
             <fieldset className="wide-field service-checks">
               <legend>Services</legend>
               {businessServices.map((service) => (
                 <label className="switch-line" key={service.id}>
                   <input
-                    checked={servicesFromText(featureDraft.servicesText).includes(service.id)}
+                    checked={servicesFromText(
+                      featureDraft.servicesText,
+                    ).includes(service.id)}
                     type="checkbox"
-                    onChange={(event) => setFeatureService(service.id, event.target.checked)}
+                    onChange={(event) =>
+                      setFeatureService(service.id, event.target.checked)
+                    }
                   />
                   <span>{service.label}</span>
                 </label>
               ))}
             </fieldset>
-            <label>Country
-              <select value={featureDraft.country} disabled={!featureDraft.businessId} onChange={(e) => setFeatureCountry(e.target.value)}>
+            <label>
+              Country
+              <select
+                value={featureDraft.country}
+                disabled={!featureDraft.businessId}
+                onChange={(e) => setFeatureCountry(e.target.value)}
+              >
                 <option value="">Select country</option>
                 {locationOptions.countries.map((country) => (
-                  <option key={country} value={country}>{country}</option>
+                  <option key={country} value={country}>
+                    {country}
+                  </option>
                 ))}
               </select>
             </label>
-            <label>City
-              <select value={featureDraft.city} disabled={!featureDraft.businessId || !featureDraft.country} onChange={(e) => setFeatureField("city", e.target.value)}>
+            <label>
+              City
+              <select
+                value={featureDraft.city}
+                disabled={!featureDraft.businessId || !featureDraft.country}
+                onChange={(e) => setFeatureField("city", e.target.value)}
+              >
                 <option value="">Select city</option>
                 {locationOptions.cities.map((city) => (
-                  <option key={city} value={city}>{city}</option>
+                  <option key={city} value={city}>
+                    {city}
+                  </option>
                 ))}
               </select>
             </label>
-            <label className="wide-field">Website URL<input value={featureDraft.websiteUrl} onChange={(e) => setFeatureField("websiteUrl", e.target.value)} /></label>
+            <label className="wide-field">
+              Website URL
+              <input
+                value={featureDraft.websiteUrl}
+                onChange={(e) => setFeatureField("websiteUrl", e.target.value)}
+              />
+            </label>
           </div>
           <div className="website-panel-footer stacked">
-            <ToggleRow label="Business has consented to being featured" checked={featureDraft.featureConsent} onChange={(value) => setFeatureField("featureConsent", value)} />
-            <ToggleRow label="Active on public site" checked={featureDraft.active} onChange={(value) => setFeatureField("active", value)} />
+            <ToggleRow
+              label="Business has consented to being featured"
+              checked={featureDraft.featureConsent}
+              onChange={(value) => setFeatureField("featureConsent", value)}
+            />
+            <ToggleRow
+              label="Active on public site"
+              checked={featureDraft.active}
+              onChange={(value) => setFeatureField("active", value)}
+            />
             {featureDraft.businessId && (
               <div className="info-band">
                 {missingFeatureItems(selectedBusiness, featureDraft).length
@@ -4239,12 +5698,19 @@ function WebsiteView({
               </div>
             )}
             <div className="panel-tools">
-              <button className="ghost-button" type="button" onClick={clearFeatureForm}>Clear</button>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={clearFeatureForm}
+              >
+                Clear
+              </button>
               <button
                 className="primary-button compact"
                 type="button"
                 disabled={!featureDraft.businessId}
-                onClick={() => runAction(
+                onClick={() =>
+                  runAction(
                   "Featured business published",
                   () => publishDraft(),
                   {
@@ -4253,7 +5719,8 @@ function WebsiteView({
                     confirmFr:
                       "Publier ces changements d’entreprise mise en avant sur le site public ?",
                   },
-                )}
+                  )
+                }
               >
                 {editingId ? "Save featured" : "Publish"}
               </button>
@@ -4271,18 +5738,26 @@ function WebsiteView({
                 <strong>{text(row.displayName, row.id)}</strong>
                 <small>{text(row.blurb, "")}</small>
                 <div className="service-checks compact">
-                  {featuredServices(row).map((service) => <span key={service}>{serviceDisplay(service)}</span>)}
+                  {featuredServices(row).map((service) => (
+                    <span key={service}>{serviceDisplay(service)}</span>
+                  ))}
                 </div>
               </div>
               <div className="featured-admin-actions">
-                <span className={`status-pill compact ${row.active === false ? "warning" : ""}`}>{row.active === false ? "Hidden" : "Active"}</span>
+                <span
+                  className={`status-pill compact ${row.active === false ? "warning" : ""}`}
+                >
+                  {row.active === false ? "Hidden" : "Active"}
+                </span>
                 <button
                   className="ghost-button compact"
                   type="button"
                   disabled={index === 0}
-                  onClick={() => runAction("Featured order updated", () =>
+                  onClick={() =>
+                    runAction("Featured order updated", () =>
                     moveFeatured(row, -1),
-                  )}
+                    )
+                  }
                 >
                   Up
                 </button>
@@ -4290,49 +5765,60 @@ function WebsiteView({
                   className="ghost-button compact"
                   type="button"
                   disabled={index === sortedFeatured.length - 1}
-                  onClick={() => runAction("Featured order updated", () =>
+                  onClick={() =>
+                    runAction("Featured order updated", () =>
                     moveFeatured(row, 1),
-                  )}
+                    )
+                  }
                 >
                   Down
                 </button>
-                <button className="secondary-button compact" type="button" onClick={() => editFeatured(row)}>Edit</button>
                 <button
                   className="secondary-button compact"
                   type="button"
-                  onClick={() => runAction(
+                  onClick={() => editFeatured(row)}
+                >
+                  Edit
+                </button>
+                <button
+                  className="secondary-button compact"
+                  type="button"
+                  onClick={() =>
+                    runAction(
                     "Featured business updated",
-                    () => publishExisting(row, {active: row.active === false}),
+                      () =>
+                        publishExisting(row, { active: row.active === false }),
                     {
-                      confirm:
-                        `${row.active === false ? "Show" : "Hide"} ${text(row.displayName, row.id)} on the public website?`,
-                      confirmFr:
-                        `${row.active === false ? "Afficher" : "Masquer"} ${text(row.displayName, row.id)} sur le site public ?`,
+                        confirm: `${row.active === false ? "Show" : "Hide"} ${text(row.displayName, row.id)} on the public website?`,
+                        confirmFr: `${row.active === false ? "Afficher" : "Masquer"} ${text(row.displayName, row.id)} sur le site public ?`,
                     },
-                  )}
+                    )
+                  }
                 >
                   {row.active === false ? "Show" : "Hide"}
                 </button>
                 <button
                   className="danger-button compact"
                   type="button"
-                  onClick={() => runAction(
+                  onClick={() =>
+                    runAction(
                     "Featured business removed",
                     () => unpublish(row),
                     {
-                      confirm:
-                        `Remove ${text(row.displayName, row.id)} from the public site?`,
-                      confirmFr:
-                        `Retirer ${text(row.displayName, row.id)} du site public ?`,
+                        confirm: `Remove ${text(row.displayName, row.id)} from the public site?`,
+                        confirmFr: `Retirer ${text(row.displayName, row.id)} du site public ?`,
                     },
-                  )}
+                    )
+                  }
                 >
                   Remove
                 </button>
               </div>
             </article>
           ))}
-          {sortedFeatured.length === 0 && <EmptyState text="No public featured businesses have been approved yet." />}
+          {sortedFeatured.length === 0 && (
+            <EmptyState text="No public featured businesses have been approved yet." />
+          )}
         </div>
       </Panel>
     </div>
@@ -4357,9 +5843,13 @@ function AdminAccountPanel({
   runAction: ActionRunner;
 }) {
   const [fullName, setFullName] = useState(text(profile?.fullName, ""));
-  const [phone, setPhone] = useState(text(profile?.phone ?? firebaseUser?.phoneNumber, ""));
+  const [phone, setPhone] = useState(
+    text(profile?.phone ?? firebaseUser?.phoneNumber, ""),
+  );
   const [photoUrl, setPhotoUrl] = useState(text(profile?.profileImageUrl, ""));
-  const [photoPath, setPhotoPath] = useState(text(profile?.profileImagePath, ""));
+  const [photoPath, setPhotoPath] = useState(
+    text(profile?.profileImagePath, ""),
+  );
   const [verificationId, setVerificationId] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -4394,13 +5884,16 @@ function AdminAccountPanel({
   }
 
   async function uploadPhoto(file: File) {
-    if (!firebaseUser) throw new Error("Sign in before uploading a profile photo.");
+    if (!firebaseUser)
+      throw new Error("Sign in before uploading a profile photo.");
     const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
     const path = `users/${firebaseUser.uid}/admin_profile_${Date.now()}.${extension}`;
     const target = storageRef(storage, path);
     setUploading(true);
     try {
-      await uploadBytes(target, file, {contentType: file.type || "image/jpeg"});
+      await uploadBytes(target, file, {
+        contentType: file.type || "image/jpeg",
+      });
       const url = await getDownloadURL(target);
       setPhotoUrl(url);
       setPhotoPath(path);
@@ -4419,12 +5912,19 @@ function AdminAccountPanel({
     if (!phone.trim()) throw new Error("Enter a phone number first.");
     if (!firebaseUser) throw new Error("Sign in before confirming your phone.");
     if (!recaptchaVerifier.current) {
-      recaptchaVerifier.current = new RecaptchaVerifier(auth, "admin-phone-recaptcha", {
+      recaptchaVerifier.current = new RecaptchaVerifier(
+        auth,
+        "admin-phone-recaptcha",
+        {
         size: "invisible",
-      });
+        },
+      );
     }
     const provider = new PhoneAuthProvider(auth);
-    const id = await provider.verifyPhoneNumber(phone.trim(), recaptchaVerifier.current);
+    const id = await provider.verifyPhoneNumber(
+      phone.trim(),
+      recaptchaVerifier.current,
+    );
     setVerificationId(id);
   }
 
@@ -4433,7 +5933,10 @@ function AdminAccountPanel({
     if (!verificationId || !verificationCode.trim()) {
       throw new Error("Send a code and enter it before confirming.");
     }
-    const credential = PhoneAuthProvider.credential(verificationId, verificationCode.trim());
+    const credential = PhoneAuthProvider.credential(
+      verificationId,
+      verificationCode.trim(),
+    );
     await updatePhoneNumber(firebaseUser, credential);
     await updateProfile({
       fullName: fullName.trim(),
@@ -4446,9 +5949,15 @@ function AdminAccountPanel({
     setVerificationId("");
   }
 
-  const phoneVerified = profile?.phoneVerified === true ||
+  const phoneVerified =
+    profile?.phoneVerified === true ||
     (firebaseUser?.phoneNumber && firebaseUser.phoneNumber === phone.trim());
-  const displayName = fullName || text(profile?.fullName ?? firebaseUser?.displayName, "Platform Administrator");
+  const displayName =
+    fullName ||
+    text(
+      profile?.fullName ?? firebaseUser?.displayName,
+      "Platform Administrator",
+    );
   const email = firebaseUser?.email ?? text(profile?.email, "");
   const initials = businessInitials(displayName || email || "Admin");
 
@@ -4456,19 +5965,36 @@ function AdminAccountPanel({
 
   return (
     <div className="account-overlay" role="presentation">
-      <button className="account-backdrop" onClick={onClose} type="button" aria-label="Dismiss account settings" />
+      <button
+        className="account-backdrop"
+        onClick={onClose}
+        type="button"
+        aria-label="Dismiss account settings"
+      />
       <aside aria-modal="true" className="account-drawer" role="dialog">
         <div className="account-drawer-head">
           <div className="account-id">
             <div className="account-avatar">
-              {photoUrl ? <img alt="Admin profile" src={photoUrl} /> : <span>{initials}</span>}
+              {photoUrl ? (
+                <img alt="Admin profile" src={photoUrl} />
+              ) : (
+                <span>{initials}</span>
+              )}
             </div>
             <div>
               <h2>Account settings</h2>
-              <p>{[perms.label, email].filter(Boolean).join(" • ") || displayName}</p>
+              <p>
+                {[perms.label, email].filter(Boolean).join(" • ") ||
+                  displayName}
+              </p>
             </div>
           </div>
-          <button className="icon-button subtle" onClick={onClose} title="Close account settings" type="button">
+          <button
+            className="icon-button subtle"
+            onClick={onClose}
+            title="Close account settings"
+            type="button"
+          >
             <X size={18} />
           </button>
         </div>
@@ -4476,21 +6002,19 @@ function AdminAccountPanel({
           className="account-form"
           onSubmit={(event) => {
             event.preventDefault();
-            runAction(
-              "Profile updated",
-              () => saveProfile(),
-              {
-                confirm:
-                  "Save your admin profile changes?",
-                confirmFr:
-                  "Enregistrer les changements de votre profil admin ?",
-              },
-            );
+            runAction("Profile updated", () => saveProfile(), {
+              confirm: "Save your admin profile changes?",
+              confirmFr: "Enregistrer les changements de votre profil admin ?",
+            });
           }}
         >
           <section className="account-photo-row">
             <div className="account-avatar large">
-              {photoUrl ? <img alt="Admin profile" src={photoUrl} /> : <span>{initials}</span>}
+              {photoUrl ? (
+                <img alt="Admin profile" src={photoUrl} />
+              ) : (
+                <span>{initials}</span>
+              )}
             </div>
             <div>
               <strong>Profile photo</strong>
@@ -4504,7 +6028,9 @@ function AdminAccountPanel({
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (file) {
-                    runAction("Profile photo uploaded", () => uploadPhoto(file));
+                    runAction("Profile photo uploaded", () =>
+                      uploadPhoto(file),
+                    );
                   }
                 }}
                 type="file"
@@ -4514,7 +6040,11 @@ function AdminAccountPanel({
           <div className="account-fields">
             <label>
               <span>Name</span>
-              <input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Full name" />
+              <input
+                value={fullName}
+                onChange={(event) => setFullName(event.target.value)}
+                placeholder="Full name"
+              />
             </label>
             <label>
               <span>Email</span>
@@ -4523,26 +6053,40 @@ function AdminAccountPanel({
             <label className="account-phone-field">
               <span className="field-label-row">
                 <span>Phone</span>
-                <span className={`status-pill compact ${phoneVerified ? "" : "warning"}`}>
+                <span
+                  className={`status-pill compact ${phoneVerified ? "" : "warning"}`}
+                >
                   {phoneVerified ? "Confirmed" : "Not confirmed"}
                 </span>
               </span>
-              <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+15551234567" />
+              <input
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                placeholder="+15551234567"
+              />
             </label>
             <label>
               <span>Photo URL</span>
-              <input value={photoUrl} onChange={(event) => setPhotoUrl(event.target.value)} placeholder="https://..." />
+              <input
+                value={photoUrl}
+                onChange={(event) => setPhotoUrl(event.target.value)}
+                placeholder="https://..."
+              />
             </label>
           </div>
           <section className="account-phone-card">
             <div>
               <strong>Phone confirmation</strong>
-              <small>Firebase SMS confirms this phone on the signed-in admin account.</small>
+              <small>
+                Firebase SMS confirms this phone on the signed-in admin account.
+              </small>
             </div>
             <div className="phone-confirm-actions">
               <button
                 className="secondary-button"
-                onClick={() => runAction("Phone verification code sent", sendPhoneCode)}
+                onClick={() =>
+                  runAction("Phone verification code sent", sendPhoneCode)
+                }
                 type="button"
               >
                 Send code
@@ -4565,8 +6109,16 @@ function AdminAccountPanel({
             <div id="admin-phone-recaptcha" />
           </section>
           <div className="account-drawer-actions">
-            <button className="secondary-button" onClick={onClose} type="button">Cancel</button>
-            <button className="primary-button" type="submit">Save changes</button>
+            <button
+              className="secondary-button"
+              onClick={onClose}
+              type="button"
+            >
+              Cancel
+            </button>
+            <button className="primary-button" type="submit">
+              Save changes
+            </button>
           </div>
         </form>
       </aside>
@@ -4585,7 +6137,8 @@ function CreatePersonForms({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [platformAdminRole, setPlatformAdminRole] = useState<string>("operationsManager");
+  const [platformAdminRole, setPlatformAdminRole] =
+    useState<string>("operationsManager");
 
   function reset() {
     setFullName("");
@@ -4611,32 +6164,59 @@ function CreatePersonForms({
   return (
     <form
       className="inline-form"
-      onSubmit={(event) => runAction(
-        "Platform manager created",
-        () => submit(event),
-        {
-          confirm:
-            "Create this platform manager account?",
-          confirmFr:
-            "Créer ce compte gestionnaire de plateforme ?",
-        },
-      )}
+      onSubmit={(event) =>
+        runAction("Platform manager created", () => submit(event), {
+          confirm: "Create this platform manager account?",
+          confirmFr: "Créer ce compte gestionnaire de plateforme ?",
+        })
+      }
     >
       <span className="form-note strong">Platform manager</span>
-      <input required autoComplete="name" name="fullName" placeholder="Name" value={fullName} onChange={(event) => setFullName(event.target.value)} />
-      <input required autoComplete="username" name="username" placeholder="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
-      <input autoComplete="tel" name="phone" placeholder="Phone" value={phone} onChange={(event) => setPhone(event.target.value)} />
-      <input required autoComplete="new-password" minLength={6} name="new-password" placeholder="Password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
-      <select value={platformAdminRole} onChange={(event) => setPlatformAdminRole(event.target.value)}>
+      <input
+        required
+        autoComplete="name"
+        name="fullName"
+        placeholder="Name"
+        value={fullName}
+        onChange={(event) => setFullName(event.target.value)}
+      />
+      <input
+        required
+        autoComplete="username"
+        name="username"
+        placeholder="Email"
+        type="email"
+        value={email}
+        onChange={(event) => setEmail(event.target.value)}
+      />
+      <input
+        autoComplete="tel"
+        name="phone"
+        placeholder="Phone"
+        value={phone}
+        onChange={(event) => setPhone(event.target.value)}
+      />
+      <input
+        required
+        autoComplete="new-password"
+        minLength={6}
+        name="new-password"
+        placeholder="Password"
+        type="password"
+        value={password}
+        onChange={(event) => setPassword(event.target.value)}
+      />
+      <select
+        value={platformAdminRole}
+        onChange={(event) => setPlatformAdminRole(event.target.value)}
+      >
         {roleOptions.map((option) => (
           <option key={option.key} value={option.key}>
             {option.label}
           </option>
         ))}
       </select>
-      <button className="primary-button">
-        Create
-      </button>
+      <button className="primary-button">Create</button>
     </form>
   );
 }
@@ -4659,9 +6239,18 @@ function relatedContactSummary(item: FirestoreRow) {
     item.buyerName ? `Buyer ${text(item.buyerName, "")}` : null,
     item.customerName ? `Customer ${text(item.customerName, "")}` : null,
     item.ownerName ? `Owner ${text(item.ownerName, "")}` : null,
-    item.customerEmail ?? item.buyerEmail ?? item.ownerEmail ?? item.senderEmail,
-    item.customerPhone ?? item.buyerPhone ?? item.ownerPhone ?? item.senderPhone ?? item.receiverPhone,
-  ].filter(Boolean).join(" • ");
+    item.customerEmail ??
+      item.buyerEmail ??
+      item.ownerEmail ??
+      item.senderEmail,
+    item.customerPhone ??
+      item.buyerPhone ??
+      item.ownerPhone ??
+      item.senderPhone ??
+      item.receiverPhone,
+  ]
+    .filter(Boolean)
+    .join(" • ");
 }
 
 function relatedRecordMeta(item: FirestoreRow, statusField = "status") {
@@ -4669,9 +6258,14 @@ function relatedRecordMeta(item: FirestoreRow, statusField = "status") {
     statusLabel(item[statusField]),
     item.destinationCountryName,
     item.paymentStatus,
-    optionalMoney(item.price ?? item.totalCost ?? item.depositAmount, text(item.depositCurrency, "USD")),
+    optionalMoney(
+      item.price ?? item.totalCost ?? item.depositAmount,
+      text(item.depositCurrency, "USD"),
+    ),
     relatedContactSummary(item),
-  ].filter(Boolean).join(" • ");
+  ]
+    .filter(Boolean)
+    .join(" • ");
 }
 
 function BusinessesView({
@@ -4737,7 +6331,10 @@ function BusinessesView({
     if (!enabledServices.length) {
       throw new Error("Choose at least one service for this business.");
     }
-    await httpsCallable(functions, "createAdminBusiness")({
+    await httpsCallable(
+      functions,
+      "createAdminBusiness",
+    )({
       name: name.trim(),
       phone: phone.trim(),
       email: email.trim(),
@@ -4761,7 +6358,10 @@ function BusinessesView({
     role: "businessOwner" | "staff" | "customer";
     businessId?: string;
   }) {
-    await httpsCallable(functions, "updateBusinessMembership")({
+    await httpsCallable(
+      functions,
+      "updateBusinessMembership",
+    )({
       userId,
       role,
       businessId: role === "customer" ? "" : businessId,
@@ -4769,7 +6369,10 @@ function BusinessesView({
   }
 
   async function createMissingBusinessProfile(business: FirestoreRow) {
-    await httpsCallable(functions, "createMissingBusinessProfile")({
+    await httpsCallable(
+      functions,
+      "createMissingBusinessProfile",
+    )({
       businessId: business.id,
       name: text(business.name, business.id),
       phone: text(business.phone, ""),
@@ -4785,7 +6388,13 @@ function BusinessesView({
   const needle = search.trim().toLowerCase();
   const filteredBusinesses = needle
     ? businesses.filter((business) =>
-        [business.name, business.id, business.email, business.phone, business.serviceNote]
+        [
+          business.name,
+          business.id,
+          business.email,
+          business.phone,
+          business.serviceNote,
+        ]
           .map((value) => String(value ?? "").toLowerCase())
           .join(" ")
           .includes(needle),
@@ -4798,18 +6407,34 @@ function BusinessesView({
 
   function slicesFor(business: FirestoreRow) {
     return {
-      members: users.filter((user) => belongsToBusiness(user, business) && isBusinessMember(user)),
+      members: users.filter(
+        (user) => belongsToBusiness(user, business) && isBusinessMember(user),
+      ),
       cars: cars.filter((item) => belongsToBusiness(item, business)),
       shipments: shipments.filter((item) => belongsToBusiness(item, business)),
-      transports: transports.filter((item) => belongsToBusiness(item, business)),
-      parkedCars: parkedCars.filter((item) => belongsToBusiness(item, business)),
+      transports: transports.filter((item) =>
+        belongsToBusiness(item, business),
+      ),
+      parkedCars: parkedCars.filter((item) =>
+        belongsToBusiness(item, business),
+      ),
       purchases: purchases.filter((item) => belongsToBusiness(item, business)),
       refunds: refunds.filter((item) => belongsToBusiness(item, business)),
-      destinations: destinations.filter((item) => belongsToBusiness(item, business)),
-      contactReferences: contactReferences.filter((item) => belongsToBusiness(item, business)),
-      applications: applications.filter((item) => belongsToBusiness(item, business)),
-      notifications: notifications.filter((item) => belongsToBusiness(item, business)),
-      supportRequests: supportRequests.filter((item) => belongsToBusiness(item, business)),
+      destinations: destinations.filter((item) =>
+        belongsToBusiness(item, business),
+      ),
+      contactReferences: contactReferences.filter((item) =>
+        belongsToBusiness(item, business),
+      ),
+      applications: applications.filter((item) =>
+        belongsToBusiness(item, business),
+      ),
+      notifications: notifications.filter((item) =>
+        belongsToBusiness(item, business),
+      ),
+      supportRequests: supportRequests.filter((item) =>
+        belongsToBusiness(item, business),
+      ),
     };
   }
 
@@ -4817,11 +6442,17 @@ function BusinessesView({
     const slices = slicesFor(business);
     return (
       countWhere(slices.shipments, (item) => rowStatus(item) === "pending") +
-      countWhere(slices.purchases, (item) => rowStatus(item, "purchaseStatus") === "pending") +
+      countWhere(
+        slices.purchases,
+        (item) => rowStatus(item, "purchaseStatus") === "pending",
+      ) +
       countWhere(slices.refunds, (item) => rowStatus(item) === "pending") +
       slices.applications.length +
       businessVerificationActionCount(business) +
-      countWhere(slices.supportRequests, (item) => rowStatus(item, "status") !== "closed")
+      countWhere(
+        slices.supportRequests,
+        (item) => rowStatus(item, "status") !== "closed",
+      )
     );
   }
 
@@ -4830,13 +6461,29 @@ function BusinessesView({
       <section className="page-hero">
         <div>
           <h2>Business network</h2>
-          <p>Pick a partner to manage its people, listings, services, payments, and support history in one place.</p>
+          <p>
+            Pick a partner to manage its people, listings, services, payments,
+            and support history in one place.
+          </p>
         </div>
         <div className="page-hero-stats">
-          <span>Pending <b>{countWhere(businesses, (item) => rowStatus(item) === "pending")}</b></span>
-          <span>Approved <b>{countWhere(businesses, (item) => rowStatus(item) === "approved")}</b></span>
+          <span>
+            Pending{" "}
+            <b>
+              {countWhere(businesses, (item) => rowStatus(item) === "pending")}
+            </b>
+          </span>
+          <span>
+            Approved{" "}
+            <b>
+              {countWhere(businesses, (item) => rowStatus(item) === "approved")}
+            </b>
+          </span>
           {countWhere(businesses, (item) => item._inferred === true) > 0 && (
-            <span className="warn">Missing profiles <b>{countWhere(businesses, (item) => item._inferred === true)}</b></span>
+            <span className="warn">
+              Missing profiles{" "}
+              <b>{countWhere(businesses, (item) => item._inferred === true)}</b>
+            </span>
           )}
         </div>
       </section>
@@ -4844,25 +6491,44 @@ function BusinessesView({
       {showAddForm && (
         <form
           className="add-business-form"
-          onSubmit={(event) => runAction(
+          onSubmit={(event) =>
+            runAction(
             "Business saved",
             async () => {
               await saveBusiness(event);
               setShowAddForm(false);
             },
             {
-              confirm:
-                "Save this business record?",
-              confirmFr:
-                "Enregistrer ce dossier entreprise ?",
+                confirm: "Save this business record?",
+                confirmFr: "Enregistrer ce dossier entreprise ?",
             },
-          )}
+            )
+          }
         >
           <div className="add-business-grid">
-            <input required placeholder="Business name" value={name} onChange={(event) => setName(event.target.value)} />
-            <input placeholder="Phone" value={phone} onChange={(event) => setPhone(event.target.value)} />
-            <input autoComplete="email" placeholder="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
-            <input placeholder="Review note" value={serviceNote} onChange={(event) => setServiceNote(event.target.value)} />
+            <input
+              required
+              placeholder="Business name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+            <input
+              placeholder="Phone"
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+            />
+            <input
+              autoComplete="email"
+              placeholder="Email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+            <input
+              placeholder="Review note"
+              value={serviceNote}
+              onChange={(event) => setServiceNote(event.target.value)}
+            />
           </div>
           <div className="checkbox-group" aria-label="Business services">
             {businessServices.map((service) => (
@@ -4877,8 +6543,16 @@ function BusinessesView({
             ))}
           </div>
           <div className="add-business-actions">
-            <button className="ghost-button" type="button" onClick={() => setShowAddForm(false)}>Cancel</button>
-            <button className="primary-button" type="submit">Create business</button>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() => setShowAddForm(false)}
+            >
+              Cancel
+            </button>
+            <button className="primary-button" type="submit">
+              Create business
+            </button>
           </div>
         </form>
       )}
@@ -4886,8 +6560,16 @@ function BusinessesView({
       <div className="master-detail">
         <aside className="master-list">
           <div className="master-list-head">
-            <SearchBox value={search} onChange={setSearch} placeholder="Search businesses" />
-            <button className="primary-button compact" type="button" onClick={() => setShowAddForm((value) => !value)}>
+            <SearchBox
+              value={search}
+              onChange={setSearch}
+              placeholder="Search businesses"
+            />
+            <button
+              className="primary-button compact"
+              type="button"
+              onClick={() => setShowAddForm((value) => !value)}
+            >
               {showAddForm ? "Close" : "Add"}
             </button>
           </div>
@@ -4902,7 +6584,9 @@ function BusinessesView({
                   onClick={() => setSelectedBusinessId(business.id)}
                   type="button"
                 >
-                  <span className="master-avatar">{businessInitials(text(business.name, business.id))}</span>
+                  <span className="master-avatar">
+                    {businessInitials(text(business.name, business.id))}
+                  </span>
                   <span className="master-row-main">
                     <strong>{text(business.name, business.id)}</strong>
                     <small>{businessStatusLabel(business)}</small>
@@ -4912,7 +6596,13 @@ function BusinessesView({
               );
             })}
             {filteredBusinesses.length === 0 && (
-              <EmptyState text={businesses.length === 0 ? "No business profiles are currently loaded." : "No businesses match this search."} />
+              <EmptyState
+                text={
+                  businesses.length === 0
+                    ? "No business profiles are currently loaded."
+                    : "No businesses match this search."
+                }
+              />
             )}
           </div>
         </aside>
@@ -4973,7 +6663,10 @@ function CreateBusinessStaffForm({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await httpsCallable(functions, "createStaffUser")({
+    await httpsCallable(
+      functions,
+      "createStaffUser",
+    )({
       fullName: fullName.trim(),
       email: email.trim().toLowerCase(),
       phone: phone.trim(),
@@ -4986,22 +6679,50 @@ function CreateBusinessStaffForm({
   return (
     <form
       className="membership-form staff-create-form"
-      onSubmit={(event) => runAction(
-        "Business staff created",
-        () => submit(event),
-        {
-          confirm:
-            `Create this staff account for ${text(business.name, business.id)}?`,
-          confirmFr:
-            `Créer ce compte employé pour ${text(business.name, business.id)} ?`,
-        },
-      )}
+      onSubmit={(event) =>
+        runAction("Business staff created", () => submit(event), {
+          confirm: `Create this staff account for ${text(business.name, business.id)}?`,
+          confirmFr: `Créer ce compte employé pour ${text(business.name, business.id)} ?`,
+        })
+      }
     >
-      <span className="form-note strong">New staff for {text(business.name, business.id)}</span>
-      <input required autoComplete="name" name={`staff-name-${business.id}`} placeholder="Name" value={fullName} onChange={(event) => setFullName(event.target.value)} />
-      <input required autoComplete="username" name={`staff-email-${business.id}`} placeholder="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
-      <input autoComplete="tel" name={`staff-phone-${business.id}`} placeholder="Phone" value={phone} onChange={(event) => setPhone(event.target.value)} />
-      <input required autoComplete="new-password" minLength={6} name={`staff-password-${business.id}`} placeholder="Password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+      <span className="form-note strong">
+        New staff for {text(business.name, business.id)}
+      </span>
+      <input
+        required
+        autoComplete="name"
+        name={`staff-name-${business.id}`}
+        placeholder="Name"
+        value={fullName}
+        onChange={(event) => setFullName(event.target.value)}
+      />
+      <input
+        required
+        autoComplete="username"
+        name={`staff-email-${business.id}`}
+        placeholder="Email"
+        type="email"
+        value={email}
+        onChange={(event) => setEmail(event.target.value)}
+      />
+      <input
+        autoComplete="tel"
+        name={`staff-phone-${business.id}`}
+        placeholder="Phone"
+        value={phone}
+        onChange={(event) => setPhone(event.target.value)}
+      />
+      <input
+        required
+        autoComplete="new-password"
+        minLength={6}
+        name={`staff-password-${business.id}`}
+        placeholder="Password"
+        type="password"
+        value={password}
+        onChange={(event) => setPassword(event.target.value)}
+      />
       <button className="primary-button">Create staff</button>
     </form>
   );
@@ -5018,8 +6739,12 @@ function BusinessSupportRequestForm({
   onDraftChange: (draft: SupportDraft) => void;
   runAction: ActionRunner;
 }) {
-  const businessOptions = businesses.filter((business) => business._inferred !== true);
-  const selectedBusiness = businessOptions.find((business) => business.id === draft.businessId);
+  const businessOptions = businesses.filter(
+    (business) => business._inferred !== true,
+  );
+  const selectedBusiness = businessOptions.find(
+    (business) => business.id === draft.businessId,
+  );
   const canSend = Boolean(
     draft.businessId &&
     draft.subject.trim() &&
@@ -5043,16 +6768,12 @@ function BusinessSupportRequestForm({
   return (
     <form
       className="support-request-form"
-      onSubmit={(event) => runAction(
-        "Support request sent",
-        () => submit(event),
-        {
-          confirm:
-            "Send this support request?",
-          confirmFr:
-            "Envoyer cette demande de support ?",
-        },
-      )}
+      onSubmit={(event) =>
+        runAction("Support request sent", () => submit(event), {
+          confirm: "Send this support request?",
+          confirmFr: "Envoyer cette demande de support ?",
+        })
+      }
     >
       <div className="support-request-grid">
         <label>
@@ -5072,10 +6793,17 @@ function BusinessSupportRequestForm({
         </label>
         <label>
           Priority
-          <select value={draft.priority} onChange={(event) => update({priority: event.target.value})}>
+          <select
+            value={draft.priority}
+            onChange={(event) => update({ priority: event.target.value })}
+          >
             {supportPriorities.map((priority) => (
               <option key={priority} value={priority}>
-                {priority === "normal" ? "Normal" : priority === "urgent" ? "Urgent" : "Blocked"}
+                {priority === "normal"
+                  ? "Normal"
+                  : priority === "urgent"
+                    ? "Urgent"
+                    : "Blocked"}
               </option>
             ))}
           </select>
@@ -5134,7 +6862,9 @@ function BusinessSupportRequestForm({
           </span>
           <button
             className="ghost-button"
-            onClick={() => update({relatedCollection: "", relatedId: "", relatedLabel: ""})}
+            onClick={() =>
+              update({ relatedCollection: "", relatedId: "", relatedLabel: "" })
+            }
             type="button"
           >
             Clear
@@ -5203,7 +6933,9 @@ function verificationAppliesTo(item: BusinessVerificationItem) {
     : item.services.map(businessServiceLabel).join(", ");
 }
 
-function stripeVerificationStateLabel(state: BusinessStripeVerification["state"]) {
+function stripeVerificationStateLabel(
+  state: BusinessStripeVerification["state"],
+) {
   if (state === "ready") return "Complete";
   if (state === "pending") return "Pending";
   if (state === "action_required") return "Action required";
@@ -5241,7 +6973,8 @@ function BusinessVerificationPanel({
   onRequestChanges: () => Promise<void>;
   runAction: ActionRunner;
 }) {
-  const platformBlockers = summary.missing + summary.submitted + summary.needsChanges;
+  const platformBlockers =
+    summary.missing + summary.submitted + summary.needsChanges;
   const blockers = platformBlockers + (stripe.ready ? 0 : 1);
   const approvalReady = stripe.ready && summary.approvalReady;
   const approved = rowStatus(business) === "approved";
@@ -5252,10 +6985,14 @@ function BusinessVerificationPanel({
 
   return (
     <div className="workspace-section">
-      <div className={`verification-readiness ${approvalReady ? "ready" : "blocked"}`}>
+      <div
+        className={`verification-readiness ${approvalReady ? "ready" : "blocked"}`}
+      >
         <div>
           <strong>
-            {approvalReady ? "Ready to approve" : "Stripe setup or platform documents still need review"}
+            {approvalReady
+              ? "Ready to approve"
+              : "Stripe setup or platform documents still need review"}
           </strong>
           <span>
             {approvalReady
@@ -5270,42 +7007,72 @@ function BusinessVerificationPanel({
 
       {canApproveWithBypass && (
         <div className="info-band">
-          Stripe is complete. If the remaining Laawol documents are not needed for this business, use the bypass approval action so the override is recorded on the verification review.
+          Stripe is complete. If the remaining Laawol documents are not needed
+          for this business, use the bypass approval action so the override is
+          recorded on the verification review.
         </div>
       )}
 
       <div className="verification-summary-grid">
-        <div><b>{summary.total}</b><span>Platform docs</span></div>
-        <div><b>{summary.verified}</b><span>Verified</span></div>
-        <div><b>{summary.submitted + summary.needsChanges}</b><span>Needs review</span></div>
-        <div><b>{summary.missing}</b><span>Missing</span></div>
+        <div>
+          <b>{summary.total}</b>
+          <span>Platform docs</span>
+        </div>
+        <div>
+          <b>{summary.verified}</b>
+          <span>Verified</span>
+        </div>
+        <div>
+          <b>{summary.submitted + summary.needsChanges}</b>
+          <span>Needs review</span>
+        </div>
+        <div>
+          <b>{summary.missing}</b>
+          <span>Missing</span>
+        </div>
       </div>
 
-      <article className={`verification-card stripe-card status-${stripe.state}`}>
+      <article
+        className={`verification-card stripe-card status-${stripe.state}`}
+      >
         <header>
           <div>
             <strong>Stripe verification</strong>
             <small>Identity, legal, tax, and bank details</small>
           </div>
-          <span className={`status-pill compact ${stripe.ready ? "" : "warning"}`}>
+          <span
+            className={`status-pill compact ${stripe.ready ? "" : "warning"}`}
+          >
             {stripeVerificationStateLabel(stripe.state)}
           </span>
         </header>
         <p>{stripe.helperText}</p>
         <div className="verification-evidence">
-          <span>{stripe.stripeAccountId ? `Account: ${stripe.stripeAccountId}` : "No Stripe account connected yet"}</span>
+          <span>
+            {stripe.stripeAccountId
+              ? `Account: ${stripe.stripeAccountId}`
+              : "No Stripe account connected yet"}
+          </span>
           {stripeDueCount > 0 && (
             <span>
-              <strong>{stripeDueCount}</strong> {stripeDueCount === 1 ? "Stripe requirement due" : "Stripe requirements due"}
+              <strong>{stripeDueCount}</strong>{" "}
+              {stripeDueCount === 1
+                ? "Stripe requirement due"
+                : "Stripe requirements due"}
             </span>
           )}
           {stripe.pendingVerification.length > 0 && (
-            <span><strong>{stripe.pendingVerification.length}</strong> pending with Stripe</span>
+            <span>
+              <strong>{stripe.pendingVerification.length}</strong> pending with
+              Stripe
+            </span>
           )}
           <button
             className="secondary-button"
             disabled={!stripe.stripeAccountId}
-            onClick={() => runAction("Stripe status refreshed", onRefreshStripe)}
+            onClick={() =>
+              runAction("Stripe status refreshed", onRefreshStripe)
+            }
             type="button"
           >
             Refresh Stripe status
@@ -5319,27 +7086,42 @@ function BusinessVerificationPanel({
             <header>
               <div>
                 <strong>No Laawol service documents required</strong>
-                <small>Stripe still handles identity, tax, legal, and bank checks.</small>
+                <small>
+                  Stripe still handles identity, tax, legal, and bank checks.
+                </small>
               </div>
               <span className="status-pill compact">Complete</span>
             </header>
-            <p>The selected services do not require extra Laawol licenses or authority documents.</p>
+            <p>
+              The selected services do not require extra Laawol licenses or
+              authority documents.
+            </p>
           </article>
         )}
         {items.map((item) => (
-          <article className={`verification-card status-${item.status}`} key={item.id}>
+          <article
+            className={`verification-card status-${item.status}`}
+            key={item.id}
+          >
             <header>
               <div>
                 <strong>{item.label}</strong>
                 <small>{verificationAppliesTo(item)}</small>
               </div>
-              <span className="status-pill compact">{statusLabel(item.status)}</span>
+              <span className="status-pill compact">
+                {statusLabel(item.status)}
+              </span>
             </header>
             <p>{item.description}</p>
             <div className="verification-evidence">
               {item.evidence.present ? (
                 item.evidence.url ? (
-                  <a className="link-button" href={item.evidence.url} rel="noreferrer" target="_blank">
+                  <a
+                    className="link-button"
+                    href={item.evidence.url}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
                     Open document
                     <ArrowUpRight size={14} />
                   </a>
@@ -5347,14 +7129,19 @@ function BusinessVerificationPanel({
                   <span>Uploaded: {item.evidence.label}</span>
                 )
               ) : (
-                <span className="verification-missing">No file uploaded yet</span>
+                <span className="verification-missing">
+                  No file uploaded yet
+                </span>
               )}
               <label>
                 Review status
                 <select
                   value={item.status}
                   onChange={(event) =>
-                    onStatusChange(item.id, event.target.value as VerificationStatus)
+                    onStatusChange(
+                      item.id,
+                      event.target.value as VerificationStatus,
+                    )
                   }
                 >
                   {VERIFICATION_STATUSES.map((status) => (
@@ -5365,7 +7152,9 @@ function BusinessVerificationPanel({
                 </select>
               </label>
             </div>
-            {item.reviewNote && <small className="verification-note">{item.reviewNote}</small>}
+            {item.reviewNote && (
+              <small className="verification-note">{item.reviewNote}</small>
+            )}
           </article>
         ))}
       </div>
@@ -5391,16 +7180,12 @@ function BusinessVerificationPanel({
         <button
           className="secondary-button"
           type="button"
-          onClick={() => runAction(
-            "Business verification saved",
-            onSave,
-            {
-              confirm:
-                "Save this business verification checklist?",
-              confirmFr:
-                "Enregistrer cette liste de vérification entreprise ?",
-            },
-          )}
+          onClick={() =>
+            runAction("Business verification saved", onSave, {
+              confirm: "Save this business verification checklist?",
+              confirmFr: "Enregistrer cette liste de vérification entreprise ?",
+            })
+          }
         >
           Save checklist
         </button>
@@ -5408,16 +7193,14 @@ function BusinessVerificationPanel({
           className="secondary-button"
           disabled={approved}
           type="button"
-          onClick={() => runAction(
-            "Business changes requested",
-            onRequestChanges,
-            {
+          onClick={() =>
+            runAction("Business changes requested", onRequestChanges, {
               confirm:
                 "Request changes from this business? They will need to respond before approval.",
               confirmFr:
                 "Demander des modifications à cette entreprise ? Elle devra répondre avant l’approbation.",
-            },
-          )}
+            })
+          }
         >
           Request changes
         </button>
@@ -5425,16 +7208,14 @@ function BusinessVerificationPanel({
           className="primary-button"
           disabled={approved || !approvalReady}
           type="button"
-          onClick={() => runAction(
-            "Business approved",
-            onApprove,
-            {
+          onClick={() =>
+            runAction("Business approved", onApprove, {
               confirm:
                 "Approve this business? Customers will be able to see and use this business after approval.",
               confirmFr:
                 "Approuver cette entreprise ? Les clients pourront voir et utiliser cette entreprise après approbation.",
-            },
-          )}
+            })
+          }
         >
           Approve business
         </button>
@@ -5515,13 +7296,17 @@ function BusinessWorkspace({
     () => buildBusinessVerificationChecklist(business),
     [business],
   );
-  const [documentStatusDraft, setDocumentStatusDraft] = useState<Record<string, VerificationStatus>>(
+  const [documentStatusDraft, setDocumentStatusDraft] = useState<
+    Record<string, VerificationStatus>
+  >(
     () =>
       Object.fromEntries(
         baseVerification.items.map((item) => [item.id, item.status]),
       ) as Record<string, VerificationStatus>,
   );
-  const [reviewNote, setReviewNote] = useState(() => businessVerificationReviewNote(business));
+  const [reviewNote, setReviewNote] = useState(() =>
+    businessVerificationReviewNote(business),
+  );
 
   useEffect(() => {
     setSupportDraft((current) => ({
@@ -5546,20 +7331,32 @@ function BusinessWorkspace({
   const owner = members.find((user) => text(user.role, "") === "businessOwner");
   const staff = members.filter((user) => text(user.role, "") === "staff");
   const inferred = business._inferred === true;
-  const verificationItems: BusinessVerificationItem[] = baseVerification.items.map(
-    (item) => ({
+  const verificationItems: BusinessVerificationItem[] =
+    baseVerification.items.map((item) => ({
       ...item,
       status: documentStatusDraft[item.id] ?? item.status,
-    }),
-  );
+    }));
   const verificationSummary = summarizeVerificationItems(verificationItems);
   const stripeVerification = resolveBusinessStripeVerification(business);
-  const businessApprovalReady = stripeVerification.ready && verificationSummary.approvalReady;
+  const businessApprovalReady =
+    stripeVerification.ready && verificationSummary.approvalReady;
 
-  const openShipments = countWhere(shipments, (item) => rowStatus(item) === "pending");
-  const openPurchases = countWhere(purchases, (item) => rowStatus(item, "purchaseStatus") === "pending");
-  const openRefunds = countWhere(refunds, (item) => rowStatus(item) === "pending");
-  const activeListings = countWhere(cars, (item) => rowStatus(item) === "active");
+  const openShipments = countWhere(
+    shipments,
+    (item) => rowStatus(item) === "pending",
+  );
+  const openPurchases = countWhere(
+    purchases,
+    (item) => rowStatus(item, "purchaseStatus") === "pending",
+  );
+  const openRefunds = countWhere(
+    refunds,
+    (item) => rowStatus(item) === "pending",
+  );
+  const activeListings = countWhere(
+    cars,
+    (item) => rowStatus(item) === "active",
+  );
 
   const counts: Array<[string, number]> = [
     ["Listings", cars.length],
@@ -5568,9 +7365,15 @@ function BusinessWorkspace({
     ["Parking", parkedCars.length],
     ["Purchases", purchases.length],
     ["Refunds", refunds.length],
-    ["Destinations", destinations.filter((item) => item.isActive === true).length],
+    [
+      "Destinations",
+      destinations.filter((item) => item.isActive === true).length,
+    ],
     ["Contacts", contactReferences.length],
-    ["Requests", applications.length + notifications.length + supportRequests.length],
+    [
+      "Requests",
+      applications.length + notifications.length + supportRequests.length,
+    ],
   ];
 
   const openWork = [
@@ -5601,13 +7404,20 @@ function BusinessWorkspace({
     ...refunds.map((item) => ({
       id: `refund-${item.id}`,
       title: `${optionalMoney(item.amount, text(item.currency, "USD")) || "Card return"}`,
-      subtitle: [text(item.customerEmail ?? item.customerName, ""), relatedContactSummary(item)].filter(Boolean).join(" • "),
+      subtitle: [
+        text(item.customerEmail ?? item.customerName, ""),
+        relatedContactSummary(item),
+      ]
+        .filter(Boolean)
+        .join(" • "),
       badge: statusLabel(item.status),
     })),
     ...applications.map((item) => ({
       id: `application-${item.id}`,
       title: text(item.businessName ?? item.name, "Business application"),
-      subtitle: [item.type, item.applicantEmail, item.message].filter(Boolean).join(" • "),
+      subtitle: [item.type, item.applicantEmail, item.message]
+        .filter(Boolean)
+        .join(" • "),
       badge: statusLabel(item.status),
     })),
     ...notifications.map((item) => ({
@@ -5624,19 +7434,26 @@ function BusinessWorkspace({
         item.customerEmail ?? item.customerName ?? item.customerPhone,
         item.relatedLabel,
         formatDate(item.createdAt),
-      ].filter(Boolean).join(" • "),
+      ]
+        .filter(Boolean)
+        .join(" • "),
       badge: statusLabel(item.status),
     })),
   ];
 
   const availableUsers = assignableUsers.filter((user) => {
-    return text(user.id, "") !== text(owner?.id, "") || selectedRole !== "businessOwner";
+    return (
+      text(user.id, "") !== text(owner?.id, "") ||
+      selectedRole !== "businessOwner"
+    );
   });
 
   function assignSelectedUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedUserId) return;
-    const selectedUser = assignableUsers.find((user) => user.id === selectedUserId);
+    const selectedUser = assignableUsers.find(
+      (user) => user.id === selectedUserId,
+    );
     return runAction(
       "Business membership updated",
       async () => {
@@ -5672,7 +7489,10 @@ function BusinessWorkspace({
   }
 
   async function saveVerificationReview() {
-    await httpsCallable(functions, "updateBusinessVerificationReview")({
+    await httpsCallable(
+      functions,
+      "updateBusinessVerificationReview",
+    )({
       businessId: business.id,
       documents: verificationItems.map((item) => ({
         id: item.id,
@@ -5684,7 +7504,10 @@ function BusinessWorkspace({
   }
 
   async function refreshStripeVerification() {
-    await httpsCallable(functions, "refreshBusinessStripeAccountStatus")({
+    await httpsCallable(
+      functions,
+      "refreshBusinessStripeAccountStatus",
+    )({
       businessId: business.id,
     });
   }
@@ -5698,10 +7521,15 @@ function BusinessWorkspace({
       options.platformDocumentBypass === true &&
       stripeVerification.ready;
     if (action === "approve" && !businessApprovalReady && !approveWithBypass) {
-      throw new Error("Complete Stripe verification and required platform documents before approval.");
+      throw new Error(
+        "Complete Stripe verification and required platform documents before approval.",
+      );
     }
     await saveVerificationReview();
-    await httpsCallable(functions, "reviewBusinessApplication")({
+    await httpsCallable(
+      functions,
+      "reviewBusinessApplication",
+    )({
       businessId: business.id,
       action,
       name: text(business.name, business.id),
@@ -5723,10 +7551,17 @@ function BusinessWorkspace({
     <div className="workspace-detail">
       <header className="workspace-head">
         <div className="workspace-id">
-          <span className="workspace-avatar">{businessInitials(text(business.name, business.id))}</span>
+          <span className="workspace-avatar">
+            {businessInitials(text(business.name, business.id))}
+          </span>
           <div>
             <h2>{text(business.name, business.id)}</h2>
-            <p>{[text(business.phone, "No phone"), text(business.email, "No email")].join(" • ")}</p>
+            <p>
+              {[
+                text(business.phone, "No phone"),
+                text(business.email, "No email"),
+              ].join(" • ")}
+            </p>
           </div>
         </div>
         <div className="workspace-head-actions">
@@ -5740,16 +7575,15 @@ function BusinessWorkspace({
                 onChange={(event) =>
                   runAction(
                     "Business status updated",
-                    () => commitStatusChange({
+                    () =>
+                      commitStatusChange({
                         collectionName: "businesses",
                         targetId: business.id,
                         nextStatus: event.target.value,
                       }),
                     {
-                      confirm:
-                        `Change ${text(business.name, business.id)} status to ${statusLabel(event.target.value)}?`,
-                      confirmFr:
-                        `Changer le statut de ${text(business.name, business.id)} en ${statusLabel(event.target.value)} ?`,
+                      confirm: `Change ${text(business.name, business.id)} status to ${statusLabel(event.target.value)}?`,
+                      confirmFr: `Changer le statut de ${text(business.name, business.id)} en ${statusLabel(event.target.value)} ?`,
                     },
                   )
                 }
@@ -5774,34 +7608,52 @@ function BusinessWorkspace({
       </header>
 
       <div className="workspace-kpis">
-        <span><b>{activeListings}</b> active listings</span>
-        <span><b>{openShipments}</b> open shipments</span>
-        <span><b>{openPurchases}</b> open purchases</span>
-        <span className={openRefunds > 0 ? "warn" : ""}><b>{openRefunds}</b> refunds to pay</span>
-        <span><b>{members.length}</b> people</span>
+        <span>
+          <b>{activeListings}</b> active listings
+        </span>
+        <span>
+          <b>{openShipments}</b> open shipments
+        </span>
+        <span>
+          <b>{openPurchases}</b> open purchases
+        </span>
+        <span className={openRefunds > 0 ? "warn" : ""}>
+          <b>{openRefunds}</b> refunds to pay
+        </span>
+        <span>
+          <b>{members.length}</b> people
+        </span>
         <span className={!businessApprovalReady ? "warn" : ""}>
           <b>{stripeVerification.ready ? "Ready" : "Blocked"}</b> verification
         </span>
         <span className={!verificationSummary.approvalReady ? "warn" : ""}>
-          <b>{verificationSummary.verified + verificationSummary.notApplicable}/{verificationSummary.total}</b> service docs
+          <b>
+            {verificationSummary.verified + verificationSummary.notApplicable}/
+            {verificationSummary.total}
+          </b>{" "}
+          service docs
         </span>
       </div>
 
       {inferred ? (
         <div className="repair-card">
-          <p>This business was inferred from existing marketplace or operations records. Create a profile document before assigning people or editing status.</p>
+          <p>
+            This business was inferred from existing marketplace or operations
+            records. Create a profile document before assigning people or
+            editing status.
+          </p>
           <button
             className="primary-button"
-            onClick={() => runAction(
+            onClick={() =>
+              runAction(
               "Business profile created",
               () => createMissingBusinessProfile(business),
               {
-                confirm:
-                  `Create a business profile for ${text(business.name, business.id)}?`,
-                confirmFr:
-                  `Créer un profil entreprise pour ${text(business.name, business.id)} ?`,
+                  confirm: `Create a business profile for ${text(business.name, business.id)}?`,
+                  confirmFr: `Créer un profil entreprise pour ${text(business.name, business.id)} ?`,
               },
-            )}
+              )
+            }
           >
             <Building2 size={16} />
             Create business profile
@@ -5809,7 +7661,12 @@ function BusinessWorkspace({
           {openWork.length > 0 && (
             <div className="row-list compact">
               {openWork.slice(0, 8).map((item) => (
-                <DataRow key={item.id} title={item.title} subtitle={item.subtitle} badge={item.badge} />
+                <DataRow
+                  key={item.id}
+                  title={item.title}
+                  subtitle={item.subtitle}
+                  badge={item.badge}
+                />
               ))}
             </div>
           )}
@@ -5835,13 +7692,22 @@ function BusinessWorkspace({
                 <div className="people-summary">
                   <div className="person-block owner-block">
                     <span>Business head</span>
-                    <strong>{owner ? userDisplayName(owner) : "No owner assigned"}</strong>
-                    <small>{owner ? userMeta(owner) : "Assign one owner for accountability."}</small>
+                    <strong>
+                      {owner ? userDisplayName(owner) : "No owner assigned"}
+                    </strong>
+                    <small>
+                      {owner
+                        ? userMeta(owner)
+                        : "Assign one owner for accountability."}
+                    </small>
                   </div>
                   <div className="person-block">
                     <span>Staff</span>
                     <strong>{staff.length}</strong>
-                    <small>{staff.map(userDisplayName).join(", ") || "No staff assigned."}</small>
+                    <small>
+                      {staff.map(userDisplayName).join(", ") ||
+                        "No staff assigned."}
+                    </small>
                   </div>
                 </div>
                 <div className="count-grid">
@@ -5856,7 +7722,12 @@ function BusinessWorkspace({
                   <h3>Recent activity</h3>
                   <div className="row-list compact">
                     {openWork.slice(0, 6).map((item) => (
-                      <DataRow key={item.id} title={item.title} subtitle={item.subtitle} badge={item.badge} />
+                      <DataRow
+                        key={item.id}
+                        title={item.title}
+                        subtitle={item.subtitle}
+                        badge={item.badge}
+                      />
                     ))}
                     {openWork.length === 0 && (
                       <EmptyState text="No related business records are currently loaded." />
@@ -5892,24 +7763,49 @@ function BusinessWorkspace({
                 <div className="subsection">
                   <h3>Add people</h3>
                   <form className="assign-form" onSubmit={assignSelectedUser}>
-                    <select required value={selectedUserId} onChange={(event) => setSelectedUserId(event.target.value)}>
+                    <select
+                      required
+                      value={selectedUserId}
+                      onChange={(event) =>
+                        setSelectedUserId(event.target.value)
+                      }
+                    >
                       <option value="">Assign existing account…</option>
                       {availableUsers.map((user) => (
                         <option key={user.id} value={user.id}>
-                          {userDisplayName(user)} {user.businessName ? `(${text(user.businessName, "")})` : ""}
+                          {userDisplayName(user)}{" "}
+                          {user.businessName
+                            ? `(${text(user.businessName, "")})`
+                            : ""}
                         </option>
                       ))}
                     </select>
-                    <select value={selectedRole} onChange={(event) => setSelectedRole(event.target.value as (typeof businessRoleOptions)[number])}>
+                    <select
+                      value={selectedRole}
+                      onChange={(event) =>
+                        setSelectedRole(
+                          event.target
+                            .value as (typeof businessRoleOptions)[number],
+                        )
+                      }
+                    >
                       {businessRoleOptions.map((role) => (
                         <option key={role} value={role}>
                           {role === "businessOwner" ? "Business head" : "Staff"}
                         </option>
                       ))}
                     </select>
-                    <button className="primary-button" disabled={assignableUsers.length === 0}>Assign</button>
+                    <button
+                      className="primary-button"
+                      disabled={assignableUsers.length === 0}
+                    >
+                      Assign
+                    </button>
                   </form>
-                  <CreateBusinessStaffForm business={business} runAction={runAction} />
+                  <CreateBusinessStaffForm
+                    business={business}
+                    runAction={runAction}
+                  />
                 </div>
                 <div className="subsection">
                   <h3>Team</h3>
@@ -5925,16 +7821,16 @@ function BusinessWorkspace({
                           onChange={(event) =>
                             runAction(
                               "Business membership updated",
-                              () => updateMembership({
+                              () =>
+                                updateMembership({
                                   userId: user.id,
-                                  role: event.target.value as "businessOwner" | "staff" | "customer",
+                                  role: event.target.value as
+                                    "businessOwner" | "staff" | "customer",
                                   businessId: business.id,
                                 }),
                               {
-                                confirm:
-                                  `Change ${userDisplayName(user)} to ${event.target.value === "customer" ? "customer" : event.target.value === "businessOwner" ? "business head" : "staff"}?`,
-                                confirmFr:
-                                  `Changer ${userDisplayName(user)} en ${event.target.value === "customer" ? "client" : event.target.value === "businessOwner" ? "responsable entreprise" : "employé"} ?`,
+                                confirm: `Change ${userDisplayName(user)} to ${event.target.value === "customer" ? "customer" : event.target.value === "businessOwner" ? "business head" : "staff"}?`,
+                                confirmFr: `Changer ${userDisplayName(user)} en ${event.target.value === "customer" ? "client" : event.target.value === "businessOwner" ? "responsable entreprise" : "employé"} ?`,
                               },
                             )
                           }
@@ -5973,48 +7869,71 @@ function BusinessWorkspace({
                     const imageUrl = listingImageUrl(listing);
                     return (
                       <article className="listing-card" key={listing.id}>
-                        <div className="listing-thumb" aria-label={`${listingTitle(listing)} photo`}>
+                        <div
+                          className="listing-thumb"
+                          aria-label={`${listingTitle(listing)} photo`}
+                        >
                           {imageUrl ? (
-                            <img alt={`${listingTitle(listing)} photo`} loading="lazy" src={imageUrl} />
+                            <img
+                              alt={`${listingTitle(listing)} photo`}
+                              loading="lazy"
+                              src={imageUrl}
+                            />
                           ) : (
-                            <div className="listing-thumb-empty"><Car size={26} /><span>No photo</span></div>
+                            <div className="listing-thumb-empty">
+                              <Car size={26} />
+                              <span>No photo</span>
+                            </div>
                           )}
                         </div>
                         <div className="listing-card-main">
                           <strong>{listingTitle(listing)}</strong>
-                          <small>{[formatMoney(listing.price), text(listing.mileage, ""), listingLocation(listing)].filter(Boolean).join(" • ")}</small>
+                          <small>
+                            {[
+                              formatMoney(listing.price),
+                              text(listing.mileage, ""),
+                              listingLocation(listing),
+                            ]
+                              .filter(Boolean)
+                              .join(" • ")}
+                          </small>
                         </div>
                         <select
                           value={text(listing.status, "active")}
                           onChange={(event) =>
                             runAction(
                               "Listing status updated",
-                              () => commitStatusChange({ collectionName: "cars", targetId: listing.id, nextStatus: event.target.value }),
+                              () =>
+                                commitStatusChange({
+                                  collectionName: "cars",
+                                  targetId: listing.id,
+                                  nextStatus: event.target.value,
+                                }),
                               {
-                                confirm:
-                                  `Change ${listingTitle(listing)} status to ${statusLabel(event.target.value)}?`,
-                                confirmFr:
-                                  `Changer le statut de ${listingTitle(listing)} en ${statusLabel(event.target.value)} ?`,
+                                confirm: `Change ${listingTitle(listing)} status to ${statusLabel(event.target.value)}?`,
+                                confirmFr: `Changer le statut de ${listingTitle(listing)} en ${statusLabel(event.target.value)} ?`,
                               },
                             )
                           }
                         >
                           {listingStatuses.map((status) => (
-                            <option key={status} value={status}>{statusLabel(status)}</option>
+                            <option key={status} value={status}>
+                              {statusLabel(status)}
+                            </option>
                           ))}
                         </select>
                         <button
                           className="danger-button"
-                          onClick={() => runAction(
+                          onClick={() =>
+                            runAction(
                             "Listing deleted",
                             () => deleteAdminRecord("cars", listing.id),
                             {
-                              confirm:
-                                `Delete ${listingTitle(listing)}? This cannot be undone from the console.`,
-                              confirmFr:
-                                `Supprimer ${listingTitle(listing)} ? Cette action ne peut pas être annulée depuis la console.`,
+                                confirm: `Delete ${listingTitle(listing)}? This cannot be undone from the console.`,
+                                confirmFr: `Supprimer ${listingTitle(listing)} ? Cette action ne peut pas être annulée depuis la console.`,
                             },
-                          )}
+                            )
+                          }
                         >
                           <X size={15} />
                         </button>
@@ -6035,15 +7954,35 @@ function BusinessWorkspace({
                   destinations={destinations}
                   runAction={runAction}
                 />
-                <ServiceGroup title="Barrel shipments" icon={<Package size={16} />} rows={shipments} statusField="status" />
-                <ServiceGroup title="Transport requests" icon={<Truck size={16} />} rows={transports} statusField="status" />
-                <ServiceGroup title="Parked cars" icon={<Car size={16} />} rows={parkedCars} statusField="status" />
+                <ServiceGroup
+                  title="Barrel shipments"
+                  icon={<Package size={16} />}
+                  rows={shipments}
+                  statusField="status"
+                />
+                <ServiceGroup
+                  title="Transport requests"
+                  icon={<Truck size={16} />}
+                  rows={transports}
+                  statusField="status"
+                />
+                <ServiceGroup
+                  title="Parked cars"
+                  icon={<Car size={16} />}
+                  rows={parkedCars}
+                  statusField="status"
+                />
               </div>
             )}
 
             {section === "payments" && (
               <div className="workspace-section">
-                <ServiceGroup title="Car purchases" icon={<BadgeDollarSign size={16} />} rows={purchases} statusField="purchaseStatus" />
+                <ServiceGroup
+                  title="Car purchases"
+                  icon={<BadgeDollarSign size={16} />}
+                  rows={purchases}
+                  statusField="purchaseStatus"
+                />
                 <div className="subsection">
                   <h3>Refund requests</h3>
                   <div className="row-list compact">
@@ -6051,7 +7990,12 @@ function BusinessWorkspace({
                       <DataRow
                         key={item.id}
                         title={`${optionalMoney(item.amount, text(item.currency, "USD")) || "Refund request"}`}
-                        subtitle={[text(item.customerEmail, "Customer"), formatDate(item.createdAt)].filter(Boolean).join(" • ")}
+                        subtitle={[
+                          text(item.customerEmail, "Customer"),
+                          formatDate(item.createdAt),
+                        ]
+                          .filter(Boolean)
+                          .join(" • ")}
                         badge={statusLabel(item.status)}
                       />
                     ))}
@@ -6081,7 +8025,12 @@ function BusinessWorkspace({
                   <h3>Activity & requests</h3>
                   <div className="row-list compact">
                     {openWork.map((item) => (
-                      <DataRow key={item.id} title={item.title} subtitle={item.subtitle} badge={item.badge} />
+                      <DataRow
+                        key={item.id}
+                        title={item.title}
+                        subtitle={item.subtitle}
+                        badge={item.badge}
+                      />
                     ))}
                     {openWork.length === 0 && (
                       <EmptyState text="No related business records are currently loaded." />
@@ -6120,7 +8069,10 @@ function BusinessDestinationsPanel({
   runAction: ActionRunner;
 }) {
   const [search, setSearch] = useState("");
-  const activeCount = countWhere(destinations, (item) => item.isActive === true);
+  const activeCount = countWhere(
+    destinations,
+    (item) => item.isActive === true,
+  );
   const inactiveCount = destinations.length - activeCount;
   const needle = search.trim().toLowerCase();
   const filteredDestinations = needle
@@ -6146,21 +8098,29 @@ function BusinessDestinationsPanel({
         <span className="subsection-count">{activeCount} active</span>
       </h3>
       <div className="destination-toolbar">
-        <SearchBox value={search} onChange={setSearch} placeholder="Find destination" />
-        <span>{destinations.length} business countries • {inactiveCount} inactive</span>
+        <SearchBox
+          value={search}
+          onChange={setSearch}
+          placeholder="Find destination"
+        />
+        <span>
+          {destinations.length} business countries • {inactiveCount} inactive
+        </span>
         <button
           className="secondary-button"
           onClick={() =>
             runAction(
               "Business destination list seeded",
-              () => httpsCallable(functions, "seedDestinationCountries")({
+              () =>
+                httpsCallable(
+                  functions,
+                  "seedDestinationCountries",
+                )({
                   businessId: business.id,
                 }),
               {
-                confirm:
-                  `Seed destination countries for ${text(business.name, business.id)}?`,
-                confirmFr:
-                  `Ajouter les pays de destination pour ${text(business.name, business.id)} ?`,
+                confirm: `Seed destination countries for ${text(business.name, business.id)}?`,
+                confirmFr: `Ajouter les pays de destination pour ${text(business.name, business.id)} ?`,
               },
             )
           }
@@ -6202,7 +8162,11 @@ function ServiceGroup({
 }) {
   return (
     <div className="subsection">
-      <h3>{icon}{title}<span className="subsection-count">{rows.length}</span></h3>
+      <h3>
+        {icon}
+        {title}
+        <span className="subsection-count">{rows.length}</span>
+      </h3>
       <div className="row-list compact">
         {rows.map((item) => (
           <DataRow
@@ -6232,12 +8196,14 @@ type ServiceModule = {
   title: (item: FirestoreRow) => string;
   subtitle: (item: FirestoreRow) => string;
   details?: (item: FirestoreRow) => Array<[string, string]>;
+  readOnlyReason?: string;
 };
 
 // To add a new service in the future, append one entry to this list — the
 // segmented selector, counts, search, filtering, and rows all derive from it.
 function buildServiceModules(data: {
   shipments: FirestoreRow[];
+  freightShipments: FirestoreRow[];
   transports: FirestoreRow[];
   parkedCars: FirestoreRow[];
   purchases: FirestoreRow[];
@@ -6251,10 +8217,71 @@ function buildServiceModules(data: {
       collectionName: "barrelShipments",
       rows: data.shipments,
       statusField: "status",
-      statusOptions: operationalStatuses,
-      title: (item) => `${text(item.trackingCode, item.id)} • ${text(item.receiverName, "Receiver")}`,
-      subtitle: (item) => `${text(item.businessName, "Business")} • ${text(item.destinationCountryName, "Destination")} • ${formatMoney(item.price)}`,
+      statusOptions: freightStatuses,
+      title: (item) =>
+        `${text(item.trackingCode, item.id)} • ${text(item.receiverName, "Receiver")}`,
+      subtitle: (item) =>
+        `${text(item.businessName, "Business")} • ${text(item.destinationCountryName, "Destination")} • ${formatMoney(item.price)}`,
       details: barrelShipmentDetails,
+    },
+    {
+      id: "freight",
+      label: "Freight",
+      service: "freight",
+      icon: <Package size={16} />,
+      collectionName: "freightShipments",
+      rows: data.freightShipments,
+      statusField: "status",
+      statusOptions: freightStatuses,
+      title: (item) =>
+        `${text(item.trackingCode, item.id)} • ${text(item.receiverName, "Receiver")}`,
+      subtitle: (item) =>
+        `${text(item.businessName, "Business")} • ${statusLabel(text(item.mode ?? item.freightMode, "freight"))} • Estimated weight: ${Number(item.estimatedWeightKg ?? item.weightKg ?? 0).toLocaleString()} kg • ${formatMoney(item.estimatedTotal ?? item.price ?? item.total)}`,
+      details: (item) =>
+        detailRows([
+          ["Business", item.businessName],
+          ["Sender", item.senderName],
+          ["Sender phone", item.senderPhone],
+          ["Receiver phone", item.receiverPhone],
+          ["Destination", item.destinationCountryName],
+          [
+            "Mode",
+            item.mode || item.freightMode
+              ? statusLabel(item.mode ?? item.freightMode)
+              : "",
+          ],
+          ["Estimated weight", optionalWeightKg(item.estimatedWeightKg ?? item.weightKg)],
+          ["Verified weight", optionalWeightKg(item.verifiedWeightKg)],
+          [
+            "Weight verification",
+            item.weightVerificationStatus
+              ? statusLabel(item.weightVerificationStatus)
+              : "",
+          ],
+          [
+            "Payment",
+            item.paymentStatus ? statusLabel(item.paymentStatus) : "",
+          ],
+          ["Rate", optionalMoney(item.pricePerKg ?? item.ratePerKg)],
+          ["Estimated total", optionalMoney(item.estimatedTotal ?? item.price)],
+          ["Final total", optionalMoney(item.finalTotal)],
+          ["Balance due", optionalMoney(item.balanceDue)],
+          ["Refund due", optionalMoney(item.refundDue)],
+          [
+            "Price settlement",
+            item.priceSettlementStatus
+              ? statusLabel(item.priceSettlementStatus)
+              : "",
+          ],
+          ["Payout", item.payoutStatus ? statusLabel(item.payoutStatus) : ""],
+          ["Weight confirmed", optionalDate(item.weightConfirmedAt)],
+          ["Weight confirmed by", item.weightConfirmedByUid],
+          ["Settled", optionalDate(item.settledAt)],
+          ["Updated", optionalDate(item.statusUpdatedAt ?? item.updatedAt)],
+          ["Updated by", item.statusUpdatedBy ?? item.updatedBy],
+        ]),
+      readOnlyReason:
+        "Freight status and settlement are controlled by the verified business workflow. Admins can review and escalate exceptions here.",
     },
     {
       id: "transport",
@@ -6265,14 +8292,27 @@ function buildServiceModules(data: {
       rows: data.transports,
       statusField: "status",
       statusOptions: operationalStatuses,
-      title: (item) => `${text(item.trackingCode, item.id)} • ${text(item.ownerName, "Owner")}`,
-      subtitle: (item) => `${text(item.carYear, "")} ${text(item.carMake, "")} ${text(item.carModel, "")} • ${formatDate(item.transportDate)}`,
-      details: (item) => detailRows([
+      title: (item) =>
+        `${text(item.trackingCode, item.id)} • ${text(item.ownerName, "Owner")}`,
+      subtitle: (item) =>
+        `${text(item.carYear, "")} ${text(item.carMake, "")} ${text(item.carModel, "")} • ${formatDate(item.transportDate)}`,
+      details: (item) =>
+        detailRows([
         ["Business", item.businessName],
         ["Owner email", item.ownerEmail],
         ["Owner phone", item.ownerPhone],
-        ["Pickup", [item.pickupAddress, item.pickupCity, item.pickupState].filter(Boolean).join(", ")],
-        ["Drop-off", [item.dropoffAddress, item.dropoffCity, item.dropoffState].filter(Boolean).join(", ")],
+          [
+            "Pickup",
+            [item.pickupAddress, item.pickupCity, item.pickupState]
+              .filter(Boolean)
+              .join(", "),
+          ],
+          [
+            "Drop-off",
+            [item.dropoffAddress, item.dropoffCity, item.dropoffState]
+              .filter(Boolean)
+              .join(", "),
+          ],
         ["Price", optionalMoney(item.price)],
         ["Updated", optionalDate(item.statusUpdatedAt ?? item.updatedAt)],
         ["Updated by", item.statusUpdatedBy ?? item.updatedBy],
@@ -6287,13 +8327,21 @@ function buildServiceModules(data: {
       rows: data.parkedCars,
       statusField: "status",
       statusOptions: operationalStatuses,
-      title: (item) => `${text(item.trackingCode, item.id)} • ${text(item.ownerName, "Owner")}`,
-      subtitle: (item) => `${text(item.carYear, "")} ${text(item.carMake, "")} ${text(item.carModel, "")} • parked ${formatDate(item.parkingDate)}`,
-      details: (item) => detailRows([
+      title: (item) =>
+        `${text(item.trackingCode, item.id)} • ${text(item.ownerName, "Owner")}`,
+      subtitle: (item) =>
+        `${text(item.carYear, "")} ${text(item.carMake, "")} ${text(item.carModel, "")} • parked ${formatDate(item.parkingDate)}`,
+      details: (item) =>
+        detailRows([
         ["Business", item.businessName],
         ["Owner email", item.ownerEmail],
         ["Owner phone", item.ownerPhone],
-        ["Location", [item.parkingAddress, item.parkingCity, item.parkingState].filter(Boolean).join(", ")],
+          [
+            "Location",
+            [item.parkingAddress, item.parkingCity, item.parkingState]
+              .filter(Boolean)
+              .join(", "),
+          ],
         ["Total", optionalMoney(item.totalCost)],
         ["Updated", optionalDate(item.statusUpdatedAt ?? item.updatedAt)],
         ["Updated by", item.statusUpdatedBy ?? item.updatedBy],
@@ -6308,15 +8356,21 @@ function buildServiceModules(data: {
       rows: data.purchases,
       statusField: "purchaseStatus",
       statusOptions: purchaseStatuses,
-      title: (item) => `${text(item.carTitle, "Car purchase")} • ${text(item.buyerName, "Buyer")}`,
-      subtitle: (item) => `${text(item.buyerEmail, "")} • ${formatMoney(item.depositAmount, text(item.depositCurrency, "USD"))} • ${text(item.paymentStatus, "payment")}`,
-      details: (item) => detailRows([
+      title: (item) =>
+        `${text(item.carTitle, "Car purchase")} • ${text(item.buyerName, "Buyer")}`,
+      subtitle: (item) =>
+        `${text(item.buyerEmail, "")} • ${formatMoney(item.depositAmount, text(item.depositCurrency, "USD"))} • ${text(item.paymentStatus, "payment")}`,
+      details: (item) =>
+        detailRows([
         ["Business", item.businessName],
         ["Buyer phone", item.buyerPhone],
         ["Payment", item.paymentStatus],
         ["Hold until", optionalDate(item.holdUntilDate)],
         ["Appointment", optionalDate(item.appointmentStart)],
-        ["Updated", optionalDate(item.purchaseStatusUpdatedAt ?? item.updatedAt)],
+          [
+            "Updated",
+            optionalDate(item.purchaseStatusUpdatedAt ?? item.updatedAt),
+          ],
         ["Updated by", item.purchaseStatusUpdatedBy ?? item.updatedBy],
       ]),
     },
@@ -6325,6 +8379,7 @@ function buildServiceModules(data: {
 
 function OperationsView({
   shipments,
+  freightShipments,
   transports,
   parkedCars,
   purchases,
@@ -6332,6 +8387,7 @@ function OperationsView({
   canService,
 }: {
   shipments: FirestoreRow[];
+  freightShipments: FirestoreRow[];
   transports: FirestoreRow[];
   parkedCars: FirestoreRow[];
   purchases: FirestoreRow[];
@@ -6339,19 +8395,39 @@ function OperationsView({
   canService: (serviceId: string) => boolean;
 }) {
   const modules = useMemo(
-    () => buildServiceModules({ shipments, transports, parkedCars, purchases })
-      .filter((mod) => canService(mod.service)),
-    [shipments, transports, parkedCars, purchases, canService],
+    () =>
+      buildServiceModules({
+        shipments,
+        freightShipments,
+        transports,
+        parkedCars,
+        purchases,
+      }).filter((mod) => canService(mod.service)),
+    [
+      shipments,
+      freightShipments,
+      transports,
+      parkedCars,
+      purchases,
+      canService,
+    ],
   );
   const [active, setActive] = useState("all");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
   const total = modules.reduce((sum, mod) => sum + mod.rows.length, 0);
-  const scope = active === "all" ? modules : modules.filter((mod) => mod.id === active);
-  const scopeItems = scope.flatMap((mod) => mod.rows.map((item) => ({ mod, item })));
+  const scope =
+    active === "all" ? modules : modules.filter((mod) => mod.id === active);
+  const scopeItems = scope.flatMap((mod) =>
+    mod.rows.map((item) => ({ mod, item })),
+  );
   const statusSet = Array.from(
-    new Set(scopeItems.map(({ mod, item }) => text(item[mod.statusField], "pending").toLowerCase())),
+    new Set(
+      scopeItems.map(({ mod, item }) =>
+        text(item[mod.statusField], "pending").toLowerCase(),
+      ),
+    ),
   ).sort();
 
   const needle = search.trim().toLowerCase();
@@ -6359,13 +8435,21 @@ function OperationsView({
     const status = text(item[mod.statusField], "pending").toLowerCase();
     if (statusFilter !== "all" && status !== statusFilter) return false;
     if (!needle) return true;
-    const detailsText = mod.details?.(item).map(([, value]) => value).join(" ") ?? "";
-    return [mod.title(item), mod.subtitle(item), status, detailsText].join(" ").toLowerCase().includes(needle);
+    const detailsText =
+      mod
+        .details?.(item)
+        .map(([, value]) => value)
+        .join(" ") ?? "";
+    return [mod.title(item), mod.subtitle(item), status, detailsText]
+      .join(" ")
+      .toLowerCase()
+      .includes(needle);
   });
 
-  const activeLabel = active === "all"
+  const activeLabel =
+    active === "all"
     ? "All service records"
-    : modules.find((mod) => mod.id === active)?.label ?? "Records";
+      : (modules.find((mod) => mod.id === active)?.label ?? "Records");
 
   function selectService(id: string) {
     setActive(id);
@@ -6384,7 +8468,11 @@ function OperationsView({
         ]}
       />
 
-      <div className="service-segments" role="tablist" aria-label="Service types">
+      <div
+        className="service-segments"
+        role="tablist"
+        aria-label="Service types"
+      >
         <button
           className={`segment ${active === "all" ? "active" : ""}`}
           onClick={() => selectService("all")}
@@ -6421,7 +8509,10 @@ function OperationsView({
                 value={search}
               />
             </label>
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+            >
               <option value="all">All statuses</option>
               {statusSet.map((status) => (
                 <option key={status} value={status}>
@@ -6444,14 +8535,17 @@ function OperationsView({
               collectionName={mod.collectionName}
               title={mod.label}
               details={mod.details}
+              readOnlyReason={mod.readOnlyReason}
               runAction={runAction}
               typeBadge={active === "all" ? mod.label : undefined}
             />
           ))}
           {total === 0 ? (
             <EmptyState text="No service records are currently loaded." />
-          ) : items.length === 0 && (
+          ) : (
+            items.length === 0 && (
             <EmptyState text="No records match the current filters." />
+            )
           )}
         </div>
       </Panel>
@@ -6495,6 +8589,14 @@ function carListingDetails(item: FirestoreRow) {
     ["Stock", item.stockNumber],
     ["Mileage", item.mileage],
     ["Condition", item.condition],
+    [
+      "Rebuilt title",
+      typeof item.isRebuiltTitle === "boolean"
+        ? item.isRebuiltTitle
+          ? "Yes"
+          : "No"
+        : "Not provided",
+    ],
     ["Body", item.bodyType],
     ["Transmission", item.transmission],
     ["Fuel", item.fuelType],
@@ -6504,7 +8606,17 @@ function carListingDetails(item: FirestoreRow) {
     ["Contact", item.contactName],
     ["Contact phone", item.contactPhone],
     ["Contact email", item.contactEmail],
-    ["Address", [item.locationAddressLine1, item.locationCity, item.locationState, item.locationPostalCode].filter(Boolean).join(", ")],
+    [
+      "Address",
+      [
+        item.locationAddressLine1,
+        item.locationCity,
+        item.locationState,
+        item.locationPostalCode,
+      ]
+        .filter(Boolean)
+        .join(", "),
+    ],
     ["Sold to", soldInfo.customerName],
     ["Sold phone", soldInfo.customerPhone],
     ["Sold email", soldInfo.customerEmail],
@@ -6520,16 +8632,15 @@ function carListingDetails(item: FirestoreRow) {
 function listingTitle(item: FirestoreRow) {
   return text(
       item.title,
-      `${text(item.year, "")} ${text(item.make, "")} ${text(item.model, "")}`.trim() || item.id,
+    `${text(item.year, "")} ${text(item.make, "")} ${text(item.model, "")}`.trim() ||
+      item.id,
   );
 }
 
 function listingLocation(item: FirestoreRow) {
-  return [
-    item.locationCity,
-    item.locationState,
-    item.locationPostalCode,
-  ].filter(Boolean).join(" ");
+  return [item.locationCity, item.locationState, item.locationPostalCode]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function imageCandidate(value: unknown): string {
@@ -6601,6 +8712,7 @@ function MarketplaceView({
   const [destinationSearch, setDestinationSearch] = useState("");
   const [listingSearch, setListingSearch] = useState("");
   const [listingStatus, setListingStatus] = useState("all");
+  const [listingRebuiltTitle, setListingRebuiltTitle] = useState("all");
   const [listingBusinessId, setListingBusinessId] = useState("all");
   const [listingLocation, setListingLocation] = useState("");
   const [minPrice, setMinPrice] = useState("");
@@ -6626,6 +8738,14 @@ function MarketplaceView({
     return cars.filter((item) => {
       const status = rowStatus(item);
       if (listingStatus !== "all" && status !== listingStatus) return false;
+      const rebuiltTitle = typeof item.isRebuiltTitle === "boolean"
+        ? item.isRebuiltTitle
+          ? "yes"
+          : "no"
+        : "unknown";
+      if (listingRebuiltTitle !== "all" && rebuiltTitle !== listingRebuiltTitle) {
+        return false;
+      }
       if (
         listingBusinessId !== "all" &&
         (!selectedBusiness || !belongsToBusiness(item, selectedBusiness))
@@ -6639,7 +8759,9 @@ function MarketplaceView({
         item.locationCity,
         item.locationState,
         item.locationPostalCode,
-      ].map((value) => String(value ?? "").toLowerCase()).join(" ");
+      ]
+        .map((value) => String(value ?? "").toLowerCase())
+        .join(" ");
       if (locationNeedle && !location.includes(locationNeedle)) return false;
       if (!needle) return true;
       return [
@@ -6655,7 +8777,8 @@ function MarketplaceView({
         item.contactEmail,
         status,
         location,
-      ].map((value) => String(value ?? "").toLowerCase())
+      ]
+        .map((value) => String(value ?? "").toLowerCase())
           .join(" ")
           .includes(needle);
     });
@@ -6664,6 +8787,7 @@ function MarketplaceView({
     cars,
     listingBusinessId,
     listingLocation,
+    listingRebuiltTitle,
     listingSearch,
     listingStatus,
     maxPrice,
@@ -6674,8 +8798,11 @@ function MarketplaceView({
         .filter((business) => business._inferred !== true)
         .map((business) => ({
           business,
-          listings: filteredCars.filter((item) => belongsToBusiness(item, business)),
-          totalListings: cars.filter((item) => belongsToBusiness(item, business)).length,
+        listings: filteredCars.filter((item) =>
+          belongsToBusiness(item, business),
+        ),
+        totalListings: cars.filter((item) => belongsToBusiness(item, business))
+          .length,
         }))
         .filter((entry) => {
           if (listingBusinessId !== "all") {
@@ -6685,12 +8812,19 @@ function MarketplaceView({
         });
   }, [businesses, cars, filteredCars, listingBusinessId]);
   const groupedListingIds = new Set(
-      businessesWithListings.flatMap((entry) => entry.listings.map((item) => item.id)),
+    businessesWithListings.flatMap((entry) =>
+      entry.listings.map((item) => item.id),
+    ),
   );
-  const unassignedListings = filteredCars.filter((item) => !groupedListingIds.has(item.id));
+  const unassignedListings = filteredCars.filter(
+    (item) => !groupedListingIds.has(item.id),
+  );
   const activeFilters = [
     listingSearch ? `Search "${listingSearch}"` : "",
     listingStatus !== "all" ? statusLabel(listingStatus) : "",
+    listingRebuiltTitle !== "all"
+      ? `Rebuilt title ${listingRebuiltTitle === "unknown" ? "Not provided" : listingRebuiltTitle}`
+      : "",
     listingBusinessId !== "all"
       ? `Business ${text(businesses.find((item) => item.id === listingBusinessId)?.name, listingBusinessId)}`
       : "",
@@ -6712,9 +8846,13 @@ function MarketplaceView({
         ]}
       />
       {errors.map((error) => (
-        <div className="inline-error" key={error}>{error}</div>
+        <div className="inline-error" key={error}>
+          {error}
+        </div>
       ))}
-      {loading && <div className="empty-state">Loading marketplace records...</div>}
+      {loading && (
+        <div className="empty-state">Loading marketplace records...</div>
+      )}
       <Panel title="Business listings" icon={<Store size={18} />}>
         <div className="marketplace-filter-grid">
           <label className="compact-search wide">
@@ -6725,7 +8863,10 @@ function MarketplaceView({
               value={listingSearch}
             />
           </label>
-          <select value={listingBusinessId} onChange={(event) => setListingBusinessId(event.target.value)}>
+          <select
+            value={listingBusinessId}
+            onChange={(event) => setListingBusinessId(event.target.value)}
+          >
             <option value="all">All businesses</option>
             {businesses
                 .filter((business) => business._inferred !== true)
@@ -6735,13 +8876,25 @@ function MarketplaceView({
                   </option>
                 ))}
           </select>
-          <select value={listingStatus} onChange={(event) => setListingStatus(event.target.value)}>
+          <select
+            value={listingStatus}
+            onChange={(event) => setListingStatus(event.target.value)}
+          >
             <option value="all">All statuses</option>
             {listingStatuses.map((status) => (
               <option key={status} value={status}>
                 {statusLabel(status)}
               </option>
             ))}
+          </select>
+          <select
+            value={listingRebuiltTitle}
+            onChange={(event) => setListingRebuiltTitle(event.target.value)}
+          >
+            <option value="all">All title disclosures</option>
+            <option value="yes">Rebuilt title: Yes</option>
+            <option value="no">Rebuilt title: No</option>
+            <option value="unknown">Rebuilt title: Not provided</option>
           </select>
           <input
             onChange={(event) => setListingLocation(event.target.value)}
@@ -6770,6 +8923,7 @@ function MarketplaceView({
               setListingSearch("");
               setListingBusinessId("all");
               setListingStatus("all");
+              setListingRebuiltTitle("all");
               setListingLocation("");
               setMinPrice("");
               setMaxPrice("");
@@ -6781,7 +8935,9 @@ function MarketplaceView({
         </div>
         {activeFilters.length > 0 && (
           <div className="list-summary">
-            {filteredCars.length.toLocaleString()} of {cars.length.toLocaleString()} listings match {activeFilters.join(" • ")}
+            {filteredCars.length.toLocaleString()} of{" "}
+            {cars.length.toLocaleString()} listings match{" "}
+            {activeFilters.join(" • ")}
           </div>
         )}
         <div className="marketplace-business-list">
@@ -6796,7 +8952,11 @@ function MarketplaceView({
           ))}
           {unassignedListings.length > 0 && (
             <MarketplaceBusinessCard
-              business={{id: "unassigned", name: "Unassigned listings", status: "missing_profile"}}
+              business={{
+                id: "unassigned",
+                name: "Unassigned listings",
+                status: "missing_profile",
+              }}
               listings={unassignedListings}
               totalListings={unassignedListings.length}
               runAction={runAction}
@@ -6815,7 +8975,10 @@ function MarketplaceView({
             {pricing.map((item) => (
               <DataRow
                 key={item.id}
-                title={text(item.destinationCountryName ?? item.countryName, item.id)}
+                title={text(
+                  item.destinationCountryName ?? item.countryName,
+                  item.id,
+                )}
                 subtitle={`${text(item.businessName, "Business")} • ${formatMoney(item.price ?? item.barrelShippingPrice)}`}
                 badge={text(item.status ?? item.isActive, "pricing")}
               />
@@ -6838,7 +9001,11 @@ function MarketplaceView({
                   value={destinationSearch}
                 />
               </label>
-              <button className="secondary-button" disabled={loading} onClick={refreshDestinations}>
+              <button
+                className="secondary-button"
+                disabled={loading}
+                onClick={refreshDestinations}
+              >
                 <RefreshCw className={loading ? "spin" : ""} size={15} />
                 Refresh
               </button>
@@ -6848,7 +9015,8 @@ function MarketplaceView({
           <div className="row-list">
             {destinationSearch.trim() && (
               <div className="list-summary">
-                {filteredDestinations.length.toLocaleString()} of {destinations.length.toLocaleString()} destinations
+                {filteredDestinations.length.toLocaleString()} of{" "}
+                {destinations.length.toLocaleString()} destinations
               </div>
             )}
             {filteredDestinations.map((item) => (
@@ -6859,10 +9027,15 @@ function MarketplaceView({
               />
             ))}
             {destinations.length === 0 && (
-              <div className="empty-state">No business destination rows are loaded. Use Production tools to seed destinations for a business.</div>
+              <div className="empty-state">
+                No business destination rows are loaded. Use Production tools to
+                seed destinations for a business.
+              </div>
             )}
             {destinations.length > 0 && filteredDestinations.length === 0 && (
-              <div className="empty-state">No destinations match this search.</div>
+              <div className="empty-state">
+                No destinations match this search.
+              </div>
             )}
           </div>
         </Panel>
@@ -6895,7 +9068,9 @@ function MarketplaceBusinessCard({
               business.email,
               `${listings.length} shown`,
               `${totalListings} total`,
-            ].filter(Boolean).join(" • ")}
+            ]
+              .filter(Boolean)
+              .join(" • ")}
           </small>
         </div>
         <div className="marketplace-status-strip">
@@ -6909,7 +9084,11 @@ function MarketplaceBusinessCard({
       </div>
       <div className="marketplace-listing-list">
         {listings.map((listing) => (
-          <MarketplaceListingRow key={listing.id} listing={listing} runAction={runAction} />
+          <MarketplaceListingRow
+            key={listing.id}
+            listing={listing}
+            runAction={runAction}
+          />
         ))}
         {listings.length === 0 && (
           <EmptyState text="No listings from this business match the current filters." />
@@ -6929,11 +9108,21 @@ function MarketplaceListingRow({
   const [open, setOpen] = useState(false);
   const details = carListingDetails(listing);
   const imageUrl = listingImageUrl(listing);
+  const rebuiltTitle = typeof listing.isRebuiltTitle === "boolean"
+    ? listing.isRebuiltTitle
+    : null;
   return (
     <article className="marketplace-listing-row">
-      <div className="listing-photo" aria-label={`${listingTitle(listing)} photo`}>
+      <div
+        className="listing-photo"
+        aria-label={`${listingTitle(listing)} photo`}
+      >
         {imageUrl ? (
-          <img alt={`${listingTitle(listing)} photo`} loading="lazy" src={imageUrl} />
+          <img
+            alt={`${listingTitle(listing)} photo`}
+            loading="lazy"
+            src={imageUrl}
+          />
         ) : (
           <div className="listing-photo-placeholder">
             <Car size={30} />
@@ -6950,10 +9139,19 @@ function MarketplaceListingRow({
             text(listing.year, ""),
             formatMoney(listing.price),
             listingLocation(listing),
-          ].filter(Boolean).join(" • ")}
+          ]
+            .filter(Boolean)
+            .join(" • ")}
         </small>
+        <span className={`status-pill compact ${rebuiltTitle === false ? "" : "warning"}`}>
+          Rebuilt title: {rebuiltTitle === null ? "Not provided" : rebuiltTitle ? "Yes" : "No"}
+        </span>
         {details.length > 0 && (
-          <button className="details-toggle" type="button" onClick={() => setOpen((v) => !v)}>
+          <button
+            className="details-toggle"
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+          >
             {open ? "Hide details" : "Details"}
             <span className={`chev ${open ? "up" : ""}`}>▾</span>
           </button>
@@ -6974,16 +9172,15 @@ function MarketplaceListingRow({
         onChange={(event) =>
           runAction(
             "Listing status updated",
-            () => commitStatusChange({
+            () =>
+              commitStatusChange({
                 collectionName: "cars",
                 targetId: listing.id,
                 nextStatus: event.target.value,
               }),
             {
-              confirm:
-                `Change ${listingTitle(listing)} status to ${statusLabel(event.target.value)}?`,
-              confirmFr:
-                `Changer le statut de ${listingTitle(listing)} en ${statusLabel(event.target.value)} ?`,
+              confirm: `Change ${listingTitle(listing)} status to ${statusLabel(event.target.value)}?`,
+              confirmFr: `Changer le statut de ${listingTitle(listing)} en ${statusLabel(event.target.value)} ?`,
             },
           )
         }
@@ -6996,16 +9193,16 @@ function MarketplaceListingRow({
       </select>
       <button
         className="danger-button"
-        onClick={() => runAction(
+        onClick={() =>
+          runAction(
           "Listing deleted",
           () => deleteAdminRecord("cars", listing.id),
           {
-            confirm:
-              `Delete ${listingTitle(listing)}? This cannot be undone from the console.`,
-            confirmFr:
-              `Supprimer ${listingTitle(listing)} ? Cette action ne peut pas être annulée depuis la console.`,
+              confirm: `Delete ${listingTitle(listing)}? This cannot be undone from the console.`,
+              confirmFr: `Supprimer ${listingTitle(listing)} ? Cette action ne peut pas être annulée depuis la console.`,
           },
-        )}
+          )
+        }
       >
         <X size={15} />
         Delete
@@ -7021,17 +9218,27 @@ function DestinationCoverageRow({
   destination: FirestoreRow;
   runAction: ActionRunner;
 }) {
-  const [price, setPrice] = useState(String(destination.barrelShippingPrice ?? ""));
-  const [minDays, setMinDays] = useState(String(destination.deliveryEstimateMinDays ?? ""));
-  const [maxDays, setMaxDays] = useState(String(destination.deliveryEstimateMaxDays ?? ""));
-  const [destinationNote, setDestinationNote] = useState(text(destination.destinationNote ?? destination.details, ""));
+  const [price, setPrice] = useState(
+    String(destination.barrelShippingPrice ?? ""),
+  );
+  const [minDays, setMinDays] = useState(
+    String(destination.deliveryEstimateMinDays ?? ""),
+  );
+  const [maxDays, setMaxDays] = useState(
+    String(destination.deliveryEstimateMaxDays ?? ""),
+  );
+  const [destinationNote, setDestinationNote] = useState(
+    text(destination.destinationNote ?? destination.details, ""),
+  );
   const [active, setActive] = useState(destination.isActive === true);
 
   useEffect(() => {
     setPrice(String(destination.barrelShippingPrice ?? ""));
     setMinDays(String(destination.deliveryEstimateMinDays ?? ""));
     setMaxDays(String(destination.deliveryEstimateMaxDays ?? ""));
-    setDestinationNote(text(destination.destinationNote ?? destination.details, ""));
+    setDestinationNote(
+      text(destination.destinationNote ?? destination.details, ""),
+    );
     setActive(destination.isActive === true);
   }, [destination]);
 
@@ -7041,7 +9248,9 @@ function DestinationCoverageRow({
       throw new Error("Barrel shipping price must be zero or more.");
     }
     if (active && nextPrice <= 0) {
-      throw new Error("Active destinations need a barrel shipping fee greater than 0.");
+      throw new Error(
+        "Active destinations need a barrel shipping fee greater than 0.",
+      );
     }
 
     const hasMin = minDays.trim() !== "";
@@ -7049,10 +9258,20 @@ function DestinationCoverageRow({
     const nextMin = Number(minDays);
     const nextMax = Number(maxDays);
     if (hasMin !== hasMax) {
-      throw new Error("Enter both min and max delivery days, or leave both empty.");
+      throw new Error(
+        "Enter both min and max delivery days, or leave both empty.",
+      );
     }
-    if (hasMin && (!Number.isInteger(nextMin) || !Number.isInteger(nextMax) || nextMin <= 0 || nextMax < nextMin)) {
-      throw new Error("Delivery days must be positive whole numbers, with max greater than or equal to min.");
+    if (
+      hasMin &&
+      (!Number.isInteger(nextMin) ||
+        !Number.isInteger(nextMax) ||
+        nextMin <= 0 ||
+        nextMax < nextMin)
+    ) {
+      throw new Error(
+        "Delivery days must be positive whole numbers, with max greater than or equal to min.",
+      );
     }
 
     const businessId = text(destination.businessId, "");
@@ -7060,7 +9279,10 @@ function DestinationCoverageRow({
     if (!businessId || !countryId) {
       throw new Error("Destination business or country ID is missing.");
     }
-    await httpsCallable(functions, "updateDestinationCoverage")({
+    await httpsCallable(
+      functions,
+      "updateDestinationCoverage",
+    )({
       businessId,
       countryId,
       barrelShippingPrice: nextPrice,
@@ -7074,14 +9296,18 @@ function DestinationCoverageRow({
   return (
     <div className="data-row destination-row">
       <div className="destination-title">
-        <span className="country-flag" aria-hidden="true">{countryFlag(destination.code)}</span>
+        <span className="country-flag" aria-hidden="true">
+          {countryFlag(destination.code)}
+        </span>
         <strong>{text(destination.name, destination.id)}</strong>
         <small>
           {[
             destination.businessName,
             destination.code,
             destination.businessStatus,
-          ].filter(Boolean).join(" • ")}
+          ]
+            .filter(Boolean)
+            .join(" • ")}
         </small>
       </div>
       <div className="destination-controls">
@@ -7146,16 +9372,12 @@ function DestinationCoverageRow({
       <button
         aria-label={`Save ${text(destination.name, destination.id)} destination`}
         className="secondary-button"
-        onClick={() => runAction(
-          "Destination updated",
-          save,
-          {
-            confirm:
-              `Save destination changes for ${text(destination.name, destination.id)}?`,
-            confirmFr:
-              `Enregistrer les changements de destination pour ${text(destination.name, destination.id)} ?`,
-          },
-        )}
+        onClick={() =>
+          runAction("Destination updated", save, {
+            confirm: `Save destination changes for ${text(destination.name, destination.id)}?`,
+            confirmFr: `Enregistrer les changements de destination pour ${text(destination.name, destination.id)} ?`,
+          })
+        }
       >
         <Check size={15} />
         Save
@@ -7216,7 +9438,10 @@ function businessIdentityForRow(row: FirestoreRow, businesses: FirestoreRow[]) {
   const match = businesses.find((business) => belongsToBusiness(row, business));
   return {
     id: optionalText(row.businessId) || optionalText(match?.id),
-    name: optionalText(row.businessName) || optionalText(match?.name) || "Unassigned business",
+    name:
+      optionalText(row.businessName) ||
+      optionalText(match?.name) ||
+      "Unassigned business",
   };
 }
 
@@ -7296,7 +9521,9 @@ function financeLedgerRow({
     row.paymentStatus,
     status,
     amount,
-  ].map((value) => String(value ?? "").toLowerCase()).join(" ");
+  ]
+    .map((value) => String(value ?? "").toLowerCase())
+    .join(" ");
 
   return {
     id: `${sourceCollection}:${sourceId || title}`,
@@ -7350,7 +9577,8 @@ function buildFinanceLedgerRows({
     const merged = {
       ...refund,
       ...transaction,
-      customerUid: transaction.customerUid ?? transaction._parentId ?? refund?.customerUid,
+      customerUid:
+        transaction.customerUid ?? transaction._parentId ?? refund?.customerUid,
       customerEmail: transaction.customerEmail ?? refund?.customerEmail,
       customerName: transaction.customerName ?? refund?.customerName,
       customerPhone: transaction.customerPhone ?? refund?.customerPhone,
@@ -7362,7 +9590,8 @@ function buildFinanceLedgerRows({
       ["amountCents", "walletAppliedCents"],
       ["amount", "walletAppliedAmount"],
     );
-    rows.push(financeLedgerRow({
+    rows.push(
+      financeLedgerRow({
       row: merged,
       source: "wallet",
       sourceLabel: "Wallet transaction",
@@ -7370,16 +9599,20 @@ function buildFinanceLedgerRows({
       title: firstText(merged, ["reason", "type"], "Wallet transaction"),
       amount,
       businesses,
-    }));
+      }),
+    );
   });
 
   refunds.forEach((refund) => {
     const amount = amountFromRecord(refund, ["amountCents"], ["amount"]);
     const sharedBarrelRefund = text(refund.source, "") === "barrel_pool";
-    rows.push(financeLedgerRow({
+    rows.push(
+      financeLedgerRow({
       row: refund,
       source: "refund",
-      sourceLabel: sharedBarrelRefund ? "Shared barrel refund" : "Card return",
+        sourceLabel: sharedBarrelRefund
+          ? "Shared barrel refund"
+          : "Card return",
       sourceCollection: "walletRefundRequests",
       title: firstText(
         refund,
@@ -7388,12 +9621,14 @@ function buildFinanceLedgerRows({
       ),
       amount,
       businesses,
-    }));
+      }),
+    );
   });
 
   barrelPoolBalances.forEach((balance) => {
     const amount = amountFromRecord(balance, ["amountCents"], ["amount"]);
-    rows.push(financeLedgerRow({
+    rows.push(
+      financeLedgerRow({
       row: balance,
       source: "barrel_balance",
       sourceLabel: "Shared barrel balance",
@@ -7405,7 +9640,8 @@ function buildFinanceLedgerRows({
       ),
       amount,
       businesses,
-    }));
+      }),
+    );
   });
 
   shipments.forEach((shipment) => {
@@ -7414,7 +9650,8 @@ function buildFinanceLedgerRows({
       ["totalCents", "priceCents", "amountCents", "walletAppliedCents"],
       ["total", "price", "amount", "walletAppliedAmount"],
     );
-    rows.push(financeLedgerRow({
+    rows.push(
+      financeLedgerRow({
       row: shipment,
       source: "barrel",
       sourceLabel: "Barrel shipment",
@@ -7422,7 +9659,8 @@ function buildFinanceLedgerRows({
       title: relatedRecordTitle(shipment, "Barrel shipment"),
       amount,
       businesses,
-    }));
+      }),
+    );
   });
 
   transports.forEach((transport) => {
@@ -7431,7 +9669,8 @@ function buildFinanceLedgerRows({
       ["totalCents", "priceCents", "amountCents"],
       ["totalCost", "price", "quoteAmount", "amount"],
     );
-    rows.push(financeLedgerRow({
+    rows.push(
+      financeLedgerRow({
       row: transport,
       source: "transport",
       sourceLabel: "Transport",
@@ -7439,7 +9678,8 @@ function buildFinanceLedgerRows({
       title: relatedRecordTitle(transport, "Transport request"),
       amount,
       businesses,
-    }));
+      }),
+    );
   });
 
   parkedCars.forEach((parking) => {
@@ -7448,7 +9688,8 @@ function buildFinanceLedgerRows({
       ["totalCents", "amountCents"],
       ["totalCost", "price", "amount"],
     );
-    rows.push(financeLedgerRow({
+    rows.push(
+      financeLedgerRow({
       row: parking,
       source: "parking",
       sourceLabel: "Parking",
@@ -7456,7 +9697,8 @@ function buildFinanceLedgerRows({
       title: relatedRecordTitle(parking, "Parked car"),
       amount,
       businesses,
-    }));
+      }),
+    );
   });
 
   purchases.forEach((purchase) => {
@@ -7465,7 +9707,8 @@ function buildFinanceLedgerRows({
       ["depositAmountCents", "amountCents"],
       ["depositAmount", "amount", "price", "listingPrice"],
     );
-    rows.push(financeLedgerRow({
+    rows.push(
+      financeLedgerRow({
       row: purchase,
       source: "purchase",
       sourceLabel: "Car purchase",
@@ -7474,14 +9717,16 @@ function buildFinanceLedgerRows({
       title: relatedRecordTitle(purchase, "Car purchase"),
       amount,
       businesses,
-    }));
+      }),
+    );
   });
 
   cars
       .filter((car) => ["sold", "reserved"].includes(rowStatus(car)))
       .forEach((car) => {
         const amount = amountFromRecord(car, ["priceCents"], ["price"]);
-        rows.push(financeLedgerRow({
+      rows.push(
+        financeLedgerRow({
           row: car,
           source: "listing",
           sourceLabel: "Listing sale state",
@@ -7489,7 +9734,8 @@ function buildFinanceLedgerRows({
           title: listingTitle(car),
           amount,
           businesses,
-        }));
+        }),
+      );
       });
 
   return rows.sort((a, b) => b.occurredAtMs - a.occurredAtMs);
@@ -7507,7 +9753,9 @@ function supportDraftFromLedgerRow(row: FinanceLedgerRow): SupportDraft {
       row.customerName ? `Customer: ${row.customerName}.` : "",
       row.customerEmail ? `Email: ${row.customerEmail}.` : "",
       row.customerPhone ? `Phone: ${row.customerPhone}.` : "",
-    ].filter(Boolean).join(" "),
+    ]
+      .filter(Boolean)
+      .join(" "),
     customerName: row.customerName,
     customerEmail: row.customerEmail,
     customerPhone: row.customerPhone,
@@ -7517,7 +9765,11 @@ function supportDraftFromLedgerRow(row: FinanceLedgerRow): SupportDraft {
   };
 }
 
-function amountFromWallet(wallet: FirestoreRow | undefined, centsField: string, amountField: string) {
+function amountFromWallet(
+  wallet: FirestoreRow | undefined,
+  centsField: string,
+  amountField: string,
+) {
   if (!wallet) return 0;
   const cents = Number(wallet[centsField] ?? 0);
   if (Number.isFinite(cents) && cents !== 0) return cents / 100;
@@ -7526,7 +9778,10 @@ function amountFromWallet(wallet: FirestoreRow | undefined, centsField: string, 
 }
 
 function refundCustomerId(item: FirestoreRow) {
-  return text(item.customerUid ?? item.uid ?? item.userId ?? item.customerId, "");
+  return text(
+    item.customerUid ?? item.uid ?? item.userId ?? item.customerId,
+    "",
+  );
 }
 
 function refundCustomerEmail(item: FirestoreRow) {
@@ -7568,16 +9823,26 @@ function RefundRequestRow({
   wallet?: FirestoreRow;
   user?: FirestoreRow;
   canManage: boolean;
-  reviewRefund: (requestId: string, decision: "completed" | "rejected", note: string) => Promise<void>;
+  reviewRefund: (
+    requestId: string,
+    decision: "completed" | "rejected",
+    note: string,
+  ) => Promise<void>;
   runAction: ActionRunner;
 }) {
   const [note, setNote] = useState("");
   const status = rowStatus(item);
   const currency = text(item.currency, "USD");
   const balance = amountFromWallet(wallet, "balanceCents", "balance");
-  const pending = amountFromWallet(wallet, "pendingRefundCents", "pendingRefund");
+  const pending = amountFromWallet(
+    wallet,
+    "pendingRefundCents",
+    "pendingRefund",
+  );
   const customerId = refundCustomerId(item);
-  const accountLabel = user ? userDisplayName(user) : refundCustomerEmail(item) || customerId || "Customer";
+  const accountLabel = user
+    ? userDisplayName(user)
+    : refundCustomerEmail(item) || customerId || "Customer";
   const walletLabel = wallet
     ? `Wallet available ${formatMoney(balance, currency)} • Pending return ${formatMoney(pending, currency)}`
     : "No wallet account loaded";
@@ -7592,12 +9857,20 @@ function RefundRequestRow({
             refundCustomerEmail(item),
             customerId ? `UID ${customerId}` : "",
             formatDate(item.createdAt),
-          ].filter(Boolean).join(" • ")}
+          ]
+            .filter(Boolean)
+            .join(" • ")}
         </small>
         <div className="finance-account-grid">
-          <span>Wallet balance <b>{formatMoney(balance, currency)}</b></span>
-          <span>Pending return <b>{formatMoney(pending, currency)}</b></span>
-          <span>Request amount <b>{formatMoney(item.amount, currency)}</b></span>
+          <span>
+            Wallet balance <b>{formatMoney(balance, currency)}</b>
+          </span>
+          <span>
+            Pending return <b>{formatMoney(pending, currency)}</b>
+          </span>
+          <span>
+            Request amount <b>{formatMoney(item.amount, currency)}</b>
+          </span>
           <span>{walletLabel}</span>
         </div>
       </div>
@@ -7615,23 +9888,25 @@ function RefundRequestRow({
           <div className="row-actions">
             <button
               className="secondary-button"
-              onClick={() => runAction(
+              onClick={() =>
+                runAction(
                 "Refund request completed",
                 () => reviewRefund(item.id, "completed", note),
                 {
-                  confirm:
-                    "Mark this refund request completed?",
+                    confirm: "Mark this refund request completed?",
                   confirmFr:
                     "Marquer cette demande de remboursement comme terminée ?",
                 },
-              )}
+                )
+              }
             >
               <Check size={15} />
               Complete
             </button>
             <button
               className="danger-button"
-              onClick={() => runAction(
+              onClick={() =>
+                runAction(
                 "Refund request rejected",
                 () => reviewRefund(item.id, "rejected", note),
                 {
@@ -7640,7 +9915,8 @@ function RefundRequestRow({
                   confirmFr:
                     "Renvoyer ce montant en attente dans le portefeuille du client ?",
                 },
-              )}
+                )
+              }
             >
               <X size={15} />
               Reject
@@ -7648,7 +9924,9 @@ function RefundRequestRow({
           </div>
         </div>
       ) : (
-        <span className="muted-action">{status === "pending" ? "View only" : "Reviewed"}</span>
+        <span className="muted-action">
+          {status === "pending" ? "View only" : "Reviewed"}
+        </span>
       )}
     </div>
   );
@@ -7691,23 +9969,33 @@ function FinanceView({
   const [businessFilter, setBusinessFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [supportDraft, setSupportDraft] = useState<SupportDraft>(() => emptySupportDraft());
+  const [supportDraft, setSupportDraft] = useState<SupportDraft>(() =>
+    emptySupportDraft(),
+  );
   const totalPending = refunds
     .filter((item) => item.status === "pending")
     .reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
-  const pendingBarrelBalanceCount = barrelPoolBalances.filter((item) => item.status === "pending").length;
+  const pendingBarrelBalanceCount = barrelPoolBalances.filter(
+    (item) => item.status === "pending",
+  ).length;
   const pendingBarrelBalanceTotal = barrelPoolBalances
     .filter((item) => item.status === "pending")
-    .reduce((sum, item) => sum + amountFromRecord(item, ["amountCents"], ["amount"]), 0);
+    .reduce(
+      (sum, item) => sum + amountFromRecord(item, ["amountCents"], ["amount"]),
+      0,
+    );
   const walletBalanceTotal = wallets.reduce(
     (sum, wallet) => sum + amountFromWallet(wallet, "balanceCents", "balance"),
     0,
   );
   const pendingWalletTotal = wallets.reduce(
-    (sum, wallet) => sum + amountFromWallet(wallet, "pendingRefundCents", "pendingRefund"),
+    (sum, wallet) =>
+      sum + amountFromWallet(wallet, "pendingRefundCents", "pendingRefund"),
     0,
   );
-  const ledgerRows = useMemo(() => buildFinanceLedgerRows({
+  const ledgerRows = useMemo(
+    () =>
+      buildFinanceLedgerRows({
     walletTransactions,
     refunds,
     barrelPoolBalances,
@@ -7717,7 +10005,8 @@ function FinanceView({
     purchases,
     cars,
     businesses,
-  }), [
+      }),
+    [
     walletTransactions,
     refunds,
     barrelPoolBalances,
@@ -7727,41 +10016,75 @@ function FinanceView({
     purchases,
     cars,
     businesses,
-  ]);
+    ],
+  );
   const sourceOptions = useMemo(() => {
     const options = new Map<string, string>();
     ledgerRows.forEach((row) => options.set(row.source, row.sourceLabel));
-    return Array.from(options.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+    return Array.from(options.entries()).sort((a, b) =>
+      a[1].localeCompare(b[1]),
+    );
   }, [ledgerRows]);
   const statusOptions = useMemo(() => {
-    return Array.from(new Set(ledgerRows.map((row) => row.status).filter(Boolean))).sort();
+    return Array.from(
+      new Set(ledgerRows.map((row) => row.status).filter(Boolean)),
+    ).sort();
   }, [ledgerRows]);
   const filteredLedgerRows = useMemo(() => {
     const needle = ledgerSearch.trim().toLowerCase();
-    const selectedBusiness = businesses.find((business) => business.id === businessFilter);
-    const selectedBusinessName = optionalText(selectedBusiness?.name).toLowerCase();
+    const selectedBusiness = businesses.find(
+      (business) => business.id === businessFilter,
+    );
+    const selectedBusinessName = optionalText(
+      selectedBusiness?.name,
+    ).toLowerCase();
     return ledgerRows.filter((row) => {
       const matchesSearch = !needle || row.searchText.includes(needle);
-      const matchesBusiness = businessFilter === "all" ||
+      const matchesBusiness =
+        businessFilter === "all" ||
         row.businessId === businessFilter ||
         row.businessName.toLowerCase() === selectedBusinessName;
-      const matchesSource = sourceFilter === "all" || row.source === sourceFilter;
-      const matchesStatus = statusFilter === "all" || row.status === statusFilter;
+      const matchesSource =
+        sourceFilter === "all" || row.source === sourceFilter;
+      const matchesStatus =
+        statusFilter === "all" || row.status === statusFilter;
       return matchesSearch && matchesBusiness && matchesSource && matchesStatus;
     });
-  }, [businessFilter, businesses, ledgerRows, ledgerSearch, sourceFilter, statusFilter]);
-  const ledgerAmountTotal = filteredLedgerRows.reduce((sum, row) => sum + row.amount, 0);
-  const businessOptions = businesses.filter((business) => business._inferred !== true);
+  }, [
+    businessFilter,
+    businesses,
+    ledgerRows,
+    ledgerSearch,
+    sourceFilter,
+    statusFilter,
+  ]);
+  const ledgerAmountTotal = filteredLedgerRows.reduce(
+    (sum, row) => sum + row.amount,
+    0,
+  );
+  const businessOptions = businesses.filter(
+    (business) => business._inferred !== true,
+  );
 
-  async function reviewRefund(requestId: string, decision: "completed" | "rejected", note: string) {
-    await httpsCallable(functions, "reviewWalletRefundRequest")({
+  async function reviewRefund(
+    requestId: string,
+    decision: "completed" | "rejected",
+    note: string,
+  ) {
+    await httpsCallable(
+      functions,
+      "reviewWalletRefundRequest",
+    )({
       requestId,
       decision,
       note: note.trim(),
     });
   }
   async function markBalanceCollected(requestId: string, note: string) {
-    await httpsCallable(functions, "markBarrelPoolBalanceCollected")({
+    await httpsCallable(
+      functions,
+      "markBarrelPoolBalanceCollected",
+    )({
       requestId,
       note: note.trim(),
     });
@@ -7773,14 +10096,20 @@ function FinanceView({
         title="Finance queue"
         description="Monitor wallet balance return requests and finance readiness."
         stats={[
-          ["Pending refunds", String(refunds.filter((item) => item.status === "pending").length)],
+          [
+            "Pending refunds",
+            String(refunds.filter((item) => item.status === "pending").length),
+          ],
           ["Pending amount", formatMoney(totalPending)],
           ["Shared balances due", String(pendingBarrelBalanceCount)],
           ["Balance due amount", formatMoney(pendingBarrelBalanceTotal)],
           ["Wallet balance", formatMoney(walletBalanceTotal)],
           ["Pending in wallets", formatMoney(pendingWalletTotal)],
           ["Ledger rows", String(ledgerRows.length)],
-          ["Customers", String(users.filter((item) => item.role === "customer").length)],
+          [
+            "Customers",
+            String(users.filter((item) => item.role === "customer").length),
+          ],
         ]}
       />
       <div className="metric-grid">
@@ -7790,7 +10119,9 @@ function FinanceView({
         </article>
         <article className="metric attention">
           <span>Refund requests</span>
-          <strong>{refunds.filter((item) => item.status === "pending").length}</strong>
+          <strong>
+            {refunds.filter((item) => item.status === "pending").length}
+          </strong>
         </article>
         <article className="metric attention">
           <span>Shared balances due</span>
@@ -7805,7 +10136,10 @@ function FinanceView({
           <strong>{formatMoney(pendingWalletTotal)}</strong>
         </article>
       </div>
-      <Panel title="All business transactions" icon={<BadgeDollarSign size={18} />}>
+      <Panel
+        title="All business transactions"
+        icon={<BadgeDollarSign size={18} />}
+      >
         <div className="marketplace-filter-grid finance-filter-grid">
           <label className="compact-search wide">
             <Search size={15} />
@@ -7815,7 +10149,10 @@ function FinanceView({
               value={ledgerSearch}
             />
           </label>
-          <select value={businessFilter} onChange={(event) => setBusinessFilter(event.target.value)}>
+          <select
+            value={businessFilter}
+            onChange={(event) => setBusinessFilter(event.target.value)}
+          >
             <option value="all">All businesses</option>
             {businessOptions.map((business) => (
               <option key={business.id} value={business.id}>
@@ -7823,16 +10160,26 @@ function FinanceView({
               </option>
             ))}
           </select>
-          <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}>
+          <select
+            value={sourceFilter}
+            onChange={(event) => setSourceFilter(event.target.value)}
+          >
             <option value="all">All sources</option>
             {sourceOptions.map(([source, label]) => (
-              <option key={source} value={source}>{label}</option>
+              <option key={source} value={source}>
+                {label}
+              </option>
             ))}
           </select>
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+          >
             <option value="all">All statuses</option>
             {statusOptions.map((status) => (
-              <option key={status} value={status}>{statusLabel(status)}</option>
+              <option key={status} value={status}>
+                {statusLabel(status)}
+              </option>
             ))}
           </select>
           <button
@@ -7849,7 +10196,9 @@ function FinanceView({
           </button>
         </div>
         <div className="list-summary">
-          Showing {filteredLedgerRows.length.toLocaleString()} of {ledgerRows.length.toLocaleString()} finance rows • visible amount {formatMoney(ledgerAmountTotal)}
+          Showing {filteredLedgerRows.length.toLocaleString()} of{" "}
+          {ledgerRows.length.toLocaleString()} finance rows • visible amount{" "}
+          {formatMoney(ledgerAmountTotal)}
         </div>
         <div className="row-list finance-ledger-list">
           {filteredLedgerRows.map((row) => (
@@ -7860,7 +10209,9 @@ function FinanceView({
               canSendSupport={canSendSupport}
               markBalanceCollected={markBalanceCollected}
               runAction={runAction}
-              onMessageBusiness={() => setSupportDraft(supportDraftFromLedgerRow(row))}
+              onMessageBusiness={() =>
+                setSupportDraft(supportDraftFromLedgerRow(row))
+              }
             />
           ))}
           {ledgerRows.length === 0 && (
@@ -7881,11 +10232,15 @@ function FinanceView({
           />
         ) : (
           <div className="info-band">
-            This role can view finance records but cannot send business support requests.
+            This role can view finance records but cannot send business support
+            requests.
           </div>
         )}
       </Panel>
-      <Panel title="Recent business support requests" icon={<ClipboardList size={18} />}>
+      <Panel
+        title="Recent business support requests"
+        icon={<ClipboardList size={18} />}
+      >
         <div className="row-list compact">
           {supportRequests.map((request) => (
             <DataRow
@@ -7893,10 +10248,14 @@ function FinanceView({
               title={text(request.subject, "Support request")}
               subtitle={[
                 request.businessName,
-                request.customerEmail ?? request.customerName ?? request.customerPhone,
+                request.customerEmail ??
+                  request.customerName ??
+                  request.customerPhone,
                 request.relatedLabel,
                 formatDate(request.createdAt),
-              ].filter(Boolean).join(" • ")}
+              ]
+                .filter(Boolean)
+                .join(" • ")}
               badge={`${statusLabel(request.status)} • ${text(request.priority, "normal")}`}
             />
           ))}
@@ -7905,9 +10264,14 @@ function FinanceView({
           )}
         </div>
       </Panel>
-      <Panel title="Wallet card return requests" icon={<BadgeDollarSign size={18} />}>
+      <Panel
+        title="Wallet card return requests"
+        icon={<BadgeDollarSign size={18} />}
+      >
         <div className="info-band">
-          Review the customer account and wallet balance before action. Complete after the external card return is done. Reject moves the pending amount back to the customer's wallet.
+          Review the customer account and wallet balance before action. Complete
+          after the external card return is done. Reject moves the pending
+          amount back to the customer's wallet.
         </div>
         <div className="row-list">
           {refunds.map((item) => (
@@ -7922,7 +10286,9 @@ function FinanceView({
             />
           ))}
           {refunds.length === 0 && (
-            <div className="empty-state">No wallet card return requests are loaded.</div>
+            <div className="empty-state">
+              No wallet card return requests are loaded.
+            </div>
           )}
         </div>
       </Panel>
@@ -7958,20 +10324,50 @@ function FinanceLedgerRecordRow({
           {[
             row.sourceLabel,
             row.businessName,
-            row.customerName || row.customerEmail || row.customerPhone || "No customer contact",
+            row.customerName ||
+              row.customerEmail ||
+              row.customerPhone ||
+              "No customer contact",
             formatDate(row.occurredAt),
-          ].filter(Boolean).join(" • ")}
+          ]
+            .filter(Boolean)
+            .join(" • ")}
         </small>
         <div className="finance-account-grid">
-          <span>Amount <b>{formatMoney(row.amount, row.currency)}</b></span>
-          <span>Business <b>{row.businessName}</b></span>
-          <span>Customer <b>{row.customerName || row.customerEmail || row.customerPhone || "Unknown"}</b></span>
-          <span>Record <b>{row.sourceId || row.relatedLabel}</b></span>
-          <span>Status <b>{statusLabel(row.status)}</b></span>
-          <span>Contact <b>{[row.customerEmail, row.customerPhone].filter(Boolean).join(" • ") || "Not set"}</b></span>
+          <span>
+            Amount <b>{formatMoney(row.amount, row.currency)}</b>
+          </span>
+          <span>
+            Business <b>{row.businessName}</b>
+          </span>
+          <span>
+            Customer{" "}
+            <b>
+              {row.customerName ||
+                row.customerEmail ||
+                row.customerPhone ||
+                "Unknown"}
+            </b>
+          </span>
+          <span>
+            Record <b>{row.sourceId || row.relatedLabel}</b>
+          </span>
+          <span>
+            Status <b>{statusLabel(row.status)}</b>
+          </span>
+          <span>
+            Contact{" "}
+            <b>
+              {[row.customerEmail, row.customerPhone]
+                .filter(Boolean)
+                .join(" • ") || "Not set"}
+            </b>
+          </span>
         </div>
       </div>
-      <span className={`status-pill ${row.status === "pending" ? "warning" : ""}`}>
+      <span
+        className={`status-pill ${row.status === "pending" ? "warning" : ""}`}
+      >
         {statusLabel(row.status)}
       </span>
       <div className="finance-review-tools">
@@ -7984,8 +10380,7 @@ function FinanceLedgerRecordRow({
                 "Shared barrel balance collected",
                 () => markBalanceCollected(row.sourceId, note),
                 {
-                  confirm:
-                    "Mark this shared barrel balance as collected?",
+                  confirm: "Mark this shared barrel balance as collected?",
                   confirmFr:
                     "Marquer ce solde de baril partagé comme encaissé ?",
                 },
@@ -8022,8 +10417,12 @@ function ToolsView({
   const [legacyBusinessName, setLegacyBusinessName] = useState("");
   const [backfillCarIds, setBackfillCarIds] = useState("");
   const [reassignExplicitCarIds, setReassignExplicitCarIds] = useState(false);
-  const [backfillResult, setBackfillResult] = useState<Record<string, unknown> | null>(null);
-  const selectedBusinessId = destinationBusinessId || text(businesses[0]?.id, "");
+  const [backfillResult, setBackfillResult] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const selectedBusinessId =
+    destinationBusinessId || text(businesses[0]?.id, "");
   const reviewedBackfillCarIds = useMemo(() => {
     const typedIds = parseDelimitedIds(backfillCarIds);
     if (typedIds.length) return typedIds;
@@ -8036,9 +10435,14 @@ function ToolsView({
     if (!selectedBusinessId) throw new Error("Select a business first.");
     const carIds = parseDelimitedIds(backfillCarIds);
     if (reassignExplicitCarIds && carIds.length === 0) {
-      throw new Error("Wrong/default ownership fixes require explicit car IDs.");
+      throw new Error(
+        "Wrong/default ownership fixes require explicit car IDs.",
+      );
     }
-    const result = await httpsCallable(functions, "backfillBusinessCarListings")({
+    const result = await httpsCallable(
+      functions,
+      "backfillBusinessCarListings",
+    )({
       businessId: selectedBusinessId,
       legacyBusinessName: legacyBusinessName.trim(),
       carIds,
@@ -8051,9 +10455,14 @@ function ToolsView({
   async function applyReviewedCarBackfill() {
     if (!selectedBusinessId) throw new Error("Select a business first.");
     if (reviewedBackfillCarIds.length === 0) {
-      throw new Error("Run a dry run or enter explicit car IDs before applying.");
+      throw new Error(
+        "Run a dry run or enter explicit car IDs before applying.",
+      );
     }
-    const result = await httpsCallable(functions, "backfillBusinessCarListings")({
+    const result = await httpsCallable(
+      functions,
+      "backfillBusinessCarListings",
+    )({
       businessId: selectedBusinessId,
       carIds: reviewedBackfillCarIds,
       reassignExplicitCarIds,
@@ -8069,7 +10478,12 @@ function ToolsView({
         description="Run setup utilities that already exist in the Firebase backend."
         stats={[
           ["Businesses", String(businesses.length)],
-          ["Approved", String(countWhere(businesses, (item) => rowStatus(item) === "approved"))],
+          [
+            "Approved",
+            String(
+              countWhere(businesses, (item) => rowStatus(item) === "approved"),
+            ),
+          ],
         ]}
       />
       <Panel title="Production setup tools" icon={<DatabaseZap size={18} />}>
@@ -8081,8 +10495,7 @@ function ToolsView({
                 "Default business migration complete",
                 () => httpsCallable(functions, "migrateDefaultBusiness")({}),
                 {
-                  confirm:
-                    "Run the default business migration now?",
+                  confirm: "Run the default business migration now?",
                   confirmFr:
                     "Lancer maintenant la migration de l’entreprise par défaut ?",
                 },
@@ -8097,7 +10510,11 @@ function ToolsView({
             onClick={() =>
               runAction(
                 "Destination country seed complete",
-                () => httpsCallable(functions, "seedDestinationCountries")({
+                () =>
+                  httpsCallable(
+                    functions,
+                    "seedDestinationCountries",
+                  )({
                     businessId: selectedBusinessId,
                   }),
                 {
@@ -8118,7 +10535,9 @@ function ToolsView({
             value={selectedBusinessId}
             onChange={(event) => setDestinationBusinessId(event.target.value)}
           >
-            {businesses.length === 0 && <option value="">No businesses loaded</option>}
+            {businesses.length === 0 && (
+              <option value="">No businesses loaded</option>
+            )}
             {businesses.map((business) => (
               <option key={business.id} value={business.id}>
                 {text(business.name, business.id)}
@@ -8135,7 +10554,9 @@ function ToolsView({
               value={selectedBusinessId}
               onChange={(event) => setDestinationBusinessId(event.target.value)}
             >
-              {businesses.length === 0 && <option value="">No businesses loaded</option>}
+              {businesses.length === 0 && (
+                <option value="">No businesses loaded</option>
+              )}
               {businesses.map((business) => (
                 <option key={business.id} value={business.id}>
                   {text(business.name, business.id)} ({business.id})
@@ -8163,10 +10584,15 @@ function ToolsView({
           <div className="switch-line wide-field">
             <input
               checked={reassignExplicitCarIds}
-              onChange={(event) => setReassignExplicitCarIds(event.target.checked)}
+              onChange={(event) =>
+                setReassignExplicitCarIds(event.target.checked)
+              }
               type="checkbox"
             />
-            <span>Allow reassignment of explicit IDs that already have a wrong/default businessId</span>
+            <span>
+              Allow reassignment of explicit IDs that already have a
+              wrong/default businessId
+            </span>
           </div>
         </div>
         <div className="tool-list">
@@ -8178,8 +10604,7 @@ function ToolsView({
                 "Legacy car backfill dry run complete",
                 runCarBackfillDryRun,
                 {
-                  confirm:
-                    "Run a dry run for the legacy car backfill?",
+                  confirm: "Run a dry run for the legacy car backfill?",
                   confirmFr:
                     "Lancer une simulation du rattachement des anciennes voitures ?",
                 },
@@ -8192,16 +10617,16 @@ function ToolsView({
           </button>
           <button
             className="primary-button"
-            disabled={!selectedBusinessId || reviewedBackfillCarIds.length === 0}
+            disabled={
+              !selectedBusinessId || reviewedBackfillCarIds.length === 0
+            }
             onClick={() =>
               runAction(
                 "Legacy car backfill applied",
                 applyReviewedCarBackfill,
                 {
-                  confirm:
-                    `Apply legacy car backfill to ${reviewedBackfillCarIds.length} reviewed car ID${reviewedBackfillCarIds.length === 1 ? "" : "s"}?`,
-                  confirmFr:
-                    `Appliquer le rattachement des anciennes voitures à ${reviewedBackfillCarIds.length} identifiant${reviewedBackfillCarIds.length === 1 ? "" : "s"} vérifié${reviewedBackfillCarIds.length === 1 ? "" : "s"} ?`,
+                  confirm: `Apply legacy car backfill to ${reviewedBackfillCarIds.length} reviewed car ID${reviewedBackfillCarIds.length === 1 ? "" : "s"}?`,
+                  confirmFr: `Appliquer le rattachement des anciennes voitures à ${reviewedBackfillCarIds.length} identifiant${reviewedBackfillCarIds.length === 1 ? "" : "s"} vérifié${reviewedBackfillCarIds.length === 1 ? "" : "s"} ?`,
                 },
               )
             }
@@ -8221,7 +10646,8 @@ function ToolsView({
         <div className="compact-stats">
           {businesses.map((business) => (
             <span key={business.id}>
-              {text(business.name, business.id)} <b>{text(business.status, "pending")}</b>
+              {text(business.name, business.id)}{" "}
+              <b>{text(business.status, "pending")}</b>
             </span>
           ))}
         </div>
@@ -8231,12 +10657,14 @@ function ToolsView({
 }
 
 function parseDelimitedIds(value: string) {
-  return Array.from(new Set(
+  return Array.from(
+    new Set(
     value
       .split(/[\s,]+/)
       .map((item) => item.trim())
       .filter(Boolean),
-  )).slice(0, 200);
+    ),
+  ).slice(0, 200);
 }
 
 function CollectionRow({
@@ -8248,6 +10676,7 @@ function CollectionRow({
   collectionName,
   title,
   details,
+  readOnlyReason,
   runAction,
   typeBadge,
 }: {
@@ -8259,6 +10688,7 @@ function CollectionRow({
   collectionName: string;
   title: string;
   details?: (item: FirestoreRow) => Array<[string, string]>;
+  readOnlyReason?: string;
   runAction: ActionRunner;
   typeBadge?: string;
 }) {
@@ -8270,8 +10700,15 @@ function CollectionRow({
         {typeBadge && <span className="type-badge">{typeBadge}</span>}
         <strong>{label(item)}</strong>
         <small>{subtitle(item)}</small>
+        {readOnlyReason && (
+          <small className="inline-note">{readOnlyReason}</small>
+        )}
         {rowDetails.length > 0 && (
-          <button className="details-toggle" type="button" onClick={() => setOpen((v) => !v)}>
+          <button
+            className="details-toggle"
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+          >
             {open ? "Hide details" : "Details"}
             <span className={`chev ${open ? "up" : ""}`}>▾</span>
           </button>
@@ -8287,47 +10724,54 @@ function CollectionRow({
           </dl>
         )}
       </div>
-      <select
-        value={text(item[statusField], "pending")}
-        onChange={(event) =>
-          runAction(
-            `${title} updated`,
-            () => commitStatusChange({
-                collectionName,
-                targetId: item.id,
-                nextStatus: event.target.value,
-              }),
-            {
-              confirm:
-                `Change ${label(item)} status to ${statusLabel(event.target.value)}?`,
-              confirmFr:
-                `Changer le statut de ${label(item)} en ${statusLabel(event.target.value)} ?`,
-            },
-          )
-        }
-      >
-        {statusOptions.map((status) => (
-          <option key={status} value={status}>
-            {statusLabel(status)}
-          </option>
-        ))}
-      </select>
-      <button
-        className="danger-button"
-        onClick={() => runAction(
-          `${title} item deleted`,
-          () => deleteAdminRecord(collectionName, item.id),
-          {
-            confirm:
-              `Delete ${label(item)}? This cannot be undone from the console.`,
-            confirmFr:
-              `Supprimer ${label(item)} ? Cette action ne peut pas être annulée depuis la console.`,
-          },
-        )}
-      >
-        <X size={15} />
-        Delete
-      </button>
+      {readOnlyReason ? (
+        <span className="status-pill compact warning">
+          {statusLabel(item[statusField])}
+        </span>
+      ) : (
+        <>
+          <select
+            value={text(item[statusField], "pending")}
+            onChange={(event) =>
+              runAction(
+                `${title} updated`,
+                () =>
+                  commitStatusChange({
+                    collectionName,
+                    targetId: item.id,
+                    nextStatus: event.target.value,
+                  }),
+                {
+                  confirm: `Change ${label(item)} status to ${statusLabel(event.target.value)}?`,
+                  confirmFr: `Changer le statut de ${label(item)} en ${statusLabel(event.target.value)} ?`,
+                },
+              )
+            }
+          >
+            {statusOptions.map((status) => (
+              <option key={status} value={status}>
+                {statusLabel(status)}
+              </option>
+            ))}
+          </select>
+          <button
+            className="danger-button"
+            onClick={() =>
+              runAction(
+              `${title} item deleted`,
+              () => deleteAdminRecord(collectionName, item.id),
+              {
+                  confirm: `Delete ${label(item)}? This cannot be undone from the console.`,
+                  confirmFr: `Supprimer ${label(item)} ? Cette action ne peut pas être annulée depuis la console.`,
+              },
+              )
+            }
+          >
+            <X size={15} />
+            Delete
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -8344,7 +10788,11 @@ function SearchBox({
   return (
     <label className="search-box">
       <Search size={17} />
-      <input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+      />
     </label>
   );
 }
@@ -8418,7 +10866,7 @@ function tabHint(tab: Tab) {
     today: "What needs you now",
     businesses: "Partner workspaces",
     people: "Admins & customers",
-    operations: "Barrels, transport, parking",
+    operations: "Barrels, freight, transport, parking",
     marketplace: "Listings by business",
     finance: "Refund queue",
     support: "Escalated cases",

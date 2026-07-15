@@ -4,9 +4,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
+const useFirebaseEmulators = bool.fromEnvironment('USE_FIREBASE_EMULATORS');
+
 Future<void> connectFirebaseEmulatorsIfRequested() async {
-  const useEmulators = bool.fromEnvironment('USE_FIREBASE_EMULATORS');
-  if (!useEmulators) return;
+  if (!useFirebaseEmulators) return;
 
   const host = String.fromEnvironment(
     'FIREBASE_EMULATOR_HOST',

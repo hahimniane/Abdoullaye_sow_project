@@ -4,4 +4,9 @@
 output/
 tmp/
 deploy/node_modules/
+deploy/firebase-debug.log
 admin_web/.firebase/
+
+# Release binaries are generated artifacts, not source. Store signed release
+# outputs in the CI/release system with provenance instead of committing them.
+release_artifacts/*

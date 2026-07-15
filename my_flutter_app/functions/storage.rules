@@ -1,22 +1,25 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    function hasUserProfile() {
+      return request.auth != null &&
+        firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
     function userProfile() {
       return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
     }
 
-    function isPlatformAdmin() {
-      return request.auth != null &&
-        (
-          ('email' in request.auth.token && request.auth.token.email == 'admin@gmail.com') ||
-          userProfile().role == 'admin' ||
-          ('platformAdmin' in userProfile() && userProfile().platformAdmin == true)
-        );
+    function isAdmin() {
+      return hasUserProfile() &&
+        request.auth.token.email_verified == true &&
+        userProfile().role == 'admin';
     }
 
     function canManageBusinessLogo(businessId) {
-      return isPlatformAdmin() ||
+      return hasAdminCapability('businesses') ||
         (
+          hasUserProfile() &&
           (
             userProfile().businessId == businessId ||
             userOwnsBusinessDocument(businessId)
@@ -32,51 +35,58 @@ service firebase.storage {
     }
 
     function isLinkedToBusiness(businessId) {
-      return userProfile().businessId == businessId ||
-        userOwnsBusinessDocument(businessId);
+      return hasUserProfile() &&
+        (userProfile().businessId == businessId ||
+         userOwnsBusinessDocument(businessId));
     }
 
     function userAdminRole() {
-      return userProfile().adminRole is string ? userProfile().adminRole : "";
+      return userProfile().get('adminRole', '') is string ?
+        userProfile().get('adminRole', '') : "";
     }
 
     function isSuperAdmin() {
       return request.auth != null &&
-        userProfile().role == 'admin' &&
-        (
-          !(userProfile().adminRole is string) ||
-          userProfile().adminRole == 'superAdmin'
-        );
+        hasUserProfile() && userProfile().role == 'admin' &&
+        userProfile().get('adminRole', '') == 'superAdmin';
     }
 
-    function hasDynamicSupportCapability() {
+    function hasDynamicAdminCapability(section) {
       return firestore.exists(/databases/(default)/documents/platformConfig/permissions) &&
         userAdminRole() in firestore.get(/databases/(default)/documents/platformConfig/permissions).data.roles &&
-        firestore.get(/databases/(default)/documents/platformConfig/permissions).data.roles[userAdminRole()].sections.support == 'manage';
+        firestore.get(/databases/(default)/documents/platformConfig/permissions).data.roles[userAdminRole()].sections is map &&
+        section in firestore.get(/databases/(default)/documents/platformConfig/permissions).data.roles[userAdminRole()].sections &&
+        firestore.get(/databases/(default)/documents/platformConfig/permissions).data.roles[userAdminRole()].sections[section] == 'manage';
     }
 
-    function isSupportAdmin() {
-      return request.auth != null &&
-        userProfile().role == 'admin' &&
+    function hasBuiltInAdminCapability(section) {
+      return isSuperAdmin() ||
         (
-          isSuperAdmin() ||
-          userAdminRole() == 'operationsManager' ||
-          userAdminRole() == 'financeManager' ||
-          userAdminRole() == 'supportAdmin' ||
-          hasDynamicSupportCapability()
-        );
+          userAdminRole() == 'operationsManager' &&
+          section in ['businesses', 'marketplace', 'operations', 'support', 'website']
+        ) ||
+        (
+          userAdminRole() == 'financeManager' &&
+          section in ['finance', 'support']
+        ) ||
+        (userAdminRole() == 'supportAdmin' && section == 'support') ||
+        (userAdminRole() == 'contentManager' && section == 'website');
+    }
+
+    function hasAdminCapability(section) {
+      return isAdmin() &&
+        (hasBuiltInAdminCapability(section) ||
+         hasDynamicAdminCapability(section));
     }
 
     function hasBusinessSection(section) {
-      return
-        !('businessPermissions' in userProfile()) ||
-        !(userProfile().businessPermissions is list) ||
-        userProfile().businessPermissions.size() == 0 ||
-        section in userProfile().businessPermissions;
+      return userProfile().get('businessPermissions', []) is list &&
+        userProfile().get('businessPermissions', []).size() > 0 &&
+        section in userProfile().get('businessPermissions', []);
     }
 
     function canManageBusinessListingImages(businessId) {
-      return isPlatformAdmin() ||
+      return hasAdminCapability('marketplace') ||
         (
           isLinkedToBusiness(businessId) &&
           (
@@ -90,7 +100,7 @@ service firebase.storage {
     }
 
     function canManageBusinessProfileImages(businessId) {
-      return isPlatformAdmin() ||
+      return hasAdminCapability('businesses') ||
         (
           isLinkedToBusiness(businessId) &&
           (
@@ -104,7 +114,7 @@ service firebase.storage {
     }
 
     function canManageBusinessVerificationDocuments(businessId) {
-      return isPlatformAdmin() ||
+      return hasAdminCapability('businesses') ||
         (
           isLinkedToBusiness(businessId) &&
           (
@@ -118,7 +128,7 @@ service firebase.storage {
     }
 
     function canManageBusinessSupport(businessId) {
-      return isSupportAdmin() ||
+      return hasAdminCapability('support') ||
         (
           isLinkedToBusiness(businessId) &&
           (
@@ -162,7 +172,7 @@ service firebase.storage {
         (
           firestore.get(/databases/(default)/documents/supportCases/$(caseId)).data.customerUid == request.auth.uid ||
           firestore.exists(/databases/(default)/documents/supportCases/$(caseId)/participants/$(request.auth.uid)) ||
-          isSupportAdmin() ||
+          hasAdminCapability('support') ||
           (
             'businessId' in firestore.get(/databases/(default)/documents/supportCases/$(caseId)).data &&
             canManageBusinessSupport(firestore.get(/databases/(default)/documents/supportCases/$(caseId)).data.businessId)
@@ -209,7 +219,7 @@ service firebase.storage {
 
     match /businessDocuments/{businessId}/{documentId}/{fileName} {
       allow read: if request.auth != null &&
-        (isPlatformAdmin() || isLinkedToBusiness(businessId));
+        (hasAdminCapability('businesses') || isLinkedToBusiness(businessId));
       allow write: if request.auth != null &&
         validBusinessVerificationDocumentId(documentId) &&
         validBusinessDocumentUpload() &&

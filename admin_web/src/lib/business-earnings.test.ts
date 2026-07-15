@@ -22,21 +22,32 @@ test("summarizes paid business earnings by service with platform fees", () => {
         platformFeePct: 0.1,
       },
     ],
+    freightShipments: [
+      {
+        id: "freight-1",
+        paymentStatus: "succeeded",
+        totalCents: 8000,
+        platformFeeCents: 800,
+        businessPayoutCents: 7200,
+      },
+    ],
     transports: [],
     parkedCars: [],
   });
 
-  assert.equal(summary.totals.grossReceived, 350);
-  assert.equal(summary.totals.platformFees, 35);
-  assert.equal(summary.totals.businessEarnings, 315);
-  assert.equal(summary.totals.paidTransactions, 2);
+  assert.equal(summary.totals.grossReceived, 430);
+  assert.equal(summary.totals.platformFees, 43);
+  assert.equal(summary.totals.businessEarnings, 387);
+  assert.equal(summary.totals.paidTransactions, 3);
   assert.equal(summary.services.find((row) => row.serviceId === "barrelShipping")?.businessEarnings, 225);
+  assert.equal(summary.services.find((row) => row.serviceId === "freight")?.businessEarnings, 72);
 });
 
 test("keeps pending payments separate from received money", () => {
   const summary = summarizeBusinessEarnings({
     purchases: [],
     shipments: [],
+    freightShipments: [],
     transports: [],
     parkedCars: [
       {
@@ -69,6 +80,7 @@ test("includes paid hold extension earnings as car sales", () => {
       },
     ],
     shipments: [],
+    freightShipments: [],
     transports: [],
     parkedCars: [],
   });
@@ -77,4 +89,37 @@ test("includes paid hold extension earnings as car sales", () => {
   assert.equal(carSales?.grossReceived, 75);
   assert.equal(carSales?.platformFees, 7.5);
   assert.equal(carSales?.businessEarnings, 67.5);
+});
+
+test("counts only the final settled amount for version-two freight", () => {
+  const summary = summarizeBusinessEarnings({
+    purchases: [],
+    shipments: [],
+    freightShipments: [
+      {
+        id: "freight-awaiting-weight",
+        freightPricingVersion: 2,
+        paymentStatus: "succeeded",
+        priceSettlementStatus: "awaiting_weight",
+        estimatedTotalCents: 10000,
+      },
+      {
+        id: "freight-settled",
+        freightPricingVersion: 2,
+        paymentStatus: "succeeded",
+        priceSettlementStatus: "settled",
+        estimatedTotalCents: 10000,
+        finalTotalCents: 12500,
+        platformFeeCents: 1250,
+        businessPayoutCents: 11250,
+      },
+    ],
+    transports: [],
+    parkedCars: [],
+  });
+
+  const freight = summary.services.find((row) => row.serviceId === "freight");
+  assert.equal(freight?.grossReceived, 125);
+  assert.equal(freight?.pendingGross, 100);
+  assert.equal(freight?.businessEarnings, 112.5);
 });

@@ -12,6 +12,7 @@ class FavoriteCarSnapshot {
     required this.year,
     required this.price,
     required this.imageUrl,
+    required this.isRebuiltTitle,
     required this.createdAt,
   });
 
@@ -22,6 +23,7 @@ class FavoriteCarSnapshot {
   final String year;
   final double price;
   final String imageUrl;
+  final bool? isRebuiltTitle;
   final DateTime? createdAt;
 
   factory FavoriteCarSnapshot.fromDoc(DocumentSnapshot doc) {
@@ -34,6 +36,9 @@ class FavoriteCarSnapshot {
       year: (data['year'] ?? '').toString(),
       price: (data['price'] is num) ? (data['price'] as num).toDouble() : 0,
       imageUrl: (data['imageUrl'] ?? '').toString(),
+      isRebuiltTitle: data['isRebuiltTitle'] is bool
+          ? data['isRebuiltTitle'] as bool
+          : null,
       createdAt: data['createdAt'] is Timestamp
           ? (data['createdAt'] as Timestamp).toDate()
           : null,
@@ -101,6 +106,7 @@ class FavoriteCarsService {
       'imageUrl': car.imageUrls.isNotEmpty ? car.imageUrls.first : '',
       'businessId': car.businessId,
       'businessName': car.businessName,
+      'isRebuiltTitle': car.isRebuiltTitle,
       'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }

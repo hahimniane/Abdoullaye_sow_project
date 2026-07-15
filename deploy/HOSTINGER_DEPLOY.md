@@ -84,34 +84,20 @@ URLs are root-absolute. Do not add `basePath: "/admin"` or
 
 ---
 
-## 3. Deploy (rsync over SSH)
+## 3. Deploy (guarded rsync over SSH)
 
-Run from the **project root**. These are non-destructive uploads (`--delete`
-only prunes files inside the target dir that no longer exist in the source).
+Run the guarded script. It enforces a clean tree, verifies the public site,
+runs console tests, rebuilds from source, uploads all three targets, and then
+runs HTTP smoke checks:
 
 ```bash
-KEY=~/.ssh/laawol_hostinger
-SSH="ssh -i $KEY -p 65002 -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
-DEST=u161013520@46.202.183.189:domains/laawoldigital.com/public_html
-
-# Marketing site -> web root. Preserve dashboard subdomain folders that live
-# under the same Hostinger public_html root.
-rsync -rtz --delete --exclude admin/ --exclude business/ \
-  --omit-dir-times --no-perms -e "$SSH" public_site/ "$DEST/"
-
-# Admin console -> admin.laawoldigital.com document root
-rsync -rtz --delete --omit-dir-times --no-perms -e "$SSH" \
-  admin_web/out/ "$DEST/admin/"
-
-# Business owner dashboard -> business.laawoldigital.com document root
-rsync -rtz --delete --omit-dir-times --no-perms -e "$SSH" \
-  admin_web/out/ "$DEST/business/"
+cd deploy
+npm run deploy:static:ssh
 ```
 
-Do not remove the `--exclude admin/ --exclude business/` flags from the
-marketing-site line. Hostinger maps `admin.laawoldigital.com` and
-`business.laawoldigital.com` to subfolders inside the same `public_html` root,
-so an unrestricted root `--delete` can remove the dashboard deployments.
+Do not replace this with a copied `rsync` command. The script preserves the
+`admin/` and `business/` subfolders during the marketing-site sync; an
+unrestricted root `--delete` can remove both dashboard deployments.
 
 ### Cache busting
 `public_site/*.html` reference `assets/styles.css?v=N` and
@@ -141,17 +127,17 @@ The admin and business dashboards talk to Firebase project
   Authorized domains → add `laawoldigital.com`, `admin.laawoldigital.com`, and
   `business.laawoldigital.com`. Email/password sign-in technically works
   without this, but add them for safety/OAuth.
-- **Super admin account:** `admin@gmail.com`. The deployed Cloud Function
-  `ensurePlatformAdminProfile` bootstraps it to `role: admin / adminRole:
-  superAdmin` on first sign-in. **Change its password before going public.**
-- Functions, Firestore rules, and Storage rules are deployed separately with the
-  Firebase CLI. Storage rules matter for dashboard uploads such as business
-  profile images, car listing photos, and featured-business logos:
+- **First super admin:** create and verify the Firebase Auth user, then run the
+  explicit confirmation-gated command from `my_flutter_app/functions`:
+  `npm run bootstrap:platform-admin -- --project PROJECT_ID --email EMAIL
+  --confirm PROJECT_ID`. Runtime code never promotes an account by email.
+- Functions, Firestore rules/indexes, and Storage rules are released together
+  through the guarded backend command. It runs backend tests and production
+  payment-mode checks before any write:
   ```bash
-  cd my_flutter_app
-  firebase deploy --only functions --project car-selling-flutter-app
-  firebase deploy --only firestore:rules,firestore:indexes --project car-selling-flutter-app
-  firebase deploy --only storage --project car-selling-flutter-app
+  cd deploy
+  DEPLOY_ENV=production FIREBASE_PROJECT=car-selling-flutter-app \
+    npm run deploy:backend
   ```
 - If deploys fail with `ACCESS_TOKEN_TYPE_UNSUPPORTED` while checking
   `cloudresourcemanager.googleapis.com` or `iam.googleapis.com`, the Firebase
@@ -169,9 +155,9 @@ The admin and business dashboards talk to Firebase project
   not loosen business dashboard reads to match by name. Deploy and run the
   targeted super-admin callable instead:
   ```bash
-  cd my_flutter_app
-  firebase deploy --only functions:backfillBusinessCarListings \
-    --project car-selling-flutter-app
+    cd deploy
+    DEPLOY_ENV=production FIREBASE_PROJECT=car-selling-flutter-app \
+      npm run deploy:backend
   ```
   Call it first with `dryRun: true`, `businessId`, and either explicit `carIds`
   or a `legacyBusinessName`; then call again with `dryRun: false` to assign only
@@ -215,25 +201,18 @@ The admin and business dashboards talk to Firebase project
   firebase functions:secrets:set BUSINESS_PRO_PRICE_ID --project car-selling-flutter-app
   firebase functions:secrets:set STRIPE_WEBHOOK_SECRET --project car-selling-flutter-app
   firebase functions:secrets:set ANTHROPIC_API_KEY --project car-selling-flutter-app
-  firebase deploy --only \
-    functions:createBusinessProCheckout,functions:handleBusinessProStripeWebhook,\
-functions:generateBusinessInsights \
-    --project car-selling-flutter-app
+  cd deploy
+  DEPLOY_ENV=production FIREBASE_PROJECT=car-selling-flutter-app \
+    npm run deploy:backend
   ```
   Register the Stripe webhook endpoint as:
   `https://us-central1-car-selling-flutter-app.cloudfunctions.net/handleBusinessProStripeWebhook`.
   Subscribe it to `checkout.session.completed`,
   `customer.subscription.created`, `customer.subscription.updated`,
   `customer.subscription.deleted`, and `invoice.payment_failed`.
-  Note: a full functions deploy occasionally hits a transient Eventarc
-  permission error on the `notify*` Firestore-trigger functions. If that
-  happens, simply re-run:
-  ```bash
-  firebase deploy --only \
-    functions:notifyBarrelShipmentStatus,functions:notifyCarPurchaseStatus,\
-functions:notifyWalletRefundStatus,functions:notifyBusinessApplicationStatus \
-    --project car-selling-flutter-app
-  ```
+  If Eventarc reports a transient permission error, re-run the guarded backend
+  command. Do not switch to a targeted direct deploy, because that bypasses the
+  full test/payment-mode gate and can leave rules and Functions out of sync.
 
 ---
 
@@ -277,19 +256,7 @@ as long as the dashboard is served at the subdomain root.
 ## Quick reference (copy/paste)
 
 ```bash
-# build dashboards
-cd admin_web && npm run build && cd ..
-
-# deploy all static artifacts
-KEY=~/.ssh/laawol_hostinger
-SSH="ssh -i $KEY -p 65002 -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
-DEST=u161013520@46.202.183.189:domains/laawoldigital.com/public_html
-rsync -rtz --delete --exclude admin/ --exclude business/ --omit-dir-times --no-perms -e "$SSH" public_site/   "$DEST/"
-rsync -rtz --delete --omit-dir-times --no-perms -e "$SSH" admin_web/out/ "$DEST/admin/"
-rsync -rtz --delete --omit-dir-times --no-perms -e "$SSH" admin_web/out/ "$DEST/business/"
-
-# verify
-curl -sS -o /dev/null -w "root %{http_code}  " https://laawoldigital.com
-curl -sS -o /dev/null -w "admin %{http_code}  " https://admin.laawoldigital.com/
-curl -sS -o /dev/null -w "business %{http_code}\n" https://business.laawoldigital.com/
+# Preflight, build-from-source, deploy, and run post-deploy smoke checks.
+cd deploy
+npm run deploy:static:ssh
 ```

@@ -25,6 +25,7 @@ export type BusinessEarningsServiceRow = {
 
 const SERVICE_LABELS: Record<string, string> = {
   barrelShipping: "Barrel shipping",
+  freight: "Freight",
   carSales: "Car sales",
   carTransport: "Car transport",
   carParking: "Car parking",
@@ -137,11 +138,13 @@ function platformFeeAmount(row: FirestoreRow, gross: number) {
 export function summarizeBusinessEarnings({
   purchases,
   shipments,
+  freightShipments,
   transports,
   parkedCars,
 }: {
   purchases: FirestoreRow[];
   shipments: FirestoreRow[];
+  freightShipments: FirestoreRow[];
   transports: FirestoreRow[];
   parkedCars: FirestoreRow[];
 }): BusinessEarningsSummary {
@@ -193,6 +196,22 @@ export function summarizeBusinessEarnings({
       "barrelShipping",
       row,
       centsOrDollars(row, ["totalCents", "priceCents", "amountCents"], ["total", "price", "amount"]),
+    );
+  });
+  freightShipments.forEach((row) => {
+    const versionTwo = numericValue(row.freightPricingVersion) >= 2;
+    const settled = normalizedStatus(row.priceSettlementStatus) === "settled";
+    const freightRow = versionTwo && !settled
+      ? { ...row, paymentStatus: "pending", payoutStatus: "pending" }
+      : row;
+    add(
+      "freight",
+      freightRow,
+      versionTwo
+        ? settled
+          ? centsOrDollars(row, ["finalTotalCents"], ["finalTotal"])
+          : centsOrDollars(row, ["estimatedTotalCents"], ["estimatedTotal"])
+        : centsOrDollars(row, ["totalCents", "priceCents", "amountCents"], ["total", "price", "amount"]),
     );
   });
   transports.forEach((row) => {

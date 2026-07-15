@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'firebase_environment_options.dart';
 import 'firebase_emulator_config.dart';
 import 'providers/language_provider.dart';
 import 'providers/auth_provider.dart';
@@ -53,10 +56,96 @@ import 'services/stripe_config_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp(
+    options: FirebaseEnvironmentOptions.currentPlatform,
+  );
   await connectFirebaseEmulatorsIfRequested();
+  await initializeFirebaseCrashlytics();
+  await initializeFirebaseAppCheck();
   await StripeConfigService.ensureConfigured();
   runApp(const MyApp());
+}
+
+Future<void> initializeFirebaseAppCheck() async {
+  const webSiteKey = String.fromEnvironment(
+    'FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY',
+  );
+  const debugToken = String.fromEnvironment('FIREBASE_APP_CHECK_DEBUG_TOKEN');
+
+  if (!kDebugMode && debugToken.trim().isNotEmpty) {
+    throw StateError(
+      'FIREBASE_APP_CHECK_DEBUG_TOKEN must not be set outside debug builds.',
+    );
+  }
+
+  if (!kIsWeb &&
+      defaultTargetPlatform != TargetPlatform.android &&
+      defaultTargetPlatform != TargetPlatform.iOS &&
+      defaultTargetPlatform != TargetPlatform.macOS) {
+    if (!kDebugMode) {
+      throw UnsupportedError(
+        'Firebase App Check production attestation is not supported on '
+        '${defaultTargetPlatform.name}.',
+      );
+    }
+    debugPrint(
+      'Firebase App Check skipped on unsupported debug platform '
+      '${defaultTargetPlatform.name}.',
+    );
+    return;
+  }
+
+  if (kIsWeb && !kDebugMode && webSiteKey.trim().isEmpty) {
+    throw StateError(
+      'FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY is required for release web builds.',
+    );
+  }
+
+  await FirebaseAppCheck.instance.activate(
+    providerWeb: kDebugMode
+        ? WebDebugProvider(
+            debugToken: debugToken.trim().isEmpty ? null : debugToken.trim(),
+          )
+        : ReCaptchaV3Provider(webSiteKey.trim()),
+    providerAndroid: kDebugMode
+        ? AndroidDebugProvider(
+            debugToken: debugToken.trim().isEmpty ? null : debugToken.trim(),
+          )
+        : const AndroidPlayIntegrityProvider(),
+    providerApple: kDebugMode
+        ? AppleDebugProvider(
+            debugToken: debugToken.trim().isEmpty ? null : debugToken.trim(),
+          )
+        : const AppleAppAttestWithDeviceCheckFallbackProvider(),
+  );
+  await FirebaseAppCheck.instance.setTokenAutoRefreshEnabled(true);
+}
+
+bool supportsFirebaseCrashlytics(bool isWeb, TargetPlatform platform) {
+  return !isWeb &&
+      (platform == TargetPlatform.android ||
+          platform == TargetPlatform.iOS ||
+          platform == TargetPlatform.macOS);
+}
+
+Future<void> initializeFirebaseCrashlytics() async {
+  if (!supportsFirebaseCrashlytics(kIsWeb, defaultTargetPlatform)) return;
+
+  final crashlytics = FirebaseCrashlytics.instance;
+  await crashlytics.setCrashlyticsCollectionEnabled(!kDebugMode);
+  final previousPlatformErrorHandler = PlatformDispatcher.instance.onError;
+
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    if (!kDebugMode) crashlytics.recordFlutterFatalError(details);
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    if (kDebugMode) {
+      return previousPlatformErrorHandler?.call(error, stack) ?? false;
+    }
+    crashlytics.recordError(error, stack, fatal: true);
+    return true;
+  };
 }
 
 class MyApp extends StatelessWidget {
@@ -69,7 +158,11 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (context) => LanguageProvider()),
         ChangeNotifierProvider(create: (context) => AuthProvider()),
         ChangeNotifierProvider(create: (context) => ThemeProvider()),
-        ChangeNotifierProvider(create: (context) => AppGateProvider()),
+        ChangeNotifierProvider(
+          create: (context) => useFirebaseEmulators
+              ? AppGateProvider.localEmulator()
+              : AppGateProvider(),
+        ),
       ],
       child: Consumer3<LanguageProvider, AuthProvider, ThemeProvider>(
         builder:
@@ -169,7 +262,7 @@ class MyApp extends StatelessWidget {
                         ModalRoute.of(context)!.settings.arguments as String;
                     return SupportThreadScreen(caseId: caseId);
                   },
-                 },
+                },
               );
             },
       ),

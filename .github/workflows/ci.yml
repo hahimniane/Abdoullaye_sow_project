@@ -3,8 +3,8 @@ name: CI
 # Quality gate for every push and pull request. A red run here means the change
 # is not allowed to ship. Mirror these checks locally before deploying:
 #   admin_web:  npm run typecheck && npm test && npm run build
-#   functions:  npm run lint
-#   flutter:    flutter analyze
+#   functions:  npm run lint && npm test
+#   flutter:    flutter gen-l10n && flutter analyze && flutter test && flutter build web --release
 on:
   push:
     branches: ["**"]
@@ -22,6 +22,8 @@ jobs:
     defaults:
       run:
         working-directory: admin_web
+    env:
+      NEXT_PUBLIC_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY: ci-only-site-key
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -35,7 +37,7 @@ jobs:
       - run: npm run build
 
   functions:
-    name: Cloud Functions (lint)
+    name: Cloud Functions (lint · unit · emulator/rules)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -47,11 +49,17 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: my_flutter_app/functions/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
       - run: npm ci
+      - run: npm install --global firebase-tools@14.22.0
       - run: npm run lint
+      - run: npm test
 
   flutter:
-    name: Flutter app (analyze)
+    name: Flutter app (generate · analyze · test · release web build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -60,7 +68,29 @@ jobs:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: "3.44.2"
           channel: stable
+          cache: true
       - run: flutter pub get
       - run: flutter gen-l10n
       - run: flutter analyze
+      - run: flutter test
+      - run: >-
+          flutter build web --release
+          --dart-define=FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY=ci-only-site-key
+
+  deployment-safety:
+    name: Deployment safety helpers
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deploy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: deploy/package-lock.json
+      - run: npm ci
+      - run: npm test

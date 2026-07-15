@@ -382,7 +382,7 @@ class _SettingRow extends StatelessWidget {
                 ],
               ),
             ),
-            if (trailing != null) trailing!,
+            ?trailing,
             if (trailing == null && onTap != null)
               Icon(
                 Icons.arrow_forward_ios,

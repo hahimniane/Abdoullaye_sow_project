@@ -3,16 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/parked_car.dart';
 import '../models/barrel_shipment.dart';
 import '../models/transport_request.dart';
 import '../models/business_service.dart' as business_services;
 import '../providers/auth_provider.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/async_action_button.dart';
+import '../widgets/app_snackbars.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_colors.dart';
 
-enum ServiceCategory { all, parking, barrels, transport, sales }
+enum ServiceCategory { all, parking, barrels, freight, transport, sales }
 
 class HomeMenu extends StatefulWidget {
   const HomeMenu({super.key});
@@ -41,14 +44,17 @@ class _HomeMenuState extends State<HomeMenu> {
   final List<ActivityRecord> _records = [];
   final List<ParkedCar> _parkedCars = [];
   final List<BarrelShipment> _barrelShipments = [];
+  final List<ActivityRecord> _freightRecords = [];
   final List<TransportRequest> _transportRequests = [];
   bool _isLoading = true;
   ServiceCategory _selectedCategory = ServiceCategory.all;
   StreamSubscription<QuerySnapshot>? _parkedCarsSubscription;
   StreamSubscription<QuerySnapshot>? _barrelShipmentsSubscription;
+  StreamSubscription<QuerySnapshot>? _freightShipmentsSubscription;
   StreamSubscription<QuerySnapshot>? _transportRequestsSubscription;
   bool _parkedLoaded = false;
   bool _barrelsLoaded = false;
+  bool _freightLoaded = false;
   bool _transportLoaded = false;
 
   @override
@@ -113,6 +119,41 @@ class _HomeMenuState extends State<HomeMenu> {
           },
         );
 
+    final freightCollection = FirebaseFirestore.instance.collection(
+      'freightShipments',
+    );
+    final freightQuery = auth.isAdmin
+        ? freightCollection
+        : freightCollection.where('businessId', isEqualTo: auth.businessId);
+    _freightShipmentsSubscription = freightQuery.snapshots().listen(
+      (snapshot) {
+        _freightRecords
+          ..clear()
+          ..addAll(
+            snapshot.docs.map((doc) {
+              final data = doc.data();
+              final createdAt = data['createdAt'];
+              return ActivityRecord(
+                category: ServiceCategory.freight,
+                title:
+                    '${data['receiverName'] ?? ''} • ${data['trackingCode'] ?? doc.id}',
+                subtitle: '${data['senderName'] ?? ''}',
+                date: createdAt is Timestamp
+                    ? createdAt.toDate()
+                    : DateTime.fromMillisecondsSinceEpoch(0),
+                payload: doc.id,
+              );
+            }),
+          );
+        _freightLoaded = true;
+        _rebuildActivityRecords();
+      },
+      onError: (_) {
+        _freightLoaded = true;
+        _rebuildActivityRecords();
+      },
+    );
+
     _transportRequestsSubscription =
         scope(
           FirebaseFirestore.instance.collection('transportRequests'),
@@ -163,6 +204,8 @@ class _HomeMenuState extends State<HomeMenu> {
       );
     }
 
+    combined.addAll(_freightRecords);
+
     for (final request in _transportRequests) {
       combined.add(
         ActivityRecord(
@@ -182,7 +225,11 @@ class _HomeMenuState extends State<HomeMenu> {
       _records
         ..clear()
         ..addAll(combined);
-      _isLoading = !(_parkedLoaded && _barrelsLoaded && _transportLoaded);
+      _isLoading =
+          !(_parkedLoaded &&
+              _barrelsLoaded &&
+              _freightLoaded &&
+              _transportLoaded);
     });
   }
 
@@ -217,6 +264,11 @@ class _HomeMenuState extends State<HomeMenu> {
         ServiceCategory.barrels,
       if (business_services.hasBusinessService(
         services,
+        business_services.BusinessServiceKey.freight,
+      ))
+        ServiceCategory.freight,
+      if (business_services.hasBusinessService(
+        services,
         business_services.BusinessServiceKey.carTransport,
       ))
         ServiceCategory.transport,
@@ -232,6 +284,7 @@ class _HomeMenuState extends State<HomeMenu> {
   void dispose() {
     _parkedCarsSubscription?.cancel();
     _barrelShipmentsSubscription?.cancel();
+    _freightShipmentsSubscription?.cancel();
     _transportRequestsSubscription?.cancel();
     super.dispose();
   }
@@ -318,9 +371,9 @@ class _WelcomeSection extends StatelessWidget {
                 height: 1,
                 color: AppColors.ink,
               ),
-              children: const [
-                TextSpan(text: 'Services'),
-                TextSpan(
+              children: [
+                TextSpan(text: l10n.services),
+                const TextSpan(
                   text: '.',
                   style: TextStyle(color: AppColors.cobalt),
                 ),
@@ -353,18 +406,6 @@ class _ServicesSection extends StatelessWidget {
     final services = auth.businessServices.isEmpty
         ? business_services.defaultBusinessServiceValues
         : auth.businessServices;
-    final showParking = business_services.hasBusinessService(
-      services,
-      business_services.BusinessServiceKey.carParking,
-    );
-    final showBarrels = business_services.hasBusinessService(
-      services,
-      business_services.BusinessServiceKey.barrelShipping,
-    );
-    final showTransport = business_services.hasBusinessService(
-      services,
-      business_services.BusinessServiceKey.carTransport,
-    );
     final showSales = business_services.hasBusinessService(
       services,
       business_services.BusinessServiceKey.carSales,
@@ -376,48 +417,51 @@ class _ServicesSection extends StatelessWidget {
         border: Border.all(color: AppColors.rule),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (showParking) ...[
-            _MenuButton(
-              title: l10n.parkACar,
-              icon: Icons.local_parking,
-              onTap: () => Navigator.pushNamed(context, '/park'),
+          Text(
+            l10n.businessOperations,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.ink,
+              fontWeight: FontWeight.w800,
             ),
-            const SizedBox(height: 12),
-          ],
-          if (showBarrels) ...[
-            _MenuButton(
-              title: l10n.sendBarrels,
-              icon: Icons.local_shipping,
-              onTap: () => Navigator.pushNamed(context, '/barrel'),
-            ),
-            const SizedBox(height: 12),
-          ],
-          _MenuButton(
-            title: 'Freight',
-            icon: Icons.inventory_2_outlined,
-            onTap: () => Navigator.pushNamed(context, '/send-freight'),
           ),
-          const SizedBox(height: 12),
-          if (showTransport) ...[
-            _MenuButton(
-              title: l10n.transportCars,
-              icon: Icons.directions_car,
-              onTap: () => Navigator.pushNamed(context, '/transport'),
+          const SizedBox(height: 8),
+          Text(
+            l10n.businessOperationsWebNote,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppColors.muted,
+              height: 1.45,
             ),
-            const SizedBox(height: 12),
+          ),
+          if (showSales) ...[
+            const SizedBox(height: 8),
+            Text(
+              l10n.businessCarsMobileNote,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.cobalt,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ],
-          if (showSales)
-            _MenuButton(
-              title: l10n.sellCars,
-              icon: Icons.sell,
-              onTap: () => Navigator.pushNamed(context, '/sell'),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: AsyncActionButton.filled(
+              icon: Icons.open_in_browser,
+              label: l10n.openBusinessConsole,
+              loadingLabel: l10n.openingBusinessConsole,
+              onPressed: () async {
+                final opened = await launchUrl(
+                  Uri.parse('https://business.laawoldigital.com/'),
+                  mode: LaunchMode.externalApplication,
+                );
+                if (!opened && context.mounted) {
+                  showErrorSnackBar(context, l10n.businessConsoleOpenFailed);
+                }
+              },
             ),
-          if (!showParking && !showBarrels && !showTransport && !showSales)
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(l10n.noServicesEnabledYet),
-            ),
+          ),
         ],
       ),
     );
@@ -445,6 +489,8 @@ class _ActivitySection extends StatelessWidget {
         return AppColors.sage;
       case ServiceCategory.barrels:
         return AppColors.cobalt;
+      case ServiceCategory.freight:
+        return AppColors.cobalt;
       case ServiceCategory.transport:
         return AppColors.sage;
       case ServiceCategory.sales:
@@ -460,6 +506,8 @@ class _ActivitySection extends StatelessWidget {
         return Icons.local_parking;
       case ServiceCategory.barrels:
         return Icons.inventory_2;
+      case ServiceCategory.freight:
+        return Icons.inventory_2_outlined;
       case ServiceCategory.transport:
         return Icons.directions_car;
       case ServiceCategory.sales:
@@ -477,6 +525,8 @@ class _ActivitySection extends StatelessWidget {
         return l10n.filterParking;
       case ServiceCategory.barrels:
         return l10n.filterBarrels;
+      case ServiceCategory.freight:
+        return l10n.filterFreight;
       case ServiceCategory.transport:
         return l10n.filterTransport;
       case ServiceCategory.sales:
@@ -594,6 +644,15 @@ class _ActivitySection extends StatelessWidget {
                   arguments: request,
                 );
               };
+            } else if (record.category == ServiceCategory.freight) {
+              onTap = () {
+                unawaited(
+                  launchUrl(
+                    Uri.parse('https://business.laawoldigital.com/'),
+                    mode: LaunchMode.externalApplication,
+                  ),
+                );
+              };
             } else {
               onTap = null;
             }
@@ -697,61 +756,6 @@ class _RecordCard extends StatelessWidget {
           const SizedBox(width: 12),
           Icon(Icons.arrow_forward_ios, color: AppColors.muted, size: 16),
         ],
-      ),
-    );
-  }
-}
-
-class _MenuButton extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _MenuButton({
-    required this.title,
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      constraints: const BoxConstraints(minHeight: 60, maxHeight: 80),
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.paper,
-          foregroundColor: AppColors.ink,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.zero,
-            side: const BorderSide(color: AppColors.rule),
-          ),
-          elevation: 0,
-          splashFactory: NoSplash.splashFactory,
-        ),
-        onPressed: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 24),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  textAlign: TextAlign.center,
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 2,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

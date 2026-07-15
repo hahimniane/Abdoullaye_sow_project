@@ -9,6 +9,10 @@
     "preflight:backend": "PREFLIGHT_SCOPE=backend node preflight.mjs",
     "preflight:full": "node preflight.mjs",
     "preflight:static": "PREFLIGHT_SCOPE=static node preflight.mjs",
+    "smoke": "node post-deploy-smoke.mjs",
+    "smoke:backend": "SMOKE_SCOPE=backend node post-deploy-smoke.mjs",
+    "smoke:static": "SMOKE_SCOPE=static node post-deploy-smoke.mjs",
+    "test": "node --test test/*.test.mjs",
     "verify:public": "node ../public_site/verify-cms.mjs"
   },
   "dependencies": { "basic-ftp": "^5.0.5" }

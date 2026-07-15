@@ -646,6 +646,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get filterBarrels => 'Envois de barils';
 
   @override
+  String get filterFreight => 'Fret';
+
+  @override
   String get filterTransport => 'Transport de voitures';
 
   @override
@@ -893,6 +896,25 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get carMileage => 'Kilométrage';
+
+  @override
+  String get rebuiltTitle => 'Titre reconstruit';
+
+  @override
+  String get rebuiltTitleQuestion => 'Titre reconstruit ?';
+
+  @override
+  String get rebuiltTitleYes => 'Oui — titre reconstruit';
+
+  @override
+  String get rebuiltTitleNo => 'Non — pas de titre reconstruit';
+
+  @override
+  String get rebuiltTitleUnknown => 'Non renseigné';
+
+  @override
+  String get rebuiltTitleDisclosureHelp =>
+      'Obligatoire. Les acheteurs verront cette information.';
 
   @override
   String get sellingPrice => 'Prix affiché';
@@ -3161,6 +3183,11 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String freightEstimatePaidTracking(Object trackingCode) {
+    return 'Estimation payée. Suivi : $trackingCode';
+  }
+
+  @override
   String get fillSenderReceiverPhone =>
       'Renseignez l’expéditeur, le destinataire et le téléphone.';
 
@@ -3174,6 +3201,22 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get noFreightBusinessesSubtitle =>
       'Le fret de colis apparaîtra ici lorsqu’une entreprise aura défini ses tarifs air ou mer.';
+
+  @override
+  String get couldNotLoadFreightOptions =>
+      'Impossible de charger les options de fret. Vérifiez votre connexion et réessayez.';
+
+  @override
+  String get freightBookingFailed =>
+      'Impossible de créer cet envoi de fret. Veuillez réessayer.';
+
+  @override
+  String get approvedBusiness => 'Entreprise approuvée';
+
+  @override
+  String freightDeliveryEstimateDays(int minimum, int maximum) {
+    return 'Livraison : $minimum-$maximum jours';
+  }
 
   @override
   String get searchBusinessOrCountry => 'Rechercher une entreprise ou un pays';
@@ -3202,10 +3245,77 @@ class AppLocalizationsFr extends AppLocalizations {
   String get shippingMode => 'Mode d’expédition';
 
   @override
+  String get invalidFreightMode => 'Choisissez le fret aérien ou maritime.';
+
+  @override
   String get parcelWeightKg => 'Poids du colis (kg)';
 
   @override
   String get estimatedPrice => 'Prix estimé';
+
+  @override
+  String get estimatedWeight => 'Poids estimé';
+
+  @override
+  String get estimatedWeightKg => 'Poids estimé (kg)';
+
+  @override
+  String get estimatedTotal => 'Total estimé';
+
+  @override
+  String get freightEstimateExplanation =>
+      'Vous payez une estimation basée sur le poids saisi. L’entreprise confirmera le poids après le dépôt.';
+
+  @override
+  String get payEstimate => 'Payer l’estimation';
+
+  @override
+  String get estimatePaid => 'Estimation payée';
+
+  @override
+  String get awaitingConfirmedWeight => 'En attente du poids confirmé';
+
+  @override
+  String get verifiedWeight => 'Poids confirmé';
+
+  @override
+  String get finalTotal => 'Total final';
+
+  @override
+  String get additionalPaymentRequired => 'Paiement supplémentaire requis';
+
+  @override
+  String payBalanceAmount(Object amount) {
+    return 'Payer le solde de $amount';
+  }
+
+  @override
+  String refundDueAmount(Object amount) {
+    return 'Remboursement dû : $amount';
+  }
+
+  @override
+  String get refundProcessing => 'Remboursement en cours';
+
+  @override
+  String get refundCompleted => 'Remboursement effectué';
+
+  @override
+  String get freightSettled => 'Paiement finalisé';
+
+  @override
+  String get shipmentHeldForBalance =>
+      'Votre colis sera retenu jusqu’au paiement du solde.';
+
+  @override
+  String get settlementNeedsAttention =>
+      'Le règlement nécessite une intervention';
+
+  @override
+  String get paymentProcessing => 'Paiement en cours…';
+
+  @override
+  String get couldNotPayBalance => 'Impossible de payer le solde. Réessayez.';
 
   @override
   String get enterWeightToSeePrice => 'Entrez un poids pour voir le prix';
@@ -3216,6 +3326,16 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get freightDropOffNote =>
       'Déposez votre colis à l’adresse de l’entreprise. Le ramassage arrive bientôt.';
+
+  @override
+  String freightDropOffAddress(Object address) {
+    return 'Dépôt : $address';
+  }
+
+  @override
+  String freightBusinessPhone(Object phone) {
+    return 'Téléphone de l’entreprise : $phone';
+  }
 
   @override
   String get airFreight => 'Fret aérien';
@@ -3315,6 +3435,29 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get receiverWhatsAppNumberSubtitle =>
       'Utilisez ceci seulement si le destinataire utilise un numéro d’un autre pays sur WhatsApp.';
+
+  @override
+  String get invalidPhoneWithCountryCode =>
+      'Entrez un numéro de téléphone valide avec l’indicatif du pays.';
+
+  @override
+  String get invalidInternationalPhone =>
+      'Entrez un numéro de téléphone international valide.';
+
+  @override
+  String get whatsAppDifferentCountryRequiresCode =>
+      'Pour un numéro WhatsApp d’un autre pays, indiquez + et l’indicatif du pays.';
+
+  @override
+  String receiverPhoneMustMatchDestination(
+    Object destinationName,
+    Object prefix,
+  ) {
+    return 'Le numéro du destinataire doit correspondre à $destinationName ($prefix) ou être indiqué comme numéro WhatsApp.';
+  }
+
+  @override
+  String get readyForPickup => 'Prêt pour le retrait';
 
   @override
   String get samePickup => 'Même ramassage';
@@ -3453,6 +3596,24 @@ class AppLocalizationsFr extends AppLocalizations {
   String get splashTagline => 'Voitures, barils et passage au même endroit.';
 
   @override
+  String get splashMarketplace => 'MARCHÉ';
+
+  @override
+  String get splashOpening => 'OUVERTURE DE LAAWOL';
+
+  @override
+  String get accountProfileUnavailable =>
+      'La connexion est lente. Nous n’avons pas pu charger votre rôle de compte en toute sécurité.';
+
+  @override
+  String get accountProfileMissing =>
+      'Le profil de votre compte est introuvable. Contactez l’assistance Laawol.';
+
+  @override
+  String get accountProfileRetryHelp =>
+      'Réessayez sans vous déconnecter ni perdre votre session.';
+
+  @override
   String get addMoney => 'Ajouter de l’argent';
 
   @override
@@ -3529,6 +3690,35 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get businessApplicationSubtitle =>
       'Postulez une fois, préparez vos opérations, puis passez en ligne après approbation.';
+
+  @override
+  String get businessOperations => 'Opérations de l’entreprise';
+
+  @override
+  String get businessOperationsWebNote =>
+      'Gérez le fret, les barils, le transport, le stationnement, les destinations, le personnel et les versements dans la console entreprise sécurisée. Cela évite d’ouvrir par erreur un parcours client de réservation ou de paiement.';
+
+  @override
+  String get businessCarsMobileNote =>
+      'Les annonces et achats de véhicules sont aussi disponibles dans les onglets mobiles ci-dessous.';
+
+  @override
+  String get openBusinessConsole => 'Ouvrir la console entreprise';
+
+  @override
+  String get openingBusinessConsole => 'Ouverture de la console entreprise...';
+
+  @override
+  String get businessConsoleOpenFailed =>
+      'Impossible d’ouvrir la console entreprise. Visitez business.laawoldigital.com dans votre navigateur.';
+
+  @override
+  String get businessChangesRequestedBanner =>
+      'Un administrateur de la plateforme a demandé des modifications. Vous pouvez continuer la configuration pendant que l’entreprise reste masquée aux clients.';
+
+  @override
+  String get businessPendingApprovalBanner =>
+      'Votre entreprise attend l’approbation de la plateforme. Vous pouvez configurer les destinations, les voitures et le personnel maintenant ; les clients la verront après approbation.';
 
   @override
   String totalDaysLabel(Object days) {
@@ -4247,4 +4437,64 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get parkingReviewPickupNo => 'Pas de ramassage';
+
+  @override
+  String get hubGuestName => 'vous';
+
+  @override
+  String get hubQuickActions => 'Actions rapides';
+
+  @override
+  String get hubSendBarrel => 'Envoyer un baril';
+
+  @override
+  String get hubShipFullBarrel => 'Expédier un baril complet au pays';
+
+  @override
+  String get hubBrowseCars => 'Parcourir les voitures';
+
+  @override
+  String get hubBuyVerifiedCar => 'Acheter une voiture vérifiée';
+
+  @override
+  String get hubFollowShipments => 'Suivre vos expéditions';
+
+  @override
+  String get hubShipping => 'Expédition';
+
+  @override
+  String get hubShippingSubtitle =>
+      'Envoyez des barils, du fret et des voitures au pays.';
+
+  @override
+  String get hubSharedBarrels => 'Barils partagés';
+
+  @override
+  String get hubSharedBarrelsSubtitle => 'Publier ou rejoindre un baril';
+
+  @override
+  String get hubFreightSubtitle => 'Au poids · par air ou par mer';
+
+  @override
+  String get hubTransportCar => 'Transporter une voiture';
+
+  @override
+  String get hubShipCarHome => 'Expédier une voiture au pays';
+
+  @override
+  String get hubCarsSubtitle =>
+      'Achetez une voiture vérifiée ou stockez-la auprès d’une entreprise.';
+
+  @override
+  String get hubParkCarSubtitle => 'Stocker auprès d’une entreprise';
+
+  @override
+  String get hubActivitySubtitle =>
+      'Vos commandes, expéditions et votre portefeuille.';
+
+  @override
+  String get hubOrdersSubtitle => 'Voitures, barils, fret et plus';
+
+  @override
+  String get hubWalletSubtitle => 'Solde et remboursements';
 }

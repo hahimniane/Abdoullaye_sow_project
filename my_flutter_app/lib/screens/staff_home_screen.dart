@@ -173,7 +173,7 @@ class _StaffScaffold extends StatelessWidget {
     return Scaffold(
       body: Column(
         children: [
-          if (banner != null) banner!,
+          ?banner,
           Expanded(child: screens[currentIndex]),
         ],
       ),
@@ -197,7 +197,7 @@ class _PendingBusinessBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final providedBusiness = business;
     if (providedBusiness != null) {
-      return _buildBanner(providedBusiness.status);
+      return _buildBanner(context, providedBusiness.status);
     }
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance
@@ -210,13 +210,14 @@ class _PendingBusinessBanner extends StatelessWidget {
         }
         final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
         final status = (data['status'] ?? 'pending') as String;
-        return _buildBanner(status);
+        return _buildBanner(context, status);
       },
     );
   }
 
-  Widget _buildBanner(String status) {
+  Widget _buildBanner(BuildContext context, String status) {
     if (status == 'approved') return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context)!;
     return Material(
       color: AppColors.saffron.withValues(alpha: 0.14),
       child: SafeArea(
@@ -231,8 +232,8 @@ class _PendingBusinessBanner extends StatelessWidget {
               Expanded(
                 child: Text(
                   status == 'changes_requested'
-                      ? 'Platform admin requested changes. You can keep editing your setup while the business is hidden from customers.'
-                      : 'Your business is pending platform approval. You can set up destinations, cars, and staff now; customers will see it after approval.',
+                      ? l10n.businessChangesRequestedBanner
+                      : l10n.businessPendingApprovalBanner,
                   style: const TextStyle(
                     color: AppColors.warn,
                     fontWeight: FontWeight.w800,

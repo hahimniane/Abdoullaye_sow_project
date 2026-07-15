@@ -14,6 +14,7 @@ class BusinessDestinationOption {
     this.businessEmail,
     this.businessWebsite,
     this.businessProfileImageUrl,
+    this.businessAddress,
     this.enabledServices = defaultBusinessServiceValues,
     this.serviceNote,
     this.businessStatus = 'approved',
@@ -27,15 +28,32 @@ class BusinessDestinationOption {
   final String? businessEmail;
   final String? businessWebsite;
   final String? businessProfileImageUrl;
+  final String? businessAddress;
   final List<String> enabledServices;
   final String? serviceNote;
   final String businessStatus;
 
-  bool get isAvailable =>
-      businessStatus == 'approved' &&
-      hasBusinessService(enabledServices, BusinessServiceKey.barrelShipping) &&
-      country.isActive &&
-      country.barrelShippingPrice > 0;
+  bool get isApprovedActive => businessStatus == 'approved' && country.isActive;
+
+  bool isAvailableFor(BusinessServiceKey service) {
+    if (!isApprovedActive || !hasBusinessService(enabledServices, service)) {
+      return false;
+    }
+    return switch (service) {
+      BusinessServiceKey.barrelShipping ||
+      BusinessServiceKey.sharedBarrels => country.barrelShippingPrice > 0,
+      BusinessServiceKey.freight => country.hasAnyFreightRate,
+      BusinessServiceKey.carTransport => true,
+      BusinessServiceKey.carSales || BusinessServiceKey.carParking => true,
+    };
+  }
+
+  bool get isAvailable => isAvailableFor(BusinessServiceKey.barrelShipping);
+
+  bool get isAvailableForAnyShippingService =>
+      isAvailableFor(BusinessServiceKey.barrelShipping) ||
+      isAvailableFor(BusinessServiceKey.sharedBarrels) ||
+      isAvailableFor(BusinessServiceKey.freight);
 
   factory BusinessDestinationOption.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? <String, dynamic>{};
@@ -59,6 +77,7 @@ class BusinessDestinationOption {
       businessEmail: data['businessEmail'] as String?,
       businessWebsite: data['businessWebsite'] as String?,
       businessProfileImageUrl: data['businessProfileImageUrl'] as String?,
+      businessAddress: data['businessAddress'] as String?,
       enabledServices: normalizeBusinessServices(data['enabledServices']),
       serviceNote: data['serviceNote'] as String?,
       businessStatus: (data['businessStatus'] ?? 'approved') as String,
@@ -112,6 +131,17 @@ class BusinessDestinationOption {
       businessProfileImageUrl:
           data['businessProfileImageUrl'] as String? ??
           business['profileImageUrl'] as String?,
+      businessAddress: businessData == null
+          ? data['businessAddress'] as String?
+          : [
+                  business['addressLine1'],
+                  business['city'],
+                  business['state'],
+                  business['postalCode'],
+                ]
+                .whereType<String>()
+                .where((part) => part.trim().isNotEmpty)
+                .join(', '),
       enabledServices: normalizeBusinessServices(
         businessData == null
             ? data['enabledServices']
@@ -132,6 +162,10 @@ class BusinessDestinationOption {
         sortOrder: (data['sortOrder'] as num?)?.toInt() ?? 0,
         barrelShippingPrice:
             (data['barrelShippingPrice'] as num?)?.toDouble() ?? 0,
+        freightAirPricePerKg:
+            (data['freightAirPricePerKg'] as num?)?.toDouble() ?? 0,
+        freightSeaPricePerKg:
+            (data['freightSeaPricePerKg'] as num?)?.toDouble() ?? 0,
         deliveryEstimateMinDays: (data['deliveryEstimateMinDays'] as num?)
             ?.toInt(),
         deliveryEstimateMaxDays: (data['deliveryEstimateMaxDays'] as num?)

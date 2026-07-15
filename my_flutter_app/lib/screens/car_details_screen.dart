@@ -193,6 +193,10 @@ class CarDetailsScreen extends StatelessWidget {
                               ),
                           ],
                         ),
+                        const SizedBox(height: 12),
+                        _RebuiltTitleDisclosure(
+                          isRebuiltTitle: car.isRebuiltTitle,
+                        ),
                         const SizedBox(height: 20),
                         Text(
                           l10n.carDescription,
@@ -2006,6 +2010,68 @@ class _InfoChip extends StatelessWidget {
           Text(
             value != null ? '$label: $value' : label,
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RebuiltTitleDisclosure extends StatelessWidget {
+  const _RebuiltTitleDisclosure({required this.isRebuiltTitle});
+
+  final bool? isRebuiltTitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final isRebuilt = isRebuiltTitle == true;
+    final isUnknown = isRebuiltTitle == null;
+    final color = isRebuilt
+        ? AppColors.brandRed
+        : isUnknown
+        ? AppColors.warn
+        : AppColors.sage;
+    final value = isRebuilt
+        ? l10n.rebuiltTitleYes
+        : isUnknown
+        ? l10n.rebuiltTitleUnknown
+        : l10n.rebuiltTitleNo;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isRebuilt
+                ? Icons.report_outlined
+                : isUnknown
+                ? Icons.help_outline
+                : Icons.verified_outlined,
+            color: color,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.rebuiltTitle,
+                  style: TextStyle(color: color, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
           ),
         ],
       ),

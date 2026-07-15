@@ -28,6 +28,7 @@ import {GrowthPanel} from "@/components/business/growth-panel";
 import {
   BarrelsPanel,
   DestinationsPanel,
+  FreightPanel,
   ListingsPanel,
   ParkingPanel,
   PurchasesPanel,
@@ -38,10 +39,7 @@ import {
   BusinessProfilePanel,
 } from "@/components/business/profile-support-people";
 import { SupportCasesPanel } from "@/components/support/support-cases-panel";
-import {
-  useBusinessCollection,
-  useBusinessStaff,
-} from "@/lib/business-data";
+import { useBusinessCollection, useBusinessStaff } from "@/lib/business-data";
 import {
   buildBusinessSidebarGroups,
   businessSidebarTabs,
@@ -90,7 +88,9 @@ export function BusinessConsole({
   const [sidebarFilter, setSidebarFilter] = useState("");
   const [pinnedTabs, setPinnedTabs] = useState<BusinessTab[]>(readPinnedTabs);
   const [destinationSetupRequest, setDestinationSetupRequest] = useState(0);
-  const [business, setBusiness] = useState<FirestoreRow | null>(previewBusiness);
+  const [business, setBusiness] = useState<FirestoreRow | null>(
+    previewBusiness,
+  );
   const [businessError, setBusinessError] = useState("");
   const enabled = Boolean(businessId && !previewMode);
 
@@ -133,19 +133,32 @@ export function BusinessConsole({
     const raw = Array.isArray(business?.enabledServices)
       ? business?.enabledServices
       : profile.businessServices;
-    return new Set((Array.isArray(raw) ? raw : []).map((item) => text(item, "")));
+    return new Set(
+      (Array.isArray(raw) ? raw : []).map((item) => text(item, "")),
+    );
   }, [business?.enabledServices, profile.businessServices]);
 
   const canManageListings = hasBusinessPermission(profile, "listings");
-  const cars = useBusinessCollection("cars", businessId, enabled && canManageListings, null);
+  const cars = useBusinessCollection(
+    "cars",
+    businessId,
+    enabled && canManageListings,
+    null,
+  );
 
   const visibleTabs = useMemo(() => {
     return businessSidebarTabs.filter((tab) => {
-      const serviceAllowed = !tab.service ||
+      const destinationAllowed =
+        tab.id !== "destinations" ||
+        services.has("barrelShipping") ||
+        services.has("freight");
+      const serviceAllowed =
+        destinationAllowed &&
+        (!tab.service ||
         services.has(tab.service) ||
-        (tab.id === "listings" && cars.rows.length > 0);
-      const permissionAllowed = !tab.permission ||
-        hasBusinessPermission(profile, tab.permission);
+          (tab.id === "listings" && cars.rows.length > 0));
+      const permissionAllowed =
+        !tab.permission || hasBusinessPermission(profile, tab.permission);
       return serviceAllowed && permissionAllowed;
     });
   }, [cars.rows.length, profile, services]);
@@ -153,7 +166,10 @@ export function BusinessConsole({
   useEffect(() => {
     setPinnedTabs((current) => {
       const next = normalizePinnedTabs(current, visibleTabs);
-      if (next.length === current.length && next.every((id, index) => id === current[index])) {
+      if (
+        next.length === current.length &&
+        next.every((id, index) => id === current[index])
+      ) {
         return current;
       }
       writePinnedTabs(next);
@@ -187,12 +203,48 @@ export function BusinessConsole({
     setActiveTab("destinations");
   }, []);
 
-  const purchases = useBusinessCollection("carPurchases", businessId, enabled && services.has("carSales"), 500);
-  const shipments = useBusinessCollection("barrelShipments", businessId, enabled && services.has("barrelShipping"), 500);
-  const transports = useBusinessCollection("transportRequests", businessId, enabled && services.has("carTransport"), 500);
-  const parkedCars = useBusinessCollection("parkedCars", businessId, enabled && services.has("carParking"), 500);
-  const supportCases = useBusinessCollection("supportCases", businessId, enabled, 300);
-  const insights = useBusinessCollection("businessInsights", businessId, enabled, 50);
+  const purchases = useBusinessCollection(
+    "carPurchases",
+    businessId,
+    enabled && services.has("carSales"),
+    500,
+  );
+  const shipments = useBusinessCollection(
+    "barrelShipments",
+    businessId,
+    enabled && services.has("barrelShipping"),
+    500,
+  );
+  const freightShipments = useBusinessCollection(
+    "freightShipments",
+    businessId,
+    enabled && services.has("freight"),
+    500,
+  );
+  const transports = useBusinessCollection(
+    "transportRequests",
+    businessId,
+    enabled && services.has("carTransport"),
+    500,
+  );
+  const parkedCars = useBusinessCollection(
+    "parkedCars",
+    businessId,
+    enabled && services.has("carParking"),
+    500,
+  );
+  const supportCases = useBusinessCollection(
+    "supportCases",
+    businessId,
+    enabled,
+    300,
+  );
+  const insights = useBusinessCollection(
+    "businessInsights",
+    businessId,
+    enabled,
+    50,
+  );
   const staff = useBusinessStaff(businessId, enabled, 200);
 
   const businessName = text(business?.name ?? profile.businessName, "Business");
@@ -206,7 +258,12 @@ export function BusinessConsole({
   const canOpenSupport = visibleTabs.some((tab) => tab.id === "cases");
   const attentionRows = [
     ...shipments.rows.filter((row) => isOpenStatus(row.status)).slice(0, 3),
-    ...purchases.rows.filter((row) => isOpenStatus(purchaseStatus(row))).slice(0, 3),
+    ...freightShipments.rows
+      .filter((row) => isOpenStatus(row.status))
+      .slice(0, 3),
+    ...purchases.rows
+      .filter((row) => isOpenStatus(purchaseStatus(row)))
+      .slice(0, 3),
     ...transports.rows.filter((row) => isOpenStatus(row.status)).slice(0, 3),
     ...parkedCars.rows.filter((row) => isOpenStatus(row.status)).slice(0, 3),
   ].slice(0, 8);
@@ -218,35 +275,62 @@ export function BusinessConsole({
           <button
             className="sidebar-toggle topbar-menu"
             onClick={() => setSidebarCollapsed((value) => !value)}
-            title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
+            title={
+              sidebarCollapsed ? "Expand navigation" : "Collapse navigation"
+            }
             type="button"
           >
             <Menu size={20} />
           </button>
           <div className="brand-badge">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="Laawol" width={20} height={20} style={{ borderRadius: 5, display: "block" }} />
+            <img
+              src="/logo.png"
+              alt="Laawol"
+              width={20}
+              height={20}
+              style={{ borderRadius: 5, display: "block" }}
+            />
             <span>Laawol Digital</span>
           </div>
           <div className="topbar-heading">
             <h1>{businessName}</h1>
-            <p>Business dashboard · <span className={`biz-status ${isApproved ? "ok" : "pending"}`}>{statusLabel(status)}</span></p>
+            <p>
+              Business dashboard ·{" "}
+              <span className={`biz-status ${isApproved ? "ok" : "pending"}`}>
+                {statusLabel(status)}
+              </span>
+            </p>
           </div>
         </div>
         <div className="topbar-actions">
           <div className="admin-chip" title="Signed-in account">
             <UserCog size={18} />
-            <span className="admin-chip-name">{text(profile.fullName ?? firebaseUser.email, "Business user")}</span>
-            <span className="admin-role-tag">{profile.role === "businessOwner" ? "Owner" : "Staff"}</span>
+            <span className="admin-chip-name">
+              {text(profile.fullName ?? firebaseUser.email, "Business user")}
+            </span>
+            <span className="admin-role-tag">
+              {profile.role === "businessOwner" ? "Owner" : "Staff"}
+            </span>
           </div>
-          <button className="icon-button" onClick={handleSignOut} title="Sign out" type="button">
+          <button
+            className="icon-button"
+            onClick={handleSignOut}
+            title="Sign out"
+            type="button"
+          >
             <LogOut size={18} />
           </button>
         </div>
       </header>
 
-      <main className={`workspace ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
-        <nav className="sidebar business-sidebar" aria-label="Business sections">
+      <main
+        className={`workspace ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}
+      >
+        <nav
+          className="sidebar business-sidebar"
+          aria-label="Business sections"
+        >
           <div className="sidebar-search" role="search">
             <Search size={15} />
             <input
@@ -256,7 +340,11 @@ export function BusinessConsole({
               value={sidebarFilter}
             />
             {sidebarFilter.trim() && (
-              <button className="sidebar-clear" onClick={() => setSidebarFilter("")} type="button">
+              <button
+                className="sidebar-clear"
+                onClick={() => setSidebarFilter("")}
+                type="button"
+              >
                 Clear
               </button>
             )}
@@ -282,7 +370,11 @@ export function BusinessConsole({
         </nav>
 
         <section className="content">
-          {(businessError || !businessId) && <div className="error-box">{businessError || "Business account is not configured."}</div>}
+          {(businessError || !businessId) && (
+            <div className="error-box">
+              {businessError || "Business account is not configured."}
+            </div>
+          )}
           {businessId && payoutStatus.state !== "ready" && (
             <StripeSetupBanner
               businessId={businessId}
@@ -294,7 +386,9 @@ export function BusinessConsole({
           )}
           {!isApproved && businessId && (
             <div className="info-band">
-              This business is currently {statusLabel(status).toLowerCase()}. Complete Stripe setup and any requested profile details while it waits for platform approval.
+              This business is currently {statusLabel(status).toLowerCase()}.
+              Complete Stripe setup and any requested profile details while it
+              waits for platform approval.
             </div>
           )}
 
@@ -306,6 +400,7 @@ export function BusinessConsole({
               cars={cars.rows}
               purchases={purchases.rows}
               shipments={shipments.rows}
+              freightShipments={freightShipments.rows}
               transports={transports.rows}
               parkedCars={parkedCars.rows}
               support={supportCases.rows}
@@ -331,8 +426,12 @@ export function BusinessConsole({
             <PurchasesPanel businessId={businessId} />
           )}
           {activeTab === "barrels" && (
-            <BarrelsPanel businessId={businessId} onOpenDestinations={openDestinationSetup} />
+            <BarrelsPanel
+              businessId={businessId}
+              onOpenDestinations={openDestinationSetup}
+            />
           )}
+          {activeTab === "freight" && <FreightPanel businessId={businessId} />}
           {activeTab === "transport" && (
             <TransportPanel businessId={businessId} />
           )}
@@ -340,7 +439,11 @@ export function BusinessConsole({
             <ParkingPanel businessId={businessId} businessName={businessName} />
           )}
           {activeTab === "destinations" && (
-            <DestinationsPanel businessId={businessId} openNewToken={destinationSetupRequest} />
+            <DestinationsPanel
+              businessId={businessId}
+              enabledServices={Array.from(services)}
+              openNewToken={destinationSetupRequest}
+            />
           )}
           {activeTab === "people" && (
             <BusinessPeoplePanel
@@ -357,7 +460,10 @@ export function BusinessConsole({
               scope="business"
               businessId={businessId}
               currentUid={firebaseUser.uid}
-              currentName={text(profile.fullName ?? firebaseUser.email, "Business")}
+              currentName={text(
+                profile.fullName ?? firebaseUser.email,
+                "Business",
+              )}
               canReply={hasBusinessPermission(profile, "support")}
             />
           )}
@@ -379,7 +485,9 @@ export function BusinessConsole({
 function readPinnedTabs() {
   if (typeof window === "undefined") return [] as BusinessTab[];
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(businessSidebarStorageKey) ?? "[]");
+    const parsed = JSON.parse(
+      window.localStorage.getItem(businessSidebarStorageKey) ?? "[]",
+    );
     return Array.isArray(parsed)
       ? normalizePinnedTabs(parsed, businessSidebarTabs)
       : [];
@@ -467,7 +575,10 @@ function StripeSetupBanner({
     setError("");
     try {
       const href = window.location.href;
-      const result = await httpsCallable(functions, "createBusinessStripeAccountLink")({
+      const result = await httpsCallable(
+        functions,
+        "createBusinessStripeAccountLink",
+      )({
         businessId,
         returnUrl: href,
         refreshUrl: href,
@@ -476,14 +587,21 @@ function StripeSetupBanner({
       if (!url) throw new Error("Stripe did not return an onboarding link.");
       window.location.assign(url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not start Stripe onboarding.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not start Stripe onboarding.",
+      );
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <section className="stripe-setup-banner" aria-labelledby="stripe-setup-title">
+    <section
+      className="stripe-setup-banner"
+      aria-labelledby="stripe-setup-title"
+    >
       <div className="stripe-setup-main">
         <span className="stripe-setup-step">Required first step</span>
         <h2 id="stripe-setup-title">{headline}</h2>
@@ -491,12 +609,19 @@ function StripeSetupBanner({
         <div className="stripe-setup-meta">
           <span>{payoutStatus.primaryLabel}</span>
           <span>{payoutStatus.chargesLabel}</span>
-          {payoutStatus.stripeAccountId && <span>{payoutStatus.stripeAccountId}</span>}
+          {payoutStatus.stripeAccountId && (
+            <span>{payoutStatus.stripeAccountId}</span>
+          )}
         </div>
         {error && <div className="error-box">{error}</div>}
       </div>
       <div className="stripe-setup-actions">
-        <button className="lst-add" disabled={busy || !businessId || previewMode} onClick={connect} type="button">
+        <button
+          className="lst-add"
+          disabled={busy || !businessId || previewMode}
+          onClick={connect}
+          type="button"
+        >
           {actionLabel}
         </button>
         <a
@@ -507,7 +632,12 @@ function StripeSetupBanner({
         >
           Stripe setup help <ExternalLink size={14} />
         </a>
-        <button className="secondary-button" disabled={!canOpenSupport} onClick={onOpenSupport} type="button">
+        <button
+          className="secondary-button"
+          disabled={!canOpenSupport}
+          onClick={onOpenSupport}
+          type="button"
+        >
           Contact Laawol support
         </button>
       </div>
@@ -522,6 +652,7 @@ function TodayView({
   cars,
   purchases,
   shipments,
+  freightShipments,
   transports,
   parkedCars,
   support,
@@ -536,6 +667,7 @@ function TodayView({
   cars: FirestoreRow[];
   purchases: FirestoreRow[];
   shipments: FirestoreRow[];
+  freightShipments: FirestoreRow[];
   transports: FirestoreRow[];
   parkedCars: FirestoreRow[];
   support: FirestoreRow[];
@@ -545,10 +677,29 @@ function TodayView({
   canOpenSupport: boolean;
 }) {
   const metrics = [
-    {label: "Active listings", value: cars.filter((row) => row.status === "active").length, tone: "good"},
-    {label: "Open shipments", value: shipments.filter((row) => isOpenStatus(row.status)).length, tone: "attention"},
-    {label: "Pending purchases", value: purchases.filter((row) => isOpenStatus(purchaseStatus(row))).length, tone: "attention"},
-    {label: "Support requests", value: support.filter((row) => isOpenStatus(row.status)).length, tone: "neutral"},
+    {
+      label: "Active listings",
+      value: cars.filter((row) => row.status === "active").length,
+      tone: "good",
+    },
+    {
+      label: "Open shipments",
+      value: [...shipments, ...freightShipments].filter((row) =>
+        isOpenStatus(row.status),
+      ).length,
+      tone: "attention",
+    },
+    {
+      label: "Pending purchases",
+      value: purchases.filter((row) => isOpenStatus(purchaseStatus(row)))
+        .length,
+      tone: "attention",
+    },
+    {
+      label: "Support requests",
+      value: support.filter((row) => isOpenStatus(row.status)).length,
+      tone: "neutral",
+    },
   ];
   return (
     <div className="stack">
@@ -564,6 +715,7 @@ function TodayView({
         cars={cars}
         purchases={purchases}
         shipments={shipments}
+        freightShipments={freightShipments}
         transports={transports}
         parkedCars={parkedCars}
       />
@@ -580,27 +732,45 @@ function TodayView({
             {attentionRows.map((row) => (
               <DataRow
                 key={`${row._path ?? row.id}`}
-                title={text(row.trackingCode ?? row.title ?? row.vehicleTitle ?? row.carTitle, row.id)}
+                title={text(
+                  row.trackingCode ??
+                    row.title ??
+                    row.vehicleTitle ??
+                    row.carTitle,
+                  row.id,
+                )}
                 subtitle={formatDate(row.updatedAt ?? row.createdAt)}
                 status={text(row.purchaseStatus ?? row.status, "pending")}
               />
             ))}
-            {attentionRows.length === 0 && <EmptyState text="No urgent operational items right now." />}
+            {attentionRows.length === 0 && (
+              <EmptyState text="No urgent operational items right now." />
+            )}
           </div>
         </Panel>
         <Panel title="Enabled services" icon={<Building2 size={18} />}>
           <div className="tool-list">
             {Array.from(services).map((service) => (
-              <span className="status-pill" key={service}>{serviceLabels[service] ?? service}</span>
+              <span className="status-pill" key={service}>
+                {serviceLabels[service] ?? service}
+              </span>
             ))}
-            {services.size === 0 && <EmptyState text="No services are enabled yet." />}
+            {services.size === 0 && (
+              <EmptyState text="No services are enabled yet." />
+            )}
           </div>
         </Panel>
       </div>
       {(transports.length > 0 || parkedCars.length > 0) && (
         <div className="metric-grid">
-          <article className="metric neutral"><span>Transport requests</span><strong>{transports.length}</strong></article>
-          <article className="metric neutral"><span>Parked cars</span><strong>{parkedCars.length}</strong></article>
+          <article className="metric neutral">
+            <span>Transport requests</span>
+            <strong>{transports.length}</strong>
+          </article>
+          <article className="metric neutral">
+            <span>Parked cars</span>
+            <strong>{parkedCars.length}</strong>
+          </article>
         </div>
       )}
     </div>
@@ -620,7 +790,9 @@ function PayoutsPanel({
   onOpenSupport: () => void;
   canOpenSupport: boolean;
 }) {
-  const [busyAction, setBusyAction] = useState<"" | "link" | "refresh" | "auto">("");
+  const [busyAction, setBusyAction] = useState<
+    "" | "link" | "refresh" | "auto"
+  >("");
   const [error, setError] = useState("");
   const [autoRefreshKey, setAutoRefreshKey] = useState("");
   const payoutStatus = resolveBusinessPayoutStatus({
@@ -635,7 +807,10 @@ function PayoutsPanel({
     setError("");
     try {
       const href = window.location.href;
-      const result = await httpsCallable(functions, "createBusinessStripeAccountLink")({
+      const result = await httpsCallable(
+        functions,
+        "createBusinessStripeAccountLink",
+      )({
         businessId,
         returnUrl: href,
         refreshUrl: href,
@@ -644,25 +819,39 @@ function PayoutsPanel({
       if (!url) throw new Error("Stripe did not return an onboarding link.");
       window.location.assign(url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not start Stripe onboarding.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not start Stripe onboarding.",
+      );
     } finally {
       setBusyAction("");
     }
   }
 
-  const refresh = useCallback(async ({silent = false}: {silent?: boolean} = {}) => {
+  const refresh = useCallback(
+    async ({ silent = false }: { silent?: boolean } = {}) => {
     setBusyAction(silent ? "auto" : "refresh");
     if (!silent) setError("");
     try {
-      await httpsCallable(functions, "refreshBusinessStripeAccountStatus")({businessId});
+        await httpsCallable(
+          functions,
+          "refreshBusinessStripeAccountStatus",
+        )({ businessId });
     } catch (err) {
       if (!silent) {
-        setError(err instanceof Error ? err.message : "Could not refresh payout status.");
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Could not refresh payout status.",
+          );
       }
     } finally {
       setBusyAction("");
     }
-  }, [businessId]);
+    },
+    [businessId],
+  );
 
   useEffect(() => {
     if (
@@ -701,26 +890,41 @@ function PayoutsPanel({
       }
     >
       <div className="tool-list">
-        <span className={`status-pill ${payoutStatus.state === "ready" ? "" : "warning"}`}>
+        <span
+          className={`status-pill ${payoutStatus.state === "ready" ? "" : "warning"}`}
+        >
           {payoutStatus.primaryLabel}
         </span>
-        <span className={`status-pill ${payoutStatus.chargesEnabled ? "" : "warning"}`}>
+        <span
+          className={`status-pill ${payoutStatus.chargesEnabled ? "" : "warning"}`}
+        >
           {payoutStatus.chargesLabel}
         </span>
-        {payoutStatus.stripeAccountId && <span className="status-pill compact">{payoutStatus.stripeAccountId}</span>}
+        {payoutStatus.stripeAccountId && (
+          <span className="status-pill compact">
+            {payoutStatus.stripeAccountId}
+          </span>
+        )}
         {payoutStatus.state === "connected_pending" && (
-          <button className="secondary-button" disabled={busy || !businessId || previewMode} onClick={() => refresh()} type="button">
+          <button
+            className="secondary-button"
+            disabled={busy || !businessId || previewMode}
+            onClick={() => refresh()}
+            type="button"
+          >
             {payoutStatus.refreshLabel}
           </button>
         )}
       </div>
-      {payoutStatus.helperText && <div className="info-band">{payoutStatus.helperText}</div>}
+      {payoutStatus.helperText && (
+        <div className="info-band">{payoutStatus.helperText}</div>
+      )}
       {payoutStatus.state === "connected_pending" && (
         <div className="stripe-help-card">
           <strong>Stuck with Stripe setup?</strong>
           <p>
-            Use Continue in Stripe to finish identity, tax, legal, and bank questions.
-            Return here and refresh the status after submitting.
+            Use Continue in Stripe to finish identity, tax, legal, and bank
+            questions. Return here and refresh the status after submitting.
           </p>
           <div className="stripe-help-actions">
             <a
@@ -741,8 +945,8 @@ function PayoutsPanel({
             </button>
           </div>
           <small>
-            Do not upload identity, tax, legal, or bank files to Laawol. Stripe must collect
-            those details in its secure onboarding flow.
+            Do not upload identity, tax, legal, or bank files to Laawol. Stripe
+            must collect those details in its secure onboarding flow.
           </small>
         </div>
       )}
@@ -755,37 +959,56 @@ function AnalyticsView({
   cars,
   purchases,
   shipments,
+  freightShipments,
   transports,
   parkedCars,
 }: {
   cars: FirestoreRow[];
   purchases: FirestoreRow[];
   shipments: FirestoreRow[];
+  freightShipments: FirestoreRow[];
   transports: FirestoreRow[];
   parkedCars: FirestoreRow[];
 }) {
   const listingBreakdown = topStatuses(cars, "status");
-  const operationBreakdown = topStatuses([...shipments, ...transports, ...parkedCars], "status");
+  const operationBreakdown = topStatuses(
+    [...shipments, ...freightShipments, ...transports, ...parkedCars],
+    "status",
+  );
   const purchaseBreakdown = topStatuses(purchases, "purchaseStatus");
-  const earnings = useMemo(() => summarizeBusinessEarnings({
+  const earnings = useMemo(
+    () =>
+      summarizeBusinessEarnings({
     purchases,
     shipments,
+        freightShipments,
     transports,
     parkedCars,
-  }), [parkedCars, purchases, shipments, transports]);
+      }),
+    [freightShipments, parkedCars, purchases, shipments, transports],
+  );
   const activeInventoryValue = cars
     .filter((row) => text(row.status, "") === "active")
     .reduce((sum, row) => sum + numericValue(row.price), 0);
-  const paidHoldValue = purchases
-    .reduce((sum, row) => sum + numericValue(row.depositAmount ?? row.holdDepositAmount), 0);
+  const paidHoldValue = purchases.reduce(
+    (sum, row) =>
+      sum + numericValue(row.depositAmount ?? row.holdDepositAmount),
+    0,
+  );
 
   return (
     <div className="stack">
       <div className="split-grid">
         <Panel title="Analytics" icon={<BarChart3 size={18} />}>
           <div className="metric-grid">
-            <article className="metric money"><span>Active inventory value</span><strong>{formatMoney(activeInventoryValue)}</strong></article>
-            <article className="metric money"><span>Hold deposits</span><strong>{formatMoney(paidHoldValue)}</strong></article>
+            <article className="metric money">
+              <span>Active inventory value</span>
+              <strong>{formatMoney(activeInventoryValue)}</strong>
+            </article>
+            <article className="metric money">
+              <span>Hold deposits</span>
+              <strong>{formatMoney(paidHoldValue)}</strong>
+            </article>
           </div>
           <div className="analytics-bars">
             <AnalyticsBars title="Listings" rows={listingBreakdown} />
@@ -793,18 +1016,36 @@ function AnalyticsView({
           </div>
         </Panel>
         <Panel title="Operations mix" icon={<ClipboardList size={18} />}>
-          <AnalyticsBars title="Operational statuses" rows={operationBreakdown} />
+          <AnalyticsBars
+            title="Operational statuses"
+            rows={operationBreakdown}
+          />
         </Panel>
       </div>
       <Panel title="Business earnings" icon={<Banknote size={18} />}>
         <div className="metric-grid earnings-metrics">
-          <article className="metric money"><span>Gross received</span><strong>{formatMoney(earnings.totals.grossReceived)}</strong></article>
-          <article className="metric attention"><span>Platform fees</span><strong>{formatMoney(earnings.totals.platformFees)}</strong></article>
-          <article className="metric good"><span>Business earnings</span><strong>{formatMoney(earnings.totals.businessEarnings)}</strong></article>
-          <article className="metric neutral"><span>Pending payments</span><strong>{formatMoney(earnings.totals.pendingGross)}</strong></article>
+          <article className="metric money">
+            <span>Gross received</span>
+            <strong>{formatMoney(earnings.totals.grossReceived)}</strong>
+          </article>
+          <article className="metric attention">
+            <span>Platform fees</span>
+            <strong>{formatMoney(earnings.totals.platformFees)}</strong>
+          </article>
+          <article className="metric good">
+            <span>Business earnings</span>
+            <strong>{formatMoney(earnings.totals.businessEarnings)}</strong>
+          </article>
+          <article className="metric neutral">
+            <span>Pending payments</span>
+            <strong>{formatMoney(earnings.totals.pendingGross)}</strong>
+          </article>
         </div>
         <div className="list-summary">
-          <span>Paid transactions</span> <b>{earnings.totals.paidTransactions.toLocaleString()}</b> · <span>Pending transactions</span> <b>{earnings.totals.pendingTransactions.toLocaleString()}</b>
+          <span>Paid transactions</span>{" "}
+          <b>{earnings.totals.paidTransactions.toLocaleString()}</b> ·{" "}
+          <span>Pending transactions</span>{" "}
+          <b>{earnings.totals.pendingTransactions.toLocaleString()}</b>
         </div>
         <div className="earnings-table">
           <div className="earnings-table-head">
@@ -818,7 +1059,10 @@ function AnalyticsView({
             <div className="earnings-table-row" key={service.serviceId}>
               <span>
                 <strong>{service.label}</strong>
-                <small><span>Paid</span> {service.paidTransactions} · <span>Pending</span> {service.pendingTransactions}</small>
+                <small>
+                  <span>Paid</span> {service.paidTransactions} ·{" "}
+                  <span>Pending</span> {service.pendingTransactions}
+                </small>
               </span>
               <span>{formatMoney(service.grossReceived)}</span>
               <span>{formatMoney(service.platformFees)}</span>
@@ -827,7 +1071,8 @@ function AnalyticsView({
             </div>
           ))}
         </div>
-        {earnings.totals.paidTransactions === 0 && earnings.totals.pendingTransactions === 0 && (
+        {earnings.totals.paidTransactions === 0 &&
+          earnings.totals.pendingTransactions === 0 && (
           <EmptyState text="No paid business transactions are loaded yet." />
         )}
       </Panel>
@@ -835,17 +1080,35 @@ function AnalyticsView({
   );
 }
 
-function AnalyticsBars({title, rows}: {title: string; rows: Array<[string, number]>}) {
+function AnalyticsBars({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: Array<[string, number]>;
+}) {
   const total = rows.reduce((sum, [, count]) => sum + count, 0);
   return (
     <div className="analytics-bars">
-      <div className="analytics-bar-label"><span>{title}</span><span>{total}</span></div>
+      <div className="analytics-bar-label">
+        <span>{title}</span>
+        <span>{total}</span>
+      </div>
       {rows.map(([label, count]) => {
-        const width = total > 0 ? Math.max(4, Math.round((count / total) * 100)) : 0;
+        const width =
+          total > 0 ? Math.max(4, Math.round((count / total) * 100)) : 0;
         return (
           <div className="analytics-bar" key={label}>
-            <div className="analytics-bar-label"><span>{statusLabel(label)}</span><span>{count}</span></div>
-            <div className="analytics-bar-track"><div className="analytics-bar-fill" style={{width: `${width}%`}} /></div>
+            <div className="analytics-bar-label">
+              <span>{statusLabel(label)}</span>
+              <span>{count}</span>
+            </div>
+            <div className="analytics-bar-track">
+              <div
+                className="analytics-bar-fill"
+                style={{ width: `${width}%` }}
+              />
+            </div>
           </div>
         );
       })}
@@ -869,11 +1132,20 @@ function ProfileView({
         <div className="business-card-body">
           <div className="person-block owner-block">
             <span>Name</span>
-            <strong>{text(business?.name ?? profile.businessName, "Business")}</strong>
-            <small>{text(business?.email ?? business?.phone ?? business?.website, "Business contact not set")}</small>
+            <strong>
+              {text(business?.name ?? profile.businessName, "Business")}
+            </strong>
+            <small>
+              {text(
+                business?.email ?? business?.phone ?? business?.website,
+                "Business contact not set",
+              )}
+            </small>
           </div>
           <div className="business-card-meta">
-            <span>Status: {statusLabel(text(business?.status, "pending"))}</span>
+            <span>
+              Status: {statusLabel(text(business?.status, "pending"))}
+            </span>
             <span>Updated: {formatDate(business?.updatedAt)}</span>
           </div>
         </div>
@@ -881,9 +1153,13 @@ function ProfileView({
       <Panel title="Services" icon={<ClipboardList size={18} />}>
         <div className="tool-list">
           {Array.from(services).map((service) => (
-            <span className="status-pill" key={service}>{serviceLabels[service] ?? service}</span>
+            <span className="status-pill" key={service}>
+              {serviceLabels[service] ?? service}
+            </span>
           ))}
-          {services.size === 0 && <EmptyState text="No enabled services found." />}
+          {services.size === 0 && (
+            <EmptyState text="No enabled services found." />
+          )}
         </div>
       </Panel>
     </div>
@@ -930,7 +1206,11 @@ function DataRow({
         <strong>{title}</strong>
         <small>{subtitle}</small>
       </div>
-      <span className={`status-pill compact ${isOpenStatus(status) ? "warning" : ""}`}>{statusLabel(status)}</span>
+      <span
+        className={`status-pill compact ${isOpenStatus(status) ? "warning" : ""}`}
+      >
+        {statusLabel(status)}
+      </span>
     </article>
   );
 }
@@ -947,6 +1227,7 @@ function tabIcon(tab: BusinessTab) {
     listings: <Car {...props} />,
     purchases: <ClipboardList {...props} />,
     barrels: <Package {...props} />,
+    freight: <Package {...props} />,
     transport: <Truck {...props} />,
     parking: <ParkingCircle {...props} />,
     destinations: <MapPinned {...props} />,
@@ -959,7 +1240,17 @@ function tabIcon(tab: BusinessTab) {
 
 function isOpenStatus(value: unknown) {
   const status = text(value, "").toLowerCase();
-  return !["", "completed", "cancelled", "sold", "inactive", "refunded", "rejected", "resolved", "closed"].includes(status);
+  return ![
+    "",
+    "completed",
+    "cancelled",
+    "sold",
+    "inactive",
+    "refunded",
+    "rejected",
+    "resolved",
+    "closed",
+  ].includes(status);
 }
 
 function purchaseStatus(row: FirestoreRow) {
@@ -987,7 +1278,7 @@ function hasBusinessPermission(profile: UserProfile, permission: string) {
   const permissions = Array.isArray(profile.businessPermissions)
     ? profile.businessPermissions.map((item) => text(item, ""))
     : [];
-  return permissions.length === 0 || permissions.includes(permission);
+  return permissions.includes(permission);
 }
 
 function statusLabel(value: unknown) {

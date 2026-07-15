@@ -27,6 +27,7 @@ class Car {
     this.interiorColor = '',
     this.vin = '',
     this.stockNumber = '',
+    this.isRebuiltTitle,
     this.isNegotiable = false,
     this.financingNote = '',
     this.locationCity = '',
@@ -72,6 +73,7 @@ class Car {
   final String interiorColor;
   final String vin;
   final String stockNumber;
+  final bool? isRebuiltTitle;
   final bool isNegotiable;
   final String financingNote;
   final String locationCity;
@@ -123,6 +125,9 @@ class Car {
       interiorColor: (data['interiorColor'] ?? '') as String,
       vin: (data['vin'] ?? '') as String,
       stockNumber: (data['stockNumber'] ?? '') as String,
+      isRebuiltTitle: data['isRebuiltTitle'] is bool
+          ? data['isRebuiltTitle'] as bool
+          : null,
       isNegotiable: data['isNegotiable'] == true,
       financingNote: (data['financingNote'] ?? '') as String,
       locationCity: (data['locationCity'] ?? '') as String,
