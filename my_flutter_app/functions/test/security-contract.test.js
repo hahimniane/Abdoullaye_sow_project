@@ -7,6 +7,10 @@ const indexSource = fs.readFileSync(
     path.join(__dirname, "..", "index.js"),
     "utf8",
 );
+const storageRulesSource = fs.readFileSync(
+    path.join(__dirname, "..", "storage.rules"),
+    "utf8",
+);
 
 test("deployed callables enforce App Check", () => {
   assert.doesNotMatch(indexSource, /enforceAppCheck:\s*false/);
@@ -92,5 +96,25 @@ test("the Functions emulator cannot send outbound push notifications", () => {
   assert.ok(
       emulatorGuard < outboundSend,
       "the emulator guard must run before the outbound FCM call",
+  );
+});
+
+test("support attachment access evaluates admin permissions once", () => {
+  const start = storageRulesSource.indexOf("function canAccessSupportCase");
+  const end = storageRulesSource.indexOf(
+      "function validSupportUpload",
+      start,
+  );
+  const supportAccessSource = storageRulesSource.slice(start, end);
+
+  assert.ok(start >= 0 && end > start, "missing support access rules");
+  assert.match(supportAccessSource, /hasAdminCapability\('support'\)/);
+  assert.match(
+      supportAccessSource,
+      /canManageBusinessSupportAsMember\(firestore\.get/,
+  );
+  assert.doesNotMatch(
+      supportAccessSource,
+      /canManageBusinessSupport\(firestore\.get/,
   );
 });

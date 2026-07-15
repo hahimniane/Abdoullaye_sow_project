@@ -142,3 +142,8 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
 - Rebuilt-title regressions must cover required boolean creation, invalid or
   missing rule rejection, legacy-null display as Not provided, edit persistence,
   buyer card/detail visibility, admin review/filtering, and English/French copy.
+- Firebase Storage rules have a 1,000-expression evaluation limit. In support
+  attachment access, evaluate `hasAdminCapability('support')` once, then use the
+  member-only business helper for the fallback; nesting the full admin-or-member
+  helper there causes legitimate dynamic-role evaluation to become noisy and
+  denied paths to fail by evaluator exhaustion instead of a clean denial.

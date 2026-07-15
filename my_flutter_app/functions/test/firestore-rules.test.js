@@ -1531,6 +1531,23 @@ describe("support attachment Storage rules", () => {
     );
   });
 
+  it("allows an administrator with a dynamic support permission", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc("platformConfig/permissions").update({
+        "roles.contentManager.sections.support": "manage",
+      });
+    });
+
+    await assertSucceeds(
+        putSupportAttachment(
+            storageFor("content-admin"),
+            "case_a",
+            "content-admin",
+            "dynamic-support-note.pdf",
+        ),
+    );
+  });
+
   it("denies strangers, wrong uploader paths, and invalid support files",
       async () => {
         await assertFails(

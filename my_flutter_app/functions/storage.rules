@@ -127,18 +127,20 @@ service firebase.storage {
         );
     }
 
-    function canManageBusinessSupport(businessId) {
-      return hasAdminCapability('support') ||
+    function canManageBusinessSupportAsMember(businessId) {
+      return isLinkedToBusiness(businessId) &&
         (
-          isLinkedToBusiness(businessId) &&
+          userProfile().role == 'businessOwner' ||
           (
-            userProfile().role == 'businessOwner' ||
-            (
-              userProfile().role == 'staff' &&
-              hasBusinessSection('support')
-            )
+            userProfile().role == 'staff' &&
+            hasBusinessSection('support')
           )
         );
+    }
+
+    function canManageBusinessSupport(businessId) {
+      return hasAdminCapability('support') ||
+        canManageBusinessSupportAsMember(businessId);
     }
 
     function validImageUpload() {
@@ -175,7 +177,7 @@ service firebase.storage {
           hasAdminCapability('support') ||
           (
             'businessId' in firestore.get(/databases/(default)/documents/supportCases/$(caseId)).data &&
-            canManageBusinessSupport(firestore.get(/databases/(default)/documents/supportCases/$(caseId)).data.businessId)
+            canManageBusinessSupportAsMember(firestore.get(/databases/(default)/documents/supportCases/$(caseId)).data.businessId)
           )
         );
     }
