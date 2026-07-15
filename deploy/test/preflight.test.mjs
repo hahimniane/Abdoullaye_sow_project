@@ -6,7 +6,10 @@ import {afterEach, describe, test} from "node:test";
 
 import {
   appCheckWebConfig,
+  deploymentJavaEnvironment,
   deploymentMode,
+  firebaseDryRunConfig,
+  javaMajorVersion,
   paymentModeEvidence,
   simulationEnabled,
   stripeKeyMode,
@@ -76,4 +79,55 @@ test("production App Check requires a site key and rejects debug tokens", () => 
     debugToken: "registered_debug_token",
     production: true,
   }).ok, false);
+});
+
+test("deployment commands prefer a compatible Java home on the command path", () => {
+  const compatibleHome = path.join("", "opt", "openjdk-21");
+  const result = deploymentJavaEnvironment({
+    environment: {
+      JAVA_HOME: path.join("", "opt", "openjdk-17"),
+      PATH: [path.join("", "opt", "openjdk-17", "bin"), "/usr/bin"].join(":"),
+    },
+    candidateHomes: [compatibleHome],
+    existsSync: (candidate) => candidate === path.join(compatibleHome, "bin", "java"),
+    delimiter: ":",
+  });
+
+  assert.equal(result.JAVA_HOME, compatibleHome);
+  assert.equal(result.PATH.split(":")[0], path.join(compatibleHome, "bin"));
+});
+
+test("DEPLOY_JAVA_HOME overrides auto-detected Java locations", () => {
+  const overrideHome = path.join("", "custom", "jdk-22");
+  const result = deploymentJavaEnvironment({
+    environment: {DEPLOY_JAVA_HOME: overrideHome, PATH: "/usr/bin"},
+    candidateHomes: [path.join("", "opt", "openjdk-21")],
+    existsSync: () => true,
+    delimiter: ":",
+  });
+
+  assert.equal(result.JAVA_HOME, overrideHome);
+});
+
+test("Java version parsing handles modern and legacy version output", () => {
+  assert.equal(javaMajorVersion('openjdk version "21.0.11" 2026-04-21'), 21);
+  assert.equal(javaMajorVersion('java version "1.8.0_402"'), 8);
+  assert.equal(javaMajorVersion("unrecognized runtime"), null);
+});
+
+test("Firebase dry-run config removes only duplicate predeploy hooks", () => {
+  const source = {
+    firestore: {rules: "firestore.rules"},
+    functions: [{
+      source: "functions",
+      codebase: "default",
+      predeploy: ["npm run lint", "npm test"],
+    }],
+  };
+
+  assert.deepEqual(firebaseDryRunConfig(source), {
+    firestore: {rules: "firestore.rules"},
+    functions: [{source: "functions", codebase: "default"}],
+  });
+  assert.deepEqual(source.functions[0].predeploy, ["npm run lint", "npm test"]);
 });

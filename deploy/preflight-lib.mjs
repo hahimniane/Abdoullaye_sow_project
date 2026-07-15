@@ -3,6 +3,54 @@ import path from "node:path";
 
 export const DEFAULT_PRODUCTION_PROJECT = "car-selling-flutter-app";
 
+export function javaMajorVersion(output) {
+  const value = String(output || "");
+  const version = value.match(/(?:openjdk|java) version "([^"]+)"/i)?.[1] ||
+    value.match(/(?:openjdk|java)\s+([0-9][^\s]*)/i)?.[1] || "";
+  const first = Number.parseInt(version.split(".")[0], 10);
+  if (!Number.isFinite(first)) return null;
+  return first === 1 ? Number.parseInt(version.split(".")[1], 10) || null : first;
+}
+
+export function deploymentJavaEnvironment({
+  environment = process.env,
+  candidateHomes = [],
+  existsSync = fs.existsSync,
+  delimiter = path.delimiter,
+} = {}) {
+  const homes = [
+    environment.DEPLOY_JAVA_HOME,
+    ...candidateHomes,
+    environment.JAVA_HOME,
+  ].map((value) => String(value || "").trim()).filter(Boolean);
+  const javaHome = homes.find((home) =>
+    existsSync(path.join(home, "bin", process.platform === "win32" ? "java.exe" : "java"))
+  );
+  if (!javaHome) return {...environment};
+
+  const javaBin = path.join(javaHome, "bin");
+  const currentPath = String(environment.PATH || "");
+  const pathEntries = currentPath.split(delimiter).filter(Boolean);
+  return {
+    ...environment,
+    JAVA_HOME: javaHome,
+    PATH: [javaBin, ...pathEntries.filter((entry) => entry !== javaBin)]
+        .join(delimiter),
+  };
+}
+
+export function firebaseDryRunConfig(config) {
+  const result = structuredClone(config);
+  const functions = Array.isArray(result.functions) ? result.functions :
+    result.functions ? [result.functions] : [];
+  result.functions = functions.map((entry) => {
+    const copy = {...entry};
+    delete copy.predeploy;
+    return copy;
+  });
+  return result;
+}
+
 const NON_PRODUCTION_ENVIRONMENTS = new Set([
   "development",
   "nonproduction",

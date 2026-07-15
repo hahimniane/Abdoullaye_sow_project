@@ -44,7 +44,10 @@ It does not print secret values and it does not deploy.
 
 Backend preflight also runs Functions lint plus the complete
 unit/callable/Firestore/Storage emulator suite. Java 21 or newer and Firebase
-CLI `14.22.0` must be available locally. For the production project it rejects
+CLI `14.22.0` must be available locally. The deploy tooling automatically
+prefers Homebrew's versioned Java 21 installation on macOS and prepends the
+selected `JAVA_HOME/bin` to `PATH`; set `DEPLOY_JAVA_HOME` to override it. For
+the production project it rejects
 `SIMULATE_PAYMENTS` and requires `STRIPE_SECRET_KEY` to be a live key. A
 non-production project must be explicitly labeled, for example:
 
@@ -55,6 +58,9 @@ DEPLOY_ENV=test FIREBASE_PROJECT=demo-laawol npm run preflight:backend
 Production preflight also requires an authenticated `gh` CLI and a successful
 `CI` workflow run for the exact commit being deployed. `ALLOW_UNVERIFIED_CI=1`
 is an emergency-only, logged override; it is not a routine deployment option.
+The Functions dry run uses a temporary Firebase config without duplicate
+predeploy hooks because lint and the complete test suite have already passed in
+the same preflight; the real deploy retains and reruns those hooks.
 
 For path-specific checks, run:
 

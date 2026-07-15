@@ -8,7 +8,10 @@ import { fileURLToPath } from "node:url";
 import {
   DEFAULT_PRODUCTION_PROJECT,
   appCheckWebConfig,
+  deploymentJavaEnvironment,
   deploymentMode,
+  firebaseDryRunConfig,
+  javaMajorVersion,
   paymentModeEvidence,
   stripeKeyMode,
 } from "./preflight-lib.mjs";
@@ -21,6 +24,13 @@ const PRODUCTION_PROJECT_ID = process.env.PRODUCTION_FIREBASE_PROJECT ||
 const SCOPE = process.env.PREFLIGHT_SCOPE || "full";
 const VALID_SCOPES = new Set(["backend", "full", "static"]);
 const STATIC_TRANSPORT = process.env.STATIC_TRANSPORT || "ftp";
+const commandEnvironment = deploymentJavaEnvironment({
+  environment: process.env,
+  candidateHomes: [
+    "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
+    "/usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
+  ],
+});
 
 if (!VALID_SCOPES.has(SCOPE)) {
   console.error("PREFLIGHT_SCOPE must be 'static', 'backend', or 'full'.");
@@ -46,7 +56,7 @@ function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: options.cwd || ROOT,
     encoding: "utf8",
-    env: process.env,
+    env: commandEnvironment,
   });
   return {
     ok: result.status === 0,
@@ -60,7 +70,7 @@ function runInherit(command, args, options = {}) {
   try {
     execFileSync(command, args, {
       cwd: options.cwd || ROOT,
-      env: process.env,
+      env: commandEnvironment,
       stdio: "inherit",
     });
     return true;
@@ -191,6 +201,15 @@ if (checksStatic) {
 if (checksBackend) {
   const functionsDir = path.join(ROOT, "my_flutter_app", "functions");
   const mode = resolvedDeploymentMode;
+  const javaRuntime = run("java", ["-version"]);
+  const javaOutput = `${javaRuntime.stdout}\n${javaRuntime.stderr}`;
+  const javaMajor = javaMajorVersion(javaOutput);
+  addCheck(
+      "Java runtime is compatible with Firebase",
+      javaRuntime.ok && javaMajor !== null && javaMajor >= 21,
+      javaMajor === null ? "install Java 21 or set DEPLOY_JAVA_HOME" :
+        `Java ${javaMajor}${javaMajor >= 21 ? "" : " is too old; install Java 21"}`,
+  );
   addCheck("Deployment environment is explicit and safe", mode.ok, mode.detail);
 
   const paymentEvidence = paymentModeEvidence({
@@ -289,16 +308,37 @@ if (checksBackend) {
         "skipped because SKIP_FUNCTIONS_DRY_RUN=true",
     );
   } else {
-    const functionsDryRun = run("firebase", [
-      "deploy",
-      "--only",
-      "functions",
-      "--project",
-      PROJECT_ID,
-      "--dry-run",
-    ], {
-      cwd: path.join(ROOT, "my_flutter_app"),
-    });
+    const appDir = path.join(ROOT, "my_flutter_app");
+    const sourceConfig = JSON.parse(fs.readFileSync(
+        path.join(appDir, "firebase.json"),
+        "utf8",
+    ));
+    const dryRunConfigPath = path.join(
+        appDir,
+        `.firebase-preflight-${process.pid}.json`,
+    );
+    let functionsDryRun;
+    try {
+      // Lint and the complete emulator/rules suite passed immediately above.
+      // Remove only the duplicate predeploy hooks so the dry run focuses on
+      // function discovery, production API access, and secret resolution.
+      fs.writeFileSync(
+          dryRunConfigPath,
+          `${JSON.stringify(firebaseDryRunConfig(sourceConfig), null, 2)}\n`,
+      );
+      functionsDryRun = run("firebase", [
+        "deploy",
+        "--only",
+        "functions",
+        "--project",
+        PROJECT_ID,
+        "--config",
+        dryRunConfigPath,
+        "--dry-run",
+      ], {cwd: appDir});
+    } finally {
+      fs.rmSync(dryRunConfigPath, {force: true});
+    }
     const functionsOutput = `${functionsDryRun.stdout}\n${functionsDryRun.stderr}`;
     const computeApiDisabled = [
       /Compute Engine API has not been used/i,
