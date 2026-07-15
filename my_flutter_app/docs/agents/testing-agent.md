@@ -147,3 +147,8 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   member-only business helper for the fallback; nesting the full admin-or-member
   helper there causes legitimate dynamic-role evaluation to become noisy and
   denied paths to fail by evaluator exhaustion instead of a clean denial.
+- Production static preflight must require each public hostname to resolve only
+  to the committed Hostinger IPv4 and to have no AAAA record. DNS timeouts,
+  SERVFAIL, and other inconclusive resolver results fail closed; genuine
+  no-record responses are acceptable only for AAAA. Keep post-deploy HTTP smoke
+  checks because DNS can change after the preflight snapshot.

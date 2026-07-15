@@ -2,11 +2,15 @@
 // This script prints only secret shape/availability, never secret values.
 
 import { execFileSync, spawnSync } from "node:child_process";
+import { resolve4, resolve6 } from "node:dns/promises";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   DEFAULT_PRODUCTION_PROJECT,
+  HOSTINGER_PRODUCTION_IPV4,
+  PRODUCTION_STATIC_HOSTS,
+  assessStaticDnsHost,
   appCheckWebConfig,
   deploymentJavaEnvironment,
   deploymentMode,
@@ -79,6 +83,19 @@ function runInherit(command, args, options = {}) {
   }
 }
 
+async function resolveDns(resolver, hostname) {
+  try {
+    return {status: "ok", addresses: await resolver(hostname)};
+  } catch (error) {
+    const errorCode = String(error?.code || "UNKNOWN");
+    return {
+      status: ["ENODATA", "ENOTFOUND"].includes(errorCode) ? "absent" : "error",
+      addresses: [],
+      errorCode,
+    };
+  }
+}
+
 function parseJsonFromOutput(output) {
   const indexesStart = output.lastIndexOf("{\n  \"indexes\"");
   const start = indexesStart >= 0 ? indexesStart : output.indexOf("{");
@@ -146,6 +163,20 @@ if (resolvedDeploymentMode.mode === "production") {
 }
 
 if (checksStatic) {
+  for (const hostname of PRODUCTION_STATIC_HOSTS) {
+    const [ipv4Result, ipv6Result] = await Promise.all([
+      resolveDns(resolve4, hostname),
+      resolveDns(resolve6, hostname),
+    ]);
+    const dns = assessStaticDnsHost({
+      hostname,
+      expectedIPv4: HOSTINGER_PRODUCTION_IPV4,
+      ipv4Result,
+      ipv6Result,
+    });
+    addCheck(`Static DNS for ${hostname}`, dns.ok, dns.detail);
+  }
+
   const appCheck = appCheckWebConfig({
     siteKey: process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY,
     debugToken: process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_DEBUG_TOKEN,

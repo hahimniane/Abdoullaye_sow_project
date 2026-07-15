@@ -87,8 +87,9 @@ URLs are root-absolute. Do not add `basePath: "/admin"` or
 ## 3. Deploy (guarded rsync over SSH)
 
 Run the guarded script. It enforces a clean tree, verifies the public site,
-runs console tests, rebuilds from source, uploads all three targets, and then
-runs HTTP smoke checks:
+runs console tests, verifies all three public DNS names point only to the
+documented Hostinger IPv4 (with no unexpected IPv6 record), rebuilds from
+source, uploads all three targets, and then runs HTTP smoke checks:
 
 ```bash
 cd deploy

@@ -5,6 +5,8 @@ import path from "node:path";
 import {afterEach, describe, test} from "node:test";
 
 import {
+  PRODUCTION_STATIC_HOSTS,
+  assessStaticDnsHost,
   appCheckWebConfig,
   deploymentJavaEnvironment,
   deploymentMode,
@@ -79,6 +81,73 @@ test("production App Check requires a site key and rejects debug tokens", () => 
     debugToken: "registered_debug_token",
     production: true,
   }).ok, false);
+});
+
+test("static DNS accepts only the documented Hostinger IPv4 without IPv6", () => {
+  assert.deepEqual(assessStaticDnsHost({
+    hostname: "laawoldigital.com",
+    ipv4Result: {
+      status: "ok",
+      addresses: ["46.202.183.189", "46.202.183.189"],
+    },
+    ipv6Result: {status: "absent", addresses: [], errorCode: "ENODATA"},
+  }), {
+    ok: true,
+    detail: "A=46.202.183.189; no unexpected AAAA record",
+  });
+});
+
+test("static DNS rejects a wrong address and an IPv6 blackhole", () => {
+  const result = assessStaticDnsHost({
+    hostname: "admin.laawoldigital.com",
+    ipv4Result: {status: "ok", addresses: ["18.204.152.241"]},
+    ipv6Result: {status: "ok", addresses: ["::"]},
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.detail, /A=18\.204\.152\.241; expected 46\.202\.183\.189/);
+  assert.match(result.detail, /unexpected AAAA=::/);
+});
+
+test("static DNS rejects mixed A records and resolver errors", () => {
+  const mixed = assessStaticDnsHost({
+    hostname: "business.laawoldigital.com",
+    ipv4Result: {
+      status: "ok",
+      addresses: ["46.202.183.189", "18.204.152.241"],
+    },
+    ipv6Result: {status: "absent", addresses: [], errorCode: "ENODATA"},
+  });
+  assert.equal(mixed.ok, false);
+
+  const timedOut = assessStaticDnsHost({
+    hostname: "business.laawoldigital.com",
+    ipv4Result: {status: "error", addresses: [], errorCode: "ETIMEOUT"},
+    ipv6Result: {status: "error", addresses: [], errorCode: "SERVFAIL"},
+  });
+  assert.equal(timedOut.ok, false);
+  assert.match(timedOut.detail, /A lookup failed \(ETIMEOUT\)/);
+  assert.match(timedOut.detail, /AAAA lookup failed \(SERVFAIL\)/);
+});
+
+test("static DNS rejects missing A and invalid expected addresses", () => {
+  assert.equal(assessStaticDnsHost({
+    hostname: "business.laawoldigital.com",
+    ipv4Result: {status: "absent", addresses: [], errorCode: "ENOTFOUND"},
+    ipv6Result: {status: "absent", addresses: [], errorCode: "ENOTFOUND"},
+  }).ok, false);
+  assert.match(assessStaticDnsHost({
+    hostname: "business.laawoldigital.com",
+    expectedIPv4: "hostinger.example",
+  }).detail, /expected static IPv4 must be valid/);
+});
+
+test("static DNS gate covers every production hostname", () => {
+  assert.deepEqual(PRODUCTION_STATIC_HOSTS, [
+    "laawoldigital.com",
+    "admin.laawoldigital.com",
+    "business.laawoldigital.com",
+  ]);
 });
 
 test("deployment commands prefer a compatible Java home on the command path", () => {

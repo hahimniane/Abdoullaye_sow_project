@@ -1,7 +1,60 @@
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
 
 export const DEFAULT_PRODUCTION_PROJECT = "car-selling-flutter-app";
+export const HOSTINGER_PRODUCTION_IPV4 = "46.202.183.189";
+export const PRODUCTION_STATIC_HOSTS = [
+  "laawoldigital.com",
+  "admin.laawoldigital.com",
+  "business.laawoldigital.com",
+];
+
+export function assessStaticDnsHost({
+  hostname,
+  expectedIPv4 = HOSTINGER_PRODUCTION_IPV4,
+  ipv4Result,
+  ipv6Result,
+}) {
+  const expected = String(expectedIPv4 || "").trim();
+  if (net.isIP(expected) !== 4) {
+    return {
+      ok: false,
+      detail: `expected static IPv4 must be valid, got ${expected || "empty"}`,
+    };
+  }
+
+  const ipv4 = [...new Set((ipv4Result?.addresses || [])
+      .map((value) => String(value).trim())
+      .filter((value) => net.isIP(value) === 4))].sort();
+  const ipv6 = [...new Set((ipv6Result?.addresses || [])
+      .map((value) => String(value).trim())
+      .filter((value) => net.isIP(value) === 6))].sort();
+
+  const problems = [];
+  if (ipv4Result?.status === "error") {
+    problems.push(`A lookup failed (${ipv4Result.errorCode || "unknown error"})`);
+  } else if (ipv4Result?.status !== "ok" ||
+    ipv4.length !== 1 || ipv4[0] !== expected) {
+    problems.push(`A=${ipv4.join(",") || "missing"}; expected ${expected}`);
+  }
+
+  if (ipv6Result?.status === "error") {
+    problems.push(
+        `AAAA lookup failed (${ipv6Result.errorCode || "unknown error"})`,
+    );
+  } else if (ipv6Result?.status === "ok" && ipv6.length > 0) {
+    problems.push(`unexpected AAAA=${ipv6.join(",")}; remove IPv6 record`);
+  } else if (ipv6Result?.status !== "absent") {
+    problems.push(`AAAA lookup was inconclusive for ${hostname}`);
+  }
+
+  return {
+    ok: problems.length === 0,
+    detail: problems.length > 0 ? problems.join("; ") :
+      `A=${expected}; no unexpected AAAA record`,
+  };
+}
 
 export function javaMajorVersion(output) {
   const value = String(output || "");
