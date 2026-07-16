@@ -166,3 +166,7 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   Never rely on a hand-maintained function-name subset: source derivation belongs
   in preflight, while deployed presence and `ACTIVE` state are enforced by the
   post-deploy smoke so a corrective deployment is not blocked before it runs.
+- Marketing app captures must be normalized into conventional opaque PNG files
+  before publication. Verify the final encoded asset in a real browser several
+  times and compare render hashes; simulator captures can contain unstable raster
+  data that looks correct once and then renders with black bands.

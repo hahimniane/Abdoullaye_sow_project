@@ -112,6 +112,7 @@
     "Laawol Digital — Trusted Services from Registered Businesses": "Laawol Digital — Services de confiance proposés par des entreprises inscrites",
     "Laawol Digital is a platform where registered businesses offer diaspora services — shipping, cars, sourcing, food, and professional help. We bring the pricing, tracking, support, and accountability into one place so customers can choose with confidence.": "Laawol Digital est une plateforme où des entreprises inscrites proposent des services pour la diaspora : expédition, voitures, approvisionnement, restauration et aide professionnelle. Nous rassemblons les prix, le suivi, l’assistance et la responsabilité au même endroit pour que les clients choisissent en confiance.",
     "Laawol connects customers with registered businesses on both sides of the route — so services are easier to compare, track, and support.": "Laawol relie les clients à des entreprises inscrites des deux côtés du trajet, afin que les services soient plus faciles à comparer, suivre et accompagner.",
+    "Laawol app Shipping screen showing barrels, freight, and car transport.": "Écran Expédition de l’application Laawol présentant les barils, le fret et le transport de voitures.",
     "Lawyers & professionals": "Avocats et professionnels",
     "Learn more": "En savoir plus",
     "Let’s bring home closer": "Rapprochons le pays",
@@ -357,6 +358,13 @@
     });
   }
 
+  function localizeImages(lang) {
+    document.querySelectorAll("img[data-src-en][data-src-fr]").forEach(function (image) {
+      var source = lang === "en" ? image.dataset.srcEn : image.dataset.srcFr;
+      if (source && image.getAttribute("src") !== source) image.setAttribute("src", source);
+    });
+  }
+
   function translateTree(root) {
     var lang = getLang();
     document.documentElement.lang = lang;
@@ -414,6 +422,7 @@
   };
 
   document.addEventListener("DOMContentLoaded", function () {
+    localizeImages(getLang());
     addToggle();
     translateTree(document.body);
     var observer = new MutationObserver(function (mutations) {

@@ -452,16 +452,12 @@ a{color:inherit; text-decoration:none}
 .sf-list{list-style:none; padding:0; margin:0 0 24px; display:grid; gap:9px}
 .sf-list li{color:#d6fbf1; font-weight:600; font-size:15px}
 .sf-visual{display:grid; place-items:center}
-.phone-sm{width:262px; padding:24px 14px 16px}
-.req-head{display:flex; align-items:center; gap:10px; margin-bottom:14px}
-.req-head .back{font-size:22px; color:var(--muted); line-height:1}
-.req-head b{font-family:var(--font-head); font-size:15px}
-.req-label{color:var(--muted); font-size:12px; font-weight:700; margin-bottom:7px}
-.req-box{background:var(--bg-soft); border:1px solid var(--line); border-radius:11px; padding:12px; font-size:13px; color:var(--ink); margin-bottom:9px}
-.req-photo{background:var(--mist); border:1px dashed rgba(13,148,136,.4); border-radius:10px; padding:10px 12px; font-size:12.5px; font-weight:700; color:var(--teal-deep); margin-bottom:12px}
-.req-row{display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-top:1px solid var(--line); font-size:13px}
-.req-row span{color:var(--muted)} .req-row b{font-family:var(--font-head)}
-.req-btn{width:100%; margin-top:12px; background:var(--teal); color:#fff; border:0; border-radius:11px; padding:12px; font-weight:800; font-family:var(--font-head); font-size:14px; cursor:pointer}
+.real-app-capture{
+  width:min(100%,286px); aspect-ratio:201/437; overflow:hidden; line-height:0;
+  background:#f7f9fc; border:7px solid rgba(5,35,32,.92); border-radius:38px;
+  box-shadow:0 30px 65px rgba(3,32,29,.34),0 0 0 1px rgba(255,255,255,.18)
+}
+.real-app-capture img{width:100%; height:100%; object-fit:cover}
 
 /* service icon plum + 'more' card */
 .service-icon[data-tone="plum"]{background:rgba(124,58,237,.13); color:#6d28d9}
@@ -631,19 +627,13 @@ html.js-anim .reveal.in { opacity: 1; transform: none; }
 
   .app-tiles .tile,
   .activity .act-row,
-  .phone-row,
-  .req-row,
-  .req-photo,
-  .req-btn {
+  .phone-row {
     animation: riseSoft .65s var(--ease-pro) backwards;
   }
   .app-tiles .tile:nth-child(1), .activity .act-row:nth-child(1) { animation-delay:.22s; }
   .app-tiles .tile:nth-child(2), .activity .act-row:nth-child(2) { animation-delay:.30s; }
   .app-tiles .tile:nth-child(3), .activity .act-row:nth-child(3) { animation-delay:.38s; }
   .app-tiles .tile:nth-child(4), .activity .act-row:nth-child(4) { animation-delay:.46s; }
-  .req-row:nth-of-type(1) { animation-delay:.22s; }
-  .req-row:nth-of-type(2) { animation-delay:.30s; }
-  .req-btn { animation-delay:.38s; }
 }
 
 @keyframes rise {
@@ -683,14 +673,12 @@ html.js-anim .reveal.in { opacity: 1; transform: none; }
 
 /* Richer hover micro-interactions */
 .btn,
-.store-badge,
-.req-btn {
+.store-badge {
   position:relative;
   overflow:hidden;
 }
 .btn::before,
-.store-badge::before,
-.req-btn::before {
+.store-badge::before {
   content:"";
   position:absolute;
   inset:-1px auto -1px -65%;
@@ -701,8 +689,7 @@ html.js-anim .reveal.in { opacity: 1; transform: none; }
   pointer-events:none;
 }
 .btn:hover::before,
-.store-badge:hover::before,
-.req-btn:hover::before {
+.store-badge:hover::before {
   transform:translateX(330%) skewX(-18deg);
 }
 .service-card,
@@ -775,17 +762,13 @@ html.js-anim .reveal.in { opacity: 1; transform: none; }
 .tile,
 .act-row,
 .phone-row,
-.app-track,
-.req-box,
-.req-photo {
+.app-track {
   transition:transform .2s var(--ease-pro), border-color .2s ease, box-shadow .2s ease;
 }
 .tile:hover,
 .act-row:hover,
 .phone-row:hover,
-.app-track:hover,
-.req-box:hover,
-.req-photo:hover {
+.app-track:hover {
   transform:translateY(-2px);
   border-color:rgba(13,148,136,.32);
   box-shadow:0 12px 24px rgba(11,59,56,.08);

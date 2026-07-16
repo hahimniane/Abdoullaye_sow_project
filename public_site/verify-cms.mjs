@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -74,6 +74,22 @@ assertIncludes(index, 'id="featuredBusinessesSection"', "index.html");
 assertIncludes(index, 'id="featuredBusinessesGrid"', "index.html");
 assertIncludes(index, 'data-cms="hero.headline"', "index.html");
 assertIncludes(index, 'data-cms="featured.heading"', "index.html");
+
+for (const file of ["index.html", "source.html"]) {
+  const html = read(file);
+  assertIncludes(html, 'data-src-en="assets/app-shipping-en.png?v=2"', file);
+  assertIncludes(html, 'data-src-fr="assets/app-shipping-fr.png?v=2"', file);
+  assert(
+    !html.includes('class="phone phone-sm"') &&
+      !html.includes("fabric-sample.jpg"),
+    `${file} must show a real localized app capture, not the retired mock UI`,
+  );
+}
+assert(
+  existsSync(path.join(root, "assets", "app-shipping-en.png")) &&
+    existsSync(path.join(root, "assets", "app-shipping-fr.png")),
+  "localized real-app capture assets must be present",
+);
 
 const contact = read("contact.html");
 assertIncludes(contact, '<select name="destination_country"', "contact.html");
