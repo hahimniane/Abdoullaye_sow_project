@@ -148,10 +148,12 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   helper there causes legitimate dynamic-role evaluation to become noisy and
   denied paths to fail by evaluator exhaustion instead of a clean denial.
 - Production static preflight must require each public hostname to resolve only
-  to the committed Hostinger IPv4 and to have no AAAA record. DNS timeouts,
-  SERVFAIL, and other inconclusive resolver results fail closed; genuine
-  no-record responses are acceptable only for AAAA. Keep post-deploy HTTP smoke
-  checks because DNS can change after the preflight snapshot.
+  to the committed Hostinger IPv4 and IPv6. Resolve through both Google and
+  Cloudflare DNS-over-HTTPS and require consensus; local UDP DNS may be
+  intercepted to `18.204.152.241` / `AAAA ::` by router security even when the
+  authoritative records are healthy. Timeouts, DNS errors, and resolver
+  disagreements fail closed. Keep post-deploy HTTP smoke checks because DNS can
+  change after the preflight snapshot.
 - Production web App Check uses a score-based reCAPTCHA Enterprise key for both
   the admin/business Next.js console and Flutter web. Keep both clients on
   `ReCaptchaEnterpriseProvider`, keep debug providers development-only, and run

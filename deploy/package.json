@@ -12,6 +12,7 @@
     "smoke": "node post-deploy-smoke.mjs",
     "smoke:backend": "SMOKE_SCOPE=backend node post-deploy-smoke.mjs",
     "smoke:static": "SMOKE_SCOPE=static node post-deploy-smoke.mjs",
+    "smoke:static:ssh": "SMOKE_SCOPE=static STATIC_SMOKE_TRANSPORT=ssh node post-deploy-smoke.mjs",
     "test": "node --test test/*.test.mjs",
     "verify:public": "node ../public_site/verify-cms.mjs"
   },

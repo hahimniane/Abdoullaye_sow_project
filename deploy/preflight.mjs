@@ -2,14 +2,15 @@
 // This script prints only secret shape/availability, never secret values.
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { resolve4, resolve6 } from "node:dns/promises";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   DEFAULT_PRODUCTION_PROJECT,
   HOSTINGER_PRODUCTION_IPV4,
+  HOSTINGER_PRODUCTION_IPV6,
   PRODUCTION_STATIC_HOSTS,
+  TRUSTED_DNS_OVER_HTTPS_PROVIDERS,
   assessStaticDnsHost,
   appCheckWebConfig,
   deploymentJavaEnvironment,
@@ -17,7 +18,9 @@ import {
   firebaseDryRunConfig,
   javaMajorVersion,
   paymentModeEvidence,
+  resolveDnsOverHttps,
   stripeKeyMode,
+  trustedDnsConsensus,
 } from "./preflight-lib.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -83,17 +86,11 @@ function runInherit(command, args, options = {}) {
   }
 }
 
-async function resolveDns(resolver, hostname) {
-  try {
-    return {status: "ok", addresses: await resolver(hostname)};
-  } catch (error) {
-    const errorCode = String(error?.code || "UNKNOWN");
-    return {
-      status: ["ENODATA", "ENOTFOUND"].includes(errorCode) ? "absent" : "error",
-      addresses: [],
-      errorCode,
-    };
-  }
+async function resolveTrustedDns(hostname, recordType) {
+  const results = await Promise.all(TRUSTED_DNS_OVER_HTTPS_PROVIDERS.map(
+      (provider) => resolveDnsOverHttps({provider, hostname, recordType}),
+  ));
+  return trustedDnsConsensus(results);
 }
 
 function parseJsonFromOutput(output) {
@@ -165,12 +162,13 @@ if (resolvedDeploymentMode.mode === "production") {
 if (checksStatic) {
   for (const hostname of PRODUCTION_STATIC_HOSTS) {
     const [ipv4Result, ipv6Result] = await Promise.all([
-      resolveDns(resolve4, hostname),
-      resolveDns(resolve6, hostname),
+      resolveTrustedDns(hostname, "A"),
+      resolveTrustedDns(hostname, "AAAA"),
     ]);
     const dns = assessStaticDnsHost({
       hostname,
       expectedIPv4: HOSTINGER_PRODUCTION_IPV4,
+      expectedIPv6: HOSTINGER_PRODUCTION_IPV6,
       ipv4Result,
       ipv6Result,
     });

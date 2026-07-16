@@ -69,12 +69,24 @@ npm run preflight:static
 npm run preflight:backend
 ```
 
+The static production gate verifies the committed Hostinger IPv4 and IPv6
+through both Google and Cloudflare DNS-over-HTTPS and requires them to agree.
+Do not replace this with the machine's ordinary UDP resolver: the local/default
+DNS path can substitute unrelated block-page addresses even when the
+authoritative Hostinger records and the public site are healthy.
+
 Preferred SSH publish:
 
 ```bash
 cd deploy
 npm run deploy:static:ssh
 ```
+
+The SSH deploy performs its post-upload HTTPS smoke checks from the Hostinger
+server with each hostname and TLS SNI preserved. This avoids the operator's
+local DNS/network filtering while still checking the deployed virtual hosts,
+certificates, console HTML, and Next.js runtime assets. Run the same read-only
+check manually with `npm run smoke:static:ssh`.
 
 FTP fallback:
 

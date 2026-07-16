@@ -95,6 +95,11 @@ spirit, not just the letter.
   and an identical build works elsewhere, suspect runtime/role/host-conditional
   code paths before blaming DNS/SSL/deploy. (admin vs business consoles ship the
   same bundle; only role and host-conditional code differ.)
+- **Do not trust one local DNS path for production truth.** Router and ISP
+  security filters can rewrite ordinary UDP DNS answers to a block-page IPv4
+  and `AAAA ::` while authoritative DNS remains correct. Deployment DNS gates
+  must use at least two trusted DNS-over-HTTPS resolvers, require consensus, and
+  fail closed on disagreement or resolver errors.
 
 ## 4. Reuse before you build — no reinvented or partial components
 

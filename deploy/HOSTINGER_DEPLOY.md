@@ -27,7 +27,8 @@ directly — no Node runtime is needed on the server.
 ## 1. Hosting facts
 
 - **Provider:** Hostinger (hPanel). Account user: `u161013520`.
-- **Primary domain:** `laawoldigital.com` (DNS A record → `46.202.183.189`).
+- **Primary domain:** `laawoldigital.com` (DNS A → `46.202.183.189`, AAAA →
+  `2a02:4780:2b:1948:0:998:df10:5`).
 - **Web root (marketing site):** `~/domains/laawoldigital.com/public_html`
   - There is a `DO_NOT_UPLOAD_HERE` marker file in the parent dir — always
     upload **into `public_html`**, never the parent.
@@ -88,8 +89,14 @@ URLs are root-absolute. Do not add `basePath: "/admin"` or
 
 Run the guarded script. It enforces a clean tree, verifies the public site,
 runs console tests, verifies all three public DNS names point only to the
-documented Hostinger IPv4 (with no unexpected IPv6 record), rebuilds from
-source, uploads all three targets, and then runs HTTP smoke checks:
+documented Hostinger IPv4 and IPv6 through Google and Cloudflare DNS-over-HTTPS,
+rebuilds from source, uploads all three targets, and then runs HTTPS smoke checks
+through the authenticated Hostinger SSH session. Those requests preserve each
+public hostname and TLS SNI while connecting to the local web server, so
+certificate, virtual-host, page, and Next.js runtime-asset failures still block
+the release.
+The trusted resolver consensus avoids false failures when the local/default DNS
+path is rewritten to a security-block address:
 
 ```bash
 cd deploy

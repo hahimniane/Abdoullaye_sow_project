@@ -93,7 +93,15 @@ run("rsync", [...common, `${ADMIN_DIR}/`, `${dest}/business/`]);
 
 console.log("\nRunning read-only static smoke checks...");
 run("node", [path.join(__dirname, "post-deploy-smoke.mjs")], {
-  env: {...process.env, SMOKE_SCOPE: "static"},
+  env: {
+    ...process.env,
+    SMOKE_SCOPE: "static",
+    STATIC_SMOKE_TRANSPORT: "ssh",
+    SSH_KEY: cfg.key,
+    SSH_PORT: cfg.port,
+    SSH_HOST: cfg.host,
+    SSH_USER: cfg.user,
+  },
 });
 
 console.log("\nStatic SSH deploy complete.");

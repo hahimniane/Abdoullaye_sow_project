@@ -4,6 +4,11 @@ import path from "node:path";
 
 export const DEFAULT_PRODUCTION_PROJECT = "car-selling-flutter-app";
 export const HOSTINGER_PRODUCTION_IPV4 = "46.202.183.189";
+export const HOSTINGER_PRODUCTION_IPV6 = "2a02:4780:2b:1948:0:998:df10:5";
+export const TRUSTED_DNS_OVER_HTTPS_PROVIDERS = [
+  {name: "Google", endpoint: "https://dns.google/resolve"},
+  {name: "Cloudflare", endpoint: "https://cloudflare-dns.com/dns-query"},
+];
 export const PRODUCTION_STATIC_HOSTS = [
   "laawoldigital.com",
   "admin.laawoldigital.com",
@@ -13,14 +18,22 @@ export const PRODUCTION_STATIC_HOSTS = [
 export function assessStaticDnsHost({
   hostname,
   expectedIPv4 = HOSTINGER_PRODUCTION_IPV4,
+  expectedIPv6 = HOSTINGER_PRODUCTION_IPV6,
   ipv4Result,
   ipv6Result,
 }) {
   const expected = String(expectedIPv4 || "").trim();
+  const expected6 = String(expectedIPv6 || "").trim();
   if (net.isIP(expected) !== 4) {
     return {
       ok: false,
       detail: `expected static IPv4 must be valid, got ${expected || "empty"}`,
+    };
+  }
+  if (net.isIP(expected6) !== 6) {
+    return {
+      ok: false,
+      detail: `expected static IPv6 must be valid, got ${expected6 || "empty"}`,
     };
   }
 
@@ -43,17 +56,140 @@ export function assessStaticDnsHost({
     problems.push(
         `AAAA lookup failed (${ipv6Result.errorCode || "unknown error"})`,
     );
-  } else if (ipv6Result?.status === "ok" && ipv6.length > 0) {
-    problems.push(`unexpected AAAA=${ipv6.join(",")}; remove IPv6 record`);
-  } else if (ipv6Result?.status !== "absent") {
-    problems.push(`AAAA lookup was inconclusive for ${hostname}`);
+  } else if (ipv6Result?.status !== "ok" ||
+    ipv6.length !== 1 || ipv6[0] !== expected6) {
+    problems.push(`AAAA=${ipv6.join(",") || "missing"}; expected ${expected6}`);
   }
 
   return {
     ok: problems.length === 0,
     detail: problems.length > 0 ? problems.join("; ") :
-      `A=${expected}; no unexpected AAAA record`,
+      `A=${expected}; AAAA=${expected6}`,
   };
+}
+
+export async function resolveDnsOverHttps({
+  provider,
+  hostname,
+  recordType,
+  fetchImpl = globalThis.fetch,
+}) {
+  const normalizedType = String(recordType || "").toUpperCase();
+  const dnsType = normalizedType === "A" ? 1 : normalizedType === "AAAA" ? 28 : 0;
+  if (!dnsType) {
+    return {
+      provider: provider?.name || "unknown",
+      providerKey: provider?.endpoint || provider?.name || "unknown",
+      status: "error",
+      addresses: [],
+      errorCode: `UNSUPPORTED_${normalizedType || "TYPE"}`,
+    };
+  }
+
+  try {
+    const url = new URL(provider.endpoint);
+    url.searchParams.set("name", hostname);
+    url.searchParams.set("type", normalizedType);
+    const response = await fetchImpl(url, {
+      headers: {accept: "application/dns-json"},
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!response.ok) {
+      return {
+        provider: provider.name,
+        providerKey: provider.endpoint,
+        status: "error",
+        addresses: [],
+        errorCode: `HTTP_${response.status}`,
+      };
+    }
+    const payload = await response.json();
+    if (payload?.Status === 3) {
+      return {
+        provider: provider.name,
+        providerKey: provider.endpoint,
+        status: "absent",
+        addresses: [],
+        errorCode: "NXDOMAIN",
+      };
+    }
+    if (payload?.Status !== 0) {
+      return {
+        provider: provider.name,
+        providerKey: provider.endpoint,
+        status: "error",
+        addresses: [],
+        errorCode: `DNS_STATUS_${payload?.Status ?? "UNKNOWN"}`,
+      };
+    }
+    const addresses = [...new Set((payload.Answer || [])
+        .filter((answer) => answer?.type === dnsType)
+        .map((answer) => String(answer?.data || "").trim())
+        .filter((address) => net.isIP(address) === (dnsType === 1 ? 4 : 6)))]
+        .sort();
+    return {
+      provider: provider.name,
+      providerKey: provider.endpoint,
+      status: addresses.length > 0 ? "ok" : "absent",
+      addresses,
+      errorCode: addresses.length > 0 ? undefined : "ENODATA",
+    };
+  } catch (error) {
+    return {
+      provider: provider?.name || "unknown",
+      providerKey: provider?.endpoint || provider?.name || "unknown",
+      status: "error",
+      addresses: [],
+      errorCode: String(error?.name || error?.code || "UNKNOWN"),
+    };
+  }
+}
+
+export function trustedDnsConsensus(results) {
+  const normalized = (results || []).map((result) => ({
+    provider: result?.provider || "unknown",
+    providerKey: result?.providerKey || result?.provider || "unknown",
+    status: result?.status,
+    addresses: [...new Set((result?.addresses || []).map(String))].sort(),
+    errorCode: result?.errorCode,
+  }));
+  if (normalized.length < 2 ||
+      new Set(normalized.map((result) => result.providerKey)).size < 2) {
+    return {
+      status: "error",
+      addresses: [],
+      errorCode: "INSUFFICIENT_DISTINCT_TRUSTED_RESOLVERS",
+    };
+  }
+  const failed = normalized.filter((result) => result.status === "error");
+  if (failed.length > 0) {
+    return {
+      status: "error",
+      addresses: [],
+      errorCode: failed
+          .map((result) => `${result.provider}:${result.errorCode || "UNKNOWN"}`)
+          .join(","),
+    };
+  }
+  if (normalized.every((result) => result.status === "absent")) {
+    return {status: "absent", addresses: [], errorCode: "ENODATA"};
+  }
+  if (!normalized.every((result) => result.status === "ok")) {
+    return {
+      status: "error",
+      addresses: [],
+      errorCode: "TRUSTED_RESOLVER_STATUS_MISMATCH",
+    };
+  }
+  const expected = JSON.stringify(normalized[0].addresses);
+  if (!normalized.every((result) => JSON.stringify(result.addresses) === expected)) {
+    return {
+      status: "error",
+      addresses: [],
+      errorCode: "TRUSTED_RESOLVER_ADDRESS_MISMATCH",
+    };
+  }
+  return {status: "ok", addresses: normalized[0].addresses};
 }
 
 export function javaMajorVersion(output) {
