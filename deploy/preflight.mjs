@@ -22,6 +22,10 @@ import {
   stripeKeyMode,
   trustedDnsConsensus,
 } from "./preflight-lib.mjs";
+import {
+  assessPaymentFunctionDeployment,
+  discoverStripeBoundFunctionNames,
+} from "./payment-functions-lib.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -263,6 +267,22 @@ if (checksBackend) {
   });
   addCheck("Cloud Functions unit/emulator/rules tests", functionsTestsOk);
 
+  let paymentFunctionNames = [];
+  try {
+    paymentFunctionNames = discoverStripeBoundFunctionNames({
+      functionsEntry: path.join(functionsDir, "index.js"),
+    });
+  } catch {
+    paymentFunctionNames = [];
+  }
+  addCheck(
+      "Stripe payment function manifest derives from source",
+      paymentFunctionNames.length > 0,
+      paymentFunctionNames.length > 0 ?
+        `${paymentFunctionNames.length} Stripe-bound exports discovered` :
+        "could not derive Stripe-bound exports from Functions metadata",
+  );
+
   const firebaseLogin = run("firebase", ["login:list"]);
   addCheck(
       "Firebase CLI authenticated",
@@ -279,6 +299,25 @@ if (checksBackend) {
       "Firebase project visible",
       projects.ok && projectVisible,
       projectVisible ? PROJECT_ID : "project not found in firebase projects:list",
+  );
+
+  const deployedFunctions = run("firebase", [
+    "functions:list",
+    "--project",
+    PROJECT_ID,
+    "--json",
+  ]);
+  const deployedFunctionData = parseJsonFromOutput(deployedFunctions.stdout);
+  const paymentDeployment = assessPaymentFunctionDeployment({
+    requiredFunctionNames: paymentFunctionNames,
+    deployedFunctions: deployedFunctionData?.result,
+  });
+  addCheck(
+      "Deployed Stripe payment manifest inspected",
+      deployedFunctions.ok && Array.isArray(deployedFunctionData?.result) &&
+        paymentFunctionNames.length > 0,
+      paymentDeployment.ok ? paymentDeployment.detail :
+        `pending full backend deployment - ${paymentDeployment.detail}`,
   );
 
   const stripeSecret = run("firebase", [

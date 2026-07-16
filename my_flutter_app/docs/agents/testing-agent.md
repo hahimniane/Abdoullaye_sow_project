@@ -161,3 +161,8 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   app uses a one-day App Check token TTL to preserve the no-billing assessment
   quota; provider/config mismatches compile successfully but fail at runtime,
   so retain source-contract tests and a real-browser launch check.
+- Production payment release checks must derive the complete Stripe-bound
+  function manifest from each export's Cloud Functions endpoint secret metadata.
+  Never rely on a hand-maintained function-name subset: source derivation belongs
+  in preflight, while deployed presence and `ACTIVE` state are enforced by the
+  post-deploy smoke so a corrective deployment is not blocked before it runs.

@@ -1,10 +1,17 @@
 import {spawnSync} from "node:child_process";
 import path from "node:path";
+import {fileURLToPath} from "node:url";
 import {
   HOSTINGER_PRODUCTION_IPV4,
   PRODUCTION_STATIC_HOSTS,
 } from "./preflight-lib.mjs";
 import {remoteStaticSmokeScript, requestPinned} from "./smoke-lib.mjs";
+import {
+  assessPaymentFunctionDeployment,
+  discoverStripeBoundFunctionNames,
+} from "./payment-functions-lib.mjs";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const scope = process.env.SMOKE_SCOPE || "all";
 const validScopes = new Set(["all", "backend", "static"]);
@@ -82,7 +89,7 @@ async function requireConsolePage(label, url) {
   }
 }
 
-function deployedFunctionIds() {
+function deployedFunctions() {
   const result = spawnSync(
       "firebase",
       ["functions:list", "--project", projectId, "--json"],
@@ -92,8 +99,7 @@ function deployedFunctionIds() {
   try {
     const parsed = JSON.parse(result.stdout);
     const rows = Array.isArray(parsed.result) ? parsed.result : [];
-    return new Set(rows.map((row) => String(row.id || row.name || "")
-        .split("/").at(-1)).filter(Boolean));
+    return rows;
   } catch {
     return null;
   }
@@ -149,18 +155,39 @@ if (scope === "static" || scope === "all") {
 }
 
 if (scope === "backend" || scope === "all") {
-  const requiredFunctions = [
-    "completeBarrelShipmentPayment",
-    "createBarrelShipmentPaymentIntent",
-    "handleBusinessProStripeWebhook",
-  ];
-  const functionIds = deployedFunctionIds();
-  if (functionIds) {
-    for (const id of requiredFunctions) {
-      const present = functionIds.has(id);
-      console.log(`${present ? "OK" : "FAIL"} deployed function ${id}`);
-      ok = present && ok;
+  const functionsEntry = path.join(
+      __dirname,
+      "..",
+      "my_flutter_app",
+      "functions",
+      "index.js",
+  );
+  let requiredFunctions = [];
+  try {
+    requiredFunctions = discoverStripeBoundFunctionNames({functionsEntry});
+  } catch (error) {
+    console.error(
+        `FAIL Could not derive payment function manifest - ${error.message}`,
+    );
+    ok = false;
+  }
+  const deployed = deployedFunctions();
+  if (deployed) {
+    const assessment = assessPaymentFunctionDeployment({
+      requiredFunctionNames: requiredFunctions,
+      deployedFunctions: deployed,
+    });
+    for (const id of assessment.required) {
+      const missing = assessment.missing.includes(id);
+      const inactive = assessment.inactive.includes(id);
+      console.log(
+          `${missing || inactive ? "FAIL" : "OK"} deployed payment function ${id}`,
+      );
     }
+    if (!assessment.ok) {
+      console.error(`FAIL Payment function manifest - ${assessment.detail}`);
+    }
+    ok = assessment.ok && ok;
   } else {
     console.error("FAIL Could not read the deployed Cloud Functions manifest.");
     ok = false;
