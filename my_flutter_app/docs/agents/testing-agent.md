@@ -152,3 +152,10 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   SERVFAIL, and other inconclusive resolver results fail closed; genuine
   no-record responses are acceptable only for AAAA. Keep post-deploy HTTP smoke
   checks because DNS can change after the preflight snapshot.
+- Production web App Check uses a score-based reCAPTCHA Enterprise key for both
+  the admin/business Next.js console and Flutter web. Keep both clients on
+  `ReCaptchaEnterpriseProvider`, keep debug providers development-only, and run
+  release web builds with the registered public site key. The production web
+  app uses a one-day App Check token TTL to preserve the no-billing assessment
+  quota; provider/config mismatches compile successfully but fail at runtime,
+  so retain source-contract tests and a real-browser launch check.

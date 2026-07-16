@@ -1,5 +1,8 @@
 import { initializeApp, getApps } from "firebase/app";
-import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
+import {
+  initializeAppCheck,
+  ReCaptchaEnterpriseProvider,
+} from "firebase/app-check";
 import { connectAuthEmulator, getAuth } from "firebase/auth";
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
@@ -64,7 +67,7 @@ if (
         appCheckDebugToken === "true" ? true : appCheckDebugToken;
     }
     initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider(
+      provider: new ReCaptchaEnterpriseProvider(
         appCheckSiteKey || "debug-provider-not-used",
       ),
       isTokenAutoRefreshEnabled: true,

@@ -48,7 +48,8 @@ assign intentional roles/permissions in the console.
 ## App Check and Crashlytics
 
 Register production Android, Apple, Flutter web, and admin/business web apps in
-Firebase App Check. Supply the public web site key through
+Firebase App Check. Web apps use the score-based reCAPTCHA Enterprise provider.
+Supply the public Enterprise site key through
 `NEXT_PUBLIC_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY` for the admin build and
 `FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY` as a Flutter `--dart-define`. Production
 preflight rejects missing site keys and debug tokens. Register development

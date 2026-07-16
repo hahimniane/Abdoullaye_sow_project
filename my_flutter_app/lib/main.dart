@@ -106,7 +106,7 @@ Future<void> initializeFirebaseAppCheck() async {
         ? WebDebugProvider(
             debugToken: debugToken.trim().isEmpty ? null : debugToken.trim(),
           )
-        : ReCaptchaV3Provider(webSiteKey.trim()),
+        : ReCaptchaEnterpriseProvider(webSiteKey.trim()),
     providerAndroid: kDebugMode
         ? AndroidDebugProvider(
             debugToken: debugToken.trim().isEmpty ? null : debugToken.trim(),
