@@ -11,6 +11,19 @@ function read(relativePath) {
   return readFileSync(path.join(root, relativePath), "utf8");
 }
 
+function readPngSize(relativePath) {
+  const bytes = readFileSync(path.join(root, relativePath));
+  assert(
+    bytes.subarray(1, 4).toString("ascii") === "PNG",
+    `${relativePath} must be a PNG image`,
+  );
+  return {
+    width: bytes.readUInt32BE(16),
+    height: bytes.readUInt32BE(20),
+    colorType: bytes[25],
+  };
+}
+
 function assert(condition, message) {
   if (!condition) {
     throw new Error(message);
@@ -67,6 +80,22 @@ assert(
 htmlFiles.forEach((file) => {
   const html = read(file);
   assertIncludes(html, "assets/content.js?v=", file);
+  for (const retiredMock of [
+    'class="phone',
+    "phone-showcase",
+    "phone-notch",
+    "act-row",
+    "app-track",
+    "3 éléments en cours",
+    "BS-MPT0A03V",
+    "Mariama’s Kitchen",
+    "fabric-sample.jpg",
+  ]) {
+    assert(
+      !html.includes(retiredMock),
+      `${file} must not contain retired mock-app content: ${retiredMock}`,
+    );
+  }
 });
 
 const index = read("index.html");
@@ -90,6 +119,38 @@ assert(
     existsSync(path.join(root, "assets", "app-shipping-fr.png")),
   "localized real-app capture assets must be present",
 );
+
+const app = read("app.html");
+assertIncludes(
+  app,
+  'data-src-en="assets/app-activity-en.png?v=2"',
+  "app.html",
+);
+assertIncludes(
+  app,
+  'data-src-fr="assets/app-activity-fr.png?v=2"',
+  "app.html",
+);
+assertIncludes(
+  app,
+  "Écran Activité de l’application Laawol présentant le suivi des expéditions, les commandes et le portefeuille.",
+  "app.html",
+);
+for (const asset of [
+  "assets/app-activity-en.png",
+  "assets/app-activity-fr.png",
+]) {
+  assert(existsSync(path.join(root, asset)), `${asset} must be present`);
+  const size = readPngSize(asset);
+  assert(
+    size.width === 804 && size.height === 1748,
+    `${asset} must be 804x1748; found ${size.width}x${size.height}`,
+  );
+  assert(
+    size.colorType === 2,
+    `${asset} must be an opaque RGB PNG without an alpha channel`,
+  );
+}
 
 const contact = read("contact.html");
 assertIncludes(contact, '<select name="destination_country"', "contact.html");
