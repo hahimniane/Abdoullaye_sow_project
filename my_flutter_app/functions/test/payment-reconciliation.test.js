@@ -146,6 +146,31 @@ const CASES = [
     },
   },
   {
+    paymentType: "barrel_destination_change",
+    metadata: {
+      shipmentId: "shipment_change_1",
+      changeRequestId: "change_1",
+      customerUid: "user_1",
+      businessId: "business_1",
+    },
+    path: "barrelShipments/shipment_change_1",
+    type: "barrel_destination_change",
+    document: {
+      id: "shipment_change_1",
+      data: {
+        customerUid: "user_1",
+        // The paid change may already have moved the shipment to a different
+        // destination business when a later Stripe event is reconciled.
+        businessId: "business_2",
+        destinationAdjustmentRequestId: "change_1",
+        destinationAdjustmentAmountCents: 5000,
+        currency: "usd",
+        destinationAdjustmentPaymentIntentId: "pi_1",
+        destinationAdjustmentPaymentStatus: "pending",
+      },
+    },
+  },
+  {
     paymentType: "freight_shipment",
     metadata: {
       shipmentId: "freight_1",
@@ -565,6 +590,7 @@ describe("stale pending scan pagination", () => {
       "shared_barrel_deposits",
       "shared_barrel_balances",
       "barrel_shipments",
+      "barrel_destination_changes",
       "barrel_orders",
       "freight_shipments",
       "freight_settlement_adjustments",

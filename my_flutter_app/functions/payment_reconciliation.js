@@ -99,6 +99,23 @@ const PAYMENT_ROUTES = Object.freeze({
     cancelledDomainStatus: "cancelled",
     operationKeys: ["shipmentId"],
   }),
+  barrel_destination_change: Object.freeze({
+    kind: "barrel_destination_change",
+    identityKeys: ["shipmentId", "changeRequestId"],
+    collection: "barrelShipments",
+    documentIdKey: "shipmentId",
+    customerMetadataKey: "customerUid",
+    customerField: "customerUid",
+    amountCentsField: "destinationAdjustmentAmountCents",
+    currencyField: "currency",
+    defaultCurrency: "usd",
+    intentField: "destinationAdjustmentPaymentIntentId",
+    paymentStatusField: "destinationAdjustmentPaymentStatus",
+    documentMetadataFields: Object.freeze({
+      changeRequestId: "destinationAdjustmentRequestId",
+    }),
+    operationKeys: ["shipmentId", "changeRequestId"],
+  }),
   barrel_order: Object.freeze({
     kind: "barrel_order",
     identityKeys: ["orderId"],
@@ -231,6 +248,12 @@ const STALE_SCAN_DEFINITIONS = Object.freeze([
     statusField: "paymentStatus",
   }),
   Object.freeze({
+    id: "barrel_destination_changes",
+    collection: "barrelShipments",
+    statusField: "destinationAdjustmentPaymentStatus",
+    intentField: "destinationAdjustmentPaymentIntentId",
+  }),
+  Object.freeze({
     id: "barrel_orders",
     collection: "barrelOrders",
     statusField: "paymentStatus",
@@ -349,7 +372,7 @@ function reconciliationMismatches({target, intent, document}) {
       target.customerUid,
       data[config.customerField],
   );
-  if (target.businessId) {
+  if (target.businessId && config.businessField) {
     pushMismatch(
         mismatches,
         "businessId",

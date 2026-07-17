@@ -10,26 +10,45 @@ if (!process.env.FIRESTORE_EMULATOR_HOST ||
 }
 
 const projectId = process.env.GCLOUD_PROJECT || "demo-laawol-e2e";
+const e2ePassword = String(process.env.E2E_TEST_PASSWORD || "").trim();
+if (e2ePassword.length < 12) {
+  throw new Error("Set E2E_TEST_PASSWORD to at least 12 characters");
+}
 admin.initializeApp({projectId});
 const db = admin.firestore();
+
+async function resetFirestore() {
+  const host = process.env.FIRESTORE_EMULATOR_HOST;
+  const response = await fetch(
+      `http://${host}/emulator/v1/projects/${projectId}` +
+      "/databases/(default)/documents",
+      {method: "DELETE"},
+  );
+  if (!response.ok) {
+    throw new Error(
+        `Could not reset Firestore emulator: ${response.status} ` +
+        await response.text(),
+    );
+  }
+}
 
 const accounts = [
   {
     uid: "e2e-customer",
     email: "e2e.customer@laawol.test",
-    password: "E2eLocal123!",
+    password: e2ePassword,
     displayName: "E2E Customer",
   },
   {
     uid: "e2e-business-owner",
     email: "e2e.business@laawol.test",
-    password: "E2eLocal123!",
+    password: e2ePassword,
     displayName: "E2E Freight Owner",
   },
   {
     uid: "e2e-platform-admin",
     email: "e2e.admin@laawol.test",
-    password: "E2eLocal123!",
+    password: e2ePassword,
     displayName: "E2E Platform Admin",
   },
 ];
@@ -45,6 +64,7 @@ async function upsertAccount(account) {
 }
 
 async function main() {
+  await resetFirestore();
   await Promise.all(accounts.map(upsertAccount));
   const now = admin.firestore.Timestamp.now();
   const later = admin.firestore.Timestamp.fromMillis(
@@ -58,6 +78,9 @@ async function main() {
     role: "customer",
     fullName: "E2E Customer",
     email: "e2e.customer@laawol.test",
+    phone: "+17185550199",
+    normalizedPhone: "+17185550199",
+    phoneVerified: true,
     language: "en",
   });
   set("users/e2e-business-owner", {
@@ -202,7 +225,9 @@ async function main() {
     requestedShares: 0,
     takenShares: 2,
     openShares: 2,
+    maxJoiners: 2,
     pricePerBarrel: 225,
+    pricePerShare: 56.25,
     joinDeadline: later,
     createdAt: now,
     updatedAt: now,
@@ -219,7 +244,9 @@ async function main() {
     requestedShares: 0,
     takenShares: 2,
     openShares: 2,
+    maxJoiners: 2,
     pricePerBarrel: 225,
+    pricePerShare: 56.25,
     joinDeadline: later,
     updatedAt: now,
   });
@@ -248,6 +275,8 @@ async function main() {
     paymentStatus: "succeeded",
     parkingStatus: "reserved",
     status: "reserved",
+    parkingDate: now,
+    parkingEndDate: later,
     totalCost: 75,
     totalCostCents: 7500,
     createdAt: now,
@@ -268,7 +297,68 @@ async function main() {
     fuelType: "gas",
     drivetrain: "awd",
     exteriorColor: "silver",
-    status: "available",
+    isRebuiltTitle: false,
+    status: "active",
+    createdAt: now,
+    updatedAt: now,
+  });
+  set("cars/car-e2e-hold", {
+    businessId,
+    businessName: "E2E Atlantic Logistics",
+    title: "2021 Honda CR-V EX",
+    make: "Honda",
+    model: "CR-V",
+    year: 2021,
+    price: 24500,
+    mileage: 36000,
+    condition: "used",
+    bodyType: "suv",
+    transmission: "automatic",
+    fuelType: "gas",
+    drivetrain: "awd",
+    exteriorColor: "blue",
+    isRebuiltTitle: false,
+    status: "active",
+    createdAt: now,
+    updatedAt: now,
+  });
+  set("cars/car-e2e-purchase", {
+    businessId,
+    businessName: "E2E Atlantic Logistics",
+    title: "2022 Nissan Rogue SV",
+    make: "Nissan",
+    model: "Rogue",
+    year: 2022,
+    price: 27000,
+    mileage: 29000,
+    condition: "used",
+    bodyType: "suv",
+    transmission: "automatic",
+    fuelType: "gas",
+    drivetrain: "awd",
+    exteriorColor: "black",
+    isRebuiltTitle: false,
+    status: "active",
+    createdAt: now,
+    updatedAt: now,
+  });
+  set("cars/car-e2e-existing-purchase", {
+    businessId,
+    businessName: "E2E Atlantic Logistics",
+    title: "2019 Ford Escape SE",
+    make: "Ford",
+    model: "Escape",
+    year: 2019,
+    price: 18500,
+    mileage: 51000,
+    condition: "used",
+    bodyType: "suv",
+    transmission: "automatic",
+    fuelType: "gas",
+    drivetrain: "awd",
+    exteriorColor: "white",
+    isRebuiltTitle: false,
+    status: "reserved",
     createdAt: now,
     updatedAt: now,
   });
@@ -277,8 +367,8 @@ async function main() {
     buyerName: "E2E Customer",
     businessId,
     businessName: "E2E Atlantic Logistics",
-    carId: "car-e2e",
-    carTitle: "2020 Toyota RAV4 XLE",
+    carId: "car-e2e-existing-purchase",
+    carTitle: "2019 Ford Escape SE",
     paymentStatus: "succeeded",
     purchaseStatus: "reserved",
     depositAmount: 500,
@@ -286,13 +376,31 @@ async function main() {
     createdAt: now,
     updatedAt: now,
   });
+  set("wallets/e2e-customer", {
+    customerUid: "e2e-customer",
+    currency: "USD",
+    balanceCents: 10000,
+    balance: 100,
+    pendingRefundCents: 0,
+    pendingRefund: 0,
+    updatedAt: now,
+  });
+  set("wallets/e2e-customer/transactions/e2e-credit", {
+    type: "credit",
+    reason: "e2e_test_credit",
+    status: "completed",
+    amountCents: 10000,
+    amount: 100,
+    currency: "USD",
+    createdAt: now,
+  });
 
   await batch.commit();
   process.stdout.write(JSON.stringify({
     projectId,
     businessId,
     accounts: accounts.map(({uid, email}) => ({uid, email})),
-    password: "E2eLocal123!",
+    password: e2ePassword,
   }, null, 2) + "\n");
 }
 

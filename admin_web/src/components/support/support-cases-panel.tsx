@@ -42,6 +42,7 @@ import type {
   ActionConfirmationOptions,
   ActionRunner,
 } from "@/lib/action-confirmation";
+import { executeSupportAction } from "@/lib/support-action";
 import type { FirestoreRow } from "@/types/admin";
 
 export type SupportCasesPanelProps = {
@@ -339,6 +340,7 @@ export function SupportCasesPanel({
   });
   const [busyAction, setBusyAction] = useState("");
   const [localError, setLocalError] = useState("");
+  const platformErrorRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -368,30 +370,42 @@ export function SupportCasesPanel({
 
   const selectedCase = rows.find((row) => row.id === selectedId) ?? null;
 
+  useEffect(() => {
+    if (showPlatformRequest && localError) {
+      platformErrorRef.current?.focus();
+    }
+  }, [localError, showPlatformRequest]);
+
   async function call(
     label: string,
     name: string,
     payload: Record<string, unknown>,
     options?: ActionConfirmationOptions,
-  ) {
-    if (busyAction) return;
+  ): Promise<boolean> {
+    if (busyAction) return false;
     const action = async () => {
       await httpsCallable(functions, name)(payload);
     };
     setLocalError("");
     setBusyAction(label);
-    if (runAction) {
-      try {
-        await runAction(label, action, options);
-      } finally {
-        setBusyAction("");
-      }
-      return;
-    }
     try {
-      await action();
-    } catch (err) {
-      setLocalError(err instanceof Error ? err.message : String(err));
+      const result = options
+        ? await executeSupportAction(
+            label,
+            action,
+            async (actionLabel, trackedAction) => {
+              if (runAction) {
+                await runAction(actionLabel, trackedAction, options);
+              } else {
+                await trackedAction();
+              }
+            },
+          )
+        : await executeSupportAction(label, action, runAction);
+      if (!result.completed && result.error) {
+        setLocalError(result.error);
+      }
+      return result.completed;
     } finally {
       setBusyAction("");
     }
@@ -402,14 +416,21 @@ export function SupportCasesPanel({
     const subject = platformDraft.subject.trim();
     const message = platformDraft.message.trim();
     if (!subject || !message || !businessId) return;
-    await call("Admin support case opened", "createBusinessPlatformSupportCase", {
+    const completed = await call("Admin support case opened", "createBusinessPlatformSupportCase", {
       businessId,
       subject,
       message,
       priority: platformDraft.priority,
     });
+    if (!completed) return;
     setPlatformDraft({ priority: "normal", subject: "", message: "" });
     setShowPlatformRequest(false);
+  }
+
+  function closePlatformRequest() {
+    if (busyAction === "Admin support case opened") return;
+    setShowPlatformRequest(false);
+    setLocalError("");
   }
 
   return (
@@ -425,7 +446,10 @@ export function SupportCasesPanel({
         </div>
         <div className="lst-head-actions">
           {scope === "business" && canReply && (
-            <button className="lst-add" type="button" disabled={Boolean(busyAction)} onClick={() => setShowPlatformRequest(true)}>
+            <button className="lst-add" type="button" disabled={Boolean(busyAction)} onClick={() => {
+              setLocalError("");
+              setShowPlatformRequest(true);
+            }}>
               <Send size={15} /> New admin request
             </button>
           )}
@@ -520,14 +544,24 @@ export function SupportCasesPanel({
         </div>
       </div>
       {showPlatformRequest && scope === "business" && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={() => setShowPlatformRequest(false)}>
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="new-admin-request-title" onClick={closePlatformRequest}>
           <div className="lst-modal" style={{ maxWidth: 560 }} onClick={(event) => event.stopPropagation()}>
             <header className="lst-modal-head">
-              <h3>New admin request</h3>
-              <button className="lst-icon-btn" type="button" onClick={() => setShowPlatformRequest(false)} aria-label="Close">x</button>
+              <h3 id="new-admin-request-title">New admin request</h3>
+              <button className="lst-icon-btn" type="button" disabled={busyAction === "Admin support case opened"} onClick={closePlatformRequest} aria-label="Close">x</button>
             </header>
             <form onSubmit={createPlatformRequest}>
               <div className="lst-modal-body">
+                {localError && (
+                  <div
+                    ref={platformErrorRef}
+                    className="error-box"
+                    role="alert"
+                    tabIndex={-1}
+                  >
+                    {localError}
+                  </div>
+                )}
                 <div className="lst-form-grid">
                   <label className="lst-field">
                     <span>Priority</span>
@@ -562,7 +596,7 @@ export function SupportCasesPanel({
                 </div>
               </div>
               <footer className="lst-modal-foot">
-                <button className="lst-btn ghost" type="button" onClick={() => setShowPlatformRequest(false)}>Cancel</button>
+                <button className="lst-btn ghost" type="button" disabled={busyAction === "Admin support case opened"} onClick={closePlatformRequest}>Cancel</button>
                 <button className="lst-add" type="submit" disabled={Boolean(busyAction) || !businessId || !platformDraft.subject.trim() || !platformDraft.message.trim()}>
                   {busyAction === "Admin support case opened" ? <RefreshCw className="spin" size={15} /> : <Send size={15} />}
                   {busyAction === "Admin support case opened" ? "Sending..." : "Send request"}
@@ -604,7 +638,7 @@ function SupportThread({
     name: string,
     payload: Record<string, unknown>,
     options?: ActionConfirmationOptions,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   busyAction: string;
 }) {
   const caseId = supportCase.id;

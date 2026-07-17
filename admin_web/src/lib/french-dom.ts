@@ -1242,6 +1242,8 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Charges not verified": "Paiements non vérifiés",
   "Charges verified": "Paiements vérifiés",
   "Choose a shared barrel pool.": "Choisissez un baril partagé.",
+  "Choose a future matching deadline.":
+    "Choisissez une date limite de mise en relation future.",
   "Choose a destination.": "Choisissez une destination.",
   "Contents note": "Note sur le contenu",
   "Current shares": "Parts actuelles",
@@ -1572,6 +1574,12 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Confirmez le contenu, les articles interdits et la responsabilité partagée avant d’ouvrir le baril.",
   "Contents note is required for drop-off pools.":
     "La note de contenu est requise pour les barils déposés.",
+  "Choose a future join deadline.":
+    "Choisissez une date limite d’inscription future.",
+  "Could not open the pool. Check your connection and try again.":
+    "Impossible d’ouvrir le baril. Vérifiez votre connexion et réessayez.",
+  "Business-held pools must start with 0 reserved shares.":
+    "Les barils détenus par l’entreprise doivent commencer avec 0 part réservée.",
   "Contents and weight were reviewed with the customer.":
     "Le contenu et le poids ont été vérifiés avec le client.",
   "Describe packed contents": "Décrivez le contenu emballé",
@@ -1580,6 +1588,17 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Inspected weight (kg)": "Poids inspecté (kg)",
   "No prohibited or unsafe items were accepted.":
     "Aucun article interdit ou dangereux n’a été accepté.",
+  "Max joiners must fit the open shares.":
+    "Le nombre maximal de participants doit correspondre aux parts ouvertes.",
+  "Opening pool...": "Ouverture du baril...",
+  "Required for customer drop-off pools.":
+    "Obligatoire pour les barils déposés par un client.",
+  "Security check failed. Refresh the page and try again.":
+    "La vérification de sécurité a échoué. Actualisez la page et réessayez.",
+  "You do not have permission to open shared barrel pools for this business.":
+    "Vous n’avez pas l’autorisation d’ouvrir des barils partagés pour cette entreprise.",
+  "Your session expired. Sign in again and retry.":
+    "Votre session a expiré. Reconnectez-vous et réessayez.",
   "The customer accepted shared-barrel liability and inspection rules.":
     "Le client a accepté la responsabilité du baril partagé et les règles d’inspection.",
   "20 kg per share max": "20 kg maximum par part",

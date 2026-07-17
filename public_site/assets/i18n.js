@@ -2,6 +2,8 @@
   var storageKey = "laawol:lang";
   var defaultLang = "fr";
   var enToFr = {
+    "Privacy": "Confidentialité",
+    "Terms of Service": "Conditions d’utilisation",
     "A better way to find serious businesses": "Une meilleure façon de trouver des entreprises sérieuses",
     "A few ideas": "Quelques idées",
     "A global, two-way marketplace connecting the diaspora and home across many services": "Une marketplace mondiale à double sens qui relie la diaspora et le pays à travers de nombreux services",
@@ -324,9 +326,21 @@
   }
 
   function setLang(lang) {
+    var targetLang = lang === "en" ? "en" : "fr";
     try {
-      localStorage.setItem(storageKey, lang === "en" ? "en" : "fr");
+      localStorage.setItem(storageKey, targetLang);
     } catch (_) {}
+    var page = location.pathname.split("/").pop();
+    var legalTarget = {
+      "privacy.html": targetLang === "en" ? "privacy-en.html" : "privacy.html",
+      "privacy-en.html": targetLang === "fr" ? "privacy.html" : "privacy-en.html",
+      "terms.html": targetLang === "en" ? "terms-en.html" : "terms.html",
+      "terms-en.html": targetLang === "fr" ? "terms.html" : "terms-en.html",
+    }[page];
+    if (legalTarget && legalTarget !== page) {
+      location.href = legalTarget;
+      return;
+    }
     location.reload();
   }
 

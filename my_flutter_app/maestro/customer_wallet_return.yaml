@@ -1,0 +1,48 @@
+appId: com.laawoldigital.app
+name: Customer requests wallet money returned to card
+---
+- clearKeychain
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "(?s).*Sign in to your wallet.*"
+    timeout: 20000
+- tapOn: "(?s).*Sign in to your wallet.*"
+- extendedWaitUntil:
+    visible: "Account Login"
+    timeout: 20000
+- waitForAnimationToEnd
+- tapOn: "Email"
+- inputText: "e2e.customer@laawol.test"
+- tapOn: "Password"
+- inputText: "${E2E_TEST_PASSWORD}"
+- tapOn: "done"
+- scrollUntilVisible:
+    element:
+      text: "Sign In"
+    direction: DOWN
+- tapOn:
+    text: "Sign In"
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible: "(?s).*E2E Customer.*"
+    timeout: 30000
+- tapOn: "Activity"
+- extendedWaitUntil:
+    visible: "(?s).*Balance & refunds.*"
+    timeout: 60000
+- tapOn: "(?s).*Balance & refunds.*"
+- extendedWaitUntil:
+    visible: "Return money to card"
+    timeout: 20000
+- assertVisible: "(?s).*\\$100.00.*"
+- tapOn: "Return money to card"
+- extendedWaitUntil:
+    visible: "Request return to card"
+    timeout: 10000
+- tapOn: "Request return to card"
+- extendedWaitUntil:
+    visible: "(?is).*return to card requested.*"
+    timeout: 30000
+- assertVisible: "(?is).*\\$100.00 pending return to card.*"
+- takeScreenshot: "output/ios-e2e/wallet-return-requested"

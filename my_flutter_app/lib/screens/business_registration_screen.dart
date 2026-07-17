@@ -7,10 +7,12 @@ import 'package:provider/provider.dart';
 import '../data/business_location_catalog.dart';
 import '../l10n/app_localizations.dart';
 import '../models/business_service.dart';
+import '../models/marketplace_disclosure_acceptance.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/phone_number_validator.dart';
+import '../utils/legal_links.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/language_toggle.dart';
@@ -44,6 +46,8 @@ class _BusinessRegistrationScreenState
   bool _isSubmitting = false;
   bool _passwordVisible = false;
   bool _prefilledSignedInAccount = false;
+  bool _legalAccepted = false;
+  bool _businessResponsibilityAccepted = false;
 
   @override
   void dispose() {
@@ -62,6 +66,7 @@ class _BusinessRegistrationScreenState
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
+    final locale = Localizations.localeOf(context).languageCode;
     if (!_formKey.currentState!.validate()) return;
     if (_selectedServices.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -70,6 +75,14 @@ class _BusinessRegistrationScreenState
           backgroundColor: Colors.red,
         ),
       );
+      return;
+    }
+    if (!context.read<AuthProvider>().isAuthenticated && !_legalAccepted) {
+      showErrorSnackBar(context, l10n.accountLegalAcceptanceRequired);
+      return;
+    }
+    if (!_businessResponsibilityAccepted) {
+      showErrorSnackBar(context, l10n.businessResponsibilityRequired);
       return;
     }
     final confirmed = await confirmMajorAction(
@@ -91,6 +104,7 @@ class _BusinessRegistrationScreenState
           password: _passwordController.text.trim(),
           fullName: _ownerNameController.text.trim(),
           phone: _ownerPhoneController.text.trim(),
+          legalAcceptance: AccountLegalAcceptance(locale: locale),
         );
       }
 
@@ -114,6 +128,7 @@ class _BusinessRegistrationScreenState
         country: _businessCountry ?? '',
         state: _businessCountry ?? '',
         postalCode: '',
+        marketplaceAcceptance: MarketplaceDisclosureAcceptance(locale: locale),
       );
       final businessId = application['businessId'] as String?;
       if (businessId != null &&
@@ -538,6 +553,50 @@ class _BusinessRegistrationScreenState
                                   maxLines: 5,
                                 ),
                               ],
+                            ),
+                            const SizedBox(height: 14),
+                            if (!isSignedIn) ...[
+                              CheckboxListTile(
+                                value: _legalAccepted,
+                                onChanged: (value) => setState(
+                                  () => _legalAccepted = value ?? false,
+                                ),
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(l10n.accountLegalAcceptance),
+                              ),
+                              Wrap(
+                                alignment: WrapAlignment.center,
+                                children: [
+                                  TextButton(
+                                    onPressed: () => openLaawolLegalPage(
+                                      context,
+                                      privacy: false,
+                                    ),
+                                    child: Text(l10n.termsOfService),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => openLaawolLegalPage(
+                                      context,
+                                      privacy: true,
+                                    ),
+                                    child: Text(l10n.privacyPolicy),
+                                  ),
+                                ],
+                              ),
+                            ],
+                            CheckboxListTile(
+                              value: _businessResponsibilityAccepted,
+                              onChanged: (value) => setState(
+                                () => _businessResponsibilityAccepted =
+                                    value ?? false,
+                              ),
+                              controlAffinity: ListTileControlAffinity.leading,
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(
+                                l10n.businessResponsibilityAcceptance,
+                              ),
                             ),
                             const SizedBox(height: 18),
                             SizedBox(

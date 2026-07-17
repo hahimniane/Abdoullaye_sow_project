@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../models/parking_availability.dart';
+import '../models/marketplace_disclosure_acceptance.dart';
+import 'payment_flow_safety.dart';
 import 'stripe_config_service.dart';
 
 abstract class ParkingRepository {
@@ -26,6 +28,7 @@ abstract class ParkingRepository {
     required DateTime startDate,
     required DateTime endDate,
     required bool pickupRequested,
+    required MarketplaceDisclosureAcceptance marketplaceAcceptance,
   });
 }
 
@@ -91,6 +94,7 @@ class FirebaseParkingService implements ParkingRepository {
     required DateTime startDate,
     required DateTime endDate,
     required bool pickupRequested,
+    required MarketplaceDisclosureAcceptance marketplaceAcceptance,
   }) async {
     final response = await _functions
         .httpsCallable('createParkingReservation')
@@ -105,6 +109,7 @@ class FirebaseParkingService implements ParkingRepository {
           'startDate': startDate.toUtc().toIso8601String(),
           'endDate': endDate.toUtc().toIso8601String(),
           'pickupRequested': pickupRequested,
+          'marketplaceDisclosure': marketplaceAcceptance.toJson(),
         });
     final data = Map<String, dynamic>.from(response.data);
     final reservationId = (data['reservationId'] as String?) ?? '';
@@ -121,25 +126,23 @@ class FirebaseParkingService implements ParkingRepository {
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
           paymentIntentClientSecret: clientSecret,
-          merchantDisplayName: option.businessName,
-          style: ThemeMode.system,
+          merchantDisplayName: 'Laawol',
+          style: ThemeMode.light,
         ),
       );
-      try {
-        await Stripe.instance.presentPaymentSheet();
-        await _functions.httpsCallable('completeParkingReservation').call({
-          'reservationId': reservationId,
-        });
-      } catch (_) {
-        try {
+      await completePaymentFlowSafely(
+        presentPaymentSheet: Stripe.instance.presentPaymentSheet,
+        completeTransaction: () async {
+          await _functions.httpsCallable('completeParkingReservation').call({
+            'reservationId': reservationId,
+          });
+        },
+        cancelPendingTransaction: () async {
           await _functions
               .httpsCallable('cancelPendingParkingReservation')
               .call({'reservationId': reservationId});
-        } catch (_) {
-          // Preserve the original payment-sheet error for the customer.
-        }
-        rethrow;
-      }
+        },
+      );
     }
     return ParkingReservationResult(
       reservationId: reservationId,

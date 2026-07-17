@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   doc,
@@ -48,6 +48,13 @@ import {
   withSelectedDestinationCountry,
 } from "@/lib/destination-countries";
 import { confirmImportantAction } from "@/lib/action-confirmation";
+import {
+  sharedBarrelDeadlineIso,
+  sharedBarrelPoolErrorMessage,
+  type SharedBarrelPoolDraft,
+  type SharedBarrelPoolField,
+  validateSharedBarrelPoolDraft,
+} from "@/lib/shared-barrel-pool";
 import { destinationRateError } from "@/lib/destination-pricing";
 import { currentLanguage, formatDate, formatMoney, text } from "@/lib/format";
 import { US_STATE_OPTIONS, citiesForState, withSelected } from "@/lib/us-locations";
@@ -136,25 +143,7 @@ type TransportDraft = {
   status: string;
 };
 
-type PoolDraft = {
-  origin: "businessHeld" | "dropOff";
-  destinationCountryId: string;
-  totalShares: string;
-  reservedShares: string;
-  maxJoiners: string;
-  approvalMode: "approval" | "auto";
-  shipMode: "sea" | "air";
-  joinDeadline: string;
-  senderName: string;
-  senderAddress: string;
-  receiverName: string;
-  receiverPhone: string;
-  contentsDescription: string;
-  attestedWeightKg: string;
-  contentsAttested: boolean;
-  prohibitedItemsAcknowledged: boolean;
-  sharedLiabilityAccepted: boolean;
-};
+type PoolDraft = SharedBarrelPoolDraft;
 
 type PoolRolloverDraft = {
   joinDeadline: string;
@@ -163,8 +152,6 @@ type PoolRolloverDraft = {
 };
 
 const countries = DESTINATION_COUNTRIES;
-const sharedBarrelShareWeightCapKg = 20;
-
 function countryFlag(code: string) {
   const cc = (code || "").trim().toUpperCase();
   if (!/^[A-Z]{2}$/.test(cc)) return "🏳️";
@@ -605,13 +592,16 @@ export function DestinationsPanel({ businessId, enabledServices = [], openNewTok
       </div>
 
       {formOpen && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeForm}>
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={() => {
+          if (!busy) closeForm();
+        }}>
           <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(event) => event.stopPropagation()}>
             <header className="lst-modal-head">
               <h3>{editingId ? `Edit ${selectedCountry ? countryName(selectedCountry.id) : countryName(editingId)}` : "New destination"}</h3>
-              <button className="lst-icon-btn" type="button" onClick={closeForm} aria-label="Close"><X size={18} /></button>
+              <button className="lst-icon-btn" type="button" disabled={busy} onClick={closeForm} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">
+              {message && <div className="lst-form-error" role="alert">{message}</div>}
               <div className="lst-form-grid">
                 <label className="lst-field wide"><span>Country</span>
                   <select value={draft.countryId} disabled={Boolean(editingId)} onChange={(event) => setDraft((value) => ({ ...value, countryId: event.target.value }))}>
@@ -647,9 +637,10 @@ export function DestinationsPanel({ businessId, enabledServices = [], openNewTok
               </div>
             </div>
             <footer className="lst-modal-foot">
-              <button className="lst-btn ghost" type="button" onClick={closeForm}>Cancel</button>
-              <button className="lst-add" type="button" disabled={busy} onClick={() => runPanelAction(setBusy, setMessage, "Destination saved.", saveDestination)}>
-                <Save size={16} /> {editingId ? "Save changes" : "Create destination"}
+              <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeForm}>Cancel</button>
+              <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => runPanelAction(setBusy, setMessage, "Destination saved.", saveDestination)}>
+                {busy ? <RefreshCw className="spin" size={16} /> : <Save size={16} />}
+                {busy ? "Saving..." : editingId ? "Save changes" : "Create destination"}
               </button>
             </footer>
           </div>
@@ -1006,13 +997,16 @@ export function ListingsPanel({
       </div>
 
       {formOpen && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeForm}>
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={() => {
+          if (!busy) closeForm();
+        }}>
           <div className="lst-modal" onClick={(event) => event.stopPropagation()}>
             <header className="lst-modal-head">
               <h3>{editingId ? "Edit listing" : "New listing"}</h3>
-              <button className="lst-icon-btn" type="button" onClick={closeForm} aria-label="Close"><X size={18} /></button>
+              <button className="lst-icon-btn" type="button" disabled={busy} onClick={closeForm} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">
+              {message && <div className="lst-form-error" role="alert">{message}</div>}
               <div className="lst-form-grid">
                 <div className="lst-form-section">Vehicle</div>
                 <label className="lst-field wide">
@@ -1198,9 +1192,10 @@ export function ListingsPanel({
               </div>
             </div>
             <footer className="lst-modal-foot">
-              <button className="lst-btn ghost" type="button" onClick={closeForm}>Cancel</button>
-              <button className="lst-add" type="button" disabled={busy} onClick={() => runPanelAction(setBusy, setMessage, "Listing saved.", saveListing)}>
-                <Save size={16} /> {editingId ? "Save changes" : "Create listing"}
+              <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeForm}>Cancel</button>
+              <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => runPanelAction(setBusy, setMessage, "Listing saved.", saveListing)}>
+                {busy ? <RefreshCw className="spin" size={16} /> : <Save size={16} />}
+                {busy ? "Saving..." : editingId ? "Save changes" : "Create listing"}
               </button>
             </footer>
           </div>
@@ -1280,6 +1275,11 @@ export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
   const [poolFilter, setPoolFilter] = useState("all");
   const [poolFormOpen, setPoolFormOpen] = useState(false);
   const [poolDraft, setPoolDraft] = useState<PoolDraft>(() => defaultPoolDraft());
+  const [poolFormError, setPoolFormError] = useState("");
+  const [poolFormErrorField, setPoolFormErrorField] =
+    useState<SharedBarrelPoolField | null>(null);
+  const [poolCreationId, setPoolCreationId] = useState("");
+  const poolCreateInFlight = useRef(false);
   const [adjustingPool, setAdjustingPool] = useState<FirestoreRow | null>(null);
   const [adjustDraft, setAdjustDraft] = useState({ totalShares: "2", inspectionNote: "" });
   const [rollingPool, setRollingPool] = useState<FirestoreRow | null>(null);
@@ -1311,6 +1311,20 @@ export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
         .sort((a, b) => countryName(a.id).localeCompare(countryName(b.id))),
     [destinations.rows],
   );
+
+  useEffect(() => {
+    if (!poolFormOpen || !poolFormErrorField) return;
+    const nextError = validateSharedBarrelPoolDraft(businessId, poolDraft);
+    if (!nextError || nextError.field !== poolFormErrorField) {
+      setPoolFormError("");
+      setPoolFormErrorField(null);
+    }
+  }, [
+    businessId,
+    poolDraft,
+    poolFormErrorField,
+    poolFormOpen,
+  ]);
 
   async function run(
     id: string,
@@ -1391,6 +1405,34 @@ export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
     });
     closeAdjustPool();
   }
+  function submitPoolAdjustment() {
+    try {
+      if (!adjustingPool) throw new Error("Choose a shared barrel pool.");
+      const totalShares = Number(adjustDraft.totalShares);
+      const takenShares = Number(adjustingPool.takenShares ?? 0);
+      if (!Number.isInteger(totalShares) || totalShares < 2 || totalShares > 4) {
+        throw new Error("Adjusted total shares must be between 2 and 4.");
+      }
+      if (totalShares < takenShares) {
+        throw new Error("Adjusted total shares cannot be below reserved shares.");
+      }
+      if (!adjustDraft.inspectionNote.trim()) {
+        throw new Error("Inspection note is required.");
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Update failed.");
+      return;
+    }
+    if (!confirmImportantAction(
+      "Save this shared-barrel capacity adjustment?",
+      "Enregistrer cet ajustement de capacité du baril partagé ?",
+    )) return;
+    void run(
+      `pool-adjust-${adjustingPool.id}`,
+      "Pool capacity adjusted.",
+      savePoolAdjustment,
+    );
+  }
   async function savePoolRollover() {
     if (!rollingPool) throw new Error("Choose a shared barrel pool.");
     const maxJoiners = Number(rollDraft.maxJoiners);
@@ -1409,48 +1451,63 @@ export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
     });
     closeRollPool();
   }
+  function submitPoolRollover() {
+    try {
+      if (!rollingPool) throw new Error("Choose a shared barrel pool.");
+      const maxJoiners = Number(rollDraft.maxJoiners);
+      const deadlineMillis = new Date(rollDraft.joinDeadline).getTime();
+      if (!Number.isFinite(deadlineMillis) || deadlineMillis <= Date.now()) {
+        throw new Error("Choose a future matching deadline.");
+      }
+      if (!Number.isInteger(maxJoiners) || maxJoiners < 1) {
+        throw new Error("Enter at least 1 max joiner.");
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Update failed.");
+      return;
+    }
+    if (!confirmImportantAction(
+      "Roll this pool into business-held matching?",
+      "Basculer ce baril vers la mise en relation gérée par l’entreprise ?",
+    )) return;
+    void run(
+      `pool-roll-${rollingPool.id}`,
+      "Pool rolled into business-held matching.",
+      savePoolRollover,
+    );
+  }
   function openPoolForm() {
     setPoolDraft(defaultPoolDraft(activeDestinations[0]?.id ?? ""));
+    setPoolCreationId(
+      typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `pool-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
     setMessage("");
+    setPoolFormError("");
+    setPoolFormErrorField(null);
     setPoolFormOpen(true);
   }
-  function closePoolForm() {
+  function closePoolForm(force = false) {
+    if (poolCreateInFlight.current && !force) return;
     setPoolFormOpen(false);
     setPoolDraft(defaultPoolDraft(activeDestinations[0]?.id ?? ""));
+    setPoolCreationId("");
+    setPoolFormError("");
+    setPoolFormErrorField(null);
   }
   async function savePool() {
-    if (!businessId) throw new Error("Business ID is required.");
-    if (!poolDraft.destinationCountryId) throw new Error("Choose a destination.");
+    const validationError = validateSharedBarrelPoolDraft(
+      businessId,
+      poolDraft,
+    );
+    if (validationError) throw new Error(validationError.message);
     const totalShares = Number(poolDraft.totalShares);
     const reservedShares = Number(poolDraft.reservedShares);
     const maxJoiners = Number(poolDraft.maxJoiners);
-    const minimumReserved = poolDraft.origin === "dropOff" ? 1 : 0;
-    if (!Number.isInteger(totalShares) || totalShares < 2 || totalShares > 4) {
-      throw new Error("Total shares must be between 2 and 4.");
-    }
-    if (!Number.isInteger(reservedShares) || reservedShares < minimumReserved || reservedShares >= totalShares) {
-      throw new Error(poolDraft.origin === "dropOff" ? "Drop-off pools need 1 reserved share and at least 1 open share." : "Reserved shares must leave at least 1 share open.");
-    }
-    if (!Number.isInteger(maxJoiners) || maxJoiners < 1) {
-      throw new Error("Enter at least 1 max joiner.");
-    }
-    if (poolDraft.origin === "dropOff" && (!poolDraft.senderName.trim() || !poolDraft.receiverName.trim() || !poolDraft.receiverPhone.trim())) {
-      throw new Error("Sender, receiver, and receiver phone are required for drop-off pools.");
-    }
-    if (poolDraft.origin === "dropOff") {
-      const weightKg = Number(poolDraft.attestedWeightKg || 0);
-      if (!poolDraft.contentsDescription.trim()) {
-        throw new Error("Contents note is required for drop-off pools.");
-      }
-      if (!Number.isFinite(weightKg) || weightKg <= 0 || weightKg > reservedShares * sharedBarrelShareWeightCapKg) {
-        throw new Error("Drop-off weight must fit the reserved shares.");
-      }
-      if (!poolDraft.contentsAttested || !poolDraft.prohibitedItemsAcknowledged || !poolDraft.sharedLiabilityAccepted) {
-        throw new Error("Confirm contents, prohibited items, and shared liability before starting the pool.");
-      }
-    }
     await httpsCallable(functions, "createBusinessBarrelPool")({
       businessId,
+      creationId: poolCreationId,
       destinationCountryId: poolDraft.destinationCountryId,
       origin: poolDraft.origin,
       totalShares,
@@ -1458,7 +1515,7 @@ export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
       maxJoiners,
       approvalMode: poolDraft.approvalMode,
       shipMode: poolDraft.shipMode,
-      joinDeadline: poolDraft.joinDeadline,
+      joinDeadline: sharedBarrelDeadlineIso(poolDraft.joinDeadline),
       senderName: poolDraft.senderName,
       senderAddress: poolDraft.senderAddress,
       receiverName: poolDraft.receiverName,
@@ -1469,7 +1526,53 @@ export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
       prohibitedItemsAcknowledged: poolDraft.prohibitedItemsAcknowledged,
       sharedLiabilityAccepted: poolDraft.sharedLiabilityAccepted,
     });
-    closePoolForm();
+    closePoolForm(true);
+  }
+  function focusPoolField(field: SharedBarrelPoolField) {
+    if (field === "businessId") return;
+    window.requestAnimationFrame(() => {
+      const target = document.querySelector<HTMLElement>(
+        `[data-pool-field="${field}"]`,
+      );
+      target?.focus();
+    });
+  }
+  async function createPool() {
+    const validationError = validateSharedBarrelPoolDraft(
+      businessId,
+      poolDraft,
+    );
+    if (validationError) {
+      setPoolFormError(validationError.message);
+      setPoolFormErrorField(validationError.field);
+      focusPoolField(validationError.field);
+      return;
+    }
+    if (poolCreateInFlight.current) return;
+    poolCreateInFlight.current = true;
+    if (
+      !confirmImportantAction(
+        "Open this shared barrel pool?",
+        "Ouvrir ce baril partagé ?",
+      )
+    ) {
+      poolCreateInFlight.current = false;
+      return;
+    }
+
+    setBusyId("pool-create");
+    setMessage("");
+    setPoolFormError("");
+    setPoolFormErrorField(null);
+    try {
+      await savePool();
+      setMessage("Shared barrel pool opened.");
+    } catch (error) {
+      setPoolFormError(sharedBarrelPoolErrorMessage(error));
+    } finally {
+      poolCreateInFlight.current = false;
+      setBusyId("");
+    }
   }
   async function copyTracking(code: string) {
     try {
@@ -1733,13 +1836,16 @@ export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
       </div>
 
       {adjustingPool && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeAdjustPool}>
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={() => {
+          if (busyId !== `pool-adjust-${adjustingPool.id}`) closeAdjustPool();
+        }}>
           <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(event) => event.stopPropagation()}>
             <header className="lst-modal-head">
               <h3>Adjust inspected shares</h3>
-              <button className="lst-icon-btn" type="button" onClick={closeAdjustPool} aria-label="Close"><X size={18} /></button>
+              <button className="lst-icon-btn" type="button" disabled={busyId === `pool-adjust-${adjustingPool.id}`} onClick={closeAdjustPool} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">
+              {message && <div className="lst-form-error" role="alert">{message}</div>}
               <div className="pool-config-note">
                 Update total shares only after physical inspection. The total cannot be lower than already reserved shares.
               </div>
@@ -1763,20 +1869,16 @@ export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
               </div>
             </div>
             <footer className="lst-modal-foot">
-              <button className="lst-btn ghost" type="button" onClick={closeAdjustPool}>Cancel</button>
+              <button className="lst-btn ghost" type="button" disabled={busyId === `pool-adjust-${adjustingPool.id}`} onClick={closeAdjustPool}>Cancel</button>
 	              <button
 	                className="lst-add"
 	                type="button"
 	                disabled={busyId === `pool-adjust-${adjustingPool.id}`}
-	                onClick={() => run(
-	                  `pool-adjust-${adjustingPool.id}`,
-	                  "Pool capacity adjusted.",
-	                  savePoolAdjustment,
-	                  "Save this shared-barrel capacity adjustment?",
-	                  "Enregistrer cet ajustement de capacité du baril partagé ?",
-	                )}
+	                aria-busy={busyId === `pool-adjust-${adjustingPool.id}`}
+	                onClick={submitPoolAdjustment}
 	              >
-                <Save size={16} /> Save adjustment
+                {busyId === `pool-adjust-${adjustingPool.id}` ? <RefreshCw className="spin" size={16} /> : <Save size={16} />}
+                {busyId === `pool-adjust-${adjustingPool.id}` ? "Saving..." : "Save adjustment"}
               </button>
             </footer>
           </div>
@@ -1784,13 +1886,16 @@ export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
       )}
 
       {rollingPool && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeRollPool}>
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={() => {
+          if (busyId !== `pool-roll-${rollingPool.id}`) closeRollPool();
+        }}>
           <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(event) => event.stopPropagation()}>
             <header className="lst-modal-head">
               <h3>Roll to business-held</h3>
-              <button className="lst-icon-btn" type="button" onClick={closeRollPool} aria-label="Close"><X size={18} /></button>
+              <button className="lst-icon-btn" type="button" disabled={busyId === `pool-roll-${rollingPool.id}`} onClick={closeRollPool} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">
+              {message && <div className="lst-form-error" role="alert">{message}</div>}
               <div className="pool-config-note">
                 Use this when an underfilled customer or drop-off pool reached its deadline and the business will keep matching the open shares.
               </div>
@@ -1813,20 +1918,16 @@ export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
               </div>
             </div>
             <footer className="lst-modal-foot">
-              <button className="lst-btn ghost" type="button" onClick={closeRollPool}>Cancel</button>
+              <button className="lst-btn ghost" type="button" disabled={busyId === `pool-roll-${rollingPool.id}`} onClick={closeRollPool}>Cancel</button>
 	              <button
 	                className="lst-add"
 	                type="button"
 	                disabled={busyId === `pool-roll-${rollingPool.id}`}
-	                onClick={() => run(
-	                  `pool-roll-${rollingPool.id}`,
-	                  "Pool rolled into business-held matching.",
-	                  savePoolRollover,
-	                  "Roll this pool into business-held matching?",
-	                  "Basculer ce baril vers la mise en relation gérée par l’entreprise ?",
-	                )}
+	                aria-busy={busyId === `pool-roll-${rollingPool.id}`}
+	                onClick={submitPoolRollover}
 	              >
-                <RotateCcw size={16} /> Roll pool
+                {busyId === `pool-roll-${rollingPool.id}` ? <RefreshCw className="spin" size={16} /> : <RotateCcw size={16} />}
+                {busyId === `pool-roll-${rollingPool.id}` ? "Saving..." : "Roll pool"}
               </button>
             </footer>
           </div>
@@ -1834,16 +1935,25 @@ export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
       )}
 
       {poolFormOpen && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closePoolForm}>
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="shared-pool-title" onClick={() => closePoolForm()}>
           <div className="lst-modal" style={{ maxWidth: 640 }} onClick={(event) => event.stopPropagation()}>
             <header className="lst-modal-head">
-              <h3>Start shared barrel pool</h3>
-              <button className="lst-icon-btn" type="button" onClick={closePoolForm} aria-label="Close"><X size={18} /></button>
+              <h3 id="shared-pool-title">Start shared barrel pool</h3>
+              <button className="lst-icon-btn" type="button" disabled={busyId === "pool-create"} onClick={() => closePoolForm()} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">
+              {poolFormError && (
+                <div
+                  className="lst-form-error"
+                  role="alert"
+                  aria-live="assertive"
+                >
+                  {poolFormError}
+                </div>
+              )}
               <div className="lst-form-grid">
                 <label className="lst-field"><span>Pool origin</span>
-                  <select value={poolDraft.origin} onChange={(event) => setPoolDraft((value) => ({
+                  <select data-pool-field="origin" value={poolDraft.origin} onChange={(event) => setPoolDraft((value) => ({
                     ...value,
                     origin: event.target.value as PoolDraft["origin"],
                     reservedShares: event.target.value === "dropOff" ? "1" : "0",
@@ -1853,7 +1963,7 @@ export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
                   </select>
                 </label>
                 <label className="lst-field"><span>Destination</span>
-                  <select value={poolDraft.destinationCountryId} onChange={(event) => setPoolDraft((value) => ({ ...value, destinationCountryId: event.target.value }))}>
+                  <select data-pool-field="destinationCountryId" aria-invalid={poolFormErrorField === "destinationCountryId"} value={poolDraft.destinationCountryId} onChange={(event) => setPoolDraft((value) => ({ ...value, destinationCountryId: event.target.value }))}>
                     {activeDestinations.map((row) => {
                       const country = countries.find((item) => item.id === row.id);
                       return (
@@ -1865,17 +1975,17 @@ export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
                   </select>
                 </label>
                 <label className="lst-field"><span>Total shares</span>
-                  <select value={poolDraft.totalShares} onChange={(event) => setPoolDraft((value) => ({ ...value, totalShares: event.target.value }))}>
+                  <select data-pool-field="totalShares" aria-invalid={poolFormErrorField === "totalShares"} value={poolDraft.totalShares} onChange={(event) => setPoolDraft((value) => ({ ...value, totalShares: event.target.value }))}>
                     <option value="2">2 halves</option>
                     <option value="3">3 shares</option>
                     <option value="4">4 quarters</option>
                   </select>
                 </label>
                 <label className="lst-field"><span>Reserved shares</span>
-                  <input inputMode="numeric" value={poolDraft.reservedShares} onChange={(event) => setPoolDraft((value) => ({ ...value, reservedShares: event.target.value }))} placeholder={poolDraft.origin === "dropOff" ? "1" : "0"} />
+                  <input data-pool-field="reservedShares" aria-invalid={poolFormErrorField === "reservedShares"} inputMode="numeric" value={poolDraft.reservedShares} onChange={(event) => setPoolDraft((value) => ({ ...value, reservedShares: event.target.value }))} placeholder={poolDraft.origin === "dropOff" ? "1" : "0"} />
                 </label>
                 <label className="lst-field"><span>Max joiners</span>
-                  <input inputMode="numeric" value={poolDraft.maxJoiners} onChange={(event) => setPoolDraft((value) => ({ ...value, maxJoiners: event.target.value }))} placeholder="2" />
+                  <input data-pool-field="maxJoiners" aria-invalid={poolFormErrorField === "maxJoiners"} inputMode="numeric" value={poolDraft.maxJoiners} onChange={(event) => setPoolDraft((value) => ({ ...value, maxJoiners: event.target.value }))} placeholder="2" />
                 </label>
                 <label className="lst-field"><span>Approval mode</span>
                   <select value={poolDraft.approvalMode} onChange={(event) => setPoolDraft((value) => ({ ...value, approvalMode: event.target.value as PoolDraft["approvalMode"] }))}>
@@ -1890,38 +2000,39 @@ export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
                   </select>
                 </label>
                 <label className="lst-field"><span>Join deadline</span>
-                  <input type="date" value={poolDraft.joinDeadline} onChange={(event) => setPoolDraft((value) => ({ ...value, joinDeadline: event.target.value }))} />
+                  <input data-pool-field="joinDeadline" aria-invalid={poolFormErrorField === "joinDeadline"} type="date" value={poolDraft.joinDeadline} onChange={(event) => setPoolDraft((value) => ({ ...value, joinDeadline: event.target.value }))} />
                 </label>
                 {poolDraft.origin === "dropOff" && (
                   <>
                     <label className="lst-field"><span>Sender name</span>
-                      <input value={poolDraft.senderName} onChange={(event) => setPoolDraft((value) => ({ ...value, senderName: event.target.value }))} placeholder="Customer name" />
+                      <input data-pool-field="senderName" aria-invalid={poolFormErrorField === "senderName"} value={poolDraft.senderName} onChange={(event) => setPoolDraft((value) => ({ ...value, senderName: event.target.value }))} placeholder="Customer name" />
                     </label>
                     <label className="lst-field"><span>Sender address</span>
                       <input value={poolDraft.senderAddress} onChange={(event) => setPoolDraft((value) => ({ ...value, senderAddress: event.target.value }))} placeholder="Optional" />
                     </label>
                     <label className="lst-field"><span>Receiver name</span>
-                      <input value={poolDraft.receiverName} onChange={(event) => setPoolDraft((value) => ({ ...value, receiverName: event.target.value }))} placeholder="Recipient name" />
+                      <input data-pool-field="receiverName" aria-invalid={poolFormErrorField === "receiverName"} value={poolDraft.receiverName} onChange={(event) => setPoolDraft((value) => ({ ...value, receiverName: event.target.value }))} placeholder="Recipient name" />
                     </label>
                     <label className="lst-field"><span>Receiver phone</span>
-                      <input value={poolDraft.receiverPhone} onChange={(event) => setPoolDraft((value) => ({ ...value, receiverPhone: event.target.value }))} placeholder="+224…" />
+                      <input data-pool-field="receiverPhone" aria-invalid={poolFormErrorField === "receiverPhone"} value={poolDraft.receiverPhone} onChange={(event) => setPoolDraft((value) => ({ ...value, receiverPhone: event.target.value }))} placeholder="+224…" />
                     </label>
                     <label className="lst-field wide"><span>Contents note</span>
-                      <textarea rows={2} value={poolDraft.contentsDescription} onChange={(event) => setPoolDraft((value) => ({ ...value, contentsDescription: event.target.value }))} placeholder="Describe packed contents" />
+                      <textarea data-pool-field="contentsDescription" aria-invalid={poolFormErrorField === "contentsDescription"} rows={2} value={poolDraft.contentsDescription} onChange={(event) => setPoolDraft((value) => ({ ...value, contentsDescription: event.target.value }))} placeholder="Describe packed contents" />
+                      <small>Required for customer drop-off pools.</small>
                     </label>
                     <label className="lst-field"><span>Inspected weight (kg)</span>
-                      <input type="number" min="0" step="0.1" value={poolDraft.attestedWeightKg} onChange={(event) => setPoolDraft((value) => ({ ...value, attestedWeightKg: event.target.value }))} placeholder="20 kg per share max" />
+                      <input data-pool-field="attestedWeightKg" aria-invalid={poolFormErrorField === "attestedWeightKg"} type="number" min="0" step="0.1" value={poolDraft.attestedWeightKg} onChange={(event) => setPoolDraft((value) => ({ ...value, attestedWeightKg: event.target.value }))} placeholder="20 kg per share max" />
                     </label>
                     <label className="lst-check wide">
-                      <input type="checkbox" checked={poolDraft.contentsAttested} onChange={(event) => setPoolDraft((value) => ({ ...value, contentsAttested: event.target.checked }))} />
+                      <input data-pool-field="contentsAttested" aria-invalid={poolFormErrorField === "contentsAttested"} type="checkbox" checked={poolDraft.contentsAttested} onChange={(event) => setPoolDraft((value) => ({ ...value, contentsAttested: event.target.checked }))} />
                       <span>Contents and weight were reviewed with the customer.</span>
                     </label>
                     <label className="lst-check wide">
-                      <input type="checkbox" checked={poolDraft.prohibitedItemsAcknowledged} onChange={(event) => setPoolDraft((value) => ({ ...value, prohibitedItemsAcknowledged: event.target.checked }))} />
+                      <input data-pool-field="prohibitedItemsAcknowledged" aria-invalid={poolFormErrorField === "prohibitedItemsAcknowledged"} type="checkbox" checked={poolDraft.prohibitedItemsAcknowledged} onChange={(event) => setPoolDraft((value) => ({ ...value, prohibitedItemsAcknowledged: event.target.checked }))} />
                       <span>No prohibited or unsafe items were accepted.</span>
                     </label>
                     <label className="lst-check wide">
-                      <input type="checkbox" checked={poolDraft.sharedLiabilityAccepted} onChange={(event) => setPoolDraft((value) => ({ ...value, sharedLiabilityAccepted: event.target.checked }))} />
+                      <input data-pool-field="sharedLiabilityAccepted" aria-invalid={poolFormErrorField === "sharedLiabilityAccepted"} type="checkbox" checked={poolDraft.sharedLiabilityAccepted} onChange={(event) => setPoolDraft((value) => ({ ...value, sharedLiabilityAccepted: event.target.checked }))} />
                       <span>The customer accepted shared-barrel liability and inspection rules.</span>
                     </label>
                   </>
@@ -1929,20 +2040,19 @@ export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
               </div>
             </div>
             <footer className="lst-modal-foot">
-              <button className="lst-btn ghost" type="button" onClick={closePoolForm}>Cancel</button>
+              <button className="lst-btn ghost" type="button" disabled={busyId === "pool-create"} onClick={() => closePoolForm()}>Cancel</button>
 	              <button
 	                className="lst-add"
 	                type="button"
 	                disabled={busyId === "pool-create"}
-	                onClick={() => run(
-	                  "pool-create",
-	                  "Shared barrel pool opened.",
-	                  savePool,
-	                  "Open this shared barrel pool?",
-	                  "Ouvrir ce baril partagé ?",
-	                )}
+	                aria-busy={busyId === "pool-create"}
+	                onClick={createPool}
 	              >
-                <Save size={16} /> Open pool
+                {busyId === "pool-create" ? (
+                  <><RefreshCw className="spin" size={16} /> Opening pool...</>
+                ) : (
+                  <><Save size={16} /> Open pool</>
+                )}
               </button>
             </footer>
           </div>
@@ -2344,13 +2454,16 @@ export function TransportPanel({ businessId, businessName = "" }: PanelProps) {
       </div>
 
       {formOpen && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeForm}>
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={() => {
+          if (!busy) closeForm();
+        }}>
           <div className="lst-modal" style={{ maxWidth: 560 }} onClick={(event) => event.stopPropagation()}>
             <header className="lst-modal-head">
               <h3>{editingId ? "Edit transport" : "New transport"}</h3>
-              <button className="lst-icon-btn" type="button" onClick={closeForm} aria-label="Close"><X size={18} /></button>
+              <button className="lst-icon-btn" type="button" disabled={busy} onClick={closeForm} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">
+              {message && <div className="lst-form-error" role="alert">{message}</div>}
               <div className="lst-form-grid">
                 <label className="lst-field wide"><span>Owner name</span>
                   <input value={draft.ownerName} onChange={(event) => setDraft((value) => ({ ...value, ownerName: event.target.value }))} placeholder="Customer name" />
@@ -2386,9 +2499,10 @@ export function TransportPanel({ businessId, businessName = "" }: PanelProps) {
               </div>
             </div>
             <footer className="lst-modal-foot">
-              <button className="lst-btn ghost" type="button" onClick={closeForm}>Cancel</button>
-              <button className="lst-add" type="button" disabled={busy} onClick={() => runPanelAction(setBusy, setMessage, draft.id ? "Transport updated." : "Transport created.", saveTransport)}>
-                <Save size={16} /> {editingId ? "Save changes" : "Create transport"}
+              <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeForm}>Cancel</button>
+              <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => runPanelAction(setBusy, setMessage, draft.id ? "Transport updated." : "Transport created.", saveTransport)}>
+                {busy ? <RefreshCw className="spin" size={16} /> : <Save size={16} />}
+                {busy ? "Saving..." : editingId ? "Save changes" : "Create transport"}
               </button>
             </footer>
           </div>
@@ -2569,13 +2683,16 @@ export function ParkingPanel({
       </div>
 
       {formOpen && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={closeForm}>
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={() => {
+          if (!busy) closeForm();
+        }}>
           <div className="lst-modal" style={{ maxWidth: 560 }} onClick={(event) => event.stopPropagation()}>
             <header className="lst-modal-head">
               <h3>{draft.id ? "Edit parking" : "New parking"}</h3>
-              <button className="lst-icon-btn" type="button" onClick={closeForm} aria-label="Close"><X size={18} /></button>
+              <button className="lst-icon-btn" type="button" disabled={busy} onClick={closeForm} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">
+              {message && <div className="lst-form-error" role="alert">{message}</div>}
               <div className="lst-form-grid">
                 <label className="lst-field wide"><span>Owner name</span>
                   <input value={draft.ownerName} onChange={(event) => setDraft((value) => ({ ...value, ownerName: event.target.value }))} placeholder="Customer name" />
@@ -2606,9 +2723,10 @@ export function ParkingPanel({
               </div>
             </div>
             <footer className="lst-modal-foot">
-              <button className="lst-btn ghost" type="button" onClick={closeForm}>Cancel</button>
-              <button className="lst-add" type="button" disabled={busy} onClick={() => runPanelAction(setBusy, setMessage, draft.id ? "Parking record updated." : "Parking record created.", saveParking)}>
-                <Save size={16} /> {draft.id ? "Save changes" : "Create parking"}
+              <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeForm}>Cancel</button>
+              <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => runPanelAction(setBusy, setMessage, draft.id ? "Parking record updated." : "Parking record created.", saveParking)}>
+                {busy ? <RefreshCw className="spin" size={16} /> : <Save size={16} />}
+                {busy ? "Saving..." : draft.id ? "Save changes" : "Create parking"}
               </button>
             </footer>
           </div>

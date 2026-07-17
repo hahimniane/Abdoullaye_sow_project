@@ -134,8 +134,29 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   `DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer`. Maestro also
   needs Java 21 and should clear the simulator keychain before auth tests,
   because Firebase credentials survive an app-data reset in the iOS Keychain.
-  With limited disk/RAM, run emulator suites sequentially and keep one seeded
-  project (`car-selling-flutter-app`) for the browser/iPhone acceptance pass.
+  With limited disk/RAM, run emulator suites sequentially. Emulator app builds
+  must pass `--dart-define=USE_FIREBASE_EMULATORS=true` and set
+  `--dart-define=FIREBASE_EMULATOR_PROJECT_ID=...` to the same demo project used
+  by the seed and Functions emulator; a shell environment variable alone does
+  not satisfy `String.fromEnvironment`. Auth can appear to work while Firestore
+  silently reads a different empty project namespace. On the animated login
+  screen, Maestro must `waitForAnimationToEnd` before focusing Email and tap the
+  iOS keyboard's `done` control after entering Password; otherwise text input or
+  the submit tap can be silently lost even though Maestro reports success.
+- Payment-sheet acceptance tests must distinguish presentation failure from
+  post-charge confirmation failure. Only the former may call a cancellation
+  endpoint; after the sheet succeeds, server/webhook reconciliation owns
+  recovery. Keep a regression test for this ordering.
+- Marketplace-responsibility regressions must prove the payment confirmation is
+  disabled until the customer explicitly checks acceptance, renders in English
+  and French, carries the current version/locale into the callable, and is
+  rejected by production parsing when missing, unchecked, stale, or malformed.
+- While the release is light-only, regression checks must cover Flutter root
+  theme, native iOS/Android shells, every Stripe sheet setup, absence of the
+  Settings toggle, and cold launch while the device OS itself is in dark mode.
+- Paid vehicle holds need a concurrent two-customer test that proves exactly
+  one reservation wins. Destination-change tests must use multi-barrel
+  quantities so per-unit rates cannot be mistaken for shipment totals.
 - The current iOS toolchain may require the `objective_c` package hook to derive
   `DEVELOPER_DIR` from Xcode's compiler path. Treat that as a local cache
   workaround, not a product fix; retest after Flutter or `objective_c` upgrades.

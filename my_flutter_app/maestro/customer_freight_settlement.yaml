@@ -4,13 +4,20 @@ name: Customer pays a verified freight balance
 - clearKeychain
 - launchApp:
     clearState: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "(?s).*Sign in to your wallet.*"
+    timeout: 20000
 - tapOn: "(?s).*Sign in to your wallet.*"
-- assertVisible: "Account Login"
+- extendedWaitUntil:
+    visible: "Account Login"
+    timeout: 20000
+- waitForAnimationToEnd
 - tapOn: "Email"
 - inputText: "e2e.customer@laawol.test"
 - tapOn: "Password"
-- inputText: "E2eLocal123!"
-- hideKeyboard
+- inputText: "${E2E_TEST_PASSWORD}"
+- tapOn: "done"
 - scrollUntilVisible:
     element:
       text: "Sign In"
@@ -20,7 +27,7 @@ name: Customer pays a verified freight balance
     visible: "(?s).*E2E Customer.*"
     timeout: 30000
 - tapOn: "Activity"
-- tapOn: "(?s).*Track a shipment.*"
+- tapOn: "(?s).*Track Shipment.*"
 - waitForAnimationToEnd
 - extendedWaitUntil:
     visible: "(?s).*FR-E2E-BALANCE.*"

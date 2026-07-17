@@ -1,0 +1,78 @@
+appId: com.laawoldigital.app
+name: Customer reserves a parking space
+---
+- clearKeychain
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "(?s).*Sign in to your wallet.*"
+    timeout: 20000
+- tapOn: "(?s).*Sign in to your wallet.*"
+- extendedWaitUntil:
+    visible: "Account Login"
+    timeout: 20000
+- waitForAnimationToEnd
+- tapOn: "Email"
+- inputText: "e2e.customer@laawol.test"
+- tapOn: "Password"
+- inputText: "${E2E_TEST_PASSWORD}"
+- tapOn: "done"
+- scrollUntilVisible:
+    element:
+      text: "Sign In"
+    direction: DOWN
+- tapOn:
+    text: "Sign In"
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible: "(?s).*E2E Customer.*"
+    timeout: 30000
+- tapOn: "Cars"
+- tapOn: "(?s).*Park a Car.*"
+- extendedWaitUntil:
+    visible: "Find parking"
+    timeout: 20000
+- tapOn: "Parking city"
+- tapOn: "Bronx"
+- tapOn: "Search parking"
+- extendedWaitUntil:
+    visible: "(?s).*Available parking.*"
+    timeout: 30000
+- tapOn: "(?s).*E2E Atlantic Logistics.*"
+- tapOn: "Continue"
+- extendedWaitUntil:
+    visible: "(?s).*Car Information.*"
+    timeout: 10000
+- tapOn: "Make"
+- tapOn: "Acura"
+- tapOn: "Model"
+- scrollUntilVisible:
+    element:
+      text: "ADX"
+    direction: DOWN
+- tapOn: "ADX"
+- tapOn: "Year"
+- scrollUntilVisible:
+    element:
+      text: "2025"
+    direction: DOWN
+- tapOn: "2025"
+- scrollUntilVisible:
+    element:
+      text: "VIN Number"
+    direction: DOWN
+- tapOn: "VIN Number"
+- inputText: "1HGCM82633A004352"
+- scrollUntilVisible:
+    element:
+      text: "Continue"
+    direction: DOWN
+- tapOn: "Continue"
+- extendedWaitUntil:
+    visible: "(?s).*Review & reserve.*"
+    timeout: 10000
+- tapOn: "Reserve parking"
+- extendedWaitUntil:
+    visible: "(?s).*Parking reserved. Tracking number:.*"
+    timeout: 30000
+- takeScreenshot: "output/ios-e2e/parking-reserved"

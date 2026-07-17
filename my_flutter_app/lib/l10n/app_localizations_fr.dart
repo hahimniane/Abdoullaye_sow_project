@@ -254,6 +254,11 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String shipmentSavedReceiptUnavailable(Object trackingCode) {
+    return 'Expédition enregistrée. Numéro de suivi : $trackingCode. Le reçu n’a pas pu être ouvert, mais votre paiement et votre expédition sont bien enregistrés.';
+  }
+
+  @override
   String failedToSaveShipment(Object error) {
     return 'Échec de l\'enregistrement de l\'expédition : $error';
   }
@@ -568,6 +573,70 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get termsOfService => 'Conditions d\'Utilisation';
+
+  @override
+  String get legalAndPrivacy => 'Mentions légales et confidentialité';
+
+  @override
+  String get privacyPolicySubtitle => 'Comment Laawol traite vos informations';
+
+  @override
+  String get termsOfServiceSubtitle =>
+      'Règles d’utilisation de la plateforme Laawol';
+
+  @override
+  String get openLegalLinkFailed =>
+      'Impossible d’ouvrir cette page. Veuillez réessayer.';
+
+  @override
+  String get accountManagement => 'Gestion du compte';
+
+  @override
+  String get deleteAccount => 'Supprimer le compte';
+
+  @override
+  String get deleteAccountSubtitle =>
+      'Supprimer définitivement votre compte et vos données personnelles';
+
+  @override
+  String get deleteAccountTitle => 'Supprimer votre compte Laawol ?';
+
+  @override
+  String get deleteAccountExplanation =>
+      'Cette action lance la suppression définitive du compte. Vous serez déconnecté et l’accès à votre compte prendra fin.';
+
+  @override
+  String get deleteAccountRetentionNotice =>
+      'Les dossiers de paiements et de services terminés peuvent être conservés lorsque la comptabilité, les remboursements, les litiges, la prévention de la fraude ou la loi l’exigent. Toutes les autres données personnelles associées seront supprimées ou anonymisées sous 30 jours.';
+
+  @override
+  String get enterPasswordToDelete =>
+      'Saisissez votre mot de passe pour confirmer';
+
+  @override
+  String get confirmDeleteAccount => 'Demander la suppression';
+
+  @override
+  String get accountDeletionRequestedTitle => 'Suppression demandée';
+
+  @override
+  String get accountDeletionRequestedMessage =>
+      'Votre demande a été reçue. Laawol supprimera ou anonymisera les données admissibles du compte sous 30 jours. Vous êtes maintenant déconnecté.';
+
+  @override
+  String get accountDeletionWrongPassword => 'Le mot de passe est incorrect.';
+
+  @override
+  String get accountDeletionRecentLoginRequired =>
+      'Reconnectez-vous, puis réessayez de supprimer le compte.';
+
+  @override
+  String get accountDeletionAdminBlocked =>
+      'Le compte d’un administrateur de la plateforme doit être supprimé par un autre super administrateur.';
+
+  @override
+  String get accountDeletionFailed =>
+      'Impossible de lancer la suppression du compte. Réessayez ou contactez l’assistance.';
 
   @override
   String get manageCars => 'Gérer les Voitures';
@@ -1032,15 +1101,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get setAsCover => 'Définir comme couverture';
-
-  @override
-  String get themeLabel => 'Apparence';
-
-  @override
-  String get darkMode => 'Mode sombre';
-
-  @override
-  String get lightMode => 'Mode clair';
 
   @override
   String get reserved => 'Réservé';
@@ -2172,6 +2232,28 @@ class AppLocalizationsFr extends AppLocalizations {
   String destinationChangeCredit(Object amount) {
     return '$amount sera crédité dans votre portefeuille.';
   }
+
+  @override
+  String destinationChangePaid(Object amount) {
+    return 'Expédition mise à jour. Différence de $amount payée.';
+  }
+
+  @override
+  String destinationChangeCredited(Object amount) {
+    return 'Expédition mise à jour. $amount crédité dans votre portefeuille.';
+  }
+
+  @override
+  String get shipmentDestinationUpdated =>
+      'Destination de l’expédition mise à jour.';
+
+  @override
+  String get destinationPaymentInitializationFailed =>
+      'Le paiement du changement de destination n’a pas pu être initialisé. Veuillez réessayer.';
+
+  @override
+  String get paidShipmentDestinationChangeRequiresSupport =>
+      'Cette expédition a déjà été versée à l’entreprise. Contactez l’assistance Laawol pour modifier sa destination en toute sécurité.';
 
   @override
   String newRouteValue(Object business, Object country) {
@@ -3789,6 +3871,63 @@ class AppLocalizationsFr extends AppLocalizations {
   String get addDestination => 'Ajouter une destination';
 
   @override
+  String get destinationsTitle => 'Destinations';
+
+  @override
+  String get barrelDestinationStartSummary =>
+      'Commencez par indiquer la destination des barils et le nombre envoyé.';
+
+  @override
+  String barrelDestinationSummary(int barrelCount, int destinationCount) {
+    String _temp0 = intl.Intl.pluralLogic(
+      barrelCount,
+      locale: localeName,
+      other: '$barrelCount barils',
+      one: '1 baril',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      destinationCount,
+      locale: localeName,
+      other: '$destinationCount destinations',
+      one: '1 destination',
+    );
+    return '$_temp0 vers $_temp1.';
+  }
+
+  @override
+  String get addAnotherDestination => 'Ajouter une autre destination';
+
+  @override
+  String get editDestination => 'Modifier la destination';
+
+  @override
+  String destinationNumber(int number) {
+    return 'Destination $number';
+  }
+
+  @override
+  String get saveDestination => 'Enregistrer la destination';
+
+  @override
+  String get addToOrder => 'Ajouter à la commande';
+
+  @override
+  String holdPerDayDescription(int days, Object amount) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'Maintien pendant $days jours',
+      one: 'Maintien pendant 1 jour',
+    );
+    return '$_temp0 à $amount par jour';
+  }
+
+  @override
+  String holdFlatFeeDescription(int days) {
+    return 'Frais fixes de maintien jusqu’à $days jours';
+  }
+
+  @override
   String get pleaseChooseBusiness => 'Veuillez choisir une entreprise';
 
   @override
@@ -4497,4 +4636,69 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get hubWalletSubtitle => 'Solde et remboursements';
+
+  @override
+  String get destinationPickupDetailsRequired =>
+      'Modifiez chaque destination et ajoutez son adresse, sa date et son heure de ramassage.';
+
+  @override
+  String get destinationPickupDetailsHelp =>
+      'Modifiez chaque destination avec son lieu et sa date de ramassage.';
+
+  @override
+  String get noShowHistory => 'Historique des absences';
+
+  @override
+  String get noShowHistoryMessage =>
+      'Si vous ne revenez pas avant la date de fin de réservation et que l’entreprise indique que vous ne vous êtes pas présenté, l’acompte peut être perdu et ce résultat peut être visible par les entreprises qui vendent des voitures.';
+
+  @override
+  String get holdUntil => 'Réserver jusqu’au';
+
+  @override
+  String get marketplaceResponsibilityTitle =>
+      'Comprendre qui fournit ce service';
+
+  @override
+  String marketplaceProviderResponsibilityBody(Object providerNames) {
+    return '$providerNames est une entreprise indépendante responsable du bien ou du service, notamment de son exécution, de son état, du délai de livraison et de la qualité de sa prestation.';
+  }
+
+  @override
+  String get marketplacePaymentFlowBody =>
+      'Laawol vous aide à trouver des entreprises, encaisse et traite votre paiement, peut déduire des frais de plateforme indiqués et peut transférer ultérieurement la rémunération de l’entreprise. Laawol peut aider au suivi, à l’assistance, aux remboursements et aux litiges.';
+
+  @override
+  String get marketplaceNoGuaranteeBody =>
+      'Laawol n’est ni le vendeur, ni le transporteur, ni le prestataire et ne garantit ni la date de livraison ni la prestation de l’entreprise. Cela ne limite pas les droits auxquels la loi ne permet pas de renoncer.';
+
+  @override
+  String get marketplaceResponsibilityCheckbox =>
+      'Je comprends la responsabilité de l’entreprise et je souhaite continuer.';
+
+  @override
+  String get selectedBusiness => 'L’entreprise sélectionnée';
+
+  @override
+  String get accountLegalAcceptance =>
+      'J’accepte les Conditions d’utilisation et la Politique de confidentialité de Laawol, y compris son rôle de place de marché.';
+
+  @override
+  String get accountLegalAcceptanceRequired =>
+      'Veuillez accepter les Conditions d’utilisation et la Politique de confidentialité pour continuer.';
+
+  @override
+  String get businessResponsibilityAcceptance =>
+      'Je comprends que mon entreprise est indépendamment responsable de ses annonces, prix, biens, services, exécution, délais de livraison, autorisations et obligations envers les clients.';
+
+  @override
+  String get businessResponsibilityRequired =>
+      'Confirmez la déclaration de responsabilité de l’entreprise pour envoyer votre demande.';
+
+  @override
+  String get marketplaceBalancePaymentSummary => 'Paiement du solde';
+
+  @override
+  String get marketplaceDestinationChangeSummary =>
+      'Modification payante de la destination';
 }

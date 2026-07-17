@@ -15,6 +15,7 @@ import '../theme/app_colors.dart';
 import '../utils/barrel_receipt_generator.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/marketplace_transaction_disclosure.dart';
 
 enum _StatusFilter { inProgress, delivered, all }
 
@@ -170,10 +171,19 @@ class _TrackingScreenState extends State<TrackingScreen> {
 
   Future<void> _payFreightBalance(CustomerTrackingShipment shipment) async {
     final l10n = AppLocalizations.of(context)!;
+    final marketplaceAcceptance = await confirmMarketplaceTransaction(
+      context,
+      providerNames: shipment.businessName,
+      transactionSummary: l10n.marketplaceBalancePaymentSummary,
+    );
+    if (marketplaceAcceptance == null || !mounted) return;
     setState(() => _balancePayments.add(shipment.id));
     try {
       final service = _freightService ??= FreightShipmentService();
-      await service.payFreightBalance(shipmentId: shipment.id);
+      await service.payFreightBalance(
+        shipmentId: shipment.id,
+        marketplaceAcceptance: marketplaceAcceptance,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,

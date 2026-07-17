@@ -9,6 +9,7 @@ const UNVERIFIED_UID = "test-shared-unverified";
 const STAFF_UID = "test-shared-staff";
 const BUSINESS_ID = "test-shared-business";
 const COUNTRY_ID = "gn";
+let businessPoolSequence = 0;
 
 const authEmails = {
   [OWNER_UID]: "owner@example.test",
@@ -152,6 +153,7 @@ async function createBusinessPool({
     auth: {uid: STAFF_UID},
     data: {
       businessId: BUSINESS_ID,
+      creationId: `test-business-pool-${++businessPoolSequence}`,
       destinationCountryId: COUNTRY_ID,
       origin,
       totalShares,
@@ -344,6 +346,100 @@ describe("shared barrel callable lifecycle", () => {
             /Adjusted total shares cannot be below reserved shares/,
         );
       });
+
+  it("treats date-only pool deadlines as the end of the selected day",
+      async () => {
+        const selectedDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .slice(0, 10);
+        const created = await functions.createBusinessBarrelPool.run({
+          auth: {uid: STAFF_UID},
+          data: {
+            businessId: BUSINESS_ID,
+            creationId: `test-business-pool-${++businessPoolSequence}`,
+            destinationCountryId: COUNTRY_ID,
+            origin: "businessHeld",
+            totalShares: 2,
+            reservedShares: 0,
+            maxJoiners: 2,
+            approvalMode: "approval",
+            joinDeadline: selectedDate,
+            shipMode: "sea",
+          },
+        });
+
+        const pool = await poolData(created.poolId);
+        assert.equal(
+            pool.joinDeadline.toMillis(),
+            Date.parse(`${selectedDate}T23:59:59.999Z`),
+        );
+      });
+
+  it("rejects invalid business pool contracts",
+      async () => {
+        const deadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+            .toISOString();
+        const baseData = {
+          businessId: BUSINESS_ID,
+          destinationCountryId: COUNTRY_ID,
+          creationId: `test-business-pool-${++businessPoolSequence}`,
+          origin: "businessHeld",
+          totalShares: 4,
+          reservedShares: 0,
+          maxJoiners: 4,
+          approvalMode: "approval",
+          joinDeadline: deadline,
+          shipMode: "sea",
+        };
+
+        await assert.rejects(
+            () => functions.createBusinessBarrelPool.run({
+              auth: {uid: STAFF_UID},
+              data: {...baseData, reservedShares: 1},
+            }),
+            /must start with 0 reserved shares/,
+        );
+        await assert.rejects(
+            () => functions.createBusinessBarrelPool.run({
+              auth: {uid: STAFF_UID},
+              data: {...baseData, maxJoiners: 5},
+            }),
+            /Max joiners must fit the open shares/,
+        );
+        await assert.rejects(
+            () => functions.createBusinessBarrelPool.run({
+              auth: {uid: STAFF_UID},
+              data: {...baseData, shipMode: "ground"},
+            }),
+            /Invalid ship mode/,
+        );
+        await assert.rejects(
+            () => functions.createBusinessBarrelPool.run({
+              auth: {uid: STAFF_UID},
+              data: {...baseData, joinDeadline: ""},
+            }),
+            /Choose a valid join deadline/,
+        );
+      });
+
+  it("deduplicates retried business pool creation requests", async () => {
+    const creationId = `test-business-pool-${++businessPoolSequence}`;
+    const first = await createBusinessPool({
+      extraData: {creationId},
+    });
+    const second = await createBusinessPool({
+      extraData: {creationId},
+    });
+
+    assert.equal(second.duplicate, true);
+    assert.equal(second.poolId, first.poolId);
+    assert.equal(second.trackingCode, first.trackingCode);
+
+    const snapshot = await db.collection("barrelPools")
+        .where("trackingCode", "==", first.trackingCode)
+        .get();
+    assert.equal(snapshot.size, 1);
+  });
 
   it("lets businesses approve or reject requested joiners", async () => {
     const acceptPool = await createBusinessPool();

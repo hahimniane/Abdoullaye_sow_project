@@ -83,6 +83,12 @@
       "trackingCode": {}
     }
   },
+  "shipmentSavedReceiptUnavailable": "Shipment saved. Tracking number: {trackingCode}. The receipt could not be opened, but your payment and shipment are safe.",
+  "@shipmentSavedReceiptUnavailable": {
+    "placeholders": {
+      "trackingCode": {}
+    }
+  },
   "failedToSaveShipment": "Failed to save shipment: {error}",
   "@failedToSaveShipment": {
     "placeholders": {
@@ -201,6 +207,24 @@
   "about": "About",
   "privacyPolicy": "Privacy Policy",
   "termsOfService": "Terms of Service",
+  "legalAndPrivacy": "Legal & privacy",
+  "privacyPolicySubtitle": "How Laawol handles your information",
+  "termsOfServiceSubtitle": "Rules for using the Laawol platform",
+  "openLegalLinkFailed": "This page could not be opened. Please try again.",
+  "accountManagement": "Account management",
+  "deleteAccount": "Delete account",
+  "deleteAccountSubtitle": "Permanently delete your account and personal data",
+  "deleteAccountTitle": "Delete your Laawol account?",
+  "deleteAccountExplanation": "This starts permanent account deletion. You will be signed out, and access to your account will end.",
+  "deleteAccountRetentionNotice": "Completed payment and service records may be retained when required for accounting, refunds, disputes, fraud prevention, or law. All other associated personal data will be deleted or anonymized within 30 days.",
+  "enterPasswordToDelete": "Enter your password to confirm",
+  "confirmDeleteAccount": "Request deletion",
+  "accountDeletionRequestedTitle": "Deletion requested",
+  "accountDeletionRequestedMessage": "Your request was received. Laawol will delete or anonymize eligible account data within 30 days. You are now signed out.",
+  "accountDeletionWrongPassword": "The password is incorrect.",
+  "accountDeletionRecentLoginRequired": "Please sign in again, then retry account deletion.",
+  "accountDeletionAdminBlocked": "A platform administrator account must be removed by another super admin.",
+  "accountDeletionFailed": "We could not start account deletion. Please try again or contact support.",
   "manageCars": "Manage Cars",
   "recentActivity": "Recent Activity",
   "filterAll": "All",
@@ -410,9 +434,6 @@
   "addImagesPrompt": "Please add at least one image.",
   "coverLabel": "Cover",
   "setAsCover": "Set as cover",
-  "themeLabel": "Appearance",
-  "darkMode": "Dark mode",
-  "lightMode": "Light mode",
   "reserved": "Reserved",
   "reserveWithDeposit": "Reserve with deposit",
   "reserveWithPaidHold": "Reserve with paid hold",
@@ -889,6 +910,21 @@
       "amount": {}
     }
   },
+  "destinationChangePaid": "Shipment updated. {amount} difference paid.",
+  "@destinationChangePaid": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "destinationChangeCredited": "Shipment updated. {amount} credited to your wallet.",
+  "@destinationChangeCredited": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "shipmentDestinationUpdated": "Shipment destination updated.",
+  "destinationPaymentInitializationFailed": "The destination payment could not be initialized. Please try again.",
+  "paidShipmentDestinationChangeRequiresSupport": "This shipment has already been paid out to the business. Contact Laawol support to change its destination safely.",
   "newRouteValue": "{business} to {country}",
   "@newRouteValue": {
     "placeholders": {
@@ -1603,6 +1639,38 @@
   "whereAreBarrelsGoing": "Where are these barrels going?",
   "addDestinationInstruction": "Add a destination — country, business, who receives it, and how many barrels are going there.",
   "addDestination": "Add a destination",
+  "destinationsTitle": "Destinations",
+  "barrelDestinationStartSummary": "Start with where the barrels are going and how many you are sending.",
+  "barrelDestinationSummary": "{barrelCount, plural, =1{1 barrel} other{{barrelCount} barrels}} to {destinationCount, plural, =1{1 destination} other{{destinationCount} destinations}}.",
+  "@barrelDestinationSummary": {
+    "placeholders": {
+      "barrelCount": {"type": "int"},
+      "destinationCount": {"type": "int"}
+    }
+  },
+  "addAnotherDestination": "Add another destination",
+  "editDestination": "Edit destination",
+  "destinationNumber": "Destination {number}",
+  "@destinationNumber": {
+    "placeholders": {
+      "number": {"type": "int"}
+    }
+  },
+  "saveDestination": "Save destination",
+  "addToOrder": "Add to order",
+  "holdPerDayDescription": "{days, plural, =1{1-day hold} other{{days}-day hold}} at {amount} per day",
+  "@holdPerDayDescription": {
+    "placeholders": {
+      "days": {"type": "int"},
+      "amount": {}
+    }
+  },
+  "holdFlatFeeDescription": "Flat hold fee for up to {days} days",
+  "@holdFlatFeeDescription": {
+    "placeholders": {
+      "days": {"type": "int"}
+    }
+  },
   "pleaseChooseBusiness": "Please choose a business",
   "originalEstimatedCost": "Original estimated cost",
   "walletCredit": "Wallet credit",
@@ -1859,5 +1927,23 @@
   "hubParkCarSubtitle": "Store with a business",
   "hubActivitySubtitle": "Your orders, shipments, and wallet.",
   "hubOrdersSubtitle": "Cars, barrels, freight & more",
-  "hubWalletSubtitle": "Balance & refunds"
+  "hubWalletSubtitle": "Balance & refunds",
+  "destinationPickupDetailsRequired": "Edit each destination and add its pickup address, date, and time.",
+  "destinationPickupDetailsHelp": "Edit each destination with its pickup place and date.",
+  "noShowHistory": "No-show history",
+  "noShowHistoryMessage": "If you do not return by the hold date and the business marks that you did not come, the deposit may be forfeited and this outcome may be visible to car-selling businesses.",
+  "holdUntil": "Hold until",
+  "marketplaceResponsibilityTitle": "Understand who provides this service",
+  "marketplaceProviderResponsibilityBody": "{providerNames} is an independent business responsible for the item or service, including fulfillment, condition, delivery timing, and performance.",
+  "@marketplaceProviderResponsibilityBody": {"placeholders": {"providerNames": {}}},
+  "marketplacePaymentFlowBody": "Laawol helps you find businesses, collects and processes your payment, may deduct a disclosed platform fee, and may transfer the business payout later. Laawol can assist with tracking, support, refunds, and disputes.",
+  "marketplaceNoGuaranteeBody": "Laawol is not the seller, carrier, or service provider and does not guarantee the business’s delivery date or performance. This does not limit rights that cannot legally be waived.",
+  "marketplaceResponsibilityCheckbox": "I understand the business’s responsibility and want to continue.",
+  "selectedBusiness": "The selected business",
+  "accountLegalAcceptance": "I agree to Laawol’s Terms of Service and Privacy Policy, including its marketplace role.",
+  "accountLegalAcceptanceRequired": "Please accept the Terms of Service and Privacy Policy to continue.",
+  "businessResponsibilityAcceptance": "I understand that my business is independently responsible for its listings, prices, goods, services, fulfillment, delivery timing, permits, and customer obligations.",
+  "businessResponsibilityRequired": "Confirm the business responsibility statement to submit your application."
+  ,"marketplaceBalancePaymentSummary": "Balance payment"
+  ,"marketplaceDestinationChangeSummary": "Paid destination change"
 }

@@ -4649,12 +4649,32 @@ button[data-loading="true"]::before {
 .lst-icon-btn { background: var(--bg); border: 0; width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--muted); }
 .lst-icon-btn:hover { background: #e7eeed; color: var(--ink); }
 .lst-modal-body { padding: 22px; overflow-y: auto; }
+.lst-form-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  color: #b91c1c;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  margin-bottom: 16px;
+  padding: 11px 13px;
+}
 .lst-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .lst-field { display: flex; flex-direction: column; gap: 6px; }
 .lst-field.wide { grid-column: 1 / -1; }
 .lst-field span { font-size: 13px; font-weight: 700; color: var(--ink-soft, #3c5450); }
+.lst-field small { color: var(--muted); font-size: 12px; line-height: 1.35; }
 .lst-field input, .lst-field select { padding: 11px 13px; border: 1.5px solid var(--rule); border-radius: 12px; font: inherit; font-size: 14.5px; background: #fff; color: var(--ink); }
 .lst-field input:focus, .lst-field select:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 4px rgba(13,148,136,.12); }
+.lst-field [aria-invalid="true"] {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220,38,38,.11);
+}
+.lst-check input[aria-invalid="true"] {
+  outline: 3px solid rgba(220,38,38,.2);
+  outline-offset: 2px;
+}
 .lst-modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 22px; border-top: 1px solid var(--rule); background: var(--paper-soft); }
 
 @media (max-width: 560px) {

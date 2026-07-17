@@ -13,6 +13,7 @@ import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/support_entry_button.dart';
+import '../widgets/marketplace_transaction_disclosure.dart';
 
 class MyPurchasesScreen extends StatelessWidget {
   const MyPurchasesScreen({super.key, this.showBackButton = false});
@@ -233,8 +234,17 @@ class MyPurchasesScreen extends StatelessWidget {
       icon: Icons.payments_outlined,
     );
     if (!confirmed || !context.mounted) return;
+    final marketplaceAcceptance = await confirmMarketplaceTransaction(
+      context,
+      providerNames: purchase.businessName,
+      transactionSummary: l10n.payExtension,
+    );
+    if (marketplaceAcceptance == null || !context.mounted) return;
     try {
-      await CarPurchaseService().payApprovedHoldExtension(purchase: purchase);
+      await CarPurchaseService().payApprovedHoldExtension(
+        purchase: purchase,
+        marketplaceAcceptance: marketplaceAcceptance,
+      );
       if (!context.mounted) return;
       showSuccessSnackBar(context, l10n.extensionPaidHoldUpdated);
     } catch (e) {

@@ -3,7 +3,9 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
+import 'payment_flow_safety.dart';
 import 'stripe_config_service.dart';
+import '../models/marketplace_disclosure_acceptance.dart';
 
 /// Customer-side flow for parcel/box freight shipments (priced by weight,
 /// by air or sea). Mirrors [BarrelShipmentService].
@@ -28,6 +30,7 @@ class FreightShipmentService {
     required String mode,
     required double weightKg,
     bool useWalletBalance = false,
+    required MarketplaceDisclosureAcceptance marketplaceAcceptance,
   }) async {
     final response = await _functions
         .httpsCallable('createFreightShipmentPaymentIntent')
@@ -41,6 +44,7 @@ class FreightShipmentService {
           'weightKg': weightKg,
           'pickupRequested': false,
           'useWalletBalance': useWalletBalance,
+          'marketplaceDisclosure': marketplaceAcceptance.toJson(),
         });
 
     final data = Map<String, dynamic>.from(response.data);
@@ -60,30 +64,22 @@ class FreightShipmentService {
         paymentSheetParameters: SetupPaymentSheetParameters(
           paymentIntentClientSecret: clientSecret,
           merchantDisplayName: 'Laawol',
-          style: ThemeMode.system,
+          style: ThemeMode.light,
         ),
       );
-      try {
-        await Stripe.instance.presentPaymentSheet();
-      } catch (_) {
-        try {
+      await completePaymentFlowSafely(
+        presentPaymentSheet: Stripe.instance.presentPaymentSheet,
+        completeTransaction: () async {
+          await _functions.httpsCallable('completeFreightShipmentPayment').call(
+            {'shipmentId': shipmentId},
+          );
+        },
+        cancelPendingTransaction: () async {
           await _functions.httpsCallable('cancelPendingFreightShipment').call({
             'shipmentId': shipmentId,
           });
-        } catch (_) {
-          // Preserve the original Stripe error for the customer message.
-        }
-        rethrow;
-      }
-      try {
-        await _functions.httpsCallable('completeFreightShipmentPayment').call({
-          'shipmentId': shipmentId,
-        });
-      } catch (_) {
-        // Stripe already accepted the payment. The signed webhook and stale
-        // payment reconciler will finish the idempotent domain transition;
-        // cancelling here could race that completion and strand the payout.
-      }
+        },
+      );
     }
 
     final snapshot = await _firestore
@@ -97,10 +93,14 @@ class FreightShipmentService {
   /// Dismissing the sheet leaves the shipment and attempt recoverable.
   Future<Map<String, dynamic>> payFreightBalance({
     required String shipmentId,
+    required MarketplaceDisclosureAcceptance marketplaceAcceptance,
   }) async {
     final response = await _functions
         .httpsCallable('createFreightSettlementPayment')
-        .call<Map<String, dynamic>>({'shipmentId': shipmentId});
+        .call<Map<String, dynamic>>({
+          'shipmentId': shipmentId,
+          'marketplaceDisclosure': marketplaceAcceptance.toJson(),
+        });
     final data = Map<String, dynamic>.from(response.data);
     if (data['alreadySettled'] != true && data['simulatedPayment'] != true) {
       final clientSecret = data['clientSecret'] as String?;
@@ -117,7 +117,7 @@ class FreightShipmentService {
         paymentSheetParameters: SetupPaymentSheetParameters(
           paymentIntentClientSecret: clientSecret,
           merchantDisplayName: 'Laawol',
-          style: ThemeMode.system,
+          style: ThemeMode.light,
         ),
       );
       await Stripe.instance.presentPaymentSheet();

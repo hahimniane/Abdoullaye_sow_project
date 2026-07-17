@@ -72,6 +72,10 @@ const {
   FreightSettlementStatus,
   calculateFreightSettlement,
 } = require("./freight_settlement");
+const {
+  accountLegalAcceptance,
+  marketplaceDisclosure,
+} = require("./marketplace_disclosure");
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
@@ -182,6 +186,37 @@ function requireAuth(request) {
   return request.auth.uid;
 }
 
+function parseAcceptedDisclosure(parser, raw) {
+  try {
+    return parser(raw, {
+      // Existing emulator fixtures predate this release. Production never
+      // receives this exception; pure contract tests cover rejection rules.
+      allowMissing: process.env.FUNCTIONS_EMULATOR === "true" ||
+        Boolean(process.env.FIRESTORE_EMULATOR_HOST),
+    });
+  } catch (error) {
+    throw new HttpsError("failed-precondition", error.message);
+  }
+}
+
+async function recordMarketplaceDisclosure(request, userId, action) {
+  const evidence = parseAcceptedDisclosure(
+      marketplaceDisclosure,
+      request.data?.marketplaceDisclosure,
+  );
+  if (!evidence) return null;
+  const ref = admin.firestore().collection(
+      "marketplaceDisclosureAcceptances",
+  ).doc();
+  await ref.set({
+    userId,
+    action,
+    ...evidence,
+    acceptedAt: FirestoreFieldValue.serverTimestamp(),
+  });
+  return {id: ref.id, ...evidence};
+}
+
 function callableClientAddress(request) {
   const rawRequest = request.rawRequest;
   const forwarded = String(rawRequest?.headers?.["x-forwarded-for"] || "")
@@ -223,7 +258,7 @@ async function enforceCallableRateLimit(request, {
       startedAtMs: activeWindow ? startedAtMs : nowMs,
       count: count + 1,
       updatedAt: FirestoreFieldValue.serverTimestamp(),
-      expiresAt: admin.firestore.Timestamp.fromMillis(nowMs + windowMs * 2),
+      expiresAt: FirestoreTimestamp.fromMillis(nowMs + windowMs * 2),
     }, {merge: true});
   });
 }
@@ -265,6 +300,12 @@ exports.createCustomerUser = onCall(
       const password = String(request.data?.password || "");
       const fullName = String(request.data?.fullName || "").trim();
       const phone = String(request.data?.phone || "").trim();
+      let legalEvidence;
+      try {
+        legalEvidence = accountLegalAcceptance(request.data?.legalAcceptance);
+      } catch (error) {
+        throw new HttpsError("failed-precondition", error.message);
+      }
 
       if (!isValidEmail(email)) {
         throw new HttpsError("invalid-argument", "Enter a valid email address");
@@ -332,6 +373,10 @@ exports.createCustomerUser = onCall(
             normalizedPhone,
             role: "customer",
             notificationPreferences: defaultNotificationPreferences(),
+            legalAcceptance: {
+              ...legalEvidence,
+              acceptedAt: now,
+            },
             createdAt: now,
             updatedAt: now,
           });
@@ -929,7 +974,7 @@ function setAdminAuditLog(batch, {
     targetPath: `${targetCollection}/${targetId}`,
     targetLabel: String(targetLabel || targetId),
     createdAt: FirestoreFieldValue.serverTimestamp(),
-    expiresAt: admin.firestore.Timestamp.fromMillis(
+    expiresAt: FirestoreTimestamp.fromMillis(
         Date.now() + 400 * 24 * 60 * 60 * 1000,
     ),
   };
@@ -1647,7 +1692,7 @@ exports.createTransportRequest = onCall(
       if (data.preferredDate) {
         const parsed = new Date(data.preferredDate);
         if (!Number.isNaN(parsed.getTime())) {
-          preferredDate = admin.firestore.Timestamp.fromDate(parsed);
+          preferredDate = FirestoreTimestamp.fromDate(parsed);
         }
       }
 
@@ -1776,6 +1821,13 @@ function stripeFormRequest(path, body, options = {}) {
 
 async function retrieveStripePaymentIntent(paymentIntentId) {
   return stripeRequest(`/payment_intents/${paymentIntentId}`);
+}
+
+async function cancelStripePaymentIntent(paymentIntentId) {
+  return stripeFormRequest(
+      `/payment_intents/${paymentIntentId}/cancel`,
+      new URLSearchParams(),
+  );
 }
 
 async function createStripeExpressAccount(params) {
@@ -2417,7 +2469,7 @@ exports.sendTestNotificationDelivery = onCall(
         previousValue: "",
         nextValue: result.status,
         createdAt: FirestoreFieldValue.serverTimestamp(),
-        expiresAt: admin.firestore.Timestamp.fromMillis(
+        expiresAt: FirestoreTimestamp.fromMillis(
             Date.now() + 400 * 24 * 60 * 60 * 1000,
         ),
       });
@@ -3678,6 +3730,7 @@ const PAYMENT_COMPLETION_EXPORTS = Object.freeze({
   barrel_pool_join: "completeBarrelPoolDepositPayment",
   barrel_pool_balance: "completeBarrelPoolBalancePayment",
   barrel_shipment: "completeBarrelShipmentPayment",
+  barrel_destination_change: "completeBarrelDestinationChange",
   barrel_order: "completeBarrelOrderPayment",
   freight_shipment: "completeFreightShipmentPayment",
   freight_settlement_adjustment: "completeFreightSettlementPayment",
@@ -3699,6 +3752,11 @@ function paymentCompletionData(target) {
     case "barrel_shipment":
     case "freight_shipment":
       return {shipmentId: identity.shipmentId};
+    case "barrel_destination_change":
+      return {
+        shipmentId: identity.shipmentId,
+        changeRequestId: identity.changeRequestId,
+      };
     case "freight_settlement_adjustment":
       return {
         settlementId: identity.settlementId,
@@ -3737,7 +3795,7 @@ async function claimStripeWebhookEvent(event) {
       processingStartedAt:
         FirestoreFieldValue.serverTimestamp(),
       updatedAt: FirestoreFieldValue.serverTimestamp(),
-      expiresAt: admin.firestore.Timestamp.fromMillis(
+      expiresAt: FirestoreTimestamp.fromMillis(
           nowMillis + 90 * 24 * 60 * 60 * 1000,
       ),
     }, {merge: true});
@@ -3960,6 +4018,12 @@ const STALE_PAYMENT_SCANS = Object.freeze([
     intent: "stripePaymentIntentId",
   },
   {
+    id: "barrel_destination_changes",
+    collection: "barrelShipments",
+    statusField: "destinationAdjustmentPaymentStatus",
+    intent: "destinationAdjustmentPaymentIntentId",
+  },
+  {
     id: "barrel_orders",
     collection: "barrelOrders",
     intent: "stripePaymentIntentId",
@@ -4021,7 +4085,7 @@ exports.reconcileStaleStripePayments = onSchedule(
     },
     async () => {
       const db = admin.firestore();
-      const cutoff = admin.firestore.Timestamp.fromMillis(
+      const cutoff = FirestoreTimestamp.fromMillis(
           Date.now() - 10 * 60 * 1000,
       );
       const deadline = Date.now() + 8 * 60 * 1000;
@@ -4184,6 +4248,10 @@ exports.submitBusinessApplication = onCall(
     },
     async (request) => {
       const applicantUid = requireAuth(request);
+      const marketplaceEvidence = parseAcceptedDisclosure(
+          marketplaceDisclosure,
+          request.data?.marketplaceDisclosure,
+      );
       const {
         ownerName,
         ownerPhone,
@@ -4312,6 +4380,12 @@ exports.submitBusinessApplication = onCall(
           updatedAt: now,
           profile,
           enabledServices: normalizedServices,
+          ...(marketplaceEvidence ? {
+            marketplaceDisclosure: {
+              ...marketplaceEvidence,
+              acceptedAt: now,
+            },
+          } : {}),
         });
         if (status !== "approved") {
           transaction.set(notificationRef, {
@@ -5442,9 +5516,17 @@ function parkingBillableDays(start, end) {
 }
 
 function parkingRangeOverlaps(row, start, end) {
-  const rowStart = row.parkingDate?.toDate?.() ||
-    parseParkingDate(row.parkingDate, "parkingDate");
-  const rowEnd = row.parkingEndDate?.toDate?.() || rowStart;
+  const rawStart = row.parkingDate?.toDate?.() ||
+    new Date(String(row.parkingDate || ""));
+  if (!(rawStart instanceof Date) || Number.isNaN(rawStart.getTime())) {
+    return false;
+  }
+  const rawEnd = row.parkingEndDate?.toDate?.() ||
+    new Date(String(row.parkingEndDate || ""));
+  const rowStart = rawStart;
+  const rowEnd = rawEnd instanceof Date && !Number.isNaN(rawEnd.getTime()) ?
+    rawEnd :
+    rowStart;
   return rowEnd.getTime() >= start.getTime() &&
     rowStart.getTime() <= end.getTime();
 }
@@ -5651,6 +5733,11 @@ exports.createParkingReservation = onCall(
     },
     async (request) => {
       const customerUid = requireAuth(request);
+      await recordMarketplaceDisclosure(
+          request,
+          customerUid,
+          "parking_reservation",
+      );
       const {
         businessId,
         customerName,
@@ -5762,8 +5849,8 @@ exports.createParkingReservation = onCall(
           businessName: option.businessName,
           parkingCity: option.city,
           parkingAddress: option.address,
-          parkingDate: admin.firestore.Timestamp.fromDate(start),
-          parkingEndDate: admin.firestore.Timestamp.fromDate(end),
+          parkingDate: FirestoreTimestamp.fromDate(start),
+          parkingEndDate: FirestoreTimestamp.fromDate(end),
           status: paymentCents > 0 && !SIMULATE_PAYMENTS ?
             "pending_payment" :
             "reserved",
@@ -5868,6 +5955,13 @@ exports.completeParkingReservation = onCall(
       if (SIMULATE_PAYMENTS) {
         return {success: true, reservationId: cleanReservationId};
       }
+      if (String(reservation.stripePaymentIntentId || "")
+          .startsWith("simulated_")) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Simulated parking payments are disabled",
+        );
+      }
       const intent = await retrieveStripePaymentIntent(
           reservation.stripePaymentIntentId,
       );
@@ -5904,6 +5998,7 @@ exports.cancelPendingParkingReservation = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
+      secrets: [stripeSecretKey],
     },
     async (request) => {
       const customerUid = requireAuth(request);
@@ -5922,6 +6017,57 @@ exports.cancelPendingParkingReservation = onCall(
       }
       if (reservation.status !== "pending_payment") {
         return {success: true, reservationId: cleanReservationId};
+      }
+      if (!SIMULATE_PAYMENTS && reservation.stripePaymentIntentId) {
+        if (String(reservation.stripePaymentIntentId)
+            .startsWith("simulated_")) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Simulated parking payments are disabled",
+          );
+        }
+        const intent = await retrieveStripePaymentIntent(
+            reservation.stripePaymentIntentId,
+        );
+        if (intent.status === "succeeded") {
+          await ref.update({
+            status: "reserved",
+            paymentStatus: "succeeded",
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          });
+          await issueBusinessPayoutTransfer({
+            ref,
+            data: {
+              ...reservation,
+              status: "reserved",
+              paymentStatus: "succeeded",
+            },
+            sourceTransaction: stripeSourceTransactionFromIntent(intent),
+            serviceType: "parking_reservation",
+          });
+          return {
+            success: true,
+            reservationId: cleanReservationId,
+            recoveredPayment: true,
+          };
+        }
+        if (intent.status === "processing" ||
+            intent.status === "requires_capture") {
+          await ref.update({
+            paymentStatus: intent.status,
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          });
+          return {
+            success: false,
+            reservationId: cleanReservationId,
+            paymentPending: true,
+          };
+        }
+        if (intent.status !== "canceled") {
+          await cancelStripePaymentIntent(
+              reservation.stripePaymentIntentId,
+          );
+        }
       }
       await ref.update({
         status: "cancelled",
@@ -6888,6 +7034,118 @@ exports.updateUserRole = onCall(
 );
 
 /**
+ * Starts the signed-in user's account deletion process.
+ *
+ * Deletion can require manual review because completed payment and service
+ * records may need to be retained for accounting, fraud, refund, or dispute
+ * obligations. Apple permits that workflow when the request is initiated in
+ * app and the completion window is disclosed to the user.
+ */
+exports.requestOwnAccountDeletion = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+            "unauthenticated",
+            "Authentication is required to delete your account.",
+        );
+      }
+
+      if (request.data && Object.prototype.hasOwnProperty.call(
+          request.data,
+          "userId",
+      )) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Account deletion never accepts a target user ID.",
+        );
+      }
+
+      const callerUid = request.auth.uid;
+      const authTimeSeconds = Number(request.auth.token?.auth_time || 0);
+      const authAgeMs = authTimeSeconds > 0 ?
+        Date.now() - (authTimeSeconds * 1000) :
+        Number.POSITIVE_INFINITY;
+      const recentAuthWindowMs = 15 * 60 * 1000;
+      if (authAgeMs > recentAuthWindowMs &&
+          process.env.FUNCTIONS_EMULATOR !== "true") {
+        throw new HttpsError(
+            "unauthenticated",
+            "recent-login-required",
+        );
+      }
+
+      const db = admin.firestore();
+      const userRef = db.collection("users").doc(callerUid);
+      const deletionRef = db.collection("accountDeletionRequests")
+          .doc(callerUid);
+      const userDoc = await userRef.get();
+      if (!userDoc.exists) {
+        throw new HttpsError("not-found", "User profile not found.");
+      }
+      const user = userDoc.data() || {};
+      if (user.role === "admin" || user.platformAdmin === true) {
+        throw new HttpsError(
+            "permission-denied",
+            "Platform administrator accounts require another super admin.",
+        );
+      }
+
+      const now = FirestoreTimestamp.now();
+      const targetCompletionAt = FirestoreTimestamp.fromMillis(
+          Date.now() + (30 * 24 * 60 * 60 * 1000),
+      );
+      const result = await db.runTransaction(async (transaction) => {
+        const existing = await transaction.get(deletionRef);
+        if (existing.exists) {
+          const existingData = existing.data() || {};
+          if (["pending", "processing"].includes(existingData.status)) {
+            return {
+              status: existingData.status,
+              requestedAt: existingData.requestedAt || now,
+              targetCompletionAt:
+                existingData.targetCompletionAt || targetCompletionAt,
+            };
+          }
+        }
+
+        const payload = {
+          userId: callerUid,
+          status: "pending",
+          source: "in_app",
+          role: String(user.role || "customer"),
+          businessId: String(user.businessId || ""),
+          requestedAt: now,
+          updatedAt: now,
+          targetCompletionAt,
+          targetCompletionDays: 30,
+        };
+        transaction.set(deletionRef, payload);
+        transaction.set(userRef, {
+          accountDeletionStatus: "pending",
+          accountDeletionRequestedAt: now,
+          accountDeletionTargetCompletionAt: targetCompletionAt,
+          updatedAt: now,
+        }, {merge: true});
+        return payload;
+      });
+
+      logger.info("Account deletion requested", {
+        uid: callerUid,
+        role: String(user.role || "customer"),
+      });
+      return {
+        success: true,
+        status: result.status,
+        targetCompletionDays: 30,
+      };
+    },
+);
+
+/**
  * Cloud Function to delete a user
  * This allows admins to delete user accounts
  */
@@ -7594,10 +7852,20 @@ function normalizeRolloverMaxJoiners(value, openShares, activeJoiners) {
   return Math.max(minimum, Math.min(maximum, joiners));
 }
 
-function normalizePoolDeadline(value) {
-  const parsed = value ? new Date(value) : null;
+function normalizePoolDeadline(value, {required = false} = {}) {
+  const normalizedValue = typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(value.trim()) ?
+    `${value.trim()}T23:59:59.999Z` :
+    value;
+  const parsed = normalizedValue ? new Date(normalizedValue) : null;
   if (!parsed || Number.isNaN(parsed.getTime())) {
-    return admin.firestore.Timestamp.fromDate(
+    if (required) {
+      throw new HttpsError(
+          "invalid-argument",
+          "Choose a valid join deadline",
+      );
+    }
+    return FirestoreTimestamp.fromDate(
         new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
     );
   }
@@ -7607,7 +7875,7 @@ function normalizePoolDeadline(value) {
         "Join deadline must be in the future",
     );
   }
-  return admin.firestore.Timestamp.fromDate(parsed);
+  return FirestoreTimestamp.fromDate(parsed);
 }
 
 function requirePoolOrigin(value) {
@@ -8107,6 +8375,11 @@ exports.createBarrelPool = onCall(
     },
     async (request) => {
       const customerUid = requireAuth(request);
+      await recordMarketplaceDisclosure(
+          request,
+          customerUid,
+          "shared_barrel_create",
+      );
       await requireVerifiedCustomerForSharedPool(customerUid);
       const {
         businessId,
@@ -8278,7 +8551,7 @@ exports.createBarrelPool = onCall(
           pickupMiles: pickup.miles,
           pickupFee: pickup.fee,
           ...(participantInput.pickupDateTime && {
-            pickupDateTime: admin.firestore.Timestamp.fromDate(
+            pickupDateTime: FirestoreTimestamp.fromDate(
                 participantInput.pickupDateTime,
             ),
           }),
@@ -8450,6 +8723,22 @@ exports.createBusinessBarrelPool = onCall(
         joinDeadline,
         shipMode,
       } = request.data || {};
+      const normalizedBusinessId = cleanText(businessId, 160);
+      const normalizedDestinationCountryId =
+        cleanText(destinationCountryId, 80);
+      const creationId = cleanText(request.data?.creationId, 160);
+      if (!normalizedBusinessId) {
+        throw new HttpsError("invalid-argument", "Business ID is required");
+      }
+      if (!normalizedDestinationCountryId) {
+        throw new HttpsError("invalid-argument", "Choose a destination");
+      }
+      if (creationId.length < 8) {
+        throw new HttpsError(
+            "invalid-argument",
+            "A valid pool creation ID is required",
+        );
+      }
       const normalizedOrigin = requirePoolOrigin(origin || "businessHeld");
       if (!["businessHeld", "dropOff"].includes(normalizedOrigin)) {
         throw new HttpsError(
@@ -8457,21 +8746,73 @@ exports.createBusinessBarrelPool = onCall(
             "Business pools must be drop-off or business-held",
         );
       }
-      const businessDestination = await getApprovedBusinessDestination({
-        businessId,
-        countryId: destinationCountryId,
-      });
+      const strictTotalShares = Number(totalShares);
+      const strictReservedShares = Number(reservedShares);
+      if (
+        !Number.isInteger(strictTotalShares) ||
+        strictTotalShares < 2 ||
+        strictTotalShares > 4
+      ) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Total shares must be between 2 and 4",
+        );
+      }
+      if (
+        normalizedOrigin === "businessHeld" &&
+        strictReservedShares !== 0
+      ) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Business-held pools must start with 0 reserved shares",
+        );
+      }
+      const minimumReservedShares = normalizedOrigin === "dropOff" ? 1 : 0;
+      if (
+        !Number.isInteger(strictReservedShares) ||
+        strictReservedShares < minimumReservedShares ||
+        strictReservedShares >= strictTotalShares
+      ) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Reserved shares must leave at least 1 share open",
+        );
+      }
+      const strictOpenShares = strictTotalShares - strictReservedShares;
+      const strictMaxJoiners = Number(maxJoiners);
+      if (
+        !Number.isInteger(strictMaxJoiners) ||
+        strictMaxJoiners < 1 ||
+        strictMaxJoiners > strictOpenShares
+      ) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Max joiners must fit the open shares",
+        );
+      }
+      if (!["approval", "auto"].includes(String(approvalMode || ""))) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Invalid pool approval mode",
+        );
+      }
+      if (!["sea", "air"].includes(String(shipMode || ""))) {
+        throw new HttpsError("invalid-argument", "Invalid ship mode");
+      }
       await requireBusinessPermission(
           callerUid,
-          businessDestination.businessId,
+          normalizedBusinessId,
           "barrels",
       );
+      const businessDestination = await getApprovedBusinessDestination({
+        businessId: normalizedBusinessId,
+        countryId: normalizedDestinationCountryId,
+      });
       const {business, country, shippingFee, deliveryEstimate} =
         businessDestination;
       requireSharedBarrelsService(business);
 
       const normalizedTotalShares = normalizeTotalPoolShares(totalShares);
-      const minimumReservedShares = normalizedOrigin === "dropOff" ? 1 : 0;
       const normalizedReservedShares = normalizeReservedPoolShares(
           reservedShares,
           normalizedTotalShares,
@@ -8483,7 +8824,7 @@ exports.createBusinessBarrelPool = onCall(
           openShares,
       );
       const mode = requirePoolApprovalMode(approvalMode);
-      const deadline = normalizePoolDeadline(joinDeadline);
+      const deadline = normalizePoolDeadline(joinDeadline, {required: true});
       const pricePerShare = dollarsFromCents(
           Math.round(centsFromDollars(shippingFee) / normalizedTotalShares),
       );
@@ -8493,6 +8834,11 @@ exports.createBusinessBarrelPool = onCall(
       ));
       const db = admin.firestore();
       const poolRef = db.collection("barrelPools").doc();
+      const creationKey = crypto.createHash("sha256")
+          .update(`${normalizedBusinessId}:${callerUid}:${creationId}`)
+          .digest("hex");
+      const creationRef = db.collection("barrelPoolCreationRequests")
+          .doc(creationKey);
       const trackingCode = await generateTrackingCode("BP", "barrelPools");
       const now = FirestoreFieldValue.serverTimestamp();
       const participantId = cleanText(request.data?.customerUid, 128)
@@ -8526,12 +8872,19 @@ exports.createBusinessBarrelPool = onCall(
           pickup.fee,
       );
 
+      let existingCreation = null;
       await db.runTransaction(async (transaction) => {
+        const creationDoc = await transaction.get(creationRef);
+        if (creationDoc.exists) {
+          existingCreation = creationDoc.data() || {};
+          return;
+        }
         const poolData = {
           businessId: businessDestination.businessId,
           businessName: business.name || DEFAULT_BUSINESS_NAME,
-          destinationCountryId,
-          destinationCountryName: country.name || destinationCountryId,
+          destinationCountryId: normalizedDestinationCountryId,
+          destinationCountryName:
+            country.name || normalizedDestinationCountryId,
           origin: normalizedOrigin,
           holderRole: "business",
           createdByUid: callerUid,
@@ -8566,6 +8919,16 @@ exports.createBusinessBarrelPool = onCall(
           updatedAt: now,
         };
         transaction.set(poolRef, poolData);
+        transaction.set(creationRef, {
+          creationId,
+          callerUid,
+          businessId: businessDestination.businessId,
+          poolId: poolRef.id,
+          trackingCode,
+          origin: normalizedOrigin,
+          createdAt: now,
+          updatedAt: now,
+        });
         if (participantRef && participantInput) {
           const businessOwnerParticipant = {
             uid: participantId,
@@ -8583,7 +8946,7 @@ exports.createBusinessBarrelPool = onCall(
             pickupMiles: pickup.miles,
             pickupFee: pickup.fee,
             ...(participantInput.pickupDateTime && {
-              pickupDateTime: admin.firestore.Timestamp.fromDate(
+              pickupDateTime: FirestoreTimestamp.fromDate(
                   participantInput.pickupDateTime,
               ),
             }),
@@ -8626,6 +8989,15 @@ exports.createBusinessBarrelPool = onCall(
         }
       });
 
+      if (existingCreation) {
+        return {
+          success: true,
+          duplicate: true,
+          poolId: existingCreation.poolId,
+          trackingCode: existingCreation.trackingCode,
+          origin: existingCreation.origin || normalizedOrigin,
+        };
+      }
       return {
         success: true,
         poolId: poolRef.id,
@@ -8868,6 +9240,11 @@ exports.requestJoinBarrelPool = onCall(
     },
     async (request) => {
       const customerUid = requireAuth(request);
+      await recordMarketplaceDisclosure(
+          request,
+          customerUid,
+          "shared_barrel_join",
+      );
       await requireVerifiedCustomerForSharedPool(customerUid);
       const poolId = cleanText(request.data?.poolId, 160);
       const useWalletBalance = request.data?.useWalletBalance === true;
@@ -9047,7 +9424,7 @@ exports.requestJoinBarrelPool = onCall(
           pickupMiles: pickup.miles,
           pickupFee: pickup.fee,
           ...(participantInput.pickupDateTime && {
-            pickupDateTime: admin.firestore.Timestamp.fromDate(
+            pickupDateTime: FirestoreTimestamp.fromDate(
                 participantInput.pickupDateTime,
             ),
           }),
@@ -9306,11 +9683,17 @@ exports.completeBarrelPoolDepositPayment = onCall(
         [];
       const intentId = intentIds[intentIds.length - 1] || "";
       let sourceTransaction = "";
-      if (!SIMULATE_PAYMENTS && !String(intentId).startsWith("simulated_")) {
+      if (!SIMULATE_PAYMENTS) {
         if (!intentId) {
           throw new HttpsError(
               "failed-precondition",
               "Missing shared barrel deposit payment intent",
+          );
+        }
+        if (String(intentId).startsWith("simulated_")) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Simulated shared barrel payments are disabled",
           );
         }
         const intent = await retrieveStripePaymentIntent(intentId);
@@ -9418,8 +9801,22 @@ exports.cancelPendingBarrelPoolDeposit = onCall(
         [];
       const intentId = intentIds[intentIds.length - 1] || "";
       if (!SIMULATE_PAYMENTS && intentId) {
+        if (String(intentId).startsWith("simulated_")) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Simulated shared barrel payments are disabled",
+          );
+        }
         const intent = await retrieveStripePaymentIntent(intentId);
-        if (intent.status === "succeeded" || intent.status === "processing") {
+        if (intent.status === "succeeded") {
+          await exports.completeBarrelPoolDepositPayment.run({
+            auth: request.auth,
+            data: {poolId},
+          });
+          return {success: true, poolId, recoveredPayment: true};
+        }
+        if (intent.status === "processing" ||
+            intent.status === "requires_capture") {
           await Promise.all([
             participantRef.update({
               paymentStatus: intent.status,
@@ -9434,6 +9831,9 @@ exports.cancelPendingBarrelPoolDeposit = onCall(
             }),
           ]);
           return {success: true, poolId};
+        }
+        if (intent.status !== "canceled") {
+          await cancelStripePaymentIntent(intentId);
         }
       }
 
@@ -10328,6 +10728,11 @@ exports.createBarrelPoolBalancePaymentIntent = onCall(
     },
     async (request) => {
       const customerUid = requireAuth(request);
+      await recordMarketplaceDisclosure(
+          request,
+          customerUid,
+          "shared_barrel_balance",
+      );
       const requestId = cleanText(request.data?.requestId, 160);
       const poolId = cleanText(request.data?.poolId, 160);
       if (!requestId && !poolId) {
@@ -10524,6 +10929,12 @@ exports.completeBarrelPoolBalancePayment = onCall(
           throw new HttpsError(
               "failed-precondition",
               "Missing shared barrel balance payment intent",
+          );
+        }
+        if (requestIntentId.startsWith("simulated_")) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Simulated shared barrel balance payments are disabled",
           );
         }
         const intent = await retrieveStripePaymentIntent(requestIntentId);
@@ -10897,7 +11308,7 @@ exports.expireBarrelPools = onSchedule(
       const db = admin.firestore();
       const snapshot = await db.collection("barrelPools")
           .where("status", "in", ["open", "partially_filled"])
-          .where("joinDeadline", "<=", admin.firestore.Timestamp.now())
+          .where("joinDeadline", "<=", FirestoreTimestamp.now())
           .limit(100)
           .get();
       await Promise.all(snapshot.docs.map(async (doc) => {
@@ -11087,6 +11498,43 @@ function barrelLinePayoutFields({
     platformFeePct,
     connectReady,
   });
+}
+
+function requireBarrelDestinationPayoutSafe({
+  shipment,
+  nextBusinessId,
+  nextShippingFeeCents,
+}) {
+  if (shipment.payoutStatus !== "paid") return;
+  const currentBusinessId = String(shipment.businessId || "").trim();
+  const currentShippingFeeCents = centsFromDollars(shipment.shippingFee);
+  if (
+    currentBusinessId !== nextBusinessId ||
+    currentShippingFeeCents !== nextShippingFeeCents
+  ) {
+    throw new HttpsError(
+        "failed-precondition",
+        "This paid shipment needs support to change its destination safely.",
+    );
+  }
+}
+
+function barrelDestinationPayoutUpdate({
+  shippingFeeCents,
+  platformFeePct,
+  connectReady,
+}) {
+  return {
+    platformFeePct,
+    ...barrelLinePayoutFields({
+      shippingFeeCents,
+      platformFeePct,
+      connectReady,
+    }),
+    payoutTransferId: FirestoreFieldValue.delete(),
+    paidOutAt: FirestoreFieldValue.delete(),
+    payoutError: FirestoreFieldValue.delete(),
+  };
 }
 
 function stripeSourceTransactionFromIntent(intent) {
@@ -11310,6 +11758,11 @@ exports.createBarrelShipmentPaymentIntent = onCall(
     },
     async (request) => {
       const customerUid = requireAuth(request);
+      await recordMarketplaceDisclosure(
+          request,
+          customerUid,
+          "barrel_shipment",
+      );
       const {
         senderName,
         receiverName,
@@ -11436,7 +11889,7 @@ exports.createBarrelShipmentPaymentIntent = onCall(
           pricingPendingReview: false,
           ...(pickupAppointment && {
             pickupDateTime:
-              admin.firestore.Timestamp.fromDate(pickupAppointment),
+              FirestoreTimestamp.fromDate(pickupAppointment),
           }),
           price: total,
           platformFeePct,
@@ -11548,6 +12001,11 @@ exports.createBarrelOrderPaymentIntent = onCall(
     },
     async (request) => {
       const customerUid = requireAuth(request);
+      await recordMarketplaceDisclosure(
+          request,
+          customerUid,
+          "barrel_order",
+      );
       const {
         senderName,
         pickupRequested,
@@ -11742,7 +12200,7 @@ exports.createBarrelOrderPaymentIntent = onCall(
             "Office drop-off",
           ...(pickupAppointment && {
             pickupDateTime:
-              admin.firestore.Timestamp.fromDate(pickupAppointment),
+              FirestoreTimestamp.fromDate(pickupAppointment),
           }),
           shipmentIds: shipmentRefs.map((ref) => ref.id),
           trackingCodes,
@@ -11798,7 +12256,7 @@ exports.createBarrelOrderPaymentIntent = onCall(
             pricingPendingReview: false,
             ...(line.pickupAppointment && {
               pickupDateTime:
-                admin.firestore.Timestamp.fromDate(line.pickupAppointment),
+                FirestoreTimestamp.fromDate(line.pickupAppointment),
             }),
             price: dollarsFromCents(line.lineTotalCents),
             platformFeePct: line.platformFeePct,
@@ -11949,10 +12407,7 @@ exports.completeBarrelShipmentPayment = onCall(
       if (shipment.customerUid !== customerUid) {
         throw new HttpsError("permission-denied", "Shipment access denied");
       }
-      if (
-        SIMULATE_PAYMENTS ||
-        String(shipment.stripePaymentIntentId || "").startsWith("simulated_")
-      ) {
+      if (SIMULATE_PAYMENTS) {
         await shipmentRef.update({
           paymentStatus: "succeeded",
           status: "pending",
@@ -11965,6 +12420,13 @@ exports.completeBarrelShipmentPayment = onCall(
           trackingCode: shipment.trackingCode,
           simulatedPayment: true,
         };
+      }
+      if (String(shipment.stripePaymentIntentId || "")
+          .startsWith("simulated_")) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Simulated barrel payments are disabled",
+        );
       }
 
       const intent = await retrieveStripePaymentIntent(
@@ -12031,15 +12493,33 @@ exports.cancelPendingBarrelShipment = onCall(
       }
 
       if (!SIMULATE_PAYMENTS && shipment.stripePaymentIntentId) {
+        if (String(shipment.stripePaymentIntentId)
+            .startsWith("simulated_")) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Simulated barrel payments are disabled",
+          );
+        }
         const intent = await retrieveStripePaymentIntent(
             shipment.stripePaymentIntentId,
         );
-        if (intent.status === "succeeded" || intent.status === "processing") {
+        if (intent.status === "succeeded") {
+          await exports.completeBarrelShipmentPayment.run({
+            auth: request.auth,
+            data: {shipmentId},
+          });
+          return {success: true, shipmentId, recoveredPayment: true};
+        }
+        if (intent.status === "processing" ||
+            intent.status === "requires_capture") {
           await shipmentRef.update({
             paymentStatus: intent.status,
             updatedAt: FirestoreFieldValue.serverTimestamp(),
           });
           return {success: true, shipmentId};
+        }
+        if (intent.status !== "canceled") {
+          await cancelStripePaymentIntent(shipment.stripePaymentIntentId);
         }
       }
 
@@ -12099,15 +12579,18 @@ exports.completeBarrelOrderPayment = onCall(
       }
 
       let sourceTransaction = "";
-      if (
-        !SIMULATE_PAYMENTS &&
-        !String(order.stripePaymentIntentId || "").startsWith("simulated_")
-      ) {
+      if (!SIMULATE_PAYMENTS) {
         const orderIntentId = String(order.stripePaymentIntentId || "");
         if (!orderIntentId) {
           throw new HttpsError(
               "failed-precondition",
               "Payment intent is missing",
+          );
+        }
+        if (orderIntentId.startsWith("simulated_")) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Simulated barrel order payments are disabled",
           );
         }
         const intent = await retrieveStripePaymentIntent(
@@ -12170,9 +12653,7 @@ exports.completeBarrelOrderPayment = onCall(
         orderId,
         shipmentIds: shipments.docs.map((doc) => doc.id),
         trackingCodes: shipments.docs.map((doc) => doc.data().trackingCode),
-        simulatedPayment:
-          SIMULATE_PAYMENTS ||
-          String(order.stripePaymentIntentId || "").startsWith("simulated_"),
+        simulatedPayment: SIMULATE_PAYMENTS,
       };
     },
 );
@@ -12203,15 +12684,32 @@ exports.cancelPendingBarrelOrder = onCall(
       }
 
       if (!SIMULATE_PAYMENTS && order.stripePaymentIntentId) {
+        if (String(order.stripePaymentIntentId).startsWith("simulated_")) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Simulated barrel order payments are disabled",
+          );
+        }
         const intent = await retrieveStripePaymentIntent(
             order.stripePaymentIntentId,
         );
-        if (intent.status === "succeeded" || intent.status === "processing") {
+        if (intent.status === "succeeded") {
+          await exports.completeBarrelOrderPayment.run({
+            auth: request.auth,
+            data: {orderId},
+          });
+          return {success: true, orderId, recoveredPayment: true};
+        }
+        if (intent.status === "processing" ||
+            intent.status === "requires_capture") {
           await orderRef.update({
             paymentStatus: intent.status,
             updatedAt: FirestoreFieldValue.serverTimestamp(),
           });
           return {success: true, orderId};
+        }
+        if (intent.status !== "canceled") {
+          await cancelStripePaymentIntent(order.stripePaymentIntentId);
         }
       }
 
@@ -12317,6 +12815,11 @@ exports.createFreightShipmentPaymentIntent = onCall(
     },
     async (request) => {
       const customerUid = requireAuth(request);
+      await recordMarketplaceDisclosure(
+          request,
+          customerUid,
+          "freight_shipment",
+      );
       const {
         senderName,
         receiverName,
@@ -12464,7 +12967,7 @@ exports.createFreightShipmentPaymentIntent = onCall(
           pricingPendingReview: false,
           ...(pickupAppointment && {
             pickupDateTime:
-              admin.firestore.Timestamp.fromDate(pickupAppointment),
+              FirestoreTimestamp.fromDate(pickupAppointment),
           }),
           price: total,
           currency: SHIPMENT_CURRENCY,
@@ -12599,10 +13102,7 @@ exports.completeFreightShipmentPayment = onCall(
         priceSettlementStatus: FreightSettlementStatus.AWAITING_WEIGHT,
       } : {};
 
-      if (
-        SIMULATE_PAYMENTS ||
-        String(shipment.stripePaymentIntentId || "").startsWith("simulated_")
-      ) {
+      if (SIMULATE_PAYMENTS) {
         await shipmentRef.update({
           paymentStatus: "succeeded",
           ...settlementUpdate,
@@ -12616,6 +13116,13 @@ exports.completeFreightShipmentPayment = onCall(
           trackingCode: shipment.trackingCode,
           simulatedPayment: true,
         };
+      }
+      if (String(shipment.stripePaymentIntentId || "")
+          .startsWith("simulated_")) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Simulated freight payments are disabled",
+        );
       }
 
       const intent = await retrieveStripePaymentIntent(
@@ -12682,15 +13189,33 @@ exports.cancelPendingFreightShipment = onCall(
       }
 
       if (!SIMULATE_PAYMENTS && shipment.stripePaymentIntentId) {
+        if (String(shipment.stripePaymentIntentId)
+            .startsWith("simulated_")) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Simulated freight payments are disabled",
+          );
+        }
         const intent = await retrieveStripePaymentIntent(
             shipment.stripePaymentIntentId,
         );
-        if (intent.status === "succeeded" || intent.status === "processing") {
+        if (intent.status === "succeeded") {
+          await exports.completeFreightShipmentPayment.run({
+            auth: request.auth,
+            data: {shipmentId},
+          });
+          return {success: true, shipmentId, recoveredPayment: true};
+        }
+        if (intent.status === "processing" ||
+            intent.status === "requires_capture") {
           await shipmentRef.update({
             paymentStatus: intent.status,
             updatedAt: FirestoreFieldValue.serverTimestamp(),
           });
           return {success: true, shipmentId};
+        }
+        if (intent.status !== "canceled") {
+          await cancelStripePaymentIntent(shipment.stripePaymentIntentId);
         }
       }
 
@@ -13198,6 +13723,11 @@ exports.createFreightSettlementPayment = onCall(
     },
     async (request) => {
       const customerUid = requireAuth(request);
+      await recordMarketplaceDisclosure(
+          request,
+          customerUid,
+          "freight_balance",
+      );
       const shipmentId = String(request.data?.shipmentId || "").trim();
       if (!shipmentId) {
         throw new HttpsError("invalid-argument", "Shipment ID is required");
@@ -13242,11 +13772,12 @@ exports.createFreightSettlementPayment = onCall(
       const attemptId = "balance_v1";
       const attemptRef = settlementRef.collection("paymentAttempts")
           .doc(attemptId);
-      let attemptDoc = await attemptRef.get();
       const balanceDueCents = Number(settlement.balanceDueCents || 0);
-      if (!attemptDoc.exists) {
+      const attempt = await db.runTransaction(async (transaction) => {
+        const attemptDoc = await transaction.get(attemptRef);
+        if (attemptDoc.exists) return attemptDoc.data() || {};
         const now = FirestoreFieldValue.serverTimestamp();
-        await attemptRef.create({
+        const createdAttempt = {
           attemptId,
           settlementId,
           shipmentId,
@@ -13259,10 +13790,10 @@ exports.createFreightSettlementPayment = onCall(
           applicationStatus: "pending",
           createdAt: now,
           updatedAt: now,
-        });
-        attemptDoc = await attemptRef.get();
-      }
-      const attempt = attemptDoc.data() || {};
+        };
+        transaction.create(attemptRef, createdAttempt);
+        return createdAttempt;
+      });
 
       if (SIMULATE_PAYMENTS) {
         if (!attempt.stripePaymentIntentId) {
@@ -13396,11 +13927,22 @@ exports.completeFreightSettlementPayment = onCall(
         return {success: true, settlementId, attemptId};
       }
       let intent = {status: "succeeded"};
-      if (!SIMULATE_PAYMENTS &&
-          !String(attempt.stripePaymentIntentId || "")
-              .startsWith("simulated_")) {
+      if (!SIMULATE_PAYMENTS) {
+        const intentId = String(attempt.stripePaymentIntentId || "");
+        if (!intentId) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Freight settlement payment has not been initialized",
+          );
+        }
+        if (intentId.startsWith("simulated_")) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Simulated freight settlement payments are disabled",
+          );
+        }
         intent = await retrieveStripePaymentIntent(
-            attempt.stripePaymentIntentId,
+            intentId,
         );
       }
       await applyFreightSettlementPayment({
@@ -13468,10 +14010,21 @@ exports.changeBarrelShipmentDestination = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
+      secrets: [stripeSecretKey],
     },
     async (request) => {
       const customerUid = requireAuth(request);
-      const {shipmentId, destinationCountryId, businessId} = request.data || {};
+      await recordMarketplaceDisclosure(
+          request,
+          customerUid,
+          "barrel_destination_change",
+      );
+      const {
+        shipmentId,
+        destinationCountryId,
+        businessId,
+        changeRequestId,
+      } = request.data || {};
       if (!shipmentId || !destinationCountryId || !businessId) {
         throw new HttpsError(
             "invalid-argument",
@@ -13481,12 +14034,13 @@ exports.changeBarrelShipmentDestination = onCall(
 
       const db = admin.firestore();
       const shipmentRef = db.collection("barrelShipments").doc(shipmentId);
-      const [shipmentDoc, businessDestination] = await Promise.all([
+      const [shipmentDoc, businessDestination, pricingDoc] = await Promise.all([
         shipmentRef.get(),
         getApprovedBusinessDestination({
           businessId,
           countryId: destinationCountryId,
         }),
+        db.collection("shipmentPricing").doc("barrelPickup").get(),
       ]);
 
       if (!shipmentDoc.exists) {
@@ -13514,12 +14068,37 @@ exports.changeBarrelShipmentDestination = onCall(
       }
 
       const previousTotalCents = centsFromDollars(shipment.price);
+      const shipmentQuantity = Math.max(
+          1,
+          intOrFallback(shipment.quantity, 1),
+      );
+      const destinationShippingFee = shippingFee * shipmentQuantity;
       const newTotalCents = centsFromDollars(
-          shippingFee + Number(shipment.pickupFee || 0),
+          destinationShippingFee + Number(shipment.pickupFee || 0),
       );
       if (newTotalCents <= 0) {
         throw new HttpsError("failed-precondition", "Invalid shipment total");
       }
+      const destinationShippingFeeCents =
+        centsFromDollars(destinationShippingFee);
+      requireBarrelDestinationPayoutSafe({
+        shipment,
+        nextBusinessId: businessDestination.businessId,
+        nextShippingFeeCents: destinationShippingFeeCents,
+      });
+      const platformFeePct = barrelPlatformFeePctFromPricing(
+          pricingDoc.data(),
+          business,
+      );
+      const connectReady =
+        !!business.stripeAccountId && business.payoutsEnabled === true;
+      const payoutUpdate = shipment.payoutStatus === "paid" ?
+        {} :
+        barrelDestinationPayoutUpdate({
+          shippingFeeCents: destinationShippingFeeCents,
+          platformFeePct,
+          connectReady,
+        });
 
       const differenceCents = newTotalCents - previousTotalCents;
       const update = {
@@ -13536,13 +14115,181 @@ exports.changeBarrelShipmentDestination = onCall(
         deliveryEstimateLabel:
           deliveryEstimate.deliveryEstimateLabel ??
           FirestoreFieldValue.delete(),
-        shippingFee,
+        unitShippingFee: shippingFee,
+        shippingFee: destinationShippingFee,
         price: dollarsFromCents(newTotalCents),
+        ...payoutUpdate,
         destinationChangedAt: FirestoreFieldValue.serverTimestamp(),
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       };
 
       if (differenceCents > 0) {
+        const cleanRequestId = String(changeRequestId || "").trim();
+        if (!SIMULATE_PAYMENTS && !cleanRequestId) {
+          throw new HttpsError(
+              "invalid-argument",
+              "Destination change request ID is required",
+          );
+        }
+        if (!SIMULATE_PAYMENTS) {
+          const pendingDestinationChange = {
+            requestId: cleanRequestId,
+            destinationCountryId,
+            destinationCountryName: country.name || destinationCountryId,
+            businessId: businessDestination.businessId,
+            businessName: business.name || DEFAULT_BUSINESS_NAME,
+            unitShippingFee: shippingFee,
+            shippingFee: destinationShippingFee,
+            newTotalCents,
+            differenceCents,
+            deliveryEstimateMinDays:
+              deliveryEstimate.deliveryEstimateMinDays ?? null,
+            deliveryEstimateMaxDays:
+              deliveryEstimate.deliveryEstimateMaxDays ?? null,
+            deliveryEstimateLabel:
+              deliveryEstimate.deliveryEstimateLabel ?? null,
+            platformFeePct,
+            platformFeeCents: payoutUpdate.platformFeeCents,
+            businessPayoutCents: payoutUpdate.businessPayoutCents,
+            nextPayoutStatus: payoutUpdate.payoutStatus,
+          };
+          const reservation = await db.runTransaction(async (transaction) => {
+            const latestDoc = await transaction.get(shipmentRef);
+            if (!latestDoc.exists) {
+              throw new HttpsError("not-found", "Shipment not found");
+            }
+            const latest = latestDoc.data();
+            requireCustomerShipmentEditable(latest, customerUid);
+            requireBarrelDestinationPayoutSafe({
+              shipment: latest,
+              nextBusinessId: businessDestination.businessId,
+              nextShippingFeeCents: destinationShippingFeeCents,
+            });
+            const pendingRequestId = String(
+                latest.pendingDestinationChange?.requestId || "",
+            );
+            const paymentInProgress =
+              ["initializing", "pending", "processing"].includes(
+                  latest.destinationAdjustmentPaymentStatus,
+              );
+            if (paymentInProgress && pendingRequestId) {
+              if (pendingRequestId !== cleanRequestId) {
+                throw new HttpsError(
+                    "failed-precondition",
+                    "Another destination payment is already in progress",
+                );
+              }
+              const existingIntentId = String(
+                  latest.destinationAdjustmentPaymentIntentId || "",
+              );
+              if (existingIntentId) {
+                return {
+                  existingIntentId,
+                  previousPayoutStatus:
+                    latest.pendingDestinationChange?.previousPayoutStatus ||
+                    "pending",
+                };
+              }
+              throw new HttpsError(
+                  "aborted",
+                  "Destination payment is still initializing",
+              );
+            }
+            if (
+              latest.destinationCountryId !== shipment.destinationCountryId ||
+              latest.businessId !== shipment.businessId
+            ) {
+              throw new HttpsError(
+                  "aborted",
+                  "Shipment destination changed. Refresh and try again.",
+              );
+            }
+            transaction.update(shipmentRef, {
+              pendingDestinationChange: {
+                ...pendingDestinationChange,
+                previousPayoutStatus: latest.payoutStatus || "pending",
+              },
+              destinationAdjustmentRequestId: cleanRequestId,
+              destinationAdjustmentPaymentStatus: "initializing",
+              destinationAdjustmentAmount:
+                dollarsFromCents(differenceCents),
+              destinationAdjustmentAmountCents: differenceCents,
+              payoutStatus: "destination_change_pending",
+              updatedAt: FirestoreFieldValue.serverTimestamp(),
+            });
+            return {
+              existingIntentId: "",
+              previousPayoutStatus: latest.payoutStatus || "pending",
+            };
+          });
+
+          let paymentIntent;
+          if (reservation.existingIntentId) {
+            paymentIntent = await retrieveStripePaymentIntent(
+                reservation.existingIntentId,
+            );
+            if (paymentIntent.status === "succeeded") {
+              await finalizePaidBarrelDestinationChange({
+                shipmentRef,
+                customerUid,
+                changeRequestId: cleanRequestId,
+              });
+              return {
+                success: true,
+                shipmentId,
+                trackingCode: shipment.trackingCode,
+                difference: dollarsFromCents(differenceCents),
+                amountDue: 0,
+                walletCredit: 0,
+                recoveredPayment: true,
+              };
+            }
+          }
+          try {
+            if (!paymentIntent) {
+              paymentIntent = await createStripePaymentIntent({
+                amount: differenceCents,
+                currency: SHIPMENT_CURRENCY,
+                metadata: {
+                  paymentType: "barrel_destination_change",
+                  shipmentId,
+                  changeRequestId: cleanRequestId,
+                  customerUid,
+                  businessId: businessDestination.businessId,
+                },
+              });
+              await shipmentRef.update({
+                destinationAdjustmentPaymentIntentId: paymentIntent.id,
+                destinationAdjustmentPaymentStatus: "pending",
+                updatedAt: FirestoreFieldValue.serverTimestamp(),
+              });
+            }
+          } catch (error) {
+            await shipmentRef.update(paymentIntent?.id ? {
+              destinationAdjustmentPaymentIntentId: paymentIntent.id,
+              destinationAdjustmentPaymentStatus: "failed",
+              updatedAt: FirestoreFieldValue.serverTimestamp(),
+            } : {
+              pendingDestinationChange: FirestoreFieldValue.delete(),
+              destinationAdjustmentPaymentStatus: "failed",
+              payoutStatus: reservation.previousPayoutStatus,
+              updatedAt: FirestoreFieldValue.serverTimestamp(),
+            });
+            throw error;
+          }
+          return {
+            success: true,
+            shipmentId,
+            trackingCode: shipment.trackingCode,
+            difference: dollarsFromCents(differenceCents),
+            amountDue: dollarsFromCents(differenceCents),
+            walletCredit: 0,
+            requiresPayment: true,
+            changeRequestId: cleanRequestId,
+            clientSecret: paymentIntent.client_secret,
+            businessName: business.name || DEFAULT_BUSINESS_NAME,
+          };
+        }
         update.paymentStatus = "succeeded";
         update.destinationAdjustmentPaymentStatus = "succeeded";
         update.destinationAdjustmentAmount = dollarsFromCents(differenceCents);
@@ -13570,6 +14317,11 @@ exports.changeBarrelShipmentDestination = onCall(
           }
           const latestShipment = latestShipmentDoc.data();
           requireCustomerShipmentEditable(latestShipment, customerUid);
+          requireBarrelDestinationPayoutSafe({
+            shipment: latestShipment,
+            nextBusinessId: businessDestination.businessId,
+            nextShippingFeeCents: destinationShippingFeeCents,
+          });
           transaction.update(shipmentRef, {
             ...update,
             destinationAdjustmentPaymentStatus: "credited_to_wallet",
@@ -13587,6 +14339,12 @@ exports.changeBarrelShipmentDestination = onCall(
             businessName: business.name || DEFAULT_BUSINESS_NAME,
           });
         });
+        const changedShipment = await shipmentRef.get();
+        await issueBarrelShipmentTransfer({
+          shipmentRef,
+          shipment: changedShipment.data() || {},
+          sourceTransaction: "",
+        });
         return {
           success: true,
           shipmentId,
@@ -13597,7 +14355,26 @@ exports.changeBarrelShipmentDestination = onCall(
         };
       }
 
-      await shipmentRef.update(update);
+      await db.runTransaction(async (transaction) => {
+        const latestDoc = await transaction.get(shipmentRef);
+        if (!latestDoc.exists) {
+          throw new HttpsError("not-found", "Shipment not found");
+        }
+        const latest = latestDoc.data();
+        requireCustomerShipmentEditable(latest, customerUid);
+        requireBarrelDestinationPayoutSafe({
+          shipment: latest,
+          nextBusinessId: businessDestination.businessId,
+          nextShippingFeeCents: destinationShippingFeeCents,
+        });
+        transaction.update(shipmentRef, update);
+      });
+      const changedShipment = await shipmentRef.get();
+      await issueBarrelShipmentTransfer({
+        shipmentRef,
+        shipment: changedShipment.data() || {},
+        sourceTransaction: "",
+      });
       return {
         success: true,
         shipmentId,
@@ -13605,6 +14382,296 @@ exports.changeBarrelShipmentDestination = onCall(
         difference: 0,
         amountDue: 0,
         walletCredit: 0,
+      };
+    },
+);
+
+function destinationChangeUpdate(pending) {
+  return {
+    destinationCountryId: pending.destinationCountryId,
+    destinationCountryName: pending.destinationCountryName,
+    businessId: pending.businessId,
+    businessName: pending.businessName,
+    deliveryEstimateMinDays:
+      pending.deliveryEstimateMinDays ??
+      FirestoreFieldValue.delete(),
+    deliveryEstimateMaxDays:
+      pending.deliveryEstimateMaxDays ??
+      FirestoreFieldValue.delete(),
+    deliveryEstimateLabel:
+      pending.deliveryEstimateLabel ??
+      FirestoreFieldValue.delete(),
+    shippingFee: pending.shippingFee,
+    unitShippingFee: pending.unitShippingFee,
+    price: dollarsFromCents(pending.newTotalCents),
+    platformFeePct: pending.platformFeePct,
+    platformFeeCents: pending.platformFeeCents,
+    businessPayoutCents: pending.businessPayoutCents,
+    payoutStatus: pending.nextPayoutStatus,
+    payoutTransferId: FirestoreFieldValue.delete(),
+    paidOutAt: FirestoreFieldValue.delete(),
+    payoutError: FirestoreFieldValue.delete(),
+    paymentStatus: "succeeded",
+    destinationAdjustmentPaymentStatus: "succeeded",
+    pendingDestinationChange: FirestoreFieldValue.delete(),
+    destinationChangedAt: FirestoreFieldValue.serverTimestamp(),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  };
+}
+
+async function applyPaidBarrelDestinationChange({
+  shipmentRef,
+  customerUid,
+  changeRequestId,
+}) {
+  return admin.firestore().runTransaction(async (transaction) => {
+    const latestDoc = await transaction.get(shipmentRef);
+    if (!latestDoc.exists) {
+      throw new HttpsError("not-found", "Shipment not found");
+    }
+    const latest = latestDoc.data();
+    if (latest.customerUid !== customerUid) {
+      throw new HttpsError("permission-denied", "Shipment access denied");
+    }
+    if (
+      latest.destinationAdjustmentPaymentStatus === "succeeded" &&
+      latest.destinationAdjustmentRequestId === changeRequestId &&
+      !latest.pendingDestinationChange
+    ) {
+      return latest;
+    }
+    const pending = latest.pendingDestinationChange;
+    if (!pending || pending.requestId !== changeRequestId) {
+      throw new HttpsError(
+          "failed-precondition",
+          "Destination change is no longer pending",
+      );
+    }
+    transaction.update(shipmentRef, destinationChangeUpdate(pending));
+    return {...latest, ...pending};
+  });
+}
+
+async function finalizePaidBarrelDestinationChange({
+  shipmentRef,
+  customerUid,
+  changeRequestId,
+}) {
+  await applyPaidBarrelDestinationChange({
+    shipmentRef,
+    customerUid,
+    changeRequestId,
+  });
+  const appliedDoc = await shipmentRef.get();
+  const applied = appliedDoc.data() || {};
+  await issueBarrelShipmentTransfer({
+    shipmentRef,
+    shipment: applied,
+    sourceTransaction: "",
+  });
+  return applied;
+}
+
+exports.completeBarrelDestinationChange = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const {shipmentId, changeRequestId} = request.data || {};
+      if (!shipmentId || !changeRequestId) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Shipment and destination change request are required",
+        );
+      }
+      const shipmentRef = admin.firestore()
+          .collection("barrelShipments").doc(shipmentId);
+      const shipmentDoc = await shipmentRef.get();
+      if (!shipmentDoc.exists) {
+        throw new HttpsError("not-found", "Shipment not found");
+      }
+      const shipment = shipmentDoc.data();
+      if (shipment.customerUid !== customerUid) {
+        throw new HttpsError("permission-denied", "Shipment access denied");
+      }
+      if (
+        shipment.destinationAdjustmentPaymentStatus === "succeeded" &&
+        shipment.destinationAdjustmentRequestId === changeRequestId &&
+        !shipment.pendingDestinationChange
+      ) {
+        await issueBarrelShipmentTransfer({
+          shipmentRef,
+          shipment,
+          sourceTransaction: "",
+        });
+        return {
+          success: true,
+          shipmentId,
+          changeRequestId,
+          amountDue: 0,
+        };
+      }
+      if (SIMULATE_PAYMENTS) {
+        throw new HttpsError(
+            "failed-precondition",
+            "No destination payment is required in simulation",
+        );
+      }
+      const intentId = String(
+          shipment.destinationAdjustmentPaymentIntentId || "",
+      );
+      if (!intentId) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Destination payment is invalid",
+        );
+      }
+      if (intentId.startsWith("simulated_")) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Simulated destination payments are disabled",
+        );
+      }
+      const intent = await retrieveStripePaymentIntent(intentId);
+      if (intent.status !== "succeeded") {
+        await shipmentRef.update({
+          destinationAdjustmentPaymentStatus: intent.status,
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+        throw new HttpsError(
+            "failed-precondition",
+            `Payment is ${intent.status}`,
+        );
+      }
+      await finalizePaidBarrelDestinationChange({
+        shipmentRef,
+        customerUid,
+        changeRequestId,
+      });
+      return {
+        success: true,
+        shipmentId,
+        changeRequestId,
+        amountDue: 0,
+      };
+    },
+);
+
+exports.cancelPendingBarrelDestinationChange = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const {shipmentId, changeRequestId} = request.data || {};
+      if (!shipmentId || !changeRequestId) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Shipment and destination change request are required",
+        );
+      }
+      const shipmentRef = admin.firestore()
+          .collection("barrelShipments").doc(shipmentId);
+      const shipmentDoc = await shipmentRef.get();
+      if (!shipmentDoc.exists) return {success: true};
+      const shipment = shipmentDoc.data();
+      if (shipment.customerUid !== customerUid) {
+        throw new HttpsError("permission-denied", "Shipment access denied");
+      }
+      if (
+        shipment.pendingDestinationChange?.requestId !== changeRequestId
+      ) {
+        return {success: true, shipmentId, changeRequestId};
+      }
+      const intentId = String(
+          shipment.destinationAdjustmentPaymentIntentId || "",
+      );
+      if (intentId && !SIMULATE_PAYMENTS) {
+        if (intentId.startsWith("simulated_")) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Destination payment is invalid",
+          );
+        }
+        const intent = await retrieveStripePaymentIntent(intentId);
+        if (intent.status === "succeeded") {
+          await finalizePaidBarrelDestinationChange({
+            shipmentRef,
+            customerUid,
+            changeRequestId,
+          });
+          return {
+            success: true,
+            shipmentId,
+            changeRequestId,
+            recoveredPayment: true,
+          };
+        }
+        if (
+          intent.status === "processing" ||
+          intent.status === "requires_capture"
+        ) {
+          await shipmentRef.update({
+            destinationAdjustmentPaymentStatus: intent.status,
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          });
+          return {
+            success: false,
+            shipmentId,
+            changeRequestId,
+            paymentPending: true,
+          };
+        }
+        if (intent.status !== "canceled") {
+          await cancelStripePaymentIntent(intentId);
+        }
+      }
+      await shipmentRef.update({
+        pendingDestinationChange: FirestoreFieldValue.delete(),
+        destinationAdjustmentPaymentIntentId:
+          FirestoreFieldValue.delete(),
+        destinationAdjustmentPaymentStatus: "cancelled",
+        payoutStatus:
+          shipment.pendingDestinationChange.previousPayoutStatus ||
+          "pending",
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      return {success: true, shipmentId, changeRequestId};
+    },
+);
+
+exports.getCarHoldPricing = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    async (request) => {
+      requireAuth(request);
+      const carId = cleanText(request.data?.carId, 160);
+      if (!carId) {
+        throw new HttpsError("invalid-argument", "Car is required");
+      }
+
+      const carDoc = await admin.firestore()
+          .collection("cars")
+          .doc(carId)
+          .get();
+      if (!carDoc.exists) {
+        throw new HttpsError("not-found", "Car not found");
+      }
+      const car = carDoc.data() || {};
+      const carBusiness = await requireActiveBusinessForCar(car);
+      const pricing = resolveHoldPricing(car, carBusiness.business);
+      return {
+        mode: pricing.mode,
+        flatFee: pricing.flatFee,
+        dailyRate: pricing.dailyRate,
+        maxDays: pricing.maxDays,
       };
     },
 );
@@ -13617,6 +14684,11 @@ exports.createCarDepositPaymentIntent = onCall(
     },
     async (request) => {
       const buyerUid = requireAuth(request);
+      await recordMarketplaceDisclosure(
+          request,
+          buyerUid,
+          "car_paid_hold",
+      );
       const {
         carId,
         buyerName,
@@ -13651,7 +14723,7 @@ exports.createCarDepositPaymentIntent = onCall(
         );
       }
       const carBusiness = await requireActiveBusinessForCar(car);
-      const holdQuote = calculateHoldQuote({
+      let holdQuote = calculateHoldQuote({
         car,
         business: carBusiness.business,
         holdUntilDate,
@@ -13669,59 +14741,73 @@ exports.createCarDepositPaymentIntent = onCall(
       const connectReady =
         !!carBusiness.business.stripeAccountId &&
         carBusiness.business.payoutsEnabled === true;
-      const payoutFields = servicePayoutFields({
-        grossCents: holdQuote.amountCents,
-        platformFeePct,
-        connectReady,
-      });
-
-      const existing = await db
-          .collection("carPurchases")
-          .where("carId", "==", carId)
-          .where("purchaseStatus", "in", ["pending", "reserved"])
-          .limit(1)
-          .get();
-      if (!existing.empty) {
-        throw new HttpsError(
-            "already-exists",
-            "This car already has an active reservation",
-        );
-      }
 
       const purchaseRef = db.collection("carPurchases").doc();
       const now = FirestoreFieldValue.serverTimestamp();
-      await purchaseRef.set({
-        carId,
-        carTitle: car.title || `${car.make || ""} ${car.model || ""}`.trim(),
-        businessId: carBusiness.businessId,
-        businessName: carBusiness.business.name || DEFAULT_BUSINESS_NAME,
-        buyerUid,
-        buyerEmail: userRecord.email || "",
-        buyerName: String(buyerName).trim(),
-        buyerPhone: String(buyerPhone).trim(),
-        destinationCountryId: "",
-        destinationCountryName: "",
-        vehicleLocation: [car.locationCity, car.locationState]
-            .filter(Boolean)
-            .join(", "),
-        depositAmount: holdQuote.amount,
-        depositCurrency: DEPOSIT_CURRENCY.toUpperCase(),
-        holdUntilDate: admin.firestore.Timestamp.fromDate(holdQuote.holdDate),
-        holdExpiresAt: admin.firestore.Timestamp.fromDate(
-            holdQuote.holdExpiresAt,
-        ),
-        holdPricingMode: holdQuote.holdPricingMode,
-        holdDays: holdQuote.holdDays,
-        holdRateAmount: holdQuote.holdRateAmount,
-        depositForfeitureStatus: "active",
-        buyerReliabilitySnapshot: reliabilitySummaryFromUser(userDoc.data()),
-        paymentType: "reservation_deposit",
-        paymentStatus: "pending",
-        purchaseStatus: "pending",
-        platformFeePct,
-        ...payoutFields,
-        createdAt: now,
-        updatedAt: now,
+      await db.runTransaction(async (transaction) => {
+        const lockedCarDoc = await transaction.get(carRef);
+        if (!lockedCarDoc.exists) {
+          throw new HttpsError("not-found", "Car not found");
+        }
+        const lockedCar = lockedCarDoc.data();
+        if (lockedCar.status !== "active") {
+          throw new HttpsError(
+              "failed-precondition",
+              "This car is not available for reservation",
+          );
+        }
+        holdQuote = calculateHoldQuote({
+          car: lockedCar,
+          business: carBusiness.business,
+          holdUntilDate,
+        });
+        const payoutFields = servicePayoutFields({
+          grossCents: holdQuote.amountCents,
+          platformFeePct,
+          connectReady,
+        });
+        transaction.set(purchaseRef, {
+          carId,
+          carTitle: lockedCar.title ||
+            `${lockedCar.make || ""} ${lockedCar.model || ""}`.trim(),
+          businessId: carBusiness.businessId,
+          businessName: carBusiness.business.name || DEFAULT_BUSINESS_NAME,
+          buyerUid,
+          buyerEmail: userRecord.email || "",
+          buyerName: String(buyerName).trim(),
+          buyerPhone: String(buyerPhone).trim(),
+          destinationCountryId: "",
+          destinationCountryName: "",
+          vehicleLocation: [
+            lockedCar.locationCity,
+            lockedCar.locationState,
+          ].filter(Boolean).join(", "),
+          depositAmount: holdQuote.amount,
+          depositCurrency: DEPOSIT_CURRENCY.toUpperCase(),
+          holdUntilDate: FirestoreTimestamp.fromDate(holdQuote.holdDate),
+          holdExpiresAt: FirestoreTimestamp.fromDate(
+              holdQuote.holdExpiresAt,
+          ),
+          holdPricingMode: holdQuote.holdPricingMode,
+          holdDays: holdQuote.holdDays,
+          holdRateAmount: holdQuote.holdRateAmount,
+          depositForfeitureStatus: "active",
+          buyerReliabilitySnapshot:
+            reliabilitySummaryFromUser(userDoc.data()),
+          paymentType: "reservation_deposit",
+          paymentStatus: "pending",
+          purchaseStatus: "pending",
+          platformFeePct,
+          ...payoutFields,
+          createdAt: now,
+          updatedAt: now,
+        });
+        transaction.update(carRef, {
+          status: "reserved",
+          reservedPurchaseId: purchaseRef.id,
+          reservationType: "paid_hold_pending",
+          updatedAt: now,
+        });
       });
 
       if (SIMULATE_PAYMENTS) {
@@ -13732,7 +14818,10 @@ exports.createCarDepositPaymentIntent = onCall(
               throw new HttpsError("not-found", "Car not found");
             }
             const lockedCar = lockedCarDoc.data();
-            if (lockedCar.status !== "active") {
+            const isLockedForPurchase =
+              lockedCar.status === "reserved" &&
+              lockedCar.reservedPurchaseId === purchaseRef.id;
+            if (!isLockedForPurchase) {
               throw new HttpsError(
                   "failed-precondition",
                   "This car is no longer available",
@@ -13759,10 +14848,26 @@ exports.createCarDepositPaymentIntent = onCall(
             }, {merge: true});
           });
         } catch (error) {
-          await purchaseRef.update({
-            paymentStatus: "failed",
-            purchaseStatus: "cancelled",
-            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          await db.runTransaction(async (transaction) => {
+            const lockedCarDoc = await transaction.get(carRef);
+            const failedAt = FirestoreFieldValue.serverTimestamp();
+            transaction.update(purchaseRef, {
+              paymentStatus: "failed",
+              purchaseStatus: "cancelled",
+              updatedAt: failedAt,
+            });
+            if (
+              lockedCarDoc.exists &&
+              lockedCarDoc.get("status") === "reserved" &&
+              lockedCarDoc.get("reservedPurchaseId") === purchaseRef.id
+            ) {
+              transaction.update(carRef, {
+                status: "active",
+                reservedPurchaseId: FirestoreFieldValue.delete(),
+                reservationType: FirestoreFieldValue.delete(),
+                updatedAt: failedAt,
+              });
+            }
           });
           throw error;
         }
@@ -13772,23 +14877,49 @@ exports.createCarDepositPaymentIntent = onCall(
         };
       }
 
-      const paymentIntent = await createStripePaymentIntent({
-        amount: holdQuote.amountCents,
-        currency: DEPOSIT_CURRENCY,
-        metadata: {
-          carId,
-          buyerUid,
-          businessId: carBusiness.businessId,
-          purchaseId: purchaseRef.id,
-          holdUntilDate: holdQuote.holdDate.toISOString(),
-          paymentType: "reservation_deposit",
-        },
-      });
+      let paymentIntent;
+      try {
+        paymentIntent = await createStripePaymentIntent({
+          amount: holdQuote.amountCents,
+          currency: DEPOSIT_CURRENCY,
+          metadata: {
+            carId,
+            buyerUid,
+            businessId: carBusiness.businessId,
+            purchaseId: purchaseRef.id,
+            holdUntilDate: holdQuote.holdDate.toISOString(),
+            paymentType: "reservation_deposit",
+          },
+        });
 
-      await purchaseRef.update({
-        stripePaymentIntentId: paymentIntent.id,
-        updatedAt: FirestoreFieldValue.serverTimestamp(),
-      });
+        await purchaseRef.update({
+          stripePaymentIntentId: paymentIntent.id,
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+      } catch (error) {
+        await db.runTransaction(async (transaction) => {
+          const lockedCarDoc = await transaction.get(carRef);
+          const failedAt = FirestoreFieldValue.serverTimestamp();
+          transaction.update(purchaseRef, {
+            paymentStatus: "failed",
+            purchaseStatus: "cancelled",
+            updatedAt: failedAt,
+          });
+          if (
+            lockedCarDoc.exists &&
+            lockedCarDoc.get("status") === "reserved" &&
+            lockedCarDoc.get("reservedPurchaseId") === purchaseRef.id
+          ) {
+            transaction.update(carRef, {
+              status: "active",
+              reservedPurchaseId: FirestoreFieldValue.delete(),
+              reservationType: FirestoreFieldValue.delete(),
+              updatedAt: failedAt,
+            });
+          }
+        });
+        throw error;
+      }
 
       return {
         purchaseId: purchaseRef.id,
@@ -13900,7 +15031,7 @@ exports.createCarViewingReservation = onCall(
           paymentType: "viewing_reservation",
           paymentStatus: "not_required",
           purchaseStatus: "viewing_scheduled",
-          appointmentStart: admin.firestore.Timestamp.fromDate(appointment),
+          appointmentStart: FirestoreTimestamp.fromDate(appointment),
           appointmentLabel: String(appointmentLabel).trim(),
           createdAt: now,
           updatedAt: now,
@@ -13978,7 +15109,7 @@ exports.updateCarViewingReservation = onCall(
         const carDoc = await transaction.get(carRef);
         const now = FirestoreFieldValue.serverTimestamp();
         transaction.update(purchaseRef, {
-          appointmentStart: admin.firestore.Timestamp.fromDate(appointment),
+          appointmentStart: FirestoreTimestamp.fromDate(appointment),
           appointmentLabel: String(appointmentLabel).trim(),
           purchaseStatus: "viewing_scheduled",
           paymentStatus: "not_required",
@@ -14082,6 +15213,11 @@ exports.createCarPurchasePaymentIntent = onCall(
     },
     async (request) => {
       const buyerUid = requireAuth(request);
+      await recordMarketplaceDisclosure(
+          request,
+          buyerUid,
+          "car_purchase",
+      );
       const {
         carId,
         buyerName,
@@ -14307,6 +15443,12 @@ exports.completeCarPurchase = onCall(
         throw new HttpsError("permission-denied", "Purchase access denied");
       }
       if (
+        purchase.purchaseStatus === "completed" &&
+        purchase.paymentStatus === "succeeded"
+      ) {
+        return {success: true, purchaseId};
+      }
+      if (
         purchase.holdExpiresAt &&
         purchase.holdExpiresAt.toMillis() <= Date.now()
       ) {
@@ -14316,15 +15458,19 @@ exports.completeCarPurchase = onCall(
         );
       }
 
-      if (
-        SIMULATE_PAYMENTS ||
-        String(purchase.stripePaymentIntentId || "").startsWith("simulated_")
-      ) {
+      if (SIMULATE_PAYMENTS) {
         return {
           success: true,
           purchaseId,
           simulatedPayment: true,
         };
+      }
+      if (String(purchase.stripePaymentIntentId || "")
+          .startsWith("simulated_")) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Simulated car purchase payments are disabled",
+        );
       }
 
       const intent = await retrieveStripePaymentIntent(
@@ -14425,14 +15571,34 @@ exports.cancelPendingCarPurchase = onCall(
       }
 
       if (!SIMULATE_PAYMENTS && purchase.stripePaymentIntentId) {
+        if (String(purchase.stripePaymentIntentId).startsWith("simulated_")) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Simulated car payments are disabled",
+          );
+        }
         const intent = await retrieveStripePaymentIntent(
             purchase.stripePaymentIntentId);
-        if (intent.status === "succeeded" || intent.status === "processing") {
+        if (intent.status === "succeeded") {
+          const completion = purchase.paymentType === "reservation_deposit" ?
+            exports.completeCarDepositReservation :
+            exports.completeCarPurchase;
+          await completion.run({
+            auth: request.auth,
+            data: {purchaseId},
+          });
+          return {success: true, purchaseId, recoveredPayment: true};
+        }
+        if (intent.status === "processing" ||
+            intent.status === "requires_capture") {
           await purchaseRef.update({
             paymentStatus: intent.status,
             updatedAt: FirestoreFieldValue.serverTimestamp(),
           });
           return {success: true, purchaseId};
+        }
+        if (intent.status !== "canceled") {
+          await cancelStripePaymentIntent(purchase.stripePaymentIntentId);
         }
       }
 
@@ -14490,16 +15656,26 @@ exports.completeCarDepositReservation = onCall(
       if (purchase.buyerUid !== buyerUid) {
         throw new HttpsError("permission-denied", "Purchase access denied");
       }
-
       if (
-        SIMULATE_PAYMENTS ||
-        String(purchase.stripePaymentIntentId || "").startsWith("simulated_")
+        purchase.purchaseStatus === "reserved" &&
+        purchase.paymentStatus === "succeeded"
       ) {
+        return {success: true, purchaseId};
+      }
+
+      if (SIMULATE_PAYMENTS) {
         return {
           success: true,
           purchaseId,
           simulatedPayment: true,
         };
+      }
+      if (String(purchase.stripePaymentIntentId || "")
+          .startsWith("simulated_")) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Simulated car deposit payments are disabled",
+        );
       }
 
       const intent = await retrieveStripePaymentIntent(
@@ -14522,7 +15698,10 @@ exports.completeCarDepositReservation = onCall(
           throw new HttpsError("not-found", "Car not found");
         }
         const car = carDoc.data();
-        if (car.status !== "active" && car.status !== "reserved") {
+        const isLockedForPurchase =
+          car.status === "reserved" &&
+          car.reservedPurchaseId === purchaseId;
+        if (car.status !== "active" && !isLockedForPurchase) {
           throw new HttpsError(
               "failed-precondition",
               "This car is no longer available",
@@ -14891,9 +16070,9 @@ exports.requestPaidHoldExtension = onCall(
         extensionId,
         extensionRequestStatus: "pending",
         extensionRequestedHoldUntilDate:
-          admin.firestore.Timestamp.fromDate(quote.holdDate),
+          FirestoreTimestamp.fromDate(quote.holdDate),
         extensionRequestedHoldExpiresAt:
-          admin.firestore.Timestamp.fromDate(quote.holdExpiresAt),
+          FirestoreTimestamp.fromDate(quote.holdExpiresAt),
         extensionRequestedHoldDays: quote.holdDays,
         extensionExtraAmount: quote.extraAmount,
         extensionExtraAmountCents: quote.extraAmountCents,
@@ -14956,6 +16135,11 @@ exports.createPaidHoldExtensionPaymentIntent = onCall(
     },
     async (request) => {
       const buyerUid = requireAuth(request);
+      await recordMarketplaceDisclosure(
+          request,
+          buyerUid,
+          "car_hold_extension",
+      );
       const {purchaseId} = request.data || {};
       if (!purchaseId) {
         throw new HttpsError("invalid-argument", "Purchase ID is required");
@@ -15089,9 +16273,22 @@ exports.completePaidHoldExtensionPayment = onCall(
       if (purchase.extensionRequestStatus !== "approved") {
         return {success: true, purchaseId};
       }
-      const intentId = purchase.extensionPaymentIntentId;
+      const intentId = String(purchase.extensionPaymentIntentId || "");
+      if (!intentId) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Extension payment has not been initialized",
+        );
+      }
       let sourceTransaction = "";
-      if (!String(intentId || "").startsWith("simulated_")) {
+      if (intentId.startsWith("simulated_")) {
+        if (!SIMULATE_PAYMENTS) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Simulated extension payments are disabled",
+          );
+        }
+      } else {
         const intent = await retrieveStripePaymentIntent(intentId);
         if (intent.status !== "succeeded") {
           await purchaseRef.update({
@@ -15149,7 +16346,7 @@ exports.expirePaidCarHolds = onSchedule(
     },
     async () => {
       const db = admin.firestore();
-      const now = admin.firestore.Timestamp.now();
+      const now = FirestoreTimestamp.now();
       const deadline = Date.now() + 8 * 60 * 1000;
       let expiredCount = 0;
       while (Date.now() < deadline) {

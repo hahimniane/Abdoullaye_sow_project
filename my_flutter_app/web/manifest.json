@@ -1,11 +1,11 @@
 {
-    "name": "Veyra",
-    "short_name": "Veyra",
+    "name": "Laawol",
+    "short_name": "Laawol",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#052B46",
     "theme_color": "#052B46",
-    "description": "Vehicle transport, car sales, barrel shipping, and tracking.",
+    "description": "Trusted services, shipping, vehicles, sourcing, payments, and tracking in one app.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

@@ -8,6 +8,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import '../models/notification_preferences.dart';
 import '../services/push_notification_service.dart';
 import '../utils/phone_number_validator.dart';
+import '../models/marketplace_disclosure_acceptance.dart';
 
 enum AuthInitializationIssue { profileUnavailable, profileMissing }
 
@@ -169,6 +170,33 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> requestOwnAccountDeletion({required String password}) async {
+    final currentUser = _auth.currentUser;
+    final email = currentUser?.email?.trim();
+    if (currentUser == null || email == null || email.isEmpty) {
+      throw FirebaseAuthException(
+        code: 'user-not-found',
+        message: 'No signed-in email account is available.',
+      );
+    }
+
+    final credential = EmailAuthProvider.credential(
+      email: email,
+      password: password,
+    );
+    await currentUser.reauthenticateWithCredential(credential);
+    await currentUser.getIdToken(true);
+
+    final callable = _functions.httpsCallable('requestOwnAccountDeletion');
+    final result = await callable.call<Map<String, dynamic>>({});
+    if (result.data['success'] != true) {
+      throw FirebaseFunctionsException(
+        code: 'internal',
+        message: 'Account deletion request was not accepted.',
+      );
+    }
+  }
+
   Future<void> retryInitialization() async {
     if (_isInitializing) return;
     _isInitializing = true;
@@ -211,7 +239,10 @@ class AuthProvider extends ChangeNotifier {
       if (_user != null) {
         debugPrint('🔍 Checking user role in Firestore...');
         await _checkUserRole();
-        await _registerPushNotificationsIfPossible();
+        // Notification registration can wait on OS permission/token services.
+        // A successful login must never remain blocked behind that optional
+        // setup work.
+        unawaited(_registerPushNotificationsIfPossible());
       }
 
       _isLoading = false;
@@ -360,6 +391,7 @@ class AuthProvider extends ChangeNotifier {
     required String country,
     required String state,
     required String postalCode,
+    required MarketplaceDisclosureAcceptance marketplaceAcceptance,
   }) async {
     if (_user == null) {
       throw 'Please create an account or sign in first.';
@@ -389,6 +421,7 @@ class AuthProvider extends ChangeNotifier {
       'country': country.trim(),
       'state': state.trim(),
       'postalCode': postalCode.trim(),
+      'marketplaceDisclosure': marketplaceAcceptance.toJson(),
     });
     await refreshUserProfile();
     return Map<String, dynamic>.from(response.data);
@@ -479,6 +512,7 @@ class AuthProvider extends ChangeNotifier {
     required String password,
     required String fullName,
     required String phone,
+    required AccountLegalAcceptance legalAcceptance,
   }) async {
     debugPrint('📝 Starting sign up for email: $email');
     _isLoading = true;
@@ -492,10 +526,11 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('📡 Creating new user through Cloud Functions...');
       final callable = _functions.httpsCallable('createCustomerUser');
       final response = await callable.call<Map<String, dynamic>>({
-        email: email,
-        password: password,
-        fullName: fullName,
-        phone: phone,
+        'email': email,
+        'password': password,
+        'fullName': fullName,
+        'phone': phone,
+        'legalAcceptance': legalAcceptance.toJson(),
       });
 
       final signInEmail = (response.data['email'] ?? email).toString().trim();
@@ -511,7 +546,7 @@ class AuthProvider extends ChangeNotifier {
       _normalizedPhone = response.data['normalizedPhone']?.toString();
       _notificationPreferences = NotificationPreferences.defaults;
       await _checkUserRole();
-      await _registerPushNotificationsIfPossible();
+      unawaited(_registerPushNotificationsIfPossible());
 
       _isLoading = false;
       notifyListeners();

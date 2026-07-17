@@ -9,7 +9,6 @@ import 'firebase_environment_options.dart';
 import 'firebase_emulator_config.dart';
 import 'providers/language_provider.dart';
 import 'providers/auth_provider.dart';
-import 'providers/theme_provider.dart';
 import 'providers/app_gate_provider.dart';
 import 'theme/app_theme.dart';
 import 'l10n/app_localizations.dart';
@@ -57,7 +56,9 @@ import 'services/stripe_config_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
-    options: FirebaseEnvironmentOptions.currentPlatform,
+    options: firebaseOptionsForRuntime(
+      FirebaseEnvironmentOptions.currentPlatform,
+    ),
   );
   await connectFirebaseEmulatorsIfRequested();
   await initializeFirebaseCrashlytics();
@@ -157,114 +158,105 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (context) => LanguageProvider()),
         ChangeNotifierProvider(create: (context) => AuthProvider()),
-        ChangeNotifierProvider(create: (context) => ThemeProvider()),
         ChangeNotifierProvider(
           create: (context) => useFirebaseEmulators
               ? AppGateProvider.localEmulator()
               : AppGateProvider(),
         ),
       ],
-      child: Consumer3<LanguageProvider, AuthProvider, ThemeProvider>(
-        builder:
-            (context, languageProvider, authProvider, themeProvider, child) {
-              return MaterialApp(
-                title: 'Laawol Digital',
-                scaffoldMessengerKey: rootScaffoldMessengerKey,
-                locale: languageProvider.currentLocale,
-                supportedLocales: const [Locale('en'), Locale('fr')],
-                localizationsDelegates: const [
-                  AppLocalizations.delegate,
-                  GlobalMaterialLocalizations.delegate,
-                  GlobalWidgetsLocalizations.delegate,
-                  GlobalCupertinoLocalizations.delegate,
-                ],
-                theme: AppTheme.light,
-                darkTheme: AppTheme.dark,
-                themeMode: themeProvider.themeMode,
-                builder: (context, child) {
-                  return AppGateBoundary(
-                    child: BiometricLockGate(child: child ?? const SizedBox()),
-                  );
-                },
-                initialRoute: '/splash',
-                routes: {
-                  '/splash': (context) => const SplashScreen(),
-                  '/': (context) => const CustomerHomeScreen(),
-                  '/login': (context) => const LoginScreen(),
-                  '/signup': (context) => const SignUpScreen(),
-                  '/forgot-password': (context) => const ForgotPasswordScreen(),
-                  '/customer_home': (context) => const CustomerHomeScreen(),
-                  '/park': (context) => const ParkCarScreen(),
-                  '/barrel': (context) => const SendBarrelScreen(),
-                  '/open-barrels': (context) => const OpenBarrelsScreen(),
-                  '/send-freight': (context) => const SendFreightScreen(),
-                  '/customize-navbar': (context) =>
-                      const CustomizeNavbarScreen(),
-                  '/transport': (context) => const TransportCarScreen(),
-                  '/request-transport': (context) =>
-                      const RequestTransportScreen(),
-                  '/sell': (context) =>
-                      const SellCarsScreen(showBackButton: true),
-                  '/tracking': (context) =>
-                      const TrackingScreen(showBackButton: true),
-                  '/my-purchases': (context) =>
-                      const MyPurchasesScreen(showBackButton: true),
-                  '/orders': (context) =>
-                      const OrdersScreen(showBackButton: true),
-                  '/purchase-management': (context) =>
-                      const StaffPurchaseManagementScreen(),
-                  '/destination-countries': (context) =>
-                      const DestinationCountriesScreen(),
-                  '/account-profile': (context) => const AccountProfileScreen(),
-                  '/wallet': (context) => const WalletScreen(),
-                  '/favorite-cars': (context) => const FavoriteCarsScreen(),
-                  '/businesses': (context) => const BusinessManagementScreen(),
-                  '/business-profile': (context) =>
-                      const BusinessProfileScreen(),
-                  '/business-register': (context) =>
-                      const BusinessRegistrationScreen(),
-                  '/parked-car-details': (context) {
-                    final parkedCar =
-                        ModalRoute.of(context)!.settings.arguments as ParkedCar;
-                    return ParkedCarDetailsScreen(parkedCar: parkedCar);
-                  },
-                  '/barrel-shipment-details': (context) {
-                    final shipment =
-                        ModalRoute.of(context)!.settings.arguments
-                            as BarrelShipment;
-                    return BarrelShipmentDetailsScreen(shipment: shipment);
-                  },
-                  '/transport-request-details': (context) {
-                    final request =
-                        ModalRoute.of(context)!.settings.arguments
-                            as TransportRequest;
-                    return TransportRequestDetailsScreen(request: request);
-                  },
-                  '/staff-home': (context) => const StaffHomeScreen(),
-                  '/home-menu': (context) => const HomeMenu(),
-                  '/user-management': (context) => const UserManagementScreen(),
-                  '/add-staff': (context) => const AddStaffScreen(),
-                  '/business-support': (context) =>
-                      const SupportInboxScreen.business(),
-                  '/admin-support': (context) =>
-                      const SupportInboxScreen.admin(),
-                  '/support': (context) {
-                    final args =
-                        ModalRoute.of(context)!.settings.arguments
-                            as SupportInboxArguments?;
-                    if (args == null) {
-                      return const SupportInboxScreen.customer();
-                    }
-                    return SupportInboxScreen(scope: args.scope);
-                  },
-                  '/support-thread': (context) {
-                    final caseId =
-                        ModalRoute.of(context)!.settings.arguments as String;
-                    return SupportThreadScreen(caseId: caseId);
-                  },
-                },
+      child: Consumer2<LanguageProvider, AuthProvider>(
+        builder: (context, languageProvider, authProvider, child) {
+          return MaterialApp(
+            title: 'Laawol Digital',
+            scaffoldMessengerKey: rootScaffoldMessengerKey,
+            locale: languageProvider.currentLocale,
+            supportedLocales: const [Locale('en'), Locale('fr')],
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            theme: AppTheme.light,
+            themeMode: ThemeMode.light,
+            builder: (context, child) {
+              return AppGateBoundary(
+                child: BiometricLockGate(child: child ?? const SizedBox()),
               );
             },
+            initialRoute: '/splash',
+            routes: {
+              '/splash': (context) => const SplashScreen(),
+              '/': (context) => const CustomerHomeScreen(),
+              '/login': (context) => const LoginScreen(),
+              '/signup': (context) => const SignUpScreen(),
+              '/forgot-password': (context) => const ForgotPasswordScreen(),
+              '/customer_home': (context) => const CustomerHomeScreen(),
+              '/park': (context) => const ParkCarScreen(),
+              '/barrel': (context) => const SendBarrelScreen(),
+              '/open-barrels': (context) => const OpenBarrelsScreen(),
+              '/send-freight': (context) => const SendFreightScreen(),
+              '/customize-navbar': (context) => const CustomizeNavbarScreen(),
+              '/transport': (context) => const TransportCarScreen(),
+              '/request-transport': (context) => const RequestTransportScreen(),
+              '/sell': (context) => const SellCarsScreen(showBackButton: true),
+              '/tracking': (context) =>
+                  const TrackingScreen(showBackButton: true),
+              '/my-purchases': (context) =>
+                  const MyPurchasesScreen(showBackButton: true),
+              '/orders': (context) => const OrdersScreen(showBackButton: true),
+              '/purchase-management': (context) =>
+                  const StaffPurchaseManagementScreen(),
+              '/destination-countries': (context) =>
+                  const DestinationCountriesScreen(),
+              '/account-profile': (context) => const AccountProfileScreen(),
+              '/wallet': (context) => const WalletScreen(),
+              '/favorite-cars': (context) => const FavoriteCarsScreen(),
+              '/businesses': (context) => const BusinessManagementScreen(),
+              '/business-profile': (context) => const BusinessProfileScreen(),
+              '/business-register': (context) =>
+                  const BusinessRegistrationScreen(),
+              '/parked-car-details': (context) {
+                final parkedCar =
+                    ModalRoute.of(context)!.settings.arguments as ParkedCar;
+                return ParkedCarDetailsScreen(parkedCar: parkedCar);
+              },
+              '/barrel-shipment-details': (context) {
+                final shipment =
+                    ModalRoute.of(context)!.settings.arguments
+                        as BarrelShipment;
+                return BarrelShipmentDetailsScreen(shipment: shipment);
+              },
+              '/transport-request-details': (context) {
+                final request =
+                    ModalRoute.of(context)!.settings.arguments
+                        as TransportRequest;
+                return TransportRequestDetailsScreen(request: request);
+              },
+              '/staff-home': (context) => const StaffHomeScreen(),
+              '/home-menu': (context) => const HomeMenu(),
+              '/user-management': (context) => const UserManagementScreen(),
+              '/add-staff': (context) => const AddStaffScreen(),
+              '/business-support': (context) =>
+                  const SupportInboxScreen.business(),
+              '/admin-support': (context) => const SupportInboxScreen.admin(),
+              '/support': (context) {
+                final args =
+                    ModalRoute.of(context)!.settings.arguments
+                        as SupportInboxArguments?;
+                if (args == null) {
+                  return const SupportInboxScreen.customer();
+                }
+                return SupportInboxScreen(scope: args.scope);
+              },
+              '/support-thread': (context) {
+                final caseId =
+                    ModalRoute.of(context)!.settings.arguments as String;
+                return SupportThreadScreen(caseId: caseId);
+              },
+            },
+          );
+        },
       ),
     );
   }

@@ -29,7 +29,9 @@ Protect and improve the visual quality, usability, and product feel of the Flutt
 - Keep screens functional first: users should be able to complete staff/customer workflows quickly.
 - Use brand assets intentionally. Do not hide the brand only in tiny navigation text when a screen is brand-facing.
 - Keep cards restrained and purposeful. Avoid nested cards and excessive decorative containers.
-- Ensure dark mode and light mode both feel complete.
+- The current release is intentionally light-only. Do not add or expose dark
+  mode until every customer, business, admin, native launch, and payment surface
+  has passed a dedicated cross-platform visual QA cycle.
 - Make bilingual UI work naturally for English and French. Leave enough room for longer French labels.
 
 ## UI Review Checklist
@@ -40,7 +42,8 @@ Protect and improve the visual quality, usability, and product feel of the Flutt
 - Does text fit at mobile widths and in both supported locales?
 - Are tap targets comfortable and stable?
 - Does the layout avoid overlap when content grows?
-- Does dark mode preserve contrast and hierarchy?
+- If dark mode is being reintroduced, has every surface passed contrast and
+  hierarchy review before the preference is exposed?
 - Are loading, empty, error, and success states accounted for when relevant?
 - Does every async button, tap target, menu item, and icon action visibly show
   progress and disable repeat activation while work is running?
@@ -93,3 +96,6 @@ Return:
   from the running app, not recreated HTML mockups. Capture a privacy-safe,
   fully rendered state in both English and French whenever the image contains
   text, and never ship debug ribbons or test/customer identifiers.
+- Keep the app light-only for the current release. A future dark-mode return is
+  a full product-quality project, not a settings-toggle change; it must include
+  Stripe sheets, iOS/Android native shells, all roles, and English/French QA.

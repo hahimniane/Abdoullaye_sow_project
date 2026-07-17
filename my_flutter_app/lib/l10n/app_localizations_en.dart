@@ -249,6 +249,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String shipmentSavedReceiptUnavailable(Object trackingCode) {
+    return 'Shipment saved. Tracking number: $trackingCode. The receipt could not be opened, but your payment and shipment are safe.';
+  }
+
+  @override
   String failedToSaveShipment(Object error) {
     return 'Failed to save shipment: $error';
   }
@@ -560,6 +565,68 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get termsOfService => 'Terms of Service';
+
+  @override
+  String get legalAndPrivacy => 'Legal & privacy';
+
+  @override
+  String get privacyPolicySubtitle => 'How Laawol handles your information';
+
+  @override
+  String get termsOfServiceSubtitle => 'Rules for using the Laawol platform';
+
+  @override
+  String get openLegalLinkFailed =>
+      'This page could not be opened. Please try again.';
+
+  @override
+  String get accountManagement => 'Account management';
+
+  @override
+  String get deleteAccount => 'Delete account';
+
+  @override
+  String get deleteAccountSubtitle =>
+      'Permanently delete your account and personal data';
+
+  @override
+  String get deleteAccountTitle => 'Delete your Laawol account?';
+
+  @override
+  String get deleteAccountExplanation =>
+      'This starts permanent account deletion. You will be signed out, and access to your account will end.';
+
+  @override
+  String get deleteAccountRetentionNotice =>
+      'Completed payment and service records may be retained when required for accounting, refunds, disputes, fraud prevention, or law. All other associated personal data will be deleted or anonymized within 30 days.';
+
+  @override
+  String get enterPasswordToDelete => 'Enter your password to confirm';
+
+  @override
+  String get confirmDeleteAccount => 'Request deletion';
+
+  @override
+  String get accountDeletionRequestedTitle => 'Deletion requested';
+
+  @override
+  String get accountDeletionRequestedMessage =>
+      'Your request was received. Laawol will delete or anonymize eligible account data within 30 days. You are now signed out.';
+
+  @override
+  String get accountDeletionWrongPassword => 'The password is incorrect.';
+
+  @override
+  String get accountDeletionRecentLoginRequired =>
+      'Please sign in again, then retry account deletion.';
+
+  @override
+  String get accountDeletionAdminBlocked =>
+      'A platform administrator account must be removed by another super admin.';
+
+  @override
+  String get accountDeletionFailed =>
+      'We could not start account deletion. Please try again or contact support.';
 
   @override
   String get manageCars => 'Manage Cars';
@@ -1017,15 +1084,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get setAsCover => 'Set as cover';
-
-  @override
-  String get themeLabel => 'Appearance';
-
-  @override
-  String get darkMode => 'Dark mode';
-
-  @override
-  String get lightMode => 'Light mode';
 
   @override
   String get reserved => 'Reserved';
@@ -2121,6 +2179,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String destinationChangeCredit(Object amount) {
     return '$amount will be credited to your wallet.';
   }
+
+  @override
+  String destinationChangePaid(Object amount) {
+    return 'Shipment updated. $amount difference paid.';
+  }
+
+  @override
+  String destinationChangeCredited(Object amount) {
+    return 'Shipment updated. $amount credited to your wallet.';
+  }
+
+  @override
+  String get shipmentDestinationUpdated => 'Shipment destination updated.';
+
+  @override
+  String get destinationPaymentInitializationFailed =>
+      'The destination payment could not be initialized. Please try again.';
+
+  @override
+  String get paidShipmentDestinationChangeRequiresSupport =>
+      'This shipment has already been paid out to the business. Contact Laawol support to change its destination safely.';
 
   @override
   String newRouteValue(Object business, Object country) {
@@ -3709,6 +3788,63 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addDestination => 'Add a destination';
 
   @override
+  String get destinationsTitle => 'Destinations';
+
+  @override
+  String get barrelDestinationStartSummary =>
+      'Start with where the barrels are going and how many you are sending.';
+
+  @override
+  String barrelDestinationSummary(int barrelCount, int destinationCount) {
+    String _temp0 = intl.Intl.pluralLogic(
+      barrelCount,
+      locale: localeName,
+      other: '$barrelCount barrels',
+      one: '1 barrel',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      destinationCount,
+      locale: localeName,
+      other: '$destinationCount destinations',
+      one: '1 destination',
+    );
+    return '$_temp0 to $_temp1.';
+  }
+
+  @override
+  String get addAnotherDestination => 'Add another destination';
+
+  @override
+  String get editDestination => 'Edit destination';
+
+  @override
+  String destinationNumber(int number) {
+    return 'Destination $number';
+  }
+
+  @override
+  String get saveDestination => 'Save destination';
+
+  @override
+  String get addToOrder => 'Add to order';
+
+  @override
+  String holdPerDayDescription(int days, Object amount) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days-day hold',
+      one: '1-day hold',
+    );
+    return '$_temp0 at $amount per day';
+  }
+
+  @override
+  String holdFlatFeeDescription(int days) {
+    return 'Flat hold fee for up to $days days';
+  }
+
+  @override
   String get pleaseChooseBusiness => 'Please choose a business';
 
   @override
@@ -4414,4 +4550,68 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get hubWalletSubtitle => 'Balance & refunds';
+
+  @override
+  String get destinationPickupDetailsRequired =>
+      'Edit each destination and add its pickup address, date, and time.';
+
+  @override
+  String get destinationPickupDetailsHelp =>
+      'Edit each destination with its pickup place and date.';
+
+  @override
+  String get noShowHistory => 'No-show history';
+
+  @override
+  String get noShowHistoryMessage =>
+      'If you do not return by the hold date and the business marks that you did not come, the deposit may be forfeited and this outcome may be visible to car-selling businesses.';
+
+  @override
+  String get holdUntil => 'Hold until';
+
+  @override
+  String get marketplaceResponsibilityTitle =>
+      'Understand who provides this service';
+
+  @override
+  String marketplaceProviderResponsibilityBody(Object providerNames) {
+    return '$providerNames is an independent business responsible for the item or service, including fulfillment, condition, delivery timing, and performance.';
+  }
+
+  @override
+  String get marketplacePaymentFlowBody =>
+      'Laawol helps you find businesses, collects and processes your payment, may deduct a disclosed platform fee, and may transfer the business payout later. Laawol can assist with tracking, support, refunds, and disputes.';
+
+  @override
+  String get marketplaceNoGuaranteeBody =>
+      'Laawol is not the seller, carrier, or service provider and does not guarantee the business’s delivery date or performance. This does not limit rights that cannot legally be waived.';
+
+  @override
+  String get marketplaceResponsibilityCheckbox =>
+      'I understand the business’s responsibility and want to continue.';
+
+  @override
+  String get selectedBusiness => 'The selected business';
+
+  @override
+  String get accountLegalAcceptance =>
+      'I agree to Laawol’s Terms of Service and Privacy Policy, including its marketplace role.';
+
+  @override
+  String get accountLegalAcceptanceRequired =>
+      'Please accept the Terms of Service and Privacy Policy to continue.';
+
+  @override
+  String get businessResponsibilityAcceptance =>
+      'I understand that my business is independently responsible for its listings, prices, goods, services, fulfillment, delivery timing, permits, and customer obligations.';
+
+  @override
+  String get businessResponsibilityRequired =>
+      'Confirm the business responsibility statement to submit your application.';
+
+  @override
+  String get marketplaceBalancePaymentSummary => 'Balance payment';
+
+  @override
+  String get marketplaceDestinationChangeSummary => 'Paid destination change';
 }

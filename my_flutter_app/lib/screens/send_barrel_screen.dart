@@ -19,6 +19,7 @@ import '../models/destination_country.dart';
 import '../services/barrel_pricing_service.dart';
 import '../services/barrel_shipment_service.dart';
 import '../services/business_service.dart';
+import '../services/payment_flow_safety.dart';
 import '../utils/barrel_receipt_generator.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/phone_number_validator.dart';
@@ -26,6 +27,7 @@ import '../utils/receiver_phone_rules.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/destination_country_field.dart';
+import '../widgets/marketplace_transaction_disclosure.dart';
 import '../theme/app_colors.dart';
 
 class SendBarrelScreen extends StatefulWidget {
@@ -181,7 +183,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
         )) {
       showErrorSnackBar(
         context,
-        'Edit each destination and add its pickup address, date, and time.',
+        AppLocalizations.of(context)!.destinationPickupDetailsRequired,
       );
       return;
     }
@@ -198,6 +200,18 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
       icon: Icons.local_shipping_outlined,
     );
     if (!confirmed || !mounted) return;
+
+    final providerNames = _orderLines
+        .map((line) => line.business.businessName.trim())
+        .where((name) => name.isNotEmpty)
+        .toSet()
+        .join(', ');
+    final marketplaceAcceptance = await confirmMarketplaceTransaction(
+      context,
+      providerNames: providerNames,
+      transactionSummary: l10n.sendBarrels,
+    );
+    if (marketplaceAcceptance == null || !mounted) return;
 
     setState(() {
       _isSubmitting = true;
@@ -221,17 +235,26 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
             ? null
             : (_pickupRequested ? _pickupDateTime : null),
         useWalletBalance: _useWalletBalance,
+        marketplaceAcceptance: marketplaceAcceptance,
       );
-      await generateBarrelOrderReceipt(
-        orderId: order.orderId,
-        shipments: order.shipments,
+      final receiptOpened = await runBestEffortPostPaymentAction(
+        () => generateBarrelOrderReceipt(
+          orderId: order.orderId,
+          shipments: order.shipments,
+        ),
       );
 
       if (!mounted) return;
       final trackingLabel = order.trackingCodes.join(', ');
       showSuccessSnackBar(
         context,
-        AppLocalizations.of(context)!.shipmentSavedWithTracking(trackingLabel),
+        receiptOpened
+            ? AppLocalizations.of(
+                context,
+              )!.shipmentSavedWithTracking(trackingLabel)
+            : AppLocalizations.of(
+                context,
+              )!.shipmentSavedReceiptUnavailable(trackingLabel),
       );
       if (widget.showBackButton) {
         Navigator.of(context).pop();
@@ -513,10 +536,13 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                 const SizedBox(height: 14),
                                 _FormSection(
                                   icon: Icons.public_outlined,
-                                  title: 'Destinations',
+                                  title: l10n.destinationsTitle,
                                   subtitle: _orderLines.isEmpty
-                                      ? 'Start with where the barrels are going and how many you are sending.'
-                                      : '$_totalBarrels barrel(s) to ${_orderLines.length} destination(s).',
+                                      ? l10n.barrelDestinationStartSummary
+                                      : l10n.barrelDestinationSummary(
+                                          _totalBarrels,
+                                          _orderLines.length,
+                                        ),
                                   children: [
                                     if (_orderLines.isEmpty)
                                       _EmptyDestinations(
@@ -535,7 +561,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                       ),
                                       const SizedBox(height: 12),
                                       _AddDestinationButton(
-                                        label: 'Add another destination',
+                                        label: l10n.addAnotherDestination,
                                         onPressed: () =>
                                             _openDestinationEditor(),
                                       ),
@@ -573,7 +599,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                     icon: Icons.local_shipping_outlined,
                                     title: l10n.pickup,
                                     subtitle: _usesDifferentPickupDetails
-                                        ? 'Edit each destination with its pickup place and date.'
+                                        ? l10n.destinationPickupDetailsHelp
                                         : (_pickupRequested
                                               ? l10n.pickupCollectNyc
                                               : l10n.pickupBringOffice),
@@ -1144,113 +1170,120 @@ class _BusinessOptionCard extends StatelessWidget {
     final destinationNote = option.country.destinationNote?.trim() ?? '';
     final deliveryEstimate = option.country.deliveryEstimateLabel;
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppColors.cobalt.withValues(alpha: 0.08)
-              : AppColors.paper,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: selected ? AppColors.cobalt : AppColors.rule,
-            width: selected ? 1.5 : 1,
+    return Semantics(
+      button: true,
+      selected: selected,
+      inMutuallyExclusiveGroup: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.cobalt.withValues(alpha: 0.08)
+                : AppColors.paper,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: selected ? AppColors.cobalt : AppColors.rule,
+              width: selected ? 1.5 : 1,
+            ),
           ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              selected
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_unchecked,
-              color: selected ? AppColors.cobalt : AppColors.muted,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              option.country.flagEmoji,
-              style: const TextStyle(fontSize: 22),
-            ),
-            const SizedBox(width: 8),
-            const Icon(Icons.storefront_outlined, size: 22),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    option.businessName,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  if (contact.isNotEmpty)
-                    Text(
-                      contact,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  if (note.isNotEmpty)
-                    Text(
-                      note,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  if (destinationNote.isNotEmpty)
-                    Text(
-                      destinationNote,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  if (deliveryEstimate != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: _DeliveryEstimateChip(label: deliveryEstimate),
-                    ),
-                ],
+          child: Row(
+            children: [
+              Icon(
+                selected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                color: selected ? AppColors.cobalt : AppColors.muted,
               ),
-            ),
-            const SizedBox(width: 10),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 86),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerRight,
-                child: Text(
-                  price,
-                  style: const TextStyle(
-                    color: AppColors.cobaltDeep,
-                    fontWeight: FontWeight.w900,
+              const SizedBox(width: 4),
+              Text(
+                option.country.flagEmoji,
+                style: const TextStyle(fontSize: 22),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.storefront_outlined, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      option.businessName,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    if (contact.isNotEmpty)
+                      Text(
+                        contact,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    if (note.isNotEmpty)
+                      Text(
+                        note,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    if (destinationNote.isNotEmpty)
+                      Text(
+                        destinationNote,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    if (deliveryEstimate != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: BarrelDeliveryEstimateChip(
+                          label: deliveryEstimate,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 86),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    price,
+                    style: const TextStyle(
+                      color: AppColors.cobaltDeep,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _DeliveryEstimateChip extends StatelessWidget {
-  const _DeliveryEstimateChip({required this.label});
+class BarrelDeliveryEstimateChip extends StatelessWidget {
+  const BarrelDeliveryEstimateChip({super.key, required this.label});
 
   final String label;
 
@@ -1268,12 +1301,17 @@ class _DeliveryEstimateChip extends StatelessWidget {
         children: [
           const Icon(Icons.schedule_outlined, size: 14, color: AppColors.sage),
           const SizedBox(width: 5),
-          Text(
-            AppLocalizations.of(context)!.deliveryLabel(label),
-            style: const TextStyle(
-              color: AppColors.sage,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
+          Flexible(
+            child: Text(
+              AppLocalizations.of(context)!.deliveryLabel(label),
+              maxLines: 2,
+              softWrap: true,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.sage,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ],
@@ -2819,8 +2857,8 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                   Expanded(
                     child: Text(
                       isEditing
-                          ? 'Edit destination'
-                          : 'Destination ${widget.ordinal}',
+                          ? l10n.editDestination
+                          : l10n.destinationNumber(widget.ordinal),
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
@@ -3022,7 +3060,7 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                           onPressed: _business == null ? null : _save,
                           icon: Icon(isEditing ? Icons.check : Icons.add),
                           label: Text(
-                            isEditing ? 'Save destination' : 'Add to order',
+                            isEditing ? l10n.saveDestination : l10n.addToOrder,
                           ),
                         ),
                       ),

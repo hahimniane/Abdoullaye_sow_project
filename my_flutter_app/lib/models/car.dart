@@ -100,45 +100,58 @@ class Car {
 
   factory Car.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? <String, dynamic>{};
+    return Car.fromMap(doc.id, data);
+  }
+
+  factory Car.fromMap(String id, Map<String, dynamic> data) {
     return Car(
-      id: doc.id,
-      title: (data['title'] ?? '') as String,
-      make: (data['make'] ?? '') as String,
-      model: (data['model'] ?? '') as String,
-      year: (data['year'] ?? '') as String,
-      mileage: (data['mileage'] ?? '') as String,
+      id: id,
+      title: _parseString(data['title']),
+      make: _parseString(data['make']),
+      model: _parseString(data['model']),
+      year: _parseString(data['year']),
+      mileage: _parseString(data['mileage']),
       price: _parseDouble(data['price']),
-      description: (data['description'] ?? '') as String,
+      description: _parseString(data['description']),
       features: _stringList(data['features']),
       imageUrls: _stringList(data['imageUrls']),
-      status: (data['status'] ?? 'active') as String,
-      contactPhone:
-          (data['contactPhone'] ?? data['sellerPhone'] ?? '') as String,
-      contactName: data['contactName'] as String?,
-      contactEmail: data['contactEmail'] as String?,
-      condition: (data['condition'] ?? '') as String,
-      bodyType: (data['bodyType'] ?? '') as String,
-      transmission: (data['transmission'] ?? '') as String,
-      fuelType: (data['fuelType'] ?? '') as String,
-      drivetrain: (data['drivetrain'] ?? '') as String,
-      exteriorColor: (data['exteriorColor'] ?? '') as String,
-      interiorColor: (data['interiorColor'] ?? '') as String,
-      vin: (data['vin'] ?? '') as String,
-      stockNumber: (data['stockNumber'] ?? '') as String,
+      status: _parseString(data['status'], fallback: 'active'),
+      contactPhone: _parseString(
+        data['contactPhone'] ?? data['sellerPhone'],
+      ),
+      contactName: _parseNullableString(data['contactName']),
+      contactEmail: _parseNullableString(data['contactEmail']),
+      condition: _parseString(data['condition']),
+      bodyType: _parseString(data['bodyType']),
+      transmission: _parseString(data['transmission']),
+      fuelType: _parseString(data['fuelType']),
+      drivetrain: _parseString(data['drivetrain']),
+      exteriorColor: _parseString(data['exteriorColor']),
+      interiorColor: _parseString(data['interiorColor']),
+      vin: _parseString(data['vin']),
+      stockNumber: _parseString(data['stockNumber']),
       isRebuiltTitle: data['isRebuiltTitle'] is bool
           ? data['isRebuiltTitle'] as bool
           : null,
       isNegotiable: data['isNegotiable'] == true,
-      financingNote: (data['financingNote'] ?? '') as String,
-      locationCity: (data['locationCity'] ?? '') as String,
-      locationState: (data['locationState'] ?? '') as String,
-      locationAddressLine1: (data['locationAddressLine1'] ?? '') as String,
-      locationPostalCode: (data['locationPostalCode'] ?? '') as String,
+      financingNote: _parseString(data['financingNote']),
+      locationCity: _parseString(data['locationCity']),
+      locationState: _parseString(data['locationState']),
+      locationAddressLine1: _parseString(data['locationAddressLine1']),
+      locationPostalCode: _parseString(data['locationPostalCode']),
       structuredFeatures: _stringList(data['structuredFeatures']),
-      businessId: (data['businessId'] ?? 'keren_auto_sales') as String,
-      businessName: (data['businessName'] ?? 'Keren') as String,
-      businessStatus: (data['businessStatus'] ?? 'approved') as String,
-      businessProfileImageUrl: data['businessProfileImageUrl'] as String?,
+      businessId: _parseString(
+        data['businessId'],
+        fallback: 'keren_auto_sales',
+      ),
+      businessName: _parseString(data['businessName'], fallback: 'Keren'),
+      businessStatus: _parseString(
+        data['businessStatus'],
+        fallback: 'approved',
+      ),
+      businessProfileImageUrl: _parseNullableString(
+        data['businessProfileImageUrl'],
+      ),
       enabledServices: normalizeBusinessServices(data['enabledServices']),
       createdAt: _toDateTime(data['createdAt']),
       updatedAt: _toDateTime(data['updatedAt']),
@@ -148,7 +161,7 @@ class Car {
             : null,
       ),
       useBusinessHoldPricing: data['useBusinessHoldPricing'] != false,
-      carHoldPricingMode: (data['carHoldPricingMode'] ?? '') as String,
+      carHoldPricingMode: _parseString(data['carHoldPricingMode']),
       carHoldFlatFee: data['carHoldFlatFee'] == null
           ? null
           : _parseDouble(data['carHoldFlatFee']),
@@ -159,6 +172,17 @@ class Car {
           ? (data['carHoldMaxDays'] as num).toInt()
           : int.tryParse('${data['carHoldMaxDays'] ?? ''}'),
     );
+  }
+
+  static String _parseString(dynamic value, {String fallback = ''}) {
+    if (value == null) return fallback;
+    return value.toString();
+  }
+
+  static String? _parseNullableString(dynamic value) {
+    if (value == null) return null;
+    final parsed = value.toString();
+    return parsed.isEmpty ? null : parsed;
   }
 
   static double _parseDouble(dynamic value) {

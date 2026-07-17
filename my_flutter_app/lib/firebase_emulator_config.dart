@@ -1,10 +1,54 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
 const useFirebaseEmulators = bool.fromEnvironment('USE_FIREBASE_EMULATORS');
+const firebaseEmulatorProjectId = String.fromEnvironment(
+  'FIREBASE_EMULATOR_PROJECT_ID',
+  defaultValue: 'demo-laawol-e2e',
+);
+
+FirebaseOptions firebaseOptionsForRuntime(FirebaseOptions configuredOptions) {
+  if (!useFirebaseEmulators) return configuredOptions;
+
+  return firebaseOptionsForProject(
+    configuredOptions,
+    firebaseEmulatorProjectId,
+  );
+}
+
+FirebaseOptions firebaseOptionsForProject(
+  FirebaseOptions configuredOptions,
+  String requestedProjectId,
+) {
+  final projectId = requestedProjectId.trim();
+  if (projectId.isEmpty) {
+    throw StateError(
+      'FIREBASE_EMULATOR_PROJECT_ID must not be empty when Firebase '
+      'emulators are enabled.',
+    );
+  }
+
+  return FirebaseOptions(
+    apiKey: configuredOptions.apiKey,
+    appId: configuredOptions.appId,
+    messagingSenderId: configuredOptions.messagingSenderId,
+    projectId: projectId,
+    authDomain: configuredOptions.authDomain,
+    databaseURL: configuredOptions.databaseURL,
+    storageBucket: configuredOptions.storageBucket,
+    measurementId: configuredOptions.measurementId,
+    trackingId: configuredOptions.trackingId,
+    deepLinkURLScheme: configuredOptions.deepLinkURLScheme,
+    androidClientId: configuredOptions.androidClientId,
+    iosClientId: configuredOptions.iosClientId,
+    iosBundleId: configuredOptions.iosBundleId,
+    appGroupId: configuredOptions.appGroupId,
+  );
+}
 
 Future<void> connectFirebaseEmulatorsIfRequested() async {
   if (!useFirebaseEmulators) return;

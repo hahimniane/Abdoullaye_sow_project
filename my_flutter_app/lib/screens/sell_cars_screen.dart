@@ -56,17 +56,21 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
         .snapshots()
         .listen(
           (snapshot) {
-            final cars = snapshot.docs
-                .map((doc) => Car.fromFirestore(doc))
-                .where(
-                  (car) =>
-                      car.businessStatus == 'approved' &&
-                      hasBusinessService(
-                        car.enabledServices,
-                        BusinessServiceKey.carSales,
-                      ),
-                )
-                .toList();
+            final cars = <Car>[];
+            for (final doc in snapshot.docs) {
+              try {
+                final car = Car.fromFirestore(doc);
+                if (car.businessStatus == 'approved' &&
+                    hasBusinessService(
+                      car.enabledServices,
+                      BusinessServiceKey.carSales,
+                    )) {
+                  cars.add(car);
+                }
+              } catch (error) {
+                debugPrint('Skipping malformed car listing ${doc.id}: $error');
+              }
+            }
             if (!mounted) return;
             setState(() {
               _allCars = cars;

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../models/barrel_pool.dart';
+import '../models/marketplace_disclosure_acceptance.dart';
+import 'payment_flow_safety.dart';
 import 'stripe_config_service.dart';
 
 class BarrelPoolService {
@@ -27,37 +29,39 @@ class BarrelPoolService {
     await Stripe.instance.initPaymentSheet(
       paymentSheetParameters: SetupPaymentSheetParameters(
         paymentIntentClientSecret: result.clientSecret,
-        merchantDisplayName: 'Services',
-        style: ThemeMode.system,
+        merchantDisplayName: 'Laawol',
+        style: ThemeMode.light,
       ),
     );
 
-    try {
-      await Stripe.instance.presentPaymentSheet();
-      await _functions.httpsCallable('completeBarrelPoolDepositPayment').call({
-        'poolId': result.poolId,
-      });
-    } catch (_) {
-      try {
+    await completePaymentFlowSafely(
+      presentPaymentSheet: Stripe.instance.presentPaymentSheet,
+      completeTransaction: () async {
+        await _functions.httpsCallable('completeBarrelPoolDepositPayment').call(
+          {'poolId': result.poolId},
+        );
+      },
+      cancelPendingTransaction: () async {
         await _functions.httpsCallable('cancelPendingBarrelPoolDeposit').call({
           'poolId': result.poolId,
         });
-      } catch (_) {
-        // Keep the original Stripe error for the customer-facing message.
-      }
-      rethrow;
-    }
+      },
+    );
 
     return result;
   }
 
-  Future<void> payBalance(BarrelPool pool) async {
+  Future<void> payBalance(
+    BarrelPool pool, {
+    required MarketplaceDisclosureAcceptance marketplaceAcceptance,
+  }) async {
     final response = await _functions
         .httpsCallable('createBarrelPoolBalancePaymentIntent')
         .call({
           'poolId': pool.id,
           if (pool.balancePaymentRequestId.isNotEmpty)
             'requestId': pool.balancePaymentRequestId,
+          'marketplaceDisclosure': marketplaceAcceptance.toJson(),
         });
     final result = BarrelPoolBalancePaymentResult.fromMap(
       Map<String, dynamic>.from(response.data),
@@ -73,8 +77,8 @@ class BarrelPoolService {
     await Stripe.instance.initPaymentSheet(
       paymentSheetParameters: SetupPaymentSheetParameters(
         paymentIntentClientSecret: result.clientSecret,
-        merchantDisplayName: 'Services',
-        style: ThemeMode.system,
+        merchantDisplayName: 'Laawol',
+        style: ThemeMode.light,
       ),
     );
     await Stripe.instance.presentPaymentSheet();
@@ -143,6 +147,7 @@ class BarrelPoolService {
     bool useWalletBalance = false,
     DateTime? pickupDateTime,
     DateTime? joinDeadline,
+    required MarketplaceDisclosureAcceptance marketplaceAcceptance,
   }) async {
     final response = await _functions.httpsCallable('createBarrelPool').call({
       'businessId': businessId,
@@ -168,6 +173,7 @@ class BarrelPoolService {
       'approvalMode': approvalMode,
       if (joinDeadline != null)
         'joinDeadline': joinDeadline.toUtc().toIso8601String(),
+      'marketplaceDisclosure': marketplaceAcceptance.toJson(),
     });
     return _completeDepositPayment(
       BarrelPoolResult.fromMap(Map<String, dynamic>.from(response.data)),
@@ -192,6 +198,7 @@ class BarrelPoolService {
     String pickupBorough = '',
     bool useWalletBalance = false,
     DateTime? pickupDateTime,
+    required MarketplaceDisclosureAcceptance marketplaceAcceptance,
   }) async {
     final response = await _functions
         .httpsCallable('requestJoinBarrelPool')
@@ -214,6 +221,7 @@ class BarrelPoolService {
           'pickupBorough': pickupBorough,
           if (pickupDateTime != null)
             'pickupDateTime': pickupDateTime.toUtc().toIso8601String(),
+          'marketplaceDisclosure': marketplaceAcceptance.toJson(),
         });
     return _completeDepositPayment(
       BarrelPoolResult.fromMap(Map<String, dynamic>.from(response.data)),

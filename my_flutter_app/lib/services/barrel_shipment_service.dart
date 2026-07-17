@@ -6,6 +6,8 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../models/barrel_shipment.dart';
 import '../models/barrel_order.dart';
+import '../models/marketplace_disclosure_acceptance.dart';
+import 'payment_flow_safety.dart';
 import 'stripe_config_service.dart';
 
 class BarrelAddressSuggestion {
@@ -86,6 +88,7 @@ class BarrelShipmentService {
     required String pickupBorough,
     required DateTime? pickupDateTime,
     bool useWalletBalance = false,
+    required MarketplaceDisclosureAcceptance marketplaceAcceptance,
   }) async {
     final callable = _functions.httpsCallable(
       'createBarrelShipmentPaymentIntent',
@@ -101,6 +104,7 @@ class BarrelShipmentService {
       'pickupAddress': pickupAddress,
       'pickupBorough': pickupBorough,
       'useWalletBalance': useWalletBalance,
+      'marketplaceDisclosure': marketplaceAcceptance.toJson(),
       if (pickupDateTime != null)
         'pickupDateTime': pickupDateTime.toUtc().toIso8601String(),
     });
@@ -122,28 +126,26 @@ class BarrelShipmentService {
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
           paymentIntentClientSecret: clientSecret,
-          merchantDisplayName: 'Services',
-          style: ThemeMode.system,
+          merchantDisplayName: 'Laawol',
+          style: ThemeMode.light,
         ),
       );
 
-      try {
-        await Stripe.instance.presentPaymentSheet();
-        await _refreshAuthTokenIfAvailable();
-        await _functions.httpsCallable('completeBarrelShipmentPayment').call({
-          'shipmentId': shipmentId,
-        });
-      } catch (_) {
-        try {
+      await completePaymentFlowSafely(
+        presentPaymentSheet: Stripe.instance.presentPaymentSheet,
+        completeTransaction: () async {
+          await _refreshAuthTokenIfAvailable();
+          await _functions.httpsCallable('completeBarrelShipmentPayment').call({
+            'shipmentId': shipmentId,
+          });
+        },
+        cancelPendingTransaction: () async {
           await _refreshAuthTokenIfAvailable();
           await _functions.httpsCallable('cancelPendingBarrelShipment').call({
             'shipmentId': shipmentId,
           });
-        } catch (_) {
-          // Keep the original Stripe error for the customer-facing message.
-        }
-        rethrow;
-      }
+        },
+      );
     }
 
     final snapshot = await _firestore
@@ -161,6 +163,7 @@ class BarrelShipmentService {
     String? pickupBorough,
     DateTime? pickupDateTime,
     bool useWalletBalance = false,
+    required MarketplaceDisclosureAcceptance marketplaceAcceptance,
   }) async {
     final callable = _functions.httpsCallable('createBarrelOrderPaymentIntent');
     late final HttpsCallableResult<Map<String, dynamic>> response;
@@ -172,6 +175,7 @@ class BarrelShipmentService {
         'pickupRequested': ?pickupRequested,
         'pickupAddress': ?pickupAddress,
         'pickupBorough': ?pickupBorough,
+        'marketplaceDisclosure': marketplaceAcceptance.toJson(),
         if (pickupDateTime != null)
           'pickupDateTime': pickupDateTime.toUtc().toIso8601String(),
       });
@@ -186,6 +190,7 @@ class BarrelShipmentService {
             pickupBorough: pickupBorough,
             pickupDateTime: pickupDateTime,
             useWalletBalance: useWalletBalance,
+            marketplaceAcceptance: marketplaceAcceptance,
           );
           return BarrelOrderResult(
             orderId: shipment.orderId ?? shipment.id,
@@ -222,28 +227,26 @@ class BarrelShipmentService {
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
           paymentIntentClientSecret: clientSecret,
-          merchantDisplayName: 'Services',
-          style: ThemeMode.system,
+          merchantDisplayName: 'Laawol',
+          style: ThemeMode.light,
         ),
       );
 
-      try {
-        await Stripe.instance.presentPaymentSheet();
-        await _refreshAuthTokenIfAvailable();
-        await _functions.httpsCallable('completeBarrelOrderPayment').call({
-          'orderId': orderId,
-        });
-      } catch (_) {
-        try {
+      await completePaymentFlowSafely(
+        presentPaymentSheet: Stripe.instance.presentPaymentSheet,
+        completeTransaction: () async {
+          await _refreshAuthTokenIfAvailable();
+          await _functions.httpsCallable('completeBarrelOrderPayment').call({
+            'orderId': orderId,
+          });
+        },
+        cancelPendingTransaction: () async {
           await _refreshAuthTokenIfAvailable();
           await _functions.httpsCallable('cancelPendingBarrelOrder').call({
             'orderId': orderId,
           });
-        } catch (_) {
-          // Keep the original Stripe error for the customer-facing message.
-        }
-        rethrow;
-      }
+        },
+      );
     }
 
     final snapshots = await Future.wait(
@@ -272,6 +275,7 @@ class BarrelShipmentService {
     required String? pickupBorough,
     required DateTime? pickupDateTime,
     required bool useWalletBalance,
+    required MarketplaceDisclosureAcceptance marketplaceAcceptance,
   }) {
     final resolvedPickupRequested = pickupRequested ?? line.pickupRequested;
     return payForShipment(
@@ -296,6 +300,7 @@ class BarrelShipmentService {
           ? (line.pickupDateTime ?? pickupDateTime)
           : null,
       useWalletBalance: useWalletBalance,
+      marketplaceAcceptance: marketplaceAcceptance,
     );
   }
 
@@ -330,18 +335,75 @@ class BarrelShipmentService {
     required String shipmentId,
     required String destinationCountryId,
     required String businessId,
+    required MarketplaceDisclosureAcceptance marketplaceAcceptance,
   }) async {
-    final response = await _functions
-        .httpsCallable('changeBarrelShipmentDestination')
-        .call<Map<String, dynamic>>({
-          'shipmentId': shipmentId,
-          'destinationCountryId': destinationCountryId,
-          'businessId': businessId,
-        });
-    return BarrelDestinationChangeResult.fromMap(
+    final changeRequestId = _firestore
+        .collection('barrelDestinationChanges')
+        .doc()
+        .id;
+    late final HttpsCallableResult<Map<String, dynamic>> response;
+    try {
+      response = await _functions
+          .httpsCallable('changeBarrelShipmentDestination')
+          .call<Map<String, dynamic>>({
+            'shipmentId': shipmentId,
+            'destinationCountryId': destinationCountryId,
+            'businessId': businessId,
+            'changeRequestId': changeRequestId,
+            'marketplaceDisclosure': marketplaceAcceptance.toJson(),
+          });
+    } on FirebaseFunctionsException catch (error) {
+      if (error.code == 'failed-precondition' &&
+          (error.message ?? '').contains('needs support')) {
+        throw const BarrelDestinationRequiresSupportException();
+      }
+      rethrow;
+    }
+    final result = BarrelDestinationChangeResult.fromMap(
       Map<String, dynamic>.from(response.data),
     );
+    if (!result.requiresPayment) return result;
+    if (result.clientSecret.isEmpty || result.changeRequestId.isEmpty) {
+      throw const BarrelDestinationPaymentInitializationException();
+    }
+
+    await StripeConfigService.ensureConfigured();
+    await Stripe.instance.initPaymentSheet(
+      paymentSheetParameters: SetupPaymentSheetParameters(
+        paymentIntentClientSecret: result.clientSecret,
+        merchantDisplayName: result.businessName.isEmpty
+            ? 'Laawol'
+            : result.businessName,
+        style: ThemeMode.light,
+      ),
+    );
+    await completePaymentFlowSafely(
+      presentPaymentSheet: Stripe.instance.presentPaymentSheet,
+      completeTransaction: () async {
+        await _functions.httpsCallable('completeBarrelDestinationChange').call({
+          'shipmentId': shipmentId,
+          'changeRequestId': result.changeRequestId,
+        });
+      },
+      cancelPendingTransaction: () async {
+        await _functions
+            .httpsCallable('cancelPendingBarrelDestinationChange')
+            .call({
+              'shipmentId': shipmentId,
+              'changeRequestId': result.changeRequestId,
+            });
+      },
+    );
+    return result;
   }
+}
+
+class BarrelDestinationPaymentInitializationException implements Exception {
+  const BarrelDestinationPaymentInitializationException();
+}
+
+class BarrelDestinationRequiresSupportException implements Exception {
+  const BarrelDestinationRequiresSupportException();
 }
 
 class BarrelDestinationChangeResult {
@@ -352,6 +414,10 @@ class BarrelDestinationChangeResult {
     required this.amountDue,
     required this.walletCredit,
     required this.simulatedPayment,
+    required this.requiresPayment,
+    required this.changeRequestId,
+    required this.clientSecret,
+    required this.businessName,
   });
 
   final String shipmentId;
@@ -360,6 +426,10 @@ class BarrelDestinationChangeResult {
   final double amountDue;
   final double walletCredit;
   final bool simulatedPayment;
+  final bool requiresPayment;
+  final String changeRequestId;
+  final String clientSecret;
+  final String businessName;
 
   factory BarrelDestinationChangeResult.fromMap(Map<String, dynamic> data) {
     return BarrelDestinationChangeResult(
@@ -369,6 +439,10 @@ class BarrelDestinationChangeResult {
       amountDue: (data['amountDue'] as num?)?.toDouble() ?? 0,
       walletCredit: (data['walletCredit'] as num?)?.toDouble() ?? 0,
       simulatedPayment: data['simulatedPayment'] == true,
+      requiresPayment: data['requiresPayment'] == true,
+      changeRequestId: (data['changeRequestId'] as String?) ?? '',
+      clientSecret: (data['clientSecret'] as String?) ?? '',
+      businessName: (data['businessName'] as String?) ?? '',
     );
   }
 }

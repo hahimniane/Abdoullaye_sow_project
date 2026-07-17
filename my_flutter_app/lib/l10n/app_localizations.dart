@@ -542,6 +542,12 @@ abstract class AppLocalizations {
   /// **'Shipment saved. Tracking number: {trackingCode}'**
   String shipmentSavedWithTracking(Object trackingCode);
 
+  /// No description provided for @shipmentSavedReceiptUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipment saved. Tracking number: {trackingCode}. The receipt could not be opened, but your payment and shipment are safe.'**
+  String shipmentSavedReceiptUnavailable(Object trackingCode);
+
   /// No description provided for @failedToSaveShipment.
   ///
   /// In en, this message translates to:
@@ -1129,6 +1135,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Terms of Service'**
   String get termsOfService;
+
+  /// No description provided for @legalAndPrivacy.
+  ///
+  /// In en, this message translates to:
+  /// **'Legal & privacy'**
+  String get legalAndPrivacy;
+
+  /// No description provided for @privacyPolicySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How Laawol handles your information'**
+  String get privacyPolicySubtitle;
+
+  /// No description provided for @termsOfServiceSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rules for using the Laawol platform'**
+  String get termsOfServiceSubtitle;
+
+  /// No description provided for @openLegalLinkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'This page could not be opened. Please try again.'**
+  String get openLegalLinkFailed;
+
+  /// No description provided for @accountManagement.
+  ///
+  /// In en, this message translates to:
+  /// **'Account management'**
+  String get accountManagement;
+
+  /// No description provided for @deleteAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete account'**
+  String get deleteAccount;
+
+  /// No description provided for @deleteAccountSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Permanently delete your account and personal data'**
+  String get deleteAccountSubtitle;
+
+  /// No description provided for @deleteAccountTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete your Laawol account?'**
+  String get deleteAccountTitle;
+
+  /// No description provided for @deleteAccountExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'This starts permanent account deletion. You will be signed out, and access to your account will end.'**
+  String get deleteAccountExplanation;
+
+  /// No description provided for @deleteAccountRetentionNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed payment and service records may be retained when required for accounting, refunds, disputes, fraud prevention, or law. All other associated personal data will be deleted or anonymized within 30 days.'**
+  String get deleteAccountRetentionNotice;
+
+  /// No description provided for @enterPasswordToDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your password to confirm'**
+  String get enterPasswordToDelete;
+
+  /// No description provided for @confirmDeleteAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Request deletion'**
+  String get confirmDeleteAccount;
+
+  /// No description provided for @accountDeletionRequestedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Deletion requested'**
+  String get accountDeletionRequestedTitle;
+
+  /// No description provided for @accountDeletionRequestedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your request was received. Laawol will delete or anonymize eligible account data within 30 days. You are now signed out.'**
+  String get accountDeletionRequestedMessage;
+
+  /// No description provided for @accountDeletionWrongPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'The password is incorrect.'**
+  String get accountDeletionWrongPassword;
+
+  /// No description provided for @accountDeletionRecentLoginRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please sign in again, then retry account deletion.'**
+  String get accountDeletionRecentLoginRequired;
+
+  /// No description provided for @accountDeletionAdminBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'A platform administrator account must be removed by another super admin.'**
+  String get accountDeletionAdminBlocked;
+
+  /// No description provided for @accountDeletionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not start account deletion. Please try again or contact support.'**
+  String get accountDeletionFailed;
 
   /// No description provided for @manageCars.
   ///
@@ -1981,24 +2095,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Set as cover'**
   String get setAsCover;
-
-  /// No description provided for @themeLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Appearance'**
-  String get themeLabel;
-
-  /// No description provided for @darkMode.
-  ///
-  /// In en, this message translates to:
-  /// **'Dark mode'**
-  String get darkMode;
-
-  /// No description provided for @lightMode.
-  ///
-  /// In en, this message translates to:
-  /// **'Light mode'**
-  String get lightMode;
 
   /// No description provided for @reserved.
   ///
@@ -3967,6 +4063,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{amount} will be credited to your wallet.'**
   String destinationChangeCredit(Object amount);
+
+  /// No description provided for @destinationChangePaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipment updated. {amount} difference paid.'**
+  String destinationChangePaid(Object amount);
+
+  /// No description provided for @destinationChangeCredited.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipment updated. {amount} credited to your wallet.'**
+  String destinationChangeCredited(Object amount);
+
+  /// No description provided for @shipmentDestinationUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipment destination updated.'**
+  String get shipmentDestinationUpdated;
+
+  /// No description provided for @destinationPaymentInitializationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The destination payment could not be initialized. Please try again.'**
+  String get destinationPaymentInitializationFailed;
+
+  /// No description provided for @paidShipmentDestinationChangeRequiresSupport.
+  ///
+  /// In en, this message translates to:
+  /// **'This shipment has already been paid out to the business. Contact Laawol support to change its destination safely.'**
+  String get paidShipmentDestinationChangeRequiresSupport;
 
   /// No description provided for @newRouteValue.
   ///
@@ -6738,6 +6864,66 @@ abstract class AppLocalizations {
   /// **'Add a destination'**
   String get addDestination;
 
+  /// No description provided for @destinationsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Destinations'**
+  String get destinationsTitle;
+
+  /// No description provided for @barrelDestinationStartSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Start with where the barrels are going and how many you are sending.'**
+  String get barrelDestinationStartSummary;
+
+  /// No description provided for @barrelDestinationSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{barrelCount, plural, =1{1 barrel} other{{barrelCount} barrels}} to {destinationCount, plural, =1{1 destination} other{{destinationCount} destinations}}.'**
+  String barrelDestinationSummary(int barrelCount, int destinationCount);
+
+  /// No description provided for @addAnotherDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Add another destination'**
+  String get addAnotherDestination;
+
+  /// No description provided for @editDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit destination'**
+  String get editDestination;
+
+  /// No description provided for @destinationNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Destination {number}'**
+  String destinationNumber(int number);
+
+  /// No description provided for @saveDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Save destination'**
+  String get saveDestination;
+
+  /// No description provided for @addToOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to order'**
+  String get addToOrder;
+
+  /// No description provided for @holdPerDayDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =1{1-day hold} other{{days}-day hold}} at {amount} per day'**
+  String holdPerDayDescription(int days, Object amount);
+
+  /// No description provided for @holdFlatFeeDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Flat hold fee for up to {days} days'**
+  String holdFlatFeeDescription(int days);
+
   /// No description provided for @pleaseChooseBusiness.
   ///
   /// In en, this message translates to:
@@ -8081,6 +8267,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Balance & refunds'**
   String get hubWalletSubtitle;
+
+  /// No description provided for @destinationPickupDetailsRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit each destination and add its pickup address, date, and time.'**
+  String get destinationPickupDetailsRequired;
+
+  /// No description provided for @destinationPickupDetailsHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit each destination with its pickup place and date.'**
+  String get destinationPickupDetailsHelp;
+
+  /// No description provided for @noShowHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'No-show history'**
+  String get noShowHistory;
+
+  /// No description provided for @noShowHistoryMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'If you do not return by the hold date and the business marks that you did not come, the deposit may be forfeited and this outcome may be visible to car-selling businesses.'**
+  String get noShowHistoryMessage;
+
+  /// No description provided for @holdUntil.
+  ///
+  /// In en, this message translates to:
+  /// **'Hold until'**
+  String get holdUntil;
+
+  /// No description provided for @marketplaceResponsibilityTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Understand who provides this service'**
+  String get marketplaceResponsibilityTitle;
+
+  /// No description provided for @marketplaceProviderResponsibilityBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{providerNames} is an independent business responsible for the item or service, including fulfillment, condition, delivery timing, and performance.'**
+  String marketplaceProviderResponsibilityBody(Object providerNames);
+
+  /// No description provided for @marketplacePaymentFlowBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol helps you find businesses, collects and processes your payment, may deduct a disclosed platform fee, and may transfer the business payout later. Laawol can assist with tracking, support, refunds, and disputes.'**
+  String get marketplacePaymentFlowBody;
+
+  /// No description provided for @marketplaceNoGuaranteeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol is not the seller, carrier, or service provider and does not guarantee the business’s delivery date or performance. This does not limit rights that cannot legally be waived.'**
+  String get marketplaceNoGuaranteeBody;
+
+  /// No description provided for @marketplaceResponsibilityCheckbox.
+  ///
+  /// In en, this message translates to:
+  /// **'I understand the business’s responsibility and want to continue.'**
+  String get marketplaceResponsibilityCheckbox;
+
+  /// No description provided for @selectedBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected business'**
+  String get selectedBusiness;
+
+  /// No description provided for @accountLegalAcceptance.
+  ///
+  /// In en, this message translates to:
+  /// **'I agree to Laawol’s Terms of Service and Privacy Policy, including its marketplace role.'**
+  String get accountLegalAcceptance;
+
+  /// No description provided for @accountLegalAcceptanceRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please accept the Terms of Service and Privacy Policy to continue.'**
+  String get accountLegalAcceptanceRequired;
+
+  /// No description provided for @businessResponsibilityAcceptance.
+  ///
+  /// In en, this message translates to:
+  /// **'I understand that my business is independently responsible for its listings, prices, goods, services, fulfillment, delivery timing, permits, and customer obligations.'**
+  String get businessResponsibilityAcceptance;
+
+  /// No description provided for @businessResponsibilityRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm the business responsibility statement to submit your application.'**
+  String get businessResponsibilityRequired;
+
+  /// No description provided for @marketplaceBalancePaymentSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance payment'**
+  String get marketplaceBalancePaymentSummary;
+
+  /// No description provided for @marketplaceDestinationChangeSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid destination change'**
+  String get marketplaceDestinationChangeSummary;
 }
 
 class _AppLocalizationsDelegate

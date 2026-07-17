@@ -111,6 +111,12 @@ Add future project conventions and repeated architectural decisions here.
   service revenue should be paid directly to the responsible business through
   Stripe Connect transfers after payment success. Do not design escrow or
   delivery-gated payout flows unless the user explicitly changes this rule.
+- Treat Laawol as a marketplace/payment facilitator and each registered
+  business as the independent provider responsible for listings, goods,
+  fulfillment, delivery timing, and performance. Account creation, business
+  applications, and every paid customer flow must use versioned bilingual
+  acceptance contracts. Production payment callables must reject missing or
+  stale acceptance and store canonical user/action/locale/timestamp evidence.
 - Async button/tap actions must use shared loading-state patterns where
   practical, show visible progress on all platforms, prevent double submits,
   and clear the loading flag on success, error, and cancellation.
@@ -129,7 +135,23 @@ Add future project conventions and repeated architectural decisions here.
   versioned settlement, and fulfillment/payout stays locked until that
   settlement is complete. Preserve estimated and final amounts separately;
   never overwrite the estimate or treat operational status as payment status.
+- Stripe payment-sheet flows must separate three phases: create a pending
+  server record, present the sheet, then confirm completion. Cancel the pending
+  record only when sheet presentation fails; never cancel after presentation
+  succeeds merely because the confirmation request failed. The webhook and
+  stale-payment reconciler must be able to finish that charged transaction.
+- Car deposits and full purchases must lock the car document in the same
+  Firestore transaction that creates the pending purchase. Completion and
+  cancellation may update the car only when `reservedPurchaseId` still matches.
+- A paid barrel destination increase is its own Stripe payment type with a
+  stable request ID and reconciliation route. Compute the new shipping total as
+  the per-barrel rate multiplied by shipment quantity; preserve the old
+  destination until the adjustment payment succeeds.
 - Store rebuilt-title disclosure as nullable `isRebuiltTitle` for legacy
   compatibility, require a real boolean on new vehicle listings, and preserve
   null as an explicit unknown display state. Never default missing values to
   false or infer a clean title.
+- The current release is light-only: lock Flutter, Stripe PaymentSheet, iOS
+  `UIUserInterfaceStyle`, and Android night resources to light, and do not read
+  the legacy `theme_mode` preference. Reintroducing dark mode requires an
+  explicitly versioned preference and complete UI/native/payment QA.

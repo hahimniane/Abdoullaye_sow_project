@@ -5,7 +5,17 @@ name: Customer service hub renders in French
 - extendedWaitUntil:
     visible: "(?s).*E2E Customer.*"
     timeout: 30000
-- tapOn: "Settings"
+- runFlow:
+    when:
+      visible: "Paramètres"
+    commands:
+      - tapOn: "Paramètres"
+      - tapOn: "Français"
+- runFlow:
+    when:
+      visible: "Settings"
+    commands:
+      - tapOn: "Settings"
 - extendedWaitUntil:
     visible: "(?s).*Favorite cars.*"
     timeout: 20000
@@ -16,3 +26,20 @@ name: Customer service hub renders in French
 - assertVisible: "(?s).*Fret.*"
 - assertVisible: "(?s).*Transporter une voiture.*"
 - takeScreenshot: "output/ios-e2e/services-hub-fr"
+- tapOn: "(?s).*Envoyer un baril.*"
+- extendedWaitUntil:
+    visible: "(?s).*Envoyer des barils.*"
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: "Ajouter une destination"
+    direction: DOWN
+- assertVisible: "Destinations"
+- tapOn: "Ajouter une destination"
+- assertVisible: "Destination 1"
+- scrollUntilVisible:
+    element:
+      text: "Ajouter à la commande"
+    direction: DOWN
+- assertVisible: "Ajouter à la commande"
+- takeScreenshot: "output/ios-e2e/send-barrel-fr"

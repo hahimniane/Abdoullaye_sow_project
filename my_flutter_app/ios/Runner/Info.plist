@@ -29,7 +29,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>We use the camera to scan VIN numbers and capture car photos.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Use Face ID to unlock your saved Veyra session.</string>
+	<string>Use Face ID to unlock your saved Laawol session.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>We use your location to help auto-fill pickup and delivery addresses for your transport requests.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
@@ -38,6 +38,8 @@
 	<string>We add selected car images to your library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>We need access to your photo library to choose car images.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -67,6 +69,8 @@
 	<string>Main</string>
 	<key>UIStatusBarHidden</key>
 	<false/>
+	<key>UIUserInterfaceStyle</key>
+	<string>Light</string>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

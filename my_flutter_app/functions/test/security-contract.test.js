@@ -12,6 +12,15 @@ const storageRulesSource = fs.readFileSync(
     "utf8",
 );
 
+function exportedFunctionSource(name, nextName) {
+  const start = indexSource.indexOf(`exports.${name} =`);
+  const end = nextName ?
+    indexSource.indexOf(`exports.${nextName} =`, start) :
+    indexSource.length;
+  assert.ok(start >= 0 && end > start, `missing function source for ${name}`);
+  return indexSource.slice(start, end);
+}
+
 test("deployed callables enforce App Check", () => {
   assert.doesNotMatch(indexSource, /enforceAppCheck:\s*false/);
   assert.doesNotMatch(indexSource, /onCall\(async/);
@@ -68,12 +77,91 @@ test("sign-in resolution does not disclose phone alias emails", () => {
   assert.doesNotMatch(resolver, /normalizePhoneAlias/);
 });
 
-test("Firestore sentinels use the supported modular Admin SDK export", () => {
+test("Firestore values use the supported modular Admin SDK export", () => {
   assert.match(
       indexSource,
-      /FieldValue:\s*FirestoreFieldValue[\s\S]*firebase-admin\/firestore/,
+      /FieldValue:\s*FirestoreFieldValue,[\s\S]*firebase-admin\/firestore/,
   );
+  assert.match(indexSource, /Timestamp:\s*FirestoreTimestamp,/);
   assert.doesNotMatch(indexSource, /admin\.firestore\.FieldValue/);
+  assert.doesNotMatch(indexSource, /admin\.firestore\.Timestamp/);
+});
+
+test("payment cancellation never cancels a successful or in-flight charge",
+    () => {
+      const cancellations = [
+        ["cancelPendingParkingReservation", "createStaffUser"],
+        ["cancelPendingBarrelPoolDeposit", "decideBarrelPoolJoin"],
+        ["cancelPendingBarrelShipment", "completeBarrelOrderPayment"],
+        ["cancelPendingBarrelOrder", "createFreightShipmentPaymentIntent"],
+        ["cancelPendingFreightShipment", "confirmFreightShipmentWeight"],
+        [
+          "cancelPendingBarrelDestinationChange",
+          "createCarDepositPaymentIntent",
+        ],
+        ["cancelPendingCarPurchase", "completeCarDepositReservation"],
+      ];
+      for (const [name, nextName] of cancellations) {
+        const source = exportedFunctionSource(name, nextName);
+        assert.match(source, /retrieveStripePaymentIntent/);
+        assert.match(source, /intent\.status === "succeeded"/);
+        assert.match(source, /intent\.status === "processing"/);
+        assert.match(source, /intent\.status === "requires_capture"/);
+        assert.match(source, /cancelStripePaymentIntent/);
+        assert.match(source, /recoveredPayment:\s*true/);
+      }
+    });
+
+test("payment completions reject simulated IDs outside simulation", () => {
+  const completions = [
+    ["completeParkingReservation", "cancelPendingParkingReservation"],
+    ["completeBarrelPoolDepositPayment", "cancelPendingBarrelPoolDeposit"],
+    ["completeBarrelPoolBalancePayment", "markBarrelPoolBalanceCollected"],
+    ["completeBarrelShipmentPayment", "cancelPendingBarrelShipment"],
+    ["completeBarrelOrderPayment", "cancelPendingBarrelOrder"],
+    ["completeFreightShipmentPayment", "cancelPendingFreightShipment"],
+    ["completeFreightSettlementPayment", "retryFreightSettlementRefunds"],
+    ["completeBarrelDestinationChange", "cancelPendingBarrelDestinationChange"],
+    ["completeCarPurchase", "cancelPendingCarPurchase"],
+    ["completeCarDepositReservation", "markPaidHoldSold"],
+    ["completePaidHoldExtensionPayment", "expirePaidCarHolds"],
+  ];
+  for (const [name, nextName] of completions) {
+    const source = exportedFunctionSource(name, nextName);
+    assert.match(source, /SIMULATE_PAYMENTS/, name);
+    assert.match(source, /startsWith\("simulated_"\)/, name);
+    assert.match(source, /Simulated [^"]+ payments? (?:are|is) disabled/, name);
+    assert.doesNotMatch(
+        source,
+        /SIMULATE_PAYMENTS\s*\|\|[\s\S]{0,120}startsWith\("simulated_"\)/,
+        name,
+    );
+  }
+});
+
+test("paid destination changes cannot redirect completed payouts", () => {
+  const changeSource = exportedFunctionSource(
+      "changeBarrelShipmentDestination",
+      "completeBarrelDestinationChange",
+  );
+  assert.match(changeSource, /requireBarrelDestinationPayoutSafe/);
+  assert.match(changeSource, /payoutStatus:\s*"destination_change_pending"/);
+  assert.match(changeSource, /previousPayoutStatus/);
+  assert.match(changeSource, /businessPayoutCents/);
+  assert.match(changeSource, /platformFeeCents/);
+
+  const completionSource = exportedFunctionSource(
+      "completeBarrelDestinationChange",
+      "cancelPendingBarrelDestinationChange",
+  );
+  assert.match(completionSource, /finalizePaidBarrelDestinationChange/);
+
+  const cancellationSource = exportedFunctionSource(
+      "cancelPendingBarrelDestinationChange",
+      "createCarDepositPaymentIntent",
+  );
+  assert.match(cancellationSource, /finalizePaidBarrelDestinationChange/);
+  assert.match(cancellationSource, /previousPayoutStatus/);
 });
 
 test("the Functions emulator cannot send outbound push notifications", () => {

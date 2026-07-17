@@ -23,6 +23,7 @@ import '../widgets/destination_country_field.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/support_entry_button.dart';
 import '../theme/app_colors.dart';
+import '../widgets/marketplace_transaction_disclosure.dart';
 
 class BarrelShipmentDetailsScreen extends StatefulWidget {
   const BarrelShipmentDetailsScreen({super.key, required this.shipment});
@@ -563,6 +564,20 @@ class _BarrelShipmentDetailsScreenState
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
+    final marketplaceAcceptance = destinationChanged
+        ? await confirmMarketplaceTransaction(
+            context,
+            providerNames:
+                _selectedDestinationOptionDraft?.businessName ??
+                _currentShipment.businessName,
+            transactionSummary: l10n.marketplaceDestinationChangeSummary,
+          )
+        : null;
+    if (destinationChanged && (marketplaceAcceptance == null || !mounted)) {
+      setState(() => _isSaving = false);
+      return;
+    }
+
     try {
       await FirebaseFirestore.instance
           .collection('barrelShipments')
@@ -575,6 +590,7 @@ class _BarrelShipmentDetailsScreenState
           shipmentId: updatedShipment.id,
           destinationCountryId: destinationCountryId,
           businessId: _businessIdDraft ?? _currentShipment.businessId,
+          marketplaceAcceptance: marketplaceAcceptance!,
         );
       }
 
@@ -603,19 +619,29 @@ class _BarrelShipmentDetailsScreenState
       setState(() {
         _isSaving = false;
       });
-      showErrorSnackBar(context, l10n.failedToUpdateShipment(e));
+      showErrorSnackBar(context, switch (e) {
+        BarrelDestinationPaymentInitializationException() =>
+          l10n.destinationPaymentInitializationFailed,
+        BarrelDestinationRequiresSupportException() =>
+          l10n.paidShipmentDestinationChangeRequiresSupport,
+        _ => l10n.failedToUpdateShipment(e),
+      });
     }
   }
 
   String _destinationChangeMessage(BarrelDestinationChangeResult result) {
     final currency = NumberFormat.simpleCurrency();
     if (result.amountDue > 0) {
-      return 'Shipment updated. ${currency.format(result.amountDue)} difference paid.';
+      return AppLocalizations.of(
+        context,
+      )!.destinationChangePaid(currency.format(result.amountDue));
     }
     if (result.walletCredit > 0) {
-      return 'Shipment updated. ${currency.format(result.walletCredit)} credited to your wallet.';
+      return AppLocalizations.of(
+        context,
+      )!.destinationChangeCredited(currency.format(result.walletCredit));
     }
-    return 'Shipment destination updated.';
+    return AppLocalizations.of(context)!.shipmentDestinationUpdated;
   }
 
   Future<void> _reprintReceipt() async {

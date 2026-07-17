@@ -14,6 +14,7 @@ import '../services/business_service.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/support_entry_button.dart';
+import '../widgets/marketplace_transaction_disclosure.dart';
 
 class OpenBarrelsScreen extends StatefulWidget {
   const OpenBarrelsScreen({super.key});
@@ -283,8 +284,16 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
 
   Future<void> _payBalanceOrLeavePool(BarrelPool pool) async {
     if (pool.balancePaymentStatus == 'balance_due') {
+      final acceptance = await confirmMarketplaceTransaction(
+        context,
+        providerNames: pool.businessName,
+        transactionSummary: AppLocalizations.of(
+          context,
+        )!.marketplaceBalancePaymentSummary,
+      );
+      if (acceptance == null || !mounted) return;
       try {
-        await _service.payBalance(pool);
+        await _service.payBalance(pool, marketplaceAcceptance: acceptance);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(copy('Balance paid.', 'Solde payé.'))),
@@ -425,6 +434,14 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                 );
                 return;
               }
+              final marketplaceAcceptance = await confirmMarketplaceTransaction(
+                context,
+                providerNames: pool.businessName,
+                transactionSummary: AppLocalizations.of(
+                  context,
+                )!.hubSharedBarrels,
+              );
+              if (marketplaceAcceptance == null || !context.mounted) return;
               setSheetState(() => busy = true);
               try {
                 final result = await _service.requestJoin(
@@ -446,6 +463,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                       ? pickupBorough
                       : 'Office drop-off',
                   pickupDateTime: pickupRequested ? pickupDateTime : null,
+                  marketplaceAcceptance: marketplaceAcceptance,
                 );
                 if (!context.mounted || !mounted) return;
                 Navigator.pop(context);
@@ -783,6 +801,14 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                 );
                 return;
               }
+              final marketplaceAcceptance = await confirmMarketplaceTransaction(
+                context,
+                providerNames: selected.businessName,
+                transactionSummary: AppLocalizations.of(
+                  context,
+                )!.hubSharedBarrels,
+              );
+              if (marketplaceAcceptance == null || !context.mounted) return;
               setSheetState(() => busy = true);
               try {
                 final result = await _service.createPool(
@@ -806,6 +832,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                   pickupDateTime: pickupRequested ? pickupDateTime : null,
                   totalShares: totalShares,
                   sharesClaimed: sharesClaimed,
+                  marketplaceAcceptance: marketplaceAcceptance,
                 );
                 if (!context.mounted || !mounted) return;
                 Navigator.pop(context);

@@ -9,6 +9,7 @@ import '../services/business_service.dart';
 import '../services/freight_shipment_service.dart';
 import '../utils/phone_number_validator.dart';
 import '../utils/receiver_phone_rules.dart';
+import '../widgets/marketplace_transaction_disclosure.dart';
 
 /// Customer screen to send a parcel/box by freight, priced by weight,
 /// by air or sea. Search-first: find a business + destination, then book.
@@ -157,6 +158,12 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       _snack(l10n.enterParcelWeightKg);
       return;
     }
+    final marketplaceAcceptance = await confirmMarketplaceTransaction(
+      context,
+      providerNames: option.businessName,
+      transactionSummary: l10n.sendFreight,
+    );
+    if (marketplaceAcceptance == null || !mounted) return;
     setState(() => _busy = true);
     try {
       final shipment = await _freightService.payForFreight(
@@ -167,6 +174,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         businessId: option.businessId,
         mode: _mode,
         weightKg: _weightKg,
+        marketplaceAcceptance: marketplaceAcceptance,
       );
       if (!mounted) return;
       final code = shipment['trackingCode']?.toString() ?? '';

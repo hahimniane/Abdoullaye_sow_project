@@ -26,6 +26,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/async_action_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/marketplace_transaction_disclosure.dart';
 
 class ParkCarScreen extends StatefulWidget {
   const ParkCarScreen({super.key, this.parkingRepository});
@@ -436,6 +437,13 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
       return;
     }
 
+    final marketplaceAcceptance = await confirmMarketplaceTransaction(
+      context,
+      providerNames: option.businessName,
+      transactionSummary: l10n.parkingReviewHeading,
+    );
+    if (marketplaceAcceptance == null || !mounted) return;
+
     setState(() => _isLoading = true);
     try {
       final result = await _parkingRepository.reserveParking(
@@ -451,6 +459,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
         startDate: _selectedDateTime,
         endDate: _selectedEndDateTime,
         pickupRequested: _pickupRequested,
+        marketplaceAcceptance: marketplaceAcceptance,
       );
       if (!mounted) return;
       showSuccessSnackBar(
@@ -1204,7 +1213,10 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     );
   }
 
-  Widget _buildParkingWizardHeader(BuildContext context, AppLocalizations l10n) {
+  Widget _buildParkingWizardHeader(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) {
     final titles = [
       l10n.parkingStepWhereWhen,
       l10n.parkingStepChooseSpot,
@@ -1223,10 +1235,9 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
               Expanded(
                 child: Text(
                   l10n.customerParkingTitle,
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleLarge
-                      ?.copyWith(fontWeight: FontWeight.w900),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
                 ),
               ),
               const LanguageToggle(),
@@ -1388,10 +1399,9 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
       children: [
         Text(
           l10n.availableParkingBusinesses,
-          style: Theme.of(context)
-              .textTheme
-              .titleMedium
-              ?.copyWith(fontWeight: FontWeight.w900),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 10),
         for (final option in _parkingOptions) ...[
@@ -1521,10 +1531,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.manage_search),
-                  label: Text(
-                    l10n.decodeVin,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  label: Text(l10n.decodeVin, overflow: TextOverflow.ellipsis),
                 ),
               ),
               const SizedBox(width: 10),
@@ -1532,10 +1539,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                 child: OutlinedButton.icon(
                   onPressed: _isVinDecoding ? null : _scanVin,
                   icon: const Icon(Icons.document_scanner),
-                  label: Text(
-                    l10n.scanVin,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  label: Text(l10n.scanVin, overflow: TextOverflow.ellipsis),
                 ),
               ),
             ],
@@ -1556,10 +1560,11 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     DateFormat dateFormat,
   ) {
     final option = _selectedParkingOption;
-    final vehicle = [_selectedYear, _selectedMake, _selectedModel]
-        .whereType<String>()
-        .where((part) => part.isNotEmpty)
-        .join(' ');
+    final vehicle = [
+      _selectedYear,
+      _selectedMake,
+      _selectedModel,
+    ].whereType<String>().where((part) => part.isNotEmpty).join(' ');
     return _CustomerParkingPanel(
       title: l10n.parkingReviewHeading,
       subtitle: l10n.customerParkingSubtitle,
@@ -1633,7 +1638,10 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     );
   }
 
-  Widget _buildParkingWizardFooter(BuildContext context, AppLocalizations l10n) {
+  Widget _buildParkingWizardFooter(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) {
     Widget primary;
     switch (_customerStep) {
       case 0:
@@ -1646,8 +1654,9 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
         break;
       case 1:
         primary = FilledButton.icon(
-          onPressed:
-              _selectedParkingOption == null ? null : () => _goToParkingStep(2),
+          onPressed: _selectedParkingOption == null
+              ? null
+              : () => _goToParkingStep(2),
           icon: const Icon(Icons.arrow_forward),
           label: Text(l10n.parkingContinue),
         );

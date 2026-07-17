@@ -1,0 +1,57 @@
+appId: com.laawoldigital.app
+name: Customer joins an open shared barrel
+---
+- clearKeychain
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "(?s).*Sign in to your wallet.*"
+    timeout: 20000
+- tapOn: "(?s).*Sign in to your wallet.*"
+- extendedWaitUntil:
+    visible: "Account Login"
+    timeout: 20000
+- waitForAnimationToEnd
+- tapOn: "Email"
+- inputText: "e2e.customer@laawol.test"
+- tapOn: "Password"
+- inputText: "${E2E_TEST_PASSWORD}"
+- tapOn: "done"
+- scrollUntilVisible:
+    element:
+      text: "Sign In"
+    direction: DOWN
+- tapOn: "Sign In"
+- extendedWaitUntil:
+    visible: "(?s).*E2E Customer.*"
+    timeout: 30000
+- tapOn: "Shipping"
+- tapOn: "(?s).*Shared barrels.*"
+- extendedWaitUntil:
+    visible: "Request one share"
+    timeout: 30000
+- tapOn: "Request one share"
+- tapOn: "Sender name"
+- inputText: "E2E Customer"
+- tapOn: "Receiver name"
+- inputText: "Mamadou Bah"
+- tapOn: "Receiver phone"
+- inputText: "+224620000099"
+- tapOn: "What are you sending?"
+- inputText: "Clothes and shoes"
+- scrollUntilVisible:
+    element:
+      text: "I confirm the contents and estimated weight are accurate."
+    direction: DOWN
+- tapOn: "I confirm the contents and estimated weight are accurate."
+- tapOn: "I confirm there are no prohibited or unsafe items."
+- tapOn: "I understand one bad item can delay the shared barrel."
+- scrollUntilVisible:
+    element:
+      text: "Send request"
+    direction: DOWN
+- tapOn: "Send request"
+- extendedWaitUntil:
+    visible: "(?s).*Join request sent.*"
+    timeout: 30000
+- takeScreenshot: "output/ios-e2e/shared-barrel-joined"

@@ -84,6 +84,12 @@
       "trackingCode": {}
     }
   },
+  "shipmentSavedReceiptUnavailable": "Expédition enregistrée. Numéro de suivi : {trackingCode}. Le reçu n’a pas pu être ouvert, mais votre paiement et votre expédition sont bien enregistrés.",
+  "@shipmentSavedReceiptUnavailable": {
+    "placeholders": {
+      "trackingCode": {}
+    }
+  },
   "failedToSaveShipment": "Échec de l'enregistrement de l'expédition : {error}",
   "@failedToSaveShipment": {
     "placeholders": {
@@ -202,6 +208,24 @@
   "about": "À Propos",
   "privacyPolicy": "Politique de Confidentialité",
   "termsOfService": "Conditions d'Utilisation",
+  "legalAndPrivacy": "Mentions légales et confidentialité",
+  "privacyPolicySubtitle": "Comment Laawol traite vos informations",
+  "termsOfServiceSubtitle": "Règles d’utilisation de la plateforme Laawol",
+  "openLegalLinkFailed": "Impossible d’ouvrir cette page. Veuillez réessayer.",
+  "accountManagement": "Gestion du compte",
+  "deleteAccount": "Supprimer le compte",
+  "deleteAccountSubtitle": "Supprimer définitivement votre compte et vos données personnelles",
+  "deleteAccountTitle": "Supprimer votre compte Laawol ?",
+  "deleteAccountExplanation": "Cette action lance la suppression définitive du compte. Vous serez déconnecté et l’accès à votre compte prendra fin.",
+  "deleteAccountRetentionNotice": "Les dossiers de paiements et de services terminés peuvent être conservés lorsque la comptabilité, les remboursements, les litiges, la prévention de la fraude ou la loi l’exigent. Toutes les autres données personnelles associées seront supprimées ou anonymisées sous 30 jours.",
+  "enterPasswordToDelete": "Saisissez votre mot de passe pour confirmer",
+  "confirmDeleteAccount": "Demander la suppression",
+  "accountDeletionRequestedTitle": "Suppression demandée",
+  "accountDeletionRequestedMessage": "Votre demande a été reçue. Laawol supprimera ou anonymisera les données admissibles du compte sous 30 jours. Vous êtes maintenant déconnecté.",
+  "accountDeletionWrongPassword": "Le mot de passe est incorrect.",
+  "accountDeletionRecentLoginRequired": "Reconnectez-vous, puis réessayez de supprimer le compte.",
+  "accountDeletionAdminBlocked": "Le compte d’un administrateur de la plateforme doit être supprimé par un autre super administrateur.",
+  "accountDeletionFailed": "Impossible de lancer la suppression du compte. Réessayez ou contactez l’assistance.",
   "manageCars": "Gérer les Voitures",
   "recentActivity": "Activité récente",
   "filterAll": "Tous",
@@ -411,9 +435,6 @@
   "addImagesPrompt": "Veuillez ajouter au moins une image.",
   "coverLabel": "Couverture",
   "setAsCover": "Définir comme couverture",
-  "themeLabel": "Apparence",
-  "darkMode": "Mode sombre",
-  "lightMode": "Mode clair",
   "reserved": "Réservé",
   "reserveWithDeposit": "Réserver avec acompte",
   "reserveWithPaidHold": "Réserver avec retenue payante",
@@ -890,6 +911,21 @@
       "amount": {}
     }
   },
+  "destinationChangePaid": "Expédition mise à jour. Différence de {amount} payée.",
+  "@destinationChangePaid": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "destinationChangeCredited": "Expédition mise à jour. {amount} crédité dans votre portefeuille.",
+  "@destinationChangeCredited": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "shipmentDestinationUpdated": "Destination de l’expédition mise à jour.",
+  "destinationPaymentInitializationFailed": "Le paiement du changement de destination n’a pas pu être initialisé. Veuillez réessayer.",
+  "paidShipmentDestinationChangeRequiresSupport": "Cette expédition a déjà été versée à l’entreprise. Contactez l’assistance Laawol pour modifier sa destination en toute sécurité.",
   "newRouteValue": "{business} vers {country}",
   "@newRouteValue": {
     "placeholders": {
@@ -1604,6 +1640,38 @@
   "whereAreBarrelsGoing": "Où vont ces barils ?",
   "addDestinationInstruction": "Ajoutez une destination — pays, entreprise, destinataire et nombre de barils envoyés.",
   "addDestination": "Ajouter une destination",
+  "destinationsTitle": "Destinations",
+  "barrelDestinationStartSummary": "Commencez par indiquer la destination des barils et le nombre envoyé.",
+  "barrelDestinationSummary": "{barrelCount, plural, =1{1 baril} other{{barrelCount} barils}} vers {destinationCount, plural, =1{1 destination} other{{destinationCount} destinations}}.",
+  "@barrelDestinationSummary": {
+    "placeholders": {
+      "barrelCount": {"type": "int"},
+      "destinationCount": {"type": "int"}
+    }
+  },
+  "addAnotherDestination": "Ajouter une autre destination",
+  "editDestination": "Modifier la destination",
+  "destinationNumber": "Destination {number}",
+  "@destinationNumber": {
+    "placeholders": {
+      "number": {"type": "int"}
+    }
+  },
+  "saveDestination": "Enregistrer la destination",
+  "addToOrder": "Ajouter à la commande",
+  "holdPerDayDescription": "{days, plural, =1{Maintien pendant 1 jour} other{Maintien pendant {days} jours}} à {amount} par jour",
+  "@holdPerDayDescription": {
+    "placeholders": {
+      "days": {"type": "int"},
+      "amount": {}
+    }
+  },
+  "holdFlatFeeDescription": "Frais fixes de maintien jusqu’à {days} jours",
+  "@holdFlatFeeDescription": {
+    "placeholders": {
+      "days": {"type": "int"}
+    }
+  },
   "pleaseChooseBusiness": "Veuillez choisir une entreprise",
   "originalEstimatedCost": "Coût estimé initial",
   "walletCredit": "Crédit du portefeuille",
@@ -1860,5 +1928,23 @@
   "hubParkCarSubtitle": "Stocker auprès d’une entreprise",
   "hubActivitySubtitle": "Vos commandes, expéditions et votre portefeuille.",
   "hubOrdersSubtitle": "Voitures, barils, fret et plus",
-  "hubWalletSubtitle": "Solde et remboursements"
+  "hubWalletSubtitle": "Solde et remboursements",
+  "destinationPickupDetailsRequired": "Modifiez chaque destination et ajoutez son adresse, sa date et son heure de ramassage.",
+  "destinationPickupDetailsHelp": "Modifiez chaque destination avec son lieu et sa date de ramassage.",
+  "noShowHistory": "Historique des absences",
+  "noShowHistoryMessage": "Si vous ne revenez pas avant la date de fin de réservation et que l’entreprise indique que vous ne vous êtes pas présenté, l’acompte peut être perdu et ce résultat peut être visible par les entreprises qui vendent des voitures.",
+  "holdUntil": "Réserver jusqu’au",
+  "marketplaceResponsibilityTitle": "Comprendre qui fournit ce service",
+  "marketplaceProviderResponsibilityBody": "{providerNames} est une entreprise indépendante responsable du bien ou du service, notamment de son exécution, de son état, du délai de livraison et de la qualité de sa prestation.",
+  "@marketplaceProviderResponsibilityBody": {"placeholders": {"providerNames": {}}},
+  "marketplacePaymentFlowBody": "Laawol vous aide à trouver des entreprises, encaisse et traite votre paiement, peut déduire des frais de plateforme indiqués et peut transférer ultérieurement la rémunération de l’entreprise. Laawol peut aider au suivi, à l’assistance, aux remboursements et aux litiges.",
+  "marketplaceNoGuaranteeBody": "Laawol n’est ni le vendeur, ni le transporteur, ni le prestataire et ne garantit ni la date de livraison ni la prestation de l’entreprise. Cela ne limite pas les droits auxquels la loi ne permet pas de renoncer.",
+  "marketplaceResponsibilityCheckbox": "Je comprends la responsabilité de l’entreprise et je souhaite continuer.",
+  "selectedBusiness": "L’entreprise sélectionnée",
+  "accountLegalAcceptance": "J’accepte les Conditions d’utilisation et la Politique de confidentialité de Laawol, y compris son rôle de place de marché.",
+  "accountLegalAcceptanceRequired": "Veuillez accepter les Conditions d’utilisation et la Politique de confidentialité pour continuer.",
+  "businessResponsibilityAcceptance": "Je comprends que mon entreprise est indépendamment responsable de ses annonces, prix, biens, services, exécution, délais de livraison, autorisations et obligations envers les clients.",
+  "businessResponsibilityRequired": "Confirmez la déclaration de responsabilité de l’entreprise pour envoyer votre demande."
+  ,"marketplaceBalancePaymentSummary": "Paiement du solde"
+  ,"marketplaceDestinationChangeSummary": "Modification payante de la destination"
 }

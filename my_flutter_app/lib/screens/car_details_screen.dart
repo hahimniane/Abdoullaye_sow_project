@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -17,6 +17,7 @@ import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/car_option_localization.dart';
 import '../utils/phone_number_validator.dart';
+import '../widgets/marketplace_transaction_disclosure.dart';
 
 String _carDetailOptionLabel(AppLocalizations l10n, String value) {
   return localizedCarOptionLabel(l10n, value);
@@ -635,6 +636,16 @@ class CarDetailsScreen extends StatelessWidget {
                                     icon: Icons.event_available_outlined,
                                   );
                                   if (!confirmed || !context.mounted) return;
+                                  final marketplaceAcceptance =
+                                      await confirmMarketplaceTransaction(
+                                        context,
+                                        providerNames: car.businessName,
+                                        transactionSummary: l10n.reserveThisCar,
+                                      );
+                                  if (marketplaceAcceptance == null ||
+                                      !context.mounted) {
+                                    return;
+                                  }
                                   setModalState(() => isSubmitting = true);
                                   try {
                                     if (needsPhone) {
@@ -1005,7 +1016,16 @@ class CarDetailsScreen extends StatelessWidget {
     final profilePhone = authProvider.customerPhone?.trim() ?? '';
     final buyerPhoneController = TextEditingController(text: profilePhone);
     final needsPhone = profilePhone.isEmpty;
-    final holdPricing = await _loadHoldPricing();
+    late final _ResolvedHoldPricing holdPricing;
+    try {
+      holdPricing = await _loadHoldPricing();
+    } catch (error) {
+      buyerPhoneController.dispose();
+      if (context.mounted) {
+        showErrorSnackBar(context, l10n.operationFailed('$error'));
+      }
+      return;
+    }
     if (!context.mounted) return;
     DateTime selectedHoldUntil = _dateOnly(
       DateTime.now().add(const Duration(days: 1)),
@@ -1021,7 +1041,7 @@ class CarDetailsScreen extends StatelessWidget {
         return StatefulBuilder(
           builder: (context, setModalState) {
             final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-            final holdQuote = holdPricing.quote(selectedHoldUntil);
+            final holdQuote = holdPricing.quote(selectedHoldUntil, l10n);
             final depositText = _currency.format(holdQuote.amount);
             final latestHoldDate = _dateOnly(
               DateTime.now().add(Duration(days: holdPricing.maxDays)),
@@ -1064,19 +1084,15 @@ class CarDetailsScreen extends StatelessWidget {
                         message: l10n.reserveCarHoldMessage,
                       ),
                       const SizedBox(height: 12),
-                      const _SheetInfoPanel(
+                      _SheetInfoPanel(
                         icon: Icons.privacy_tip_outlined,
-                        title: 'No-show history',
-                        message:
-                            'If you do not return by the hold date and the '
-                            'business marks that you did not come, the deposit '
-                            'may be forfeited and this outcome may be visible '
-                            'to car-selling businesses.',
+                        title: l10n.noShowHistory,
+                        message: l10n.noShowHistoryMessage,
                       ),
                       const SizedBox(height: 12),
                       _SheetInfoPanel(
                         icon: Icons.event_busy_outlined,
-                        title: 'Hold until',
+                        title: l10n.holdUntil,
                         message:
                             '${DateFormat.yMMMd().format(selectedHoldUntil)}\n'
                             '${holdQuote.description}',
@@ -1152,6 +1168,16 @@ class CarDetailsScreen extends StatelessWidget {
                                     icon: Icons.payments_outlined,
                                   );
                                   if (!confirmed || !context.mounted) return;
+                                  final marketplaceAcceptance =
+                                      await confirmMarketplaceTransaction(
+                                        context,
+                                        providerNames: car.businessName,
+                                        transactionSummary: l10n.reserveThisCar,
+                                      );
+                                  if (marketplaceAcceptance == null ||
+                                      !context.mounted) {
+                                    return;
+                                  }
                                   setModalState(() => isSubmitting = true);
                                   try {
                                     if (needsPhone) {
@@ -1172,6 +1198,8 @@ class CarDetailsScreen extends StatelessWidget {
                                           buyerPhone: buyerPhoneController.text
                                               .trim(),
                                           holdUntilDate: selectedHoldUntil,
+                                          marketplaceAcceptance:
+                                              marketplaceAcceptance,
                                         );
                                     if (!context.mounted) return;
                                     Navigator.pop(context);
@@ -1358,6 +1386,17 @@ class CarDetailsScreen extends StatelessWidget {
                                     icon: Icons.payments_outlined,
                                   );
                                   if (!confirmed || !context.mounted) return;
+                                  final marketplaceAcceptance =
+                                      await confirmMarketplaceTransaction(
+                                        context,
+                                        providerNames: car.businessName,
+                                        transactionSummary:
+                                            l10n.purchaseThisCar,
+                                      );
+                                  if (marketplaceAcceptance == null ||
+                                      !context.mounted) {
+                                    return;
+                                  }
                                   setModalState(() => isSubmitting = true);
                                   try {
                                     if (needsPhone) {
@@ -1376,6 +1415,8 @@ class CarDetailsScreen extends StatelessWidget {
                                       buyerName: buyerName,
                                       buyerPhone: buyerPhoneController.text
                                           .trim(),
+                                      marketplaceAcceptance:
+                                          marketplaceAcceptance,
                                     );
                                     if (!context.mounted) return;
                                     Navigator.pop(context);
@@ -1473,12 +1514,12 @@ class CarDetailsScreen extends StatelessWidget {
   }
 
   Future<_ResolvedHoldPricing> _loadHoldPricing() async {
-    final businessDoc = await FirebaseFirestore.instance
-        .collection('businesses')
-        .doc(car.businessId)
-        .get();
-    final business = businessDoc.data() ?? const <String, dynamic>{};
-    return _ResolvedHoldPricing.from(car: car, business: business);
+    final response = await FirebaseFunctions.instance
+        .httpsCallable('getCarHoldPricing')
+        .call({'carId': car.id});
+    return _ResolvedHoldPricing.fromMap(
+      Map<String, dynamic>.from(response.data),
+    );
   }
 }
 
@@ -1502,34 +1543,20 @@ class _ResolvedHoldPricing {
   final double dailyRate;
   final int maxDays;
 
-  factory _ResolvedHoldPricing.from({
-    required Car car,
-    required Map<String, dynamic> business,
-  }) {
-    final useBusiness = car.useBusinessHoldPricing;
-    final mode = useBusiness
-        ? (business['carHoldPricingMode'] ?? 'flat').toString()
-        : (car.carHoldPricingMode.isEmpty ? 'flat' : car.carHoldPricingMode);
-    final flatFee = useBusiness
-        ? _number(business['carHoldFlatFee'], 500)
-        : (car.carHoldFlatFee ?? 500);
-    final dailyRate = useBusiness
-        ? _number(business['carHoldDailyRate'], 100)
-        : (car.carHoldDailyRate ?? 100);
-    final maxDays =
-        (useBusiness
-                ? _intValue(business['carHoldMaxDays'], 14)
-                : (car.carHoldMaxDays ?? 14))
-            .clamp(1, 30);
+  factory _ResolvedHoldPricing.fromMap(Map<String, dynamic> data) {
+    final mode = data['mode'] == 'per_day' ? 'per_day' : 'flat';
+    final flatFee = _number(data['flatFee'], 500);
+    final dailyRate = _number(data['dailyRate'], 100);
+    final maxDays = _intValue(data['maxDays'], 14).clamp(1, 30);
     return _ResolvedHoldPricing(
-      mode: mode == 'per_day' ? 'per_day' : 'flat',
+      mode: mode,
       flatFee: flatFee > 0 ? flatFee : 500,
       dailyRate: dailyRate > 0 ? dailyRate : 100,
       maxDays: maxDays,
     );
   }
 
-  _HoldQuote quote(DateTime holdUntilDate) {
+  _HoldQuote quote(DateTime holdUntilDate, AppLocalizations l10n) {
     final today = DateTime.now();
     final todayOnly = DateTime(today.year, today.month, today.day);
     final holdOnly = DateTime(
@@ -1541,13 +1568,17 @@ class _ResolvedHoldPricing {
     if (mode == 'per_day') {
       return _HoldQuote(
         amount: dailyRate * days,
-        description:
-            '$days day hold at ${NumberFormat.simpleCurrency().format(dailyRate)} per day',
+        description: l10n.holdPerDayDescription(
+          days,
+          NumberFormat.simpleCurrency(
+            locale: l10n.localeName,
+          ).format(dailyRate),
+        ),
       );
     }
     return _HoldQuote(
       amount: flatFee,
-      description: 'Flat hold fee for up to $maxDays days',
+      description: l10n.holdFlatFeeDescription(maxDays),
     );
   }
 

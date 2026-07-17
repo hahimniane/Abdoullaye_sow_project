@@ -4,6 +4,9 @@ const admin = require("firebase-admin");
 
 const CUSTOMER_UID = "service-test-customer";
 const OTHER_UID = "service-test-other";
+const FINANCE_UID = "service-test-finance";
+const DELETE_UID = "service-test-delete-own";
+const DELETE_ADMIN_UID = "service-test-delete-admin";
 const COUNTRY_ID = "gn";
 
 const functions = require("../index");
@@ -118,6 +121,24 @@ before(async () => {
       fullName: "Other Customer",
       email: `${OTHER_UID}@example.test`,
     }),
+    db.collection("users").doc(FINANCE_UID).set({
+      role: "admin",
+      adminRole: "financeManager",
+      fullName: "Finance Manager",
+      email: `${FINANCE_UID}@example.test`,
+    }),
+    db.collection("users").doc(DELETE_UID).set({
+      role: "customer",
+      fullName: "Delete Own Customer",
+      email: `${DELETE_UID}@example.test`,
+    }),
+    db.collection("users").doc(DELETE_ADMIN_UID).set({
+      role: "admin",
+      platformAdmin: true,
+      adminRole: "superAdmin",
+      fullName: "Delete Admin",
+      email: `${DELETE_ADMIN_UID}@example.test`,
+    }),
     db.collection("shipmentPricing").doc("barrelPickup").set({
       officeAddress: "Bronx Test Office",
       boroughPrices: {
@@ -136,6 +157,63 @@ before(async () => {
       carDepositPlatformFeePct: 0.1,
     }),
   ]);
+});
+
+describe("self-service account deletion request", () => {
+  const recentAuth = (uid) => ({
+    uid,
+    token: {auth_time: Math.floor(Date.now() / 1000)},
+  });
+
+  it("requires authentication and never accepts a target user ID", async () => {
+    await assert.rejects(
+        () => functions.requestOwnAccountDeletion.run({data: {}}),
+        /Authentication is required/,
+    );
+    await assert.rejects(
+        () => functions.requestOwnAccountDeletion.run({
+          auth: recentAuth(DELETE_UID),
+          data: {userId: OTHER_UID},
+        }),
+        /never accepts a target user ID/,
+    );
+  });
+
+  it("blocks platform admins from deleting their own managed account",
+      async () => {
+        await assert.rejects(
+            () => functions.requestOwnAccountDeletion.run({
+              auth: recentAuth(DELETE_ADMIN_UID),
+              data: {},
+            }),
+            /require another super admin/,
+        );
+      });
+
+  it("records one idempotent in-app request for the signed-in user",
+      async () => {
+        const first = await functions.requestOwnAccountDeletion.run({
+          auth: recentAuth(DELETE_UID),
+          data: {},
+        });
+        const second = await functions.requestOwnAccountDeletion.run({
+          auth: recentAuth(DELETE_UID),
+          data: {},
+        });
+        assert.equal(first.success, true);
+        assert.equal(first.status, "pending");
+        assert.equal(second.success, true);
+        assert.equal(second.status, "pending");
+
+        const requestDoc = await db.collection("accountDeletionRequests")
+            .doc(DELETE_UID).get();
+        const userDoc = await db.collection("users").doc(DELETE_UID).get();
+        assert.equal(requestDoc.exists, true);
+        assert.equal(requestDoc.get("userId"), DELETE_UID);
+        assert.equal(requestDoc.get("source"), "in_app");
+        assert.equal(requestDoc.get("targetCompletionDays"), 30);
+        assert.equal(userDoc.get("accountDeletionStatus"), "pending");
+      });
 });
 
 describe("freight service callable lifecycle", () => {
@@ -449,6 +527,40 @@ describe("freight service callable lifecycle", () => {
         assert.equal(repeated.alreadySettled, true);
       });
 
+  it("converges simultaneous freight balance payment requests",
+      async () => {
+        const businessId = "freight-concurrent-settlement-business";
+        await seedBusiness(businessId);
+        const manager = await seedFreightManager(businessId);
+        const booking = await functions.createFreightShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: freightInput(businessId, {weightKg: 10}),
+        });
+        const confirmed = await functions.confirmFreightShipmentWeight.run({
+          auth: manager,
+          data: {shipmentId: booking.shipmentId, verifiedWeightKg: 12},
+        });
+
+        const results = await Promise.all([
+          functions.createFreightSettlementPayment.run({
+            auth: {uid: CUSTOMER_UID},
+            data: {shipmentId: booking.shipmentId},
+          }),
+          functions.createFreightSettlementPayment.run({
+            auth: {uid: CUSTOMER_UID},
+            data: {shipmentId: booking.shipmentId},
+          }),
+        ]);
+
+        assert.equal(results.length, 2);
+        const attempts = await db.collection("freightSettlements")
+            .doc(confirmed.settlementId).collection("paymentAttempts").get();
+        assert.equal(attempts.size, 1);
+        const shipment = await freightData(booking.shipmentId);
+        assert.equal(shipment.priceSettlementStatus, "settled");
+        assert.equal(shipment.balancePaymentStatus, "succeeded");
+      });
+
   it("refunds a lighter parcel card-first and restores wallet exactly once",
       async () => {
         const businessId = "freight-refund-settlement-business";
@@ -603,6 +715,62 @@ describe("barrel shipping service callable lifecycle", () => {
         assert.equal(shipment.get("paymentStatus"), "succeeded");
         assert.equal(shipment.get("status"), "pending");
         assert.match(shipment.get("trackingCode"), /^BS/);
+
+        await db.collection("businesses").doc(businessId)
+            .collection("destinationCountries").doc("gh").set({
+              countryId: "gh",
+              name: "Ghana",
+              code: "GH",
+              isActive: true,
+              barrelShippingPrice: 300,
+              deliveryEstimateMinDays: 12,
+              deliveryEstimateMaxDays: 24,
+            });
+        const changed = await functions.changeBarrelShipmentDestination.run({
+          auth: {uid: CUSTOMER_UID},
+          data: {
+            shipmentId: created.shipmentId,
+            destinationCountryId: "gh",
+            businessId,
+            changeRequestId: "quantity-price-change",
+          },
+        });
+        const updated = await db.collection("barrelShipments")
+            .doc(created.shipmentId).get();
+        assert.equal(changed.simulatedPayment, true);
+        assert.equal(changed.amountDue, 150);
+        assert.equal(updated.get("unitShippingFee"), 300);
+        assert.equal(updated.get("shippingFee"), 600);
+        assert.equal(updated.get("price"), 600);
+        assert.equal(updated.get("destinationCountryName"), "Ghana");
+        assert.equal(updated.get("platformFeePct"), 0.1);
+        assert.equal(updated.get("platformFeeCents"), 6000);
+        assert.equal(updated.get("businessPayoutCents"), 54000);
+        assert.equal(updated.get("payoutStatus"), "pending_account");
+
+        await db.collection("businesses").doc(businessId)
+            .collection("destinationCountries").doc("sl").set({
+              countryId: "sl",
+              name: "Sierra Leone",
+              code: "SL",
+              isActive: true,
+              barrelShippingPrice: 350,
+              deliveryEstimateMinDays: 12,
+              deliveryEstimateMaxDays: 24,
+            });
+        await updated.ref.update({payoutStatus: "paid"});
+        await assert.rejects(
+            () => functions.changeBarrelShipmentDestination.run({
+              auth: {uid: CUSTOMER_UID},
+              data: {
+                shipmentId: created.shipmentId,
+                destinationCountryId: "sl",
+                businessId,
+                changeRequestId: "paid-payout-change",
+              },
+            }),
+            /needs support to change its destination safely/,
+        );
       });
 
   it("rejects a business that does not offer barrel shipping", async () => {
@@ -623,11 +791,69 @@ describe("barrel shipping service callable lifecycle", () => {
         /not accepting barrel shipments/,
     );
   });
+
+  it("creates one paid order with independent destination shipments",
+      async () => {
+        const businessId = "barrel-order-service-business";
+        const businessRef = await seedBusiness(businessId);
+        await businessRef.collection("destinationCountries").doc("gh").set({
+          countryId: "gh",
+          name: "Ghana",
+          code: "GH",
+          isActive: true,
+          barrelShippingPrice: 300,
+          deliveryEstimateMinDays: 12,
+          deliveryEstimateMaxDays: 24,
+        });
+        const created = await functions.createBarrelOrderPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: {
+            senderName: "Multi Destination Sender",
+            pickupRequested: false,
+            useWalletBalance: false,
+            lines: [
+              {
+                destinationCountryId: COUNTRY_ID,
+                businessId,
+                receiverName: "Guinea Receiver",
+                receiverPhone: "+224620000010",
+                quantity: 1,
+              },
+              {
+                destinationCountryId: "gh",
+                businessId,
+                receiverName: "Ghana Receiver",
+                receiverPhone: "+233201234567",
+                quantity: 2,
+              },
+            ],
+          },
+        });
+        assert.equal(created.simulatedPayment, true);
+        assert.equal(created.shipmentIds.length, 2);
+        assert.equal(created.trackingCodes.length, 2);
+
+        const [order, ...shipments] = await Promise.all([
+          db.collection("barrelOrders").doc(created.orderId).get(),
+          ...created.shipmentIds.map((id) =>
+            db.collection("barrelShipments").doc(id).get()),
+        ]);
+        assert.equal(order.get("paymentStatus"), "succeeded");
+        assert.equal(order.get("lineCount"), 2);
+        assert.equal(order.get("quantity"), 3);
+        assert.equal(order.get("orderTotal"), 825);
+        assert.deepEqual(
+            shipments.map((shipment) => shipment.get("price")),
+            [225, 600],
+        );
+        assert.ok(shipments.every((shipment) =>
+          shipment.get("paymentStatus") === "succeeded"));
+      });
 });
 
 describe("car parking service callable lifecycle", () => {
   it("lists capacity and creates a simulated paid reservation", async () => {
-    const businessId = "parking-service-business";
+    const businessId = `parking-service-business-${Date.now()}`;
     await seedBusiness(businessId);
     const startDate = futureDate(2);
     const endDate = futureDate(4);
@@ -668,7 +894,172 @@ describe("car parking service callable lifecycle", () => {
   });
 });
 
+describe("wallet refund lifecycle", () => {
+  it("moves funds to pending and restores or completes them exactly once",
+      async () => {
+        const walletRef = db.collection("wallets").doc(OTHER_UID);
+        await walletRef.set({
+          customerUid: OTHER_UID,
+          currency: "usd",
+          balanceCents: 5000,
+          balance: 50,
+          pendingRefundCents: 0,
+          pendingRefund: 0,
+        });
+
+        const first = await functions.requestWalletCardRefund.run({
+          auth: {uid: OTHER_UID},
+          data: {},
+        });
+        let wallet = await walletRef.get();
+        assert.equal(wallet.get("balanceCents"), 0);
+        assert.equal(wallet.get("pendingRefundCents"), 5000);
+        await assert.rejects(
+            () => functions.requestWalletCardRefund.run({
+              auth: {uid: OTHER_UID},
+              data: {},
+            }),
+            /no wallet balance to return/,
+        );
+
+        await functions.reviewWalletRefundRequest.run({
+          auth: {uid: FINANCE_UID},
+          data: {
+            requestId: first.refundRequestId,
+            decision: "rejected",
+            note: "External card return was not available.",
+          },
+        });
+        wallet = await walletRef.get();
+        assert.equal(wallet.get("balanceCents"), 5000);
+        assert.equal(wallet.get("pendingRefundCents"), 0);
+
+        const second = await functions.requestWalletCardRefund.run({
+          auth: {uid: OTHER_UID},
+          data: {},
+        });
+        await functions.reviewWalletRefundRequest.run({
+          auth: {uid: FINANCE_UID},
+          data: {
+            requestId: second.refundRequestId,
+            decision: "completed",
+            note: "External card return confirmed.",
+          },
+        });
+        wallet = await walletRef.get();
+        assert.equal(wallet.get("balanceCents"), 0);
+        assert.equal(wallet.get("pendingRefundCents"), 0);
+        await assert.rejects(
+            () => functions.reviewWalletRefundRequest.run({
+              auth: {uid: FINANCE_UID},
+              data: {
+                requestId: second.refundRequestId,
+                decision: "completed",
+              },
+            }),
+            /Only pending refund requests can be reviewed/,
+        );
+      });
+});
+
 describe("car sales service callable lifecycle", () => {
+  it("returns exact server-side paid-hold pricing to customers", async () => {
+    const businessId = "car-hold-quote-business";
+    const businessRef = await seedBusiness(businessId);
+    await businessRef.update({
+      carHoldPricingMode: "per_day",
+      carHoldDailyRate: 85,
+      carHoldMaxDays: 9,
+    });
+    const carRef = db.collection("cars").doc("service-hold-quote-car");
+    await carRef.set({
+      businessId,
+      businessName: "Service Test Cars",
+      title: "2022 Honda CR-V",
+      make: "Honda",
+      model: "CR-V",
+      year: 2022,
+      price: 25000,
+      status: "active",
+      useBusinessHoldPricing: true,
+    });
+
+    const quote = await functions.getCarHoldPricing.run({
+      auth: {uid: CUSTOMER_UID},
+      data: {carId: carRef.id},
+    });
+
+    assert.deepEqual(quote, {
+      mode: "per_day",
+      flatFee: 500,
+      dailyRate: 85,
+      maxDays: 9,
+    });
+  });
+
+  it("allows only one paid hold when two customers reserve together",
+      async () => {
+        const businessId = "car-deposit-race-business";
+        await seedBusiness(businessId);
+        const carRef = db.collection("cars").doc();
+        await carRef.set({
+          businessId,
+          businessName: "Service Test Cars",
+          title: "2021 Honda Accord",
+          make: "Honda",
+          model: "Accord",
+          year: 2021,
+          price: 15000,
+          status: "active",
+          locationCity: "Bronx",
+          locationState: "NY",
+        });
+
+        const reserve = (uid, phone) =>
+          functions.createCarDepositPaymentIntent.run({
+            auth: {uid},
+            data: {
+              carId: carRef.id,
+              buyerName: `Buyer ${uid}`,
+              buyerPhone: phone,
+              holdUntilDate: futureDate(2),
+            },
+          });
+        const attempts = await Promise.allSettled([
+          reserve(CUSTOMER_UID, "+15555550110"),
+          reserve(OTHER_UID, "+15555550111"),
+        ]);
+        const successful = attempts.filter(
+            (result) => result.status === "fulfilled",
+        );
+        const rejected = attempts.filter(
+            (result) => result.status === "rejected",
+        );
+
+        assert.equal(successful.length, 1);
+        assert.equal(rejected.length, 1);
+        assert.match(
+            String(rejected[0].reason),
+            /not available for reservation/,
+        );
+
+        const winner = successful[0].value;
+        const [car, purchases] = await Promise.all([
+          carRef.get(),
+          db.collection("carPurchases")
+              .where("carId", "==", carRef.id)
+              .get(),
+        ]);
+        assert.equal(car.get("status"), "reserved");
+        assert.equal(car.get("reservedPurchaseId"), winner.purchaseId);
+        assert.equal(car.get("reservationType"), "paid_hold");
+        assert.equal(
+            purchases.docs.filter((doc) =>
+              doc.get("purchaseStatus") === "reserved").length,
+            1,
+        );
+      });
+
   it("atomically completes a simulated full car purchase", async () => {
     const businessId = "car-sales-service-business";
     await seedBusiness(businessId);
@@ -716,5 +1107,129 @@ describe("car sales service callable lifecycle", () => {
         }),
         /not available for purchase/,
     );
+  });
+
+  it("creates, reschedules, and cancels a car viewing", async () => {
+    const businessId = "car-viewing-service-business";
+    await seedBusiness(businessId);
+    const carRef = db.collection("cars").doc("service-viewing-car");
+    await carRef.set({
+      businessId,
+      businessName: "Service Test Cars",
+      title: "2020 Toyota RAV4",
+      make: "Toyota",
+      model: "RAV4",
+      year: 2020,
+      price: 17000,
+      status: "active",
+      locationCity: "Bronx",
+      locationState: "NY",
+    });
+
+    const created = await functions.createCarViewingReservation.run({
+      auth: {uid: CUSTOMER_UID},
+      data: {
+        carId: carRef.id,
+        buyerName: "Viewing Customer",
+        buyerPhone: "+15555550120",
+        appointmentStart: futureIso(48),
+        appointmentLabel: "Friday afternoon",
+      },
+    });
+    let viewing = await db.collection("carPurchases")
+        .doc(created.purchaseId).get();
+    assert.equal(viewing.get("paymentType"), "viewing_reservation");
+    assert.equal(viewing.get("purchaseStatus"), "viewing_scheduled");
+    assert.equal(viewing.get("paymentStatus"), "not_required");
+
+    const rescheduledAt = futureIso(72);
+    await functions.updateCarViewingReservation.run({
+      auth: {uid: CUSTOMER_UID},
+      data: {
+        purchaseId: created.purchaseId,
+        appointmentStart: rescheduledAt,
+        appointmentLabel: "Saturday afternoon",
+      },
+    });
+    viewing = await viewing.ref.get();
+    assert.equal(
+        viewing.get("appointmentStart").toMillis(),
+        Date.parse(rescheduledAt),
+    );
+
+    await functions.cancelCarViewingReservation.run({
+      auth: {uid: CUSTOMER_UID},
+      data: {purchaseId: created.purchaseId},
+    });
+    viewing = await viewing.ref.get();
+    assert.equal(viewing.get("purchaseStatus"), "cancelled");
+  });
+
+  it("extends an approved paid car hold exactly once", async () => {
+    const businessId = "car-hold-extension-business";
+    const businessRef = await seedBusiness(businessId);
+    await businessRef.update({
+      carHoldPricingMode: "per_day",
+      carHoldDailyRate: 100,
+      carHoldMaxDays: 10,
+    });
+    const manager = await seedFreightManager(businessId, {
+      permissions: ["purchases"],
+    });
+    const carRef = db.collection("cars").doc("service-extension-car");
+    await carRef.set({
+      businessId,
+      businessName: "Service Test Cars",
+      title: "2019 Honda CR-V",
+      make: "Honda",
+      model: "CR-V",
+      year: 2019,
+      price: 16000,
+      status: "active",
+      locationCity: "Bronx",
+      locationState: "NY",
+    });
+    const hold = await functions.createCarDepositPaymentIntent.run({
+      auth: {uid: CUSTOMER_UID},
+      data: {
+        carId: carRef.id,
+        buyerName: "Hold Customer",
+        buyerPhone: "+15555550121",
+        holdUntilDate: futureDate(2),
+      },
+    });
+    const purchaseRef = db.collection("carPurchases").doc(hold.purchaseId);
+    const before = await purchaseRef.get();
+    const originalDeposit = Number(before.get("depositAmount"));
+
+    await functions.requestPaidHoldExtension.run({
+      auth: {uid: CUSTOMER_UID},
+      data: {
+        purchaseId: hold.purchaseId,
+        requestedHoldUntilDate: futureDate(4),
+      },
+    });
+    await functions.decidePaidHoldExtension.run({
+      auth: manager,
+      data: {purchaseId: hold.purchaseId, decision: "approved"},
+    });
+    const paid = await functions.createPaidHoldExtensionPaymentIntent.run({
+      auth: {uid: CUSTOMER_UID},
+      data: {purchaseId: hold.purchaseId},
+    });
+    assert.equal(paid.simulatedPayment, true);
+
+    const extended = await purchaseRef.get();
+    assert.equal(extended.get("extensionRequestStatus"), "paid");
+    assert.equal(extended.get("extensionPaymentStatus"), "succeeded");
+    assert.ok(Number(extended.get("depositAmount")) > originalDeposit);
+    const depositAfterExtension = extended.get("depositAmount");
+
+    await functions.completePaidHoldExtensionPayment.run({
+      auth: {uid: CUSTOMER_UID},
+      data: {purchaseId: hold.purchaseId},
+    });
+    const completedAgain = await purchaseRef.get();
+    assert.equal(completedAgain.get("depositAmount"), depositAfterExtension);
   });
 });
