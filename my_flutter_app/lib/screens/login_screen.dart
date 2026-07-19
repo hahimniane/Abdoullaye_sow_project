@@ -5,8 +5,14 @@ import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../utils/app_feedback.dart';
-import '../utils/phone_number_validator.dart';
+import '../utils/auth_navigation.dart';
+import '../utils/business_registration_navigation.dart';
 import '../widgets/app_snackbars.dart';
+
+@visibleForTesting
+bool isValidLoginEmail(String value) {
+  return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$').hasMatch(value.trim());
+}
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -59,13 +65,13 @@ class _LoginScreenState extends State<LoginScreen>
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
     try {
-      final identifier = _emailController.text.trim();
+      final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
 
-      debugPrint('🔵 LoginScreen: Attempting login for: $identifier');
+      debugPrint('🔵 LoginScreen: Attempting email login');
       debugPrint('🔵 LoginScreen: Calling authProvider.authenticate()...');
 
-      final success = await authProvider.authenticate(identifier, password);
+      final success = await authProvider.authenticate(email, password);
 
       debugPrint('🔵 LoginScreen: Authentication result: $success');
       debugPrint('🔵 LoginScreen: isStaff: ${authProvider.isStaff}');
@@ -87,15 +93,11 @@ class _LoginScreenState extends State<LoginScreen>
 
         if (authProvider.hasBusinessDashboardAccess) {
           debugPrint('🔵 LoginScreen: Navigating to business dashboard');
-          Navigator.pushNamedAndRemoveUntil(
-            context,
-            '/staff-home',
-            (route) => false,
-          );
+          navigateAfterLogin(context, hasBusinessDashboardAccess: true);
         } else {
           debugPrint('🔵 LoginScreen: Navigating to customer home');
           // Regular customer - go to customer home
-          Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+          navigateAfterLogin(context, hasBusinessDashboardAccess: false);
         }
       }
     } catch (error) {
@@ -198,10 +200,10 @@ class _LoginScreenState extends State<LoginScreen>
                                       decoration: InputDecoration(
                                         labelText: AppLocalizations.of(
                                           context,
-                                        )!.emailOrPhone,
+                                        )!.email,
                                         hintText: AppLocalizations.of(
                                           context,
-                                        )!.enterEmailOrPhone,
+                                        )!.pleaseEnterEmail,
                                         prefixIcon: const Icon(
                                           Icons.alternate_email_outlined,
                                         ),
@@ -235,23 +237,12 @@ class _LoginScreenState extends State<LoginScreen>
                                         if (trimmed.isEmpty) {
                                           return AppLocalizations.of(
                                             context,
-                                          )!.pleaseEnterEmailOrPhone;
+                                          )!.pleaseEnterEmail;
                                         }
-                                        final looksLikeEmail = trimmed.contains(
-                                          '@',
-                                        );
-                                        final validEmail = RegExp(
-                                          r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$',
-                                        ).hasMatch(trimmed);
-                                        final validPhone =
-                                            PhoneNumberValidator.isValid(
-                                              trimmed,
-                                            );
-                                        if ((looksLikeEmail && !validEmail) ||
-                                            (!looksLikeEmail && !validPhone)) {
+                                        if (!isValidLoginEmail(trimmed)) {
                                           return AppLocalizations.of(
                                             context,
-                                          )!.pleaseEnterValidEmailOrPhone;
+                                          )!.validEmailRequired;
                                         }
                                         return null;
                                       },
@@ -377,10 +368,7 @@ class _LoginScreenState extends State<LoginScreen>
                                     // Forgot Password
                                     TextButton(
                                       onPressed: () {
-                                        Navigator.pushNamed(
-                                          context,
-                                          '/forgot-password',
-                                        );
+                                        openForgotPassword(context);
                                       },
                                       style: TextButton.styleFrom(
                                         splashFactory: NoSplash.splashFactory,
@@ -462,16 +450,15 @@ class _LoginScreenState extends State<LoginScreen>
                                     const SizedBox(height: 8),
                                     OutlinedButton.icon(
                                       onPressed: () {
-                                        Navigator.pushNamed(
-                                          context,
-                                          '/business-register',
-                                        );
+                                        openBusinessRegistration(context);
                                       },
                                       icon: const Icon(
                                         Icons.storefront_outlined,
                                       ),
-                                      label: const Text(
-                                        'Register your business',
+                                      label: Text(
+                                        AppLocalizations.of(
+                                          context,
+                                        )!.registerYourBusiness,
                                       ),
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: AppColors.cobaltDeep,

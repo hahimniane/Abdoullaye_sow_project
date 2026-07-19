@@ -23,6 +23,9 @@ class _BiometricLockGateState extends State<BiometricLockGate>
   bool _locked = false;
   bool _checking = true;
   bool _authenticating = false;
+  // The biometric prompt itself backgrounds/resumes the app; this window
+  // swallows the resume that fires right after a successful unlock.
+  DateTime _suppressLockUntil = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
   void initState() {
@@ -39,7 +42,11 @@ class _BiometricLockGateState extends State<BiometricLockGate>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Ignore lifecycle churn caused by the biometric prompt itself, otherwise
+    // the resume that follows a successful unlock immediately re-locks the app.
+    if (_authenticating) return;
     if (state == AppLifecycleState.resumed) {
+      if (DateTime.now().isBefore(_suppressLockUntil)) return;
       _refreshLockState(forceLock: true);
     }
   }
@@ -62,6 +69,9 @@ class _BiometricLockGateState extends State<BiometricLockGate>
     setState(() => _authenticating = true);
     final ok = await _service.authenticate(reason: l10n.unlockWithFaceId);
     if (!mounted) return;
+    // Swallow the resume event fired when the biometric sheet dismisses so a
+    // successful unlock is not immediately re-locked.
+    _suppressLockUntil = DateTime.now().add(const Duration(seconds: 2));
     setState(() {
       _authenticating = false;
       if (ok) _locked = false;

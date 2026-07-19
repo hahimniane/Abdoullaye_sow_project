@@ -278,10 +278,12 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
                                 : null,
                           ),
                           const SizedBox(width: 12),
-                          const Expanded(
+                          Expanded(
                             child: Text(
-                              'Add profile picture',
-                              style: TextStyle(fontWeight: FontWeight.w700),
+                              AppLocalizations.of(context)!.addProfilePicture,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                         ],

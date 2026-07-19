@@ -1,0 +1,74 @@
+appId: com.laawoldigital.app
+name: Connected-project customer creates a QA account
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "(?s).*Sign in to your wallet.*"
+    timeout: 30000
+- tapOn:
+    text: "(?s).*Sign in to your wallet.*"
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible: "Account Login"
+    timeout: 20000
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      text: "Sign Up"
+    direction: DOWN
+- tapOn: "Sign Up"
+- extendedWaitUntil:
+    visible: "Create Account"
+    timeout: 20000
+- waitForAnimationToEnd
+- tapOn: "Full Name"
+- inputText: "Codex Stripe QA"
+- tapOn: "done"
+- scrollUntilVisible:
+    element:
+      text: "Phone Number"
+    direction: DOWN
+- tapOn: "Phone Number"
+- inputText: "15555550199"
+- swipe:
+    start: 50%,55%
+    end: 50%,20%
+    duration: 600
+- scrollUntilVisible:
+    element:
+      text: "Email"
+    direction: DOWN
+    visibilityPercentage: 50
+- tapOn: "Email"
+- inputText: "${CONNECTED_QA_EMAIL}"
+- tapOn: "done"
+- scrollUntilVisible:
+    element:
+      text: "Password"
+    direction: DOWN
+- tapOn: "Password"
+- inputText: "${CONNECTED_QA_PASSWORD}"
+- tapOn: "done"
+- scrollUntilVisible:
+    element:
+      text: "Confirm Password"
+    direction: DOWN
+- tapOn: "Confirm Password"
+- inputText: "${CONNECTED_QA_PASSWORD}"
+- tapOn: "done"
+- scrollUntilVisible:
+    element:
+      text: "(?s).*I agree to Laawol’s Terms of Service.*"
+    direction: DOWN
+- tapOn: "(?s).*I agree to Laawol’s Terms of Service.*"
+- scrollUntilVisible:
+    element:
+      text: "Sign Up"
+    direction: DOWN
+- tapOn:
+    text: "Sign Up"
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible: "(?s).*Codex Stripe QA.*"
+    timeout: 30000
+- takeScreenshot: "output/ios-e2e/connected-customer-created"

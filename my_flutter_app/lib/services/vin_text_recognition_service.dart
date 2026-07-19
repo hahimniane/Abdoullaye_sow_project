@@ -13,7 +13,7 @@ class VinTextRecognitionService {
   const VinTextRecognitionService();
 
   static const MethodChannel _channel = MethodChannel(
-    'com.autosales.myFlutterApp/vin_text_recognition',
+    'com.laawoldigital.app/vin_text_recognition',
   );
 
   Future<String> recognizeText(String imagePath) async {

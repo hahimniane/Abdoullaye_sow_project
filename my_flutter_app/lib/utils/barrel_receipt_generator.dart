@@ -137,6 +137,14 @@ Future<void> generateBarrelShipmentReceipt({
                     ),
                   ),
                   pw.SizedBox(height: 10),
+                  buildRow('Quantity', shipment.quantity.toString()),
+                  if (shipment.unitShippingFee != null)
+                    buildRow(
+                      'Unit Shipping',
+                      NumberFormat.simpleCurrency().format(
+                        shipment.unitShippingFee,
+                      ),
+                    ),
                   buildRow(
                     'Shipping Fee',
                     NumberFormat.simpleCurrency().format(shipment.shippingFee),
@@ -165,5 +173,95 @@ Future<void> generateBarrelShipmentReceipt({
   await Printing.layoutPdf(
     onLayout: (format) async => pdf.save(),
     name: 'Barrel_Shipment_${shipment.trackingCode}',
+  );
+}
+
+Future<void> generateBarrelOrderReceipt({
+  required String orderId,
+  required List<BarrelShipment> shipments,
+}) async {
+  if (shipments.length == 1) {
+    await generateBarrelShipmentReceipt(shipment: shipments.first);
+    return;
+  }
+
+  final pdf = pw.Document();
+  final currency = NumberFormat.simpleCurrency();
+  final dateFormat = DateFormat('MMM dd, yyyy - HH:mm');
+  final total = shipments.fold<double>(0, (sum, item) => sum + item.price);
+
+  pw.Widget buildLine(BarrelShipment shipment) {
+    return pw.Container(
+      margin: const pw.EdgeInsets.only(bottom: 10),
+      padding: const pw.EdgeInsets.all(12),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.grey300),
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            '${shipment.destinationCountryName} - ${shipment.businessName}',
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 4),
+          pw.Text('Tracking: ${shipment.trackingCode}'),
+          pw.Text('Receiver: ${shipment.receiverName}'),
+          pw.Text('Quantity: ${shipment.quantity}'),
+          pw.Text('Shipping: ${currency.format(shipment.shippingFee)}'),
+          pw.Text('Pickup: ${currency.format(shipment.pickupFee)}'),
+          pw.Text('Line total: ${currency.format(shipment.price)}'),
+        ],
+      ),
+    );
+  }
+
+  pdf.addPage(
+    pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      build: (context) => [
+        pw.Container(
+          width: double.infinity,
+          padding: const pw.EdgeInsets.all(20),
+          color: PdfColors.blue,
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'BARREL ORDER RECEIPT',
+                style: pw.TextStyle(
+                  fontSize: 24,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.white,
+                ),
+              ),
+              pw.SizedBox(height: 6),
+              pw.Text(
+                'Order $orderId',
+                style: pw.TextStyle(color: PdfColors.white),
+              ),
+            ],
+          ),
+        ),
+        pw.SizedBox(height: 18),
+        pw.Text('Generated: ${dateFormat.format(DateTime.now())}'),
+        pw.SizedBox(height: 12),
+        ...shipments.map(buildLine),
+        pw.Divider(),
+        pw.Align(
+          alignment: pw.Alignment.centerRight,
+          child: pw.Text(
+            'Order total: ${currency.format(total)}',
+            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  await Printing.layoutPdf(
+    onLayout: (format) async => pdf.save(),
+    name: 'Barrel_Order_$orderId',
   );
 }

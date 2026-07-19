@@ -4,12 +4,15 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../data/business_location_catalog.dart';
 import '../l10n/app_localizations.dart';
 import '../models/business_service.dart';
+import '../models/marketplace_disclosure_acceptance.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/phone_number_validator.dart';
+import '../utils/legal_links.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/language_toggle.dart';
@@ -36,11 +39,15 @@ class _BusinessRegistrationScreenState
   final _businessWebsiteController = TextEditingController();
   final _serviceNoteController = TextEditingController();
   final _selectedServices = <String>{...defaultBusinessServiceValues};
+  String? _businessCountry;
+  String? _businessCity;
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
   bool _isSubmitting = false;
   bool _passwordVisible = false;
   bool _prefilledSignedInAccount = false;
+  bool _legalAccepted = false;
+  bool _businessResponsibilityAccepted = false;
 
   @override
   void dispose() {
@@ -59,6 +66,7 @@ class _BusinessRegistrationScreenState
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
+    final locale = Localizations.localeOf(context).languageCode;
     if (!_formKey.currentState!.validate()) return;
     if (_selectedServices.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -67,6 +75,14 @@ class _BusinessRegistrationScreenState
           backgroundColor: Colors.red,
         ),
       );
+      return;
+    }
+    if (!context.read<AuthProvider>().isAuthenticated && !_legalAccepted) {
+      showErrorSnackBar(context, l10n.accountLegalAcceptanceRequired);
+      return;
+    }
+    if (!_businessResponsibilityAccepted) {
+      showErrorSnackBar(context, l10n.businessResponsibilityRequired);
       return;
     }
     final confirmed = await confirmMajorAction(
@@ -88,6 +104,7 @@ class _BusinessRegistrationScreenState
           password: _passwordController.text.trim(),
           fullName: _ownerNameController.text.trim(),
           phone: _ownerPhoneController.text.trim(),
+          legalAcceptance: AccountLegalAcceptance(locale: locale),
         );
       }
 
@@ -107,9 +124,11 @@ class _BusinessRegistrationScreenState
         enabledServices: _selectedServices.toList(),
         serviceNote: _serviceNoteController.text.trim(),
         addressLine1: '',
-        city: '',
-        state: '',
+        city: _businessCity ?? '',
+        country: _businessCountry ?? '',
+        state: _businessCountry ?? '',
         postalCode: '',
+        marketplaceAcceptance: MarketplaceDisclosureAcceptance(locale: locale),
       );
       final businessId = application['businessId'] as String?;
       if (businessId != null &&
@@ -129,21 +148,34 @@ class _BusinessRegistrationScreenState
           profileImagePath: upload.path,
           serviceNote: _serviceNoteController.text.trim(),
           addressLine1: '',
-          city: '',
-          state: '',
+          city: _businessCity ?? '',
+          country: _businessCountry ?? '',
+          state: _businessCountry ?? '',
           postalCode: '',
           carHoldPricingMode: 'flat',
           carHoldFlatFee: 500,
           carHoldDailyRate: 100,
           carHoldMaxDays: 14,
+          parkingAddressLine1: '',
+          parkingCity: _businessCity ?? '',
+          parkingCountry: _businessCountry ?? '',
+          parkingState: _businessCountry ?? '',
+          parkingTotalSpaces: 0,
+          parkingBlockedSpaces: 0,
+          parkingDailyRate: 0,
+          parkingWeeklyRate: 0,
+          parkingMonthlyRate: 0,
+          parkingMinimumDays: 1,
+          parkingPickupAvailable: false,
+          parkingPickupFee: 0,
+          parkingInstructions: '',
+          parkingLatitude: null,
+          parkingLongitude: null,
         );
       }
 
       if (!mounted) return;
-      showSuccessSnackBar(
-        context,
-        'Business application submitted. You can set up your dashboard now.',
-      );
+      showSuccessSnackBar(context, l10n.businessApplicationSubmittedSetup);
       Navigator.pushNamedAndRemoveUntil(
         context,
         '/staff-home',
@@ -176,7 +208,7 @@ class _BusinessRegistrationScreenState
     final image = _profileImage;
     final bytes = _profileImageBytes;
     if (image == null || bytes == null) {
-      throw 'Please choose a business image first.';
+      throw AppLocalizations.of(context)!.chooseBusinessImageFirst;
     }
     final ext = (image.name.split('.').last).toLowerCase();
     final safeExt = ['jpg', 'jpeg', 'png', 'webp'].contains(ext) ? ext : 'jpg';
@@ -200,15 +232,17 @@ class _BusinessRegistrationScreenState
   }
 
   String? _emailValidator(String? value, {bool required = true}) {
+    final l10n = AppLocalizations.of(context)!;
     final trimmed = value?.trim() ?? '';
-    if (trimmed.isEmpty) return required ? 'Email is required' : null;
+    if (trimmed.isEmpty) return required ? l10n.emailRequired : null;
     if (!RegExp(r'^[\w\-.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(trimmed)) {
-      return 'Please enter a valid email';
+      return l10n.validEmailRequired;
     }
     return null;
   }
 
   String? _websiteValidator(String? value) {
+    final l10n = AppLocalizations.of(context)!;
     final trimmed = value?.trim() ?? '';
     if (trimmed.isEmpty) return null;
     final normalized = trimmed.startsWith(RegExp(r'https?://'))
@@ -219,7 +253,7 @@ class _BusinessRegistrationScreenState
         !uri.hasScheme ||
         uri.host.isEmpty ||
         !uri.host.contains('.')) {
-      return 'Please enter a valid website';
+      return l10n.validWebsiteRequired;
     }
     return null;
   }
@@ -470,6 +504,47 @@ class _BusinessRegistrationScreenState
                                   validator: _websiteValidator,
                                 ),
                                 const SizedBox(height: 12),
+                                _DropdownField(
+                                  label: l10n.countryName,
+                                  icon: Icons.public_outlined,
+                                  value: _businessCountry,
+                                  values: businessCountryOptions(
+                                    _businessCountry,
+                                  ),
+                                  validator: (value) => _required(
+                                    value,
+                                    l10n.selectBusinessCountry,
+                                  ),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _businessCountry = value;
+                                      _businessCity = null;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 12),
+                                _DropdownField(
+                                  label: l10n.locationCity,
+                                  icon: Icons.location_city_outlined,
+                                  value: _businessCity,
+                                  values: businessCityOptions(
+                                    _businessCountry,
+                                    _businessCity,
+                                  ),
+                                  hintText: _businessCountry == null
+                                      ? l10n.selectCountryFirst
+                                      : null,
+                                  validator: (value) =>
+                                      _required(value, l10n.selectBusinessCity),
+                                  onChanged: _businessCountry == null
+                                      ? null
+                                      : (value) {
+                                          setState(() {
+                                            _businessCity = value;
+                                          });
+                                        },
+                                ),
+                                const SizedBox(height: 12),
                                 _TextField(
                                   controller: _serviceNoteController,
                                   label: l10n.serviceNote,
@@ -478,6 +553,50 @@ class _BusinessRegistrationScreenState
                                   maxLines: 5,
                                 ),
                               ],
+                            ),
+                            const SizedBox(height: 14),
+                            if (!isSignedIn) ...[
+                              CheckboxListTile(
+                                value: _legalAccepted,
+                                onChanged: (value) => setState(
+                                  () => _legalAccepted = value ?? false,
+                                ),
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(l10n.accountLegalAcceptance),
+                              ),
+                              Wrap(
+                                alignment: WrapAlignment.center,
+                                children: [
+                                  TextButton(
+                                    onPressed: () => openLaawolLegalPage(
+                                      context,
+                                      privacy: false,
+                                    ),
+                                    child: Text(l10n.termsOfService),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => openLaawolLegalPage(
+                                      context,
+                                      privacy: true,
+                                    ),
+                                    child: Text(l10n.privacyPolicy),
+                                  ),
+                                ],
+                              ),
+                            ],
+                            CheckboxListTile(
+                              value: _businessResponsibilityAccepted,
+                              onChanged: (value) => setState(
+                                () => _businessResponsibilityAccepted =
+                                    value ?? false,
+                              ),
+                              controlAffinity: ListTileControlAffinity.leading,
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(
+                                l10n.businessResponsibilityAcceptance,
+                              ),
                             ),
                             const SizedBox(height: 18),
                             SizedBox(
@@ -501,10 +620,10 @@ class _BusinessRegistrationScreenState
                               ),
                             ),
                             const SizedBox(height: 12),
-                            const Text(
-                              'You can set up destinations, cars, and staff immediately. Customers will only see your business after platform approval.',
+                            Text(
+                              l10n.businessApprovalSetupNote,
                               textAlign: TextAlign.center,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: AppColors.muted,
                                 fontWeight: FontWeight.w600,
                                 height: 1.35,
@@ -563,18 +682,18 @@ class _ProfileImagePicker extends StatelessWidget {
                   : null,
             ),
             const SizedBox(width: 14),
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Business profile picture',
-                    style: TextStyle(fontWeight: FontWeight.w900),
+                    AppLocalizations.of(context)!.businessProfilePicture,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
                   ),
-                  SizedBox(height: 3),
+                  const SizedBox(height: 3),
                   Text(
-                    'Upload a logo or storefront image customers can recognize.',
-                    style: TextStyle(
+                    AppLocalizations.of(context)!.businessProfilePictureHelper,
+                    style: const TextStyle(
                       color: AppColors.muted,
                       fontWeight: FontWeight.w600,
                     ),
@@ -640,26 +759,30 @@ class _BusinessRegistrationHero extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
       ),
-      child: const Row(
+      child: Row(
         children: [
-          Icon(Icons.business_center_outlined, color: Colors.white, size: 42),
-          SizedBox(width: 14),
+          const Icon(
+            Icons.business_center_outlined,
+            color: Colors.white,
+            size: 42,
+          ),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Join the marketplace',
-                  style: TextStyle(
+                  AppLocalizations.of(context)!.joinMarketplace,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 18,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Text(
-                  'Apply once, prepare your operations, then go live when approved.',
-                  style: TextStyle(color: Colors.white70, height: 1.3),
+                  AppLocalizations.of(context)!.businessApplicationSubtitle,
+                  style: const TextStyle(color: Colors.white70, height: 1.3),
                 ),
               ],
             ),
@@ -770,6 +893,42 @@ class _TextField extends StatelessWidget {
         prefixIcon: Icon(icon),
         suffixIcon: suffixIcon,
       ),
+      validator: validator,
+    );
+  }
+}
+
+class _DropdownField extends StatelessWidget {
+  const _DropdownField({
+    required this.label,
+    required this.icon,
+    required this.value,
+    required this.values,
+    required this.onChanged,
+    this.validator,
+    this.hintText,
+  });
+
+  final String label;
+  final IconData icon;
+  final String? value;
+  final List<String> values;
+  final ValueChanged<String?>? onChanged;
+  final String? Function(String?)? validator;
+  final String? hintText;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String>(
+      initialValue: value != null && values.contains(value) ? value : null,
+      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
+      hint: hintText == null ? null : Text(hintText!),
+      items: values
+          .map(
+            (item) => DropdownMenuItem<String>(value: item, child: Text(item)),
+          )
+          .toList(),
+      onChanged: onChanged,
       validator: validator,
     );
   }

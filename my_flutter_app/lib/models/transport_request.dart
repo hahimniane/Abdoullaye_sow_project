@@ -15,6 +15,13 @@ class TransportRequest {
     required this.price,
     required this.status,
     required this.createdAt,
+    this.businessName = '',
+    this.businessId = '',
+    this.customerUid,
+    this.customerPhone = '',
+    this.pickupAddress = '',
+    this.notes = '',
+    this.quoteStatus = '',
   });
 
   final String id;
@@ -30,27 +37,61 @@ class TransportRequest {
   final double price;
   final String status;
   final DateTime createdAt;
+  final String businessName;
+  final String businessId;
+  final String? customerUid;
+  final String customerPhone;
+  final String pickupAddress;
+  final String notes;
+
+  /// Quote lifecycle for customer-submitted requests: 'awaitingQuote' until a
+  /// business sets a price, then '' (priced).
+  final String quoteStatus;
+
+  /// True when a customer submitted this and no price has been set yet.
+  bool get awaitingQuote => quoteStatus == 'awaitingQuote' || price <= 0;
 
   factory TransportRequest.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+    return TransportRequest.fromMap(id: doc.id, data: data);
+  }
+
+  factory TransportRequest.fromMap({
+    required String id,
+    required Map<String, dynamic> data,
+  }) {
+    final trackingCode = data['trackingCode'];
+    final carYear = data['carYear'];
     return TransportRequest(
-      id: doc.id,
-      trackingCode: (data['trackingCode'] as String?)?.trim().isNotEmpty == true
-          ? (data['trackingCode'] as String).trim()
-          : doc.id,
+      id: id,
+      trackingCode: trackingCode is String && trackingCode.trim().isNotEmpty
+          ? trackingCode.trim()
+          : id,
       ownerName: (data['ownerName'] ?? '') as String,
       carMake: (data['carMake'] ?? '') as String,
       carModel: (data['carModel'] ?? '') as String,
-      carYear: (data['carYear'] ?? '') as String,
+      carYear: switch (carYear) {
+        String value => value,
+        num value => value.toString(),
+        _ => '',
+      },
       vinNumber: (data['vinNumber'] ?? '') as String,
       destinationCountryId:
           (data['destinationCountryId'] ?? 'guinea') as String,
       destinationCountryName:
           (data['destinationCountryName'] ?? 'Guinea') as String,
-      transportDate: (data['transportDate'] as Timestamp).toDate(),
+      transportDate:
+          (data['transportDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
       price: (data['price'] as num?)?.toDouble() ?? 0,
       status: (data['status'] ?? 'pending') as String,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      businessName: (data['businessName'] ?? '') as String,
+      businessId: (data['businessId'] ?? '') as String,
+      customerUid: data['customerUid'] as String?,
+      customerPhone: (data['customerPhone'] ?? '') as String,
+      pickupAddress: (data['pickupAddress'] ?? '') as String,
+      notes: (data['notes'] ?? '') as String,
+      quoteStatus: (data['quoteStatus'] ?? '') as String,
     );
   }
 
@@ -68,6 +109,13 @@ class TransportRequest {
       'price': price,
       'status': status,
       'createdAt': Timestamp.fromDate(createdAt),
+      'businessName': businessName,
+      'businessId': businessId,
+      if (customerUid != null) 'customerUid': customerUid,
+      'customerPhone': customerPhone,
+      'pickupAddress': pickupAddress,
+      'notes': notes,
+      'quoteStatus': quoteStatus,
     };
   }
 
@@ -85,6 +133,13 @@ class TransportRequest {
     double? price,
     String? status,
     DateTime? createdAt,
+    String? businessName,
+    String? businessId,
+    String? customerUid,
+    String? customerPhone,
+    String? pickupAddress,
+    String? notes,
+    String? quoteStatus,
   }) {
     return TransportRequest(
       id: id ?? this.id,
@@ -101,6 +156,13 @@ class TransportRequest {
       price: price ?? this.price,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
+      businessName: businessName ?? this.businessName,
+      businessId: businessId ?? this.businessId,
+      customerUid: customerUid ?? this.customerUid,
+      customerPhone: customerPhone ?? this.customerPhone,
+      pickupAddress: pickupAddress ?? this.pickupAddress,
+      notes: notes ?? this.notes,
+      quoteStatus: quoteStatus ?? this.quoteStatus,
     );
   }
 }

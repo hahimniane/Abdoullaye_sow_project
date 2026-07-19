@@ -34,17 +34,18 @@ void main() {
     );
   });
 
-  test('bottom-tab shell keeps root pages back-button free', () {
+  test('bottom-tab shell keeps tab roots back-button free', () {
     final shellSource = File(
       'lib/screens/customer_home_screen.dart',
     ).readAsStringSync();
 
-    expect(shellSource, contains('const SellCarsScreen()'));
-    expect(shellSource, contains('const MyPurchasesScreen()'));
-    expect(shellSource, contains('const TrackingScreen()'));
+    expect(shellSource, contains('return const HomeTab();'));
+    expect(shellSource, contains('return const ShippingTab();'));
+    expect(shellSource, contains('return const CarsTab();'));
+    expect(shellSource, contains('return const ActivityTab();'));
   });
 
-  test('embedded settings detail screens keep callback back behavior', () {
+  test('settings detail screens open inside the nested settings navigator', () {
     final shellSource = File(
       'lib/screens/customer_home_screen.dart',
     ).readAsStringSync();
@@ -55,10 +56,10 @@ void main() {
       'lib/screens/wallet_screen.dart',
     ).readAsStringSync();
 
-    expect(shellSource, contains('WalletScreen(onBack: () => _selectTab(4))'));
+    expect(shellSource, contains("Navigator.of(context).pushNamed('/wallet')"));
     expect(
       shellSource,
-      contains('AccountProfileScreen(onBack: () => _selectTab(4))'),
+      contains("Navigator.of(context).pushNamed('/account-profile')"),
     );
     expect(accountSource, contains('AppBackButton(onPressed: _close)'));
     expect(walletSource, contains('_WalletHeader(onBack: _back)'));

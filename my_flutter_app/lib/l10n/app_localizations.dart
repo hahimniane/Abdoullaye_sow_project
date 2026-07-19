@@ -542,6 +542,12 @@ abstract class AppLocalizations {
   /// **'Shipment saved. Tracking number: {trackingCode}'**
   String shipmentSavedWithTracking(Object trackingCode);
 
+  /// No description provided for @shipmentSavedReceiptUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipment saved. Tracking number: {trackingCode}. The receipt could not be opened, but your payment and shipment are safe.'**
+  String shipmentSavedReceiptUnavailable(Object trackingCode);
+
   /// No description provided for @failedToSaveShipment.
   ///
   /// In en, this message translates to:
@@ -1130,6 +1136,114 @@ abstract class AppLocalizations {
   /// **'Terms of Service'**
   String get termsOfService;
 
+  /// No description provided for @legalAndPrivacy.
+  ///
+  /// In en, this message translates to:
+  /// **'Legal & privacy'**
+  String get legalAndPrivacy;
+
+  /// No description provided for @privacyPolicySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How Laawol handles your information'**
+  String get privacyPolicySubtitle;
+
+  /// No description provided for @termsOfServiceSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rules for using the Laawol platform'**
+  String get termsOfServiceSubtitle;
+
+  /// No description provided for @openLegalLinkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'This page could not be opened. Please try again.'**
+  String get openLegalLinkFailed;
+
+  /// No description provided for @accountManagement.
+  ///
+  /// In en, this message translates to:
+  /// **'Account management'**
+  String get accountManagement;
+
+  /// No description provided for @deleteAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete account'**
+  String get deleteAccount;
+
+  /// No description provided for @deleteAccountSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Permanently delete your account and personal data'**
+  String get deleteAccountSubtitle;
+
+  /// No description provided for @deleteAccountTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete your Laawol account?'**
+  String get deleteAccountTitle;
+
+  /// No description provided for @deleteAccountExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'This starts permanent account deletion. You will be signed out, and access to your account will end.'**
+  String get deleteAccountExplanation;
+
+  /// No description provided for @deleteAccountRetentionNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed payment and service records may be retained when required for accounting, refunds, disputes, fraud prevention, or law. All other associated personal data will be deleted or anonymized within 30 days.'**
+  String get deleteAccountRetentionNotice;
+
+  /// No description provided for @enterPasswordToDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your password to confirm'**
+  String get enterPasswordToDelete;
+
+  /// No description provided for @confirmDeleteAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Request deletion'**
+  String get confirmDeleteAccount;
+
+  /// No description provided for @accountDeletionRequestedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Deletion requested'**
+  String get accountDeletionRequestedTitle;
+
+  /// No description provided for @accountDeletionRequestedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your request was received. Laawol will delete or anonymize eligible account data within 30 days. You are now signed out.'**
+  String get accountDeletionRequestedMessage;
+
+  /// No description provided for @accountDeletionWrongPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'The password is incorrect.'**
+  String get accountDeletionWrongPassword;
+
+  /// No description provided for @accountDeletionRecentLoginRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please sign in again, then retry account deletion.'**
+  String get accountDeletionRecentLoginRequired;
+
+  /// No description provided for @accountDeletionAdminBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'A platform administrator account must be removed by another super admin.'**
+  String get accountDeletionAdminBlocked;
+
+  /// No description provided for @accountDeletionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not start account deletion. Please try again or contact support.'**
+  String get accountDeletionFailed;
+
   /// No description provided for @manageCars.
   ///
   /// In en, this message translates to:
@@ -1148,6 +1262,126 @@ abstract class AppLocalizations {
   /// **'All'**
   String get filterAll;
 
+  /// No description provided for @trackSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search tracking, receiver, country'**
+  String get trackSearchHint;
+
+  /// No description provided for @filterInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get filterInProgress;
+
+  /// No description provided for @filterDelivered.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivered'**
+  String get filterDelivered;
+
+  /// No description provided for @allDestinations.
+  ///
+  /// In en, this message translates to:
+  /// **'All destinations'**
+  String get allDestinations;
+
+  /// No description provided for @noShipmentsMatchFilters.
+  ///
+  /// In en, this message translates to:
+  /// **'No shipments match your filters'**
+  String get noShipmentsMatchFilters;
+
+  /// No description provided for @ordersTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My orders'**
+  String get ordersTitle;
+
+  /// No description provided for @ordersSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search orders, business, country'**
+  String get ordersSearchHint;
+
+  /// No description provided for @ordersEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Your paid orders appear here'**
+  String get ordersEmpty;
+
+  /// No description provided for @ordersNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No orders match your filters'**
+  String get ordersNoMatch;
+
+  /// No description provided for @orderTypeCars.
+  ///
+  /// In en, this message translates to:
+  /// **'Cars'**
+  String get orderTypeCars;
+
+  /// No description provided for @orderTypeBarrels.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrels'**
+  String get orderTypeBarrels;
+
+  /// No description provided for @orderTypeFreight.
+  ///
+  /// In en, this message translates to:
+  /// **'Freight'**
+  String get orderTypeFreight;
+
+  /// No description provided for @orderTypeTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport'**
+  String get orderTypeTransport;
+
+  /// No description provided for @orderTypeParking.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking'**
+  String get orderTypeParking;
+
+  /// No description provided for @orderStatusPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get orderStatusPending;
+
+  /// No description provided for @orderStatusActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get orderStatusActive;
+
+  /// No description provided for @orderStatusInTransit.
+  ///
+  /// In en, this message translates to:
+  /// **'In transit'**
+  String get orderStatusInTransit;
+
+  /// No description provided for @orderStatusCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get orderStatusCompleted;
+
+  /// No description provided for @orderStatusCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get orderStatusCancelled;
+
+  /// No description provided for @orderStatusRefunded.
+  ///
+  /// In en, this message translates to:
+  /// **'Refunded'**
+  String get orderStatusRefunded;
+
   /// No description provided for @filterParking.
   ///
   /// In en, this message translates to:
@@ -1159,6 +1393,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Barrel Shipments'**
   String get filterBarrels;
+
+  /// No description provided for @filterFreight.
+  ///
+  /// In en, this message translates to:
+  /// **'Freight'**
+  String get filterFreight;
 
   /// No description provided for @filterTransport.
   ///
@@ -1589,7 +1829,7 @@ abstract class AppLocalizations {
   /// No description provided for @markAsSold.
   ///
   /// In en, this message translates to:
-  /// **'Mark as Sold'**
+  /// **'Mark as sold'**
   String get markAsSold;
 
   /// No description provided for @sold.
@@ -1603,6 +1843,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Mileage'**
   String get carMileage;
+
+  /// No description provided for @rebuiltTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rebuilt title'**
+  String get rebuiltTitle;
+
+  /// No description provided for @rebuiltTitleQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Rebuilt title?'**
+  String get rebuiltTitleQuestion;
+
+  /// No description provided for @rebuiltTitleYes.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes — rebuilt title'**
+  String get rebuiltTitleYes;
+
+  /// No description provided for @rebuiltTitleNo.
+  ///
+  /// In en, this message translates to:
+  /// **'No — not a rebuilt title'**
+  String get rebuiltTitleNo;
+
+  /// No description provided for @rebuiltTitleUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Not provided'**
+  String get rebuiltTitleUnknown;
+
+  /// No description provided for @rebuiltTitleDisclosureHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Required. Buyers will see this disclosure.'**
+  String get rebuiltTitleDisclosureHelp;
 
   /// No description provided for @sellingPrice.
   ///
@@ -1631,7 +1907,7 @@ abstract class AppLocalizations {
   /// No description provided for @contactPhone.
   ///
   /// In en, this message translates to:
-  /// **'Contact Phone'**
+  /// **'Contact phone'**
   String get contactPhone;
 
   /// No description provided for @contactEmail.
@@ -1819,24 +2095,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Set as cover'**
   String get setAsCover;
-
-  /// No description provided for @themeLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Appearance'**
-  String get themeLabel;
-
-  /// No description provided for @darkMode.
-  ///
-  /// In en, this message translates to:
-  /// **'Dark mode'**
-  String get darkMode;
-
-  /// No description provided for @lightMode.
-  ///
-  /// In en, this message translates to:
-  /// **'Light mode'**
-  String get lightMode;
 
   /// No description provided for @reserved.
   ///
@@ -2150,6 +2408,24 @@ abstract class AppLocalizations {
   /// **'Country Code'**
   String get countryCode;
 
+  /// No description provided for @selectBusinessCountry.
+  ///
+  /// In en, this message translates to:
+  /// **'Select your business country'**
+  String get selectBusinessCountry;
+
+  /// No description provided for @selectBusinessCity.
+  ///
+  /// In en, this message translates to:
+  /// **'Select your business city'**
+  String get selectBusinessCity;
+
+  /// No description provided for @selectCountryFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Select country first'**
+  String get selectCountryFirst;
+
   /// No description provided for @seedDefaultCountries.
   ///
   /// In en, this message translates to:
@@ -2233,6 +2509,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Business profile saved.'**
   String get businessProfileSaved;
+
+  /// No description provided for @featureBlurbRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a short blurb under 140 characters.'**
+  String get featureBlurbRequired;
+
+  /// No description provided for @featureConsentRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Consent is required before requesting.'**
+  String get featureConsentRequired;
+
+  /// No description provided for @featureLogoRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload a logo before requesting.'**
+  String get featureLogoRequired;
+
+  /// No description provided for @featureRequestSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Featuring request sent for admin review.'**
+  String get featureRequestSent;
+
+  /// No description provided for @featuredOnWebsite.
+  ///
+  /// In en, this message translates to:
+  /// **'Featured on the website'**
+  String get featuredOnWebsite;
+
+  /// No description provided for @featureApprovedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your business is approved for public featuring.'**
+  String get featureApprovedMessage;
+
+  /// No description provided for @featureRequestedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your request is waiting for admin review.'**
+  String get featureRequestedMessage;
+
+  /// No description provided for @featureDefaultMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Request a public marketing card on Laawol Digital.'**
+  String get featureDefaultMessage;
+
+  /// No description provided for @featureAdminNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin note: {note}'**
+  String featureAdminNote(Object note);
+
+  /// No description provided for @uploadLogo.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload logo'**
+  String get uploadLogo;
+
+  /// No description provided for @changeLogo.
+  ///
+  /// In en, this message translates to:
+  /// **'Change logo'**
+  String get changeLogo;
+
+  /// No description provided for @shortPublicBlurb.
+  ///
+  /// In en, this message translates to:
+  /// **'Short public blurb'**
+  String get shortPublicBlurb;
+
+  /// No description provided for @shortPublicBlurbHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'One sentence customers can safely see.'**
+  String get shortPublicBlurbHelper;
+
+  /// No description provided for @featureConsentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'I consent to this business being featured publicly.'**
+  String get featureConsentLabel;
+
+  /// No description provided for @sendingFeatureRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending request'**
+  String get sendingFeatureRequest;
+
+  /// No description provided for @requestFeaturing.
+  ///
+  /// In en, this message translates to:
+  /// **'Request featuring'**
+  String get requestFeaturing;
 
   /// No description provided for @noBusinessProfileAssigned.
   ///
@@ -2425,6 +2797,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No wallet activity yet.'**
   String get noWalletActivityYet;
+
+  /// No description provided for @walletActivityUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not load your wallet activity right now. Please try again in a moment.'**
+  String get walletActivityUnavailable;
 
   /// No description provided for @signInToViewWallet.
   ///
@@ -3134,6 +3512,90 @@ abstract class AppLocalizations {
   /// **'Reject'**
   String get reject;
 
+  /// No description provided for @sharedBarrelManageRequests.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage requests'**
+  String get sharedBarrelManageRequests;
+
+  /// No description provided for @sharedBarrelJoinRequests.
+  ///
+  /// In en, this message translates to:
+  /// **'Join requests'**
+  String get sharedBarrelJoinRequests;
+
+  /// No description provided for @sharedBarrelJoinRequestsHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve or reject customers waiting to join this shared barrel.'**
+  String get sharedBarrelJoinRequestsHelp;
+
+  /// No description provided for @sharedBarrelNoPendingRequests.
+  ///
+  /// In en, this message translates to:
+  /// **'No join requests are waiting for approval.'**
+  String get sharedBarrelNoPendingRequests;
+
+  /// No description provided for @sharedBarrelRequestApproved.
+  ///
+  /// In en, this message translates to:
+  /// **'Join request approved.'**
+  String get sharedBarrelRequestApproved;
+
+  /// No description provided for @sharedBarrelRequestRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Join request rejected. The deposit will be sent for refund.'**
+  String get sharedBarrelRequestRejected;
+
+  /// No description provided for @sharedBarrelRequestDecisionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update this request. Please try again.'**
+  String get sharedBarrelRequestDecisionFailed;
+
+  /// No description provided for @sharedBarrelRequestedShareCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 share requested} other{{count} shares requested}}'**
+  String sharedBarrelRequestedShareCount(int count);
+
+  /// No description provided for @sharedBarrelPaidDeposit.
+  ///
+  /// In en, this message translates to:
+  /// **'Deposit paid: {amount}'**
+  String sharedBarrelPaidDeposit(Object amount);
+
+  /// No description provided for @sharedBarrelCancelPool.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel pool'**
+  String get sharedBarrelCancelPool;
+
+  /// No description provided for @sharedBarrelCancelTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel this shared barrel?'**
+  String get sharedBarrelCancelTitle;
+
+  /// No description provided for @sharedBarrelCancelForfeitureMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'If you cancel now, your {amount} deposit will be forfeited. This cannot be undone.'**
+  String sharedBarrelCancelForfeitureMessage(Object amount);
+
+  /// No description provided for @sharedBarrelKeepPool.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep pool'**
+  String get sharedBarrelKeepPool;
+
+  /// No description provided for @sharedBarrelCancelAndForfeit.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel and forfeit deposit'**
+  String get sharedBarrelCancelAndForfeit;
+
   /// No description provided for @requestChanges.
   ///
   /// In en, this message translates to:
@@ -3578,6 +4040,36 @@ abstract class AppLocalizations {
   /// **'Total Cost:'**
   String get totalCostPdf;
 
+  /// No description provided for @dateTimePdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Date & Time:'**
+  String get dateTimePdf;
+
+  /// No description provided for @parkingStatusActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking Status: ACTIVE'**
+  String get parkingStatusActive;
+
+  /// No description provided for @vehicleSuccessfullyParked.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle has been successfully parked'**
+  String get vehicleSuccessfullyParked;
+
+  /// No description provided for @termsAndConditions.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms & Conditions'**
+  String get termsAndConditions;
+
+  /// No description provided for @parkingReceiptTerms.
+  ///
+  /// In en, this message translates to:
+  /// **'• This receipt serves as proof of parking\n• Vehicle will be stored securely\n• Contact us for any inquiries\n• Valid until vehicle is retrieved'**
+  String get parkingReceiptTerms;
+
   /// No description provided for @peopleAndAccess.
   ///
   /// In en, this message translates to:
@@ -3661,6 +4153,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{amount} will be credited to your wallet.'**
   String destinationChangeCredit(Object amount);
+
+  /// No description provided for @destinationChangePaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipment updated. {amount} difference paid.'**
+  String destinationChangePaid(Object amount);
+
+  /// No description provided for @destinationChangeCredited.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipment updated. {amount} credited to your wallet.'**
+  String destinationChangeCredited(Object amount);
+
+  /// No description provided for @shipmentDestinationUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipment destination updated.'**
+  String get shipmentDestinationUpdated;
+
+  /// No description provided for @destinationPaymentInitializationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The destination payment could not be initialized. Please try again.'**
+  String get destinationPaymentInitializationFailed;
+
+  /// No description provided for @paidShipmentDestinationChangeRequiresSupport.
+  ///
+  /// In en, this message translates to:
+  /// **'This shipment has already been paid out to the business. Contact Laawol support to change its destination safely.'**
+  String get paidShipmentDestinationChangeRequiresSupport;
 
   /// No description provided for @newRouteValue.
   ///
@@ -3830,6 +4352,258 @@ abstract class AppLocalizations {
   /// **'1 to 30 days'**
   String get holdMaxDaysHelper;
 
+  /// No description provided for @parkingCapacityTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking capacity'**
+  String get parkingCapacityTitle;
+
+  /// No description provided for @parkingCapacitySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Set the address, spaces, and prices customers can reserve.'**
+  String get parkingCapacitySubtitle;
+
+  /// No description provided for @parkingAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking address'**
+  String get parkingAddress;
+
+  /// No description provided for @parkingLatitude.
+  ///
+  /// In en, this message translates to:
+  /// **'Latitude'**
+  String get parkingLatitude;
+
+  /// No description provided for @parkingLongitude.
+  ///
+  /// In en, this message translates to:
+  /// **'Longitude'**
+  String get parkingLongitude;
+
+  /// No description provided for @totalParkingSpaces.
+  ///
+  /// In en, this message translates to:
+  /// **'Total spaces'**
+  String get totalParkingSpaces;
+
+  /// No description provided for @blockedParkingSpaces.
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked spaces'**
+  String get blockedParkingSpaces;
+
+  /// No description provided for @dailyParkingRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily parking rate'**
+  String get dailyParkingRate;
+
+  /// No description provided for @weeklyParkingRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly parking rate'**
+  String get weeklyParkingRate;
+
+  /// No description provided for @monthlyParkingRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly parking rate'**
+  String get monthlyParkingRate;
+
+  /// No description provided for @minimumParkingDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Minimum days'**
+  String get minimumParkingDays;
+
+  /// No description provided for @pickupAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup available'**
+  String get pickupAvailable;
+
+  /// No description provided for @pickupAvailableSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers can request vehicle pickup before parking.'**
+  String get pickupAvailableSubtitle;
+
+  /// No description provided for @pickupFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup fee'**
+  String get pickupFee;
+
+  /// No description provided for @parkingInstructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking instructions'**
+  String get parkingInstructions;
+
+  /// No description provided for @enterValidParkingCapacity.
+  ///
+  /// In en, this message translates to:
+  /// **'Add total spaces, a positive daily rate, and valid blocked spaces before saving parking.'**
+  String get enterValidParkingCapacity;
+
+  /// No description provided for @enterValidParkingCoordinates.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter valid parking latitude and longitude, or leave both blank.'**
+  String get enterValidParkingCoordinates;
+
+  /// No description provided for @customerParkingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Find parking'**
+  String get customerParkingTitle;
+
+  /// No description provided for @customerParkingSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose where and when you want to park. We will show businesses with open spaces.'**
+  String get customerParkingSubtitle;
+
+  /// No description provided for @enterCarDetailsToReserveParking.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter car details to reserve parking'**
+  String get enterCarDetailsToReserveParking;
+
+  /// No description provided for @parkingCity.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking city'**
+  String get parkingCity;
+
+  /// No description provided for @pleaseEnterParkingCity.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the city where you want to park.'**
+  String get pleaseEnterParkingCity;
+
+  /// No description provided for @parkingStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking start'**
+  String get parkingStart;
+
+  /// No description provided for @parkingEnd.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking end'**
+  String get parkingEnd;
+
+  /// No description provided for @searchParking.
+  ///
+  /// In en, this message translates to:
+  /// **'Search parking'**
+  String get searchParking;
+
+  /// No description provided for @searchingParking.
+  ///
+  /// In en, this message translates to:
+  /// **'Searching...'**
+  String get searchingParking;
+
+  /// No description provided for @availableParkingBusinesses.
+  ///
+  /// In en, this message translates to:
+  /// **'Available parking'**
+  String get availableParkingBusinesses;
+
+  /// No description provided for @noParkingBusinesses.
+  ///
+  /// In en, this message translates to:
+  /// **'No businesses have parking available for those dates.'**
+  String get noParkingBusinesses;
+
+  /// No description provided for @parkingSearchFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking search failed. Please try again.'**
+  String get parkingSearchFailed;
+
+  /// No description provided for @availableSpacesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} spaces available'**
+  String availableSpacesCount(Object count);
+
+  /// No description provided for @parkingPricePerDay.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount}/day'**
+  String parkingPricePerDay(Object amount);
+
+  /// No description provided for @parkingEstimatedTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated total: {amount}'**
+  String parkingEstimatedTotal(Object amount);
+
+  /// No description provided for @parkingDistanceMiles.
+  ///
+  /// In en, this message translates to:
+  /// **'{miles} mi away'**
+  String parkingDistanceMiles(Object miles);
+
+  /// No description provided for @reserveParking.
+  ///
+  /// In en, this message translates to:
+  /// **'Reserve parking'**
+  String get reserveParking;
+
+  /// No description provided for @reservingParking.
+  ///
+  /// In en, this message translates to:
+  /// **'Reserving...'**
+  String get reservingParking;
+
+  /// No description provided for @parkingReservationSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking reserved. Tracking number: {trackingCode}'**
+  String parkingReservationSaved(Object trackingCode);
+
+  /// No description provided for @parkingReservationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking could not be reserved. Please try again.'**
+  String get parkingReservationFailed;
+
+  /// No description provided for @accountRequiredParking.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to reserve parking and track your vehicle.'**
+  String get accountRequiredParking;
+
+  /// No description provided for @parkingDateRangeInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an end date after the parking start date.'**
+  String get parkingDateRangeInvalid;
+
+  /// No description provided for @chooseParkingBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a business with available parking.'**
+  String get chooseParkingBusiness;
+
+  /// No description provided for @parkingPickupRequested.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup requested'**
+  String get parkingPickupRequested;
+
+  /// No description provided for @parkingPickupOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Request pickup if the business offers it'**
+  String get parkingPickupOptional;
+
   /// No description provided for @businessServicesSubtitle.
   ///
   /// In en, this message translates to:
@@ -3974,11 +4748,29 @@ abstract class AppLocalizations {
   /// **'Submit business application'**
   String get submitBusinessApplication;
 
+  /// No description provided for @businessApplicationSubmittedSetup.
+  ///
+  /// In en, this message translates to:
+  /// **'Business application submitted. You can set up your dashboard now.'**
+  String get businessApplicationSubmittedSetup;
+
   /// No description provided for @ownerNameRequiredShort.
   ///
   /// In en, this message translates to:
   /// **'Owner name is required'**
   String get ownerNameRequiredShort;
+
+  /// No description provided for @chooseBusinessImageFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Please choose a business image first.'**
+  String get chooseBusinessImageFirst;
+
+  /// No description provided for @validWebsiteRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter a valid website'**
+  String get validWebsiteRequired;
 
   /// No description provided for @unknown.
   ///
@@ -5054,6 +5846,24 @@ abstract class AppLocalizations {
   /// **'Notification preferences'**
   String get notificationPreferences;
 
+  /// No description provided for @pushNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Push notifications'**
+  String get pushNotifications;
+
+  /// No description provided for @emailNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Email notifications'**
+  String get emailNotifications;
+
+  /// No description provided for @smsNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'SMS notifications'**
+  String get smsNotifications;
+
   /// No description provided for @carActivityNotifications.
   ///
   /// In en, this message translates to:
@@ -5143,6 +5953,2866 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Favorite removed'**
   String get favoriteRemoved;
+
+  /// No description provided for @addToFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to favorites'**
+  String get addToFavorites;
+
+  /// No description provided for @removeFromFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from favorites'**
+  String get removeFromFavorites;
+
+  /// No description provided for @enterValidPaidHoldPricing.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter valid paid hold pricing.'**
+  String get enterValidPaidHoldPricing;
+
+  /// No description provided for @useBusinessPaidHoldPricing.
+  ///
+  /// In en, this message translates to:
+  /// **'Use business paid hold pricing'**
+  String get useBusinessPaidHoldPricing;
+
+  /// No description provided for @useBusinessPaidHoldPricingSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off to override hold fee for this car.'**
+  String get useBusinessPaidHoldPricingSubtitle;
+
+  /// No description provided for @chooseReturnDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose return date'**
+  String get chooseReturnDate;
+
+  /// No description provided for @customizeNavbar.
+  ///
+  /// In en, this message translates to:
+  /// **'Customize navbar'**
+  String get customizeNavbar;
+
+  /// No description provided for @change.
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get change;
+
+  /// No description provided for @sendFreight.
+  ///
+  /// In en, this message translates to:
+  /// **'Send freight'**
+  String get sendFreight;
+
+  /// No description provided for @freightBookedTracking.
+  ///
+  /// In en, this message translates to:
+  /// **'Freight booked. Tracking: {trackingCode}'**
+  String freightBookedTracking(Object trackingCode);
+
+  /// No description provided for @freightEstimatePaidTracking.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimate paid. Tracking: {trackingCode}'**
+  String freightEstimatePaidTracking(Object trackingCode);
+
+  /// No description provided for @fillSenderReceiverPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Fill sender, receiver, and phone.'**
+  String get fillSenderReceiverPhone;
+
+  /// No description provided for @enterParcelWeightKg.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the parcel weight in kg.'**
+  String get enterParcelWeightKg;
+
+  /// No description provided for @noFreightBusinessesYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No freight businesses yet'**
+  String get noFreightBusinessesYet;
+
+  /// No description provided for @noFreightBusinessesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Parcel freight will appear here once a business sets its air or sea rates.'**
+  String get noFreightBusinessesSubtitle;
+
+  /// No description provided for @couldNotLoadFreightOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load freight options. Check your connection and try again.'**
+  String get couldNotLoadFreightOptions;
+
+  /// No description provided for @freightBookingFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t create this freight shipment. Please try again.'**
+  String get freightBookingFailed;
+
+  /// No description provided for @approvedBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved business'**
+  String get approvedBusiness;
+
+  /// No description provided for @freightDeliveryEstimateDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery: {minimum}-{maximum} days'**
+  String freightDeliveryEstimateDays(int minimum, int maximum);
+
+  /// No description provided for @searchBusinessOrCountry.
+  ///
+  /// In en, this message translates to:
+  /// **'Search a business or country'**
+  String get searchBusinessOrCountry;
+
+  /// No description provided for @noMatchFor.
+  ///
+  /// In en, this message translates to:
+  /// **'No match for \"{query}\"'**
+  String noMatchFor(Object query);
+
+  /// No description provided for @toDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'To {destination}'**
+  String toDestination(Object destination);
+
+  /// No description provided for @airRatePerKg.
+  ///
+  /// In en, this message translates to:
+  /// **'Air {rate}/kg'**
+  String airRatePerKg(Object rate);
+
+  /// No description provided for @seaRatePerKg.
+  ///
+  /// In en, this message translates to:
+  /// **'Sea {rate}/kg'**
+  String seaRatePerKg(Object rate);
+
+  /// No description provided for @shippingMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipping mode'**
+  String get shippingMode;
+
+  /// No description provided for @invalidFreightMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose air or sea freight.'**
+  String get invalidFreightMode;
+
+  /// No description provided for @parcelWeightKg.
+  ///
+  /// In en, this message translates to:
+  /// **'Parcel weight (kg)'**
+  String get parcelWeightKg;
+
+  /// No description provided for @estimatedPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated price'**
+  String get estimatedPrice;
+
+  /// No description provided for @estimatedWeight.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated weight'**
+  String get estimatedWeight;
+
+  /// No description provided for @estimatedWeightKg.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated weight (kg)'**
+  String get estimatedWeightKg;
+
+  /// No description provided for @estimatedTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated total'**
+  String get estimatedTotal;
+
+  /// No description provided for @freightEstimateExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'You are paying an estimate based on the weight you entered. The business will confirm the weight after drop-off.'**
+  String get freightEstimateExplanation;
+
+  /// No description provided for @payEstimate.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay estimate'**
+  String get payEstimate;
+
+  /// No description provided for @estimatePaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimate paid'**
+  String get estimatePaid;
+
+  /// No description provided for @awaitingConfirmedWeight.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting confirmed weight'**
+  String get awaitingConfirmedWeight;
+
+  /// No description provided for @verifiedWeight.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed weight'**
+  String get verifiedWeight;
+
+  /// No description provided for @finalTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Final total'**
+  String get finalTotal;
+
+  /// No description provided for @additionalPaymentRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Additional payment required'**
+  String get additionalPaymentRequired;
+
+  /// No description provided for @payBalanceAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay balance of {amount}'**
+  String payBalanceAmount(Object amount);
+
+  /// No description provided for @refundDueAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Refund due: {amount}'**
+  String refundDueAmount(Object amount);
+
+  /// No description provided for @refundProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'Refund processing'**
+  String get refundProcessing;
+
+  /// No description provided for @refundCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Refund completed'**
+  String get refundCompleted;
+
+  /// No description provided for @freightSettled.
+  ///
+  /// In en, this message translates to:
+  /// **'Settled'**
+  String get freightSettled;
+
+  /// No description provided for @shipmentHeldForBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Your parcel will be held until the balance is paid.'**
+  String get shipmentHeldForBalance;
+
+  /// No description provided for @settlementNeedsAttention.
+  ///
+  /// In en, this message translates to:
+  /// **'Settlement needs attention'**
+  String get settlementNeedsAttention;
+
+  /// No description provided for @paymentProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment processing…'**
+  String get paymentProcessing;
+
+  /// No description provided for @couldNotPayBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not pay the balance. Try again.'**
+  String get couldNotPayBalance;
+
+  /// No description provided for @enterWeightToSeePrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a weight to see the price'**
+  String get enterWeightToSeePrice;
+
+  /// No description provided for @bookAndPay.
+  ///
+  /// In en, this message translates to:
+  /// **'Book & pay'**
+  String get bookAndPay;
+
+  /// No description provided for @freightDropOffNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop your parcel at the business location. Pickup coming soon.'**
+  String get freightDropOffNote;
+
+  /// No description provided for @freightDropOffAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop-off: {address}'**
+  String freightDropOffAddress(Object address);
+
+  /// No description provided for @freightBusinessPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Business phone: {phone}'**
+  String freightBusinessPhone(Object phone);
+
+  /// No description provided for @airFreight.
+  ///
+  /// In en, this message translates to:
+  /// **'Air freight'**
+  String get airFreight;
+
+  /// No description provided for @seaFreight.
+  ///
+  /// In en, this message translates to:
+  /// **'Sea freight'**
+  String get seaFreight;
+
+  /// No description provided for @pricePerKg.
+  ///
+  /// In en, this message translates to:
+  /// **'{price} / kg'**
+  String pricePerKg(Object price);
+
+  /// No description provided for @fasterDelivery.
+  ///
+  /// In en, this message translates to:
+  /// **'Faster delivery'**
+  String get fasterDelivery;
+
+  /// No description provided for @lowerCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Lower cost'**
+  String get lowerCost;
+
+  /// No description provided for @requestCarTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Request car transport'**
+  String get requestCarTransport;
+
+  /// No description provided for @chooseBusinessAndDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a business and destination.'**
+  String get chooseBusinessAndDestination;
+
+  /// No description provided for @selectCarMakeModelYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Select the car make, model, and year.'**
+  String get selectCarMakeModelYear;
+
+  /// No description provided for @transportRequestSentToBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Request sent to {businessName}. Tracking {trackingCode}. They will send you a price quote.'**
+  String transportRequestSentToBusiness(
+    Object businessName,
+    Object trackingCode,
+  );
+
+  /// No description provided for @couldNotSendRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send request: {error}'**
+  String couldNotSendRequest(Object error);
+
+  /// No description provided for @pickPreferredDateOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a preferred date (optional)'**
+  String get pickPreferredDateOptional;
+
+  /// No description provided for @whoShouldHandleTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Who should handle it?'**
+  String get whoShouldHandleTransport;
+
+  /// No description provided for @theCar.
+  ///
+  /// In en, this message translates to:
+  /// **'The car'**
+  String get theCar;
+
+  /// No description provided for @contactAndPickup.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact & pickup'**
+  String get contactAndPickup;
+
+  /// No description provided for @businessDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Business · destination'**
+  String get businessDestination;
+
+  /// No description provided for @pickupAddressOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup address (optional)'**
+  String get pickupAddressOptional;
+
+  /// No description provided for @notesForBusinessOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes for the business (optional)'**
+  String get notesForBusinessOptional;
+
+  /// No description provided for @enterOwnerName.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the owner name'**
+  String get enterOwnerName;
+
+  /// No description provided for @enterContactPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a contact phone'**
+  String get enterContactPhone;
+
+  /// No description provided for @sending.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending...'**
+  String get sending;
+
+  /// No description provided for @sendRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Send request'**
+  String get sendRequest;
+
+  /// No description provided for @transportQuoteNoPaymentNote.
+  ///
+  /// In en, this message translates to:
+  /// **'No payment now — the business reviews your request and sends a price quote you can accept.'**
+  String get transportQuoteNoPaymentNote;
+
+  /// No description provided for @noTransportBusinessesYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No business is offering car transport yet'**
+  String get noTransportBusinessesYet;
+
+  /// No description provided for @noTransportBusinessesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Check back soon — businesses add transport routes as they come online.'**
+  String get noTransportBusinessesSubtitle;
+
+  /// No description provided for @couldNotLoadTransportOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load transport options'**
+  String get couldNotLoadTransportOptions;
+
+  /// No description provided for @receiverWhatsAppNumberTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This receiver number is used on WhatsApp'**
+  String get receiverWhatsAppNumberTitle;
+
+  /// No description provided for @receiverWhatsAppNumberSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this only if the receiver uses a different country number on WhatsApp.'**
+  String get receiverWhatsAppNumberSubtitle;
+
+  /// No description provided for @invalidPhoneWithCountryCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid phone number with country code.'**
+  String get invalidPhoneWithCountryCode;
+
+  /// No description provided for @invalidInternationalPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid international phone number.'**
+  String get invalidInternationalPhone;
+
+  /// No description provided for @whatsAppDifferentCountryRequiresCode.
+  ///
+  /// In en, this message translates to:
+  /// **'For WhatsApp numbers from another country, include + and the country code.'**
+  String get whatsAppDifferentCountryRequiresCode;
+
+  /// No description provided for @receiverPhoneMustMatchDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Receiver number must match {destinationName} ({prefix}) or mark it as a WhatsApp number.'**
+  String receiverPhoneMustMatchDestination(
+    Object destinationName,
+    Object prefix,
+  );
+
+  /// No description provided for @readyForPickup.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready for pickup'**
+  String get readyForPickup;
+
+  /// No description provided for @samePickup.
+  ///
+  /// In en, this message translates to:
+  /// **'Same pickup'**
+  String get samePickup;
+
+  /// No description provided for @differentPickups.
+  ///
+  /// In en, this message translates to:
+  /// **'Different pickups'**
+  String get differentPickups;
+
+  /// No description provided for @boroughPickupAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'{borough} pickup address'**
+  String boroughPickupAddress(Object borough);
+
+  /// No description provided for @barrelsForThisDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrels for this destination'**
+  String get barrelsForThisDestination;
+
+  /// No description provided for @decrease.
+  ///
+  /// In en, this message translates to:
+  /// **'Decrease'**
+  String get decrease;
+
+  /// No description provided for @increase.
+  ///
+  /// In en, this message translates to:
+  /// **'Increase'**
+  String get increase;
+
+  /// No description provided for @edit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get edit;
+
+  /// No description provided for @remove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get remove;
+
+  /// No description provided for @barrelCartLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{quantity, plural, =1{1 barrel} other{{quantity} barrels}} → {receiverName}'**
+  String barrelCartLine(int quantity, Object receiverName);
+
+  /// No description provided for @holdPricingSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Hold pricing: {mode}{days}'**
+  String holdPricingSummary(Object mode, Object days);
+
+  /// No description provided for @holdDaysSuffix.
+  ///
+  /// In en, this message translates to:
+  /// **' • {days} day(s)'**
+  String holdDaysSuffix(Object days);
+
+  /// No description provided for @flat.
+  ///
+  /// In en, this message translates to:
+  /// **'Flat'**
+  String get flat;
+
+  /// No description provided for @forfeitureStatusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Forfeiture: {status}'**
+  String forfeitureStatusLabel(Object status);
+
+  /// No description provided for @holdDateReachedStaffAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Hold date reached. Mark this vehicle as sold or mark the customer as not shown.'**
+  String get holdDateReachedStaffAction;
+
+  /// No description provided for @extensionStatusLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Extension: {status}{date}{amount}'**
+  String extensionStatusLine(Object status, Object date, Object amount);
+
+  /// No description provided for @dateSuffix.
+  ///
+  /// In en, this message translates to:
+  /// **' • {date}'**
+  String dateSuffix(Object date);
+
+  /// No description provided for @extraAmountSuffix.
+  ///
+  /// In en, this message translates to:
+  /// **' • extra {amount}'**
+  String extraAmountSuffix(Object amount);
+
+  /// No description provided for @buyerHistoryLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Buyer history: {completed} completed, {noShows} no-show, {forfeitures} forfeited'**
+  String buyerHistoryLine(Object completed, Object noShows, Object forfeitures);
+
+  /// No description provided for @customerDidNotCome.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer did not come'**
+  String get customerDidNotCome;
+
+  /// No description provided for @approveExtension.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve extension'**
+  String get approveExtension;
+
+  /// No description provided for @rejectExtension.
+  ///
+  /// In en, this message translates to:
+  /// **'Reject extension'**
+  String get rejectExtension;
+
+  /// No description provided for @navbarPickerInstructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick up to {count} services for quick access in your bottom bar. Drag to reorder.'**
+  String navbarPickerInstructions(int count);
+
+  /// No description provided for @inYourNavbar.
+  ///
+  /// In en, this message translates to:
+  /// **'In your navbar'**
+  String get inYourNavbar;
+
+  /// No description provided for @nothingPinnedYet.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing pinned yet — add services below.'**
+  String get nothingPinnedYet;
+
+  /// No description provided for @addServices.
+  ///
+  /// In en, this message translates to:
+  /// **'Add services'**
+  String get addServices;
+
+  /// No description provided for @navbarFullMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Navbar is full ({count}). Remove one to add another.'**
+  String navbarFullMessage(int count);
+
+  /// No description provided for @activeDestinationsRequireFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Active destinations require a barrel shipping fee.'**
+  String get activeDestinationsRequireFee;
+
+  /// No description provided for @seedCountriesEmptyInstruction.
+  ///
+  /// In en, this message translates to:
+  /// **'Seed the full country catalog, then search and activate the destinations you serve.'**
+  String get seedCountriesEmptyInstruction;
+
+  /// No description provided for @barrelPriceSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrel: {price}'**
+  String barrelPriceSummary(Object price);
+
+  /// No description provided for @deliveryEstimateSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery: {estimate}'**
+  String deliveryEstimateSummary(Object estimate);
+
+  /// No description provided for @businessProfileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Business profile'**
+  String get businessProfileTitle;
+
+  /// No description provided for @splashTagline.
+  ///
+  /// In en, this message translates to:
+  /// **'Motorcars, barrels & passage in one place.'**
+  String get splashTagline;
+
+  /// No description provided for @splashMarketplace.
+  ///
+  /// In en, this message translates to:
+  /// **'MARKETPLACE'**
+  String get splashMarketplace;
+
+  /// No description provided for @splashOpening.
+  ///
+  /// In en, this message translates to:
+  /// **'OPENING LAAWOL'**
+  String get splashOpening;
+
+  /// No description provided for @accountProfileUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The connection is slow. We could not safely load your account role.'**
+  String get accountProfileUnavailable;
+
+  /// No description provided for @accountProfileMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account profile is missing. Contact Laawol support.'**
+  String get accountProfileMissing;
+
+  /// No description provided for @accountProfileRetryHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry without signing out or losing your session.'**
+  String get accountProfileRetryHelp;
+
+  /// No description provided for @addMoney.
+  ///
+  /// In en, this message translates to:
+  /// **'Add money'**
+  String get addMoney;
+
+  /// No description provided for @myOrders.
+  ///
+  /// In en, this message translates to:
+  /// **'My orders'**
+  String get myOrders;
+
+  /// No description provided for @goodMorning.
+  ///
+  /// In en, this message translates to:
+  /// **'Good morning'**
+  String get goodMorning;
+
+  /// No description provided for @goodAfternoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Good afternoon'**
+  String get goodAfternoon;
+
+  /// No description provided for @goodEvening.
+  ///
+  /// In en, this message translates to:
+  /// **'Good evening'**
+  String get goodEvening;
+
+  /// No description provided for @signInToYourWallet.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to your wallet'**
+  String get signInToYourWallet;
+
+  /// No description provided for @walletSignInSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Track orders, balances and refunds.'**
+  String get walletSignInSubtitle;
+
+  /// No description provided for @shippingBusinessUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'{businessName} is not shipping to {countryName}, and no alternate business is available yet.'**
+  String shippingBusinessUnavailable(Object businessName, Object countryName);
+
+  /// No description provided for @shippingBusinessWillChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipping business will change'**
+  String get shippingBusinessWillChange;
+
+  /// No description provided for @shippingBusinessChangeMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{businessName} does not deliver to {countryName}. Choose another approved business to continue.'**
+  String shippingBusinessChangeMessage(Object businessName, Object countryName);
+
+  /// No description provided for @availableBusinesses.
+  ///
+  /// In en, this message translates to:
+  /// **'Available businesses'**
+  String get availableBusinesses;
+
+  /// No description provided for @deliveryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery {value}'**
+  String deliveryLabel(Object value);
+
+  /// No description provided for @pickupDateAndTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup date and time'**
+  String get pickupDateAndTime;
+
+  /// No description provided for @shipmentEstimate.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipment estimate'**
+  String get shipmentEstimate;
+
+  /// No description provided for @addProfilePicture.
+  ///
+  /// In en, this message translates to:
+  /// **'Add profile picture'**
+  String get addProfilePicture;
+
+  /// No description provided for @registerBusinessInstead.
+  ///
+  /// In en, this message translates to:
+  /// **'Register your business instead'**
+  String get registerBusinessInstead;
+
+  /// No description provided for @businessApprovalSetupNote.
+  ///
+  /// In en, this message translates to:
+  /// **'You can set up destinations, cars, and staff immediately. Customers will only see your business after platform approval.'**
+  String get businessApprovalSetupNote;
+
+  /// No description provided for @businessProfilePicture.
+  ///
+  /// In en, this message translates to:
+  /// **'Business profile picture'**
+  String get businessProfilePicture;
+
+  /// No description provided for @businessProfilePictureHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload a logo or storefront image customers can recognize.'**
+  String get businessProfilePictureHelper;
+
+  /// No description provided for @joinMarketplace.
+  ///
+  /// In en, this message translates to:
+  /// **'Join the marketplace'**
+  String get joinMarketplace;
+
+  /// No description provided for @businessApplicationSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply once, prepare your operations, then go live when approved.'**
+  String get businessApplicationSubtitle;
+
+  /// No description provided for @businessOperations.
+  ///
+  /// In en, this message translates to:
+  /// **'Business operations'**
+  String get businessOperations;
+
+  /// No description provided for @businessOperationsWebNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage freight, barrels, transport, parking, destinations, staff, and payouts in the secure business console. This avoids entering a customer booking or payment flow by mistake.'**
+  String get businessOperationsWebNote;
+
+  /// No description provided for @businessCarsMobileNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle listings and purchases are also available in the mobile tabs below.'**
+  String get businessCarsMobileNote;
+
+  /// No description provided for @openBusinessConsole.
+  ///
+  /// In en, this message translates to:
+  /// **'Open business console'**
+  String get openBusinessConsole;
+
+  /// No description provided for @openingBusinessConsole.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening business console...'**
+  String get openingBusinessConsole;
+
+  /// No description provided for @businessConsoleOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the business console. Visit business.laawoldigital.com in your browser.'**
+  String get businessConsoleOpenFailed;
+
+  /// No description provided for @businessChangesRequestedBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'A platform admin requested changes. You can keep editing your setup while the business stays hidden from customers.'**
+  String get businessChangesRequestedBanner;
+
+  /// No description provided for @businessPendingApprovalBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Your business is pending platform approval. You can set up destinations, cars, and staff now; customers will see it after approval.'**
+  String get businessPendingApprovalBanner;
+
+  /// No description provided for @totalDaysLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Total Days: {days}'**
+  String totalDaysLabel(Object days);
+
+  /// No description provided for @totalCostLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Total Cost: {cost}'**
+  String totalCostLabel(Object cost);
+
+  /// No description provided for @customerRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer request'**
+  String get customerRequest;
+
+  /// No description provided for @awaitingQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting quote'**
+  String get awaitingQuote;
+
+  /// No description provided for @setPriceQuoteInstruction.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a price below to send this customer a quote.'**
+  String get setPriceQuoteInstruction;
+
+  /// No description provided for @barrelOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrel order'**
+  String get barrelOrder;
+
+  /// No description provided for @barrelOrderSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{barrelCount} barrels • {destinationCount} destinations • {businessCount} businesses'**
+  String barrelOrderSummary(
+    Object barrelCount,
+    Object destinationCount,
+    Object businessCount,
+  );
+
+  /// No description provided for @clear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get clear;
+
+  /// No description provided for @signInToSaveBarrelShipment.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in or create an account so we can securely save this barrel shipment and show it in tracking.'**
+  String get signInToSaveBarrelShipment;
+
+  /// No description provided for @editDestinationPickupHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Use Edit on each destination row to add or change that destination\'s pickup details.'**
+  String get editDestinationPickupHelp;
+
+  /// No description provided for @businessesShippingToCountry.
+  ///
+  /// In en, this message translates to:
+  /// **'Businesses shipping to this country'**
+  String get businessesShippingToCountry;
+
+  /// No description provided for @fixedPickupPriceForBorough.
+  ///
+  /// In en, this message translates to:
+  /// **'Fixed pickup price for this borough'**
+  String get fixedPickupPriceForBorough;
+
+  /// No description provided for @finalPriceConfirmedByStaff.
+  ///
+  /// In en, this message translates to:
+  /// **'Final price will be confirmed by staff.'**
+  String get finalPriceConfirmedByStaff;
+
+  /// No description provided for @useWalletCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'Use wallet credit'**
+  String get useWalletCredit;
+
+  /// No description provided for @whereAreBarrelsGoing.
+  ///
+  /// In en, this message translates to:
+  /// **'Where are these barrels going?'**
+  String get whereAreBarrelsGoing;
+
+  /// No description provided for @addDestinationInstruction.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a destination — country, business, who receives it, and how many barrels are going there.'**
+  String get addDestinationInstruction;
+
+  /// No description provided for @addDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a destination'**
+  String get addDestination;
+
+  /// No description provided for @destinationsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Destinations'**
+  String get destinationsTitle;
+
+  /// No description provided for @barrelDestinationStartSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Start with where the barrels are going and how many you are sending.'**
+  String get barrelDestinationStartSummary;
+
+  /// No description provided for @barrelDestinationSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{barrelCount, plural, =1{1 barrel} other{{barrelCount} barrels}} to {destinationCount, plural, =1{1 destination} other{{destinationCount} destinations}}.'**
+  String barrelDestinationSummary(int barrelCount, int destinationCount);
+
+  /// No description provided for @addAnotherDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Add another destination'**
+  String get addAnotherDestination;
+
+  /// No description provided for @editDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit destination'**
+  String get editDestination;
+
+  /// No description provided for @destinationNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Destination {number}'**
+  String destinationNumber(int number);
+
+  /// No description provided for @saveDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Save destination'**
+  String get saveDestination;
+
+  /// No description provided for @addToOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to order'**
+  String get addToOrder;
+
+  /// No description provided for @holdPerDayDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =1{1-day hold} other{{days}-day hold}} at {amount} per day'**
+  String holdPerDayDescription(int days, Object amount);
+
+  /// No description provided for @holdFlatFeeDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Flat hold fee for up to {days} days'**
+  String holdFlatFeeDescription(int days);
+
+  /// No description provided for @pleaseChooseBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Please choose a business'**
+  String get pleaseChooseBusiness;
+
+  /// No description provided for @originalEstimatedCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Original estimated cost'**
+  String get originalEstimatedCost;
+
+  /// No description provided for @walletCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet credit'**
+  String get walletCredit;
+
+  /// No description provided for @cardPaymentDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment due'**
+  String get cardPaymentDue;
+
+  /// No description provided for @addAtLeastOneDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Add at least one destination to this order.'**
+  String get addAtLeastOneDestination;
+
+  /// No description provided for @noApprovedBusinessShippingDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'No approved business is currently shipping to this destination.'**
+  String get noApprovedBusinessShippingDestination;
+
+  /// No description provided for @businessOptionsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Business options are not available right now. Please try again in a moment.'**
+  String get businessOptionsUnavailable;
+
+  /// No description provided for @gettingYourLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Getting your location...'**
+  String get gettingYourLocation;
+
+  /// No description provided for @useMyCurrentLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Use my current location'**
+  String get useMyCurrentLocation;
+
+  /// No description provided for @currentLocationAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Current location added'**
+  String get currentLocationAdded;
+
+  /// No description provided for @choosePickupDateAndTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose pickup date and time'**
+  String get choosePickupDateAndTime;
+
+  /// No description provided for @amountDueNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount due now'**
+  String get amountDueNow;
+
+  /// No description provided for @estimatedCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated cost'**
+  String get estimatedCost;
+
+  /// No description provided for @supportCenter.
+  ///
+  /// In en, this message translates to:
+  /// **'Support center'**
+  String get supportCenter;
+
+  /// No description provided for @supportCases.
+  ///
+  /// In en, this message translates to:
+  /// **'Support cases'**
+  String get supportCases;
+
+  /// No description provided for @supportInbox.
+  ///
+  /// In en, this message translates to:
+  /// **'Support inbox'**
+  String get supportInbox;
+
+  /// No description provided for @supportInboxSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer issues, business replies, and admin escalations.'**
+  String get supportInboxSubtitle;
+
+  /// No description provided for @supportChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Support chat'**
+  String get supportChat;
+
+  /// No description provided for @getHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Get help'**
+  String get getHelp;
+
+  /// No description provided for @openSupport.
+  ///
+  /// In en, this message translates to:
+  /// **'Open support'**
+  String get openSupport;
+
+  /// No description provided for @openingSupport.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening support...'**
+  String get openingSupport;
+
+  /// No description provided for @writeSupportMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Write a message'**
+  String get writeSupportMessage;
+
+  /// No description provided for @sendMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get sendMessage;
+
+  /// No description provided for @sendingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending...'**
+  String get sendingMessage;
+
+  /// No description provided for @supportMessageRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Write a message before sending.'**
+  String get supportMessageRequired;
+
+  /// No description provided for @supportNoCases.
+  ///
+  /// In en, this message translates to:
+  /// **'No support cases yet'**
+  String get supportNoCases;
+
+  /// No description provided for @supportNoCasesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cases appear here when customers ask a business for help.'**
+  String get supportNoCasesSubtitle;
+
+  /// No description provided for @supportSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search support cases'**
+  String get supportSearch;
+
+  /// No description provided for @supportBusinessFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Business first'**
+  String get supportBusinessFirst;
+
+  /// No description provided for @supportEscalated.
+  ///
+  /// In en, this message translates to:
+  /// **'Escalated'**
+  String get supportEscalated;
+
+  /// No description provided for @supportResolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolved'**
+  String get supportResolved;
+
+  /// No description provided for @supportWaitingBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for business'**
+  String get supportWaitingBusiness;
+
+  /// No description provided for @supportWaitingCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for customer'**
+  String get supportWaitingCustomer;
+
+  /// No description provided for @supportAdminReviewing.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin reviewing'**
+  String get supportAdminReviewing;
+
+  /// No description provided for @supportUrgent.
+  ///
+  /// In en, this message translates to:
+  /// **'Urgent'**
+  String get supportUrgent;
+
+  /// No description provided for @supportNormal.
+  ///
+  /// In en, this message translates to:
+  /// **'Normal'**
+  String get supportNormal;
+
+  /// No description provided for @supportLinkedRecord.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked record'**
+  String get supportLinkedRecord;
+
+  /// No description provided for @supportCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer'**
+  String get supportCustomer;
+
+  /// No description provided for @supportBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Business'**
+  String get supportBusiness;
+
+  /// No description provided for @supportPlatformAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol admin'**
+  String get supportPlatformAdmin;
+
+  /// No description provided for @supportAskPlatform.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask Laawol admin to help'**
+  String get supportAskPlatform;
+
+  /// No description provided for @businessSupportAskAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask platform admin'**
+  String get businessSupportAskAdmin;
+
+  /// No description provided for @businessSupportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask platform admin for help'**
+  String get businessSupportTitle;
+
+  /// No description provided for @businessSupportSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a support request to Laawol admins about your business account, operations, payouts, or platform access.'**
+  String get businessSupportSubtitle;
+
+  /// No description provided for @businessSupportSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Support subject'**
+  String get businessSupportSubject;
+
+  /// No description provided for @businessSupportSubjectRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a support subject.'**
+  String get businessSupportSubjectRequired;
+
+  /// No description provided for @supportEscalating.
+  ///
+  /// In en, this message translates to:
+  /// **'Escalating...'**
+  String get supportEscalating;
+
+  /// No description provided for @supportEscalationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask Laawol admin to help'**
+  String get supportEscalationTitle;
+
+  /// No description provided for @supportEscalationSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this when the business cannot resolve the issue or the issue is urgent.'**
+  String get supportEscalationSubtitle;
+
+  /// No description provided for @supportEscalationReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Escalation reason'**
+  String get supportEscalationReason;
+
+  /// No description provided for @supportEscalationNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Add details for the admin'**
+  String get supportEscalationNote;
+
+  /// No description provided for @supportEscalationUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin escalation becomes available after the business response window unless the issue is urgent.'**
+  String get supportEscalationUnavailable;
+
+  /// No description provided for @supportReasonUnresolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Business did not resolve it'**
+  String get supportReasonUnresolved;
+
+  /// No description provided for @supportReasonFraud.
+  ///
+  /// In en, this message translates to:
+  /// **'Fraud or suspicious activity'**
+  String get supportReasonFraud;
+
+  /// No description provided for @supportReasonSafety.
+  ///
+  /// In en, this message translates to:
+  /// **'Safety concern'**
+  String get supportReasonSafety;
+
+  /// No description provided for @supportReasonAbuse.
+  ///
+  /// In en, this message translates to:
+  /// **'Abusive behavior'**
+  String get supportReasonAbuse;
+
+  /// No description provided for @supportReasonPaymentNoService.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment taken, service not provided'**
+  String get supportReasonPaymentNoService;
+
+  /// No description provided for @supportReasonBusinessUnreachable.
+  ///
+  /// In en, this message translates to:
+  /// **'Business unreachable'**
+  String get supportReasonBusinessUnreachable;
+
+  /// No description provided for @supportReasonTimeSensitive.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup or delivery is time-sensitive'**
+  String get supportReasonTimeSensitive;
+
+  /// No description provided for @supportEvidence.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence'**
+  String get supportEvidence;
+
+  /// No description provided for @supportAddImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Add image'**
+  String get supportAddImage;
+
+  /// No description provided for @supportAddAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Add attachment'**
+  String get supportAddAttachment;
+
+  /// No description provided for @supportAttachmentSheetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add attachment'**
+  String get supportAttachmentSheetTitle;
+
+  /// No description provided for @supportPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo'**
+  String get supportPhoto;
+
+  /// No description provided for @supportVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get supportVideo;
+
+  /// No description provided for @supportFile.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get supportFile;
+
+  /// No description provided for @supportUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading...'**
+  String get supportUploading;
+
+  /// No description provided for @supportReviewAttachmentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Review attachment'**
+  String get supportReviewAttachmentTitle;
+
+  /// No description provided for @supportUploadAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload'**
+  String get supportUploadAttachment;
+
+  /// No description provided for @supportReplaceAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace'**
+  String get supportReplaceAttachment;
+
+  /// No description provided for @supportAttachmentCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Caption (optional)'**
+  String get supportAttachmentCaption;
+
+  /// No description provided for @supportPreviewUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview unavailable. You can still upload this file.'**
+  String get supportPreviewUnavailable;
+
+  /// No description provided for @supportUploadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload failed. Check your connection and try again.'**
+  String get supportUploadFailed;
+
+  /// No description provided for @supportImagePreviewLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Image preview: {name}'**
+  String supportImagePreviewLabel(Object name);
+
+  /// No description provided for @supportRequestEvidence.
+  ///
+  /// In en, this message translates to:
+  /// **'Request evidence'**
+  String get supportRequestEvidence;
+
+  /// No description provided for @supportRequestingEvidence.
+  ///
+  /// In en, this message translates to:
+  /// **'Requesting...'**
+  String get supportRequestingEvidence;
+
+  /// No description provided for @supportEvidenceNote.
+  ///
+  /// In en, this message translates to:
+  /// **'What should the customer add?'**
+  String get supportEvidenceNote;
+
+  /// No description provided for @supportResolve.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark resolved'**
+  String get supportResolve;
+
+  /// No description provided for @supportResolving.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolving...'**
+  String get supportResolving;
+
+  /// No description provided for @supportReopen.
+  ///
+  /// In en, this message translates to:
+  /// **'Reopen'**
+  String get supportReopen;
+
+  /// No description provided for @supportReopening.
+  ///
+  /// In en, this message translates to:
+  /// **'Reopening...'**
+  String get supportReopening;
+
+  /// No description provided for @supportInternalNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Internal notes'**
+  String get supportInternalNotes;
+
+  /// No description provided for @supportAddInternalNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Add internal note'**
+  String get supportAddInternalNote;
+
+  /// No description provided for @supportSavingNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving note...'**
+  String get supportSavingNote;
+
+  /// No description provided for @supportNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note'**
+  String get supportNote;
+
+  /// No description provided for @supportTimeline.
+  ///
+  /// In en, this message translates to:
+  /// **'Timeline'**
+  String get supportTimeline;
+
+  /// No description provided for @supportActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Actions'**
+  String get supportActions;
+
+  /// No description provided for @supportFilters.
+  ///
+  /// In en, this message translates to:
+  /// **'Filters'**
+  String get supportFilters;
+
+  /// No description provided for @supportAllCases.
+  ///
+  /// In en, this message translates to:
+  /// **'All cases'**
+  String get supportAllCases;
+
+  /// No description provided for @supportSlaBreaches.
+  ///
+  /// In en, this message translates to:
+  /// **'SLA breaches'**
+  String get supportSlaBreaches;
+
+  /// No description provided for @supportFraudSafety.
+  ///
+  /// In en, this message translates to:
+  /// **'Fraud and safety'**
+  String get supportFraudSafety;
+
+  /// No description provided for @supportOpenFromTransaction.
+  ///
+  /// In en, this message translates to:
+  /// **'Open a case with the responsible business. If unresolved, a Laawol admin can mediate.'**
+  String get supportOpenFromTransaction;
+
+  /// No description provided for @supportCaseOpened.
+  ///
+  /// In en, this message translates to:
+  /// **'Support case opened'**
+  String get supportCaseOpened;
+
+  /// No description provided for @supportActionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Support action failed'**
+  String get supportActionFailed;
+
+  /// No description provided for @supportImageSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an image'**
+  String get supportImageSource;
+
+  /// No description provided for @supportCamera.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get supportCamera;
+
+  /// No description provided for @supportGallery.
+  ///
+  /// In en, this message translates to:
+  /// **'Gallery'**
+  String get supportGallery;
+
+  /// No description provided for @supportReplyingTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Replying to {name}'**
+  String supportReplyingTo(Object name);
+
+  /// No description provided for @supportEdited.
+  ///
+  /// In en, this message translates to:
+  /// **'edited'**
+  String get supportEdited;
+
+  /// No description provided for @supportReply.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply'**
+  String get supportReply;
+
+  /// No description provided for @supportDeleteForMe.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete for me'**
+  String get supportDeleteForMe;
+
+  /// No description provided for @supportEditMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit message'**
+  String get supportEditMessage;
+
+  /// No description provided for @supportSaveEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Save edit'**
+  String get supportSaveEdit;
+
+  /// No description provided for @supportCancelReply.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel reply'**
+  String get supportCancelReply;
+
+  /// No description provided for @supportCaseStatusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Status: {status}'**
+  String supportCaseStatusLabel(Object status);
+
+  /// No description provided for @support.
+  ///
+  /// In en, this message translates to:
+  /// **'Support'**
+  String get support;
+
+  /// No description provided for @supportTeam.
+  ///
+  /// In en, this message translates to:
+  /// **'Support team'**
+  String get supportTeam;
+
+  /// No description provided for @supportCase.
+  ///
+  /// In en, this message translates to:
+  /// **'Support case'**
+  String get supportCase;
+
+  /// No description provided for @supportBusinessInbox.
+  ///
+  /// In en, this message translates to:
+  /// **'Business support'**
+  String get supportBusinessInbox;
+
+  /// No description provided for @supportBusinessInboxSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Review customer cases, request evidence, and coordinate with Laawol support.'**
+  String get supportBusinessInboxSubtitle;
+
+  /// No description provided for @supportAdminQueue.
+  ///
+  /// In en, this message translates to:
+  /// **'Support queue'**
+  String get supportAdminQueue;
+
+  /// No description provided for @supportAdminQueueSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Assign, escalate, resolve, and document marketplace cases.'**
+  String get supportAdminQueueSubtitle;
+
+  /// No description provided for @supportNewCase.
+  ///
+  /// In en, this message translates to:
+  /// **'New case'**
+  String get supportNewCase;
+
+  /// No description provided for @supportUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Support is unavailable'**
+  String get supportUnavailable;
+
+  /// No description provided for @supportSignInRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to open and review support cases.'**
+  String get supportSignInRequired;
+
+  /// No description provided for @supportBusinessRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'A business profile is required to use business support.'**
+  String get supportBusinessRequired;
+
+  /// No description provided for @supportUnableToLoad.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to load support'**
+  String get supportUnableToLoad;
+
+  /// No description provided for @supportSearchCases.
+  ///
+  /// In en, this message translates to:
+  /// **'Search cases'**
+  String get supportSearchCases;
+
+  /// No description provided for @supportNoCasesDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Support conversations and updates will appear here.'**
+  String get supportNoCasesDesc;
+
+  /// No description provided for @supportLastMessageFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the case to continue the conversation.'**
+  String get supportLastMessageFallback;
+
+  /// No description provided for @supportStatusOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get supportStatusOpen;
+
+  /// No description provided for @supportStatusWaitingCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting on customer'**
+  String get supportStatusWaitingCustomer;
+
+  /// No description provided for @supportStatusWaitingBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting on business'**
+  String get supportStatusWaitingBusiness;
+
+  /// No description provided for @supportStatusResolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolved'**
+  String get supportStatusResolved;
+
+  /// No description provided for @supportStatusClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'Closed'**
+  String get supportStatusClosed;
+
+  /// No description provided for @supportFilterWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get supportFilterWaiting;
+
+  /// No description provided for @supportPriorityNormal.
+  ///
+  /// In en, this message translates to:
+  /// **'Normal'**
+  String get supportPriorityNormal;
+
+  /// No description provided for @supportPriorityUrgent.
+  ///
+  /// In en, this message translates to:
+  /// **'Urgent'**
+  String get supportPriorityUrgent;
+
+  /// No description provided for @supportPriorityEscalated.
+  ///
+  /// In en, this message translates to:
+  /// **'Escalated'**
+  String get supportPriorityEscalated;
+
+  /// No description provided for @supportCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Category'**
+  String get supportCategory;
+
+  /// No description provided for @supportCategoryGeneral.
+  ///
+  /// In en, this message translates to:
+  /// **'General'**
+  String get supportCategoryGeneral;
+
+  /// No description provided for @supportCategoryPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment'**
+  String get supportCategoryPayment;
+
+  /// No description provided for @supportCategoryDelivery.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery'**
+  String get supportCategoryDelivery;
+
+  /// No description provided for @supportCategoryVehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle'**
+  String get supportCategoryVehicle;
+
+  /// No description provided for @supportCategoryBarrel.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrel'**
+  String get supportCategoryBarrel;
+
+  /// No description provided for @supportCategoryTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport'**
+  String get supportCategoryTransport;
+
+  /// No description provided for @supportCategoryRefund.
+  ///
+  /// In en, this message translates to:
+  /// **'Refund'**
+  String get supportCategoryRefund;
+
+  /// No description provided for @supportAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin'**
+  String get supportAdmin;
+
+  /// No description provided for @supportSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get supportSystem;
+
+  /// No description provided for @supportSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Subject'**
+  String get supportSubject;
+
+  /// No description provided for @supportInitialMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Initial message'**
+  String get supportInitialMessage;
+
+  /// No description provided for @supportCreateCase.
+  ///
+  /// In en, this message translates to:
+  /// **'Create case'**
+  String get supportCreateCase;
+
+  /// No description provided for @supportCreatingCase.
+  ///
+  /// In en, this message translates to:
+  /// **'Creating case...'**
+  String get supportCreatingCase;
+
+  /// No description provided for @supportCaseActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Case actions'**
+  String get supportCaseActions;
+
+  /// No description provided for @supportAssignToMe.
+  ///
+  /// In en, this message translates to:
+  /// **'Assign to me'**
+  String get supportAssignToMe;
+
+  /// No description provided for @supportResolveCase.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolve case'**
+  String get supportResolveCase;
+
+  /// No description provided for @supportReopenCase.
+  ///
+  /// In en, this message translates to:
+  /// **'Reopen case'**
+  String get supportReopenCase;
+
+  /// No description provided for @supportEvidenceRequested.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence requested'**
+  String get supportEvidenceRequested;
+
+  /// No description provided for @supportEvidenceAttached.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence attached'**
+  String get supportEvidenceAttached;
+
+  /// No description provided for @supportEvidenceUploaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence uploaded.'**
+  String get supportEvidenceUploaded;
+
+  /// No description provided for @supportEscalateCase.
+  ///
+  /// In en, this message translates to:
+  /// **'Escalate case'**
+  String get supportEscalateCase;
+
+  /// No description provided for @supportEscalate.
+  ///
+  /// In en, this message translates to:
+  /// **'Escalate'**
+  String get supportEscalate;
+
+  /// No description provided for @supportCaseEscalated.
+  ///
+  /// In en, this message translates to:
+  /// **'Case escalated.'**
+  String get supportCaseEscalated;
+
+  /// No description provided for @supportEvidenceRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence request'**
+  String get supportEvidenceRequest;
+
+  /// No description provided for @supportSendRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Send request'**
+  String get supportSendRequest;
+
+  /// No description provided for @supportSendingRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending request...'**
+  String get supportSendingRequest;
+
+  /// No description provided for @supportEvidenceRequestSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence request sent.'**
+  String get supportEvidenceRequestSent;
+
+  /// No description provided for @supportResolutionNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolution note'**
+  String get supportResolutionNote;
+
+  /// No description provided for @supportCaseResolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Case resolved.'**
+  String get supportCaseResolved;
+
+  /// No description provided for @supportReopenReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Reopen reason'**
+  String get supportReopenReason;
+
+  /// No description provided for @supportCaseReopened.
+  ///
+  /// In en, this message translates to:
+  /// **'Case reopened.'**
+  String get supportCaseReopened;
+
+  /// No description provided for @supportCaseAssigned.
+  ///
+  /// In en, this message translates to:
+  /// **'Case assigned.'**
+  String get supportCaseAssigned;
+
+  /// No description provided for @supportInternalNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Internal note'**
+  String get supportInternalNote;
+
+  /// No description provided for @supportSaveNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Save note'**
+  String get supportSaveNote;
+
+  /// No description provided for @supportInternalNoteSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Internal note saved.'**
+  String get supportInternalNoteSaved;
+
+  /// No description provided for @supportMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get supportMessage;
+
+  /// No description provided for @supportMessageHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Write a message...'**
+  String get supportMessageHint;
+
+  /// No description provided for @supportSendMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Send message'**
+  String get supportSendMessage;
+
+  /// No description provided for @supportNoMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'No messages yet'**
+  String get supportNoMessages;
+
+  /// No description provided for @supportNoMessagesDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Send the first message to start this support thread.'**
+  String get supportNoMessagesDesc;
+
+  /// No description provided for @supportNoInternalNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'No internal notes'**
+  String get supportNoInternalNotes;
+
+  /// No description provided for @supportNoInternalNotesDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin notes for this case will appear here.'**
+  String get supportNoInternalNotesDesc;
+
+  /// No description provided for @supportUnassigned.
+  ///
+  /// In en, this message translates to:
+  /// **'Unassigned'**
+  String get supportUnassigned;
+
+  /// No description provided for @supportResolvedComposerDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'This case is resolved. Reopen it to send another message.'**
+  String get supportResolvedComposerDisabled;
+
+  /// No description provided for @supportSystemMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'System update'**
+  String get supportSystemMessage;
+
+  /// No description provided for @supportDeletedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This message was deleted'**
+  String get supportDeletedMessage;
+
+  /// No description provided for @supportAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachment'**
+  String get supportAttachment;
+
+  /// No description provided for @supportAddEvidence.
+  ///
+  /// In en, this message translates to:
+  /// **'Add evidence'**
+  String get supportAddEvidence;
+
+  /// No description provided for @supportUploadImageEvidence.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload image evidence'**
+  String get supportUploadImageEvidence;
+
+  /// No description provided for @supportAddFileMetadata.
+  ///
+  /// In en, this message translates to:
+  /// **'Add file metadata'**
+  String get supportAddFileMetadata;
+
+  /// No description provided for @supportAddVoiceMetadata.
+  ///
+  /// In en, this message translates to:
+  /// **'Add voice metadata'**
+  String get supportAddVoiceMetadata;
+
+  /// No description provided for @supportImageAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Image attachment'**
+  String get supportImageAttachment;
+
+  /// No description provided for @supportVoiceAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice message'**
+  String get supportVoiceAttachment;
+
+  /// No description provided for @supportFileAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'File attachment'**
+  String get supportFileAttachment;
+
+  /// No description provided for @supportVideoAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Video attachment'**
+  String get supportVideoAttachment;
+
+  /// No description provided for @supportOpenAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Open attachment'**
+  String get supportOpenAttachment;
+
+  /// No description provided for @supportVoiceDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice {duration}'**
+  String supportVoiceDuration(Object duration);
+
+  /// No description provided for @supportAttachmentSize.
+  ///
+  /// In en, this message translates to:
+  /// **'{size}'**
+  String supportAttachmentSize(Object size);
+
+  /// No description provided for @supportFileName.
+  ///
+  /// In en, this message translates to:
+  /// **'File name'**
+  String get supportFileName;
+
+  /// No description provided for @supportFileUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'File URL'**
+  String get supportFileUrl;
+
+  /// No description provided for @supportDurationSeconds.
+  ///
+  /// In en, this message translates to:
+  /// **'Duration in seconds'**
+  String get supportDurationSeconds;
+
+  /// No description provided for @supportSizeBytes.
+  ///
+  /// In en, this message translates to:
+  /// **'Size in bytes'**
+  String get supportSizeBytes;
+
+  /// No description provided for @supportFileReadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read that file. Please try again.'**
+  String get supportFileReadFailed;
+
+  /// No description provided for @supportUnsupportedAttachmentType.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a PDF, text, Word, or DOCX file.'**
+  String get supportUnsupportedAttachmentType;
+
+  /// No description provided for @supportImageTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an image smaller than 10 MB.'**
+  String get supportImageTooLarge;
+
+  /// No description provided for @supportVideoTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a video smaller than 50 MB.'**
+  String get supportVideoTooLarge;
+
+  /// No description provided for @supportDocumentTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a document smaller than 25 MB.'**
+  String get supportDocumentTooLarge;
+
+  /// No description provided for @supportVoiceTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an audio file smaller than 10 MB.'**
+  String get supportVoiceTooLarge;
+
+  /// No description provided for @supportAttach.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach'**
+  String get supportAttach;
+
+  /// No description provided for @supportAttaching.
+  ///
+  /// In en, this message translates to:
+  /// **'Attaching...'**
+  String get supportAttaching;
+
+  /// No description provided for @supportPurchaseCaseSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Support for {carTitle}'**
+  String supportPurchaseCaseSubject(Object carTitle);
+
+  /// No description provided for @supportSharedBarrelCaseSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared barrel support'**
+  String get supportSharedBarrelCaseSubject;
+
+  /// No description provided for @supportPlatformSenderName.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol support'**
+  String get supportPlatformSenderName;
+
+  /// No description provided for @supportBusinessSenderName.
+  ///
+  /// In en, this message translates to:
+  /// **'Business'**
+  String get supportBusinessSenderName;
+
+  /// No description provided for @parkingStepWhereWhen.
+  ///
+  /// In en, this message translates to:
+  /// **'Where & when'**
+  String get parkingStepWhereWhen;
+
+  /// No description provided for @parkingStepChooseSpot.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a spot'**
+  String get parkingStepChooseSpot;
+
+  /// No description provided for @parkingStepYourCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Your car'**
+  String get parkingStepYourCar;
+
+  /// No description provided for @parkingStepReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Review'**
+  String get parkingStepReview;
+
+  /// No description provided for @parkingStepIndicator.
+  ///
+  /// In en, this message translates to:
+  /// **'Step {current} of {total}'**
+  String parkingStepIndicator(Object current, Object total);
+
+  /// No description provided for @parkingContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get parkingContinue;
+
+  /// No description provided for @parkingBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get parkingBack;
+
+  /// No description provided for @parkingReviewHeading.
+  ///
+  /// In en, this message translates to:
+  /// **'Review & reserve'**
+  String get parkingReviewHeading;
+
+  /// No description provided for @parkingReviewVehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle'**
+  String get parkingReviewVehicle;
+
+  /// No description provided for @parkingReviewDates.
+  ///
+  /// In en, this message translates to:
+  /// **'Dates'**
+  String get parkingReviewDates;
+
+  /// No description provided for @parkingReviewPickupYes.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup requested'**
+  String get parkingReviewPickupYes;
+
+  /// No description provided for @parkingReviewPickupNo.
+  ///
+  /// In en, this message translates to:
+  /// **'No pickup'**
+  String get parkingReviewPickupNo;
+
+  /// No description provided for @hubGuestName.
+  ///
+  /// In en, this message translates to:
+  /// **'there'**
+  String get hubGuestName;
+
+  /// No description provided for @hubQuickActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick actions'**
+  String get hubQuickActions;
+
+  /// No description provided for @hubSendBarrel.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a barrel'**
+  String get hubSendBarrel;
+
+  /// No description provided for @hubShipFullBarrel.
+  ///
+  /// In en, this message translates to:
+  /// **'Ship a full barrel home'**
+  String get hubShipFullBarrel;
+
+  /// No description provided for @hubBrowseCars.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse cars'**
+  String get hubBrowseCars;
+
+  /// No description provided for @hubBuyVerifiedCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Buy a verified car'**
+  String get hubBuyVerifiedCar;
+
+  /// No description provided for @hubFollowShipments.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow your shipments'**
+  String get hubFollowShipments;
+
+  /// No description provided for @hubShipping.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipping'**
+  String get hubShipping;
+
+  /// No description provided for @hubShippingSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send barrels, freight, and cars home.'**
+  String get hubShippingSubtitle;
+
+  /// No description provided for @hubSharedBarrels.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared barrels'**
+  String get hubSharedBarrels;
+
+  /// No description provided for @hubSharedBarrelsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Post or join a barrel'**
+  String get hubSharedBarrelsSubtitle;
+
+  /// No description provided for @hubFreightSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'By weight · air or sea'**
+  String get hubFreightSubtitle;
+
+  /// No description provided for @hubTransportCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport a car'**
+  String get hubTransportCar;
+
+  /// No description provided for @hubShipCarHome.
+  ///
+  /// In en, this message translates to:
+  /// **'Ship a car home'**
+  String get hubShipCarHome;
+
+  /// No description provided for @hubCarsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Buy a verified car or store one with a business.'**
+  String get hubCarsSubtitle;
+
+  /// No description provided for @hubParkCarSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Store with a business'**
+  String get hubParkCarSubtitle;
+
+  /// No description provided for @hubActivitySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your orders, shipments, and wallet.'**
+  String get hubActivitySubtitle;
+
+  /// No description provided for @hubOrdersSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cars, barrels, freight & more'**
+  String get hubOrdersSubtitle;
+
+  /// No description provided for @hubWalletSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance & refunds'**
+  String get hubWalletSubtitle;
+
+  /// No description provided for @destinationPickupDetailsRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit each destination and add its pickup address, date, and time.'**
+  String get destinationPickupDetailsRequired;
+
+  /// No description provided for @destinationPickupDetailsHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit each destination with its pickup place and date.'**
+  String get destinationPickupDetailsHelp;
+
+  /// No description provided for @noShowHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'No-show history'**
+  String get noShowHistory;
+
+  /// No description provided for @noShowHistoryMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'If you do not return by the hold date and the business marks that you did not come, the deposit may be forfeited and this outcome may be visible to car-selling businesses.'**
+  String get noShowHistoryMessage;
+
+  /// No description provided for @holdUntil.
+  ///
+  /// In en, this message translates to:
+  /// **'Hold until'**
+  String get holdUntil;
+
+  /// No description provided for @marketplaceResponsibilityTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Understand who provides this service'**
+  String get marketplaceResponsibilityTitle;
+
+  /// No description provided for @marketplaceProviderResponsibilityBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{providerNames} is an independent business responsible for the item or service, including fulfillment, condition, delivery timing, and performance.'**
+  String marketplaceProviderResponsibilityBody(Object providerNames);
+
+  /// No description provided for @marketplacePaymentFlowBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol helps you find businesses, collects and processes your payment, may deduct a disclosed platform fee, and may transfer the business payout later. Laawol can assist with tracking, support, refunds, and disputes.'**
+  String get marketplacePaymentFlowBody;
+
+  /// No description provided for @marketplaceNoGuaranteeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol is not the seller, carrier, or service provider and does not guarantee the business’s delivery date or performance. This does not limit rights that cannot legally be waived.'**
+  String get marketplaceNoGuaranteeBody;
+
+  /// No description provided for @marketplaceResponsibilityCheckbox.
+  ///
+  /// In en, this message translates to:
+  /// **'I understand the business’s responsibility and want to continue.'**
+  String get marketplaceResponsibilityCheckbox;
+
+  /// No description provided for @selectedBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected business'**
+  String get selectedBusiness;
+
+  /// No description provided for @accountLegalAcceptance.
+  ///
+  /// In en, this message translates to:
+  /// **'I agree to Laawol’s Terms of Service and Privacy Policy, including its marketplace role.'**
+  String get accountLegalAcceptance;
+
+  /// No description provided for @accountLegalAcceptanceRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please accept the Terms of Service and Privacy Policy to continue.'**
+  String get accountLegalAcceptanceRequired;
+
+  /// No description provided for @businessResponsibilityAcceptance.
+  ///
+  /// In en, this message translates to:
+  /// **'I understand that my business is independently responsible for its listings, prices, goods, services, fulfillment, delivery timing, permits, and customer obligations.'**
+  String get businessResponsibilityAcceptance;
+
+  /// No description provided for @businessResponsibilityRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm the business responsibility statement to submit your application.'**
+  String get businessResponsibilityRequired;
+
+  /// No description provided for @verifyPhoneToContinueTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify your phone to continue'**
+  String get verifyPhoneToContinueTitle;
+
+  /// No description provided for @verifyPhoneToContinueBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared barrels are available only to customers with a verified phone number. We’ll send a code to the number in your account.'**
+  String get verifyPhoneToContinueBody;
+
+  /// No description provided for @verifyPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify phone'**
+  String get verifyPhone;
+
+  /// No description provided for @notNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get notNow;
+
+  /// No description provided for @phoneVerificationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone verification'**
+  String get phoneVerificationTitle;
+
+  /// No description provided for @phoneVerificationExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm or update the mobile number for your account. We’ll text you a one-time verification code.'**
+  String get phoneVerificationExplanation;
+
+  /// No description provided for @phoneVerificationCountryCodeHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Include the country code, for example +1 718 555 0100.'**
+  String get phoneVerificationCountryCodeHelp;
+
+  /// No description provided for @phoneVerificationCodeSentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Code sent'**
+  String get phoneVerificationCodeSentTitle;
+
+  /// No description provided for @phoneVerificationCodeSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 6-digit code sent to {phone}.'**
+  String phoneVerificationCodeSent(Object phone);
+
+  /// No description provided for @phoneVerificationCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification code'**
+  String get phoneVerificationCode;
+
+  /// No description provided for @phoneVerificationSendCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Send verification code'**
+  String get phoneVerificationSendCode;
+
+  /// No description provided for @phoneVerificationSendingCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending code...'**
+  String get phoneVerificationSendingCode;
+
+  /// No description provided for @phoneVerificationVerifying.
+  ///
+  /// In en, this message translates to:
+  /// **'Verifying...'**
+  String get phoneVerificationVerifying;
+
+  /// No description provided for @phoneVerificationResending.
+  ///
+  /// In en, this message translates to:
+  /// **'Resending...'**
+  String get phoneVerificationResending;
+
+  /// No description provided for @phoneVerificationResent.
+  ///
+  /// In en, this message translates to:
+  /// **'A new code was sent.'**
+  String get phoneVerificationResent;
+
+  /// No description provided for @phoneVerificationResend.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend code'**
+  String get phoneVerificationResend;
+
+  /// No description provided for @phoneVerificationResendIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend code in {seconds}s'**
+  String phoneVerificationResendIn(int seconds);
+
+  /// No description provided for @phoneVerificationChangeNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Change number'**
+  String get phoneVerificationChangeNumber;
+
+  /// No description provided for @phoneVerificationSmsNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Standard SMS and data rates may apply. The code is used only to verify that this phone belongs to you.'**
+  String get phoneVerificationSmsNotice;
+
+  /// No description provided for @phoneVerificationInvalidPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid international phone number beginning with + and the country code.'**
+  String get phoneVerificationInvalidPhone;
+
+  /// No description provided for @phoneVerificationEnterCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 6-digit code.'**
+  String get phoneVerificationEnterCode;
+
+  /// No description provided for @phoneVerificationInvalidCode.
+  ///
+  /// In en, this message translates to:
+  /// **'That code is incorrect. Check it and try again.'**
+  String get phoneVerificationInvalidCode;
+
+  /// No description provided for @phoneVerificationExpiredCode.
+  ///
+  /// In en, this message translates to:
+  /// **'That code expired. Request a new code and try again.'**
+  String get phoneVerificationExpiredCode;
+
+  /// No description provided for @phoneVerificationTooManyAttempts.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many verification attempts. Please wait and try again later.'**
+  String get phoneVerificationTooManyAttempts;
+
+  /// No description provided for @phoneVerificationNetworkError.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your connection and try again.'**
+  String get phoneVerificationNetworkError;
+
+  /// No description provided for @phoneVerificationRequestTimedOut.
+  ///
+  /// In en, this message translates to:
+  /// **'We didn’t receive a response. Check your connection and try again.'**
+  String get phoneVerificationRequestTimedOut;
+
+  /// No description provided for @phoneVerificationPhoneInUse.
+  ///
+  /// In en, this message translates to:
+  /// **'That phone number is already linked to another account.'**
+  String get phoneVerificationPhoneInUse;
+
+  /// No description provided for @phoneVerificationRecentLogin.
+  ///
+  /// In en, this message translates to:
+  /// **'For security, sign out, sign back in, and verify your phone again.'**
+  String get phoneVerificationRecentLogin;
+
+  /// No description provided for @phoneVerificationGenericError.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn’t verify your phone. Please try again.'**
+  String get phoneVerificationGenericError;
+
+  /// No description provided for @phoneVerificationSyncPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Your code was accepted, but we couldn’t finish updating your profile. Try finishing verification again—another SMS is not required.'**
+  String get phoneVerificationSyncPending;
+
+  /// No description provided for @phoneVerificationFinish.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish verification'**
+  String get phoneVerificationFinish;
+
+  /// No description provided for @phoneVerificationFinishing.
+  ///
+  /// In en, this message translates to:
+  /// **'Finishing verification...'**
+  String get phoneVerificationFinishing;
+
+  /// No description provided for @phoneVerificationSavePhoneFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Save this phone number before verifying it.'**
+  String get phoneVerificationSavePhoneFirst;
+
+  /// No description provided for @phoneVerificationSaveAndVerify.
+  ///
+  /// In en, this message translates to:
+  /// **'Save and verify'**
+  String get phoneVerificationSaveAndVerify;
+
+  /// No description provided for @phoneVerificationSavingNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving number...'**
+  String get phoneVerificationSavingNumber;
+
+  /// No description provided for @phoneVerificationEditedStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'This number has not been saved or verified.'**
+  String get phoneVerificationEditedStatus;
+
+  /// No description provided for @phoneVerificationUnverifiedHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify this number to use protected account features.'**
+  String get phoneVerificationUnverifiedHelp;
+
+  /// No description provided for @phoneVerificationVerifiedHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'This number matches the phone securely verified on your account.'**
+  String get phoneVerificationVerifiedHelp;
+
+  /// No description provided for @phoneVerificationSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Your phone number is verified.'**
+  String get phoneVerificationSuccess;
+
+  /// No description provided for @phoneVerificationSuccessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone verified'**
+  String get phoneVerificationSuccessTitle;
+
+  /// No description provided for @phoneVerificationReturnToSharedBarrels.
+  ///
+  /// In en, this message translates to:
+  /// **'Return to shared barrels'**
+  String get phoneVerificationReturnToSharedBarrels;
+
+  /// No description provided for @phoneVerificationVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone verified'**
+  String get phoneVerificationVerified;
+
+  /// No description provided for @phoneVerificationNotVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone not verified'**
+  String get phoneVerificationNotVerified;
+
+  /// No description provided for @sharedBarrelActionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn’t complete that shared-barrel action. Please try again.'**
+  String get sharedBarrelActionFailed;
+
+  /// No description provided for @sharedBarrelsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your connection and try again. Your information is safe.'**
+  String get sharedBarrelsLoadFailed;
+
+  /// No description provided for @sharedBarrelFormLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn’t open the shared-barrel form. Check your connection and try again.'**
+  String get sharedBarrelFormLoadFailed;
+
+  /// No description provided for @marketplaceBalancePaymentSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance payment'**
+  String get marketplaceBalancePaymentSummary;
+
+  /// No description provided for @marketplaceDestinationChangeSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid destination change'**
+  String get marketplaceDestinationChangeSummary;
 }
 
 class _AppLocalizationsDelegate

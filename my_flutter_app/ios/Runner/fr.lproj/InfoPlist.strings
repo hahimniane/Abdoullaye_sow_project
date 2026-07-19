@@ -1,0 +1,6 @@
+"NSCameraUsageDescription" = "Laawol utilise l’appareil photo pour scanner les numéros VIN et ajouter des photos aux annonces et aux demandes de service.";
+"NSFaceIDUsageDescription" = "Utilisez Face ID pour déverrouiller votre session Laawol enregistrée.";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "Laawol utilise votre position pour aider à remplir les adresses de collecte et de livraison de vos demandes.";
+"NSLocationWhenInUseUsageDescription" = "Laawol utilise votre position pour aider à remplir votre adresse de collecte.";
+"NSPhotoLibraryAddUsageDescription" = "Laawol peut enregistrer les images de services et de véhicules sélectionnées dans votre photothèque.";
+"NSPhotoLibraryUsageDescription" = "Laawol doit accéder à votre photothèque pour choisir des photos pour les annonces et les demandes de service.";

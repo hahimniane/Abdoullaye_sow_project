@@ -71,7 +71,7 @@ class FavoriteCarsScreen extends StatelessWidget {
           return ListView.separated(
             padding: const EdgeInsets.all(20),
             itemCount: favorites.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               final favorite = favorites[index];
               return _FavoriteCarTile(
@@ -138,6 +138,7 @@ class _FavoriteCarTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currency = NumberFormat.simpleCurrency();
+    final l10n = AppLocalizations.of(context)!;
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(16),
@@ -181,6 +182,23 @@ class _FavoriteCarTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: AppColors.lightMuted),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      favorite.isRebuiltTitle == true
+                          ? l10n.rebuiltTitleYes
+                          : favorite.isRebuiltTitle == null
+                          ? '${l10n.rebuiltTitle}: ${l10n.rebuiltTitleUnknown}'
+                          : l10n.rebuiltTitleNo,
+                      style: TextStyle(
+                        color: favorite.isRebuiltTitle == false
+                            ? AppColors.sage
+                            : AppColors.warn,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 6),
                     Text(

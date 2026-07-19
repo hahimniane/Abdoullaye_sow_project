@@ -11,9 +11,13 @@ import '../providers/auth_provider.dart';
 import '../services/biometric_lock_service.dart';
 import '../services/push_notification_service.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
 import '../utils/phone_number_validator.dart';
+import '../utils/phone_verification_status.dart';
+import '../utils/root_navigation.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import 'phone_verification_screen.dart';
 
 class AccountProfileScreen extends StatefulWidget {
   const AccountProfileScreen({super.key, this.onBack});
@@ -35,6 +39,7 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
   bool _biometricAvailable = false;
   bool _biometricEnabled = false;
   bool _saving = false;
+  bool _preparingVerification = false;
   bool _hydrated = false;
 
   @override
@@ -173,10 +178,56 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
     setState(() => _preferences = preferences);
   }
 
+  Future<void> _verifyPhone() async {
+    final l10n = AppLocalizations.of(context)!;
+    final auth = context.read<AuthProvider>();
+    final status = phoneDraftVerificationState(
+      savedPhone: auth.customerPhone,
+      draftPhone: _phoneController.text,
+      savedPhoneVerified: auth.phoneVerified,
+    );
+    if (status == PhoneDraftVerificationState.edited) {
+      if (!PhoneNumberValidator.isValidE164(_phoneController.text)) {
+        showErrorSnackBar(context, l10n.phoneVerificationInvalidPhone);
+        return;
+      }
+      setState(() => _preparingVerification = true);
+      try {
+        await auth.updateCustomerPhone(_phoneController.text);
+      } catch (error) {
+        debugPrint('Could not save phone before verification: $error');
+        if (!mounted) return;
+        showErrorSnackBar(context, l10n.phoneVerificationGenericError);
+        return;
+      } finally {
+        if (mounted) setState(() => _preparingVerification = false);
+      }
+    }
+    if (!mounted) return;
+    final verified = await pushRootNamed<bool>(
+      context,
+      '/verify-phone',
+      arguments: const PhoneVerificationArguments(),
+    );
+    if (!mounted || verified != true) return;
+    setState(() {
+      _phoneController.text = auth.customerPhone ?? _phoneController.text;
+    });
+    showSuccessSnackBar(context, l10n.phoneVerificationSuccess);
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final l10n = AppLocalizations.of(context)!;
+    final phoneStatus = phoneDraftVerificationState(
+      savedPhone: auth.customerPhone,
+      draftPhone: _phoneController.text,
+      savedPhoneVerified: auth.phoneVerified,
+    );
+    final displayedPhoneVerified =
+        phoneStatus == PhoneDraftVerificationState.verified;
+    final profileBusy = _saving || _preparingVerification;
     return Scaffold(
       backgroundColor: AppColors.lightBg,
       appBar: AppBar(
@@ -263,15 +314,126 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _phoneController,
+                    enabled: !profileBusy,
                     keyboardType: TextInputType.phone,
                     inputFormatters:
                         PhoneNumberValidator.allowedInputFormatters,
-                    decoration: InputDecoration(labelText: l10n.phone),
-                    validator: (value) => PhoneNumberValidator.validate(
-                      value,
-                      requiredMessage: l10n.requiredField,
+                    decoration: InputDecoration(
+                      labelText: l10n.phone,
+                      helperText: auth.role == 'customer'
+                          ? l10n.phoneVerificationCountryCodeHelp
+                          : null,
                     ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return l10n.requiredField;
+                      }
+                      if (auth.role == 'customer' &&
+                          !PhoneNumberValidator.isValidE164(value)) {
+                        return l10n.invalidPhoneWithCountryCode;
+                      }
+                      return PhoneNumberValidator.validate(
+                        value,
+                        requiredMessage: l10n.requiredField,
+                      );
+                    },
+                    onChanged: (_) => setState(() {}),
                   ),
+                  if (auth.role == 'customer') ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: displayedPhoneVerified
+                            ? AppColors.sage.withValues(alpha: 0.10)
+                            : AppColors.warn.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusMd,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                displayedPhoneVerified
+                                    ? Icons.verified_outlined
+                                    : Icons.info_outline,
+                                color: displayedPhoneVerified
+                                    ? AppColors.sage
+                                    : AppColors.warn,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      displayedPhoneVerified
+                                          ? l10n.phoneVerificationVerified
+                                          : l10n.phoneVerificationNotVerified,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      switch (phoneStatus) {
+                                        PhoneDraftVerificationState.verified =>
+                                          l10n.phoneVerificationVerifiedHelp,
+                                        PhoneDraftVerificationState
+                                            .unverified =>
+                                          l10n.phoneVerificationUnverifiedHelp,
+                                        PhoneDraftVerificationState.edited =>
+                                          l10n.phoneVerificationEditedStatus,
+                                      },
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (!displayedPhoneVerified) ...[
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              height: 46,
+                              child: FilledButton.icon(
+                                key: const Key(
+                                  'account-phone-verification-action',
+                                ),
+                                onPressed: profileBusy ? null : _verifyPhone,
+                                icon: _preparingVerification
+                                    ? SizedBox.square(
+                                        dimension: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onPrimary,
+                                        ),
+                                      )
+                                    : const Icon(Icons.sms_outlined),
+                                label: Text(
+                                  _preparingVerification
+                                      ? l10n.phoneVerificationSavingNumber
+                                      : phoneStatus ==
+                                            PhoneDraftVerificationState.edited
+                                      ? l10n.phoneVerificationSaveAndVerify
+                                      : l10n.verifyPhone,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -280,6 +442,27 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
               title: l10n.notificationPreferences,
               child: Column(
                 children: [
+                  _PreferenceSwitch(
+                    title: l10n.pushNotifications,
+                    value: _preferences.pushNotifications,
+                    onChanged: (value) => _updatePreferences(
+                      _preferences.copyWith(pushNotifications: value),
+                    ),
+                  ),
+                  _PreferenceSwitch(
+                    title: l10n.emailNotifications,
+                    value: _preferences.emailNotifications,
+                    onChanged: (value) => _updatePreferences(
+                      _preferences.copyWith(emailNotifications: value),
+                    ),
+                  ),
+                  _PreferenceSwitch(
+                    title: l10n.smsNotifications,
+                    value: _preferences.smsNotifications,
+                    onChanged: (value) => _updatePreferences(
+                      _preferences.copyWith(smsNotifications: value),
+                    ),
+                  ),
                   _PreferenceSwitch(
                     title: l10n.carActivityNotifications,
                     value: _preferences.carActivity,
@@ -329,12 +512,15 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
             SizedBox(
               height: 52,
               child: FilledButton.icon(
-                onPressed: _saving ? null : _save,
+                onPressed: profileBusy ? null : _save,
                 icon: _saving
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 18,
                         height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Theme.of(context).colorScheme.onPrimary,
+                        ),
                       )
                     : const Icon(Icons.save_outlined),
                 label: Text(_saving ? l10n.saving : l10n.saveProfile),

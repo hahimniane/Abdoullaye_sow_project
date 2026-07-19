@@ -6,6 +6,18 @@
     "serve": "firebase emulators:start --only functions",
     "shell": "firebase functions:shell",
     "start": "npm run shell",
+    "test": "npm run test:unit && npm run test:platform-admin && npm run test:services && npm run test:shared-barrel && npm run test:support && npm run test:rules",
+    "test:unit": "node --test test/bootstrap-platform-admin.test.js test/business-car-backfill.test.js test/business-verification.test.js test/e2e-seed-fixtures.test.js test/explicit-access-migration.test.js test/featured-business.test.js test/freight-settlement.test.js test/notification-settings.test.js test/payment-config.test.js test/payment-reconciliation.test.js test/security-contract.test.js test/shared-barrel.test.js test/support-case-contract.test.js",
+    "test:platform-admin": "firebase emulators:exec --config ../firebase.json --only auth,firestore --project demo-laawol-platform-admin \"node test/platform-admin-callables.test.js\"",
+    "test:services": "firebase emulators:exec --config ../firebase.json --only firestore --project demo-laawol-services \"node test/service-callables.test.js\"",
+    "test:shared-barrel": "firebase emulators:exec --config ../firebase.json --only firestore --project demo-laawol-shared-barrels \"node test/shared-barrel-callables.test.js\"",
+    "test:support": "firebase emulators:exec --config ../firebase.json --only auth,firestore --project demo-laawol-support \"node test/support-case-callables.test.js\"",
+    "test:rules": "firebase emulators:exec --config ../firebase.json --only firestore,storage --project demo-laawol-rules \"node test/firestore-rules.test.js\"",
+    "seed:support-emulator": "node scripts/seed-support-emulator.js",
+    "seed:e2e-emulator": "node scripts/seed-e2e-emulator.js",
+    "bootstrap:platform-admin": "node scripts/bootstrap-platform-admin.js",
+    "migrate:explicit-access": "node scripts/migrate-explicit-access.js",
+    "backfill:cars": "node scripts/backfill-business-car-listings.js",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log"
   },
@@ -14,13 +26,16 @@
   },
   "main": "index.js",
   "dependencies": {
-    "firebase-admin": "^12.6.0",
+    "firebase-admin": "^13.6.0",
     "firebase-functions": "^6.0.1"
   },
+  "overrides": {
+    "uuid": "11.1.1"
+  },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
     "eslint": "^8.15.0",
-    "eslint-config-google": "^0.14.0",
-    "firebase-functions-test": "^3.1.0"
+    "eslint-config-google": "^0.14.0"
   },
   "private": true
 }

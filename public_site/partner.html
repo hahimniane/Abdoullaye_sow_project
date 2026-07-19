@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inscrire votre entreprise — Laawol Digital</title>
+  <meta name="description" content="Postulez pour proposer expédition, voitures, approvisionnement et plus sur Laawol Digital. Inscrivez votre entreprise, choisissez vos services et soyez visible après approbation." />
+  <meta name="theme-color" content="#0b3b38" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/styles.css?v=17" />
+  <link rel="icon" type="image/png" href="assets/logo.png" />
+  <style>
+    /* Partner application — scoped styles layered on top of the shared form CSS */
+    .apply-inner{max-width:760px; margin:0 auto}
+    .apply-card{background:var(--paper); border:1px solid var(--line); border-radius:var(--r-lg); padding:26px; box-shadow:var(--shadow); margin-bottom:22px}
+    .apply-card h2{font-size:20px; color:var(--ink); display:flex; align-items:center; gap:10px}
+    .apply-card .card-sub{color:var(--ink-soft); font-size:14.5px; margin:6px 0 18px}
+    .apply-card .field-row{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+    .apply-card label.fld{display:block; font-weight:700; font-size:14px; color:var(--ink-soft); margin-bottom:16px}
+    .apply-card input[type=text],.apply-card input[type=email],.apply-card input[type=tel],.apply-card input[type=password],.apply-card input[type=url],.apply-card select,.apply-card textarea{width:100%; margin-top:7px; padding:13px 14px; border:1.5px solid var(--line); border-radius:12px; font:inherit; font-size:15px; background:var(--bg); color:var(--ink); transition:border-color .15s ease, box-shadow .15s ease}
+    .apply-card input:focus,.apply-card select:focus,.apply-card textarea:focus{outline:none; border-color:var(--teal); box-shadow:0 0 0 4px rgba(13,148,136,.14); background:#fff}
+    .apply-card textarea{resize:vertical}
+    .partner-service-list{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px}
+    .partner-service-choice{position:relative; display:flex; min-height:78px; gap:12px; align-items:flex-start; border:1.5px solid var(--line); border-radius:14px; padding:14px; cursor:pointer; background:var(--bg); transition:border-color .15s ease, background .15s ease, box-shadow .15s ease}
+    .partner-service-choice:hover{border-color:var(--teal)}
+    .partner-service-choice.on{border-color:var(--teal); background:rgba(13,148,136,.06); box-shadow:0 0 0 3px rgba(13,148,136,.08)}
+    .partner-service-choice input{flex:0 0 auto; margin-top:3px; width:18px; height:18px; accent-color:var(--teal)}
+    .partner-service-text b{display:block; color:var(--ink); font-size:15px; line-height:1.25}
+    .partner-service-text span{display:block; color:var(--ink-soft); font-size:13.5px; line-height:1.35; margin-top:3px}
+    .logo-row{display:flex; align-items:center; gap:16px}
+    .logo-prev{width:64px; height:64px; border-radius:14px; object-fit:cover; border:1px solid var(--line); background:var(--bg); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:22px}
+    .form-msg{display:none; padding:13px 15px; border-radius:12px; font-size:14px; font-weight:600; margin-bottom:16px}
+    .form-msg.err{display:block; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca}
+    .form-msg.ok{display:block; background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0}
+    .apply-success{display:none; text-align:center; background:var(--paper); border:1px solid var(--line); border-radius:var(--r-lg); padding:40px 26px; box-shadow:var(--shadow)}
+    .apply-success .tick{width:64px; height:64px; border-radius:50%; background:rgba(13,148,136,.12); color:var(--teal); display:inline-flex; align-items:center; justify-content:center; font-size:34px; margin-bottom:14px}
+    .apply-success h2{font-size:24px; color:var(--ink)}
+    .apply-success p{color:var(--ink-soft); max-width:460px; margin:12px auto 0}
+    .apply-success .btn{margin-top:22px}
+    .hint{color:var(--muted); font-size:12px; margin-top:6px}
+    .req{color:#dc2626}
+    .signed-note{background:rgba(13,148,136,.06); border:1px solid rgba(13,148,136,.25); border-radius:12px; padding:12px 14px; font-size:14px; color:var(--ink-soft); margin-bottom:16px}
+    @media (max-width:680px){ .apply-card .field-row,.partner-service-list{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="index.html" aria-label="Accueil Laawol Digital">
+        <span class="brand-mark" aria-hidden="true"><img src="assets/logo.png" alt="Laawol" width="32" height="32" style="border-radius:8px;display:block" /></span>
+        <span class="brand-text">Laawol<span>Digital</span></span>
+      </a>
+      <nav class="nav-links" aria-label="Navigation principale">
+        <a href="index.html">Accueil</a>
+        <a href="services.html">Services</a>
+        <a href="source.html">Commander depuis le pays</a>
+        <a href="app.html">Application</a>
+        <a href="about.html">À propos</a>
+        <a href="contact.html">Contact</a>
+      </nav>
+      <div class="nav-cta">
+        <a class="btn btn-ghost" href="app.html">Télécharger l’application</a>
+        <a class="btn btn-primary" href="partner.html">Inscrire votre entreprise</a>
+      </div>
+      <button class="nav-toggle" id="navToggle" aria-label="Ouvrir le menu" aria-expanded="false"><span></span><span></span><span></span></button>
+    </div>
+    <div class="mobile-menu" id="mobileMenu">
+      <a href="index.html">Accueil</a>
+      <a href="services.html">Services</a>
+      <a href="source.html">Commander depuis le pays</a>
+      <a href="app.html">Application</a>
+      <a href="about.html">À propos</a>
+      <a href="contact.html">Contact</a>
+      <a href="partner.html" class="active">Pour les entreprises</a>
+      <a class="btn btn-primary" href="partner.html">Inscrire votre entreprise</a>
+    </div>
+  </header>
+
+  <section class="page-head"><div class="hero-bg" aria-hidden="true"></div><div class="container">
+    <span class="kicker">Pour les entreprises</span>
+    <h1>Inscrivez votre entreprise sur Laawol</h1>
+    <p>Postulez une fois, choisissez les services que vous proposez et préparez vos opérations. Les clients verront votre entreprise après approbation par la plateforme.</p>
+  </div></section>
+
+  <section class="section" style="padding-top:36px"><div class="container apply-inner">
+    <!-- Success state -->
+    <div class="apply-success" id="applySuccess">
+      <span class="tick" aria-hidden="true">✓</span>
+      <h2>Demande envoyée</h2>
+      <p>Merci ! Votre demande d’entreprise attend maintenant l’approbation de la plateforme. Vous pouvez vous connecter à la console admin pour configurer destinations, annonces et personnel tout de suite; les clients vous verront après approbation.</p>
+      <a class="btn btn-primary btn-lg" href="https://admin.laawoldigital.com" id="goAdmin">Ouvrir la console admin</a>
+    </div>
+
+    <!-- Application form -->
+    <form id="applyForm" novalidate>
+      <div class="form-msg" id="formMsg" role="alert"></div>
+
+      <div class="apply-card">
+        <h2>👤 Compte propriétaire</h2>
+        <p class="card-sub" id="ownerSub">Créez l’identifiant que vous utiliserez pour gérer votre entreprise.</p>
+        <div class="signed-note" id="signedNote" style="display:none"></div>
+        <div class="field-row">
+          <label class="fld">Nom complet <span class="req">*</span>
+            <input type="text" id="ownerName" name="ownerName" autocomplete="name" required />
+          </label>
+          <label class="fld">Téléphone <span class="req">*</span>
+            <input type="tel" id="ownerPhone" name="ownerPhone" autocomplete="tel" placeholder="+1 555 123 4567" data-phone-autocode="true" required />
+          </label>
+        </div>
+        <div id="credFields">
+          <div class="field-row">
+            <label class="fld">Email <span class="req">*</span>
+              <input type="email" id="email" name="email" autocomplete="email" required />
+            </label>
+            <label class="fld">Mot de passe <span class="req">*</span>
+              <input type="password" id="password" name="password" autocomplete="new-password" minlength="6" required />
+              <span class="hint">Au moins 6 caractères.</span>
+            </label>
+          </div>
+          <label class="fld">Confirmer le mot de passe <span class="req">*</span>
+            <input type="password" id="confirmPassword" name="confirmPassword" autocomplete="new-password" required />
+          </label>
+        </div>
+      </div>
+
+      <div class="apply-card">
+        <h2>🧩 Services proposés</h2>
+        <p class="card-sub">Sélectionnez tout ce que votre entreprise peut fournir. Vous pourrez modifier cela plus tard.</p>
+        <div class="partner-service-list" id="svcList"></div>
+      </div>
+
+      <div class="apply-card">
+        <h2>🏪 Profil de l’entreprise</h2>
+        <p class="card-sub">Voici ce que la plateforme examine. Les clients ne voient que les entreprises approuvées.</p>
+        <label class="fld">Nom de l’entreprise <span class="req">*</span>
+          <input type="text" id="businessName" name="businessName" required />
+        </label>
+        <div class="field-row">
+          <label class="fld">Téléphone de l’entreprise
+            <input type="tel" id="businessPhone" name="businessPhone" placeholder="Optional" data-phone-autocode="true" />
+          </label>
+          <label class="fld">Email de l’entreprise
+            <input type="email" id="businessEmail" name="businessEmail" placeholder="Optional" />
+          </label>
+        </div>
+        <label class="fld">Site web
+          <input type="url" id="businessWebsite" name="businessWebsite" placeholder="https:// (optional)" />
+        </label>
+        <div class="field-row">
+          <label class="fld">Pays de l’entreprise <span class="req">*</span>
+            <select id="businessCountry" name="businessCountry" required>
+              <option value="">Sélectionnez un pays</option>
+            </select>
+          </label>
+          <label class="fld">Ville de l’entreprise <span class="req">*</span>
+            <select id="businessCity" name="businessCity" disabled required>
+              <option value="">Sélectionnez une ville</option>
+            </select>
+            <input type="text" id="businessCityText" name="businessCityText" placeholder="Saisissez une ville" autocomplete="address-level2" hidden disabled />
+          </label>
+        </div>
+        <label class="fld">Parlez-nous de votre service
+          <textarea id="serviceNote" name="serviceNote" rows="4" placeholder="Routes, pricing, experience, anything useful for approval (optional)"></textarea>
+        </label>
+        <label class="fld">Logo ou photo de vitrine (facultatif)
+          <div class="logo-row">
+            <span class="logo-prev" id="logoPrev" aria-hidden="true">＋</span>
+            <input type="file" id="logo" name="logo" accept="image/*" />
+          </div>
+        </label>
+      </div>
+
+      <button class="btn btn-primary btn-lg" type="submit" id="submitBtn" style="width:100%">Envoyer la demande</button>
+      <small class="form-note">En envoyant, vous créez un compte entreprise Laawol et acceptez l’examen par la plateforme. Vous pouvez configurer votre tableau de bord immédiatement; les clients vous verront après approbation.</small>
+    </form>
+  </div></section>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="index.html"><span class="brand-mark"><img src="assets/logo.png" alt="Laawol" width="32" height="32" style="border-radius:8px;display:block" /></span><span class="brand-text light">Laawol<span>Digital</span></span></a>
+        <p>Une plateforme de confiance pour la diaspora africaine : des entreprises inscrites proposent l’expédition, les voitures, l’approvisionnement, la restauration et des services professionnels avec un accompagnement plus clair.</p>
+      </div>
+      <div class="footer-col"><h4>Explorer</h4>
+        <a href="services.html">Services</a><a href="source.html">Commander depuis le pays</a><a href="app.html">Application</a><a href="about.html">À propos</a>
+      </div>
+      <div class="footer-col"><h4>Entreprise</h4>
+        <a href="about.html">Notre histoire</a><a href="partner.html">Inscrire votre entreprise</a><a href="contact.html">Contact</a><a href="https://admin.laawoldigital.com">Console admin</a>
+      </div>
+      <div class="footer-col"><h4>Télécharger l’application</h4>
+        <a href="contact.html">iOS — App Store</a><a href="contact.html">Android — Google Play</a><a href="contact.html" data-cms-contact="supportEmail" data-cms-contact-href="supportEmail">Assistance</a>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <span>© <span id="year"></span> Laawol Digital. Tous droits réservés.</span>
+      <span class="footer-legal"><a href="privacy.html">Confidentialité</a><span aria-hidden="true"> · </span><a href="terms.html">Conditions d’utilisation</a></span>
+      <span class="footer-tag">Laawol — la route vers le pays.</span>
+    </div>
+  </footer>
+
+  <script src="assets/script.js?v=9"></script>
+  <script src="assets/i18n.js?v=6"></script>
+  <script src="assets/country-catalog.js?v=1"></script>
+  <script src="assets/content.js?v=9"></script>
+
+  <script type="module">
+    import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+    // Same Firebase project the mobile app and admin console use.
+    const firebaseConfig = {
+      apiKey: "AIzaSyBrRDTd5w2iWxTIfvsn7ra0xjW7M-iuPN8",
+      authDomain: "car-selling-flutter-app.firebaseapp.com",
+      projectId: "car-selling-flutter-app",
+      storageBucket: "car-selling-flutter-app.firebasestorage.app",
+      messagingSenderId: "577373430777",
+      appId: "1:577373430777:web:5af70db59c5d49a8125328",
+    };
+    const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const functions = getFunctions(app); // default region us-central1, matches mobile
+    const storage = getStorage(app);
+    const CITY_OPTIONS = {
+      "United States": ["New York", "Bronx", "Brooklyn", "Manhattan", "Queens", "Newark", "Jersey City", "Philadelphia", "Atlanta"],
+      "Guinea": ["Conakry", "Kankan", "Labe", "Nzerekore", "Kindia", "Mamou"],
+      "Senegal": ["Dakar", "Touba", "Thiès", "Saint-Louis", "Kaolack", "Ziguinchor"],
+      "Mali": ["Bamako", "Sikasso", "Mopti", "Ségou", "Kayes", "Koutiala"],
+      "Côte d'Ivoire": ["Abidjan", "Bouaké", "Yamoussoukro", "Daloa", "San-Pedro", "Korhogo"],
+      "Gambia": ["Banjul", "Serekunda", "Brikama", "Bakau", "Farafenni"],
+      "Sierra Leone": ["Freetown", "Bo", "Kenema", "Makeni", "Koidu"],
+      "Liberia": ["Monrovia", "Gbarnga", "Buchanan", "Ganta", "Kakata"],
+    };
+
+    // Service catalog — mirrors my_flutter_app/lib/models/business_service.dart
+    const SERVICES = [
+      { key: "barrelShipping", label: "Barrel shipping", desc: "Ship barrels to destination countries." },
+      { key: "sharedBarrels", label: "Shared barrels", desc: "Manage partial barrels, drop-offs, and customer consolidation." },
+      { key: "carSales",       label: "Car sales", desc: "Publish cars so customers can browse and buy them." },
+      { key: "carParking",     label: "Car parking", desc: "Manage parked cars and parking receipts." },
+      { key: "carTransport",   label: "Car transport", desc: "Track vehicle transport requests." },
+    ];
+
+    const $ = (id) => document.getElementById(id);
+    const form = $("applyForm");
+    const msg = $("formMsg");
+    const submitBtn = $("submitBtn");
+    const businessCountry = $("businessCountry");
+    const businessCity = $("businessCity");
+    const businessCityText = $("businessCityText");
+    const countryCatalog = window.LaawolCountryCatalog;
+
+    function localize(value) {
+      return window.LaawolI18n && typeof window.LaawolI18n.localize === "function"
+        ? window.LaawolI18n.localize(value)
+        : value;
+    }
+
+    if (countryCatalog && typeof countryCatalog.populateCountrySelect === "function") {
+      countryCatalog.populateCountrySelect(businessCountry);
+    }
+
+    function setBusinessCityOptions() {
+      const cities = CITY_OPTIONS[businessCountry.value] || [];
+      businessCity.innerHTML = "";
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = localize("Select a city");
+      businessCity.appendChild(placeholder);
+      cities.forEach((city) => {
+        const option = document.createElement("option");
+        option.value = city;
+        option.textContent = city;
+        businessCity.appendChild(option);
+      });
+      const hasCountry = businessCountry.value.trim().length > 0;
+      const useTextCity = hasCountry && cities.length === 0;
+      businessCity.hidden = useTextCity;
+      businessCity.disabled = useTextCity || !hasCountry;
+      businessCity.required = !useTextCity;
+      businessCityText.hidden = !useTextCity;
+      businessCityText.disabled = !useTextCity;
+      businessCityText.required = useTextCity;
+      if (!useTextCity) businessCityText.value = "";
+      if (useTextCity) businessCity.value = "";
+    }
+
+    function selectedDialCode() {
+      if (countryCatalog && typeof countryCatalog.dialCodeForCountry === "function") {
+        return countryCatalog.dialCodeForCountry(businessCountry.value);
+      }
+      return "";
+    }
+
+    function isOnlyPrefix(value, prefix) {
+      return value.replace(/\s+/g, "") === prefix;
+    }
+
+    function applyPhoneCountryCode(input, dialCode) {
+      const prefix = dialCode ? "+" + dialCode : "";
+      const previousPrefix = input.dataset.autoDialPrefix || "";
+      const value = input.value.trim();
+      input.placeholder = prefix ? prefix + " 555 123 4567" : localize("Phone number");
+      if (!prefix) return;
+
+      if (!value || (previousPrefix && isOnlyPrefix(value, previousPrefix))) {
+        input.value = prefix + " ";
+      } else if (previousPrefix && value.startsWith(previousPrefix + " ")) {
+        const rest = value.slice(previousPrefix.length).trim();
+        input.value = rest ? prefix + " " + rest : prefix + " ";
+      } else if (!value.startsWith("+") && /^\d[\d\s().-]*$/.test(value)) {
+        input.value = prefix + " " + value;
+      }
+      input.dataset.autoDialPrefix = prefix;
+    }
+
+    function syncPhoneCountryCodes() {
+      const dialCode = selectedDialCode();
+      document.querySelectorAll("[data-phone-autocode='true']").forEach((input) => {
+        applyPhoneCountryCode(input, dialCode);
+      });
+    }
+
+    businessCountry.addEventListener("change", () => {
+      setBusinessCityOptions();
+      syncPhoneCountryCodes();
+    });
+    document.querySelectorAll("[data-phone-autocode='true']").forEach((input) => {
+      input.addEventListener("focus", () => {
+        if (!input.value.trim()) applyPhoneCountryCode(input, selectedDialCode());
+      });
+    });
+    setBusinessCityOptions();
+    syncPhoneCountryCodes();
+
+    // Build service checkboxes (all selected by default, like mobile)
+    const svcList = $("svcList");
+    SERVICES.forEach((s) => {
+      const lab = document.createElement("label");
+      lab.className = "partner-service-choice on";
+      lab.innerHTML =
+        '<input type="checkbox" value="' + s.key + '" checked />' +
+        '<span class="partner-service-text"><b>' + s.label + '</b><span>' + s.desc + '</span></span>';
+      const cb = lab.querySelector("input");
+      cb.addEventListener("change", () => lab.classList.toggle("on", cb.checked));
+      svcList.appendChild(lab);
+    });
+    const selectedServices = () =>
+      Array.from(svcList.querySelectorAll("input:checked")).map((c) => c.value);
+    const reducedMotion = window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const scrollToPanel = (node) => {
+      node.scrollIntoView({
+        behavior: reducedMotion ? "auto" : "smooth",
+        block: "center",
+      });
+    };
+
+    // Logo preview
+    let logoFile = null;
+    $("logo").addEventListener("change", (e) => {
+      logoFile = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+      const prev = $("logoPrev");
+      if (logoFile) {
+        const url = URL.createObjectURL(logoFile);
+        prev.style.backgroundImage = "url(" + url + ")";
+        prev.style.backgroundSize = "cover";
+        prev.textContent = "";
+      } else {
+        prev.style.backgroundImage = "";
+        prev.textContent = "＋";
+      }
+    });
+
+    // Public marketing page: every applicant gets (or signs into) their OWN
+    // business account. We deliberately do NOT reuse any pre-existing browser
+    // session — doing so could convert a signed-in admin/customer into a
+    // business owner. The submit handler always signs in as the entered email
+    // before calling submitBusinessApplication.
+
+    const PHONE_OK = (v) => {
+      const raw = String(v || "").trim();
+      if (!raw || /[A-Za-z]/.test(raw)) return false;
+      const norm = raw.replace(/[\s().-]/g, "");
+      if (!/^\+?\d+$/.test(norm)) return false;
+      const digits = norm.replace(/\D/g, "");
+      return digits.length >= 7 && digits.length <= 15;
+    };
+    const EMAIL_OK = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
+
+    function showError(text) {
+      msg.className = "form-msg err";
+      msg.textContent = text;
+      scrollToPanel(msg);
+    }
+    function clearMsg() { msg.className = "form-msg"; msg.textContent = ""; }
+
+    async function uploadLogo(businessId) {
+      const ext = (logoFile.name.split(".").pop() || "jpg").toLowerCase();
+      const safe = ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg";
+      const path = "businesses/" + businessId + "/profile/profile_" + Date.now() + "." + safe;
+      const r = storageRef(storage, path);
+      await uploadBytes(r, logoFile, { contentType: logoFile.type || "image/jpeg" });
+      return { path, url: await getDownloadURL(r) };
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearMsg();
+
+      const ownerName = $("ownerName").value.trim();
+      const ownerPhone = $("ownerPhone").value.trim();
+      const email = $("email").value.trim();
+      const password = $("password").value;
+      const confirmPassword = $("confirmPassword").value;
+      const businessName = $("businessName").value.trim();
+      const businessPhone = $("businessPhone").value.trim();
+      const businessEmail = $("businessEmail").value.trim();
+      const businessWebsite = $("businessWebsite").value.trim();
+      const selectedCountry = businessCountry.value.trim();
+      const selectedCity = (businessCity.hidden ? businessCityText.value : businessCity.value).trim();
+      const serviceNote = $("serviceNote").value.trim();
+      const services = selectedServices();
+
+      // Client-side validation (server re-validates everything)
+      if (!ownerName) return showError("Veuillez saisir le nom complet du propriétaire.");
+      if (!PHONE_OK(ownerPhone)) return showError("Saisissez un numéro de téléphone propriétaire valide (7 à 15 chiffres).");
+      if (!EMAIL_OK(email)) return showError("Saisissez une adresse email valide.");
+      if (password.length < 6) return showError("Le mot de passe doit contenir au moins 6 caractères.");
+      if (password !== confirmPassword) return showError("Les mots de passe ne correspondent pas.");
+      if (!services.length) return showError("Choisissez au moins un service d’entreprise.");
+      if (!businessName) return showError("Veuillez saisir le nom de votre entreprise.");
+      if (!selectedCountry) return showError("Sélectionnez le pays de votre entreprise.");
+      if (!selectedCity) return showError("Sélectionnez la ville de votre entreprise.");
+      if (businessPhone && !PHONE_OK(businessPhone)) return showError("Saisissez un téléphone d’entreprise valide, ou laissez ce champ vide.");
+      if (businessEmail && !EMAIL_OK(businessEmail)) return showError("Saisissez un email d’entreprise valide, ou laissez ce champ vide.");
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Envoi…";
+
+      try {
+        // 1. Always create (or sign into) the applicant's OWN account, and make
+        //    it the active session before applying. This guarantees the
+        //    application is filed under the applicant — never a pre-existing
+        //    admin/customer session that happened to be in the browser.
+        try {
+          const createUser = httpsCallable(functions, "createCustomerUser");
+          const res = await createUser({ email, password, fullName: ownerName, phone: ownerPhone });
+          const signInEmail = (res.data && res.data.email) ? res.data.email : email;
+          await signInWithEmailAndPassword(auth, signInEmail, password);
+        } catch (err) {
+          // Account may already exist — sign the applicant in with the password they entered.
+          if (err && (err.code === "functions/already-exists" || /already/i.test(err.message || ""))) {
+            try {
+              await signInWithEmailAndPassword(auth, email, password);
+            } catch (signInErr) {
+              throw new Error("Un compte existe déjà pour cet email. Saisissez le bon mot de passe pour continuer.");
+            }
+          } else {
+            throw err;
+          }
+        }
+        const currentUser = auth.currentUser;
+
+        // 2. Submit the business application (same callable the mobile app uses)
+        const submit = httpsCallable(functions, "submitBusinessApplication");
+        const appRes = await submit({
+          ownerName,
+          ownerPhone,
+          businessName,
+          businessPhone,
+          businessEmail: businessEmail || (currentUser && currentUser.email) || email,
+          businessWebsite,
+          enabledServices: services,
+          serviceNote,
+          addressLine1: "",
+          city: selectedCity,
+          country: selectedCountry,
+          state: selectedCountry,
+          postalCode: "",
+        });
+        const businessId = appRes.data && appRes.data.businessId;
+
+        // 3. Optional logo upload (mirrors mobile: only when an image was chosen)
+        if (businessId && logoFile) {
+          try {
+            const up = await uploadLogo(businessId);
+            const updateProfile = httpsCallable(functions, "updateBusinessProfile");
+            await updateProfile({
+              businessId,
+              name: businessName,
+              phone: businessPhone,
+              email: businessEmail || (currentUser && currentUser.email) || email,
+              website: businessWebsite,
+              enabledServices: services,
+              profileImageUrl: up.url,
+              profileImagePath: up.path,
+              serviceNote,
+              addressLine1: "",
+              city: selectedCity,
+              country: selectedCountry,
+              state: selectedCountry,
+              postalCode: "",
+              carHoldPricingMode: "flat",
+              carHoldFlatFee: 500,
+              carHoldDailyRate: 100,
+              carHoldMaxDays: 14,
+            });
+          } catch (imgErr) {
+            console.warn("Logo upload failed (application still submitted):", imgErr);
+          }
+        }
+
+        // 4. Success
+        form.style.display = "none";
+        $("applySuccess").style.display = "block";
+        scrollToPanel($("applySuccess"));
+      } catch (err) {
+        console.error("Business application failed:", err);
+        const friendly = (err && err.message) ? err.message.replace(/^functions\/[a-z-]+:?\s*/i, "") : "Une erreur est survenue. Veuillez réessayer.";
+        showError(friendly);
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Envoyer la demande";
+      }
+    });
+  </script>
+</body>
+</html>

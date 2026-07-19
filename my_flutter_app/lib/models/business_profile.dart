@@ -13,16 +13,41 @@ class BusinessProfile {
     this.website,
     this.profileImageUrl,
     this.profileImagePath,
+    this.logoUrl,
     this.enabledServices = defaultBusinessServiceValues,
     this.serviceNote,
     this.addressLine1,
     this.city,
+    this.country,
     this.state,
     this.postalCode,
+    this.marketingBlurb,
+    this.stripeAccountId,
+    this.payoutsEnabled = false,
+    this.chargesEnabled = false,
+    this.connectOnboardedAt,
+    this.featureConsent = false,
+    this.featureStatus = 'none',
+    this.featureNote,
     this.carHoldPricingMode = 'flat',
     this.carHoldFlatFee = 500,
     this.carHoldDailyRate = 100,
     this.carHoldMaxDays = 14,
+    this.parkingAddressLine1,
+    this.parkingCity,
+    this.parkingCountry,
+    this.parkingState,
+    this.parkingTotalSpaces = 0,
+    this.parkingBlockedSpaces = 0,
+    this.parkingDailyRate = 0,
+    this.parkingWeeklyRate = 0,
+    this.parkingMonthlyRate = 0,
+    this.parkingMinimumDays = 1,
+    this.parkingPickupAvailable = false,
+    this.parkingPickupFee = 0,
+    this.parkingInstructions,
+    this.parkingLatitude,
+    this.parkingLongitude,
   });
 
   static const defaultBusinessId = 'keren_auto_sales';
@@ -37,16 +62,41 @@ class BusinessProfile {
   final String? website;
   final String? profileImageUrl;
   final String? profileImagePath;
+  final String? logoUrl;
   final List<String> enabledServices;
   final String? serviceNote;
   final String? addressLine1;
   final String? city;
+  final String? country;
   final String? state;
   final String? postalCode;
+  final String? marketingBlurb;
+  final String? stripeAccountId;
+  final bool payoutsEnabled;
+  final bool chargesEnabled;
+  final DateTime? connectOnboardedAt;
+  final bool featureConsent;
+  final String featureStatus;
+  final String? featureNote;
   final String carHoldPricingMode;
   final double carHoldFlatFee;
   final double carHoldDailyRate;
   final int carHoldMaxDays;
+  final String? parkingAddressLine1;
+  final String? parkingCity;
+  final String? parkingCountry;
+  final String? parkingState;
+  final int parkingTotalSpaces;
+  final int parkingBlockedSpaces;
+  final double parkingDailyRate;
+  final double parkingWeeklyRate;
+  final double parkingMonthlyRate;
+  final int parkingMinimumDays;
+  final bool parkingPickupAvailable;
+  final double parkingPickupFee;
+  final String? parkingInstructions;
+  final double? parkingLatitude;
+  final double? parkingLongitude;
 
   bool get isApproved => status == 'approved';
   bool hasService(BusinessServiceKey key) =>
@@ -64,16 +114,50 @@ class BusinessProfile {
       website: data['website'] as String?,
       profileImageUrl: data['profileImageUrl'] as String?,
       profileImagePath: data['profileImagePath'] as String?,
+      logoUrl: data['logoUrl'] as String?,
       enabledServices: normalizeBusinessServices(data['enabledServices']),
       serviceNote: data['serviceNote'] as String?,
       addressLine1: data['addressLine1'] as String?,
       city: data['city'] as String?,
+      country: data['country'] as String?,
       state: data['state'] as String?,
       postalCode: data['postalCode'] as String?,
+      marketingBlurb: data['marketingBlurb'] as String?,
+      stripeAccountId: data['stripeAccountId'] as String?,
+      payoutsEnabled: data['payoutsEnabled'] == true,
+      chargesEnabled: data['chargesEnabled'] == true,
+      connectOnboardedAt: (data['connectOnboardedAt'] as Timestamp?)?.toDate(),
+      featureConsent: data['featureConsent'] == true,
+      featureStatus: (data['featureStatus'] ?? 'none') as String,
+      featureNote: data['featureNote'] as String?,
       carHoldPricingMode: (data['carHoldPricingMode'] ?? 'flat') as String,
       carHoldFlatFee: _parseDouble(data['carHoldFlatFee'], 500),
       carHoldDailyRate: _parseDouble(data['carHoldDailyRate'], 100),
       carHoldMaxDays: _parseInt(data['carHoldMaxDays'], 14).clamp(1, 30),
+      parkingAddressLine1: data['parkingAddressLine1'] as String?,
+      parkingCity: data['parkingCity'] as String?,
+      parkingCountry: data['parkingCountry'] as String?,
+      parkingState: data['parkingState'] as String?,
+      parkingTotalSpaces: _parseInt(
+        data['parkingTotalSpaces'],
+        0,
+      ).clamp(0, 100000),
+      parkingBlockedSpaces: _parseInt(
+        data['parkingBlockedSpaces'],
+        0,
+      ).clamp(0, 100000),
+      parkingDailyRate: _parseDouble(data['parkingDailyRate'], 0),
+      parkingWeeklyRate: _parseDouble(data['parkingWeeklyRate'], 0),
+      parkingMonthlyRate: _parseDouble(data['parkingMonthlyRate'], 0),
+      parkingMinimumDays: _parseInt(
+        data['parkingMinimumDays'],
+        1,
+      ).clamp(1, 365),
+      parkingPickupAvailable: data['parkingPickupAvailable'] == true,
+      parkingPickupFee: _parseDouble(data['parkingPickupFee'], 0),
+      parkingInstructions: data['parkingInstructions'] as String?,
+      parkingLatitude: _parseNullableDouble(data['parkingLatitude']),
+      parkingLongitude: _parseNullableDouble(data['parkingLongitude']),
     );
   }
 
@@ -81,6 +165,14 @@ class BusinessProfile {
     if (value is num) return value.toDouble();
     if (value is String) return double.tryParse(value) ?? fallback;
     return fallback;
+  }
+
+  static double? _parseNullableDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String && value.trim().isNotEmpty) {
+      return double.tryParse(value.trim());
+    }
+    return null;
   }
 
   static int _parseInt(dynamic value, int fallback) {
@@ -93,8 +185,18 @@ class BusinessProfile {
     return [
       addressLine1,
       city,
+      country,
       state,
       postalCode,
+    ].whereType<String>().where((part) => part.trim().isNotEmpty).join(', ');
+  }
+
+  String get parkingAddressLabel {
+    return [
+      parkingAddressLine1 ?? addressLine1,
+      parkingCity ?? city,
+      parkingCountry ?? country,
+      parkingState ?? state,
     ].whereType<String>().where((part) => part.trim().isNotEmpty).join(', ');
   }
 }

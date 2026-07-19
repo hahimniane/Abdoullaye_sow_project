@@ -31,7 +31,7 @@ import Vision
       return
     }
     let channel = FlutterMethodChannel(
-      name: "com.autosales.myFlutterApp/vin_text_recognition",
+      name: "com.laawoldigital.app/vin_text_recognition",
       binaryMessenger: controller.binaryMessenger
     )
     channel.setMethodCallHandler { [weak self] call, result in

@@ -45,6 +45,8 @@ Cloud Functions commands from `functions/package.json`:
 ```sh
 cd functions
 npm run lint
+npm run test:unit
+npm run test:rules
 npm run serve
 ```
 
@@ -64,7 +66,8 @@ Also available: `npm run shell`, `npm run deploy`, and `npm run logs`. Do not de
 - Prefer pure model/service tests when possible.
 - If a Firebase boundary is hard-wired, isolate logic behind a service boundary before testing.
 - Do not run tests against production Firebase.
-- For emulator-backed testing, document the exact command here once introduced.
+- For emulator-backed Firestore rules testing, run
+  `cd my_flutter_app/functions && npm run test:rules`.
 
 ## Regression Checklist
 
@@ -72,6 +75,10 @@ Also available: `npm run shell`, `npm run deploy`, and `npm run logs`. Do not de
 - Are affected tests present and passing?
 - Did generated files need regeneration?
 - Are async operations awaited and errors surfaced to the UI?
+- Do async buttons/taps show loading, disable repeat activation, and reset the
+  loading state after success, error, or cancellation?
+- Did every new or changed user-facing string get English and French ARB values,
+  generated localization output, and a hardcoded-string audit?
 - Are Firebase security rules, storage rules, or function contracts affected?
 - Are route arguments and provider dependencies still valid?
 
@@ -85,3 +92,140 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
 
 - The iOS 26.5 simulator requires `arm64`; do not exclude simulator `arm64` in `ios/Podfile`. The old `google_mlkit_text_recognition` / MLKit `MLImage.framework` pod only provided an `x86_64` simulator slice and an `arm64` device slice, so it could not run on this simulator runtime. After iOS Podfile or plugin dependency changes, run `pod install` from `my_flutter_app/ios`, then verify with `flutter run -d 96729E62-B230-4C2E-A307-2AEFD8DE8F3A`.
 - Keep `build/**` excluded in `analysis_options.yaml`. Flutter's Swift Package Manager integration can place plugin source under `build/ios/SourcePackages` and `build/macos/SourcePackages`; without the exclusion, `flutter analyze` may fail on generated third-party package examples/tests instead of app code.
+- For production Cloud Functions audits, keep `firebase-admin` on a Firebase Functions-compatible major and use the package-level `uuid` override in `functions/package.json`; `firebase-admin@14` clears the advisory directly but currently conflicts with `firebase-functions@6/7` peer ranges. `firebase-functions-test` was unused and removed because it pulled vulnerable Jest-only dev dependencies.
+- For Website featured-business work, regression-test both authorization planes:
+  UI manage gating plus Firebase Storage/Firestore/callable rules. Logo uploads
+  under `businessLogos/{businessId}/...` should allow super admins and
+  website-manage admins, reject non-image or oversized files, and public
+  country/city fields should be selectable rather than free text.
+- Firestore rules tests for business-scoped collections should cover both point
+  reads and query/list reads. Staff `businessPermissions` are section-scoped for
+  writes, and missing, empty, or malformed permissions must fail closed. Use the
+  explicit-access migration dry run before enabling those rules on legacy data.
+- Callable emulator suites that exercise platform-admin behavior must start both
+  Auth and Firestore emulators and seed an `emailVerified: true` Auth user. The
+  support suite's canonical command is `npm run test:support`; do not bypass the
+  production admin email-verification lookup in tests.
+- Business dashboard listing queries must remain uncapped for `cars` while still
+  scoped by `businessId`; if a business cannot see older posted cars, first
+  check whether those legacy car documents are missing the matching
+  `businessId` or were assigned to the wrong/default business. Backfill helper changes should run
+  `cd my_flutter_app/functions && npm run test:unit`. The local fallback script
+  is `npm run backfill:cars -- ...`; it defaults to dry-run and requires
+  explicit `--commit` for writes.
+- Car listing image uploads must use `cars/{businessId}/{carId}/...`; keep
+  legacy `cars/{carId}/...` image URLs readable but deny legacy writes. Storage
+  rules tests should cover owner, listing staff, admin, cross-business,
+  unauthenticated, non-image, and oversized upload cases.
+- For top-level business-owned documents, add takeover regressions: updates must
+  not authorize against a changed `request.resource.data.businessId` without also
+  preserving the existing `resource.data.businessId`.
+- For UI workflows, test or manually verify that async buttons and tap targets
+  show progress immediately, cannot be double-clicked/double-tapped, and recover
+  after both success and failure.
+- For Flutter UI changes, run or report a hardcoded-string audit for touched
+  files and verify `flutter gen-l10n` plus `flutter analyze` after ARB edits.
+- Every listed transacting service needs an acceptance contract spanning
+  configuration, customer discovery/booking, callable lifecycle, Firestore
+  rules, payment reconciliation, customer orders/tracking, operator
+  fulfillment, earnings, and English/French rendering. A callable accepting a
+  payment is not sufficient evidence that the service is operational.
+- Local iPhone E2E is verified with stable Xcode 26.6 selected through
+  `xcode-select`; do not require an Xcode beta or a `DEVELOPER_DIR` override.
+  Maestro needs Java 21 and should clear the simulator keychain before auth
+  tests, because Firebase credentials survive an app-data reset in the iOS
+  Keychain.
+  With limited disk/RAM, run emulator suites sequentially. Emulator app builds
+  must pass `--dart-define=USE_FIREBASE_EMULATORS=true` and set
+  `--dart-define=FIREBASE_EMULATOR_PROJECT_ID=...` to the same demo project used
+  by the seed and Functions emulator; a shell environment variable alone does
+  not satisfy `String.fromEnvironment`. Auth can appear to work while Firestore
+  silently reads a different empty project namespace. On the animated login
+  screen, Maestro must `waitForAnimationToEnd` before focusing Email and tap the
+  iOS keyboard's `done` control after entering Password; otherwise text input or
+  the submit tap can be silently lost even though Maestro reports success.
+- Flutter tappable rows often expose their title and subtitle as one multiline
+  accessibility label. Maestro should use multiline-safe selectors such as
+  `(?s).*Browse cars.*` unless the node has an explicit standalone semantics
+  label.
+- Payment-sheet acceptance tests must distinguish presentation failure from
+  post-charge confirmation failure. Only the former may call a cancellation
+  endpoint; after the sheet succeeds, server/webhook reconciliation owns
+  recovery. Keep a regression test for this ordering.
+- Marketplace-responsibility regressions must prove the payment confirmation is
+  disabled until the customer explicitly checks acceptance, renders in English
+  and French, carries the current version/locale into the callable, and is
+  rejected by production parsing when missing, unchecked, stale, or malformed.
+- While the release is light-only, regression checks must cover Flutter root
+  theme, native iOS/Android shells, every Stripe sheet setup, absence of the
+  Settings toggle, and cold launch while the device OS itself is in dark mode.
+- Paid vehicle holds need a concurrent two-customer test that proves exactly
+  one reservation wins. Destination-change tests must use multi-barrel
+  quantities so per-unit rates cannot be mistaken for shipment totals.
+- Rebuilt-title regressions must cover required boolean creation, invalid or
+  missing rule rejection, legacy-null display as Not provided, edit persistence,
+  buyer card/detail visibility, admin review/filtering, and English/French copy.
+- Firebase Storage rules have a 1,000-expression evaluation limit. In support
+  attachment access, evaluate `hasAdminCapability('support')` once, then use the
+  member-only business helper for the fallback; nesting the full admin-or-member
+  helper there causes legitimate dynamic-role evaluation to become noisy and
+  denied paths to fail by evaluator exhaustion instead of a clean denial.
+- Production static preflight must require each public hostname to resolve only
+  to the committed Hostinger IPv4 and IPv6. Resolve through both Google and
+  Cloudflare DNS-over-HTTPS and require consensus; local UDP DNS may be
+  intercepted to `18.204.152.241` / `AAAA ::` by router security even when the
+  authoritative records are healthy. Timeouts, DNS errors, and resolver
+  disagreements fail closed. Keep post-deploy HTTP smoke checks because DNS can
+  change after the preflight snapshot.
+- Production web App Check uses a score-based reCAPTCHA Enterprise key for both
+  the admin/business Next.js console and Flutter web. Keep both clients on
+  `ReCaptchaEnterpriseProvider`, keep debug providers development-only, and run
+  release web builds with the registered public site key. The production web
+  app uses a one-day App Check token TTL to preserve the no-billing assessment
+  quota; provider/config mismatches compile successfully but fail at runtime,
+  so retain source-contract tests and a real-browser launch check.
+- Production payment release checks must derive the complete Stripe-bound
+  function manifest from each export's Cloud Functions endpoint secret metadata.
+  Never rely on a hand-maintained function-name subset: source derivation belongs
+  in preflight, while deployed presence and `ACTIVE` state are enforced by the
+  post-deploy smoke so a corrective deployment is not blocked before it runs.
+- Marketing app captures must be normalized into conventional opaque PNG files
+  before publication. Verify the final encoded asset in a real browser several
+  times and compare render hashes; simulator captures can contain unstable raster
+  data that looks correct once and then renders with black bands.
+- Treat every route opened from customer-tab authentication as a nested-navigator
+  regression risk. Business registration, forgot password, and business/staff
+  home are app-wide destinations and must be pushed through the root navigator;
+  widget tests must begin inside the nested customer navigator so a root-only
+  test cannot produce a false pass.
+- Native support-attachment acceptance must cover picker to Firebase Storage to
+  callable message creation to participant download. On iOS, upload an `XFile`
+  by its file path with `putFile`; do not load full videos into Dart memory.
+  Selection must stop at a review step before any upload: assert image preview,
+  Cancel with zero backend writes, Replace, explicit Upload, and retained Retry
+  state after failure in both English and French.
+  Enforce client limits below the backend's strict `<` limits and test the exact
+  boundary. Production Storage rules that call `firestore.get` or
+  `firestore.exists` also require the Firebase Storage service agent to hold
+  `roles/firebaserules.firestoreServiceAgent`; deployment preflight must fail
+  closed when that cross-service IAM binding cannot be verified.
+- Firestore-backed display formatters must tolerate malformed legacy sentinel
+  values without crashing. Preserve explicit bad financial metadata visibly;
+  do not silently relabel it as a valid currency. Optional/domain helpers must
+  preserve absence as empty so typed fallbacks such as USD can run.
+- Keep the durable release matrix in `docs/ios-role-feature-qa.md`. A feature is
+  not `PASS` merely because it compiles or its callable succeeds: exercise it in
+  the native iOS app, verify the backend record, and verify that the next role
+  can see and act on the result.
+- Always include a restricted staff account with one permission and a staff
+  account with no `businessPermissions`. Verify the Flutter auth state loads
+  the permission list, unauthorized tabs and activity listeners are absent,
+  and the backend rules independently deny the same reads and writes. Seeded
+  owners and full-access staff cannot cover this fail-closed branch.
+- Phone verification coverage must include edited-draft status, initial send,
+  duplicate activation, asynchronous code callback, wrong/expired code, resend
+  cooldown and synchronous resend failure, change-number/cancel, late automatic
+  callbacks, success, and Auth-linked/profile-sync recovery. A failed profile
+  sync must never require another SMS. Only a Firebase-verified phone may reserve
+  a `phoneSignInAliases` document; unverified signup/profile values cannot claim
+  login aliases.

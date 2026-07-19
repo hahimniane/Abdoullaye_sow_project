@@ -92,6 +92,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
     final businessData = businessDoc.data() ?? <String, dynamic>{};
     final docRef = _firestore.collection('cars').doc();
     final imageUrls = await _uploadImages(
+      businessId: businessId,
       carId: docRef.id,
       images: result.images,
     );
@@ -117,6 +118,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
         ? car.status
         : result.status;
     final imageUrls = await _uploadImages(
+      businessId: car.businessId,
       carId: car.id,
       images: result.images,
       previousUrls: car.imageUrls,
@@ -136,6 +138,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
   }
 
   Future<List<String>> _uploadImages({
+    required String businessId,
     required String carId,
     required List<_EditableCarImage> images,
     List<String>? previousUrls,
@@ -155,7 +158,12 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
       final ext = (image.file?.name.split('.').last ?? 'jpg').toLowerCase();
       final filename =
           'car_${carId}_${DateTime.now().millisecondsSinceEpoch}_$index.$ext';
-      final ref = storage.ref().child('cars').child(carId).child(filename);
+      final ref = storage
+          .ref()
+          .child('cars')
+          .child(businessId)
+          .child(carId)
+          .child(filename);
       final contentType = ext == 'png'
           ? 'image/png'
           : ext == 'webp'
@@ -695,6 +703,21 @@ class _CarCard extends StatelessWidget {
                             fontSize: 14,
                           ),
                         ),
+                        const SizedBox(height: 4),
+                        Text(
+                          car.isRebuiltTitle == true
+                              ? l10n.rebuiltTitleYes
+                              : car.isRebuiltTitle == null
+                              ? '${l10n.rebuiltTitle}: ${l10n.rebuiltTitleUnknown}'
+                              : l10n.rebuiltTitleNo,
+                          style: TextStyle(
+                            color: car.isRebuiltTitle == false
+                                ? AppColors.sage
+                                : AppColors.warn,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -983,6 +1006,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
   String? _drivetrain;
   String? _exteriorColor;
   String? _interiorColor;
+  bool? _isRebuiltTitle;
   String? _locationState;
   String? _locationCity;
   String _locationAddressLine1 = '';
@@ -1059,6 +1083,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
     _interiorColor = car?.interiorColor.isNotEmpty == true
         ? car!.interiorColor
         : null;
+    _isRebuiltTitle = car?.isRebuiltTitle;
     _locationState = car?.locationState.isNotEmpty == true
         ? car!.locationState
         : null;
@@ -1323,6 +1348,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
             _selectedModel == null ||
             _selectedYear == null ||
             _condition == null ||
+            _isRebuiltTitle == null ||
             _bodyType == null) {
           return l10n.requiredField;
         }
@@ -1495,6 +1521,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
       interiorColor: _interiorColor ?? '',
       vin: _vinController.text.trim().replaceAll(' ', '').toUpperCase(),
       stockNumber: _stockNumberController.text.trim(),
+      isRebuiltTitle: _isRebuiltTitle!,
       isNegotiable: _isNegotiable,
       locationAddressLine1: _locationAddressLine1,
       locationCity: _locationCity ?? '',
@@ -1889,6 +1916,37 @@ class _CarFormSheetState extends State<_CarFormSheet> {
               onSelected: (value) => setState(() => _condition = value),
             ),
             const SizedBox(height: 16),
+            Text(
+              l10n.rebuiltTitleQuestion,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              l10n.rebuiltTitleDisclosureHelp,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.lightMuted),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ChoiceChip(
+                  avatar: const Icon(Icons.report_outlined, size: 18),
+                  label: Text(l10n.rebuiltTitleYes),
+                  selected: _isRebuiltTitle == true,
+                  onSelected: (_) => setState(() => _isRebuiltTitle = true),
+                ),
+                ChoiceChip(
+                  avatar: const Icon(Icons.verified_outlined, size: 18),
+                  label: Text(l10n.rebuiltTitleNo),
+                  selected: _isRebuiltTitle == false,
+                  onSelected: (_) => setState(() => _isRebuiltTitle = false),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
             Text(l10n.bodyType, style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
             _optionGrid(
@@ -1940,25 +1998,23 @@ class _CarFormSheetState extends State<_CarFormSheet> {
               value: _useBusinessHoldPricing,
               onChanged: (value) =>
                   setState(() => _useBusinessHoldPricing = value),
-              title: const Text('Use business paid hold pricing'),
-              subtitle: const Text(
-                'Turn off to override hold fee for this car.',
-              ),
+              title: Text(l10n.useBusinessPaidHoldPricing),
+              subtitle: Text(l10n.useBusinessPaidHoldPricingSubtitle),
               secondary: const Icon(Icons.lock_clock_outlined),
             ),
             if (!_useBusinessHoldPricing) ...[
               const SizedBox(height: 8),
               SegmentedButton<String>(
-                segments: const [
+                segments: [
                   ButtonSegment(
                     value: 'flat',
-                    icon: Icon(Icons.payments_outlined),
-                    label: Text('Flat fee'),
+                    icon: const Icon(Icons.payments_outlined),
+                    label: Text(l10n.flatFee),
                   ),
                   ButtonSegment(
                     value: 'per_day',
-                    icon: Icon(Icons.calendar_month_outlined),
-                    label: Text('Per day'),
+                    icon: const Icon(Icons.calendar_month_outlined),
+                    label: Text(l10n.perDay),
                   ),
                 ],
                 selected: {_holdPricingMode},
@@ -1971,8 +2027,8 @@ class _CarFormSheetState extends State<_CarFormSheet> {
                     ? _holdFlatFeeController
                     : _holdDailyRateController,
                 label: _holdPricingMode == 'flat'
-                    ? 'Flat hold fee'
-                    : 'Daily hold rate',
+                    ? l10n.flatHoldFee
+                    : l10n.dailyHoldRate,
                 icon: Icons.attach_money,
                 keyboardType: TextInputType.number,
               ),
@@ -2393,6 +2449,14 @@ class _CarFormSheetState extends State<_CarFormSheet> {
         _reviewLine(
           l10n.condition,
           _condition == null ? '' : _carOptionLabel(l10n, _condition!),
+        ),
+        _reviewLine(
+          l10n.rebuiltTitle,
+          _isRebuiltTitle == null
+              ? l10n.rebuiltTitleUnknown
+              : _isRebuiltTitle!
+              ? l10n.rebuiltTitleYes
+              : l10n.rebuiltTitleNo,
         ),
         _reviewLine(
           l10n.bodyType,
@@ -3108,6 +3172,7 @@ class _CarFormResult {
     required this.interiorColor,
     required this.vin,
     required this.stockNumber,
+    required this.isRebuiltTitle,
     required this.isNegotiable,
     required this.locationAddressLine1,
     required this.locationCity,
@@ -3143,6 +3208,7 @@ class _CarFormResult {
   final String interiorColor;
   final String vin;
   final String stockNumber;
+  final bool isRebuiltTitle;
   final bool isNegotiable;
   final String locationAddressLine1;
   final String locationCity;
@@ -3176,6 +3242,7 @@ class _CarFormResult {
       'interiorColor': interiorColor,
       'vin': vin,
       'stockNumber': stockNumber,
+      'isRebuiltTitle': isRebuiltTitle,
       'isNegotiable': isNegotiable,
       'locationAddressLine1': locationAddressLine1,
       'locationCity': locationCity,

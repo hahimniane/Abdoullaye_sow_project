@@ -1,0 +1,89 @@
+appId: com.laawoldigital.app
+name: Customer requests a full barrel shipment
+---
+- clearKeychain
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "(?s).*Sign in to your wallet.*"
+    timeout: 20000
+- tapOn: "(?s).*Sign in to your wallet.*"
+- extendedWaitUntil:
+    visible: "Account Login"
+    timeout: 20000
+- waitForAnimationToEnd
+- tapOn: "Email"
+- inputText: "e2e.customer@laawol.test"
+- tapOn: "Password"
+- inputText: "${E2E_TEST_PASSWORD}"
+- tapOn: "done"
+- scrollUntilVisible:
+    element:
+      text: "Sign In"
+    direction: DOWN
+- tapOn:
+    text: "Sign In"
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible: "(?s).*E2E Customer.*"
+    timeout: 30000
+- tapOn: "Shipping"
+- tapOn: "(?s).*Send a barrel.*"
+- extendedWaitUntil:
+    visible: "(?s).*Send Barrels.*"
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: "Add a destination"
+    direction: DOWN
+- tapOn: "Add a destination"
+- extendedWaitUntil:
+    visible: "(?s).*Destination 1.*"
+    timeout: 10000
+- tapOn: "Destination Country"
+- tapOn:
+    point: 50%, 50%
+- extendedWaitUntil:
+    visible: "(?s).*E2E Atlantic Logistics.*"
+    timeout: 20000
+- tapOn:
+    point: 50%, 46%
+- tapOn:
+    point: 50%, 57%
+- inputText: "Mamadou Bah"
+- tapOn: "done"
+- tapOn:
+    point: 50%, 64%
+- inputText: "+224620000002"
+- tapOn: "Add to order"
+- extendedWaitUntil:
+    visible: "(?s).*Mamadou Bah.*"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: "(?s).*Bring to office.*"
+    direction: DOWN
+- tapOn: "(?s).*Bring to office.*"
+- scrollUntilVisible:
+    element:
+      text: "Pay and request shipment"
+    direction: DOWN
+- tapOn: "Pay and request shipment"
+- extendedWaitUntil:
+    visible: "(?s).*Request barrel shipment?.*"
+    timeout: 10000
+- tapOn: "Pay and request"
+- extendedWaitUntil:
+    visible: "(?s).*Understand who provides this service.*"
+    timeout: 10000
+- tapOn: "(?s).*I understand the business’s responsibility and want to continue.*"
+- tapOn: "Continue to payment"
+- extendedWaitUntil:
+    visible: "Options"
+    timeout: 30000
+- tapOn:
+    point: 9%, 11%
+- extendedWaitUntil:
+    visible: "(?s).*Shipment saved. Tracking number: BS-.*"
+    timeout: 30000
+- takeScreenshot: "output/ios-e2e/full-barrel-requested"

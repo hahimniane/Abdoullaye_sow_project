@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_flutter_app/models/barrel_order.dart';
 import 'package:my_flutter_app/models/barrel_shipment.dart';
+import 'package:my_flutter_app/models/business_destination_option.dart';
 import 'package:my_flutter_app/models/car.dart';
 import 'package:my_flutter_app/models/car_purchase.dart';
 import 'package:my_flutter_app/models/destination_country.dart';
@@ -128,5 +130,73 @@ void main() {
 
     expect(barrel.destinationCountryName, DestinationCountry.fallback.name);
     expect(transport.destinationCountryId, DestinationCountry.fallback.id);
+  });
+
+  test('barrel order line serializes pickup details per destination', () {
+    final pickupTime = DateTime.utc(2026, 7, 3, 14, 30);
+    final country = DestinationCountry(
+      id: 'guinea',
+      name: 'Guinea',
+      code: 'GN',
+      isActive: true,
+      barrelShippingPrice: 120,
+    );
+    final line = BarrelOrderLine(
+      country: country,
+      business: BusinessDestinationOption(
+        id: 'business-a-guinea',
+        businessId: 'business-a',
+        businessName: 'Business A',
+        country: country,
+      ),
+      receiverName: 'Receiver',
+      receiverPhone: '+2245550101',
+      quantity: 2,
+      pickupRequested: true,
+      pickupAddress: '3184 Webster Ave, Bronx, NY 10467',
+      pickupBorough: 'Bronx',
+      pickupFee: 25,
+      pickupDateTime: pickupTime,
+      hasPickupOverride: true,
+    );
+
+    expect(line.lineTotal, 265);
+    expect(line.toCallableJson(), {
+      'destinationCountryId': 'guinea',
+      'businessId': 'business-a',
+      'receiverName': 'Receiver',
+      'receiverPhone': '+2245550101',
+      'quantity': 2,
+      'pickupRequested': true,
+      'pickupAddress': '3184 Webster Ave, Bronx, NY 10467',
+      'pickupBorough': 'Bronx',
+      'pickupDateTime': pickupTime.toIso8601String(),
+    });
+  });
+
+  test('barrel order line omits pickup details when using shared pickup', () {
+    final country = DestinationCountry(
+      id: 'guinea',
+      name: 'Guinea',
+      code: 'GN',
+      isActive: true,
+      barrelShippingPrice: 120,
+    );
+    final line = BarrelOrderLine(
+      country: country,
+      business: BusinessDestinationOption(
+        id: 'business-a-guinea',
+        businessId: 'business-a',
+        businessName: 'Business A',
+        country: country,
+      ),
+      receiverName: 'Receiver',
+      receiverPhone: '+2245550101',
+      quantity: 1,
+    );
+
+    expect(line.toCallableJson().keys, isNot(contains('pickupRequested')));
+    expect(line.toCallableJson().keys, isNot(contains('pickupAddress')));
+    expect(line.toCallableJson().keys, isNot(contains('pickupDateTime')));
   });
 }

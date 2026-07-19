@@ -5,6 +5,9 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../models/car.dart';
 import '../models/car_purchase.dart';
+import '../models/marketplace_disclosure_acceptance.dart';
+import 'payment_flow_safety.dart';
+import 'stripe_config_service.dart';
 
 class CarPurchaseService {
   CarPurchaseService({FirebaseFunctions? functions})
@@ -84,12 +87,14 @@ class CarPurchaseService {
     required Car car,
     required String buyerName,
     required String buyerPhone,
+    required MarketplaceDisclosureAcceptance marketplaceAcceptance,
   }) async {
     final callable = _functions.httpsCallable('createCarPurchasePaymentIntent');
     final response = await callable.call<Map<String, dynamic>>({
       'carId': car.id,
       'buyerName': buyerName,
       'buyerPhone': buyerPhone,
+      'marketplaceDisclosure': marketplaceAcceptance.toJson(),
     });
     final data = Map<String, dynamic>.from(response.data);
     final purchaseId = data['purchaseId'] as String?;
@@ -104,28 +109,27 @@ class CarPurchaseService {
       throw Exception('Payment could not be initialized.');
     }
 
+    await StripeConfigService.ensureConfigured();
     await Stripe.instance.initPaymentSheet(
       paymentSheetParameters: SetupPaymentSheetParameters(
         paymentIntentClientSecret: clientSecret,
-        merchantDisplayName: car.businessName,
-        style: ThemeMode.system,
+        merchantDisplayName: 'Laawol',
+        style: ThemeMode.light,
       ),
     );
-    try {
-      await Stripe.instance.presentPaymentSheet();
-      await _functions.httpsCallable('completeCarPurchase').call({
-        'purchaseId': purchaseId,
-      });
-    } catch (_) {
-      try {
+    await completePaymentFlowSafely(
+      presentPaymentSheet: Stripe.instance.presentPaymentSheet,
+      completeTransaction: () async {
+        await _functions.httpsCallable('completeCarPurchase').call({
+          'purchaseId': purchaseId,
+        });
+      },
+      cancelPendingTransaction: () async {
         await _functions.httpsCallable('cancelPendingCarPurchase').call({
           'purchaseId': purchaseId,
         });
-      } catch (_) {
-        // Preserve the original payment-sheet error for the customer.
-      }
-      rethrow;
-    }
+      },
+    );
   }
 
   Future<void> reserveWithDeposit({
@@ -133,6 +137,7 @@ class CarPurchaseService {
     required String buyerName,
     required String buyerPhone,
     required DateTime holdUntilDate,
+    required MarketplaceDisclosureAcceptance marketplaceAcceptance,
   }) async {
     final callable = _functions.httpsCallable('createCarDepositPaymentIntent');
     final response = await callable.call<Map<String, dynamic>>({
@@ -140,6 +145,7 @@ class CarPurchaseService {
       'buyerName': buyerName,
       'buyerPhone': buyerPhone,
       'holdUntilDate': holdUntilDate.toUtc().toIso8601String(),
+      'marketplaceDisclosure': marketplaceAcceptance.toJson(),
     });
     final data = Map<String, dynamic>.from(response.data);
     final purchaseId = data['purchaseId'] as String?;
@@ -154,17 +160,27 @@ class CarPurchaseService {
       throw Exception('Payment could not be initialized.');
     }
 
+    await StripeConfigService.ensureConfigured();
     await Stripe.instance.initPaymentSheet(
       paymentSheetParameters: SetupPaymentSheetParameters(
         paymentIntentClientSecret: clientSecret,
-        merchantDisplayName: car.businessName,
-        style: ThemeMode.system,
+        merchantDisplayName: 'Laawol',
+        style: ThemeMode.light,
       ),
     );
-    await Stripe.instance.presentPaymentSheet();
-    await _functions.httpsCallable('completeCarDepositReservation').call({
-      'purchaseId': purchaseId,
-    });
+    await completePaymentFlowSafely(
+      presentPaymentSheet: Stripe.instance.presentPaymentSheet,
+      completeTransaction: () async {
+        await _functions.httpsCallable('completeCarDepositReservation').call({
+          'purchaseId': purchaseId,
+        });
+      },
+      cancelPendingTransaction: () async {
+        await _functions.httpsCallable('cancelPendingCarPurchase').call({
+          'purchaseId': purchaseId,
+        });
+      },
+    );
   }
 
   Future<void> requestPaidHoldExtension({
@@ -179,21 +195,28 @@ class CarPurchaseService {
     });
   }
 
-  Future<void> payApprovedHoldExtension({required CarPurchase purchase}) async {
+  Future<void> payApprovedHoldExtension({
+    required CarPurchase purchase,
+    required MarketplaceDisclosureAcceptance marketplaceAcceptance,
+  }) async {
     final response = await _functions
         .httpsCallable('createPaidHoldExtensionPaymentIntent')
-        .call<Map<String, dynamic>>({'purchaseId': purchase.id});
+        .call<Map<String, dynamic>>({
+          'purchaseId': purchase.id,
+          'marketplaceDisclosure': marketplaceAcceptance.toJson(),
+        });
     final data = Map<String, dynamic>.from(response.data);
     if (data['simulatedPayment'] == true) return;
     final clientSecret = data['clientSecret'] as String?;
     if (clientSecret == null || clientSecret.isEmpty) {
       throw Exception('Extension payment could not be initialized.');
     }
+    await StripeConfigService.ensureConfigured();
     await Stripe.instance.initPaymentSheet(
       paymentSheetParameters: SetupPaymentSheetParameters(
         paymentIntentClientSecret: clientSecret,
-        merchantDisplayName: purchase.businessName,
-        style: ThemeMode.system,
+        merchantDisplayName: 'Laawol',
+        style: ThemeMode.light,
       ),
     );
     await Stripe.instance.presentPaymentSheet();

@@ -1,0 +1,57 @@
+appId: com.laawoldigital.app
+name: Customer pays a verified freight balance
+---
+- clearKeychain
+- launchApp:
+    clearState: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "(?s).*Sign in to your wallet.*"
+    timeout: 20000
+- tapOn: "(?s).*Sign in to your wallet.*"
+- extendedWaitUntil:
+    visible: "Account Login"
+    timeout: 20000
+- waitForAnimationToEnd
+- tapOn: "Email"
+- inputText: "e2e.customer@laawol.test"
+- tapOn: "Password"
+- inputText: "${E2E_TEST_PASSWORD}"
+- tapOn: "done"
+- scrollUntilVisible:
+    element:
+      text: "Sign In"
+    direction: DOWN
+- tapOn: "Sign In"
+- extendedWaitUntil:
+    visible: "(?s).*E2E Customer.*"
+    timeout: 30000
+- tapOn: "Activity"
+- tapOn: "(?s).*Track Shipment.*"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "(?s).*FR-E2E-BALANCE.*"
+    timeout: 40000
+- assertVisible: "(?s).*FR-E2E-BALANCE.*Additional payment required.*"
+- swipe:
+    start: 50%, 75%
+    end: 50%, 25%
+    duration: 700
+- swipe:
+    start: 50%, 70%
+    end: 50%, 35%
+    duration: 500
+- assertVisible: "Pay balance of $25.00"
+- takeScreenshot: "output/ios-e2e/freight-balance-due"
+- tapOn: "Pay balance of $25.00"
+- extendedWaitUntil:
+    visible: "I understand the business’s responsibility and want to continue."
+    timeout: 10000
+- tapOn: "I understand the business’s responsibility and want to continue."
+- tapOn: "Continue to payment"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      text: "Settled"
+    direction: DOWN
+- takeScreenshot: "output/ios-e2e/freight-settled"

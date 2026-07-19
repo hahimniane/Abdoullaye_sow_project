@@ -910,12 +910,12 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
           ),
           const SizedBox(height: 24),
           Text(
-            'Total Days: ${_totalDays > 0 ? _totalDays : '-'}',
+            l10n.totalDaysLabel(_totalDays > 0 ? _totalDays : '-'),
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
           Text(
-            'Total Cost: \$${_totalCost.toStringAsFixed(2)}',
+            l10n.totalCostLabel('\$${_totalCost.toStringAsFixed(2)}'),
             style: Theme.of(context).textTheme.headlineSmall,
           ),
         ],

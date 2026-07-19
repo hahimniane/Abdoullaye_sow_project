@@ -12,6 +12,8 @@ import '../utils/action_confirmation.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/support_entry_button.dart';
+import '../widgets/marketplace_transaction_disclosure.dart';
 
 class MyPurchasesScreen extends StatelessWidget {
   const MyPurchasesScreen({super.key, this.showBackButton = false});
@@ -232,8 +234,17 @@ class MyPurchasesScreen extends StatelessWidget {
       icon: Icons.payments_outlined,
     );
     if (!confirmed || !context.mounted) return;
+    final marketplaceAcceptance = await confirmMarketplaceTransaction(
+      context,
+      providerNames: purchase.businessName,
+      transactionSummary: l10n.payExtension,
+    );
+    if (marketplaceAcceptance == null || !context.mounted) return;
     try {
-      await CarPurchaseService().payApprovedHoldExtension(purchase: purchase);
+      await CarPurchaseService().payApprovedHoldExtension(
+        purchase: purchase,
+        marketplaceAcceptance: marketplaceAcceptance,
+      );
       if (!context.mounted) return;
       showSuccessSnackBar(context, l10n.extensionPaidHoldUpdated);
     } catch (e) {
@@ -307,7 +318,7 @@ class MyPurchasesScreen extends StatelessWidget {
                   child: ListView.separated(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                     itemCount: purchases.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final purchase = purchases[index];
                       return _PurchaseCard(
@@ -574,6 +585,14 @@ class _PurchaseCard extends StatelessWidget {
                 ).textTheme.bodySmall?.copyWith(color: AppColors.lightMuted),
               ),
             ],
+            const SizedBox(height: 8),
+            SupportEntryButton(
+              relatedCollection: 'carPurchases',
+              relatedId: purchase.id,
+              relatedLabel: purchase.carTitle,
+              subject: l10n.supportPurchaseCaseSubject(purchase.carTitle),
+              compact: true,
+            ),
             const SizedBox(height: 8),
             Text(
               DateFormat.yMMMd().add_jm().format(purchase.createdAt),

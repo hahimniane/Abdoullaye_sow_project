@@ -6,24 +6,32 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import '../models/business_profile.dart';
+import '../models/parking_availability.dart';
 import '../models/parked_car.dart';
 import '../providers/auth_provider.dart';
 import '../screens/vin_scanner_screen.dart';
 import '../services/vin_catalog_matcher.dart';
 import '../services/vin_decoder_service.dart';
+import '../services/parking_service.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
+import '../data/business_location_catalog.dart';
 import '../data/car_catalog.dart';
 import '../utils/tracking_code_generator.dart';
 import '../utils/vin_utils.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_back_button.dart';
+import '../widgets/async_action_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/marketplace_transaction_disclosure.dart';
 
 class ParkCarScreen extends StatefulWidget {
-  const ParkCarScreen({super.key});
+  const ParkCarScreen({super.key, this.parkingRepository});
+
+  final ParkingRepository? parkingRepository;
 
   @override
   State<ParkCarScreen> createState() => _ParkCarScreenState();
@@ -32,6 +40,8 @@ class ParkCarScreen extends StatefulWidget {
 class _ParkCarScreenState extends State<ParkCarScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _parkingCityController = TextEditingController();
   final _vinController = TextEditingController();
 
   String? _selectedMake;
@@ -39,18 +49,29 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   String? _selectedYear;
 
   DateTime _selectedDateTime = DateTime.now();
+  DateTime _selectedEndDateTime = DateTime.now().add(const Duration(days: 7));
   bool _isLoading = false;
+  bool _isSearchingParking = false;
   bool _isCatalogLoading = true;
   bool _isVinDecoding = false;
+  bool _isLocating = false;
+  bool _pickupRequested = false;
+  double? _customerLatitude;
+  double? _customerLongitude;
   List<String> _makeOptions = [];
   List<String> _modelOptions = [];
   List<String> _yearOptions = [];
+  List<ParkingBusinessOption> _parkingOptions = const [];
+  ParkingBusinessOption? _selectedParkingOption;
+  int _customerStep = 0; // 0 where/when · 1 choose · 2 car · 3 review
+  late final ParkingRepository _parkingRepository;
   final VinDecoderService _vinDecoderService = NhtsaVinDecoderService();
   DecodedVehicleInfo? _decodedVehicleInfo;
 
   @override
   void initState() {
     super.initState();
+    _parkingRepository = widget.parkingRepository ?? FirebaseParkingService();
     _loadCatalog();
   }
 
@@ -73,6 +94,8 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _phoneController.dispose();
+    _parkingCityController.dispose();
     _vinController.dispose();
     super.dispose();
   }
@@ -85,6 +108,39 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
       // Use Android-style date picker
       await _showAndroidDatePicker();
     }
+  }
+
+  Future<void> _selectCustomerParkingDate({required bool isStart}) async {
+    final current = isStart ? _selectedDateTime : _selectedEndDateTime;
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: current,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 730)),
+    );
+    if (pickedDate == null || !mounted) return;
+    setState(() {
+      if (isStart) {
+        _selectedDateTime = DateTime(
+          pickedDate.year,
+          pickedDate.month,
+          pickedDate.day,
+          9,
+        );
+        if (_selectedEndDateTime.isBefore(_selectedDateTime)) {
+          _selectedEndDateTime = _selectedDateTime.add(const Duration(days: 7));
+        }
+      } else {
+        _selectedEndDateTime = DateTime(
+          pickedDate.year,
+          pickedDate.month,
+          pickedDate.day,
+          17,
+        );
+      }
+      _parkingOptions = const [];
+      _selectedParkingOption = null;
+    });
   }
 
   Future<void> _showIOSDatePicker() async {
@@ -260,6 +316,168 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     }
   }
 
+  Future<void> _searchParkingOptions() async {
+    final l10n = AppLocalizations.of(context)!;
+    final city = _parkingCityController.text.trim();
+    if (city.isEmpty) {
+      showErrorSnackBar(context, l10n.pleaseEnterParkingCity);
+      return;
+    }
+    if (_selectedEndDateTime.isBefore(_selectedDateTime)) {
+      showErrorSnackBar(context, l10n.parkingDateRangeInvalid);
+      return;
+    }
+    setState(() {
+      _isSearchingParking = true;
+      _selectedParkingOption = null;
+    });
+    try {
+      final options = await _parkingRepository.searchParking(
+        city: city,
+        startDate: _selectedDateTime,
+        endDate: _selectedEndDateTime,
+        customerLatitude: _customerLatitude,
+        customerLongitude: _customerLongitude,
+        pickupRequested: _pickupRequested,
+      );
+      if (!mounted) return;
+      setState(() => _parkingOptions = options);
+    } catch (_) {
+      if (mounted) {
+        showErrorSnackBar(context, l10n.parkingSearchFailed);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSearchingParking = false);
+      }
+    }
+  }
+
+  // Wizard step 1 -> validate the search inputs, run the search, and advance to
+  // the "choose a spot" step (which shows results or an empty-state notice).
+  Future<void> _findParkingAndAdvance() async {
+    final l10n = AppLocalizations.of(context)!;
+    final city = _parkingCityController.text.trim();
+    if (city.isEmpty) {
+      showErrorSnackBar(context, l10n.pleaseEnterParkingCity);
+      return;
+    }
+    if (_selectedEndDateTime.isBefore(_selectedDateTime)) {
+      showErrorSnackBar(context, l10n.parkingDateRangeInvalid);
+      return;
+    }
+    await _searchParkingOptions();
+    if (mounted) setState(() => _customerStep = 1);
+  }
+
+  void _goToParkingStep(int step) {
+    setState(() => _customerStep = step.clamp(0, 3));
+  }
+
+  void _parkingBack() {
+    if (_customerStep > 0) {
+      setState(() => _customerStep -= 1);
+    } else {
+      Navigator.of(context).maybePop();
+    }
+  }
+
+  Future<void> _locateCustomerForParking() async {
+    final l10n = AppLocalizations.of(context)!;
+    setState(() => _isLocating = true);
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) await Geolocator.openAppSettings();
+        return;
+      }
+      if (permission == LocationPermission.denied) {
+        if (mounted) showErrorSnackBar(context, l10n.locationPermissionDenied);
+        return;
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _customerLatitude = position.latitude;
+        _customerLongitude = position.longitude;
+        _parkingOptions = const [];
+        _selectedParkingOption = null;
+      });
+    } catch (_) {
+      if (mounted) showErrorSnackBar(context, l10n.locationPermissionDenied);
+    } finally {
+      if (mounted) setState(() => _isLocating = false);
+    }
+  }
+
+  Future<void> _reserveCustomerParking() async {
+    final l10n = AppLocalizations.of(context)!;
+    final auth = context.read<AuthProvider>();
+    if (auth.user == null) {
+      showErrorSnackBar(context, l10n.accountRequiredParking);
+      return;
+    }
+    final option = _selectedParkingOption;
+    if (option == null) {
+      showErrorSnackBar(context, l10n.chooseParkingBusiness);
+      return;
+    }
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    if (_selectedEndDateTime.isBefore(_selectedDateTime)) {
+      showErrorSnackBar(context, l10n.parkingDateRangeInvalid);
+      return;
+    }
+
+    final marketplaceAcceptance = await confirmMarketplaceTransaction(
+      context,
+      providerNames: option.businessName,
+      transactionSummary: l10n.parkingReviewHeading,
+    );
+    if (marketplaceAcceptance == null || !mounted) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final result = await _parkingRepository.reserveParking(
+        option: option,
+        customerName: _nameController.text,
+        customerPhone: _phoneController.text.trim().isNotEmpty
+            ? _phoneController.text
+            : auth.customerPhone ?? '',
+        carMake: _selectedMake!,
+        carModel: _selectedModel!,
+        carYear: _selectedYear!,
+        vinNumber: normalizeVin(_vinController.text),
+        startDate: _selectedDateTime,
+        endDate: _selectedEndDateTime,
+        pickupRequested: _pickupRequested,
+        marketplaceAcceptance: marketplaceAcceptance,
+      );
+      if (!mounted) return;
+      showSuccessSnackBar(
+        context,
+        l10n.parkingReservationSaved(result.trackingCode),
+      );
+      Navigator.of(context).pop();
+    } catch (_) {
+      if (mounted) {
+        showErrorSnackBar(context, l10n.parkingReservationFailed);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   Future<void> _saveAndPrintReceipt() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -329,6 +547,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   }
 
   Future<void> _generateAndPrintReceipt(ParkedCar record) async {
+    final l10n = AppLocalizations.of(context)!;
     final pdf = pw.Document();
 
     pdf.addPage(
@@ -351,7 +570,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                 child: pw.Column(
                   children: [
                     pw.Text(
-                      'CAR PARKING RECEIPT',
+                      l10n.carParkingReceipt,
                       style: pw.TextStyle(
                         fontSize: 24,
                         fontWeight: pw.FontWeight.bold,
@@ -361,7 +580,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                     ),
                     pw.SizedBox(height: 10),
                     pw.Text(
-                      'Business Services',
+                      l10n.businessServices,
                       style: pw.TextStyle(fontSize: 16, color: PdfColors.white),
                       textAlign: pw.TextAlign.center,
                     ),
@@ -384,7 +603,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Text(
-                      'Receipt Details',
+                      l10n.receiptDetails,
                       style: pw.TextStyle(
                         fontSize: 18,
                         fontWeight: pw.FontWeight.bold,
@@ -393,25 +612,28 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                     pw.SizedBox(height: 15),
 
                     _buildReceiptRow(
-                      'Receipt Number:',
+                      l10n.receiptNumber,
                       record.id.isEmpty ? record.trackingCode : record.id,
                     ),
-                    _buildReceiptRow('Tracking Number:', record.trackingCode),
                     _buildReceiptRow(
-                      'Date & Time:',
+                      l10n.trackingNumberPdf,
+                      record.trackingCode,
+                    ),
+                    _buildReceiptRow(
+                      l10n.dateTimePdf,
                       DateFormat(
                         'MMM dd, yyyy - HH:mm',
                       ).format(record.parkingDate),
                     ),
                     _buildReceiptRow(
-                      'Generated On:',
+                      l10n.generatedOn,
                       DateFormat('MMM dd, yyyy - HH:mm').format(DateTime.now()),
                     ),
 
                     pw.SizedBox(height: 20),
 
                     pw.Text(
-                      'Car Information',
+                      l10n.carInformation,
                       style: pw.TextStyle(
                         fontSize: 18,
                         fontWeight: pw.FontWeight.bold,
@@ -419,11 +641,11 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                     ),
                     pw.SizedBox(height: 15),
 
-                    _buildReceiptRow('Owner Name:', _nameController.text),
-                    _buildReceiptRow('Car Make:', _selectedMake ?? ''),
-                    _buildReceiptRow('Car Model:', _selectedModel ?? ''),
-                    _buildReceiptRow('Year:', _selectedYear ?? ''),
-                    _buildReceiptRow('VIN Number:', _vinController.text),
+                    _buildReceiptRow(l10n.ownerNamePdf, _nameController.text),
+                    _buildReceiptRow(l10n.carMakePdf, _selectedMake ?? ''),
+                    _buildReceiptRow(l10n.carModelPdf, _selectedModel ?? ''),
+                    _buildReceiptRow(l10n.yearPdf, _selectedYear ?? ''),
+                    _buildReceiptRow(l10n.vinNumberPdf, _vinController.text),
 
                     pw.SizedBox(height: 20),
 
@@ -439,7 +661,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                       child: pw.Column(
                         children: [
                           pw.Text(
-                            'Parking Status: ACTIVE',
+                            l10n.parkingStatusActive,
                             style: pw.TextStyle(
                               fontSize: 16,
                               fontWeight: pw.FontWeight.bold,
@@ -448,7 +670,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                           ),
                           pw.SizedBox(height: 5),
                           pw.Text(
-                            'Vehicle has been successfully parked',
+                            l10n.vehicleSuccessfullyParked,
                             style: pw.TextStyle(
                               fontSize: 12,
                               color: PdfColors.grey700,
@@ -473,7 +695,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                       child: pw.Column(
                         children: [
                           pw.Text(
-                            'Terms & Conditions',
+                            l10n.termsAndConditions,
                             style: pw.TextStyle(
                               fontSize: 14,
                               fontWeight: pw.FontWeight.bold,
@@ -481,10 +703,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                           ),
                           pw.SizedBox(height: 10),
                           pw.Text(
-                            '• This receipt serves as proof of parking\n'
-                            '• Vehicle will be stored securely\n'
-                            '• Contact us for any inquiries\n'
-                            '• Valid until vehicle is retrieved',
+                            l10n.parkingReceiptTerms,
                             style: pw.TextStyle(
                               fontSize: 10,
                               color: PdfColors.grey700,
@@ -530,6 +749,14 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    if (!auth.hasBusinessDashboardAccess) {
+      return _buildCustomerParkingReservation(context);
+    }
+    return _buildBusinessParkingIntake(context);
+  }
+
+  Widget _buildBusinessParkingIntake(BuildContext context) {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(gradient: AppColors.headerGradient),
@@ -942,6 +1169,542 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
       ),
     );
   }
+
+  Widget _buildCustomerParkingReservation(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final auth = context.watch<AuthProvider>();
+    final currency = NumberFormat.simpleCurrency(
+      locale: Localizations.localeOf(context).toString(),
+      name: 'USD',
+    );
+    final dateFormat = DateFormat.yMMMd(
+      Localizations.localeOf(context).toLanguageTag(),
+    );
+
+    if (_nameController.text.isEmpty && auth.buyerName != 'Customer') {
+      _nameController.text = auth.buyerName;
+    }
+    if (_phoneController.text.isEmpty &&
+        (auth.customerPhone ?? '').isNotEmpty) {
+      _phoneController.text = auth.customerPhone!;
+    }
+
+    return Scaffold(
+      backgroundColor: AppColors.lightBg,
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              _buildParkingWizardHeader(context, l10n),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+                  children: [
+                    _buildParkingStepBody(context, l10n, currency, dateFormat),
+                  ],
+                ),
+              ),
+              _buildParkingWizardFooter(context, l10n),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildParkingWizardHeader(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) {
+    final titles = [
+      l10n.parkingStepWhereWhen,
+      l10n.parkingStepChooseSpot,
+      l10n.parkingStepYourCar,
+      l10n.parkingStepReview,
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              AppBackButton(onPressed: _parkingBack),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  l10n.customerParkingTitle,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+              const LanguageToggle(),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              for (int i = 0; i < titles.length; i++) ...[
+                Expanded(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: i <= _customerStep
+                          ? AppColors.cobalt
+                          : AppColors.rule,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+                if (i < titles.length - 1) const SizedBox(width: 6),
+              ],
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '${l10n.parkingStepIndicator(_customerStep + 1, titles.length)} · ${titles[_customerStep]}',
+            style: const TextStyle(
+              color: AppColors.muted,
+              fontWeight: FontWeight.w800,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildParkingStepBody(
+    BuildContext context,
+    AppLocalizations l10n,
+    NumberFormat currency,
+    DateFormat dateFormat,
+  ) {
+    switch (_customerStep) {
+      case 0:
+        return _buildParkingWhereWhenStep(context, l10n, dateFormat);
+      case 1:
+        return _buildParkingChooseSpotStep(context, l10n, currency);
+      case 2:
+        return _buildParkingCarStep(context, l10n);
+      default:
+        return _buildParkingReviewStep(context, l10n, currency, dateFormat);
+    }
+  }
+
+  Widget _buildParkingWhereWhenStep(
+    BuildContext context,
+    AppLocalizations l10n,
+    DateFormat dateFormat,
+  ) {
+    return _CustomerParkingPanel(
+      title: l10n.parkingStepWhereWhen,
+      subtitle: l10n.customerParkingSubtitle,
+      child: Column(
+        children: [
+          Builder(
+            builder: (context) {
+              final selectedCity = _parkingCityController.text.trim().isEmpty
+                  ? null
+                  : _parkingCityController.text.trim();
+              return _RoundedDropdownField(
+                label: l10n.parkingCity,
+                value: selectedCity,
+                items: businessCityOptions('United States', selectedCity),
+                onChanged: (value) {
+                  setState(() {
+                    _parkingCityController.text = value ?? '';
+                    _parkingOptions = const [];
+                    _selectedParkingOption = null;
+                  });
+                },
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _ParkingDateTile(
+                  label: l10n.parkingStart,
+                  value: dateFormat.format(_selectedDateTime),
+                  onTap: () => _selectCustomerParkingDate(isStart: true),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ParkingDateTile(
+                  label: l10n.parkingEnd,
+                  value: dateFormat.format(_selectedEndDateTime),
+                  onTap: () => _selectCustomerParkingDate(isStart: false),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _pickupRequested,
+            onChanged: (value) {
+              setState(() {
+                _pickupRequested = value ?? false;
+                _parkingOptions = const [];
+                _selectedParkingOption = null;
+              });
+            },
+            title: Text(l10n.parkingPickupOptional),
+          ),
+          SizedBox(
+            width: double.infinity,
+            child: AsyncActionButton.outlined(
+              onPressed: _isLocating ? null : _locateCustomerForParking,
+              icon: Icons.my_location_outlined,
+              label: _customerLatitude == null
+                  ? l10n.useMyCurrentLocation
+                  : l10n.currentLocationAdded,
+              loadingLabel: l10n.gettingYourLocation,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildParkingChooseSpotStep(
+    BuildContext context,
+    AppLocalizations l10n,
+    NumberFormat currency,
+  ) {
+    if (_isSearchingParking) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(40),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+    if (_parkingOptions.isEmpty) {
+      return Column(
+        children: [
+          const SizedBox(height: 8),
+          _InlineParkingNotice(message: l10n.noParkingBusinesses),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.availableParkingBusinesses,
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 10),
+        for (final option in _parkingOptions) ...[
+          _ParkingOptionCard(
+            option: option,
+            selected: option.businessId == _selectedParkingOption?.businessId,
+            currency: currency,
+            l10n: l10n,
+            onTap: () => setState(() => _selectedParkingOption = option),
+          ),
+          const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildParkingCarStep(BuildContext context, AppLocalizations l10n) {
+    return _CustomerParkingPanel(
+      title: l10n.carInformation,
+      subtitle: l10n.enterCarDetailsToReserveParking,
+      child: Column(
+        children: [
+          _RoundedTextField(
+            controller: _nameController,
+            label: l10n.name,
+            textCapitalization: TextCapitalization.words,
+            validator: (value) => value == null || value.isEmpty
+                ? l10n.pleaseEnterOwnerName
+                : null,
+          ),
+          const SizedBox(height: 12),
+          _RoundedTextField(
+            controller: _phoneController,
+            label: l10n.phoneNumber,
+            keyboardType: TextInputType.phone,
+            validator: (value) => value == null || value.trim().isEmpty
+                ? l10n.phoneNumberRequired
+                : null,
+          ),
+          const SizedBox(height: 12),
+          if (_isCatalogLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else ...[
+            _RoundedDropdownField(
+              label: l10n.make,
+              value: _selectedMake,
+              items: _makeOptions,
+              onChanged: (value) {
+                setState(() {
+                  _selectedMake = value;
+                  _selectedModel = null;
+                  _selectedYear = null;
+                  _modelOptions = value == null
+                      ? []
+                      : CarCatalog.instance.getModels(value);
+                  _yearOptions = [];
+                });
+              },
+              validator: (value) => value == null || value.isEmpty
+                  ? l10n.pleaseEnterCarMake
+                  : null,
+            ),
+            const SizedBox(height: 12),
+            _RoundedDropdownField(
+              label: l10n.model,
+              value: _selectedModel,
+              items: _modelOptions,
+              enabled: _selectedMake != null,
+              onChanged: (value) {
+                setState(() {
+                  _selectedModel = value;
+                  _selectedYear = null;
+                  _yearOptions = _selectedMake == null || value == null
+                      ? []
+                      : CarCatalog.instance.getYears(_selectedMake!, value);
+                });
+              },
+              validator: (value) => value == null || value.isEmpty
+                  ? l10n.pleaseEnterCarModel
+                  : null,
+            ),
+            const SizedBox(height: 12),
+            _RoundedDropdownField(
+              label: l10n.year,
+              value: _selectedYear,
+              items: _yearOptions,
+              enabled: _selectedModel != null,
+              onChanged: (value) => setState(() => _selectedYear = value),
+              validator: (value) => value == null || value.isEmpty
+                  ? l10n.pleaseEnterCarYear
+                  : null,
+            ),
+          ],
+          const SizedBox(height: 12),
+          _RoundedTextField(
+            controller: _vinController,
+            label: l10n.vinNumber,
+            textCapitalization: TextCapitalization.characters,
+            suffixIcon: IconButton(
+              tooltip: l10n.scanVin,
+              onPressed: _isVinDecoding ? null : _scanVin,
+              icon: const Icon(Icons.qr_code_scanner),
+            ),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return l10n.pleaseEnterVinNumber;
+              }
+              if (!isValidVin(value)) {
+                return l10n.invalidVinNumber;
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isVinDecoding ? null : _decodeCurrentVin,
+                  icon: _isVinDecoding
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.manage_search),
+                  label: Text(l10n.decodeVin, overflow: TextOverflow.ellipsis),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isVinDecoding ? null : _scanVin,
+                  icon: const Icon(Icons.document_scanner),
+                  label: Text(l10n.scanVin, overflow: TextOverflow.ellipsis),
+                ),
+              ),
+            ],
+          ),
+          if (_decodedVehicleInfo != null) ...[
+            const SizedBox(height: 12),
+            _DecodedVinPanel(info: _decodedVehicleInfo!),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildParkingReviewStep(
+    BuildContext context,
+    AppLocalizations l10n,
+    NumberFormat currency,
+    DateFormat dateFormat,
+  ) {
+    final option = _selectedParkingOption;
+    final vehicle = [
+      _selectedYear,
+      _selectedMake,
+      _selectedModel,
+    ].whereType<String>().where((part) => part.isNotEmpty).join(' ');
+    return _CustomerParkingPanel(
+      title: l10n.parkingReviewHeading,
+      subtitle: l10n.customerParkingSubtitle,
+      child: Column(
+        children: [
+          if (option != null) ...[
+            _ParkingReviewRow(
+              icon: Icons.local_parking_outlined,
+              label: option.businessName,
+              value: l10n.parkingPricePerDay(
+                currency.format(option.pricing.dailyRate),
+              ),
+            ),
+            const _ParkingReviewDivider(),
+          ],
+          _ParkingReviewRow(
+            icon: Icons.place_outlined,
+            label: l10n.parkingCity,
+            value: _parkingCityController.text.trim(),
+          ),
+          const _ParkingReviewDivider(),
+          _ParkingReviewRow(
+            icon: Icons.event_outlined,
+            label: l10n.parkingReviewDates,
+            value:
+                '${dateFormat.format(_selectedDateTime)} → ${dateFormat.format(_selectedEndDateTime)}',
+          ),
+          const _ParkingReviewDivider(),
+          _ParkingReviewRow(
+            icon: Icons.directions_car_outlined,
+            label: l10n.parkingReviewVehicle,
+            value: vehicle.isEmpty ? '—' : vehicle,
+          ),
+          const _ParkingReviewDivider(),
+          _ParkingReviewRow(
+            icon: Icons.badge_outlined,
+            label: l10n.vinNumber,
+            value: normalizeVin(_vinController.text),
+          ),
+          const _ParkingReviewDivider(),
+          _ParkingReviewRow(
+            icon: Icons.local_shipping_outlined,
+            label: l10n.parkingPickupOptional,
+            value: _pickupRequested
+                ? l10n.parkingReviewPickupYes
+                : l10n.parkingReviewPickupNo,
+          ),
+          if (option != null) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.mist.withValues(alpha: 0.42),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                l10n.parkingEstimatedTotal(
+                  currency.format(option.estimatedTotal),
+                ),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.cobaltDeep,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildParkingWizardFooter(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) {
+    Widget primary;
+    switch (_customerStep) {
+      case 0:
+        primary = AsyncActionButton.filled(
+          onPressed: _isSearchingParking ? null : _findParkingAndAdvance,
+          icon: Icons.search,
+          label: l10n.searchParking,
+          loadingLabel: l10n.searchingParking,
+        );
+        break;
+      case 1:
+        primary = FilledButton.icon(
+          onPressed: _selectedParkingOption == null
+              ? null
+              : () => _goToParkingStep(2),
+          icon: const Icon(Icons.arrow_forward),
+          label: Text(l10n.parkingContinue),
+        );
+        break;
+      case 2:
+        primary = FilledButton.icon(
+          onPressed: () {
+            if (_formKey.currentState?.validate() ?? false) {
+              _goToParkingStep(3);
+            }
+          },
+          icon: const Icon(Icons.arrow_forward),
+          label: Text(l10n.parkingContinue),
+        );
+        break;
+      default:
+        primary = AsyncActionButton.filled(
+          onPressed: _isLoading ? null : _reserveCustomerParking,
+          icon: Icons.local_parking_outlined,
+          label: l10n.reserveParking,
+          loadingLabel: l10n.reservingParking,
+        );
+    }
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        12,
+        20,
+        12 + MediaQuery.of(context).padding.bottom,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.paper,
+        border: Border(top: BorderSide(color: AppColors.rule)),
+      ),
+      child: Row(
+        children: [
+          if (_customerStep > 0) ...[
+            OutlinedButton(
+              onPressed: _parkingBack,
+              child: Text(l10n.parkingBack),
+            ),
+            const SizedBox(width: 12),
+          ],
+          Expanded(child: primary),
+        ],
+      ),
+    );
+  }
 }
 
 class _RoundedTextField extends StatelessWidget {
@@ -950,6 +1713,7 @@ class _RoundedTextField extends StatelessWidget {
   final String? Function(String?)? validator;
   final Widget? suffixIcon;
   final TextCapitalization textCapitalization;
+  final TextInputType? keyboardType;
 
   const _RoundedTextField({
     required this.label,
@@ -957,6 +1721,7 @@ class _RoundedTextField extends StatelessWidget {
     this.validator,
     this.suffixIcon,
     this.textCapitalization = TextCapitalization.none,
+    this.keyboardType,
   });
 
   @override
@@ -965,6 +1730,7 @@ class _RoundedTextField extends StatelessWidget {
       controller: controller,
       validator: validator,
       textCapitalization: textCapitalization,
+      keyboardType: keyboardType,
       decoration: InputDecoration(
         labelText: label,
         suffixIcon: suffixIcon,
@@ -1091,5 +1857,349 @@ class _RoundedDropdownField extends StatelessWidget {
       icon: const Icon(Icons.arrow_drop_down),
       dropdownColor: Colors.white,
     );
+  }
+}
+
+class _CustomerParkingPanel extends StatelessWidget {
+  const _CustomerParkingPanel({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
+
+  final String title;
+  final String subtitle;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.paper,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              color: AppColors.muted,
+              height: 1.25,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 16),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _ParkingDateTile extends StatelessWidget {
+  const _ParkingDateTile({
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.lightSurfaceVariant,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.rule),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.event_outlined, size: 20, color: AppColors.cobalt),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    value,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ParkingOptionCard extends StatelessWidget {
+  const _ParkingOptionCard({
+    required this.option,
+    required this.selected,
+    required this.currency,
+    required this.l10n,
+    required this.onTap,
+  });
+
+  final ParkingBusinessOption option;
+  final bool selected;
+  final NumberFormat currency;
+  final AppLocalizations l10n;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.mist.withValues(alpha: 0.42)
+              : AppColors.paper,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected ? AppColors.cobalt : AppColors.rule,
+            width: selected ? 1.4 : 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.cobalt.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.local_parking_outlined,
+                    color: AppColors.cobaltDeep,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        option.businessName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        [
+                          option.address,
+                          option.city,
+                        ].where((part) => part.isNotEmpty).join(', '),
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  selected
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
+                  color: selected ? AppColors.cobalt : AppColors.muted,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _ParkingChip(
+                  icon: Icons.directions_car_outlined,
+                  label: l10n.availableSpacesCount(option.availableSpaces),
+                ),
+                _ParkingChip(
+                  icon: Icons.attach_money,
+                  label: l10n.parkingPricePerDay(
+                    currency.format(option.pricing.dailyRate),
+                  ),
+                ),
+                if (option.distanceMiles != null)
+                  _ParkingChip(
+                    icon: Icons.near_me_outlined,
+                    label: l10n.parkingDistanceMiles(
+                      option.distanceMiles!.toStringAsFixed(1),
+                    ),
+                  ),
+                if (option.pickupAvailable)
+                  _ParkingChip(
+                    icon: Icons.local_shipping_outlined,
+                    label: l10n.pickupAvailable,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              l10n.parkingEstimatedTotal(
+                currency.format(option.estimatedTotal),
+              ),
+              style: const TextStyle(
+                color: AppColors.cobaltDeep,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ParkingChip extends StatelessWidget {
+  const _ParkingChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: AppColors.lightSurfaceVariant,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: AppColors.cobalt),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineParkingNotice extends StatelessWidget {
+  const _InlineParkingNotice({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.saffron.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.saffron.withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        message,
+        style: const TextStyle(
+          color: AppColors.ink,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _ParkingReviewRow extends StatelessWidget {
+  const _ParkingReviewRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: AppColors.cobalt),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.muted,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              value.isEmpty ? '—' : value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: AppColors.ink,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ParkingReviewDivider extends StatelessWidget {
+  const _ParkingReviewDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Divider(height: 1, color: AppColors.rule);
   }
 }

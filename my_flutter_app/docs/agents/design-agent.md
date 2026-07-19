@@ -6,7 +6,7 @@ Protect and improve the visual quality, usability, and product feel of the Flutt
 
 ## Current Product Context
 
-- App name: Veyra.
+- Public/platform brand: Laawol Digital. Do not use Veyra/Verya in new brand-facing docs, PDFs, public website copy, or admin design language unless explicitly working on legacy mobile labels.
 - Domain: car sales, parking, transport, barrel shipping, account and staff workflows.
 - Stack: Flutter Material 3 with shared theme files under `lib/theme/`.
 - Current palette uses deep teal foundations, clean slate/white surfaces, warm amber highlights, and semantic green/red states.
@@ -29,7 +29,9 @@ Protect and improve the visual quality, usability, and product feel of the Flutt
 - Keep screens functional first: users should be able to complete staff/customer workflows quickly.
 - Use brand assets intentionally. Do not hide the brand only in tiny navigation text when a screen is brand-facing.
 - Keep cards restrained and purposeful. Avoid nested cards and excessive decorative containers.
-- Ensure dark mode and light mode both feel complete.
+- The current release is intentionally light-only. Do not add or expose dark
+  mode until every customer, business, admin, native launch, and payment surface
+  has passed a dedicated cross-platform visual QA cycle.
 - Make bilingual UI work naturally for English and French. Leave enough room for longer French labels.
 
 ## UI Review Checklist
@@ -40,8 +42,13 @@ Protect and improve the visual quality, usability, and product feel of the Flutt
 - Does text fit at mobile widths and in both supported locales?
 - Are tap targets comfortable and stable?
 - Does the layout avoid overlap when content grows?
-- Does dark mode preserve contrast and hierarchy?
+- If dark mode is being reintroduced, has every surface passed contrast and
+  hierarchy review before the preference is exposed?
 - Are loading, empty, error, and success states accounted for when relevant?
+- Does every async button, tap target, menu item, and icon action visibly show
+  progress and disable repeat activation while work is running?
+- Is every user-facing string localized through the app l10n system, with both
+  English and French text checked for layout length?
 - Are contrast, font sizes, and semantic hierarchy accessible?
 - Are icon-only controls labeled or otherwise understandable?
 - Are animations/transitions restrained and helpful?
@@ -65,3 +72,36 @@ Return:
 - Prefers compact business-app typography; avoid oversized marketing headlines in operational screens, and keep most UI text near Material-style 14 body, 17-18 section titles, and 20-22 page titles unless a true brand/display moment needs more.
 - Wants Codex to act like a manager and proactively involve design review when UI quality is at stake.
 - Avoid one-off visual inventions that do not fit the existing theme.
+- For admin dashboards, use a tidy conventional operations layout: restrained top bar, collapsible sidebar, dense tables/lists, and minimal decorative copy. The user rejected decorative AI-looking admin designs.
+- Website and featured-business location fields must be selectable controls, not free-text country/city inputs. Preserve current/legacy values in select options so existing records remain editable without introducing spelling drift.
+- Business-owner listing views must clearly show all cars for the current business, with no artificial row cap. Empty states should point to missing listings only after the data query has run for the owner's `businessId`.
+- Every async user action must show a loading/progress state and prevent double
+  taps until it resolves; this applies across mobile, web, tablet, and desktop
+  layouts.
+- User-facing text belongs in the app localization system, not inline English
+  strings or one-off translation helpers; review both English and French layouts.
+- Business dashboard sidebars should reduce service clutter with operational
+  hierarchy, not flat service lists. Keep Destinations under transport/shipping,
+  and preserve search/pin affordances so businesses with many services can
+  quickly find or prioritize the sections they use most.
+- Freight UI must show estimated weight/total and confirmed weight/final total
+  as separate concepts. Use settlement labels for money state and operational
+  labels for fulfillment state; when a balance is due, keep the amount and
+  payment action visible together on narrow mobile screens.
+- Vehicle listings must require an explicit rebuilt-title Yes/No disclosure.
+  Show it in seller edit/review, customer cards/details, and admin review in
+  English and French. Missing legacy values must say Not provided/Unknown and
+  must never be presented as No or “clean title.”
+- Public marketing visuals that present the product UI must use genuine captures
+  from the running app, not recreated HTML mockups. Capture a privacy-safe,
+  fully rendered state in both English and French whenever the image contains
+  text, and never ship debug ribbons or test/customer identifiers.
+- Keep the app light-only for the current release. A future dark-mode return is
+  a full product-quality project, not a settings-toggle change; it must include
+  Stripe sheets, iOS/Android native shells, all roles, and English/French QA.
+- Phone verification uses three explicit profile states: matching verified,
+  matching unverified, and edited. An edited visible number must never retain a
+  green verified treatment. Present a nearby full-width `Save and verify`
+  action, keep the one-field OTP and Verify action together above the keyboard,
+  and give resend, error, synchronization recovery, and success their own
+  visible states in English and French.
