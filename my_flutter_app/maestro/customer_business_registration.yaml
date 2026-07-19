@@ -1,0 +1,24 @@
+appId: com.laawoldigital.app
+name: Customer opens native business registration
+---
+- clearKeychain
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "(?s).*Sign in to your wallet.*"
+    timeout: 30000
+- tapOn: "(?s).*Sign in to your wallet.*"
+- extendedWaitUntil:
+    visible: "Account Login"
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: "Register your business"
+    direction: DOWN
+- tapOn: "Register your business"
+- extendedWaitUntil:
+    visible: "Join the marketplace"
+    timeout: 20000
+- assertVisible: "Owner full name"
+- assertVisible: "Services you offer"
+- takeScreenshot: "output/ios-e2e/business-registration-native"

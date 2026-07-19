@@ -12,6 +12,19 @@ class PhoneNumberValidator {
 
   static String aliasKey(String value) => digitsOnly(value);
 
+  static bool matches(String? first, String? second) {
+    final firstAlias = aliasKey(first ?? '');
+    final secondAlias = aliasKey(second ?? '');
+    return firstAlias.isNotEmpty &&
+        secondAlias.isNotEmpty &&
+        firstAlias == secondAlias;
+  }
+
+  static bool isValidE164(String? value) {
+    final normalizedValue = normalized(value ?? '');
+    return RegExp(r'^\+[1-9]\d{7,14}$').hasMatch(normalizedValue);
+  }
+
   static bool isValid(String? value) {
     final raw = value?.trim() ?? '';
     if (raw.isEmpty) return false;

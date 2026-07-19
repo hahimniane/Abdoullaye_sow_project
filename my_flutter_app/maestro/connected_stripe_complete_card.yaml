@@ -1,0 +1,22 @@
+appId: com.laawoldigital.app
+name: Complete the open Stripe test PaymentSheet
+---
+- tapOn:
+    id: "Card number"
+- inputText: "4242424242424242"
+- tapOn:
+    id: "MM / YY"
+- inputText: "1234"
+- tapOn:
+    id: "CVC"
+- inputText: "123"
+- tapOn:
+    id: "ZIP"
+- inputText: "10001"
+- tapOn:
+    point: 90%,62%
+- tapOn: "(?s).*Pay.*22,950.*"
+- extendedWaitUntil:
+    visible: "(?s).*Payment received. This car is now purchased.*"
+    timeout: 60000
+- takeScreenshot: "output/ios-e2e/connected-stripe-car-purchased"

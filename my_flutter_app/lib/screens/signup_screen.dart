@@ -4,6 +4,9 @@ import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
+import '../models/marketplace_disclosure_acceptance.dart';
+import '../utils/legal_links.dart';
+import '../utils/business_registration_navigation.dart';
 import '../utils/phone_number_validator.dart';
 import '../widgets/app_snackbars.dart';
 
@@ -24,6 +27,7 @@ class _SignUpScreenState extends State<SignUpScreen>
   final _confirmPasswordController = TextEditingController();
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
+  bool _legalAccepted = false;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -61,6 +65,13 @@ class _SignUpScreenState extends State<SignUpScreen>
 
   void _handleSignUp() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!_legalAccepted) {
+      showErrorSnackBar(
+        context,
+        AppLocalizations.of(context)!.accountLegalAcceptanceRequired,
+      );
+      return;
+    }
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
@@ -76,6 +87,9 @@ class _SignUpScreenState extends State<SignUpScreen>
         password: password,
         fullName: fullName,
         phone: phone,
+        legalAcceptance: AccountLegalAcceptance(
+          locale: Localizations.localeOf(context).languageCode,
+        ),
       );
       debugPrint('🔵 SignUpScreen: Sign up returned: $success');
 
@@ -507,7 +521,49 @@ class _SignUpScreenState extends State<SignUpScreen>
                                         return null;
                                       },
                                     ),
-                                    const SizedBox(height: 32),
+                                    const SizedBox(height: 18),
+                                    CheckboxListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      controlAffinity:
+                                          ListTileControlAffinity.leading,
+                                      value: _legalAccepted,
+                                      onChanged: (value) => setState(
+                                        () => _legalAccepted = value ?? false,
+                                      ),
+                                      title: Text(
+                                        AppLocalizations.of(
+                                          context,
+                                        )!.accountLegalAcceptance,
+                                      ),
+                                    ),
+                                    Wrap(
+                                      alignment: WrapAlignment.center,
+                                      children: [
+                                        TextButton(
+                                          onPressed: () => openLaawolLegalPage(
+                                            context,
+                                            privacy: false,
+                                          ),
+                                          child: Text(
+                                            AppLocalizations.of(
+                                              context,
+                                            )!.termsOfService,
+                                          ),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => openLaawolLegalPage(
+                                            context,
+                                            privacy: true,
+                                          ),
+                                          child: Text(
+                                            AppLocalizations.of(
+                                              context,
+                                            )!.privacyPolicy,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 20),
 
                                     // Sign Up Button
                                     Consumer<AuthProvider>(
@@ -615,16 +671,15 @@ class _SignUpScreenState extends State<SignUpScreen>
                                     const SizedBox(height: 8),
                                     OutlinedButton.icon(
                                       onPressed: () {
-                                        Navigator.pushNamed(
-                                          context,
-                                          '/business-register',
-                                        );
+                                        openBusinessRegistration(context);
                                       },
                                       icon: const Icon(
                                         Icons.storefront_outlined,
                                       ),
-                                      label: const Text(
-                                        'Register your business instead',
+                                      label: Text(
+                                        AppLocalizations.of(
+                                          context,
+                                        )!.registerBusinessInstead,
                                       ),
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: AppColors.cobaltDeep,

@@ -1,0 +1,64 @@
+appId: com.laawoldigital.app
+name: Customer reserves a car viewing
+---
+- clearKeychain
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "(?s).*Sign in to your wallet.*"
+    timeout: 20000
+- tapOn: "(?s).*Sign in to your wallet.*"
+- extendedWaitUntil:
+    visible: "Account Login"
+    timeout: 20000
+- waitForAnimationToEnd
+- tapOn: "Email"
+- inputText: "e2e.customer@laawol.test"
+- tapOn: "Password"
+- inputText: "${E2E_TEST_PASSWORD}"
+- tapOn: "done"
+- scrollUntilVisible:
+    element:
+      text: "Sign In"
+    direction: DOWN
+- tapOn:
+    text: "Sign In"
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible: "(?s).*E2E Customer.*"
+    timeout: 30000
+- tapOn: "Cars"
+- tapOn: "(?s).*Browse cars.*"
+- extendedWaitUntil:
+    visible: "(?s).*2020 Toyota RAV4 XLE.*"
+    timeout: 20000
+- tapOn: "(?s).*2020 Toyota RAV4 XLE.*"
+- scrollUntilVisible:
+    element:
+      text: "Reserve a viewing"
+    direction: DOWN
+- tapOn: "Reserve a viewing"
+- extendedWaitUntil:
+    visible: "(?s).*Available viewing times.*"
+    timeout: 10000
+- tapOn:
+    point: 25%, 40%
+- scrollUntilVisible:
+    element:
+      text: "Confirm Viewing"
+    direction: DOWN
+- tapOn: "Confirm Viewing"
+- extendedWaitUntil:
+    visible: "(?s).*Reserve viewing?.*"
+    timeout: 10000
+- tapOn: "Reserve a viewing"
+- extendedWaitUntil:
+    visible: "I understand the business’s responsibility and want to continue."
+    timeout: 10000
+- tapOn: "I understand the business’s responsibility and want to continue."
+- tapOn: "Continue to payment"
+- extendedWaitUntil:
+    visible: "(?s).*Your viewing is reserved for.*"
+    timeout: 30000
+- assertVisible: "Edit viewing reservation"
+- takeScreenshot: "output/ios-e2e/car-viewing-reserved"

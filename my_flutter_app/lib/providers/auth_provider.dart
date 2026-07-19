@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -6,10 +8,22 @@ import 'package:cloud_functions/cloud_functions.dart';
 import '../models/notification_preferences.dart';
 import '../services/push_notification_service.dart';
 import '../utils/phone_number_validator.dart';
+import '../utils/business_permissions.dart';
+import '../models/marketplace_disclosure_acceptance.dart';
+
+enum AuthInitializationIssue { profileUnavailable, profileMissing }
+
+class PhoneVerificationSession {
+  const PhoneVerificationSession({
+    required this.verificationId,
+    this.resendToken,
+  });
+
+  final String verificationId;
+  final int? resendToken;
+}
 
 class AuthProvider extends ChangeNotifier {
-  static const String platformAdminEmail = 'admin@gmail.com';
-
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseFunctions _functions = FirebaseFunctions.instance;
@@ -23,15 +37,18 @@ class AuthProvider extends ChangeNotifier {
   String? _businessId;
   String? _businessName;
   List<String> _businessServices = const [];
+  List<String> _businessPermissions = const [];
   String? _userEmail;
   String? _customerName;
   String? _customerPhone;
   String? _normalizedPhone;
+  bool _phoneVerified = false;
   String? _profileImageUrl;
   NotificationPreferences _notificationPreferences =
       NotificationPreferences.defaults;
   bool _isLoading = false;
   bool _isInitializing = true;
+  AuthInitializationIssue? _initializationIssue;
 
   User? get user => _user;
   bool get isStaff => _isStaff;
@@ -43,15 +60,32 @@ class AuthProvider extends ChangeNotifier {
   String? get businessId => _businessId;
   String? get businessName => _businessName;
   List<String> get businessServices => List.unmodifiable(_businessServices);
+  List<String> get businessPermissions =>
+      List.unmodifiable(_businessPermissions);
+  bool hasBusinessPermission(String permission) => canAccessBusinessPermission(
+    isStaff: _isStaff,
+    permissions: _businessPermissions,
+    permission: permission,
+  );
   String? get userEmail => _userEmail;
   String? get customerName => _customerName;
   String? get customerPhone => _customerPhone;
   String? get normalizedPhone => _normalizedPhone;
+  String? get linkedPhoneNumber => _auth.currentUser?.phoneNumber;
+  bool get phoneVerified =>
+      _phoneVerified &&
+      PhoneNumberValidator.matches(
+        _user?.phoneNumber,
+        _customerPhone ?? _normalizedPhone,
+      );
+  bool linkedPhoneMatches(String phoneNumber) =>
+      PhoneNumberValidator.matches(linkedPhoneNumber, phoneNumber);
   String? get profileImageUrl => _profileImageUrl;
   NotificationPreferences get notificationPreferences =>
       _notificationPreferences;
   bool get isLoading => _isLoading;
   bool get isInitializing => _isInitializing;
+  AuthInitializationIssue? get initializationIssue => _initializationIssue;
   bool get isAuthenticated => _user != null;
 
   String get buyerName {
@@ -70,23 +104,14 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _onAuthStateChanged(User? user) async {
     _user = user;
+    _initializationIssue = null;
     if (user != null) {
+      _clearProfileState();
       _userEmail = user.email;
       await _checkUserRole();
     } else {
-      _isStaff = false;
-      _isAdmin = false;
-      _isBusinessOwner = false;
-      _role = null;
-      _businessId = null;
-      _businessName = null;
-      _businessServices = const [];
+      _clearProfileState();
       _userEmail = null;
-      _customerName = null;
-      _customerPhone = null;
-      _normalizedPhone = null;
-      _profileImageUrl = null;
-      _notificationPreferences = NotificationPreferences.defaults;
     }
 
     if (_isInitializing) {
@@ -98,12 +123,12 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _checkUserRole() async {
     if (_user != null) {
       try {
-        await _ensurePlatformAdminProfileIfNeeded();
         debugPrint('🔍 Fetching user document from Firestore...');
         final userDoc = await _firestore
             .collection('users')
             .doc(_user!.uid)
-            .get();
+            .get()
+            .timeout(const Duration(seconds: 15));
         if (userDoc.exists) {
           final data = userDoc.data();
           final role = data?['role'] as String?;
@@ -114,15 +139,18 @@ class AuthProvider extends ChangeNotifier {
           _businessId = data?['businessId'] as String?;
           _businessName = data?['businessName'] as String?;
           _businessServices = _stringList(data?['businessServices']);
+          _businessPermissions = _stringList(data?['businessPermissions']);
           _customerName = data?['fullName'] as String?;
           _customerPhone = data?['phone'] as String?;
           _normalizedPhone = data?['normalizedPhone'] as String?;
+          _phoneVerified = data?['phoneVerified'] == true;
           _profileImageUrl = data?['profileImageUrl'] as String?;
           _notificationPreferences = NotificationPreferences.fromMap(
             data?['notificationPreferences'] is Map<String, dynamic>
                 ? data!['notificationPreferences'] as Map<String, dynamic>
                 : null,
           );
+          _initializationIssue = null;
           debugPrint(
             '👥 User role: ${_isAdmin
                 ? 'admin'
@@ -134,31 +162,33 @@ class AuthProvider extends ChangeNotifier {
           );
         } else {
           debugPrint('📄 User document not found.');
-          _isStaff = false;
-          _isAdmin = false;
-          _isBusinessOwner = false;
-          _role = null;
-          _businessId = null;
-          _businessName = null;
-          _businessServices = const [];
-          _customerName = null;
-          _customerPhone = null;
-          _normalizedPhone = null;
-          _profileImageUrl = null;
-          _notificationPreferences = NotificationPreferences.defaults;
+          _clearProfileState();
+          _initializationIssue = AuthInitializationIssue.profileMissing;
         }
         // No longer need to notify here, _onAuthStateChanged will do it.
       } catch (e) {
         debugPrint('❌ Error checking user role: $e');
-        _isStaff = false;
-        _isAdmin = false;
-        _isBusinessOwner = false;
-        _role = null;
-        _businessId = null;
-        _businessName = null;
-        _businessServices = const [];
+        _clearProfileState();
+        _initializationIssue = AuthInitializationIssue.profileUnavailable;
       }
     }
+  }
+
+  void _clearProfileState() {
+    _isStaff = false;
+    _isAdmin = false;
+    _isBusinessOwner = false;
+    _role = null;
+    _businessId = null;
+    _businessName = null;
+    _businessServices = const [];
+    _businessPermissions = const [];
+    _customerName = null;
+    _customerPhone = null;
+    _normalizedPhone = null;
+    _phoneVerified = false;
+    _profileImageUrl = null;
+    _notificationPreferences = NotificationPreferences.defaults;
   }
 
   List<String> _stringList(dynamic raw) {
@@ -168,34 +198,46 @@ class AuthProvider extends ChangeNotifier {
     return const [];
   }
 
-  Future<void> _ensurePlatformAdminProfileIfNeeded() async {
-    final email = (_user?.email ?? '').trim().toLowerCase();
-    if (email != platformAdminEmail) return;
-    debugPrint('🛡️ Ensuring platform admin profile for $email...');
-    final callable = _functions.httpsCallable('ensurePlatformAdminProfile');
-    await callable.call();
-  }
-
   Future<void> refreshUserProfile() async {
     await _checkUserRole();
     notifyListeners();
   }
 
-  Future<String> _resolveSignInEmail(String identifier) async {
-    final trimmed = identifier.trim();
-    if (trimmed.contains('@')) return trimmed.toLowerCase();
-    if (!PhoneNumberValidator.isValid(trimmed)) {
-      throw 'Enter a valid email address or phone number.';
+  Future<void> requestOwnAccountDeletion({required String password}) async {
+    final currentUser = _auth.currentUser;
+    final email = currentUser?.email?.trim();
+    if (currentUser == null || email == null || email.isEmpty) {
+      throw FirebaseAuthException(
+        code: 'user-not-found',
+        message: 'No signed-in email account is available.',
+      );
     }
-    final callable = _functions.httpsCallable('resolveSignInIdentifier');
-    final response = await callable.call<Map<String, dynamic>>({
-      'identifier': trimmed,
-    });
-    final email = (response.data['email'] ?? '').toString().trim();
-    if (email.isEmpty) {
-      throw 'No account found with this phone number.';
+
+    final credential = EmailAuthProvider.credential(
+      email: email,
+      password: password,
+    );
+    await currentUser.reauthenticateWithCredential(credential);
+    await currentUser.getIdToken(true);
+
+    final callable = _functions.httpsCallable('requestOwnAccountDeletion');
+    final result = await callable.call<Map<String, dynamic>>({});
+    if (result.data['success'] != true) {
+      throw FirebaseFunctionsException(
+        code: 'internal',
+        message: 'Account deletion request was not accepted.',
+      );
     }
-    return email.toLowerCase();
+  }
+
+  Future<void> retryInitialization() async {
+    if (_isInitializing) return;
+    _isInitializing = true;
+    _initializationIssue = null;
+    notifyListeners();
+    await _checkUserRole();
+    _isInitializing = false;
+    notifyListeners();
   }
 
   Future<void> _registerPushNotificationsIfPossible() async {
@@ -206,16 +248,16 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> authenticate(String identifier, String password) async {
-    debugPrint('🔐 Starting authentication for identifier: $identifier');
+  Future<bool> authenticate(String email, String password) async {
+    debugPrint('🔐 Starting email authentication');
     _isLoading = true;
     notifyListeners();
 
     try {
-      final email = await _resolveSignInEmail(identifier);
+      final normalizedEmail = email.trim().toLowerCase();
       debugPrint('📡 Attempting Firebase authentication...');
       final userCredential = await _auth.signInWithEmailAndPassword(
-        email: email,
+        email: normalizedEmail,
         password: password,
       );
 
@@ -230,7 +272,10 @@ class AuthProvider extends ChangeNotifier {
       if (_user != null) {
         debugPrint('🔍 Checking user role in Firestore...');
         await _checkUserRole();
-        await _registerPushNotificationsIfPossible();
+        // Notification registration can wait on OS permission/token services.
+        // A successful login must never remain blocked behind that optional
+        // setup work.
+        unawaited(_registerPushNotificationsIfPossible());
       }
 
       _isLoading = false;
@@ -289,10 +334,12 @@ class AuthProvider extends ChangeNotifier {
       _businessId = null;
       _businessName = null;
       _businessServices = const [];
+      _businessPermissions = const [];
       _userEmail = null;
       _customerName = null;
       _customerPhone = null;
       _normalizedPhone = null;
+      _phoneVerified = false;
       _profileImageUrl = null;
       _notificationPreferences = NotificationPreferences.defaults;
       notifyListeners();
@@ -307,10 +354,12 @@ class AuthProvider extends ChangeNotifier {
       _businessId = null;
       _businessName = null;
       _businessServices = const [];
+      _businessPermissions = const [];
       _userEmail = null;
       _customerName = null;
       _customerPhone = null;
       _normalizedPhone = null;
+      _phoneVerified = false;
       _profileImageUrl = null;
       _notificationPreferences = NotificationPreferences.defaults;
       notifyListeners();
@@ -348,8 +397,8 @@ class AuthProvider extends ChangeNotifier {
       'fullName': fullName.trim(),
       'phone': trimmedPhone,
       'notificationPreferences': prefs.toMap(),
-      if (profileImageUrl != null) 'profileImageUrl': profileImageUrl,
-      if (profileImagePath != null) 'profileImagePath': profileImagePath,
+      'profileImageUrl': ?profileImageUrl,
+      'profileImagePath': ?profileImagePath,
     });
     await _user!.updateDisplayName(fullName.trim());
     _customerName = fullName.trim();
@@ -358,8 +407,114 @@ class AuthProvider extends ChangeNotifier {
         (response.data['normalizedPhone'] ??
                 PhoneNumberValidator.aliasKey(trimmedPhone))
             .toString();
+    _phoneVerified = response.data['phoneVerified'] == true;
     _notificationPreferences = prefs;
     if (profileImageUrl != null) _profileImageUrl = profileImageUrl;
+    notifyListeners();
+  }
+
+  Future<void> startPhoneVerification({
+    required String phoneNumber,
+    required String languageCode,
+    required ValueChanged<PhoneVerificationSession> onCodeSent,
+    required Future<void> Function() onVerificationCompleted,
+    required ValueChanged<Object> onVerificationFailed,
+    bool Function()? shouldCompleteAutomaticVerification,
+    int? resendToken,
+  }) async {
+    if (_auth.currentUser == null) {
+      throw FirebaseAuthException(
+        code: 'user-not-found',
+        message: 'No signed-in account is available.',
+      );
+    }
+    if (!PhoneNumberValidator.isValidE164(phoneNumber)) {
+      throw FirebaseAuthException(
+        code: 'invalid-phone-number',
+        message: 'Use an international phone number beginning with +.',
+      );
+    }
+
+    await _auth.setLanguageCode(languageCode);
+    await _auth.verifyPhoneNumber(
+      phoneNumber: PhoneNumberValidator.normalized(phoneNumber),
+      forceResendingToken: resendToken,
+      timeout: const Duration(seconds: 60),
+      verificationCompleted: (credential) async {
+        if (shouldCompleteAutomaticVerification?.call() == false) return;
+        try {
+          await _finishPhoneVerification(credential);
+          if (shouldCompleteAutomaticVerification?.call() == false) return;
+          await onVerificationCompleted();
+        } catch (error) {
+          if (shouldCompleteAutomaticVerification?.call() == false) return;
+          onVerificationFailed(error);
+        }
+      },
+      verificationFailed: onVerificationFailed,
+      codeSent: (verificationId, forceResendingToken) {
+        onCodeSent(
+          PhoneVerificationSession(
+            verificationId: verificationId,
+            resendToken: forceResendingToken,
+          ),
+        );
+      },
+      codeAutoRetrievalTimeout: (verificationId) {},
+    );
+  }
+
+  Future<void> completePhoneVerification({
+    required String verificationId,
+    required String smsCode,
+  }) async {
+    final credential = PhoneAuthProvider.credential(
+      verificationId: verificationId,
+      smsCode: smsCode,
+    );
+    await _finishPhoneVerification(credential);
+  }
+
+  Future<void> _finishPhoneVerification(PhoneAuthCredential credential) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      throw FirebaseAuthException(
+        code: 'user-not-found',
+        message: 'No signed-in account is available.',
+      );
+    }
+
+    if ((currentUser.phoneNumber ?? '').isEmpty) {
+      await currentUser.linkWithCredential(credential);
+    } else {
+      await currentUser.updatePhoneNumber(credential);
+    }
+    await syncLinkedPhoneVerification();
+  }
+
+  Future<void> syncLinkedPhoneVerification() async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      throw FirebaseAuthException(
+        code: 'user-not-found',
+        message: 'No signed-in account is available.',
+      );
+    }
+
+    await currentUser.reload();
+    final refreshedUser = _auth.currentUser;
+    if (!PhoneNumberValidator.isValidE164(refreshedUser?.phoneNumber)) {
+      throw FirebaseAuthException(
+        code: 'invalid-phone-number',
+        message: 'Complete phone verification before syncing your profile.',
+      );
+    }
+    _user = refreshedUser;
+    await refreshedUser!.getIdToken(true);
+    await _functions.httpsCallable('syncVerifiedCustomerPhone').call<void>({});
+    await refreshedUser.reload();
+    _user = _auth.currentUser;
+    await _checkUserRole();
     notifyListeners();
   }
 
@@ -376,8 +531,10 @@ class AuthProvider extends ChangeNotifier {
     required String serviceNote,
     required String addressLine1,
     required String city,
+    required String country,
     required String state,
     required String postalCode,
+    required MarketplaceDisclosureAcceptance marketplaceAcceptance,
   }) async {
     if (_user == null) {
       throw 'Please create an account or sign in first.';
@@ -399,13 +556,15 @@ class AuthProvider extends ChangeNotifier {
       'businessEmail': businessEmail.trim(),
       'businessWebsite': businessWebsite.trim(),
       'enabledServices': enabledServices,
-      if (profileImageUrl != null) 'profileImageUrl': profileImageUrl,
-      if (profileImagePath != null) 'profileImagePath': profileImagePath,
+      'profileImageUrl': ?profileImageUrl,
+      'profileImagePath': ?profileImagePath,
       'serviceNote': serviceNote.trim(),
       'addressLine1': addressLine1.trim(),
       'city': city.trim(),
+      'country': country.trim(),
       'state': state.trim(),
       'postalCode': postalCode.trim(),
+      'marketplaceDisclosure': marketplaceAcceptance.toJson(),
     });
     await refreshUserProfile();
     return Map<String, dynamic>.from(response.data);
@@ -423,12 +582,28 @@ class AuthProvider extends ChangeNotifier {
     required String serviceNote,
     required String addressLine1,
     required String city,
+    required String country,
     required String state,
     required String postalCode,
     required String carHoldPricingMode,
     required double carHoldFlatFee,
     required double carHoldDailyRate,
     required int carHoldMaxDays,
+    required String parkingAddressLine1,
+    required String parkingCity,
+    required String parkingCountry,
+    required String parkingState,
+    required int parkingTotalSpaces,
+    required int parkingBlockedSpaces,
+    required double parkingDailyRate,
+    required double parkingWeeklyRate,
+    required double parkingMonthlyRate,
+    required int parkingMinimumDays,
+    required bool parkingPickupAvailable,
+    required double parkingPickupFee,
+    required String parkingInstructions,
+    double? parkingLatitude,
+    double? parkingLongitude,
   }) async {
     if (_user == null) {
       throw 'Please sign in first.';
@@ -444,17 +619,33 @@ class AuthProvider extends ChangeNotifier {
       'email': email.trim(),
       'website': website.trim(),
       'enabledServices': enabledServices,
-      if (profileImageUrl != null) 'profileImageUrl': profileImageUrl,
-      if (profileImagePath != null) 'profileImagePath': profileImagePath,
+      'profileImageUrl': ?profileImageUrl,
+      'profileImagePath': ?profileImagePath,
       'serviceNote': serviceNote.trim(),
       'addressLine1': addressLine1.trim(),
       'city': city.trim(),
+      'country': country.trim(),
       'state': state.trim(),
       'postalCode': postalCode.trim(),
       'carHoldPricingMode': carHoldPricingMode,
       'carHoldFlatFee': carHoldFlatFee,
       'carHoldDailyRate': carHoldDailyRate,
       'carHoldMaxDays': carHoldMaxDays,
+      'parkingAddressLine1': parkingAddressLine1.trim(),
+      'parkingCity': parkingCity.trim(),
+      'parkingCountry': parkingCountry.trim(),
+      'parkingState': parkingState.trim(),
+      'parkingTotalSpaces': parkingTotalSpaces,
+      'parkingBlockedSpaces': parkingBlockedSpaces,
+      'parkingDailyRate': parkingDailyRate,
+      'parkingWeeklyRate': parkingWeeklyRate,
+      'parkingMonthlyRate': parkingMonthlyRate,
+      'parkingMinimumDays': parkingMinimumDays,
+      'parkingPickupAvailable': parkingPickupAvailable,
+      'parkingPickupFee': parkingPickupFee,
+      'parkingInstructions': parkingInstructions.trim(),
+      'parkingLatitude': parkingLatitude,
+      'parkingLongitude': parkingLongitude,
     });
     await refreshUserProfile();
   }
@@ -464,6 +655,7 @@ class AuthProvider extends ChangeNotifier {
     required String password,
     required String fullName,
     required String phone,
+    required AccountLegalAcceptance legalAcceptance,
   }) async {
     debugPrint('📝 Starting sign up for email: $email');
     _isLoading = true;
@@ -477,10 +669,11 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('📡 Creating new user through Cloud Functions...');
       final callable = _functions.httpsCallable('createCustomerUser');
       final response = await callable.call<Map<String, dynamic>>({
-        email: email,
-        password: password,
-        fullName: fullName,
-        phone: phone,
+        'email': email,
+        'password': password,
+        'fullName': fullName,
+        'phone': phone,
+        'legalAcceptance': legalAcceptance.toJson(),
       });
 
       final signInEmail = (response.data['email'] ?? email).toString().trim();
@@ -496,7 +689,7 @@ class AuthProvider extends ChangeNotifier {
       _normalizedPhone = response.data['normalizedPhone']?.toString();
       _notificationPreferences = NotificationPreferences.defaults;
       await _checkUserRole();
-      await _registerPushNotificationsIfPossible();
+      unawaited(_registerPushNotificationsIfPossible());
 
       _isLoading = false;
       notifyListeners();
@@ -667,8 +860,8 @@ class AuthProvider extends ChangeNotifier {
         'phone': phone.trim(),
         if (businessId != null && businessId.trim().isNotEmpty)
           'businessId': businessId.trim(),
-        if (profileImageUrl != null) 'profileImageUrl': profileImageUrl,
-        if (profileImagePath != null) 'profileImagePath': profileImagePath,
+        'profileImageUrl': ?profileImageUrl,
+        'profileImagePath': ?profileImagePath,
       });
 
       // Log the result

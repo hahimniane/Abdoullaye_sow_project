@@ -1,0 +1,98 @@
+appId: com.laawoldigital.app
+name: Customer opens support from an order and uploads a video
+---
+- clearKeychain
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "(?s).*Sign in to your wallet.*"
+    timeout: 30000
+- waitForAnimationToEnd
+- tapOn:
+    text: "(?s).*Sign in to your wallet.*"
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible: "Account Login"
+    timeout: 20000
+- waitForAnimationToEnd
+- tapOn: "Email"
+- inputText: "e2e.customer@laawol.test"
+- tapOn: "Password"
+- inputText: "${E2E_TEST_PASSWORD}"
+- tapOn: "done"
+- scrollUntilVisible:
+    element:
+      text: "Sign In"
+    direction: DOWN
+- tapOn:
+    text: "Sign In"
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible: "(?s).*E2E Customer.*"
+    timeout: 30000
+- tapOn: "Activity"
+- extendedWaitUntil:
+    visible: "My orders"
+    timeout: 20000
+- tapOn: "My orders"
+- extendedWaitUntil:
+    visible: "My orders"
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: "(?s).*1 barrel.*Guinea.*"
+    direction: DOWN
+- tapOn: "(?s).*1 barrel.*Guinea.*"
+- extendedWaitUntil:
+    visible: "(?s).*BR-E2E-001.*"
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: "Open support"
+    direction: DOWN
+- tapOn: "Open support"
+- extendedWaitUntil:
+    visible: "Write a message"
+    timeout: 10000
+- tapOn: "Write a message"
+- inputText: "The package video is attached for support review."
+- tapOn: "Open support"
+- extendedWaitUntil:
+    visible: "Support chat"
+    timeout: 30000
+- assertVisible: "(?s).*The package video.*support review.*"
+- tapOn: "Support chat"
+- waitForAnimationToEnd
+- tapOn:
+    text: "Add attachment"
+- runFlow:
+    when:
+      notVisible: "Video"
+    commands:
+      - tapOn:
+          text: "Add attachment"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Video"
+    timeout: 10000
+- tapOn: "Video"
+- extendedWaitUntil:
+    visible: "Videos"
+    timeout: 20000
+- tapOn:
+    point: 64,200
+- extendedWaitUntil:
+    visible: "Review attachment"
+    timeout: 20000
+- assertVisible: "Video attachment"
+- assertVisible: "Cancel"
+- assertVisible: "Replace"
+- assertVisible: "Upload"
+- takeScreenshot: "output/ios-e2e/customer-support-video-review"
+- tapOn: "Upload"
+- extendedWaitUntil:
+    visible: "Support chat"
+    timeout: 40000
+- assertNotVisible: "Review attachment"
+- waitForAnimationToEnd
+- takeScreenshot: "output/ios-e2e/customer-support-video-uploaded"

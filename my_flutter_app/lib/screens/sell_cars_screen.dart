@@ -39,6 +39,7 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
   List<Car> _filteredCars = <Car>[];
 
   bool _isLoading = true;
+  bool _isFilterSheetOpen = false;
   String? _errorMessage;
 
   @override
@@ -55,17 +56,21 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
         .snapshots()
         .listen(
           (snapshot) {
-            final cars = snapshot.docs
-                .map((doc) => Car.fromFirestore(doc))
-                .where(
-                  (car) =>
-                      car.businessStatus == 'approved' &&
-                      hasBusinessService(
-                        car.enabledServices,
-                        BusinessServiceKey.carSales,
-                      ),
-                )
-                .toList();
+            final cars = <Car>[];
+            for (final doc in snapshot.docs) {
+              try {
+                final car = Car.fromFirestore(doc);
+                if (car.businessStatus == 'approved' &&
+                    hasBusinessService(
+                      car.enabledServices,
+                      BusinessServiceKey.carSales,
+                    )) {
+                  cars.add(car);
+                }
+              } catch (error) {
+                debugPrint('Skipping malformed car listing ${doc.id}: $error');
+              }
+            }
             if (!mounted) return;
             setState(() {
               _allCars = cars;
@@ -186,6 +191,36 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
       _filters = filters;
       _filteredCars = _applyFilter(_searchController.text, _allCars);
     });
+  }
+
+  Future<void> _openFilters() async {
+    if (_isFilterSheetOpen) return;
+    setState(() => _isFilterSheetOpen = true);
+    try {
+      final filters = await showModalBottomSheet<_CarFilters>(
+        context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (_) => _FilterSheet(
+          initialFilters: _filters,
+          makes: _valuesFor((car) => car.make),
+          models: _valuesFor((car) => car.model),
+          conditions: _valuesFor((car) => car.condition),
+          bodyTypes: _valuesFor((car) => car.bodyType),
+          transmissions: _valuesFor((car) => car.transmission),
+          fuelTypes: _valuesFor((car) => car.fuelType),
+          drivetrains: _valuesFor((car) => car.drivetrain),
+          businesses: _valuesFor((car) => car.businessName),
+          locations: _valuesFor((car) => car.locationLabel),
+          features: _listValuesFor((car) => car.allFeatures),
+        ),
+      );
+      if (!mounted) return;
+      if (filters != null) _updateFilters(filters);
+    } finally {
+      if (mounted) setState(() => _isFilterSheetOpen = false);
+    }
   }
 
   Future<void> _toggleFavorite(
@@ -313,28 +348,8 @@ class _SellCarsScreenState extends State<SellCarsScreen> {
                   _FilterButton(
                     isActive: _filters.isActive,
                     count: _filters.activeCount,
-                    onTap: () async {
-                      final filters = await showModalBottomSheet<_CarFilters>(
-                        context: context,
-                        backgroundColor: Colors.transparent,
-                        isScrollControlled: true,
-                        useSafeArea: true,
-                        builder: (_) => _FilterSheet(
-                          initialFilters: _filters,
-                          makes: _valuesFor((car) => car.make),
-                          models: _valuesFor((car) => car.model),
-                          conditions: _valuesFor((car) => car.condition),
-                          bodyTypes: _valuesFor((car) => car.bodyType),
-                          transmissions: _valuesFor((car) => car.transmission),
-                          fuelTypes: _valuesFor((car) => car.fuelType),
-                          drivetrains: _valuesFor((car) => car.drivetrain),
-                          businesses: _valuesFor((car) => car.businessName),
-                          locations: _valuesFor((car) => car.locationLabel),
-                          features: _listValuesFor((car) => car.allFeatures),
-                        ),
-                      );
-                      if (filters != null) _updateFilters(filters);
-                    },
+                    isLoading: _isFilterSheetOpen,
+                    onTap: () => unawaited(_openFilters()),
                   ),
                 ],
               ),
@@ -445,7 +460,7 @@ class _CarList extends StatelessWidget {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(20, 2, 20, 24),
       itemCount: cars.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 14),
+      separatorBuilder: (_, _) => const SizedBox(height: 14),
       itemBuilder: (context, index) {
         final car = cars[index];
         return _CarListTile(
@@ -624,11 +639,13 @@ class _FilterButton extends StatelessWidget {
   const _FilterButton({
     required this.isActive,
     required this.count,
+    required this.isLoading,
     required this.onTap,
   });
 
   final bool isActive;
   final int count;
+  final bool isLoading;
   final VoidCallback onTap;
 
   @override
@@ -638,7 +655,7 @@ class _FilterButton extends StatelessWidget {
       height: 54,
       width: 58,
       child: FilledButton(
-        onPressed: onTap,
+        onPressed: isLoading ? null : onTap,
         style: FilledButton.styleFrom(
           padding: EdgeInsets.zero,
           shape: RoundedRectangleBorder(
@@ -648,8 +665,17 @@ class _FilterButton extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Tooltip(message: l10n.filters, child: const Icon(Icons.tune)),
-            if (isActive)
+            Tooltip(
+              message: l10n.filters,
+              child: isLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.tune),
+            ),
+            if (isActive && !isLoading)
               Positioned(
                 right: 9,
                 top: 8,
@@ -742,6 +768,7 @@ String _carBrowserOptionLabel(AppLocalizations l10n, String value) {
 
 class _FilterSheetState extends State<_FilterSheet> {
   late _CarFilters _filters = widget.initialFilters;
+  bool _isOpeningFeaturePicker = false;
 
   static const _years = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2018, 2016];
   static const _priceMin = 0.0;
@@ -1018,26 +1045,22 @@ class _FilterSheetState extends State<_FilterSheet> {
 
     return InkWell(
       borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-      onTap: () async {
-        final next = await showModalBottomSheet<List<String>>(
-          context: context,
-          backgroundColor: Colors.transparent,
-          isScrollControlled: true,
-          useSafeArea: true,
-          builder: (_) => _FeaturePickerSheet(
-            features: widget.features,
-            selectedFeatures: _filters.features,
-          ),
-        );
-        if (next == null) return;
-        setState(() {
-          _filters = _filters.copyWith(features: next);
-        });
-      },
+      onTap: _isOpeningFeaturePicker
+          ? null
+          : () => unawaited(_openFeaturePicker()),
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: l10n.features,
-          suffixIcon: Icon(Icons.arrow_drop_down, color: colorScheme.primary),
+          suffixIcon: _isOpeningFeaturePicker
+              ? const Padding(
+                  padding: EdgeInsets.all(14),
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : Icon(Icons.arrow_drop_down, color: colorScheme.primary),
         ),
         child: Text(
           summary,
@@ -1054,6 +1077,30 @@ class _FilterSheetState extends State<_FilterSheet> {
         ),
       ),
     );
+  }
+
+  Future<void> _openFeaturePicker() async {
+    if (_isOpeningFeaturePicker) return;
+    setState(() => _isOpeningFeaturePicker = true);
+    try {
+      final next = await showModalBottomSheet<List<String>>(
+        context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (_) => _FeaturePickerSheet(
+          features: widget.features,
+          selectedFeatures: _filters.features,
+        ),
+      );
+      if (!mounted) return;
+      if (next == null) return;
+      setState(() {
+        _filters = _filters.copyWith(features: next);
+      });
+    } finally {
+      if (mounted) setState(() => _isOpeningFeaturePicker = false);
+    }
   }
 
   @override
@@ -1938,10 +1985,16 @@ class _CarListTile extends StatelessWidget {
                   Positioned(
                     right: 12,
                     top: 12,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: onFavoriteToggle,
-                      child: _FavoriteButton(isFavorite: isFavorite),
+                    child: Semantics(
+                      button: true,
+                      label: isFavorite
+                          ? AppLocalizations.of(context)!.removeFromFavorites
+                          : AppLocalizations.of(context)!.addToFavorites,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: onFavoriteToggle,
+                        child: _FavoriteButton(isFavorite: isFavorite),
+                      ),
                     ),
                   ),
                   Positioned(
@@ -2044,6 +2097,19 @@ class _CarListTile extends StatelessWidget {
                             icon: Icons.verified_outlined,
                             label: _carBrowserOptionLabel(l10n, car.condition),
                           ),
+                        _SpecChip(
+                          icon: car.isRebuiltTitle == true
+                              ? Icons.report_outlined
+                              : car.isRebuiltTitle == null
+                              ? Icons.help_outline
+                              : Icons.verified_outlined,
+                          label: car.isRebuiltTitle == true
+                              ? l10n.rebuiltTitleYes
+                              : car.isRebuiltTitle == null
+                              ? '${l10n.rebuiltTitle}: ${l10n.rebuiltTitleUnknown}'
+                              : l10n.rebuiltTitleNo,
+                          emphasized: car.isRebuiltTitle != false,
+                        ),
                         if (car.transmission.isNotEmpty)
                           _SpecChip(
                             icon: Icons.settings_suggest_outlined,

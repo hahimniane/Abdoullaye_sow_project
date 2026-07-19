@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 enum BusinessServiceKey {
   barrelShipping('barrelShipping'),
+  sharedBarrels('sharedBarrels'),
+  freight('freight'),
   carSales('carSales'),
   carParking('carParking'),
   carTransport('carTransport');
@@ -40,6 +42,18 @@ const businessServiceCatalog = <BusinessServiceDefinition>[
     icon: Icons.local_shipping_outlined,
   ),
   BusinessServiceDefinition(
+    key: BusinessServiceKey.sharedBarrels,
+    label: 'Shared barrels',
+    description: 'Pool partial barrels and match customers by destination.',
+    icon: Icons.group_add_outlined,
+  ),
+  BusinessServiceDefinition(
+    key: BusinessServiceKey.freight,
+    label: 'Freight (parcels)',
+    description: 'Ship parcels and boxes by weight, by air or sea.',
+    icon: Icons.inventory_2_outlined,
+  ),
+  BusinessServiceDefinition(
     key: BusinessServiceKey.carSales,
     label: 'Car sales',
     description: 'List cars for customers to browse and buy.',
@@ -61,22 +75,21 @@ const businessServiceCatalog = <BusinessServiceDefinition>[
 
 const defaultBusinessServiceValues = <String>[
   'barrelShipping',
+  'sharedBarrels',
+  'freight',
   'carSales',
   'carParking',
   'carTransport',
 ];
 
 List<String> normalizeBusinessServices(dynamic raw) {
-  final values = raw is Iterable
-      ? raw.map((item) => item.toString()).toSet()
-      : <String>{};
-  final normalized = <String>[
+  if (raw == null) return List<String>.from(defaultBusinessServiceValues);
+  if (raw is! Iterable) return const <String>[];
+  final values = raw.map((item) => item.toString()).toSet();
+  return <String>[
     for (final service in businessServiceCatalog)
       if (values.contains(service.key.value)) service.key.value,
   ];
-  return normalized.isEmpty
-      ? List<String>.from(defaultBusinessServiceValues)
-      : normalized;
 }
 
 bool hasBusinessService(Iterable<String> services, BusinessServiceKey key) {

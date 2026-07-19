@@ -68,7 +68,7 @@ class BusinessService {
             Map<String, dynamic>.from(option),
           ),
         )
-        .where((option) => option.isAvailable)
+        .where((option) => option.isAvailableForAnyShippingService)
         .toList()
       ..sort(_compareDestinationOptions);
   }
@@ -92,7 +92,7 @@ class BusinessService {
           destinationDoc.data(),
           businessData: businessDoc.data(),
         );
-        if (option.isAvailable) {
+        if (option.isAvailableForAnyShippingService) {
           options.add(option);
         }
       }
@@ -132,7 +132,7 @@ class BusinessService {
         doc.data(),
         businessData: businessData,
       );
-      if (option.isAvailable) {
+      if (option.isAvailableForAnyShippingService) {
         options.add(option);
       }
     }

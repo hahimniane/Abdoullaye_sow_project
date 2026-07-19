@@ -8,8 +8,11 @@ class DestinationCountry {
     this.isActive = false,
     this.sortOrder = 0,
     this.barrelShippingPrice = 0,
+    this.freightAirPricePerKg = 0,
+    this.freightSeaPricePerKg = 0,
     this.deliveryEstimateMinDays,
     this.deliveryEstimateMaxDays,
+    this.destinationNote,
   });
 
   static const fallback = DestinationCountry(
@@ -26,8 +29,19 @@ class DestinationCountry {
   final bool isActive;
   final int sortOrder;
   final double barrelShippingPrice;
+  final double freightAirPricePerKg;
+  final double freightSeaPricePerKg;
   final int? deliveryEstimateMinDays;
   final int? deliveryEstimateMaxDays;
+  final String? destinationNote;
+
+  double freightRatePerKg(String mode) =>
+      mode == 'air' ? freightAirPricePerKg : freightSeaPricePerKg;
+
+  bool freightAvailable(String mode) => freightRatePerKg(mode) > 0;
+
+  bool get hasAnyFreightRate =>
+      freightAirPricePerKg > 0 || freightSeaPricePerKg > 0;
 
   String get displayCode => (code ?? '').trim().toUpperCase();
 
@@ -67,10 +81,15 @@ class DestinationCountry {
       sortOrder: (data['sortOrder'] as num?)?.toInt() ?? 0,
       barrelShippingPrice:
           (data['barrelShippingPrice'] as num?)?.toDouble() ?? 0,
+      freightAirPricePerKg:
+          (data['freightAirPricePerKg'] as num?)?.toDouble() ?? 0,
+      freightSeaPricePerKg:
+          (data['freightSeaPricePerKg'] as num?)?.toDouble() ?? 0,
       deliveryEstimateMinDays: (data['deliveryEstimateMinDays'] as num?)
           ?.toInt(),
       deliveryEstimateMaxDays: (data['deliveryEstimateMaxDays'] as num?)
           ?.toInt(),
+      destinationNote: data['destinationNote'] as String?,
     );
   }
 
@@ -81,10 +100,14 @@ class DestinationCountry {
       'isActive': isActive,
       'sortOrder': sortOrder,
       'barrelShippingPrice': barrelShippingPrice,
+      'freightAirPricePerKg': freightAirPricePerKg,
+      'freightSeaPricePerKg': freightSeaPricePerKg,
       if (deliveryEstimateMinDays != null)
         'deliveryEstimateMinDays': deliveryEstimateMinDays,
       if (deliveryEstimateMaxDays != null)
         'deliveryEstimateMaxDays': deliveryEstimateMaxDays,
+      if (destinationNote != null && destinationNote!.isNotEmpty)
+        'destinationNote': destinationNote,
       'updatedAt': FieldValue.serverTimestamp(),
     };
   }

@@ -4,8 +4,17 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Helper function to check if a user is an admin
     function isAdmin(userId) {
-      return exists(/databases/$(database)/documents/users/$(userId)) &&
+      return request.auth != null &&
+             request.auth.uid == userId &&
+             request.auth.token.email_verified == true &&
+             exists(/databases/$(database)/documents/users/$(userId)) &&
              get(/databases/$(database)/documents/users/$(userId)).data.role == 'admin';
+    }
+
+    function isSuperAdmin(userId) {
+      return isAdmin(userId) &&
+             get(/databases/$(database)/documents/users/$(userId))
+               .data.get('adminRole', '') == 'superAdmin';
     }
 
     function userProfile(userId) {
@@ -20,20 +29,83 @@ service cloud.firestore {
       return userProfile(userId).businessId;
     }
 
+    function userAdminRole(userId) {
+      return userProfile(userId).get('adminRole', '') is string ?
+        userProfile(userId).get('adminRole', '') :
+        "";
+    }
+
+    function hasDynamicAdminCapability(userId, section) {
+      return exists(/databases/$(database)/documents/platformConfig/permissions) &&
+        userAdminRole(userId) in get(/databases/$(database)/documents/platformConfig/permissions)
+          .data.roles &&
+        get(/databases/$(database)/documents/platformConfig/permissions)
+          .data.roles[userAdminRole(userId)].sections is map &&
+        section in get(/databases/$(database)/documents/platformConfig/permissions)
+          .data.roles[userAdminRole(userId)].sections &&
+        get(/databases/$(database)/documents/platformConfig/permissions)
+          .data.roles[userAdminRole(userId)].sections[section] == 'manage';
+    }
+
+    function hasBuiltInAdminCapability(userId, section) {
+      return isSuperAdmin(userId) ||
+        (
+          userAdminRole(userId) == 'operationsManager' &&
+          section in ['businesses', 'marketplace', 'operations', 'support', 'website']
+        ) ||
+        (
+          userAdminRole(userId) == 'financeManager' &&
+          section in ['finance', 'support']
+        ) ||
+        (userAdminRole(userId) == 'supportAdmin' && section == 'support') ||
+        (userAdminRole(userId) == 'contentManager' && section == 'website');
+    }
+
+    function hasAdminCapability(userId, section) {
+      return isAdmin(userId) &&
+        (hasBuiltInAdminCapability(userId, section) ||
+         hasDynamicAdminCapability(userId, section));
+    }
+
+    function canManageWebsite(userId) {
+      return hasAdminCapability(userId, 'website');
+    }
+
+    function canManageSupport(userId) {
+      return hasAdminCapability(userId, 'support');
+    }
+
     // Helper function to check if a user is staff, business owner, or admin
     function isStaffOrAdmin(userId) {
       return exists(/databases/$(database)/documents/users/$(userId)) &&
              (userRole(userId) == 'staff' ||
               userRole(userId) == 'businessOwner' ||
-              userRole(userId) == 'admin');
+              isSuperAdmin(userId));
     }
 
     function canManageBusiness(userId, businessId) {
-      return isAdmin(userId) ||
+      return isSuperAdmin(userId) ||
              (exists(/databases/$(database)/documents/users/$(userId)) &&
               (userRole(userId) == 'staff' ||
                userRole(userId) == 'businessOwner') &&
               userBusinessId(userId) == businessId);
+    }
+
+    function canManageBusinessSection(userId, businessId, section) {
+      return isSuperAdmin(userId) ||
+             (
+               exists(/databases/$(database)/documents/users/$(userId)) &&
+               userBusinessId(userId) == businessId &&
+               (
+                 userRole(userId) == 'businessOwner' ||
+                 (
+                   userRole(userId) == 'staff' &&
+                   userProfile(userId).get('businessPermissions', []) is list &&
+                   userProfile(userId).get('businessPermissions', []).size() > 0 &&
+                   section in userProfile(userId).get('businessPermissions', [])
+                 )
+               )
+             );
     }
 
     function validDeliveryEstimate(data) {
@@ -49,9 +121,86 @@ service cloud.firestore {
         );
     }
 
+    function validUserRoleState(data) {
+      return data.role == 'customer' ||
+        data.role == 'admin' ||
+        (
+          (data.role == 'staff' || data.role == 'businessOwner') &&
+          data.businessId is string &&
+          data.businessId != '' &&
+          data.businessName is string &&
+          data.businessName != ''
+        );
+    }
+
+    // Customer signup normally runs through createCustomerUser (Admin SDK),
+    // but keep a narrow legacy fallback for clients that must create their own
+    // minimal profile. Everything used for verification, authorization,
+    // reliability, wallet balances, or payments is intentionally absent from
+    // this allowlist and therefore remains server-authoritative.
+    function validNewCustomerProfile(data) {
+      return data.keys().hasOnly([
+          'role',
+          'email',
+          'fullName',
+          'phone',
+          'profileImageUrl',
+          'profileImagePath',
+          'notificationPreferences'
+        ]) &&
+        data.role == 'customer' &&
+        data.get('email', '') is string &&
+        data.get('email', '') == request.auth.token.get('email', '') &&
+        data.get('fullName', '') is string &&
+        data.get('phone', '') is string &&
+        data.get('profileImageUrl', '') is string &&
+        data.get('profileImagePath', '') is string &&
+        data.get('notificationPreferences', {}) is map;
+    }
+
+    function supportCaseData(caseId) {
+      return get(/databases/$(database)/documents/supportCases/$(caseId)).data;
+    }
+
+    // NOTE: authorize purely from the case document + the caller's own profile.
+    // We deliberately avoid an exists() on the case's participants subcollection
+    // here: a subcollection exists() makes the rule un-evaluable for `list`
+    // (collection) queries, which silently breaks the business and admin support
+    // inbox queries (where('businessId'==) / where('escalationStatus'=='escalated')).
+    // Every legitimate reader is already covered: the customer, business
+    // owner/support staff (by businessId), and support admins.
+    function canReadSupportCase(caseId, data) {
+      return request.auth != null &&
+        (
+          data.customerUid == request.auth.uid ||
+          canManageSupport(request.auth.uid) ||
+          (
+            data.businessId is string &&
+            canManageBusinessSection(request.auth.uid, data.businessId, 'support')
+          )
+        );
+    }
+
     match /appConfig/client {
       allow read: if true;
       allow write: if false;
+    }
+
+    // Platform configuration (e.g. editable role permissions matrix).
+    // Any admin may read it (drives console gating); only super admins write.
+    match /platformConfig/{configId} {
+      allow read: if request.auth != null && isAdmin(request.auth.uid);
+      allow write: if request.auth != null && isSuperAdmin(request.auth.uid);
+    }
+
+    match /websiteContent/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null && canManageWebsite(request.auth.uid);
+    }
+
+    match /featuredBusinesses/{businessId} {
+      allow read: if true;
+      allow write: if request.auth != null && canManageWebsite(request.auth.uid);
     }
 
     // Rules for the 'users' collection
@@ -61,7 +210,7 @@ service cloud.firestore {
       
       // Allow users to create their own user document
       allow create: if request.auth != null && request.auth.uid == userId &&
-                      request.resource.data.role == 'customer';
+                      validNewCustomerProfile(request.resource.data);
 
       // Allow admins to read any user's data
       allow read: if request.auth != null && isAdmin(request.auth.uid);
@@ -70,9 +219,10 @@ service cloud.firestore {
         canManageBusiness(request.auth.uid, resource.data.businessId);
       
       // Allow admins to update any user's role
-      allow update: if request.auth != null && isAdmin(request.auth.uid) &&
+      allow update: if request.auth != null && isSuperAdmin(request.auth.uid) &&
                       'role' in request.resource.data &&
-                      request.resource.data.role in ['customer', 'staff', 'businessOwner', 'admin'];
+                      request.resource.data.role in ['customer', 'staff', 'businessOwner', 'admin'] &&
+                      validUserRoleState(request.resource.data);
 
       // Prevent users from updating their own role directly
       allow update: if request.auth != null && request.auth.uid == userId &&
@@ -92,6 +242,12 @@ service cloud.firestore {
           request.auth.uid == userId;
       }
 
+      match /barrelPools/{poolId} {
+        allow read: if request.auth != null &&
+          (request.auth.uid == userId || isAdmin(request.auth.uid));
+        allow create, update, delete: if false;
+      }
+
       match /fcmTokens/{tokenId} {
         allow read, create, update, delete: if request.auth != null &&
           request.auth.uid == userId;
@@ -102,30 +258,58 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Server-only abuse-prevention state for callable rate limits.
+    match /callableRateLimits/{limitId} {
+      allow read, write: if false;
+    }
+
+    // Server-only payment webhook deduplication and reconciliation state.
+    match /stripeWebhookEvents/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /paymentReconciliationFailures/{failureId} {
+      allow read, write: if false;
+    }
+
     // Rules for the 'parkedCars' collection
     match /parkedCars/{carId} {
       // Allow only staff and admins to create, read, and update parking records
       allow read: if request.auth != null &&
-        (isAdmin(request.auth.uid) ||
+        (resource.data.customerUid == request.auth.uid ||
+         isAdmin(request.auth.uid) ||
          canManageBusiness(request.auth.uid, resource.data.businessId));
-      allow create, update: if request.auth != null &&
-        (isAdmin(request.auth.uid) ||
-         canManageBusiness(request.auth.uid, request.resource.data.businessId));
+      allow create: if request.auth != null &&
+        (hasAdminCapability(request.auth.uid, 'operations') ||
+         canManageBusinessSection(request.auth.uid, request.resource.data.businessId, 'parking'));
+      allow update: if request.auth != null &&
+        request.resource.data.businessId == resource.data.businessId &&
+        (hasAdminCapability(request.auth.uid, 'operations') ||
+         canManageBusinessSection(request.auth.uid, resource.data.businessId, 'parking'));
       allow delete: if request.auth != null &&
-        (isAdmin(request.auth.uid) ||
-         canManageBusiness(request.auth.uid, resource.data.businessId));
+        (hasAdminCapability(request.auth.uid, 'operations') ||
+         canManageBusinessSection(request.auth.uid, resource.data.businessId, 'parking'));
     }
 
     match /barrelShipments/{shipmentId} {
       allow read: if request.auth != null &&
         (isAdmin(request.auth.uid) ||
          canManageBusiness(request.auth.uid, resource.data.businessId));
-      allow create, update: if request.auth != null &&
-        (isAdmin(request.auth.uid) ||
-         canManageBusiness(request.auth.uid, request.resource.data.businessId));
+      allow create: if request.auth != null &&
+        (hasAdminCapability(request.auth.uid, 'operations') ||
+         canManageBusinessSection(request.auth.uid, request.resource.data.businessId, 'barrels'));
+      // Admins keep full update. A business may only progress fulfillment
+      // (status / tracking / notes) — never the customer's price, fees, payment,
+      // Stripe, or identity fields — and may not delete a customer's shipment.
+      allow update: if request.auth != null &&
+        hasAdminCapability(request.auth.uid, 'operations');
+      allow update: if request.auth != null &&
+        canManageBusinessSection(request.auth.uid, resource.data.businessId, 'barrels') &&
+        request.resource.data.businessId == resource.data.businessId &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'trackingNumber', 'trackingCode', 'staffNotes', 'statusUpdatedAt', 'updatedAt']);
       allow delete: if request.auth != null &&
-        (isAdmin(request.auth.uid) ||
-         canManageBusiness(request.auth.uid, resource.data.businessId));
+        hasAdminCapability(request.auth.uid, 'operations');
       allow read: if request.auth != null &&
         resource.data.customerUid == request.auth.uid;
       allow update: if request.auth != null &&
@@ -153,40 +337,180 @@ service cloud.firestore {
           ]);
     }
 
+    match /barrelOrders/{orderId} {
+      allow read: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         resource.data.customerUid == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /freightShipments/{shipmentId} {
+      allow read: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, resource.data.businessId));
+      allow create: if request.auth != null &&
+        (hasAdminCapability(request.auth.uid, 'operations') ||
+         canManageBusinessSection(request.auth.uid, request.resource.data.businessId, 'freight'));
+      // Admins keep full update. A business may only progress fulfillment
+      // (status / tracking / notes) — never price, fees, payment, Stripe, or
+      // identity fields — and may not delete a customer's shipment.
+      allow update: if request.auth != null &&
+        hasAdminCapability(request.auth.uid, 'operations');
+      allow update: if request.auth != null &&
+        canManageBusinessSection(request.auth.uid, resource.data.businessId, 'freight') &&
+        request.resource.data.businessId == resource.data.businessId &&
+        (
+          !resource.data.keys().hasAny(['freightPricingVersion']) ||
+          resource.data.freightPricingVersion != 2 ||
+          !(request.resource.data.status in ['in_transit', 'ready_for_pickup', 'completed']) ||
+          resource.data.priceSettlementStatus == 'settled'
+        ) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'trackingNumber', 'trackingCode', 'staffNotes', 'statusUpdatedAt', 'updatedAt']);
+      allow delete: if request.auth != null &&
+        hasAdminCapability(request.auth.uid, 'operations');
+      allow read: if request.auth != null &&
+        resource.data.customerUid == request.auth.uid;
+      allow update: if request.auth != null &&
+        resource.data.customerUid == request.auth.uid &&
+        (
+          resource.data.pickupRequested != true ||
+          !(resource.data.pickupDateTime is timestamp) ||
+          resource.data.pickupDateTime > request.time
+        ) &&
+        resource.data.status == 'pending' &&
+        request.resource.data.customerUid == resource.data.customerUid &&
+        request.resource.data.price == resource.data.price &&
+        request.resource.data.status == resource.data.status &&
+        request.resource.data.paymentStatus == resource.data.paymentStatus &&
+        request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'senderName',
+            'senderAddress',
+            'pickupAddress',
+            'pickupDateTime',
+            'receiverName',
+            'receiverPhone',
+            'updatedAt'
+          ]);
+    }
+
+    match /freightSettlements/{settlementId} {
+      allow read: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         resource.data.customerUid == request.auth.uid ||
+         canManageBusinessSection(
+           request.auth.uid,
+           resource.data.businessId,
+           'freight'
+         ));
+      allow write: if false;
+
+      match /paymentAttempts/{attemptId} {
+        allow read: if request.auth != null &&
+          (isAdmin(request.auth.uid) ||
+           resource.data.customerUid == request.auth.uid ||
+           canManageBusinessSection(
+             request.auth.uid,
+             resource.data.businessId,
+             'freight'
+           ));
+        allow write: if false;
+      }
+    }
+
+    match /openBarrels/{poolId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    match /barrelPools/{poolId} {
+      allow read: if request.auth != null &&
+        (
+          isAdmin(request.auth.uid) ||
+          canManageBusiness(request.auth.uid, resource.data.businessId) ||
+          resource.data.createdByUid == request.auth.uid ||
+          exists(/databases/$(database)/documents/barrelPools/$(poolId)/participants/$(request.auth.uid))
+        );
+      allow create, update, delete: if false;
+
+      match /participants/{participantId} {
+        allow read: if request.auth != null &&
+          (
+            participantId == request.auth.uid ||
+            isAdmin(request.auth.uid) ||
+            get(/databases/$(database)/documents/barrelPools/$(poolId)).data.createdByUid == request.auth.uid ||
+            canManageBusiness(
+              request.auth.uid,
+              get(/databases/$(database)/documents/barrelPools/$(poolId)).data.businessId
+            )
+          );
+        allow create, update, delete: if false;
+      }
+    }
+
     match /transportRequests/{requestId} {
       allow read: if request.auth != null &&
         (isAdmin(request.auth.uid) ||
          canManageBusiness(request.auth.uid, resource.data.businessId));
-      allow create, update: if request.auth != null &&
-        (isAdmin(request.auth.uid) ||
-         canManageBusiness(request.auth.uid, request.resource.data.businessId));
+      allow create: if request.auth != null &&
+        (hasAdminCapability(request.auth.uid, 'operations') ||
+         canManageBusinessSection(request.auth.uid, request.resource.data.businessId, 'transport'));
+      allow update: if request.auth != null &&
+        request.resource.data.businessId == resource.data.businessId &&
+        (hasAdminCapability(request.auth.uid, 'operations') ||
+         canManageBusinessSection(request.auth.uid, resource.data.businessId, 'transport'));
       allow delete: if request.auth != null &&
-        (isAdmin(request.auth.uid) ||
-         canManageBusiness(request.auth.uid, resource.data.businessId));
+        (hasAdminCapability(request.auth.uid, 'operations') ||
+         canManageBusinessSection(request.auth.uid, resource.data.businessId, 'transport'));
+      // Customers may read their own transport requests (for tracking) and
+      // cancel one while it is still pending. Requests are created server-side
+      // by the createTransportRequest function (Admin SDK), so no customer
+      // create rule is needed here.
+      allow read: if request.auth != null &&
+        resource.data.customerUid == request.auth.uid;
+      allow update: if request.auth != null &&
+        resource.data.customerUid == request.auth.uid &&
+        resource.data.status == 'pending' &&
+        request.resource.data.status == 'cancelled' &&
+        request.resource.data.customerUid == resource.data.customerUid &&
+        request.resource.data.businessId == resource.data.businessId &&
+        request.resource.data.price == resource.data.price &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'updatedAt']);
     }
 
     match /cars/{carId} {
       allow read: if true;
-      allow create, update: if request.auth != null &&
-        (isAdmin(request.auth.uid) ||
-         canManageBusiness(request.auth.uid, request.resource.data.businessId));
+      allow create: if request.auth != null &&
+        request.resource.data.isRebuiltTitle is bool &&
+        (hasAdminCapability(request.auth.uid, 'marketplace') ||
+         canManageBusinessSection(request.auth.uid, request.resource.data.businessId, 'listings'));
+      allow update: if request.auth != null &&
+        request.resource.data.businessId == resource.data.businessId &&
+        (!request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['isRebuiltTitle']) ||
+         request.resource.data.isRebuiltTitle is bool) &&
+        (hasAdminCapability(request.auth.uid, 'marketplace') ||
+         canManageBusinessSection(request.auth.uid, resource.data.businessId, 'listings'));
       allow delete: if request.auth != null &&
-        (isAdmin(request.auth.uid) ||
-         canManageBusiness(request.auth.uid, resource.data.businessId));
+        (hasAdminCapability(request.auth.uid, 'marketplace') ||
+         canManageBusinessSection(request.auth.uid, resource.data.businessId, 'listings'));
     }
 
     match /businesses/{businessId} {
-      allow read: if resource.data.status == 'approved' ||
-        (request.auth != null && canManageBusiness(request.auth.uid, businessId));
+      allow read: if request.auth != null &&
+        canManageBusiness(request.auth.uid, businessId);
       allow create, update, delete: if request.auth != null &&
-        isAdmin(request.auth.uid);
+        isSuperAdmin(request.auth.uid);
 
       match /destinationCountries/{countryId} {
         allow read: if resource.data.businessStatus == 'approved' ||
           get(/databases/$(database)/documents/businesses/$(businessId)).data.status == 'approved' ||
           (request.auth != null && canManageBusiness(request.auth.uid, businessId));
         allow write: if request.auth != null &&
-          canManageBusiness(request.auth.uid, businessId) &&
+          canManageBusinessSection(request.auth.uid, businessId, 'destinations') &&
           (
             request.resource.data.isActive != true ||
             (
@@ -200,7 +524,11 @@ service cloud.firestore {
 
     match /destinationCountries/{countryId} {
       allow read: if true;
-      allow write: if request.auth != null && isAdmin(request.auth.uid);
+      allow write: if request.auth != null && isSuperAdmin(request.auth.uid);
+    }
+
+    match /{path=**}/destinationCountries/{countryId} {
+      allow read: if request.auth != null && isAdmin(request.auth.uid);
     }
 
     match /businessApplications/{applicationId} {
@@ -212,13 +540,96 @@ service cloud.firestore {
     }
 
     match /platformNotifications/{notificationId} {
-      allow read, update: if request.auth != null && isAdmin(request.auth.uid);
+      allow read: if request.auth != null && isAdmin(request.auth.uid);
+      allow update: if request.auth != null &&
+        hasAdminCapability(request.auth.uid, 'support');
       allow create, delete: if false;
+    }
+
+    match /notificationDeliveries/{deliveryId} {
+      allow read: if request.auth != null && isAdmin(request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /businessSupportRequests/{requestId} {
+      allow read: if request.auth != null && isAdmin(request.auth.uid);
+      allow update: if request.auth != null &&
+        hasAdminCapability(request.auth.uid, 'support');
+      allow read: if request.auth != null &&
+        canManageBusiness(request.auth.uid, resource.data.businessId);
+      allow create, delete: if false;
+      allow update: if request.auth != null &&
+        canManageBusiness(request.auth.uid, resource.data.businessId) &&
+        canManageBusinessSection(request.auth.uid, resource.data.businessId, 'support') &&
+        request.resource.data.businessId == resource.data.businessId &&
+        request.resource.data.createdBy == resource.data.createdBy &&
+        request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'status',
+            'businessResponse',
+            'businessRespondedAt',
+            'businessRespondedBy',
+            'businessReadAt',
+            'businessReadBy',
+            'updatedAt'
+          ]);
+    }
+
+    match /supportCases/{caseId} {
+      allow read: if canReadSupportCase(caseId, resource.data);
+      allow create, update, delete: if false;
+
+      match /messages/{messageId} {
+        // Guard the optional `internal` flag: reading resource.data.internal
+        // directly throws "Property internal is undefined" for `list` queries on
+        // messages that omit the field (which is all of them today).
+        allow read: if canReadSupportCase(caseId, supportCaseData(caseId)) &&
+          resource.data.get('internal', false) != true;
+        allow create, update, delete: if false;
+      }
+
+      match /timeline/{eventId} {
+        allow read: if canReadSupportCase(caseId, supportCaseData(caseId)) &&
+          resource.data.get('private', false) != true;
+        allow create, update, delete: if false;
+      }
+
+      match /participants/{participantId} {
+        allow read: if canReadSupportCase(caseId, supportCaseData(caseId));
+        allow create, update, delete: if false;
+      }
+
+      match /internalNotes/{noteId} {
+        allow read: if request.auth != null &&
+          canManageSupport(request.auth.uid);
+        allow create, update, delete: if false;
+      }
+    }
+
+    match /businessInsights/{insightId} {
+      allow read: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, resource.data.businessId));
+      allow create, update, delete: if false;
+    }
+
+    match /businessSubscriptions/{subscriptionId} {
+      allow read: if request.auth != null &&
+        (isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, resource.data.businessId));
+      allow create, update, delete: if false;
+    }
+
+    match /adminAuditLogs/{logId} {
+      allow read: if request.auth != null && isAdmin(request.auth.uid);
+      allow create, update, delete: if false;
     }
 
     match /shipmentPricing/{pricingId} {
       allow read: if true;
-      allow write: if request.auth != null && isStaffOrAdmin(request.auth.uid);
+      allow write: if request.auth != null &&
+        hasAdminCapability(request.auth.uid, 'finance');
     }
 
     match /wallets/{userId} {
@@ -241,17 +652,42 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /barrelPoolBalanceRequests/{requestId} {
+      allow read: if request.auth != null &&
+        (resource.data.customerUid == request.auth.uid ||
+         isAdmin(request.auth.uid) ||
+         canManageBusiness(request.auth.uid, resource.data.businessId));
+      allow write: if false;
+    }
+
     match /carPurchases/{purchaseId} {
-      allow create: if request.auth != null &&
-        request.resource.data.buyerUid == request.auth.uid;
+      // Purchases contain server-authoritative payment and fulfillment fields.
+      // Every create must go through a guarded callable using the Admin SDK.
+      allow create: if false;
       allow read: if request.auth != null &&
         resource.data.buyerUid == request.auth.uid;
       allow read: if request.auth != null &&
         (isAdmin(request.auth.uid) ||
          canManageBusiness(request.auth.uid, resource.data.businessId));
-      allow update, delete: if request.auth != null &&
-        (isAdmin(request.auth.uid) ||
-         canManageBusiness(request.auth.uid, resource.data.businessId));
+      // Admins keep full access (and money-moving actions run via Cloud Functions
+      // with the Admin SDK, which bypasses these rules).
+      allow update: if request.auth != null &&
+        hasAdminCapability(request.auth.uid, 'operations');
+      // A business may only nudge status/notes on a NON-finalized record, and may
+      // never alter buyer, money, payment, hold, or extension fields, nor delete
+      // the record. This stops deposit/payment tampering and history erasure;
+      // forfeits/refunds/sales must go through the guarded callables.
+      allow update: if request.auth != null &&
+        canManageBusinessSection(request.auth.uid, resource.data.businessId, 'purchases') &&
+        !(resource.data.purchaseStatus in ['completed', 'no_show', 'cancelled', 'refunded', 'forfeited']) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['purchaseStatus', 'staffNotes', 'updatedAt']) &&
+        request.resource.data.businessId == resource.data.businessId &&
+        request.resource.data.buyerUid == resource.data.buyerUid &&
+        request.resource.data.depositAmount == resource.data.depositAmount &&
+        request.resource.data.paymentStatus == resource.data.paymentStatus;
+      allow delete: if request.auth != null &&
+        hasAdminCapability(request.auth.uid, 'operations');
     }
   }
 } 

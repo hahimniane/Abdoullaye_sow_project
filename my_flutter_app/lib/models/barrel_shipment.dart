@@ -20,6 +20,10 @@ class BarrelShipment {
     this.pickupMiles = 0,
     this.pickupFee = 0,
     this.shippingFee = 0,
+    this.unitShippingFee,
+    this.quantity = 1,
+    this.totalWeightKg,
+    this.contentsNote,
     this.deliveryEstimateMinDays,
     this.deliveryEstimateMaxDays,
     this.deliveryEstimateLabel,
@@ -27,6 +31,11 @@ class BarrelShipment {
     this.pickupDateTime,
     this.paymentStatus = 'not_required',
     this.stripePaymentIntentId,
+    this.orderId,
+    this.platformFeeCents = 0,
+    this.businessPayoutCents = 0,
+    this.payoutStatus = '',
+    this.payoutTransferId,
     required this.price,
     required this.status,
     required this.createdAt,
@@ -50,6 +59,10 @@ class BarrelShipment {
   final double pickupMiles;
   final double pickupFee;
   final double shippingFee;
+  final double? unitShippingFee;
+  final int quantity;
+  final double? totalWeightKg;
+  final String? contentsNote;
   final int? deliveryEstimateMinDays;
   final int? deliveryEstimateMaxDays;
   final String? deliveryEstimateLabel;
@@ -57,6 +70,11 @@ class BarrelShipment {
   final DateTime? pickupDateTime;
   final String paymentStatus;
   final String? stripePaymentIntentId;
+  final String? orderId;
+  final int platformFeeCents;
+  final int businessPayoutCents;
+  final String payoutStatus;
+  final String? payoutTransferId;
   final double price;
   final String status;
   final DateTime createdAt;
@@ -86,6 +104,10 @@ class BarrelShipment {
       pickupMiles: (data['pickupMiles'] as num?)?.toDouble() ?? 0,
       pickupFee: (data['pickupFee'] as num?)?.toDouble() ?? 0,
       shippingFee: (data['shippingFee'] as num?)?.toDouble() ?? 0,
+      unitShippingFee: (data['unitShippingFee'] as num?)?.toDouble(),
+      quantity: (data['quantity'] as num?)?.toInt() ?? 1,
+      totalWeightKg: (data['totalWeightKg'] as num?)?.toDouble(),
+      contentsNote: data['contentsNote'] as String?,
       deliveryEstimateMinDays: (data['deliveryEstimateMinDays'] as num?)
           ?.toInt(),
       deliveryEstimateMaxDays: (data['deliveryEstimateMaxDays'] as num?)
@@ -95,6 +117,14 @@ class BarrelShipment {
       pickupDateTime: (data['pickupDateTime'] as Timestamp?)?.toDate(),
       paymentStatus: (data['paymentStatus'] ?? 'not_required') as String,
       stripePaymentIntentId: data['stripePaymentIntentId'] as String?,
+      orderId: data['orderId'] as String?,
+      platformFeeCents: (data['platformFeeCents'] as num?)?.toInt() ?? 0,
+      businessPayoutCents:
+          (data['businessPayoutCents'] as num?)?.toInt() ??
+          (data['businessPayoutAmountCents'] as num?)?.toInt() ??
+          0,
+      payoutStatus: (data['payoutStatus'] ?? '') as String,
+      payoutTransferId: data['payoutTransferId'] as String?,
       price: (data['price'] as num?)?.toDouble() ?? 0,
       status: (data['status'] ?? 'pending') as String,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -120,6 +150,10 @@ class BarrelShipment {
     double? pickupMiles,
     double? pickupFee,
     double? shippingFee,
+    double? unitShippingFee,
+    int? quantity,
+    double? totalWeightKg,
+    String? contentsNote,
     int? deliveryEstimateMinDays,
     int? deliveryEstimateMaxDays,
     String? deliveryEstimateLabel,
@@ -127,6 +161,11 @@ class BarrelShipment {
     DateTime? pickupDateTime,
     String? paymentStatus,
     String? stripePaymentIntentId,
+    String? orderId,
+    int? platformFeeCents,
+    int? businessPayoutCents,
+    String? payoutStatus,
+    String? payoutTransferId,
     double? price,
     String? status,
     DateTime? createdAt,
@@ -151,6 +190,10 @@ class BarrelShipment {
       pickupMiles: pickupMiles ?? this.pickupMiles,
       pickupFee: pickupFee ?? this.pickupFee,
       shippingFee: shippingFee ?? this.shippingFee,
+      unitShippingFee: unitShippingFee ?? this.unitShippingFee,
+      quantity: quantity ?? this.quantity,
+      totalWeightKg: totalWeightKg ?? this.totalWeightKg,
+      contentsNote: contentsNote ?? this.contentsNote,
       deliveryEstimateMinDays:
           deliveryEstimateMinDays ?? this.deliveryEstimateMinDays,
       deliveryEstimateMaxDays:
@@ -162,6 +205,11 @@ class BarrelShipment {
       paymentStatus: paymentStatus ?? this.paymentStatus,
       stripePaymentIntentId:
           stripePaymentIntentId ?? this.stripePaymentIntentId,
+      orderId: orderId ?? this.orderId,
+      platformFeeCents: platformFeeCents ?? this.platformFeeCents,
+      businessPayoutCents: businessPayoutCents ?? this.businessPayoutCents,
+      payoutStatus: payoutStatus ?? this.payoutStatus,
+      payoutTransferId: payoutTransferId ?? this.payoutTransferId,
       price: price ?? this.price,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
@@ -187,6 +235,10 @@ class BarrelShipment {
       'pickupMiles': pickupMiles,
       'pickupFee': pickupFee,
       'shippingFee': shippingFee,
+      if (unitShippingFee != null) 'unitShippingFee': unitShippingFee,
+      'quantity': quantity,
+      if (totalWeightKg != null) 'totalWeightKg': totalWeightKg,
+      if (contentsNote != null) 'contentsNote': contentsNote,
       if (deliveryEstimateMinDays != null)
         'deliveryEstimateMinDays': deliveryEstimateMinDays,
       if (deliveryEstimateMaxDays != null)
@@ -199,6 +251,11 @@ class BarrelShipment {
       'paymentStatus': paymentStatus,
       if (stripePaymentIntentId != null)
         'stripePaymentIntentId': stripePaymentIntentId,
+      if (orderId != null) 'orderId': orderId,
+      'platformFeeCents': platformFeeCents,
+      'businessPayoutCents': businessPayoutCents,
+      'payoutStatus': payoutStatus,
+      if (payoutTransferId != null) 'payoutTransferId': payoutTransferId,
       'price': price,
       'status': status,
       'createdAt': Timestamp.fromDate(createdAt),

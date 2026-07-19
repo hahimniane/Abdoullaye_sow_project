@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Veyra</string>
+	<string>Laawol</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Veyra</string>
+	<string>Laawol</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -24,12 +24,23 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>app-1-577373430777-ios-8aad47e718e090ed125328</string>
+			</array>
+		</dict>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>We use the camera to scan VIN numbers and capture car photos.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Use Face ID to unlock your saved Veyra session.</string>
+	<string>Use Face ID to unlock your saved Laawol session.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>We use your location to help auto-fill pickup and delivery addresses for your transport requests.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
@@ -38,6 +49,8 @@
 	<string>We add selected car images to your library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>We need access to your photo library to choose car images.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -67,6 +80,12 @@
 	<string>Main</string>
 	<key>UIStatusBarHidden</key>
 	<false/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
+	<key>UIUserInterfaceStyle</key>
+	<string>Light</string>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

@@ -54,7 +54,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyC_dXN5QsR1Dxob1ex8I4y4sXQRGIOah3k',
-    appId: '1:577373430777:android:9a27a422f3d043b6125328',
+    appId: '1:577373430777:android:8d017189d7d3e183125328',
     messagingSenderId: '577373430777',
     projectId: 'car-selling-flutter-app',
     storageBucket: 'car-selling-flutter-app.firebasestorage.app',
@@ -62,11 +62,11 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyABrxCtLot_sX3uXoBxjVmPXa2lrRylo3Y',
-    appId: '1:577373430777:ios:c424208e88aeb2e7125328',
+    appId: '1:577373430777:ios:8aad47e718e090ed125328',
     messagingSenderId: '577373430777',
     projectId: 'car-selling-flutter-app',
     storageBucket: 'car-selling-flutter-app.firebasestorage.app',
-    iosBundleId: 'com.example.myFlutterApp',
+    iosBundleId: 'com.laawoldigital.app',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(

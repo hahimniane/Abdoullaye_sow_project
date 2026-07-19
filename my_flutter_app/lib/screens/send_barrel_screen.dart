@@ -14,16 +14,20 @@ import '../providers/auth_provider.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../models/business_destination_option.dart';
+import '../models/barrel_order.dart';
 import '../models/destination_country.dart';
 import '../services/barrel_pricing_service.dart';
 import '../services/barrel_shipment_service.dart';
 import '../services/business_service.dart';
+import '../services/payment_flow_safety.dart';
 import '../utils/barrel_receipt_generator.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/phone_number_validator.dart';
+import '../utils/receiver_phone_rules.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/destination_country_field.dart';
+import '../widgets/marketplace_transaction_disclosure.dart';
 import '../theme/app_colors.dart';
 
 class SendBarrelScreen extends StatefulWidget {
@@ -40,18 +44,15 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
   final _formKey = GlobalKey<FormState>();
   final _senderNameController = TextEditingController();
   final _pickupAddressController = TextEditingController();
-  final _receiverNameController = TextEditingController();
-  final _receiverPhoneController = TextEditingController();
   final _shipmentService = BarrelShipmentService();
-  DestinationCountry? _selectedCountry;
-  BusinessDestinationOption? _selectedBusinessOption;
+  final List<BarrelOrderLine> _orderLines = [];
   BarrelPickupPricing _pickupPricing = BarrelPickupPricing.defaultPricing;
   bool _pickupRequested = true;
+  bool _useDifferentPickupDetails = false;
   bool _isSubmitting = false;
   bool _pricingLoaded = false;
   String _pickupBorough = 'Bronx';
   DateTime? _pickupDateTime;
-  bool _receiverPhoneIsWhatsappOnly = false;
   bool _useWalletBalance = false;
   double _walletBalance = 0;
   bool _prefilledSenderName = false;
@@ -89,30 +90,33 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
     _heroController.dispose();
     _senderNameController.dispose();
     _pickupAddressController.dispose();
-    _receiverNameController.dispose();
-    _receiverPhoneController.dispose();
     super.dispose();
   }
 
   double get _shippingFee =>
-      _selectedBusinessOption?.country.barrelShippingPrice ?? 0;
-  double get _pickupFee =>
+      _orderLines.fold(0, (total, line) => total + line.shippingFee);
+  int get _billableLineCount => _orderLines.length;
+  int get _totalBarrels =>
+      _orderLines.fold(0, (total, line) => total + line.quantity);
+  bool get _canUseDifferentPickupDetails =>
+      _totalBarrels > 1 && _orderLines.length > 1;
+  bool get _usesDifferentPickupDetails =>
+      _canUseDifferentPickupDetails && _useDifferentPickupDetails;
+  double get _sharedPickupFee =>
       _pickupRequested ? _pickupPricing.pickupFeeForBorough(_pickupBorough) : 0;
+  double get _pickupFee => _usesDifferentPickupDetails
+      ? _orderLines.fold(0, (total, line) => total + line.pickupFee)
+      : _sharedPickupFee * _billableLineCount;
   double get _estimatedTotal => _shippingFee + _pickupFee;
   bool get _needsPriceReview =>
       !_pricingLoaded ||
       _shippingFee <= 0 ||
-      (_pickupRequested && _pickupFee <= 0);
-  bool get _canPay =>
-      _selectedCountry != null &&
-      _selectedBusinessOption != null &&
-      _shippingFee > 0 &&
-      (!_pickupRequested || _pickupFee > 0);
-  bool get _showReceiverWhatsappOption =>
-      _ReceiverPhoneRules.isDifferentCountryNumber(
-        value: _receiverPhoneController.text,
-        destination: _selectedCountry,
-      );
+      (_usesDifferentPickupDetails
+          ? _orderLines.any(
+              (line) => line.pickupRequested && line.pickupFee <= 0,
+            )
+          : (_pickupRequested && _sharedPickupFee <= 0));
+  bool get _canPay => _orderLines.isNotEmpty && !_needsPriceReview;
 
   void _handlePickupAddressChanged(String address) {
     final borough = _NycAddressSuggestions.detectBorough(address);
@@ -121,41 +125,72 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
     }
   }
 
-  void _handleReceiverPhoneChanged(String value) {
-    final showWhatsAppOption = _showReceiverWhatsappOption;
+  Future<void> _openDestinationEditor({int? editIndex}) async {
+    final result = await showModalBottomSheet<BarrelOrderLine>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => _DestinationEditorSheet(
+        initial: editIndex != null ? _orderLines[editIndex] : null,
+        ordinal: (editIndex ?? _orderLines.length) + 1,
+        pickupPricing: _pickupPricing,
+        shipmentService: _shipmentService,
+        collectPickupDetails: _usesDifferentPickupDetails,
+      ),
+    );
+    if (result == null || !mounted) return;
     setState(() {
-      if (!showWhatsAppOption) {
-        _receiverPhoneIsWhatsappOnly = false;
+      if (editIndex != null) {
+        _orderLines[editIndex] = result;
+      } else {
+        _orderLines.add(result);
+      }
+      if (!_canUseDifferentPickupDetails) {
+        _useDifferentPickupDetails = false;
       }
     });
-    _formKey.currentState?.validate();
   }
 
-  void _handleDestinationChanged(DestinationCountry? country) {
+  void _removeDestinationLine(int index) {
     setState(() {
-      _selectedCountry = country;
-      _selectedBusinessOption = null;
-      if (!_ReceiverPhoneRules.isDifferentCountryNumber(
-        value: _receiverPhoneController.text,
-        destination: country,
-      )) {
-        _receiverPhoneIsWhatsappOnly = false;
+      _orderLines.removeAt(index);
+      if (!_canUseDifferentPickupDetails) {
+        _useDifferentPickupDetails = false;
       }
     });
-    _formKey.currentState?.validate();
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
+    if (_orderLines.isEmpty) {
+      showErrorSnackBar(
+        context,
+        AppLocalizations.of(context)!.addAtLeastOneDestination,
+      );
+      return;
+    }
+    if (_usesDifferentPickupDetails &&
+        _orderLines.any(
+          (line) =>
+              !line.hasPickupOverride ||
+              (line.pickupRequested &&
+                  (line.pickupAddress.trim().isEmpty ||
+                      line.pickupBorough.trim().isEmpty ||
+                      line.pickupDateTime == null)),
+        )) {
+      showErrorSnackBar(
+        context,
+        AppLocalizations.of(context)!.destinationPickupDetailsRequired,
+      );
+      return;
+    }
     final isReady = await _ensureCustomerAccount();
     if (!isReady || !mounted) return;
     _prefillSenderName();
 
-    final pickupAddress = _pickupRequested
-        ? _pickupAddressController.text.trim()
-        : _pickupPricing.officeAddress;
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await confirmMajorAction(
       context,
@@ -166,31 +201,60 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
     );
     if (!confirmed || !mounted) return;
 
+    final providerNames = _orderLines
+        .map((line) => line.business.businessName.trim())
+        .where((name) => name.isNotEmpty)
+        .toSet()
+        .join(', ');
+    final marketplaceAcceptance = await confirmMarketplaceTransaction(
+      context,
+      providerNames: providerNames,
+      transactionSummary: l10n.sendBarrels,
+    );
+    if (marketplaceAcceptance == null || !mounted) return;
+
     setState(() {
       _isSubmitting = true;
     });
 
     try {
-      final shipment = await _shipmentService.payForShipment(
+      final lines = List.of(_orderLines);
+      final order = await _shipmentService.payForOrder(
         senderName: _senderNameController.text.trim(),
-        receiverName: _receiverNameController.text.trim(),
-        receiverPhone: _receiverPhoneController.text.trim(),
-        destinationCountryId: _selectedCountry!.id,
-        businessId: _selectedBusinessOption!.businessId,
-        pickupRequested: _pickupRequested,
-        pickupAddress: pickupAddress,
-        pickupBorough: _pickupRequested ? _pickupBorough : 'Office drop-off',
-        pickupDateTime: _pickupRequested ? _pickupDateTime : null,
+        lines: lines,
+        pickupRequested: _usesDifferentPickupDetails ? null : _pickupRequested,
+        pickupAddress: _usesDifferentPickupDetails
+            ? null
+            : (_pickupRequested
+                  ? _pickupAddressController.text.trim()
+                  : _pickupPricing.officeAddress),
+        pickupBorough: _usesDifferentPickupDetails
+            ? null
+            : (_pickupRequested ? _pickupBorough : 'Office drop-off'),
+        pickupDateTime: _usesDifferentPickupDetails
+            ? null
+            : (_pickupRequested ? _pickupDateTime : null),
         useWalletBalance: _useWalletBalance,
+        marketplaceAcceptance: marketplaceAcceptance,
       );
-      await generateBarrelShipmentReceipt(shipment: shipment);
+      final receiptOpened = await runBestEffortPostPaymentAction(
+        () => generateBarrelOrderReceipt(
+          orderId: order.orderId,
+          shipments: order.shipments,
+        ),
+      );
 
       if (!mounted) return;
+      final trackingLabel = order.trackingCodes.join(', ');
       showSuccessSnackBar(
         context,
-        AppLocalizations.of(
-          context,
-        )!.shipmentSavedWithTracking(shipment.trackingCode),
+        receiptOpened
+            ? AppLocalizations.of(
+                context,
+              )!.shipmentSavedWithTracking(trackingLabel)
+            : AppLocalizations.of(
+                context,
+              )!.shipmentSavedReceiptUnavailable(trackingLabel),
       );
       if (widget.showBackButton) {
         Navigator.of(context).pop();
@@ -198,15 +262,13 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
         _formKey.currentState?.reset();
         _senderNameController.clear();
         _pickupAddressController.clear();
-        _receiverNameController.clear();
-        _receiverPhoneController.clear();
         _prefillSenderName();
         setState(() {
-          _selectedCountry = null;
-          _selectedBusinessOption = null;
+          _orderLines.clear();
+          _pickupRequested = true;
+          _useDifferentPickupDetails = false;
           _pickupDateTime = null;
           _pickupBorough = 'Bronx';
-          _receiverPhoneIsWhatsappOnly = false;
           _useWalletBalance = false;
         });
       }
@@ -220,108 +282,6 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
         });
       }
     }
-  }
-
-  Future<bool> _ensureCustomerAccount() async {
-    if (context.read<AuthProvider>().isAuthenticated) return true;
-
-    final route = await showModalBottomSheet<String>(
-      context: context,
-      useSafeArea: true,
-      builder: (context) {
-        final l10n = AppLocalizations.of(context)!;
-        return Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: AppColors.cobalt.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(
-                  Icons.person_outline,
-                  color: AppColors.cobalt,
-                ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                l10n.accountRequiredTitle,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Sign in or create an account so we can securely save this barrel shipment and show it in tracking.',
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () => Navigator.pop(context, '/login'),
-                  icon: const Icon(Icons.login),
-                  label: Text(l10n.signIn),
-                ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () => Navigator.pop(context, '/signup'),
-                  icon: const Icon(Icons.person_add_outlined),
-                  label: Text(l10n.createAccount),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    if (route == null || !mounted) return false;
-    final result = await Navigator.pushNamed(
-      context,
-      route,
-      arguments: const {'returnToPrevious': true},
-    );
-    if (!mounted) return false;
-    return result == true && context.read<AuthProvider>().isAuthenticated;
-  }
-
-  void _prefillSenderName() {
-    final auth = context.read<AuthProvider>();
-    final profileName = auth.customerName?.trim();
-    final displayName = auth.user?.displayName?.trim();
-    final fallbackName = auth.buyerName.trim();
-    final name = profileName?.isNotEmpty == true
-        ? profileName!
-        : displayName?.isNotEmpty == true
-        ? displayName!
-        : fallbackName != 'Customer'
-        ? fallbackName
-        : '';
-    if (name.isNotEmpty && _senderNameController.text.trim().isEmpty) {
-      _senderNameController.text = name;
-    }
-  }
-
-  String _friendlyShipmentError(BuildContext context, Object error) {
-    final l10n = AppLocalizations.of(context)!;
-    if (error is FirebaseFunctionsException) {
-      if (error.code == 'not-found') {
-        return 'Payment service is not deployed yet. Please deploy the Firebase Functions and try again.';
-      }
-      if (error.code == 'internal') {
-        return 'The deployed payment function is still returning an internal error. Deploy the latest Firebase Functions so simulated payments are active.';
-      }
-      return l10n.failedToSaveShipment(
-        error.message?.trim().isNotEmpty == true ? error.message! : error.code,
-      );
-    }
-    return l10n.failedToSaveShipment(error);
   }
 
   Future<void> _pickPickupDateTime() async {
@@ -376,6 +336,109 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
         time.minute,
       );
     });
+  }
+
+  Future<bool> _ensureCustomerAccount() async {
+    if (context.read<AuthProvider>().isAuthenticated) return true;
+
+    final route = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      builder: (context) {
+        final l10n = AppLocalizations.of(context)!;
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: AppColors.cobalt.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.person_outline,
+                  color: AppColors.cobalt,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                l10n.accountRequiredTitle,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              Text(l10n.signInToSaveBarrelShipment),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () => Navigator.pop(context, '/login'),
+                  icon: const Icon(Icons.login),
+                  label: Text(l10n.signIn),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.pop(context, '/signup'),
+                  icon: const Icon(Icons.person_add_outlined),
+                  label: Text(l10n.createAccount),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (route == null || !mounted) return false;
+    final result = await Navigator.pushNamed(
+      context,
+      route,
+      arguments: const {'returnToPrevious': true},
+    );
+    if (!mounted) return false;
+    return result == true && context.read<AuthProvider>().isAuthenticated;
+  }
+
+  void _prefillSenderName() {
+    final auth = context.read<AuthProvider>();
+    final profileName = auth.customerName?.trim();
+    final displayName = auth.user?.displayName?.trim();
+    final fallbackName = auth.buyerName.trim();
+    final name = profileName?.isNotEmpty == true
+        ? profileName!
+        : displayName?.isNotEmpty == true
+        ? displayName!
+        : fallbackName != 'Customer'
+        ? fallbackName
+        : '';
+    if (name.isNotEmpty && _senderNameController.text.trim().isEmpty) {
+      _senderNameController.text = name;
+    }
+  }
+
+  String _friendlyShipmentError(BuildContext context, Object error) {
+    final l10n = AppLocalizations.of(context)!;
+    if (error is BarrelOrderPaymentFunctionMissingException) {
+      return 'Multiple destinations need the barrel order payment function to be deployed. Deploy Firebase Functions, then try this order again.';
+    }
+    if (error is FirebaseFunctionsException) {
+      if (error.code == 'not-found') {
+        return 'Payment service is not deployed yet. Please deploy the Firebase Functions and try again.';
+      }
+      if (error.code == 'internal') {
+        return 'The deployed payment function is still returning an internal error. Deploy the latest Firebase Functions so simulated payments are active.';
+      }
+      return l10n.failedToSaveShipment(
+        error.message?.trim().isNotEmpty == true ? error.message! : error.code,
+      );
+    }
+    return l10n.failedToSaveShipment(error);
   }
 
   @override
@@ -439,6 +502,11 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                         children: [
                           _BarrelHero(animation: _heroController),
                           const SizedBox(height: 18),
+                          _SharedBarrelCard(
+                            onTap: () =>
+                                Navigator.pushNamed(context, '/open-barrels'),
+                          ),
+                          const SizedBox(height: 18),
                           Form(
                             key: _formKey,
                             child: Column(
@@ -448,7 +516,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                   title: l10n.sender,
                                   subtitle: l10n.senderQuestion,
                                   children: [
-                                    _RoundedTextField(
+                                    BarrelTextFormField(
                                       label: AppLocalizations.of(
                                         context,
                                       )!.senderName,
@@ -467,244 +535,190 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                 ),
                                 const SizedBox(height: 14),
                                 _FormSection(
-                                  icon: Icons.local_shipping_outlined,
-                                  title: l10n.pickup,
-                                  subtitle: _pickupRequested
-                                      ? l10n.pickupCollectNyc
-                                      : l10n.pickupBringOffice,
-                                  children: [
-                                    _PickupChoice(
-                                      pickupRequested: _pickupRequested,
-                                      officeAddress:
-                                          _pickupPricing.officeAddress,
-                                      onChanged: (value) {
-                                        setState(
-                                          () => _pickupRequested = value,
-                                        );
-                                      },
-                                    ),
-                                    const SizedBox(height: 14),
-                                    AnimatedSwitcher(
-                                      duration: const Duration(
-                                        milliseconds: 260,
-                                      ),
-                                      switchInCurve: Curves.easeOutCubic,
-                                      switchOutCurve: Curves.easeInCubic,
-                                      transitionBuilder: (child, animation) {
-                                        final offset = Tween<Offset>(
-                                          begin: const Offset(0, .06),
-                                          end: Offset.zero,
-                                        ).animate(animation);
-                                        return FadeTransition(
-                                          opacity: animation,
-                                          child: SlideTransition(
-                                            position: offset,
-                                            child: child,
-                                          ),
-                                        );
-                                      },
-                                      child: _pickupRequested
-                                          ? Column(
-                                              key: const ValueKey('pickup'),
-                                              children: [
-                                                _AddressAutocompleteField(
-                                                  controller:
-                                                      _pickupAddressController,
-                                                  service: _shipmentService,
-                                                  onChanged:
-                                                      _handlePickupAddressChanged,
-                                                  validator: (value) {
-                                                    if (value == null ||
-                                                        value.trim().isEmpty) {
-                                                      return l10n
-                                                          .pleaseEnterPickupAddress;
-                                                    }
-                                                    if (_NycAddressSuggestions.detectBorough(
-                                                          value,
-                                                        ) ==
-                                                        null) {
-                                                      return l10n
-                                                          .pleaseIncludeNycBoroughZip;
-                                                    }
-                                                    return null;
-                                                  },
-                                                ),
-                                                const SizedBox(height: 14),
-                                                _PickupDateTimeTile(
-                                                  value: _pickupDateTime,
-                                                  onTap: _pickPickupDateTime,
-                                                  validator: () {
-                                                    if (_pickupDateTime ==
-                                                        null) {
-                                                      return l10n
-                                                          .pleaseChoosePickupDateTime;
-                                                    }
-                                                    if (!_pickupDateTime!
-                                                        .isAfter(
-                                                          DateTime.now(),
-                                                        )) {
-                                                      return l10n
-                                                          .pickupTimeFuture;
-                                                    }
-                                                    return null;
-                                                  },
-                                                ),
-                                              ],
-                                            )
-                                          : _OfficeDropOffTile(
-                                              key: const ValueKey('dropoff'),
-                                              address:
-                                                  _pickupPricing.officeAddress,
-                                            ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 14),
-                                _FormSection(
-                                  icon: Icons.call_received_outlined,
-                                  title: l10n.receiver,
-                                  subtitle: l10n.receiverQuestion,
-                                  children: [
-                                    _RoundedTextField(
-                                      label: AppLocalizations.of(
-                                        context,
-                                      )!.receiverName,
-                                      controller: _receiverNameController,
-                                      icon: Icons.person_pin_outlined,
-                                      validator: (value) {
-                                        if (value == null || value.isEmpty) {
-                                          return AppLocalizations.of(
-                                            context,
-                                          )!.pleaseEnterReceiverName;
-                                        }
-                                        return null;
-                                      },
-                                    ),
-                                    const SizedBox(height: 14),
-                                    _RoundedTextField(
-                                      label: AppLocalizations.of(
-                                        context,
-                                      )!.receiverPhone,
-                                      controller: _receiverPhoneController,
-                                      icon: Icons.phone_outlined,
-                                      keyboardType: TextInputType.phone,
-                                      inputFormatters: PhoneNumberValidator
-                                          .allowedInputFormatters,
-                                      onChanged: _handleReceiverPhoneChanged,
-                                      validator: (value) {
-                                        return _ReceiverPhoneRules.validate(
-                                          value: value,
-                                          destination: _selectedCountry,
-                                          allowDifferentCountry:
-                                              _receiverPhoneIsWhatsappOnly,
-                                          requiredMessage: AppLocalizations.of(
-                                            context,
-                                          )!.pleaseEnterReceiverPhone,
-                                        );
-                                      },
-                                    ),
-                                    AnimatedSwitcher(
-                                      duration: const Duration(
-                                        milliseconds: 180,
-                                      ),
-                                      switchInCurve: Curves.easeOutCubic,
-                                      switchOutCurve: Curves.easeInCubic,
-                                      child: _showReceiverWhatsappOption
-                                          ? Padding(
-                                              key: const ValueKey(
-                                                'whatsapp-phone-option',
-                                              ),
-                                              padding: const EdgeInsets.only(
-                                                top: 8,
-                                              ),
-                                              child: _WhatsAppPhoneOption(
-                                                value:
-                                                    _receiverPhoneIsWhatsappOnly,
-                                                onChanged: (value) {
-                                                  setState(
-                                                    () =>
-                                                        _receiverPhoneIsWhatsappOnly =
-                                                            value,
-                                                  );
-                                                  _formKey.currentState
-                                                      ?.validate();
-                                                },
-                                              ),
-                                            )
-                                          : const SizedBox.shrink(
-                                              key: ValueKey(
-                                                'no-whatsapp-phone-option',
-                                              ),
-                                            ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 14),
-                                _FormSection(
                                   icon: Icons.public_outlined,
-                                  title: l10n.destination,
-                                  subtitle:
-                                      l10n.destinationSubtitleEstimateRoute,
+                                  title: l10n.destinationsTitle,
+                                  subtitle: _orderLines.isEmpty
+                                      ? l10n.barrelDestinationStartSummary
+                                      : l10n.barrelDestinationSummary(
+                                          _totalBarrels,
+                                          _orderLines.length,
+                                        ),
                                   children: [
-                                    DestinationCountryField(
-                                      value: _selectedCountry,
-                                      label: AppLocalizations.of(
-                                        context,
-                                      )!.destinationCountry,
-                                      requiredMessage: AppLocalizations.of(
-                                        context,
-                                      )!.requiredField,
-                                      onChanged: _handleDestinationChanged,
-                                    ),
-                                    if (_selectedCountry != null) ...[
+                                    if (_orderLines.isEmpty)
+                                      _EmptyDestinations(
+                                        onAdd: () => _openDestinationEditor(),
+                                      )
+                                    else ...[
+                                      _DestinationCart(
+                                        lines: _orderLines,
+                                        showPickupDetails:
+                                            _usesDifferentPickupDetails,
+                                        onEdit: (index) =>
+                                            _openDestinationEditor(
+                                              editIndex: index,
+                                            ),
+                                        onRemove: _removeDestinationLine,
+                                      ),
+                                      const SizedBox(height: 12),
+                                      _AddDestinationButton(
+                                        label: l10n.addAnotherDestination,
+                                        onPressed: () =>
+                                            _openDestinationEditor(),
+                                      ),
                                       const SizedBox(height: 14),
-                                      _BusinessOptionSelector(
-                                        countryId: _selectedCountry!.id,
-                                        value: _selectedBusinessOption,
-                                        onChanged: (option) {
+                                      _PriceEstimateCard(
+                                        shippingFee: _shippingFee,
+                                        pickupFee: _pickupFee,
+                                        lineCount: _billableLineCount,
+                                        total: _estimatedTotal,
+                                        useWalletBalance: _useWalletBalance,
+                                        walletBalance: _walletBalance,
+                                        needsReview: _needsPriceReview,
+                                      ),
+                                      _WalletPaymentOption(
+                                        total: _estimatedTotal,
+                                        selected: _useWalletBalance,
+                                        onBalanceChanged: (balance) {
+                                          if (_walletBalance == balance) return;
                                           setState(() {
-                                            _selectedBusinessOption = option;
+                                            _walletBalance = balance;
                                           });
+                                        },
+                                        onChanged: (value) {
+                                          setState(
+                                            () => _useWalletBalance = value,
+                                          );
                                         },
                                       ),
                                     ],
-                                    const SizedBox(height: 14),
-                                    _PriceEstimateCard(
-                                      shippingFee: _shippingFee,
-                                      pickupFee: _pickupFee,
-                                      pickupBorough: _pickupRequested
-                                          ? _pickupBorough
-                                          : 'Office drop-off',
-                                      total: _estimatedTotal,
-                                      useWalletBalance: _useWalletBalance,
-                                      walletBalance: _walletBalance,
-                                      needsReview: _needsPriceReview,
-                                    ),
-                                    _WalletPaymentOption(
-                                      total: _estimatedTotal,
-                                      selected: _useWalletBalance,
-                                      onBalanceChanged: (balance) {
-                                        if (_walletBalance == balance) return;
-                                        setState(() {
-                                          _walletBalance = balance;
-                                        });
-                                      },
-                                      onChanged: (value) {
-                                        setState(
-                                          () => _useWalletBalance = value,
-                                        );
-                                      },
-                                    ),
-                                    if (!_canPay) ...[
-                                      const SizedBox(height: 12),
-                                      _InlineNotice(
-                                        message:
-                                            l10n.chooseBusinessWithShippingFee,
-                                      ),
-                                    ],
                                   ],
                                 ),
-                                const SizedBox(height: 18),
+                                if (_orderLines.isNotEmpty) ...[
+                                  const SizedBox(height: 14),
+                                  _FormSection(
+                                    icon: Icons.local_shipping_outlined,
+                                    title: l10n.pickup,
+                                    subtitle: _usesDifferentPickupDetails
+                                        ? l10n.destinationPickupDetailsHelp
+                                        : (_pickupRequested
+                                              ? l10n.pickupCollectNyc
+                                              : l10n.pickupBringOffice),
+                                    children: [
+                                      if (_canUseDifferentPickupDetails) ...[
+                                        _PickupScopeChoice(
+                                          useDifferentPickupDetails:
+                                              _usesDifferentPickupDetails,
+                                          onChanged: (value) {
+                                            setState(
+                                              () => _useDifferentPickupDetails =
+                                                  value,
+                                            );
+                                            _formKey.currentState?.validate();
+                                          },
+                                        ),
+                                        const SizedBox(height: 14),
+                                      ],
+                                      if (_usesDifferentPickupDetails)
+                                        Text(
+                                          l10n.editDestinationPickupHelp,
+                                          style: const TextStyle(
+                                            color: AppColors.muted,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        )
+                                      else ...[
+                                        _PickupChoice(
+                                          pickupRequested: _pickupRequested,
+                                          officeAddress:
+                                              _pickupPricing.officeAddress,
+                                          onChanged: (value) {
+                                            setState(
+                                              () => _pickupRequested = value,
+                                            );
+                                            _formKey.currentState?.validate();
+                                          },
+                                        ),
+                                        const SizedBox(height: 14),
+                                        AnimatedSwitcher(
+                                          duration: const Duration(
+                                            milliseconds: 220,
+                                          ),
+                                          switchInCurve: Curves.easeOutCubic,
+                                          switchOutCurve: Curves.easeInCubic,
+                                          child: _pickupRequested
+                                              ? Column(
+                                                  key: const ValueKey(
+                                                    'shared-pickup',
+                                                  ),
+                                                  children: [
+                                                    _AddressAutocompleteField(
+                                                      controller:
+                                                          _pickupAddressController,
+                                                      service: _shipmentService,
+                                                      onChanged:
+                                                          _handlePickupAddressChanged,
+                                                      validator: (value) {
+                                                        if (_usesDifferentPickupDetails ||
+                                                            !_pickupRequested) {
+                                                          return null;
+                                                        }
+                                                        if (value == null ||
+                                                            value
+                                                                .trim()
+                                                                .isEmpty) {
+                                                          return l10n
+                                                              .pleaseEnterPickupAddress;
+                                                        }
+                                                        if (_NycAddressSuggestions.detectBorough(
+                                                              value,
+                                                            ) ==
+                                                            null) {
+                                                          return l10n
+                                                              .pleaseIncludeNycBoroughZip;
+                                                        }
+                                                        return null;
+                                                      },
+                                                    ),
+                                                    const SizedBox(height: 14),
+                                                    _PickupDateTimeTile(
+                                                      value: _pickupDateTime,
+                                                      onTap:
+                                                          _pickPickupDateTime,
+                                                      validator: () {
+                                                        if (_usesDifferentPickupDetails ||
+                                                            !_pickupRequested) {
+                                                          return null;
+                                                        }
+                                                        if (_pickupDateTime ==
+                                                            null) {
+                                                          return l10n
+                                                              .pleaseChoosePickupDateTime;
+                                                        }
+                                                        if (!_pickupDateTime!
+                                                            .isAfter(
+                                                              DateTime.now(),
+                                                            )) {
+                                                          return l10n
+                                                              .pickupTimeFuture;
+                                                        }
+                                                        return null;
+                                                      },
+                                                    ),
+                                                  ],
+                                                )
+                                              : _OfficeDropOffTile(
+                                                  key: const ValueKey(
+                                                    'shared-dropoff',
+                                                  ),
+                                                  address: _pickupPricing
+                                                      .officeAddress,
+                                                ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ],
+                                const SizedBox(height: 14),
                                 _SubmitButton(
                                   isSubmitting: _isSubmitting,
                                   canPay: _canPay,
@@ -799,6 +813,81 @@ class _BarrelHero extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SharedBarrelCard extends StatelessWidget {
+  const _SharedBarrelCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  String _copy(BuildContext context, String en, String fr) {
+    return Localizations.localeOf(context).languageCode == 'fr' ? fr : en;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE6FFFA),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.group_add_outlined,
+                  color: Color(0xFF0D9488),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _copy(
+                        context,
+                        "Can't fill a barrel?",
+                        "Vous ne remplissez pas un baril ?",
+                      ),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _copy(
+                        context,
+                        'Join an open shared barrel or reserve a share.',
+                        'Rejoignez un baril partagé ouvert ou réservez une part.',
+                      ),
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -910,9 +999,9 @@ class _OfficeDropOffTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Drop-off office',
-                  style: TextStyle(
+                Text(
+                  AppLocalizations.of(context)!.dropOffOffice,
+                  style: const TextStyle(
                     color: AppColors.ink,
                     fontWeight: FontWeight.w800,
                   ),
@@ -989,20 +1078,17 @@ class _BusinessOptionSelector extends StatelessWidget {
     return StreamBuilder<List<BusinessDestinationOption>>(
       stream: BusinessService().optionsForCountry(countryId),
       builder: (context, snapshot) {
+        final l10n = AppLocalizations.of(context)!;
         if (snapshot.hasError) {
-          return const _InlineNotice(
-            message:
-                'Business options are not available right now. Please try again in a moment.',
-          );
+          return _InlineNotice(message: l10n.businessOptionsUnavailable);
         }
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
         final options = snapshot.data!;
         if (options.isEmpty) {
-          return const _InlineNotice(
-            message:
-                'No approved business is currently shipping to this destination.',
+          return _InlineNotice(
+            message: l10n.noApprovedBusinessShippingDestination,
           );
         }
         final selectedOption =
@@ -1014,13 +1100,13 @@ class _BusinessOptionSelector extends StatelessWidget {
           key: ValueKey('business-options-$countryId-${selectedOption?.id}'),
           initialValue: selectedOption,
           validator: (option) =>
-              option == null ? 'Please choose a business' : null,
+              option == null ? l10n.pleaseChooseBusiness : null,
           builder: (field) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Businesses shipping to this country',
+                  l10n.businessesShippingToCountry,
                   style: Theme.of(
                     context,
                   ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
@@ -1081,99 +1167,123 @@ class _BusinessOptionCard extends StatelessWidget {
     ].where((item) => item != null && item.trim().isNotEmpty).join(' • ');
 
     final note = option.serviceNote?.trim() ?? '';
+    final destinationNote = option.country.destinationNote?.trim() ?? '';
     final deliveryEstimate = option.country.deliveryEstimateLabel;
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppColors.cobalt.withValues(alpha: 0.08)
-              : AppColors.paper,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: selected ? AppColors.cobalt : AppColors.rule,
-            width: selected ? 1.5 : 1,
+    return Semantics(
+      button: true,
+      selected: selected,
+      inMutuallyExclusiveGroup: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.cobalt.withValues(alpha: 0.08)
+                : AppColors.paper,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: selected ? AppColors.cobalt : AppColors.rule,
+              width: selected ? 1.5 : 1,
+            ),
           ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              selected
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_unchecked,
-              color: selected ? AppColors.cobalt : AppColors.muted,
-            ),
-            const SizedBox(width: 4),
-            const Icon(Icons.storefront_outlined, size: 22),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    option.businessName,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  if (contact.isNotEmpty)
-                    Text(
-                      contact,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  if (note.isNotEmpty)
-                    Text(
-                      note,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  if (deliveryEstimate != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: _DeliveryEstimateChip(label: deliveryEstimate),
-                    ),
-                ],
+          child: Row(
+            children: [
+              Icon(
+                selected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                color: selected ? AppColors.cobalt : AppColors.muted,
               ),
-            ),
-            const SizedBox(width: 10),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 86),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerRight,
-                child: Text(
-                  price,
-                  style: const TextStyle(
-                    color: AppColors.cobaltDeep,
-                    fontWeight: FontWeight.w900,
+              const SizedBox(width: 4),
+              Text(
+                option.country.flagEmoji,
+                style: const TextStyle(fontSize: 22),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.storefront_outlined, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      option.businessName,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    if (contact.isNotEmpty)
+                      Text(
+                        contact,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    if (note.isNotEmpty)
+                      Text(
+                        note,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    if (destinationNote.isNotEmpty)
+                      Text(
+                        destinationNote,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    if (deliveryEstimate != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: BarrelDeliveryEstimateChip(
+                          label: deliveryEstimate,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 86),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    price,
+                    style: const TextStyle(
+                      color: AppColors.cobaltDeep,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _DeliveryEstimateChip extends StatelessWidget {
-  const _DeliveryEstimateChip({required this.label});
+class BarrelDeliveryEstimateChip extends StatelessWidget {
+  const BarrelDeliveryEstimateChip({super.key, required this.label});
 
   final String label;
 
@@ -1191,12 +1301,17 @@ class _DeliveryEstimateChip extends StatelessWidget {
         children: [
           const Icon(Icons.schedule_outlined, size: 14, color: AppColors.sage),
           const SizedBox(width: 5),
-          Text(
-            'Delivery $label',
-            style: const TextStyle(
-              color: AppColors.sage,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
+          Flexible(
+            child: Text(
+              AppLocalizations.of(context)!.deliveryLabel(label),
+              maxLines: 2,
+              softWrap: true,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.sage,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ],
@@ -1278,19 +1393,18 @@ class _WhatsAppPhoneOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return CheckboxListTile(
       value: value,
       onChanged: (checked) => onChanged(checked ?? false),
       contentPadding: EdgeInsets.zero,
       dense: true,
       controlAffinity: ListTileControlAffinity.leading,
-      title: const Text(
-        'This receiver number is used on WhatsApp',
-        style: TextStyle(fontWeight: FontWeight.w700),
+      title: Text(
+        l10n.receiverWhatsAppNumberTitle,
+        style: const TextStyle(fontWeight: FontWeight.w700),
       ),
-      subtitle: const Text(
-        'Use this only if the receiver uses a different country number on WhatsApp.',
-      ),
+      subtitle: Text(l10n.receiverWhatsAppNumberSubtitle),
       activeColor: AppColors.cobaltDeep,
     );
   }
@@ -1327,6 +1441,60 @@ class _PickupChoice extends StatelessWidget {
           ),
         ],
         selected: {pickupRequested},
+        onSelectionChanged: (selection) => onChanged(selection.first),
+        style: ButtonStyle(
+          visualDensity: VisualDensity.standard,
+          minimumSize: const WidgetStatePropertyAll(Size.fromHeight(48)),
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return AppColors.mist;
+            }
+            return AppColors.paper;
+          }),
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return AppColors.cobaltDeep;
+            }
+            return AppColors.muted;
+          }),
+          side: const WidgetStatePropertyAll(BorderSide(color: AppColors.rule)),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PickupScopeChoice extends StatelessWidget {
+  const _PickupScopeChoice({
+    required this.useDifferentPickupDetails,
+    required this.onChanged,
+  });
+
+  final bool useDifferentPickupDetails;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return SizedBox(
+      width: double.infinity,
+      child: SegmentedButton<bool>(
+        segments: [
+          ButtonSegment<bool>(
+            value: false,
+            icon: const Icon(Icons.event_repeat_outlined),
+            label: Text(l10n.samePickup),
+          ),
+          ButtonSegment<bool>(
+            value: true,
+            icon: const Icon(Icons.edit_location_alt_outlined),
+            label: Text(l10n.differentPickups),
+          ),
+        ],
+        selected: {useDifferentPickupDetails},
         onSelectionChanged: (selection) => onChanged(selection.first),
         style: ButtonStyle(
           visualDensity: VisualDensity.standard,
@@ -1439,7 +1607,7 @@ class _AddressAutocompleteFieldState extends State<_AddressAutocompleteField> {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 7);
     try {
       final req = await client.getUrl(uri);
-      req.headers.set(HttpHeaders.userAgentHeader, 'Veyra-App/1.0');
+      req.headers.set(HttpHeaders.userAgentHeader, 'Laawol-App/1.0');
       req.headers.set(HttpHeaders.acceptLanguageHeader, 'en-US,en;q=0.9');
       final res = await req.close();
       if (res.statusCode != 200) return const [];
@@ -1526,7 +1694,7 @@ class _AddressAutocompleteFieldState extends State<_AddressAutocompleteField> {
           accuracy: LocationAccuracy.high,
         ),
       );
-      final placemarks = await placemarkFromCoordinates(
+      final placemarks = await Geocoding().placemarkFromCoordinates(
         position.latitude,
         position.longitude,
       );
@@ -1638,7 +1806,11 @@ class _AddressAutocompleteFieldState extends State<_AddressAutocompleteField> {
                         title: Text(option.description),
                         subtitle: option.borough == null
                             ? null
-                            : Text('${option.borough} pickup address'),
+                            : Text(
+                                AppLocalizations.of(
+                                  context,
+                                )!.boroughPickupAddress(option.borough!),
+                              ),
                         onTap: () => onSelected(option),
                       );
                     },
@@ -1700,8 +1872,8 @@ class _LocateMeButton extends StatelessWidget {
               const SizedBox(width: 10),
               Text(
                 isLocating
-                    ? 'Getting your location…'
-                    : 'Use my current location',
+                    ? AppLocalizations.of(context)!.gettingYourLocation
+                    : AppLocalizations.of(context)!.useMyCurrentLocation,
                 style: const TextStyle(
                   color: AppColors.cobaltDeep,
                   fontWeight: FontWeight.w700,
@@ -1725,8 +1897,9 @@ class _PickupDateTimeTile extends FormField<DateTime> {
          initialValue: value,
          validator: (_) => validator(),
          builder: (state) {
+           final l10n = AppLocalizations.of(state.context)!;
            final formatted = value == null
-               ? 'Choose pickup date and time'
+               ? l10n.choosePickupDateAndTime
                : DateFormat('EEE, MMM d, yyyy • h:mm a').format(value);
            return Column(
              crossAxisAlignment: CrossAxisAlignment.start,
@@ -1748,9 +1921,9 @@ class _PickupDateTimeTile extends FormField<DateTime> {
                      horizontal: 14,
                      vertical: 4,
                    ),
-                   title: const Text(
-                     'Pickup date and time',
-                     style: TextStyle(fontWeight: FontWeight.w700),
+                   title: Text(
+                     l10n.pickupDateAndTime,
+                     style: const TextStyle(fontWeight: FontWeight.w700),
                    ),
                    subtitle: Text(
                      formatted,
@@ -1780,11 +1953,252 @@ class _PickupDateTimeTile extends FormField<DateTime> {
        );
 }
 
+class _QuantityStepper extends StatelessWidget {
+  const _QuantityStepper({required this.value, required this.onChanged});
+
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.lightSurfaceVariant,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.inventory_2_outlined, color: AppColors.cobaltDeep),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              l10n.barrelsForThisDestination,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+          IconButton.filledTonal(
+            tooltip: l10n.decrease,
+            onPressed: value <= 1 ? null : () => onChanged(value - 1),
+            icon: const Icon(Icons.remove),
+          ),
+          SizedBox(
+            width: 42,
+            child: Text(
+              value.toString(),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+          ),
+          IconButton.filledTonal(
+            tooltip: l10n.increase,
+            onPressed: value >= 20 ? null : () => onChanged(value + 1),
+            icon: const Icon(Icons.add),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DestinationCart extends StatelessWidget {
+  const _DestinationCart({
+    required this.lines,
+    required this.showPickupDetails,
+    required this.onEdit,
+    required this.onRemove,
+  });
+
+  final List<BarrelOrderLine> lines;
+  final bool showPickupDetails;
+  final ValueChanged<int> onEdit;
+  final ValueChanged<int> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = NumberFormat.simpleCurrency();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var index = 0; index < lines.length; index++) ...[
+          _DestinationCartCard(
+            line: lines[index],
+            price: currency.format(lines[index].lineTotal),
+            showPickupDetails: showPickupDetails,
+            onEdit: () => onEdit(index),
+            onRemove: () => onRemove(index),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+}
+
+class _DestinationCartCard extends StatelessWidget {
+  const _DestinationCartCard({
+    required this.line,
+    required this.price,
+    required this.showPickupDetails,
+    required this.onEdit,
+    required this.onRemove,
+  });
+
+  final BarrelOrderLine line;
+  final String price;
+  final bool showPickupDetails;
+  final VoidCallback onEdit;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final qty = line.quantity;
+    return Material(
+      color: AppColors.paper,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onEdit,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.rule),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                line.country.flagEmoji,
+                style: const TextStyle(fontSize: 24),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      line.country.name,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      line.business.businessName,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      l10n.barrelCartLine(qty, line.receiverName),
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (showPickupDetails) ...[
+                      const SizedBox(height: 4),
+                      _PickupSummaryChip(line: line),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    price,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: l10n.edit,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: onEdit,
+                        icon: const Icon(Icons.edit_outlined, size: 18),
+                      ),
+                      IconButton(
+                        tooltip: l10n.remove,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: onRemove,
+                        icon: const Icon(Icons.close, size: 18),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PickupSummaryChip extends StatelessWidget {
+  const _PickupSummaryChip({required this.line});
+
+  final BarrelOrderLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = line.pickupRequested
+        ? [
+            line.pickupBorough,
+            if (line.pickupDateTime != null)
+              DateFormat.MMMd().add_jm().format(line.pickupDateTime!),
+          ].where((item) => item.trim().isNotEmpty).join(' • ')
+        : 'Office drop-off';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.mist,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            line.pickupRequested
+                ? Icons.home_work_outlined
+                : Icons.storefront_outlined,
+            size: 14,
+            color: AppColors.cobaltDeep,
+          ),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.cobaltDeep,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PriceEstimateCard extends StatelessWidget {
   const _PriceEstimateCard({
     required this.shippingFee,
     required this.pickupFee,
-    required this.pickupBorough,
+    required this.lineCount,
     required this.total,
     required this.useWalletBalance,
     required this.walletBalance,
@@ -1793,7 +2207,7 @@ class _PriceEstimateCard extends StatelessWidget {
 
   final double shippingFee;
   final double pickupFee;
-  final String pickupBorough;
+  final int lineCount;
   final double total;
   final bool useWalletBalance;
   final double walletBalance;
@@ -1801,6 +2215,7 @@ class _PriceEstimateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final currency = NumberFormat.simpleCurrency();
     final walletApplied = useWalletBalance
         ? walletBalance.clamp(0, total).toDouble()
@@ -1870,7 +2285,7 @@ class _PriceEstimateCard extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  useWalletBalance ? 'Amount due now' : 'Estimated cost',
+                  useWalletBalance ? l10n.amountDueNow : l10n.estimatedCost,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
@@ -1897,9 +2312,18 @@ class _PriceEstimateCard extends StatelessWidget {
             ),
             child: Column(
               children: [
-                row('Destination shipment', currency.format(shippingFee)),
                 row(
-                  pickupFee > 0 ? 'Pickup from $pickupBorough' : 'Pickup',
+                  lineCount > 1
+                      ? '$lineCount destination shipments'
+                      : 'Destination shipment',
+                  currency.format(shippingFee),
+                ),
+                row(
+                  pickupFee > 0
+                      ? lineCount > 1
+                            ? 'Pickup for destination lines'
+                            : 'Pickup'
+                      : 'Pickup',
                   currency.format(pickupFee),
                 ),
                 if (pickupFee > 0) ...[
@@ -1914,7 +2338,9 @@ class _PriceEstimateCard extends StatelessWidget {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          'Fixed pickup price for this borough',
+                          AppLocalizations.of(
+                            context,
+                          )!.fixedPickupPriceForBorough,
                           style: const TextStyle(
                             color: AppColors.muted,
                             fontSize: 12,
@@ -1927,10 +2353,10 @@ class _PriceEstimateCard extends StatelessWidget {
                 ],
                 if (useWalletBalance) ...[
                   const Divider(height: 18),
-                  row('Original estimated cost', currency.format(total)),
-                  row('Wallet credit', '-${currency.format(walletApplied)}'),
+                  row(l10n.originalEstimatedCost, currency.format(total)),
+                  row(l10n.walletCredit, '-${currency.format(walletApplied)}'),
                   const Divider(height: 18),
-                  row('Card payment due', currency.format(amountDue)),
+                  row(l10n.cardPaymentDue, currency.format(amountDue)),
                 ],
               ],
             ),
@@ -1938,7 +2364,7 @@ class _PriceEstimateCard extends StatelessWidget {
           if (needsReview) ...[
             const SizedBox(height: 10),
             Text(
-              'Final price will be confirmed by staff.',
+              l10n.finalPriceConfirmedByStaff,
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.86),
                 fontWeight: FontWeight.w600,
@@ -1966,6 +2392,7 @@ class _WalletPaymentOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final auth = context.watch<AuthProvider>();
     final user = auth.user;
     if (user == null || total <= 0 || auth.hasBusinessDashboardAccess) {
@@ -2041,9 +2468,9 @@ class _WalletPaymentOption extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Use wallet credit',
-                          style: TextStyle(
+                        Text(
+                          l10n.useWalletCredit,
+                          style: const TextStyle(
                             color: AppColors.ink,
                             fontWeight: FontWeight.w900,
                           ),
@@ -2109,267 +2536,9 @@ class _NycAddressSuggestions {
   }
 }
 
-class _ReceiverPhoneRules {
-  static const _callingCodes = <String, List<String>>{
-    'AF': ['93'],
-    'AL': ['355'],
-    'DZ': ['213'],
-    'AD': ['376'],
-    'AO': ['244'],
-    'AR': ['54'],
-    'AM': ['374'],
-    'AU': ['61'],
-    'AT': ['43'],
-    'AZ': ['994'],
-    'BS': ['1'],
-    'BH': ['973'],
-    'BD': ['880'],
-    'BB': ['1'],
-    'BY': ['375'],
-    'BE': ['32'],
-    'BZ': ['501'],
-    'BJ': ['229'],
-    'BT': ['975'],
-    'BO': ['591'],
-    'BA': ['387'],
-    'BW': ['267'],
-    'BR': ['55'],
-    'BN': ['673'],
-    'BG': ['359'],
-    'BF': ['226'],
-    'BI': ['257'],
-    'CV': ['238'],
-    'KH': ['855'],
-    'CM': ['237'],
-    'CA': ['1'],
-    'CF': ['236'],
-    'TD': ['235'],
-    'CL': ['56'],
-    'CN': ['86'],
-    'CO': ['57'],
-    'KM': ['269'],
-    'CG': ['242'],
-    'CD': ['243'],
-    'CR': ['506'],
-    'CI': ['225'],
-    'HR': ['385'],
-    'CU': ['53'],
-    'CY': ['357'],
-    'CZ': ['420'],
-    'DK': ['45'],
-    'DJ': ['253'],
-    'DM': ['1'],
-    'DO': ['1'],
-    'EC': ['593'],
-    'EG': ['20'],
-    'SV': ['503'],
-    'GQ': ['240'],
-    'ER': ['291'],
-    'EE': ['372'],
-    'SZ': ['268'],
-    'ET': ['251'],
-    'FJ': ['679'],
-    'FI': ['358'],
-    'FR': ['33'],
-    'GA': ['241'],
-    'GM': ['220'],
-    'GE': ['995'],
-    'DE': ['49'],
-    'GH': ['233'],
-    'GR': ['30'],
-    'GD': ['1'],
-    'GT': ['502'],
-    'GN': ['224'],
-    'GW': ['245'],
-    'GY': ['592'],
-    'HT': ['509'],
-    'HN': ['504'],
-    'HU': ['36'],
-    'IS': ['354'],
-    'IN': ['91'],
-    'ID': ['62'],
-    'IR': ['98'],
-    'IQ': ['964'],
-    'IE': ['353'],
-    'IL': ['972'],
-    'IT': ['39'],
-    'JM': ['1'],
-    'JP': ['81'],
-    'JO': ['962'],
-    'KZ': ['7'],
-    'KE': ['254'],
-    'KI': ['686'],
-    'KW': ['965'],
-    'KG': ['996'],
-    'LA': ['856'],
-    'LV': ['371'],
-    'LB': ['961'],
-    'LS': ['266'],
-    'LR': ['231'],
-    'LY': ['218'],
-    'LI': ['423'],
-    'LT': ['370'],
-    'LU': ['352'],
-    'MG': ['261'],
-    'MW': ['265'],
-    'MY': ['60'],
-    'MV': ['960'],
-    'ML': ['223'],
-    'MT': ['356'],
-    'MH': ['692'],
-    'MR': ['222'],
-    'MU': ['230'],
-    'MX': ['52'],
-    'FM': ['691'],
-    'MD': ['373'],
-    'MC': ['377'],
-    'MN': ['976'],
-    'ME': ['382'],
-    'MA': ['212'],
-    'MZ': ['258'],
-    'MM': ['95'],
-    'NA': ['264'],
-    'NR': ['674'],
-    'NP': ['977'],
-    'NL': ['31'],
-    'NZ': ['64'],
-    'NI': ['505'],
-    'NE': ['227'],
-    'NG': ['234'],
-    'KP': ['850'],
-    'MK': ['389'],
-    'NO': ['47'],
-    'OM': ['968'],
-    'PK': ['92'],
-    'PW': ['680'],
-    'PS': ['970'],
-    'PA': ['507'],
-    'PG': ['675'],
-    'PY': ['595'],
-    'PE': ['51'],
-    'PH': ['63'],
-    'PL': ['48'],
-    'PT': ['351'],
-    'QA': ['974'],
-    'RO': ['40'],
-    'RU': ['7'],
-    'RW': ['250'],
-    'KN': ['1'],
-    'LC': ['1'],
-    'VC': ['1'],
-    'WS': ['685'],
-    'SM': ['378'],
-    'ST': ['239'],
-    'SA': ['966'],
-    'SN': ['221'],
-    'RS': ['381'],
-    'SC': ['248'],
-    'SL': ['232'],
-    'SG': ['65'],
-    'SK': ['421'],
-    'SI': ['386'],
-    'SB': ['677'],
-    'SO': ['252'],
-    'ZA': ['27'],
-    'KR': ['82'],
-    'SS': ['211'],
-    'ES': ['34'],
-    'LK': ['94'],
-    'SD': ['249'],
-    'SR': ['597'],
-    'SE': ['46'],
-    'CH': ['41'],
-    'SY': ['963'],
-    'TW': ['886'],
-    'TJ': ['992'],
-    'TZ': ['255'],
-    'TH': ['66'],
-    'TL': ['670'],
-    'TG': ['228'],
-    'TO': ['676'],
-    'TT': ['1'],
-    'TN': ['216'],
-    'TR': ['90'],
-    'TM': ['993'],
-    'TV': ['688'],
-    'UG': ['256'],
-    'UA': ['380'],
-    'AE': ['971'],
-    'GB': ['44'],
-    'US': ['1'],
-    'UY': ['598'],
-    'UZ': ['998'],
-    'VU': ['678'],
-    'VE': ['58'],
-    'VN': ['84'],
-    'YE': ['967'],
-    'ZM': ['260'],
-    'ZW': ['263'],
-  };
-
-  static String? validate({
-    required String? value,
-    required DestinationCountry? destination,
-    required bool allowDifferentCountry,
-    required String requiredMessage,
-  }) {
-    final raw = value?.trim() ?? '';
-    if (raw.isEmpty) return requiredMessage;
-
-    final normalized = raw.replaceAll(RegExp(r'[\s().-]'), '');
-    if (!PhoneNumberValidator.isValid(raw)) {
-      return 'Enter a valid phone number with country code.';
-    }
-
-    final international = normalized.startsWith('+')
-        ? normalized.substring(1)
-        : normalized;
-    if (international.length < 8 || international.length > 15) {
-      return 'Enter a valid international phone number.';
-    }
-
-    final destinationCode = destination?.displayCode ?? '';
-    final expectedCodes = _callingCodes[destinationCode];
-    if (expectedCodes == null || expectedCodes.isEmpty) {
-      return null;
-    }
-
-    final matchesDestination = expectedCodes.any(
-      (code) => international.startsWith(code),
-    );
-    if (matchesDestination) return null;
-
-    if (allowDifferentCountry) {
-      return normalized.startsWith('+')
-          ? null
-          : 'For WhatsApp numbers from another country, include + and the country code.';
-    }
-
-    final prefixExample = '+${expectedCodes.first}';
-    final destinationName = destination?.name ?? 'the destination';
-    return 'Receiver number must match $destinationName ($prefixExample) or mark it as a WhatsApp number.';
-  }
-
-  static bool isDifferentCountryNumber({
-    required String value,
-    required DestinationCountry? destination,
-  }) {
-    final normalized = value.trim().replaceAll(RegExp(r'[\s().-]'), '');
-    if (!PhoneNumberValidator.isValid(value)) return false;
-
-    final destinationCode = destination?.displayCode ?? '';
-    final expectedCodes = _callingCodes[destinationCode];
-    if (expectedCodes == null || expectedCodes.isEmpty) return false;
-
-    final international = normalized.startsWith('+')
-        ? normalized.substring(1)
-        : normalized;
-    return !expectedCodes.any((code) => international.startsWith(code));
-  }
-}
-
-class _RoundedTextField extends StatelessWidget {
-  const _RoundedTextField({
+class BarrelTextFormField extends StatelessWidget {
+  const BarrelTextFormField({
+    super.key,
     required this.label,
     this.controller,
     this.validator,
@@ -2392,6 +2561,7 @@ class _RoundedTextField extends StatelessWidget {
     return TextFormField(
       controller: controller,
       validator: validator,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       onChanged: onChanged,
@@ -2413,6 +2583,495 @@ class _RoundedTextField extends StatelessWidget {
         ),
         filled: true,
         fillColor: AppColors.lightSurfaceVariant,
+      ),
+    );
+  }
+}
+
+class _AddDestinationButton extends StatelessWidget {
+  const _AddDestinationButton({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: const Icon(Icons.add_location_alt_outlined),
+        label: Text(label),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          foregroundColor: AppColors.cobaltDeep,
+          side: const BorderSide(color: AppColors.cobalt),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyDestinations extends StatelessWidget {
+  const _EmptyDestinations({required this.onAdd});
+
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.lightSurfaceVariant,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: AppColors.cobalt.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.add_location_alt_outlined,
+              color: AppColors.cobaltDeep,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            l10n.whereAreBarrelsGoing,
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            l10n.addDestinationInstruction,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.muted, height: 1.3),
+          ),
+          const SizedBox(height: 14),
+          _AddDestinationButton(label: l10n.addDestination, onPressed: onAdd),
+        ],
+      ),
+    );
+  }
+}
+
+class _DestinationEditorSheet extends StatefulWidget {
+  const _DestinationEditorSheet({
+    required this.initial,
+    required this.ordinal,
+    required this.pickupPricing,
+    required this.shipmentService,
+    required this.collectPickupDetails,
+  });
+
+  final BarrelOrderLine? initial;
+  final int ordinal;
+  final BarrelPickupPricing pickupPricing;
+  final BarrelShipmentService shipmentService;
+  final bool collectPickupDetails;
+
+  @override
+  State<_DestinationEditorSheet> createState() =>
+      _DestinationEditorSheetState();
+}
+
+class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _receiverNameController;
+  late final TextEditingController _receiverPhoneController;
+  late final TextEditingController _pickupAddressController;
+  DestinationCountry? _country;
+  BusinessDestinationOption? _business;
+  int _quantity = 1;
+  bool _receiverPhoneIsWhatsappOnly = false;
+  bool _pickupRequested = true;
+  String _pickupBorough = 'Bronx';
+  DateTime? _pickupDateTime;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initial;
+    _receiverNameController = TextEditingController(
+      text: initial?.receiverName ?? '',
+    );
+    _receiverPhoneController = TextEditingController(
+      text: initial?.receiverPhone ?? '',
+    );
+    _pickupAddressController = TextEditingController(
+      text: initial?.pickupAddress ?? '',
+    );
+    _country = initial?.country;
+    _business = initial?.business;
+    _quantity = initial?.quantity ?? 1;
+    _receiverPhoneIsWhatsappOnly =
+        initial?.receiverPhoneIsWhatsappOnly ?? false;
+    _pickupRequested = initial?.pickupRequested ?? true;
+    _pickupBorough = initial?.pickupBorough.isNotEmpty == true
+        ? initial!.pickupBorough
+        : 'Bronx';
+    _pickupDateTime = initial?.pickupDateTime;
+  }
+
+  @override
+  void dispose() {
+    _receiverNameController.dispose();
+    _receiverPhoneController.dispose();
+    _pickupAddressController.dispose();
+    super.dispose();
+  }
+
+  bool get _showWhatsapp => ReceiverPhoneRules.isDifferentCountryNumber(
+    value: _receiverPhoneController.text,
+    destination: _country,
+  );
+
+  double get _lineFee => (_country?.barrelShippingPrice ?? 0) * _quantity;
+  double get _pickupFee => widget.collectPickupDetails && _pickupRequested
+      ? widget.pickupPricing.pickupFeeForBorough(_pickupBorough)
+      : 0;
+
+  void _handlePickupAddressChanged(String address) {
+    final borough = _NycAddressSuggestions.detectBorough(address);
+    if (borough != null && borough != _pickupBorough) {
+      setState(() => _pickupBorough = borough);
+    }
+  }
+
+  Future<void> _pickPickupDateTime() async {
+    final now = DateTime.now();
+    final initial = _pickupDateTime ?? now.add(const Duration(days: 1));
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial.isAfter(now) ? initial : now,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 180)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.brandRed,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (date == null || !mounted) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.brandRed,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (time == null) return;
+
+    setState(() {
+      _pickupDateTime = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
+    });
+  }
+
+  void _save() {
+    if (!_formKey.currentState!.validate()) return;
+    final country = _country;
+    final business = _business;
+    if (country == null || business == null) return;
+    Navigator.of(context).pop(
+      BarrelOrderLine(
+        country: country,
+        business: business,
+        receiverName: _receiverNameController.text.trim(),
+        receiverPhone: _receiverPhoneController.text.trim(),
+        receiverPhoneIsWhatsappOnly:
+            _showWhatsapp && _receiverPhoneIsWhatsappOnly,
+        quantity: _quantity,
+        pickupRequested: _pickupRequested,
+        pickupAddress: _pickupRequested
+            ? _pickupAddressController.text.trim()
+            : widget.pickupPricing.officeAddress,
+        pickupBorough: _pickupRequested ? _pickupBorough : 'Office drop-off',
+        pickupFee: _pickupFee,
+        pickupDateTime: _pickupRequested ? _pickupDateTime : null,
+        hasPickupOverride: widget.collectPickupDetails,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final media = MediaQuery.of(context);
+    final isEditing = widget.initial != null;
+    final currency = NumberFormat.simpleCurrency();
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+      child: Container(
+        constraints: BoxConstraints(maxHeight: media.size.height * 0.92),
+        decoration: const BoxDecoration(
+          color: AppColors.lightBg,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.rule,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 12, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      isEditing
+                          ? l10n.editDestination
+                          : l10n.destinationNumber(widget.ordinal),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      DestinationCountryField(
+                        value: _country,
+                        label: l10n.destinationCountry,
+                        requiredMessage: l10n.requiredField,
+                        onChanged: (country) {
+                          setState(() {
+                            _country = country;
+                            _business = null;
+                            if (!_showWhatsapp) {
+                              _receiverPhoneIsWhatsappOnly = false;
+                            }
+                          });
+                        },
+                      ),
+                      if (_country != null) ...[
+                        const SizedBox(height: 14),
+                        _BusinessOptionSelector(
+                          countryId: _country!.id,
+                          value: _business,
+                          onChanged: (option) =>
+                              setState(() => _business = option),
+                        ),
+                      ],
+                      const SizedBox(height: 14),
+                      BarrelTextFormField(
+                        label: l10n.receiverName,
+                        controller: _receiverNameController,
+                        icon: Icons.person_pin_outlined,
+                        validator: (value) =>
+                            (value == null || value.trim().isEmpty)
+                            ? l10n.pleaseEnterReceiverName
+                            : null,
+                      ),
+                      const SizedBox(height: 14),
+                      BarrelTextFormField(
+                        label: l10n.receiverPhone,
+                        controller: _receiverPhoneController,
+                        icon: Icons.phone_outlined,
+                        keyboardType: TextInputType.phone,
+                        inputFormatters:
+                            PhoneNumberValidator.allowedInputFormatters,
+                        onChanged: (_) => setState(() {
+                          if (!_showWhatsapp) {
+                            _receiverPhoneIsWhatsappOnly = false;
+                          }
+                        }),
+                        validator: (value) => ReceiverPhoneRules.validate(
+                          value: value,
+                          destination: _country,
+                          allowDifferentCountry: _receiverPhoneIsWhatsappOnly,
+                          requiredMessage: l10n.pleaseEnterReceiverPhone,
+                          invalidPhoneMessage: l10n.invalidPhoneWithCountryCode,
+                          invalidInternationalPhoneMessage:
+                              l10n.invalidInternationalPhone,
+                          whatsAppCountryCodeMessage:
+                              l10n.whatsAppDifferentCountryRequiresCode,
+                          destinationMismatchMessage:
+                              l10n.receiverPhoneMustMatchDestination,
+                        ),
+                      ),
+                      if (_showWhatsapp)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: _WhatsAppPhoneOption(
+                            value: _receiverPhoneIsWhatsappOnly,
+                            onChanged: (value) {
+                              setState(
+                                () => _receiverPhoneIsWhatsappOnly = value,
+                              );
+                              _formKey.currentState?.validate();
+                            },
+                          ),
+                        ),
+                      const SizedBox(height: 14),
+                      _QuantityStepper(
+                        value: _quantity,
+                        onChanged: (value) => setState(() => _quantity = value),
+                      ),
+                      if (widget.collectPickupDetails) ...[
+                        const SizedBox(height: 14),
+                        _PickupChoice(
+                          pickupRequested: _pickupRequested,
+                          officeAddress: widget.pickupPricing.officeAddress,
+                          onChanged: (value) {
+                            setState(() => _pickupRequested = value);
+                            _formKey.currentState?.validate();
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 220),
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          child: _pickupRequested
+                              ? Column(
+                                  key: const ValueKey('line-pickup'),
+                                  children: [
+                                    _AddressAutocompleteField(
+                                      controller: _pickupAddressController,
+                                      service: widget.shipmentService,
+                                      onChanged: _handlePickupAddressChanged,
+                                      validator: (value) {
+                                        if (!_pickupRequested) return null;
+                                        if (value == null ||
+                                            value.trim().isEmpty) {
+                                          return l10n.pleaseEnterPickupAddress;
+                                        }
+                                        if (_NycAddressSuggestions.detectBorough(
+                                              value,
+                                            ) ==
+                                            null) {
+                                          return l10n
+                                              .pleaseIncludeNycBoroughZip;
+                                        }
+                                        return null;
+                                      },
+                                    ),
+                                    const SizedBox(height: 14),
+                                    _PickupDateTimeTile(
+                                      value: _pickupDateTime,
+                                      onTap: _pickPickupDateTime,
+                                      validator: () {
+                                        if (!_pickupRequested) return null;
+                                        if (_pickupDateTime == null) {
+                                          return l10n
+                                              .pleaseChoosePickupDateTime;
+                                        }
+                                        if (!_pickupDateTime!.isAfter(
+                                          DateTime.now(),
+                                        )) {
+                                          return l10n.pickupTimeFuture;
+                                        }
+                                        return null;
+                                      },
+                                    ),
+                                  ],
+                                )
+                              : _OfficeDropOffTile(
+                                  key: const ValueKey('line-dropoff'),
+                                  address: widget.pickupPricing.officeAddress,
+                                ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
+                child: Row(
+                  children: [
+                    if (_lineFee + _pickupFee > 0) ...[
+                      Text(
+                        currency.format(_lineFee + _pickupFee),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                    ],
+                    Expanded(
+                      child: SizedBox(
+                        height: 52,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.cobaltDeep,
+                            disabledBackgroundColor: AppColors.rule,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          onPressed: _business == null ? null : _save,
+                          icon: Icon(isEditing ? Icons.check : Icons.add),
+                          label: Text(
+                            isEditing ? l10n.saveDestination : l10n.addToOrder,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

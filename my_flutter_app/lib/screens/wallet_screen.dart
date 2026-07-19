@@ -10,6 +10,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/support_entry_button.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key, this.onBack});
@@ -430,7 +431,9 @@ class _TransactionList extends StatelessWidget {
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 10),
-            if (!snapshot.hasData)
+            if (snapshot.hasError)
+              _EmptyActivity(message: l10n.walletActivityUnavailable)
+            else if (!snapshot.hasData)
               const Center(child: CircularProgressIndicator())
             else if (docs.isEmpty)
               const _EmptyActivity()
@@ -465,6 +468,13 @@ class _TransactionTile extends StatelessWidget {
     );
     final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
     final positive = type != 'debit';
+    final refundRequestId = (data['refundRequestId'] as String?) ?? '';
+    final trackingCode = (data['trackingCode'] as String?) ?? '';
+    final label = [
+      _reasonLabel(l10n, reason, status),
+      if (trackingCode.isNotEmpty) trackingCode,
+      if (refundRequestId.isNotEmpty) refundRequestId,
+    ].join(' · ');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -474,52 +484,65 @@ class _TransactionTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.rule),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: (positive ? AppColors.sage : AppColors.warn).withValues(
-                alpha: 0.12,
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: (positive ? AppColors.sage : AppColors.warn)
+                      .withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  positive ? Icons.add : Icons.arrow_outward,
+                  color: positive ? AppColors.sage : AppColors.warn,
+                ),
               ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              positive ? Icons.add : Icons.arrow_outward,
-              color: positive ? AppColors.sage : AppColors.warn,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _reasonLabel(l10n, reason, status),
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _reasonLabel(l10n, reason, status),
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      createdAt == null
+                          ? l10n.processing
+                          : DateFormat.yMMMd().add_jm().format(createdAt),
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  createdAt == null
-                      ? l10n.processing
-                      : DateFormat.yMMMd().add_jm().format(createdAt),
-                  style: const TextStyle(
-                    color: AppColors.muted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
+              ),
+              Text(
+                '${positive ? '+' : '-'}${currency.format(amount)}',
+                style: TextStyle(
+                  color: positive ? AppColors.sage : AppColors.warn,
+                  fontWeight: FontWeight.w900,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          Text(
-            '${positive ? '+' : '-'}${currency.format(amount)}',
-            style: TextStyle(
-              color: positive ? AppColors.sage : AppColors.warn,
-              fontWeight: FontWeight.w900,
+          if (refundRequestId.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SupportEntryButton(
+              relatedCollection: 'walletRefundRequests',
+              relatedId: refundRequestId,
+              subject: l10n.refundRequest,
+              relatedLabel: label,
+              compact: true,
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -537,7 +560,9 @@ class _TransactionTile extends StatelessWidget {
 }
 
 class _EmptyActivity extends StatelessWidget {
-  const _EmptyActivity();
+  const _EmptyActivity({String? message}) : _message = message;
+
+  final String? _message;
 
   @override
   Widget build(BuildContext context) {
@@ -551,7 +576,7 @@ class _EmptyActivity extends StatelessWidget {
         border: Border.all(color: AppColors.rule),
       ),
       child: Text(
-        l10n.noWalletActivityYet,
+        _message ?? l10n.noWalletActivityYet,
         textAlign: TextAlign.center,
         style: const TextStyle(
           color: AppColors.muted,

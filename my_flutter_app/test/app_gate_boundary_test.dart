@@ -10,6 +10,14 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
 void main() {
+  test('local Firebase emulator mode bypasses the internet gate', () {
+    final gate = AppGateProvider.localEmulator();
+    addTearDown(gate.dispose);
+
+    expect(gate.status, AppGateStatus.ready);
+    expect(gate.isBlocking, isFalse);
+  });
+
   test(
     'app config fetch failure fails open after confirmed connectivity',
     () async {

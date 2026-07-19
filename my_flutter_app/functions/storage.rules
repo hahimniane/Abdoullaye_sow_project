@@ -1,26 +1,244 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    match /cars/{carId}/{allPaths=**} {
+    function hasUserProfile() {
+      return request.auth != null &&
+        firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function userProfile() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return hasUserProfile() &&
+        request.auth.token.email_verified == true &&
+        userProfile().role == 'admin';
+    }
+
+    function canManageBusinessLogo(businessId) {
+      return hasAdminCapability('businesses') ||
+        (
+          hasUserProfile() &&
+          (
+            userProfile().businessId == businessId ||
+            userOwnsBusinessDocument(businessId)
+          ) &&
+          userProfile().role == 'businessOwner'
+        );
+    }
+
+    function userOwnsBusinessDocument(businessId) {
+      return firestore.exists(/databases/(default)/documents/businesses/$(businessId)) &&
+        'ownerUid' in firestore.get(/databases/(default)/documents/businesses/$(businessId)).data &&
+        firestore.get(/databases/(default)/documents/businesses/$(businessId)).data.ownerUid == request.auth.uid;
+    }
+
+    function isLinkedToBusiness(businessId) {
+      return hasUserProfile() &&
+        (userProfile().businessId == businessId ||
+         userOwnsBusinessDocument(businessId));
+    }
+
+    function userAdminRole() {
+      return userProfile().get('adminRole', '') is string ?
+        userProfile().get('adminRole', '') : "";
+    }
+
+    function isSuperAdmin() {
+      return request.auth != null &&
+        hasUserProfile() && userProfile().role == 'admin' &&
+        userProfile().get('adminRole', '') == 'superAdmin';
+    }
+
+    function hasDynamicAdminCapability(section) {
+      return firestore.exists(/databases/(default)/documents/platformConfig/permissions) &&
+        userAdminRole() in firestore.get(/databases/(default)/documents/platformConfig/permissions).data.roles &&
+        firestore.get(/databases/(default)/documents/platformConfig/permissions).data.roles[userAdminRole()].sections is map &&
+        section in firestore.get(/databases/(default)/documents/platformConfig/permissions).data.roles[userAdminRole()].sections &&
+        firestore.get(/databases/(default)/documents/platformConfig/permissions).data.roles[userAdminRole()].sections[section] == 'manage';
+    }
+
+    function hasBuiltInAdminCapability(section) {
+      return isSuperAdmin() ||
+        (
+          userAdminRole() == 'operationsManager' &&
+          section in ['businesses', 'marketplace', 'operations', 'support', 'website']
+        ) ||
+        (
+          userAdminRole() == 'financeManager' &&
+          section in ['finance', 'support']
+        ) ||
+        (userAdminRole() == 'supportAdmin' && section == 'support') ||
+        (userAdminRole() == 'contentManager' && section == 'website');
+    }
+
+    function hasAdminCapability(section) {
+      return isAdmin() &&
+        (hasBuiltInAdminCapability(section) ||
+         hasDynamicAdminCapability(section));
+    }
+
+    function hasBusinessSection(section) {
+      return userProfile().get('businessPermissions', []) is list &&
+        userProfile().get('businessPermissions', []).size() > 0 &&
+        section in userProfile().get('businessPermissions', []);
+    }
+
+    function canManageBusinessListingImages(businessId) {
+      return hasAdminCapability('marketplace') ||
+        (
+          isLinkedToBusiness(businessId) &&
+          (
+            userProfile().role == 'businessOwner' ||
+            (
+              userProfile().role == 'staff' &&
+              hasBusinessSection('listings')
+            )
+          )
+        );
+    }
+
+    function canManageBusinessProfileImages(businessId) {
+      return hasAdminCapability('businesses') ||
+        (
+          isLinkedToBusiness(businessId) &&
+          (
+            userProfile().role == 'businessOwner' ||
+            (
+              userProfile().role == 'staff' &&
+              hasBusinessSection('profile')
+            )
+          )
+        );
+    }
+
+    function canManageBusinessVerificationDocuments(businessId) {
+      return hasAdminCapability('businesses') ||
+        (
+          isLinkedToBusiness(businessId) &&
+          (
+            userProfile().role == 'businessOwner' ||
+            (
+              userProfile().role == 'staff' &&
+              hasBusinessSection('profile')
+            )
+          )
+        );
+    }
+
+    function canManageBusinessSupportAsMember(businessId) {
+      return isLinkedToBusiness(businessId) &&
+        (
+          userProfile().role == 'businessOwner' ||
+          (
+            userProfile().role == 'staff' &&
+            hasBusinessSection('support')
+          )
+        );
+    }
+
+    function canManageBusinessSupport(businessId) {
+      return hasAdminCapability('support') ||
+        canManageBusinessSupportAsMember(businessId);
+    }
+
+    function validImageUpload() {
+      return request.resource.size < 10 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*');
+    }
+
+    function validBusinessDocumentUpload() {
+      return request.resource.size < 20 * 1024 * 1024 &&
+        (
+          request.resource.contentType.matches('image/.*') ||
+          request.resource.contentType == 'application/pdf' ||
+          request.resource.contentType == 'application/msword' ||
+          request.resource.contentType == 'application/octet-stream' ||
+          request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        );
+    }
+
+    function validBusinessVerificationDocumentId(documentId) {
+      return documentId in [
+        'shippingAuthority',
+        'dealerLicense',
+        'parkingFacilityProof',
+        'transportInsurance'
+      ];
+    }
+
+    function canAccessSupportCase(caseId) {
+      return request.auth != null &&
+        firestore.exists(/databases/(default)/documents/supportCases/$(caseId)) &&
+        (
+          firestore.get(/databases/(default)/documents/supportCases/$(caseId)).data.customerUid == request.auth.uid ||
+          firestore.exists(/databases/(default)/documents/supportCases/$(caseId)/participants/$(request.auth.uid)) ||
+          hasAdminCapability('support') ||
+          (
+            'businessId' in firestore.get(/databases/(default)/documents/supportCases/$(caseId)).data &&
+            canManageBusinessSupportAsMember(firestore.get(/databases/(default)/documents/supportCases/$(caseId)).data.businessId)
+          )
+        );
+    }
+
+    // Access control is enforced by the scoped path (support_cases/{caseId}/
+    // {uploaderUid}) + canAccessSupportCase, and the uploadSupportAttachmentMetadata
+    // callable validates the real content type and per-type size before the file
+    // ever becomes a message. So the storage rule only guards a max size here.
+    // A strict content-type allowlist previously rejected uploads whose type was
+    // missing or 'application/octet-stream' (common on web / some pickers),
+    // surfacing as storage/unauthorized — i.e. "the rules won't let me upload".
+    function validSupportUpload() {
+      return request.resource.size < 50 * 1024 * 1024;
+    }
+
+    match /cars/{businessId}/{carId}/{allPaths=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if request.auth != null &&
+        validImageUpload() &&
+        canManageBusinessListingImages(businessId);
+    }
+
+    match /cars/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
     }
 
     match /businesses/{businessId}/{allPaths=**} {
       allow read: if true;
       allow write: if request.auth != null &&
-        (
-          firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (
-            firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.businessId == businessId &&
-            firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['businessOwner', 'staff']
-          )
-        );
+        validImageUpload() &&
+        canManageBusinessProfileImages(businessId);
+    }
+
+    match /businessLogos/{businessId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null &&
+        validImageUpload() &&
+        canManageBusinessLogo(businessId);
+    }
+
+    match /businessDocuments/{businessId}/{documentId}/{fileName} {
+      allow read: if request.auth != null &&
+        (hasAdminCapability('businesses') || isLinkedToBusiness(businessId));
+      allow write: if request.auth != null &&
+        validBusinessVerificationDocumentId(documentId) &&
+        validBusinessDocumentUpload() &&
+        canManageBusinessVerificationDocuments(businessId);
     }
 
     match /users/{userId}/{allPaths=**} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /support_cases/{caseId}/{uploaderUid}/{allPaths=**} {
+      allow read: if canAccessSupportCase(caseId);
+      allow write: if request.auth != null &&
+        request.auth.uid == uploaderUid &&
+        canAccessSupportCase(caseId) &&
+        validSupportUpload();
     }
 
     // Optional: allow read-only access for other files if needed

@@ -11,6 +11,7 @@ import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/support_entry_button.dart';
 
 class StaffPurchaseManagementScreen extends StatelessWidget {
   const StaffPurchaseManagementScreen({super.key});
@@ -197,7 +198,7 @@ class StaffPurchaseManagementScreen extends StatelessWidget {
           return ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: purchases.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               final purchase = purchases[index];
               return _StaffPurchaseCard(
@@ -282,23 +283,31 @@ class _StaffPurchaseCard extends StatelessWidget {
               ),
             if (purchase.holdUntilDate != null)
               Text(
-                'Hold until: ${DateFormat.yMMMd().format(purchase.holdUntilDate!)}',
+                l10n.holdUntilDate(
+                  DateFormat.yMMMd().format(purchase.holdUntilDate!),
+                ),
               ),
             if (purchase.holdPricingMode != null)
               Text(
-                'Hold pricing: ${purchase.holdPricingMode == 'per_day' ? 'Per day' : 'Flat'}'
-                '${purchase.holdDays == null ? '' : ' • ${purchase.holdDays} day(s)'}',
+                l10n.holdPricingSummary(
+                  purchase.holdPricingMode == 'per_day'
+                      ? l10n.perDay
+                      : l10n.flat,
+                  purchase.holdDays == null
+                      ? ''
+                      : l10n.holdDaysSuffix(purchase.holdDays!),
+                ),
               ),
             if (purchase.depositForfeitureStatus != null)
-              Text('Forfeiture: ${purchase.depositForfeitureStatus}'),
+              Text(
+                l10n.forfeitureStatusLabel(purchase.depositForfeitureStatus!),
+              ),
             if (purchase.holdReviewRequiredAt != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: _NoticeBand(
                   icon: Icons.priority_high_outlined,
-                  text:
-                      'Hold date reached. Mark this vehicle as sold or mark '
-                      'the customer as not shown.',
+                  text: l10n.holdDateReachedStaffAction,
                   color: AppColors.warn,
                 ),
               ),
@@ -307,19 +316,31 @@ class _StaffPurchaseCard extends StatelessWidget {
               _NoticeBand(
                 icon: Icons.event_repeat_outlined,
                 color: AppColors.brandRed,
-                text:
-                    'Extension: ${purchase.extensionRequestStatus}'
-                    '${purchase.extensionRequestedHoldUntilDate == null ? '' : ' • ${DateFormat.yMMMd().format(purchase.extensionRequestedHoldUntilDate!)}'}'
-                    '${purchase.extensionExtraAmount == null ? '' : ' • extra ${currency.format(purchase.extensionExtraAmount)}'}',
+                text: l10n.extensionStatusLine(
+                  purchase.extensionRequestStatus!,
+                  purchase.extensionRequestedHoldUntilDate == null
+                      ? ''
+                      : l10n.dateSuffix(
+                          DateFormat.yMMMd().format(
+                            purchase.extensionRequestedHoldUntilDate!,
+                          ),
+                        ),
+                  purchase.extensionExtraAmount == null
+                      ? ''
+                      : l10n.extraAmountSuffix(
+                          currency.format(purchase.extensionExtraAmount),
+                        ),
+                ),
               ),
             ],
             if (purchase.buyerReliabilitySnapshot != null) ...[
               const SizedBox(height: 8),
               Text(
-                'Buyer history: '
-                '${purchase.buyerReliabilitySnapshot!['completedHolds'] ?? 0} completed, '
-                '${purchase.buyerReliabilitySnapshot!['noShows'] ?? 0} no-show, '
-                '${purchase.buyerReliabilitySnapshot!['forfeitures'] ?? 0} forfeited',
+                l10n.buyerHistoryLine(
+                  purchase.buyerReliabilitySnapshot!['completedHolds'] ?? 0,
+                  purchase.buyerReliabilitySnapshot!['noShows'] ?? 0,
+                  purchase.buyerReliabilitySnapshot!['forfeitures'] ?? 0,
+                ),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
@@ -334,13 +355,13 @@ class _StaffPurchaseCard extends StatelessWidget {
                   FilledButton.icon(
                     onPressed: onMarkSold,
                     icon: const Icon(Icons.sell_outlined),
-                    label: const Text('Mark as sold'),
+                    label: Text(l10n.markAsSold),
                   ),
                   if (purchase.purchaseStatus == 'hold_review_required')
                     OutlinedButton.icon(
                       onPressed: onNoShow,
                       icon: const Icon(Icons.person_off_outlined),
-                      label: const Text('Customer did not come'),
+                      label: Text(l10n.customerDidNotCome),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.errorRed,
                       ),
@@ -367,17 +388,24 @@ class _StaffPurchaseCard extends StatelessWidget {
                   OutlinedButton.icon(
                     onPressed: onApproveExtension,
                     icon: const Icon(Icons.check_circle_outline),
-                    label: const Text('Approve extension'),
+                    label: Text(l10n.approveExtension),
                   ),
                   OutlinedButton.icon(
                     onPressed: onRejectExtension,
                     icon: const Icon(Icons.cancel_outlined),
-                    label: const Text('Reject extension'),
+                    label: Text(l10n.rejectExtension),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.errorRed,
                     ),
                   ),
                 ],
+                SupportEntryButton(
+                  relatedCollection: 'carPurchases',
+                  relatedId: purchase.id,
+                  relatedLabel: purchase.carTitle,
+                  subject: l10n.supportPurchaseCaseSubject(purchase.carTitle),
+                  compact: true,
+                ),
               ],
             ),
           ],

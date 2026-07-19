@@ -1,0 +1,50 @@
+appId: com.laawoldigital.app
+name: Customer requests car transport quote
+---
+- clearKeychain
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "(?s).*Sign in to your wallet.*"
+    timeout: 20000
+- tapOn: "(?s).*Sign in to your wallet.*"
+- extendedWaitUntil:
+    visible: "Account Login"
+    timeout: 20000
+- waitForAnimationToEnd
+- tapOn: "Email"
+- inputText: "e2e.customer@laawol.test"
+- tapOn: "Password"
+- inputText: "${E2E_TEST_PASSWORD}"
+- tapOn: "done"
+- scrollUntilVisible:
+    element:
+      text: "Sign In"
+    direction: DOWN
+- tapOn:
+    text: "Sign In"
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible: "(?s).*E2E Customer.*"
+    timeout: 30000
+- tapOn: "Shipping"
+- tapOn: "(?s).*Transport a car.*"
+- extendedWaitUntil:
+    visible: "(?s).*Request car transport.*"
+    timeout: 20000
+- assertVisible: "(?s).*E2E Atlantic Logistics.*Guinea.*"
+- tapOn: "Make"
+- tapOn: "Acura"
+- tapOn: "Model"
+- tapOn: "ADX"
+- tapOn: "Year"
+- tapOn: "2025"
+- scrollUntilVisible:
+    element:
+      text: "Send request"
+    direction: DOWN
+- tapOn: "Send request"
+- extendedWaitUntil:
+    visible: "(?s).*Request sent to E2E Atlantic Logistics.*Tracking TR-.*They will send you a price quote.*"
+    timeout: 30000
+- takeScreenshot: "output/ios-e2e/car-transport-requested"
