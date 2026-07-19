@@ -1,0 +1,36 @@
+appId: com.laawoldigital.app
+name: Business login leaves the nested customer navigator
+---
+- clearKeychain
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "(?s).*Sign in to your wallet.*"
+    timeout: 30000
+- waitForAnimationToEnd
+- tapOn:
+    text: "(?s).*Sign in to your wallet.*"
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible: "Account Login"
+    timeout: 20000
+- waitForAnimationToEnd
+- tapOn: "Email"
+- inputText: "e2e.business@laawol.test"
+- tapOn: "Password"
+- inputText: "${E2E_TEST_PASSWORD}"
+- tapOn: "done"
+- scrollUntilVisible:
+    element:
+      text: "Sign In"
+    direction: DOWN
+- tapOn:
+    text: "Sign In"
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible: "Business operations"
+    timeout: 40000
+- assertVisible: "Manage Cars"
+- assertVisible: "Business"
+- assertVisible: "Support"
+- takeScreenshot: "output/ios-e2e/business-login-root-navigation"

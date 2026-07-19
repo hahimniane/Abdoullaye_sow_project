@@ -73,6 +73,11 @@ name: Customer reserves a parking space
     timeout: 10000
 - tapOn: "Reserve parking"
 - extendedWaitUntil:
+    visible: "I understand the business’s responsibility and want to continue."
+    timeout: 10000
+- tapOn: "I understand the business’s responsibility and want to continue."
+- tapOn: "Continue to payment"
+- extendedWaitUntil:
     visible: "(?s).*Parking reserved. Tracking number:.*"
     timeout: 30000
 - takeScreenshot: "output/ios-e2e/parking-reserved"

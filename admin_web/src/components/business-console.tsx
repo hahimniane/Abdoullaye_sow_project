@@ -386,9 +386,7 @@ export function BusinessConsole({
           )}
           {!isApproved && businessId && (
             <div className="info-band">
-              This business is currently {statusLabel(status).toLowerCase()}.
-              Complete Stripe setup and any requested profile details while it
-              waits for platform approval.
+              {businessStatusNotice(status)}
             </div>
           )}
 
@@ -416,6 +414,7 @@ export function BusinessConsole({
           {activeTab === "listings" && (
             <ListingsPanel
               businessId={businessId}
+              previewMode={previewMode}
               businessName={businessName}
               businessStatus={status}
               businessProfileImageUrl={text(business?.profileImageUrl, "")}
@@ -423,24 +422,32 @@ export function BusinessConsole({
             />
           )}
           {activeTab === "purchases" && (
-            <PurchasesPanel businessId={businessId} />
+            <PurchasesPanel businessId={businessId} previewMode={previewMode} />
           )}
           {activeTab === "barrels" && (
             <BarrelsPanel
               businessId={businessId}
+              previewMode={previewMode}
               onOpenDestinations={openDestinationSetup}
             />
           )}
-          {activeTab === "freight" && <FreightPanel businessId={businessId} />}
+          {activeTab === "freight" && (
+            <FreightPanel businessId={businessId} previewMode={previewMode} />
+          )}
           {activeTab === "transport" && (
-            <TransportPanel businessId={businessId} />
+            <TransportPanel businessId={businessId} previewMode={previewMode} />
           )}
           {activeTab === "parking" && (
-            <ParkingPanel businessId={businessId} businessName={businessName} />
+            <ParkingPanel
+              businessId={businessId}
+              businessName={businessName}
+              previewMode={previewMode}
+            />
           )}
           {activeTab === "destinations" && (
             <DestinationsPanel
               businessId={businessId}
+              previewMode={previewMode}
               enabledServices={Array.from(services)}
               openNewToken={destinationSetupRequest}
             />
@@ -465,12 +472,14 @@ export function BusinessConsole({
                 "Business",
               )}
               canReply={hasBusinessPermission(profile, "support")}
+              enabled={!previewMode}
             />
           )}
           {activeTab === "growth" && (
             <GrowthPanel
               businessId={businessId}
               business={business}
+              previewMode={previewMode}
               insights={insights.rows}
               loading={insights.loading}
               error={insights.error}
@@ -1306,4 +1315,8 @@ function statusLabel(value: unknown) {
       .filter(Boolean)
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(" ");
+}
+
+function businessStatusNotice(status: unknown) {
+  return `This business is currently ${statusLabel(status).toLowerCase()}. Complete Stripe setup and any requested profile details while it waits for platform approval.`;
 }

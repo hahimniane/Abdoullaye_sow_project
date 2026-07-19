@@ -158,6 +158,7 @@
     "Select a country": "Sélectionnez un pays",
     "Send request": "Envoyer la demande",
     "Send request →": "Envoyer la demande →",
+    "Send message": "Envoyer le message",
     "Share a barrel": "Partager un baril",
     "Shared barrels": "Barils partagés",
     "Services from partners you can compare": "Des services de partenaires que vous pouvez comparer",

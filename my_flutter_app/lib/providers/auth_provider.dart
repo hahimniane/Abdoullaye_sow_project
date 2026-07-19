@@ -8,9 +8,20 @@ import 'package:cloud_functions/cloud_functions.dart';
 import '../models/notification_preferences.dart';
 import '../services/push_notification_service.dart';
 import '../utils/phone_number_validator.dart';
+import '../utils/business_permissions.dart';
 import '../models/marketplace_disclosure_acceptance.dart';
 
 enum AuthInitializationIssue { profileUnavailable, profileMissing }
+
+class PhoneVerificationSession {
+  const PhoneVerificationSession({
+    required this.verificationId,
+    this.resendToken,
+  });
+
+  final String verificationId;
+  final int? resendToken;
+}
 
 class AuthProvider extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -26,10 +37,12 @@ class AuthProvider extends ChangeNotifier {
   String? _businessId;
   String? _businessName;
   List<String> _businessServices = const [];
+  List<String> _businessPermissions = const [];
   String? _userEmail;
   String? _customerName;
   String? _customerPhone;
   String? _normalizedPhone;
+  bool _phoneVerified = false;
   String? _profileImageUrl;
   NotificationPreferences _notificationPreferences =
       NotificationPreferences.defaults;
@@ -47,10 +60,26 @@ class AuthProvider extends ChangeNotifier {
   String? get businessId => _businessId;
   String? get businessName => _businessName;
   List<String> get businessServices => List.unmodifiable(_businessServices);
+  List<String> get businessPermissions =>
+      List.unmodifiable(_businessPermissions);
+  bool hasBusinessPermission(String permission) => canAccessBusinessPermission(
+    isStaff: _isStaff,
+    permissions: _businessPermissions,
+    permission: permission,
+  );
   String? get userEmail => _userEmail;
   String? get customerName => _customerName;
   String? get customerPhone => _customerPhone;
   String? get normalizedPhone => _normalizedPhone;
+  String? get linkedPhoneNumber => _auth.currentUser?.phoneNumber;
+  bool get phoneVerified =>
+      _phoneVerified &&
+      PhoneNumberValidator.matches(
+        _user?.phoneNumber,
+        _customerPhone ?? _normalizedPhone,
+      );
+  bool linkedPhoneMatches(String phoneNumber) =>
+      PhoneNumberValidator.matches(linkedPhoneNumber, phoneNumber);
   String? get profileImageUrl => _profileImageUrl;
   NotificationPreferences get notificationPreferences =>
       _notificationPreferences;
@@ -110,9 +139,11 @@ class AuthProvider extends ChangeNotifier {
           _businessId = data?['businessId'] as String?;
           _businessName = data?['businessName'] as String?;
           _businessServices = _stringList(data?['businessServices']);
+          _businessPermissions = _stringList(data?['businessPermissions']);
           _customerName = data?['fullName'] as String?;
           _customerPhone = data?['phone'] as String?;
           _normalizedPhone = data?['normalizedPhone'] as String?;
+          _phoneVerified = data?['phoneVerified'] == true;
           _profileImageUrl = data?['profileImageUrl'] as String?;
           _notificationPreferences = NotificationPreferences.fromMap(
             data?['notificationPreferences'] is Map<String, dynamic>
@@ -151,9 +182,11 @@ class AuthProvider extends ChangeNotifier {
     _businessId = null;
     _businessName = null;
     _businessServices = const [];
+    _businessPermissions = const [];
     _customerName = null;
     _customerPhone = null;
     _normalizedPhone = null;
+    _phoneVerified = false;
     _profileImageUrl = null;
     _notificationPreferences = NotificationPreferences.defaults;
   }
@@ -301,10 +334,12 @@ class AuthProvider extends ChangeNotifier {
       _businessId = null;
       _businessName = null;
       _businessServices = const [];
+      _businessPermissions = const [];
       _userEmail = null;
       _customerName = null;
       _customerPhone = null;
       _normalizedPhone = null;
+      _phoneVerified = false;
       _profileImageUrl = null;
       _notificationPreferences = NotificationPreferences.defaults;
       notifyListeners();
@@ -319,10 +354,12 @@ class AuthProvider extends ChangeNotifier {
       _businessId = null;
       _businessName = null;
       _businessServices = const [];
+      _businessPermissions = const [];
       _userEmail = null;
       _customerName = null;
       _customerPhone = null;
       _normalizedPhone = null;
+      _phoneVerified = false;
       _profileImageUrl = null;
       _notificationPreferences = NotificationPreferences.defaults;
       notifyListeners();
@@ -370,8 +407,114 @@ class AuthProvider extends ChangeNotifier {
         (response.data['normalizedPhone'] ??
                 PhoneNumberValidator.aliasKey(trimmedPhone))
             .toString();
+    _phoneVerified = response.data['phoneVerified'] == true;
     _notificationPreferences = prefs;
     if (profileImageUrl != null) _profileImageUrl = profileImageUrl;
+    notifyListeners();
+  }
+
+  Future<void> startPhoneVerification({
+    required String phoneNumber,
+    required String languageCode,
+    required ValueChanged<PhoneVerificationSession> onCodeSent,
+    required Future<void> Function() onVerificationCompleted,
+    required ValueChanged<Object> onVerificationFailed,
+    bool Function()? shouldCompleteAutomaticVerification,
+    int? resendToken,
+  }) async {
+    if (_auth.currentUser == null) {
+      throw FirebaseAuthException(
+        code: 'user-not-found',
+        message: 'No signed-in account is available.',
+      );
+    }
+    if (!PhoneNumberValidator.isValidE164(phoneNumber)) {
+      throw FirebaseAuthException(
+        code: 'invalid-phone-number',
+        message: 'Use an international phone number beginning with +.',
+      );
+    }
+
+    await _auth.setLanguageCode(languageCode);
+    await _auth.verifyPhoneNumber(
+      phoneNumber: PhoneNumberValidator.normalized(phoneNumber),
+      forceResendingToken: resendToken,
+      timeout: const Duration(seconds: 60),
+      verificationCompleted: (credential) async {
+        if (shouldCompleteAutomaticVerification?.call() == false) return;
+        try {
+          await _finishPhoneVerification(credential);
+          if (shouldCompleteAutomaticVerification?.call() == false) return;
+          await onVerificationCompleted();
+        } catch (error) {
+          if (shouldCompleteAutomaticVerification?.call() == false) return;
+          onVerificationFailed(error);
+        }
+      },
+      verificationFailed: onVerificationFailed,
+      codeSent: (verificationId, forceResendingToken) {
+        onCodeSent(
+          PhoneVerificationSession(
+            verificationId: verificationId,
+            resendToken: forceResendingToken,
+          ),
+        );
+      },
+      codeAutoRetrievalTimeout: (verificationId) {},
+    );
+  }
+
+  Future<void> completePhoneVerification({
+    required String verificationId,
+    required String smsCode,
+  }) async {
+    final credential = PhoneAuthProvider.credential(
+      verificationId: verificationId,
+      smsCode: smsCode,
+    );
+    await _finishPhoneVerification(credential);
+  }
+
+  Future<void> _finishPhoneVerification(PhoneAuthCredential credential) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      throw FirebaseAuthException(
+        code: 'user-not-found',
+        message: 'No signed-in account is available.',
+      );
+    }
+
+    if ((currentUser.phoneNumber ?? '').isEmpty) {
+      await currentUser.linkWithCredential(credential);
+    } else {
+      await currentUser.updatePhoneNumber(credential);
+    }
+    await syncLinkedPhoneVerification();
+  }
+
+  Future<void> syncLinkedPhoneVerification() async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      throw FirebaseAuthException(
+        code: 'user-not-found',
+        message: 'No signed-in account is available.',
+      );
+    }
+
+    await currentUser.reload();
+    final refreshedUser = _auth.currentUser;
+    if (!PhoneNumberValidator.isValidE164(refreshedUser?.phoneNumber)) {
+      throw FirebaseAuthException(
+        code: 'invalid-phone-number',
+        message: 'Complete phone verification before syncing your profile.',
+      );
+    }
+    _user = refreshedUser;
+    await refreshedUser!.getIdToken(true);
+    await _functions.httpsCallable('syncVerifiedCustomerPhone').call<void>({});
+    await refreshedUser.reload();
+    _user = _auth.currentUser;
+    await _checkUserRole();
     notifyListeners();
   }
 

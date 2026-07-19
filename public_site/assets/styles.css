@@ -417,7 +417,7 @@ a{color:inherit; text-decoration:none}
 .app-showcase::before{content:""; position:absolute; right:-120px; top:-80px; width:420px; height:420px; border-radius:50%;
   background:radial-gradient(circle,rgba(20,184,166,.28),transparent 70%)}
 .app-show-inner{position:relative; z-index:1; display:grid; grid-template-columns:1fr 1.05fr; gap:54px; align-items:center}
-.app-show-copy h2{color:#fff; font-size:clamp(28px,4vw,42px)}
+.app-show-copy h1,.app-show-copy h2{color:#fff; font-size:clamp(28px,4vw,42px)}
 .app-show-copy>p{color:rgba(233,255,249,.82); font-size:18px; margin:16px 0 26px}
 .app-feature-list{list-style:none; padding:0; margin:0 0 28px; display:grid; gap:16px}
 .app-feature-list li{display:flex; gap:13px; align-items:flex-start}

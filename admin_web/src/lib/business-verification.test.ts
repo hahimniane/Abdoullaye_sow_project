@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import {
@@ -175,5 +176,25 @@ test("business verification action count only flags pending reviewable businesse
       enabledServices: [],
     }),
     1,
+  );
+});
+
+test("editing verification drafts does not trigger their reset effect", () => {
+  const source = readFileSync(
+    "src/components/admin-console.tsx",
+    "utf8",
+  );
+  const start = source.indexOf("const verificationVersion");
+  const end = source.indexOf("const owner", start);
+  const draftReset = source.slice(start, end);
+
+  assert.ok(start >= 0 && end > start);
+  assert.match(
+    draftReset,
+    /\[business\.id,\s*persistedReviewNote,\s*verificationVersion\]/,
+  );
+  assert.doesNotMatch(
+    draftReset,
+    /\[baseVerification\.items,\s*business,\s*verificationVersion\]/,
   );
 });

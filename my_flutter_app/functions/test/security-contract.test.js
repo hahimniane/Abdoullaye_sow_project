@@ -45,6 +45,40 @@ test("administrator and staff permissions fail closed", () => {
   );
 });
 
+test("trusted manager provisioning creates a verified administrator", () => {
+  const source = exportedFunctionSource(
+      "createPlatformManager",
+      "setPlatformAdminRole",
+  );
+  assert.match(
+      source,
+      /admin\.auth\(\)\.createUser\(\{[\s\S]*emailVerified:\s*true/,
+  );
+});
+
+test("administrator role changes do not authorize the target as a caller",
+    () => {
+      const source = exportedFunctionSource(
+          "setPlatformAdminRole",
+          "listPlatformUsers",
+      );
+      assert.match(source, /getStoredUserProfile\(userId\)/);
+      assert.doesNotMatch(source, /getUserProfile\(userId\)/);
+    });
+
+test("user role updates enforce the verified administrator caller contract",
+    () => {
+      const source = exportedFunctionSource(
+          "updateUserRole",
+          "requestOwnAccountDeletion",
+      );
+      assert.match(source, /getUserProfile\(callerUid\)/);
+      assert.doesNotMatch(
+          source,
+          /collection\("users"\)[\s\S]*doc\(callerUid\)/,
+      );
+    });
+
 test("credential-bearing callable payloads are not logged", () => {
   assert.doesNotMatch(
       indexSource,
@@ -75,6 +109,35 @@ test("sign-in resolution does not disclose phone alias emails", () => {
   );
   assert.doesNotMatch(resolver, /phoneSignInAliases/);
   assert.doesNotMatch(resolver, /normalizePhoneAlias/);
+});
+
+test("only verified phone synchronization reserves a phone alias", () => {
+  const createCustomer = exportedFunctionSource(
+      "createCustomerUser",
+      "updateCustomerProfile",
+  );
+  const updateProfile = exportedFunctionSource(
+      "updateCustomerProfile",
+      "syncVerifiedCustomerPhone",
+  );
+  const syncPhone = exportedFunctionSource(
+      "syncVerifiedCustomerPhone",
+      "notifyCarPurchaseStatus",
+  );
+
+  assert.doesNotMatch(createCustomer, /phoneSignInAliases/);
+  assert.match(
+      updateProfile,
+      /if \(phoneVerified\) \{[\s\S]*transaction\.set\(nextAliasRef/,
+  );
+  assert.match(
+      updateProfile,
+      /currentAliasSnap\?\.data\(\)\?\.uid === uid/,
+  );
+  assert.match(
+      syncPhone,
+      /currentAliasSnap\.data\(\)\?\.uid === uid/,
+  );
 });
 
 test("Firestore values use the supported modular Admin SDK export", () => {

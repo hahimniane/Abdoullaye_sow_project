@@ -1985,10 +1985,16 @@ class _CarListTile extends StatelessWidget {
                   Positioned(
                     right: 12,
                     top: 12,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: onFavoriteToggle,
-                      child: _FavoriteButton(isFavorite: isFavorite),
+                    child: Semantics(
+                      button: true,
+                      label: isFavorite
+                          ? AppLocalizations.of(context)!.removeFromFavorites
+                          : AppLocalizations.of(context)!.addToFavorites,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: onFavoriteToggle,
+                        child: _FavoriteButton(isFavorite: isFavorite),
+                      ),
                     ),
                   ),
                   Positioned(

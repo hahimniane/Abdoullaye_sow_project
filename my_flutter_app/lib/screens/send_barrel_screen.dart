@@ -516,7 +516,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                   title: l10n.sender,
                                   subtitle: l10n.senderQuestion,
                                   children: [
-                                    _RoundedTextField(
+                                    BarrelTextFormField(
                                       label: AppLocalizations.of(
                                         context,
                                       )!.senderName,
@@ -2536,8 +2536,9 @@ class _NycAddressSuggestions {
   }
 }
 
-class _RoundedTextField extends StatelessWidget {
-  const _RoundedTextField({
+class BarrelTextFormField extends StatelessWidget {
+  const BarrelTextFormField({
+    super.key,
     required this.label,
     this.controller,
     this.validator,
@@ -2560,6 +2561,7 @@ class _RoundedTextField extends StatelessWidget {
     return TextFormField(
       controller: controller,
       validator: validator,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       onChanged: onChanged,
@@ -2892,7 +2894,6 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                               _receiverPhoneIsWhatsappOnly = false;
                             }
                           });
-                          _formKey.currentState?.validate();
                         },
                       ),
                       if (_country != null) ...[
@@ -2905,7 +2906,7 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                         ),
                       ],
                       const SizedBox(height: 14),
-                      _RoundedTextField(
+                      BarrelTextFormField(
                         label: l10n.receiverName,
                         controller: _receiverNameController,
                         icon: Icons.person_pin_outlined,
@@ -2915,7 +2916,7 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                             : null,
                       ),
                       const SizedBox(height: 14),
-                      _RoundedTextField(
+                      BarrelTextFormField(
                         label: l10n.receiverPhone,
                         controller: _receiverPhoneController,
                         icon: Icons.phone_outlined,

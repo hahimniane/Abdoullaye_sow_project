@@ -99,3 +99,9 @@ Return:
 - Keep the app light-only for the current release. A future dark-mode return is
   a full product-quality project, not a settings-toggle change; it must include
   Stripe sheets, iOS/Android native shells, all roles, and English/French QA.
+- Phone verification uses three explicit profile states: matching verified,
+  matching unverified, and edited. An edited visible number must never retain a
+  green verified treatment. Present a nearby full-width `Save and verify`
+  action, keep the one-field OTP and Verify action together above the keyboard,
+  and give resend, error, synchronization recovery, and success their own
+  visible states in English and French.

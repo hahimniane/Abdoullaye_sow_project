@@ -1,0 +1,50 @@
+appId: com.laawoldigital.app
+name: Customer cancels a shared barrel before processing
+---
+- clearKeychain
+- launchApp:
+    clearState: true
+- waitForAnimationToEnd
+- tapOn: "(?s)Sign in to your wallet.*"
+- extendedWaitUntil:
+    visible: "Account Login"
+    timeout: 20000
+- waitForAnimationToEnd
+- tapOn: "Email"
+- inputText: "e2e.customer@laawol.test"
+- tapOn: "Password"
+- inputText: "${E2E_TEST_PASSWORD}"
+- tapOn: "done"
+- scrollUntilVisible:
+    element:
+      text: "Sign In"
+    direction: DOWN
+- tapOn: "Sign In"
+- extendedWaitUntil:
+    visible: "(?s).*E2E Customer.*"
+    timeout: 30000
+- tapOn: "Shipping"
+- tapOn: "(?s).*Shared barrels.*"
+- extendedWaitUntil:
+    visible: "(?s).*My pools.*"
+    timeout: 30000
+- tapOn: "(?s).*My pools.*"
+- extendedWaitUntil:
+    visible: "Manage requests"
+    timeout: 30000
+- tapOn:
+    text: "Manage requests"
+    index: 0
+- extendedWaitUntil:
+    visible: "No join requests are waiting for approval."
+    timeout: 20000
+- tapOn: "Cancel pool"
+- extendedWaitUntil:
+    visible: "Cancel this shared barrel?"
+    timeout: 10000
+- assertVisible: '(?s).*If you cancel now.*\$33\.75 deposit will be forfeited.*'
+- tapOn: "Cancel and forfeit deposit"
+- extendedWaitUntil:
+    visible: "Pool cancelled."
+    timeout: 30000
+- takeScreenshot: "output/ios-e2e/shared-barrel-cancelled"

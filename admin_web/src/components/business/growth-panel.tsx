@@ -10,6 +10,7 @@ import type {FirestoreRow} from "@/types/admin";
 
 type GrowthPanelProps = {
   businessId: string;
+  previewMode?: boolean;
   business?: FirestoreRow | null;
   insights: FirestoreRow[];
   loading?: boolean;
@@ -18,6 +19,7 @@ type GrowthPanelProps = {
 
 export function GrowthPanel({
   businessId,
+  previewMode = false,
   business,
   insights,
   loading = false,
@@ -101,7 +103,7 @@ export function GrowthPanel({
           {plan === "pro" ? (
             <span className="lst-badge ok" style={{ alignSelf: "flex-start" }}>Active</span>
           ) : (
-            <button className="lst-add" type="button" disabled={busy === "checkout" || !businessId} onClick={startCheckout}>
+            <button className="lst-add" type="button" disabled={busy === "checkout" || !businessId || previewMode} onClick={startCheckout}>
               {busy === "checkout" ? <RefreshCw className="spin" size={16} /> : <BadgeDollarSign size={16} />} Upgrade to Pro
             </button>
           )}
@@ -115,7 +117,7 @@ export function GrowthPanel({
             <strong>Business AI advisor</strong>
             <p>{aiAdvisorEnabled ? "Generate new recommendations from your latest business data." : "Available on the Pro plan — spots pricing, listing, and response issues and how to fix them."}</p>
           </div>
-          <button className="lst-add" type="button" disabled={busy === "advisor" || !businessId || !aiAdvisorEnabled} onClick={generateInsights}>
+          <button className="lst-add" type="button" disabled={busy === "advisor" || !businessId || !aiAdvisorEnabled || previewMode} onClick={generateInsights}>
             {busy === "advisor" ? <RefreshCw className="spin" size={16} /> : <Sparkles size={16} />} Generate recommendations
           </button>
         </div>

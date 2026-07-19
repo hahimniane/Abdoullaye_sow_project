@@ -125,6 +125,37 @@ class BarrelPoolService {
         });
   }
 
+  Stream<List<BarrelPoolParticipant>> participants(String poolId) {
+    return _firestore
+        .collection('barrelPools')
+        .doc(poolId)
+        .collection('participants')
+        .snapshots()
+        .map((snapshot) {
+          final rows = snapshot.docs
+              .map(BarrelPoolParticipant.fromFirestore)
+              .toList();
+          rows.sort((a, b) {
+            final aCreatedAt = a.createdAt?.millisecondsSinceEpoch ?? 0;
+            final bCreatedAt = b.createdAt?.millisecondsSinceEpoch ?? 0;
+            return aCreatedAt.compareTo(bCreatedAt);
+          });
+          return rows;
+        });
+  }
+
+  Future<void> decideJoin({
+    required String poolId,
+    required String participantUid,
+    required bool accept,
+  }) async {
+    await _functions.httpsCallable('decideBarrelPoolJoin').call({
+      'poolId': poolId,
+      'participantUid': participantUid,
+      'decision': accept ? 'accept' : 'reject',
+    });
+  }
+
   Future<BarrelPoolResult> createPool({
     required String businessId,
     required String destinationCountryId,

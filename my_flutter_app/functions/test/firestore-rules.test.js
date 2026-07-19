@@ -1040,7 +1040,7 @@ describe("shared barrel Firestore rules", () => {
         await assertFails(strangerDb.doc("barrelPools/pool_a").get());
       });
 
-  it("protects participant PII from customers and all client writes",
+  it("lets the pool owner review joiners while protecting participant PII",
       async () => {
         const ownerDb = firestoreFor("customer-owner");
         const joinerDb = firestoreFor("customer-joiner");
@@ -1051,9 +1051,20 @@ describe("shared barrel Firestore rules", () => {
             ownerDb.doc("barrelPools/pool_a/participants/customer-owner").get(),
         );
         await assertSucceeds(
+            ownerDb
+                .doc("barrelPools/pool_a/participants/customer-joiner")
+                .get(),
+        );
+        await assertSucceeds(
+            ownerDb.collection("barrelPools/pool_a/participants").get(),
+        );
+        await assertSucceeds(
             businessDb
                 .doc("barrelPools/pool_a/participants/customer-joiner")
                 .get(),
+        );
+        await assertFails(
+            joinerDb.collection("barrelPools/pool_a/participants").get(),
         );
         await assertFails(
             joinerDb
@@ -1507,6 +1518,24 @@ describe("support attachment Storage rules", () => {
             "staff-support-a",
             "photo.jpg",
             {contentType: "image/jpeg"},
+        ),
+    );
+    await assertSucceeds(
+        putSupportAttachment(
+            storageFor("customer-support"),
+            "case_a",
+            "customer-support",
+            "ios-photo.heic",
+            {contentType: "image/heic"},
+        ),
+    );
+    await assertSucceeds(
+        putSupportAttachment(
+            storageFor("customer-support"),
+            "case_a",
+            "customer-support",
+            "ios-video.mov",
+            {contentType: "video/quicktime"},
         ),
     );
     await assertSucceeds(

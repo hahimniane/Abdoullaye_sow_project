@@ -1512,6 +1512,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Aucune activité de portefeuille pour le moment.';
 
   @override
+  String get walletActivityUnavailable =>
+      'Nous n\'avons pas pu charger l\'activité de votre portefeuille pour le moment. Veuillez réessayer dans un instant.';
+
+  @override
   String get signInToViewWallet =>
       'Connectez-vous pour voir votre portefeuille.';
 
@@ -1900,6 +1904,64 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get reject => 'Rejeter';
+
+  @override
+  String get sharedBarrelManageRequests => 'Gérer les demandes';
+
+  @override
+  String get sharedBarrelJoinRequests => 'Demandes d’adhésion';
+
+  @override
+  String get sharedBarrelJoinRequestsHelp =>
+      'Approuvez ou refusez les clients qui souhaitent rejoindre ce baril partagé.';
+
+  @override
+  String get sharedBarrelNoPendingRequests =>
+      'Aucune demande d’adhésion n’attend d’approbation.';
+
+  @override
+  String get sharedBarrelRequestApproved => 'Demande d’adhésion approuvée.';
+
+  @override
+  String get sharedBarrelRequestRejected =>
+      'Demande d’adhésion refusée. Le remboursement de l’acompte sera lancé.';
+
+  @override
+  String get sharedBarrelRequestDecisionFailed =>
+      'Impossible de mettre à jour cette demande. Veuillez réessayer.';
+
+  @override
+  String sharedBarrelRequestedShareCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count parts demandées',
+      one: '1 part demandée',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String sharedBarrelPaidDeposit(Object amount) {
+    return 'Acompte payé : $amount';
+  }
+
+  @override
+  String get sharedBarrelCancelPool => 'Annuler le baril';
+
+  @override
+  String get sharedBarrelCancelTitle => 'Annuler ce baril partagé ?';
+
+  @override
+  String sharedBarrelCancelForfeitureMessage(Object amount) {
+    return 'Si vous annulez maintenant, votre acompte de $amount sera perdu. Cette action est irréversible.';
+  }
+
+  @override
+  String get sharedBarrelKeepPool => 'Conserver le baril';
+
+  @override
+  String get sharedBarrelCancelAndForfeit => 'Annuler et perdre l’acompte';
 
   @override
   String get requestChanges => 'Demander des modifications';
@@ -3236,6 +3298,12 @@ class AppLocalizationsFr extends AppLocalizations {
   String get favoriteRemoved => 'Favori supprimé';
 
   @override
+  String get addToFavorites => 'Ajouter aux favoris';
+
+  @override
+  String get removeFromFavorites => 'Retirer des favoris';
+
+  @override
   String get enterValidPaidHoldPricing =>
       'Entrez un tarif de blocage payant valide.';
 
@@ -4140,6 +4208,31 @@ class AppLocalizationsFr extends AppLocalizations {
   String get supportUploading => 'Téléversement...';
 
   @override
+  String get supportReviewAttachmentTitle => 'Vérifier la pièce jointe';
+
+  @override
+  String get supportUploadAttachment => 'Téléverser';
+
+  @override
+  String get supportReplaceAttachment => 'Remplacer';
+
+  @override
+  String get supportAttachmentCaption => 'Légende (facultative)';
+
+  @override
+  String get supportPreviewUnavailable =>
+      'Aperçu indisponible. Vous pouvez quand même téléverser ce fichier.';
+
+  @override
+  String get supportUploadFailed =>
+      'Échec du téléversement. Vérifiez votre connexion et réessayez.';
+
+  @override
+  String supportImagePreviewLabel(Object name) {
+    return 'Aperçu de l’image : $name';
+  }
+
+  @override
   String get supportRequestEvidence => 'Demander des preuves';
 
   @override
@@ -4520,6 +4613,20 @@ class AppLocalizationsFr extends AppLocalizations {
       'Choisissez un fichier PDF, texte, Word ou DOCX.';
 
   @override
+  String get supportImageTooLarge => 'Choisissez une image de moins de 10 Mo.';
+
+  @override
+  String get supportVideoTooLarge => 'Choisissez une vidéo de moins de 50 Mo.';
+
+  @override
+  String get supportDocumentTooLarge =>
+      'Choisissez un document de moins de 25 Mo.';
+
+  @override
+  String get supportVoiceTooLarge =>
+      'Choisissez un fichier audio de moins de 10 Mo.';
+
+  @override
   String get supportAttach => 'Joindre';
 
   @override
@@ -4694,6 +4801,172 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get businessResponsibilityRequired =>
       'Confirmez la déclaration de responsabilité de l’entreprise pour envoyer votre demande.';
+
+  @override
+  String get verifyPhoneToContinueTitle =>
+      'Vérifiez votre téléphone pour continuer';
+
+  @override
+  String get verifyPhoneToContinueBody =>
+      'Les barils partagés sont réservés aux clients dont le numéro de téléphone est vérifié. Nous enverrons un code au numéro associé à votre compte.';
+
+  @override
+  String get verifyPhone => 'Vérifier le téléphone';
+
+  @override
+  String get notNow => 'Pas maintenant';
+
+  @override
+  String get phoneVerificationTitle => 'Vérification du téléphone';
+
+  @override
+  String get phoneVerificationExplanation =>
+      'Confirmez ou modifiez le numéro de portable de votre compte. Nous vous enverrons un code de vérification à usage unique par SMS.';
+
+  @override
+  String get phoneVerificationCountryCodeHelp =>
+      'Incluez l’indicatif du pays, par exemple +1 718 555 0100.';
+
+  @override
+  String get phoneVerificationCodeSentTitle => 'Code envoyé';
+
+  @override
+  String phoneVerificationCodeSent(Object phone) {
+    return 'Saisissez le code à 6 chiffres envoyé au $phone.';
+  }
+
+  @override
+  String get phoneVerificationCode => 'Code de vérification';
+
+  @override
+  String get phoneVerificationSendCode => 'Envoyer le code de vérification';
+
+  @override
+  String get phoneVerificationSendingCode => 'Envoi du code...';
+
+  @override
+  String get phoneVerificationVerifying => 'Vérification...';
+
+  @override
+  String get phoneVerificationResending => 'Nouvel envoi...';
+
+  @override
+  String get phoneVerificationResent => 'Un nouveau code a été envoyé.';
+
+  @override
+  String get phoneVerificationResend => 'Renvoyer le code';
+
+  @override
+  String phoneVerificationResendIn(int seconds) {
+    return 'Renvoyer le code dans $seconds s';
+  }
+
+  @override
+  String get phoneVerificationChangeNumber => 'Changer de numéro';
+
+  @override
+  String get phoneVerificationSmsNotice =>
+      'Les frais SMS et de données habituels peuvent s’appliquer. Le code sert uniquement à vérifier que ce téléphone vous appartient.';
+
+  @override
+  String get phoneVerificationInvalidPhone =>
+      'Saisissez un numéro international valide commençant par + et l’indicatif du pays.';
+
+  @override
+  String get phoneVerificationEnterCode => 'Saisissez le code à 6 chiffres.';
+
+  @override
+  String get phoneVerificationInvalidCode =>
+      'Ce code est incorrect. Vérifiez-le et réessayez.';
+
+  @override
+  String get phoneVerificationExpiredCode =>
+      'Ce code a expiré. Demandez un nouveau code et réessayez.';
+
+  @override
+  String get phoneVerificationTooManyAttempts =>
+      'Trop de tentatives de vérification. Attendez avant de réessayer.';
+
+  @override
+  String get phoneVerificationNetworkError =>
+      'Vérifiez votre connexion et réessayez.';
+
+  @override
+  String get phoneVerificationRequestTimedOut =>
+      'Nous n’avons reçu aucune réponse. Vérifiez votre connexion et réessayez.';
+
+  @override
+  String get phoneVerificationPhoneInUse =>
+      'Ce numéro de téléphone est déjà associé à un autre compte.';
+
+  @override
+  String get phoneVerificationRecentLogin =>
+      'Pour des raisons de sécurité, déconnectez-vous, reconnectez-vous, puis vérifiez à nouveau votre téléphone.';
+
+  @override
+  String get phoneVerificationGenericError =>
+      'Nous n’avons pas pu vérifier votre téléphone. Réessayez.';
+
+  @override
+  String get phoneVerificationSyncPending =>
+      'Votre code a été accepté, mais nous n’avons pas pu terminer la mise à jour de votre profil. Terminez à nouveau la vérification ; aucun autre SMS n’est nécessaire.';
+
+  @override
+  String get phoneVerificationFinish => 'Terminer la vérification';
+
+  @override
+  String get phoneVerificationFinishing => 'Finalisation de la vérification...';
+
+  @override
+  String get phoneVerificationSavePhoneFirst =>
+      'Enregistrez ce numéro avant de le vérifier.';
+
+  @override
+  String get phoneVerificationSaveAndVerify => 'Enregistrer et vérifier';
+
+  @override
+  String get phoneVerificationSavingNumber => 'Enregistrement du numéro...';
+
+  @override
+  String get phoneVerificationEditedStatus =>
+      'Ce numéro n’est ni enregistré ni vérifié.';
+
+  @override
+  String get phoneVerificationUnverifiedHelp =>
+      'Vérifiez ce numéro pour utiliser les fonctions protégées du compte.';
+
+  @override
+  String get phoneVerificationVerifiedHelp =>
+      'Ce numéro correspond au téléphone vérifié de manière sécurisée sur votre compte.';
+
+  @override
+  String get phoneVerificationSuccess =>
+      'Votre numéro de téléphone est vérifié.';
+
+  @override
+  String get phoneVerificationSuccessTitle => 'Téléphone vérifié';
+
+  @override
+  String get phoneVerificationReturnToSharedBarrels =>
+      'Retourner aux barils partagés';
+
+  @override
+  String get phoneVerificationVerified => 'Téléphone vérifié';
+
+  @override
+  String get phoneVerificationNotVerified => 'Téléphone non vérifié';
+
+  @override
+  String get sharedBarrelActionFailed =>
+      'Nous n’avons pas pu terminer cette action de baril partagé. Réessayez.';
+
+  @override
+  String get sharedBarrelsLoadFailed =>
+      'Vérifiez votre connexion et réessayez. Vos informations sont en sécurité.';
+
+  @override
+  String get sharedBarrelFormLoadFailed =>
+      'Nous n’avons pas pu ouvrir le formulaire de baril partagé. Vérifiez votre connexion et réessayez.';
 
   @override
   String get marketplaceBalancePaymentSummary => 'Paiement du solde';

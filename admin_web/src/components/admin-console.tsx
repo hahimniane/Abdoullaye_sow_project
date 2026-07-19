@@ -54,6 +54,7 @@ import {
   Search,
   Send,
   Shield,
+  ShieldOff,
   SlidersHorizontal,
   Store,
   Truck,
@@ -63,6 +64,10 @@ import {
 } from "lucide-react";
 
 import { auth, db, functions, storage } from "@/lib/firebase";
+import {
+  resolveAdminRoleKey,
+  resolveAssignableAdminRole,
+} from "@/lib/admin-access";
 import {
   VERIFICATION_STATUSES,
   buildBusinessVerificationChecklist,
@@ -76,7 +81,13 @@ import {
   type BusinessStripeVerification,
   type VerificationStatus,
 } from "@/lib/business-verification";
-import { asDate, formatDate, formatMoney, text } from "@/lib/format";
+import {
+  asDate,
+  formatDate,
+  formatMoney,
+  optionalText,
+  text,
+} from "@/lib/format";
 import type { FirestoreRow, Role, UserProfile } from "@/types/admin";
 import { SupportCasesPanel } from "@/components/support/support-cases-panel";
 import {
@@ -320,8 +331,7 @@ function resolvePerms(
   previewMode: boolean,
   config: PermissionsConfig | null,
 ): Perms {
-  const raw = text(profile?.adminRole, "");
-  const effective = previewMode ? "superAdmin" : raw || "superAdmin";
+  const effective = resolveAdminRoleKey(profile?.adminRole, previewMode);
   if (effective === "superAdmin") {
     return {
       role: "superAdmin",
@@ -336,7 +346,7 @@ function resolvePerms(
   if (!role) {
     return {
       role: effective,
-      label: roleLabel(effective, config),
+      label: roleLabel(effective, config) || "Access not configured",
       tabs: ["today"],
       can: () => false,
       services: [],
@@ -2613,25 +2623,25 @@ function Today(props: {
       label: "Marketplace",
       value: activeListings,
       total: Math.max(props.cars.length, 1),
-      meta: `${activeListings} active of ${props.cars.length} listings`,
+      meta: `Active listings: ${activeListings} of ${props.cars.length}`,
     },
     {
       label: "Barrel shipments",
       value: pendingShipments,
       total: Math.max(props.barrelShipments.length, 1),
-      meta: `${pendingShipments} open of ${props.barrelShipments.length} records`,
+      meta: `Open records: ${pendingShipments} of ${props.barrelShipments.length}`,
     },
     {
       label: "Freight shipments",
       value: pendingFreight,
       total: Math.max(props.freightShipments.length, 1),
-      meta: `${pendingFreight} open of ${props.freightShipments.length} records`,
+      meta: `Open records: ${pendingFreight} of ${props.freightShipments.length}`,
     },
     {
       label: "Car purchases",
       value: pendingPurchases,
       total: Math.max(props.purchases.length, 1),
-      meta: `${pendingPurchases} open of ${props.purchases.length} records`,
+      meta: `Open records: ${pendingPurchases} of ${props.purchases.length}`,
     },
     {
       label: "Card returns",
@@ -2656,14 +2666,14 @@ function Today(props: {
       label: "Open shipments",
       value: pendingShipments + pendingFreight,
       tone: "neutral" as const,
-      meta: `${props.barrelShipments.length} barrel · ${props.freightShipments.length} freight records`,
+      meta: `Barrel records: ${props.barrelShipments.length} · Freight records: ${props.freightShipments.length}`,
       target: "operations" as Tab,
     },
     {
       label: "Pending purchases",
       value: pendingPurchases,
       tone: "neutral" as const,
-      meta: `${props.purchases.length} purchase records`,
+      meta: `Purchase records: ${props.purchases.length}`,
       target: "operations" as Tab,
     },
     {
@@ -3147,7 +3157,10 @@ function UsersView({
           {platformAdmins.map((user) => {
             const isCurrentUser =
               text(user.uid ?? user.id, "") === currentUserId;
-            const adminRole = text(user.adminRole, "superAdmin");
+            const adminRole = resolveAssignableAdminRole(
+              user.adminRole,
+              roleOptions.map((option) => option.key),
+            );
             return (
               <div className="table-row admin-row" key={user.id}>
                 <div>
@@ -3160,13 +3173,9 @@ function UsersView({
                 </div>
                 {canManage ? (
                   <select
-                    aria-label="Access role"
+                    aria-label="Admin access role"
                     disabled={isCurrentUser}
-                    value={
-                      roleOptions.some((option) => option.key === adminRole)
-                        ? adminRole
-                        : "superAdmin"
-                    }
+                    value={adminRole}
                     onChange={(event) =>
                       runAction(
                         "Admin role updated",
@@ -3178,6 +3187,11 @@ function UsersView({
                       )
                     }
                   >
+                    {!adminRole && (
+                      <option disabled value="">
+                        Access not configured
+                      </option>
+                    )}
                     {roleOptions.map((option) => (
                       <option key={option.key} value={option.key}>
                         {option.label}
@@ -3186,22 +3200,41 @@ function UsersView({
                   </select>
                 ) : (
                   <span className="admin-role-pill">
-                    {roleLabel(adminRole, permsConfig)}
+                    {roleLabel(adminRole, permsConfig) ||
+                      "Access not configured"}
                   </span>
                 )}
                 {canManage && !isCurrentUser ? (
-                  <button
-                    className="danger-button"
-                    onClick={() =>
-                      runAction("User deleted", () => deleteUser(user.id), {
-                        confirm: `Delete ${text(user.email ?? user.fullName, user.id)}? This cannot be undone from the console.`,
-                        confirmFr: `Supprimer ${text(user.email ?? user.fullName, user.id)} ? Cette action ne peut pas être annulée depuis la console.`,
-                      })
-                    }
-                  >
-                    <X size={15} />
-                    Delete
-                  </button>
+                  <div className="admin-row-actions">
+                    <button
+                      className="warning-button"
+                      onClick={() =>
+                        runAction(
+                          "Admin access removed",
+                          () => updateRole(user.id, "customer"),
+                          {
+                            confirm: `Remove admin access for ${userDisplayName(user)}? This account will become a customer account and immediately lose access to the admin console. The account and its history will not be deleted.`,
+                            confirmFr: `Retirer l’accès administrateur de ${userDisplayName(user)} ? Ce compte deviendra un compte client et perdra immédiatement l’accès à la console d’administration. Le compte et son historique ne seront pas supprimés.`,
+                          },
+                        )
+                      }
+                    >
+                      <ShieldOff size={15} />
+                      Remove admin access
+                    </button>
+                    <button
+                      className="danger-button"
+                      onClick={() =>
+                        runAction("User deleted", () => deleteUser(user.id), {
+                          confirm: `Delete ${text(user.email ?? user.fullName, user.id)}? This cannot be undone from the console.`,
+                          confirmFr: `Supprimer ${text(user.email ?? user.fullName, user.id)} ? Cette action ne peut pas être annulée depuis la console.`,
+                        })
+                      }
+                    >
+                      <X size={15} />
+                      Delete
+                    </button>
+                  </div>
                 ) : (
                   <span className="muted-action">
                     {isCurrentUser ? "You" : "—"}
@@ -7304,9 +7337,8 @@ function BusinessWorkspace({
         baseVerification.items.map((item) => [item.id, item.status]),
       ) as Record<string, VerificationStatus>,
   );
-  const [reviewNote, setReviewNote] = useState(() =>
-    businessVerificationReviewNote(business),
-  );
+  const persistedReviewNote = businessVerificationReviewNote(business);
+  const [reviewNote, setReviewNote] = useState(() => persistedReviewNote);
 
   useEffect(() => {
     setSupportDraft((current) => ({
@@ -7325,8 +7357,8 @@ function BusinessWorkspace({
         baseVerification.items.map((item) => [item.id, item.status]),
       ) as Record<string, VerificationStatus>,
     );
-    setReviewNote(businessVerificationReviewNote(business));
-  }, [baseVerification.items, business, verificationVersion]);
+    setReviewNote(persistedReviewNote);
+  }, [business.id, persistedReviewNote, verificationVersion]);
 
   const owner = members.find((user) => text(user.role, "") === "businessOwner");
   const staff = members.filter((user) => text(user.role, "") === "staff");
@@ -9384,10 +9416,6 @@ function DestinationCoverageRow({
       </button>
     </div>
   );
-}
-
-function optionalText(value: unknown) {
-  return text(value, "");
 }
 
 function amountFromRecord(

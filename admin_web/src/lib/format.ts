@@ -28,16 +28,35 @@ export function formatDate(value: unknown) {
 
 export function formatMoney(value: unknown, currency = "USD") {
   const amount = typeof value === "number" ? value : Number(value ?? 0);
-  return new Intl.NumberFormat(currentLocale(), {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 2,
-  }).format(Number.isFinite(amount) ? amount : 0);
+  const normalizedAmount = Number.isFinite(amount) ? amount : 0;
+  const normalizedCurrency = String(currency ?? "").trim().toUpperCase() || "USD";
+  const locale = currentLocale();
+
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: normalizedCurrency,
+      maximumFractionDigits: 2,
+    }).format(normalizedAmount);
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+    const formattedAmount = new Intl.NumberFormat(locale, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(normalizedAmount);
+    return `${formattedAmount} ${normalizedCurrency}`;
+  }
+}
+
+export function optionalText(value: unknown) {
+  return String(value ?? "").trim();
 }
 
 export function text(value: unknown, fallback?: string) {
-  const normalized = String(value ?? "").trim();
-  return normalized || fallback || (currentLanguage() === "fr" ? "Inconnu" : "Unknown");
+  const normalized = optionalText(value);
+  if (normalized) return normalized;
+  if (fallback !== undefined) return fallback;
+  return currentLanguage() === "fr" ? "Inconnu" : "Unknown";
 }
 
 export function currentLanguage() {

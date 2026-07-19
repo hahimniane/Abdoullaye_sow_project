@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
@@ -31,6 +33,10 @@ class _FakeSupportRepository implements SupportRepository {
   String? internalNote;
   String? uploadedFileName;
   String? uploadedMessageType;
+  String? uploadedMimeType;
+  String? uploadedCaption;
+  int uploadCount = 0;
+  int uploadFailuresRemaining = 0;
   bool resolved = false;
   bool reopened = false;
 
@@ -186,6 +192,26 @@ class _FakeSupportRepository implements SupportRepository {
   }
 
   @override
+  Future<void> uploadPickedAttachment({
+    required String caseId,
+    required XFile file,
+    required String mimeType,
+    required String messageType,
+    int? durationSeconds,
+    String caption = '',
+  }) async {
+    uploadCount += 1;
+    uploadedFileName = file.name;
+    uploadedMessageType = messageType;
+    uploadedMimeType = mimeType;
+    uploadedCaption = caption;
+    if (uploadFailuresRemaining > 0) {
+      uploadFailuresRemaining -= 1;
+      throw StateError('test upload failure');
+    }
+  }
+
+  @override
   Future<void> uploadAttachmentMetadata({
     required String caseId,
     required String messageType,
@@ -253,9 +279,14 @@ Future<void> _pumpThread(
   _FakeSupportRepository repository, {
   String userId = 'customer-1',
   bool isAdmin = false,
+  Locale locale = const Locale('en'),
+  SupportImagePicker? imagePicker,
+  SupportAttachmentPicker? videoPicker,
+  SupportAttachmentPicker? documentPicker,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
+      locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: SupportThreadScreen(
@@ -263,10 +294,24 @@ Future<void> _pumpThread(
         supportRepository: repository,
         userIdOverride: userId,
         isAdminOverride: isAdmin,
+        imagePicker: imagePicker,
+        videoPicker: videoPicker,
+        documentPicker: documentPicker,
       ),
     ),
   );
   await tester.pumpAndSettle();
+}
+
+XFile _testImage(String name) {
+  return XFile.fromData(
+    base64Decode(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    ),
+    path: name,
+    name: name,
+    mimeType: 'image/png',
+  );
 }
 
 void main() {
@@ -363,6 +408,152 @@ void main() {
     expect(find.text('Camera'), findsOneWidget);
     expect(find.text('Video'), findsOneWidget);
     expect(find.text('File'), findsOneWidget);
+  });
+
+  testWidgets(
+    'selected image is reviewed and can be cancelled without uploading',
+    (tester) async {
+      final repository = _FakeSupportRepository(
+        supportCase: _supportCase(),
+        messages: const [],
+      );
+
+      await _pumpThread(
+        tester,
+        repository,
+        imagePicker: (_) async => _testImage('evidence.png'),
+      );
+      await tester.enterText(find.byType(TextField), 'Keep this caption');
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Photo'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Review attachment'), findsOneWidget);
+      expect(find.text('evidence.png'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
+      expect(find.text('Replace'), findsOneWidget);
+      expect(find.text('Upload'), findsOneWidget);
+      expect(repository.uploadCount, 0);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Review attachment'), findsNothing);
+      expect(repository.uploadCount, 0);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller?.text,
+        'Keep this caption',
+      );
+    },
+  );
+
+  testWidgets('replace uploads only the confirmed image with its caption', (
+    tester,
+  ) async {
+    final repository = _FakeSupportRepository(
+      supportCase: _supportCase(),
+      messages: const [],
+    );
+    final images = <XFile>[
+      _testImage('first.png'),
+      _testImage('replacement.png'),
+    ];
+
+    await _pumpThread(
+      tester,
+      repository,
+      imagePicker: (_) async => images.removeAt(0),
+    );
+    await tester.enterText(find.byType(TextField), 'Damage evidence');
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Photo'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('first.png'), findsOneWidget);
+    await tester.tap(find.text('Replace'));
+    await tester.pumpAndSettle();
+    expect(find.text('first.png'), findsNothing);
+    expect(find.text('replacement.png'), findsOneWidget);
+    expect(repository.uploadCount, 0);
+
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    expect(repository.uploadCount, 1);
+    expect(repository.uploadedFileName, 'replacement.png');
+    expect(repository.uploadedMessageType, 'image');
+    expect(repository.uploadedMimeType, 'image/png');
+    expect(repository.uploadedCaption, 'Damage evidence');
+    expect(find.text('Review attachment'), findsNothing);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller?.text,
+      isEmpty,
+    );
+  });
+
+  testWidgets('failed upload keeps the review available for retry', (
+    tester,
+  ) async {
+    final repository = _FakeSupportRepository(
+      supportCase: _supportCase(),
+      messages: const [],
+    )..uploadFailuresRemaining = 1;
+
+    await _pumpThread(
+      tester,
+      repository,
+      imagePicker: (_) async => _testImage('retry.png'),
+    );
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Photo'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    expect(repository.uploadCount, 1);
+    expect(find.text('Review attachment'), findsOneWidget);
+    expect(
+      find.text('Upload failed. Check your connection and try again.'),
+      findsOneWidget,
+    );
+    expect(find.text('Retry'), findsOneWidget);
+
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+
+    expect(repository.uploadCount, 2);
+    expect(find.text('Review attachment'), findsNothing);
+  });
+
+  testWidgets('attachment review fits a narrow French phone layout', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakeSupportRepository(
+      supportCase: _supportCase(),
+      messages: const [],
+    );
+
+    await _pumpThread(
+      tester,
+      repository,
+      locale: const Locale('fr'),
+      imagePicker: (_) async => _testImage('preuve.png'),
+    );
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Photo'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Vérifier la pièce jointe'), findsOneWidget);
+    expect(find.text('Annuler'), findsOneWidget);
+    expect(find.text('Remplacer'), findsOneWidget);
+    expect(find.text('Téléverser'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('admin support thread shows admin actions and internal notes', (

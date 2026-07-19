@@ -53,15 +53,28 @@ class TransportRequest {
 
   factory TransportRequest.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+    return TransportRequest.fromMap(id: doc.id, data: data);
+  }
+
+  factory TransportRequest.fromMap({
+    required String id,
+    required Map<String, dynamic> data,
+  }) {
+    final trackingCode = data['trackingCode'];
+    final carYear = data['carYear'];
     return TransportRequest(
-      id: doc.id,
-      trackingCode: (data['trackingCode'] as String?)?.trim().isNotEmpty == true
-          ? (data['trackingCode'] as String).trim()
-          : doc.id,
+      id: id,
+      trackingCode: trackingCode is String && trackingCode.trim().isNotEmpty
+          ? trackingCode.trim()
+          : id,
       ownerName: (data['ownerName'] ?? '') as String,
       carMake: (data['carMake'] ?? '') as String,
       carModel: (data['carModel'] ?? '') as String,
-      carYear: (data['carYear'] ?? '') as String,
+      carYear: switch (carYear) {
+        String value => value,
+        num value => value.toString(),
+        _ => '',
+      },
       vinNumber: (data['vinNumber'] ?? '') as String,
       destinationCountryId:
           (data['destinationCountryId'] ?? 'guinea') as String,

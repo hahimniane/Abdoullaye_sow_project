@@ -7,6 +7,7 @@ import {afterEach, describe, test} from "node:test";
 import {
   HOSTINGER_PRODUCTION_IPV6,
   PRODUCTION_STATIC_HOSTS,
+  assessStorageRulesFirestoreIam,
   assessStaticDnsHost,
   appCheckWebConfig,
   deploymentJavaEnvironment,
@@ -236,6 +237,50 @@ test("static DNS gate covers every production hostname", () => {
     "admin.laawoldigital.com",
     "business.laawoldigital.com",
   ]);
+});
+
+test("Storage rules Firestore IAM gate requires the cross-service role", () => {
+  const rulesSource = `
+    service firebase.storage {
+      match /b/{bucket}/o {
+        allow read: if firestore.exists(
+          /databases/(default)/documents/users/$(request.auth.uid)
+        );
+      }
+    }
+  `;
+  const projectNumber = "577373430777";
+  const expectedMember =
+    "serviceAccount:service-577373430777" +
+    "@gcp-sa-firebasestorage.iam.gserviceaccount.com";
+
+  assert.equal(assessStorageRulesFirestoreIam({
+    rulesSource,
+    projectNumber,
+    iamPolicy: {bindings: []},
+  }).ok, false);
+  assert.deepEqual(assessStorageRulesFirestoreIam({
+    rulesSource,
+    projectNumber,
+    iamPolicy: {
+      bindings: [{
+        role: "roles/firebaserules.firestoreServiceAgent",
+        members: [expectedMember],
+      }],
+    },
+  }), {
+    ok: true,
+    detail: "Firebase Storage can evaluate Firestore-backed rules",
+  });
+});
+
+test("Storage rules IAM gate is not required without Firestore lookups", () => {
+  assert.deepEqual(assessStorageRulesFirestoreIam({
+    rulesSource: "allow read: if request.auth != null;",
+  }), {
+    ok: true,
+    detail: "Storage rules do not call Firestore",
+  });
 });
 
 test("deployment commands prefer a compatible Java home on the command path", () => {

@@ -431,7 +431,9 @@ class _TransactionList extends StatelessWidget {
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 10),
-            if (!snapshot.hasData)
+            if (snapshot.hasError)
+              _EmptyActivity(message: l10n.walletActivityUnavailable)
+            else if (!snapshot.hasData)
               const Center(child: CircularProgressIndicator())
             else if (docs.isEmpty)
               const _EmptyActivity()
@@ -558,7 +560,9 @@ class _TransactionTile extends StatelessWidget {
 }
 
 class _EmptyActivity extends StatelessWidget {
-  const _EmptyActivity();
+  const _EmptyActivity({String? message}) : _message = message;
+
+  final String? _message;
 
   @override
   Widget build(BuildContext context) {
@@ -572,7 +576,7 @@ class _EmptyActivity extends StatelessWidget {
         border: Border.all(color: AppColors.rule),
       ),
       child: Text(
-        l10n.noWalletActivityYet,
+        _message ?? l10n.noWalletActivityYet,
         textAlign: TextAlign.center,
         style: const TextStyle(
           color: AppColors.muted,

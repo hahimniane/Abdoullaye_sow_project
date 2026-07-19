@@ -19,6 +19,7 @@ class BarrelPool {
     this.joinDeadline,
     this.trackingCode = '',
     this.participantRole = '',
+    this.participantSharesClaimed = 0,
     this.participantJoinStatus = '',
     this.participantPaymentStatus = '',
     this.balancePaymentStatus = '',
@@ -43,6 +44,7 @@ class BarrelPool {
   final DateTime? joinDeadline;
   final String trackingCode;
   final String participantRole;
+  final int participantSharesClaimed;
   final String participantJoinStatus;
   final String participantPaymentStatus;
   final String balancePaymentStatus;
@@ -72,6 +74,7 @@ class BarrelPool {
       joinDeadline: (data['joinDeadline'] as Timestamp?)?.toDate(),
       trackingCode: (data['trackingCode'] ?? data['poolId'] ?? '') as String,
       participantRole: (data['participantRole'] ?? '') as String,
+      participantSharesClaimed: (data['sharesClaimed'] as num?)?.toInt() ?? 0,
       participantJoinStatus: (data['participantJoinStatus'] ?? '') as String,
       participantPaymentStatus:
           (data['participantPaymentStatus'] ?? '') as String,
@@ -81,6 +84,57 @@ class BarrelPool {
           ((data['balanceDueAmountCents'] as num?)?.toDouble() ?? 0) / 100,
       balancePaymentRequestId:
           (data['balancePaymentRequestId'] ?? '') as String,
+    );
+  }
+}
+
+class BarrelPoolParticipant {
+  const BarrelPoolParticipant({
+    required this.uid,
+    required this.senderName,
+    required this.receiverName,
+    required this.receiverPhone,
+    required this.contentsDescription,
+    required this.sharesClaimed,
+    required this.joinStatus,
+    required this.paymentStatus,
+    required this.depositAmount,
+    this.createdAt,
+  });
+
+  final String uid;
+  final String senderName;
+  final String receiverName;
+  final String receiverPhone;
+  final String contentsDescription;
+  final int sharesClaimed;
+  final String joinStatus;
+  final String paymentStatus;
+  final double depositAmount;
+  final DateTime? createdAt;
+
+  factory BarrelPoolParticipant.fromFirestore(DocumentSnapshot doc) {
+    return BarrelPoolParticipant.fromMap(
+      doc.id,
+      doc.data() as Map<String, dynamic>? ?? const {},
+    );
+  }
+
+  factory BarrelPoolParticipant.fromMap(String id, Map<String, dynamic> data) {
+    final createdAt = data['createdAt'];
+    return BarrelPoolParticipant(
+      uid: (data['uid'] ?? id) as String,
+      senderName: (data['senderName'] ?? '') as String,
+      receiverName: (data['receiverName'] ?? '') as String,
+      receiverPhone: (data['receiverPhone'] ?? '') as String,
+      contentsDescription: (data['contentsDescription'] ?? '') as String,
+      sharesClaimed: (data['sharesClaimed'] as num?)?.toInt() ?? 0,
+      joinStatus: (data['joinStatus'] ?? '') as String,
+      paymentStatus: (data['paymentStatus'] ?? '') as String,
+      depositAmount:
+          (data['depositAmount'] as num?)?.toDouble() ??
+          ((data['depositAmountCents'] as num?)?.toDouble() ?? 0) / 100,
+      createdAt: createdAt is Timestamp ? createdAt.toDate() : null,
     );
   }
 }

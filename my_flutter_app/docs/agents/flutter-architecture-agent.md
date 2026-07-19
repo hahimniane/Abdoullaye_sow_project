@@ -155,3 +155,18 @@ Add future project conventions and repeated architectural decisions here.
   `UIUserInterfaceStyle`, and Android night resources to light, and do not read
   the legacy `theme_mode` preference. Reintroducing dark mode requires an
   explicitly versioned preference and complete UI/native/payment QA.
+- `CustomerHomeScreen` owns nested tab navigators that deliberately absorb
+  unknown routes by returning the tab root. Full-screen global flows such as
+  business onboarding must navigate with `rootNavigator: true`; a route merely
+  existing in `MaterialApp.routes` does not prove a nested call can reach it.
+  Cover global navigation helpers with a nested-navigator widget regression.
+- Customer attachment flows must follow select → validate → review → commit.
+  Images need a local preview plus Cancel, Replace, and explicit Upload;
+  videos/documents need filename and size review without buffering the full
+  native file. Preserve the draft caption on cancel or upload failure, retain
+  the pending attachment for retry, and keep picker/review/upload actions
+  guarded against duplicate activation.
+- Optional/domain normalization must preserve absence as absence. Display
+  sentinels such as `Unknown` must never enter typed identifiers such as
+  currency codes, roles, collection names, or business IDs; apply display copy
+  only after typed fallbacks and validation have run.

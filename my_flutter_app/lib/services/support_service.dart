@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../models/support_case.dart';
 import '../models/support_message.dart';
+import '../utils/support_attachment_storage.dart';
 
 enum SupportInboxScope { customer, business, admin }
 
@@ -89,6 +90,15 @@ abstract interface class SupportRepository {
     required String caseId,
     required String fileName,
     required List<int> bytes,
+    required String mimeType,
+    required String messageType,
+    int? durationSeconds,
+    String caption = '',
+  });
+
+  Future<void> uploadPickedAttachment({
+    required String caseId,
+    required XFile file,
     required String mimeType,
     required String messageType,
     int? durationSeconds,
@@ -397,18 +407,81 @@ class SupportService implements SupportRepository {
     final metadata = SettableMetadata(contentType: mimeType);
     final uploadBytes = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
     await ref.putData(uploadBytes, metadata);
-    final url = await ref.getDownloadURL();
-    await _functions.httpsCallable('uploadSupportAttachmentMetadata').call({
-      'caseId': caseId,
-      'fileUrl': url,
-      'filePath': path,
-      'fileName': fileName,
-      'mimeType': mimeType,
-      'fileSize': uploadBytes.length,
-      'messageType': messageType,
-      'durationSeconds': ?durationSeconds,
-      if (caption.trim().isNotEmpty) 'caption': caption.trim(),
-    });
+    await _createAttachmentMessage(
+      reference: ref,
+      caseId: caseId,
+      fileName: fileName,
+      filePath: path,
+      mimeType: mimeType,
+      messageType: messageType,
+      fileSize: uploadBytes.length,
+      durationSeconds: durationSeconds,
+      caption: caption,
+    );
+  }
+
+  @override
+  Future<void> uploadPickedAttachment({
+    required String caseId,
+    required XFile file,
+    required String mimeType,
+    required String messageType,
+    int? durationSeconds,
+    String caption = '',
+  }) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) throw StateError('Sign in required.');
+    final safeName = _safeAttachmentName(file.name);
+    final path =
+        'support_cases/$caseId/$uid/${DateTime.now().millisecondsSinceEpoch}-$safeName';
+    final ref = _storage.ref(path);
+    final metadata = SettableMetadata(contentType: mimeType);
+    await putSupportXFile(reference: ref, file: file, metadata: metadata);
+    await _createAttachmentMessage(
+      reference: ref,
+      caseId: caseId,
+      fileName: file.name,
+      filePath: path,
+      mimeType: mimeType,
+      messageType: messageType,
+      fileSize: await file.length(),
+      durationSeconds: durationSeconds,
+      caption: caption,
+    );
+  }
+
+  Future<void> _createAttachmentMessage({
+    required Reference reference,
+    required String caseId,
+    required String fileName,
+    required String filePath,
+    required String mimeType,
+    required String messageType,
+    required int fileSize,
+    required String caption,
+    int? durationSeconds,
+  }) async {
+    final url = await reference.getDownloadURL();
+    try {
+      await _functions.httpsCallable('uploadSupportAttachmentMetadata').call({
+        'caseId': caseId,
+        'fileUrl': url,
+        'filePath': filePath,
+        'fileName': fileName,
+        'mimeType': mimeType,
+        'fileSize': fileSize,
+        'messageType': messageType,
+        'durationSeconds': ?durationSeconds,
+        if (caption.trim().isNotEmpty) 'caption': caption.trim(),
+      });
+    } catch (_) {
+      try {
+        await reference.delete();
+      } catch (_) {
+        // Preserve the callable failure. Cleanup is best-effort.
+      }
+      rethrow;
+    }
   }
 
   @override

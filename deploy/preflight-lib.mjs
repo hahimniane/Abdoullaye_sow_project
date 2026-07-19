@@ -14,6 +14,48 @@ export const PRODUCTION_STATIC_HOSTS = [
   "admin.laawoldigital.com",
   "business.laawoldigital.com",
 ];
+export const FIREBASE_RULES_FIRESTORE_SERVICE_AGENT_ROLE =
+  "roles/firebaserules.firestoreServiceAgent";
+
+export function assessStorageRulesFirestoreIam({
+  rulesSource,
+  iamPolicy,
+  projectNumber,
+}) {
+  const usesFirestore = /\bfirestore\.(?:get|exists)\s*\(/.test(
+      String(rulesSource || ""),
+  );
+  if (!usesFirestore) {
+    return {
+      ok: true,
+      detail: "Storage rules do not call Firestore",
+    };
+  }
+
+  const normalizedProjectNumber = String(projectNumber || "").trim();
+  if (!normalizedProjectNumber) {
+    return {
+      ok: false,
+      detail: "could not determine the Firebase project number",
+    };
+  }
+  const expectedMember =
+    `serviceAccount:service-${normalizedProjectNumber}` +
+    "@gcp-sa-firebasestorage.iam.gserviceaccount.com";
+  const bindings = Array.isArray(iamPolicy?.bindings) ? iamPolicy.bindings : [];
+  const hasBinding = bindings.some((binding) =>
+    binding?.role === FIREBASE_RULES_FIRESTORE_SERVICE_AGENT_ROLE &&
+    Array.isArray(binding?.members) &&
+    binding.members.includes(expectedMember)
+  );
+  return {
+    ok: hasBinding,
+    detail: hasBinding ?
+      "Firebase Storage can evaluate Firestore-backed rules" :
+      `${expectedMember} needs ` +
+      FIREBASE_RULES_FIRESTORE_SERVICE_AGENT_ROLE,
+  };
+}
 
 export function assessStaticDnsHost({
   hostname,

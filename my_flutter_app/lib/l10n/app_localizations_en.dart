@@ -1480,6 +1480,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noWalletActivityYet => 'No wallet activity yet.';
 
   @override
+  String get walletActivityUnavailable =>
+      'We could not load your wallet activity right now. Please try again in a moment.';
+
+  @override
   String get signInToViewWallet => 'Sign in to view your wallet.';
 
   @override
@@ -1857,6 +1861,64 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get reject => 'Reject';
+
+  @override
+  String get sharedBarrelManageRequests => 'Manage requests';
+
+  @override
+  String get sharedBarrelJoinRequests => 'Join requests';
+
+  @override
+  String get sharedBarrelJoinRequestsHelp =>
+      'Approve or reject customers waiting to join this shared barrel.';
+
+  @override
+  String get sharedBarrelNoPendingRequests =>
+      'No join requests are waiting for approval.';
+
+  @override
+  String get sharedBarrelRequestApproved => 'Join request approved.';
+
+  @override
+  String get sharedBarrelRequestRejected =>
+      'Join request rejected. The deposit will be sent for refund.';
+
+  @override
+  String get sharedBarrelRequestDecisionFailed =>
+      'Could not update this request. Please try again.';
+
+  @override
+  String sharedBarrelRequestedShareCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count shares requested',
+      one: '1 share requested',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String sharedBarrelPaidDeposit(Object amount) {
+    return 'Deposit paid: $amount';
+  }
+
+  @override
+  String get sharedBarrelCancelPool => 'Cancel pool';
+
+  @override
+  String get sharedBarrelCancelTitle => 'Cancel this shared barrel?';
+
+  @override
+  String sharedBarrelCancelForfeitureMessage(Object amount) {
+    return 'If you cancel now, your $amount deposit will be forfeited. This cannot be undone.';
+  }
+
+  @override
+  String get sharedBarrelKeepPool => 'Keep pool';
+
+  @override
+  String get sharedBarrelCancelAndForfeit => 'Cancel and forfeit deposit';
 
   @override
   String get requestChanges => 'Request changes';
@@ -3165,6 +3227,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get favoriteRemoved => 'Favorite removed';
 
   @override
+  String get addToFavorites => 'Add to favorites';
+
+  @override
+  String get removeFromFavorites => 'Remove from favorites';
+
+  @override
   String get enterValidPaidHoldPricing => 'Enter valid paid hold pricing.';
 
   @override
@@ -4056,6 +4124,31 @@ class AppLocalizationsEn extends AppLocalizations {
   String get supportUploading => 'Uploading...';
 
   @override
+  String get supportReviewAttachmentTitle => 'Review attachment';
+
+  @override
+  String get supportUploadAttachment => 'Upload';
+
+  @override
+  String get supportReplaceAttachment => 'Replace';
+
+  @override
+  String get supportAttachmentCaption => 'Caption (optional)';
+
+  @override
+  String get supportPreviewUnavailable =>
+      'Preview unavailable. You can still upload this file.';
+
+  @override
+  String get supportUploadFailed =>
+      'Upload failed. Check your connection and try again.';
+
+  @override
+  String supportImagePreviewLabel(Object name) {
+    return 'Image preview: $name';
+  }
+
+  @override
   String get supportRequestEvidence => 'Request evidence';
 
   @override
@@ -4436,6 +4529,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'Choose a PDF, text, Word, or DOCX file.';
 
   @override
+  String get supportImageTooLarge => 'Choose an image smaller than 10 MB.';
+
+  @override
+  String get supportVideoTooLarge => 'Choose a video smaller than 50 MB.';
+
+  @override
+  String get supportDocumentTooLarge => 'Choose a document smaller than 25 MB.';
+
+  @override
+  String get supportVoiceTooLarge => 'Choose an audio file smaller than 10 MB.';
+
+  @override
   String get supportAttach => 'Attach';
 
   @override
@@ -4608,6 +4713,170 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get businessResponsibilityRequired =>
       'Confirm the business responsibility statement to submit your application.';
+
+  @override
+  String get verifyPhoneToContinueTitle => 'Verify your phone to continue';
+
+  @override
+  String get verifyPhoneToContinueBody =>
+      'Shared barrels are available only to customers with a verified phone number. We’ll send a code to the number in your account.';
+
+  @override
+  String get verifyPhone => 'Verify phone';
+
+  @override
+  String get notNow => 'Not now';
+
+  @override
+  String get phoneVerificationTitle => 'Phone verification';
+
+  @override
+  String get phoneVerificationExplanation =>
+      'Confirm or update the mobile number for your account. We’ll text you a one-time verification code.';
+
+  @override
+  String get phoneVerificationCountryCodeHelp =>
+      'Include the country code, for example +1 718 555 0100.';
+
+  @override
+  String get phoneVerificationCodeSentTitle => 'Code sent';
+
+  @override
+  String phoneVerificationCodeSent(Object phone) {
+    return 'Enter the 6-digit code sent to $phone.';
+  }
+
+  @override
+  String get phoneVerificationCode => 'Verification code';
+
+  @override
+  String get phoneVerificationSendCode => 'Send verification code';
+
+  @override
+  String get phoneVerificationSendingCode => 'Sending code...';
+
+  @override
+  String get phoneVerificationVerifying => 'Verifying...';
+
+  @override
+  String get phoneVerificationResending => 'Resending...';
+
+  @override
+  String get phoneVerificationResent => 'A new code was sent.';
+
+  @override
+  String get phoneVerificationResend => 'Resend code';
+
+  @override
+  String phoneVerificationResendIn(int seconds) {
+    return 'Resend code in ${seconds}s';
+  }
+
+  @override
+  String get phoneVerificationChangeNumber => 'Change number';
+
+  @override
+  String get phoneVerificationSmsNotice =>
+      'Standard SMS and data rates may apply. The code is used only to verify that this phone belongs to you.';
+
+  @override
+  String get phoneVerificationInvalidPhone =>
+      'Enter a valid international phone number beginning with + and the country code.';
+
+  @override
+  String get phoneVerificationEnterCode => 'Enter the 6-digit code.';
+
+  @override
+  String get phoneVerificationInvalidCode =>
+      'That code is incorrect. Check it and try again.';
+
+  @override
+  String get phoneVerificationExpiredCode =>
+      'That code expired. Request a new code and try again.';
+
+  @override
+  String get phoneVerificationTooManyAttempts =>
+      'Too many verification attempts. Please wait and try again later.';
+
+  @override
+  String get phoneVerificationNetworkError =>
+      'Check your connection and try again.';
+
+  @override
+  String get phoneVerificationRequestTimedOut =>
+      'We didn’t receive a response. Check your connection and try again.';
+
+  @override
+  String get phoneVerificationPhoneInUse =>
+      'That phone number is already linked to another account.';
+
+  @override
+  String get phoneVerificationRecentLogin =>
+      'For security, sign out, sign back in, and verify your phone again.';
+
+  @override
+  String get phoneVerificationGenericError =>
+      'We couldn’t verify your phone. Please try again.';
+
+  @override
+  String get phoneVerificationSyncPending =>
+      'Your code was accepted, but we couldn’t finish updating your profile. Try finishing verification again—another SMS is not required.';
+
+  @override
+  String get phoneVerificationFinish => 'Finish verification';
+
+  @override
+  String get phoneVerificationFinishing => 'Finishing verification...';
+
+  @override
+  String get phoneVerificationSavePhoneFirst =>
+      'Save this phone number before verifying it.';
+
+  @override
+  String get phoneVerificationSaveAndVerify => 'Save and verify';
+
+  @override
+  String get phoneVerificationSavingNumber => 'Saving number...';
+
+  @override
+  String get phoneVerificationEditedStatus =>
+      'This number has not been saved or verified.';
+
+  @override
+  String get phoneVerificationUnverifiedHelp =>
+      'Verify this number to use protected account features.';
+
+  @override
+  String get phoneVerificationVerifiedHelp =>
+      'This number matches the phone securely verified on your account.';
+
+  @override
+  String get phoneVerificationSuccess => 'Your phone number is verified.';
+
+  @override
+  String get phoneVerificationSuccessTitle => 'Phone verified';
+
+  @override
+  String get phoneVerificationReturnToSharedBarrels =>
+      'Return to shared barrels';
+
+  @override
+  String get phoneVerificationVerified => 'Phone verified';
+
+  @override
+  String get phoneVerificationNotVerified => 'Phone not verified';
+
+  @override
+  String get sharedBarrelActionFailed =>
+      'We couldn’t complete that shared-barrel action. Please try again.';
+
+  @override
+  String get sharedBarrelsLoadFailed =>
+      'Check your connection and try again. Your information is safe.';
+
+  @override
+  String get sharedBarrelFormLoadFailed =>
+      'We couldn’t open the shared-barrel form. Check your connection and try again.';
 
   @override
   String get marketplaceBalancePaymentSummary => 'Balance payment';

@@ -2798,6 +2798,12 @@ abstract class AppLocalizations {
   /// **'No wallet activity yet.'**
   String get noWalletActivityYet;
 
+  /// No description provided for @walletActivityUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not load your wallet activity right now. Please try again in a moment.'**
+  String get walletActivityUnavailable;
+
   /// No description provided for @signInToViewWallet.
   ///
   /// In en, this message translates to:
@@ -3505,6 +3511,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reject'**
   String get reject;
+
+  /// No description provided for @sharedBarrelManageRequests.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage requests'**
+  String get sharedBarrelManageRequests;
+
+  /// No description provided for @sharedBarrelJoinRequests.
+  ///
+  /// In en, this message translates to:
+  /// **'Join requests'**
+  String get sharedBarrelJoinRequests;
+
+  /// No description provided for @sharedBarrelJoinRequestsHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve or reject customers waiting to join this shared barrel.'**
+  String get sharedBarrelJoinRequestsHelp;
+
+  /// No description provided for @sharedBarrelNoPendingRequests.
+  ///
+  /// In en, this message translates to:
+  /// **'No join requests are waiting for approval.'**
+  String get sharedBarrelNoPendingRequests;
+
+  /// No description provided for @sharedBarrelRequestApproved.
+  ///
+  /// In en, this message translates to:
+  /// **'Join request approved.'**
+  String get sharedBarrelRequestApproved;
+
+  /// No description provided for @sharedBarrelRequestRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Join request rejected. The deposit will be sent for refund.'**
+  String get sharedBarrelRequestRejected;
+
+  /// No description provided for @sharedBarrelRequestDecisionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update this request. Please try again.'**
+  String get sharedBarrelRequestDecisionFailed;
+
+  /// No description provided for @sharedBarrelRequestedShareCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 share requested} other{{count} shares requested}}'**
+  String sharedBarrelRequestedShareCount(int count);
+
+  /// No description provided for @sharedBarrelPaidDeposit.
+  ///
+  /// In en, this message translates to:
+  /// **'Deposit paid: {amount}'**
+  String sharedBarrelPaidDeposit(Object amount);
+
+  /// No description provided for @sharedBarrelCancelPool.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel pool'**
+  String get sharedBarrelCancelPool;
+
+  /// No description provided for @sharedBarrelCancelTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel this shared barrel?'**
+  String get sharedBarrelCancelTitle;
+
+  /// No description provided for @sharedBarrelCancelForfeitureMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'If you cancel now, your {amount} deposit will be forfeited. This cannot be undone.'**
+  String sharedBarrelCancelForfeitureMessage(Object amount);
+
+  /// No description provided for @sharedBarrelKeepPool.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep pool'**
+  String get sharedBarrelKeepPool;
+
+  /// No description provided for @sharedBarrelCancelAndForfeit.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel and forfeit deposit'**
+  String get sharedBarrelCancelAndForfeit;
 
   /// No description provided for @requestChanges.
   ///
@@ -5864,6 +5954,18 @@ abstract class AppLocalizations {
   /// **'Favorite removed'**
   String get favoriteRemoved;
 
+  /// No description provided for @addToFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to favorites'**
+  String get addToFavorites;
+
+  /// No description provided for @removeFromFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from favorites'**
+  String get removeFromFavorites;
+
   /// No description provided for @enterValidPaidHoldPricing.
   ///
   /// In en, this message translates to:
@@ -7326,6 +7428,48 @@ abstract class AppLocalizations {
   /// **'Uploading...'**
   String get supportUploading;
 
+  /// No description provided for @supportReviewAttachmentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Review attachment'**
+  String get supportReviewAttachmentTitle;
+
+  /// No description provided for @supportUploadAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload'**
+  String get supportUploadAttachment;
+
+  /// No description provided for @supportReplaceAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace'**
+  String get supportReplaceAttachment;
+
+  /// No description provided for @supportAttachmentCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Caption (optional)'**
+  String get supportAttachmentCaption;
+
+  /// No description provided for @supportPreviewUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview unavailable. You can still upload this file.'**
+  String get supportPreviewUnavailable;
+
+  /// No description provided for @supportUploadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload failed. Check your connection and try again.'**
+  String get supportUploadFailed;
+
+  /// No description provided for @supportImagePreviewLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Image preview: {name}'**
+  String supportImagePreviewLabel(Object name);
+
   /// No description provided for @supportRequestEvidence.
   ///
   /// In en, this message translates to:
@@ -8046,6 +8190,30 @@ abstract class AppLocalizations {
   /// **'Choose a PDF, text, Word, or DOCX file.'**
   String get supportUnsupportedAttachmentType;
 
+  /// No description provided for @supportImageTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an image smaller than 10 MB.'**
+  String get supportImageTooLarge;
+
+  /// No description provided for @supportVideoTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a video smaller than 50 MB.'**
+  String get supportVideoTooLarge;
+
+  /// No description provided for @supportDocumentTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a document smaller than 25 MB.'**
+  String get supportDocumentTooLarge;
+
+  /// No description provided for @supportVoiceTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an audio file smaller than 10 MB.'**
+  String get supportVoiceTooLarge;
+
   /// No description provided for @supportAttach.
   ///
   /// In en, this message translates to:
@@ -8357,6 +8525,282 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Confirm the business responsibility statement to submit your application.'**
   String get businessResponsibilityRequired;
+
+  /// No description provided for @verifyPhoneToContinueTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify your phone to continue'**
+  String get verifyPhoneToContinueTitle;
+
+  /// No description provided for @verifyPhoneToContinueBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared barrels are available only to customers with a verified phone number. We’ll send a code to the number in your account.'**
+  String get verifyPhoneToContinueBody;
+
+  /// No description provided for @verifyPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify phone'**
+  String get verifyPhone;
+
+  /// No description provided for @notNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get notNow;
+
+  /// No description provided for @phoneVerificationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone verification'**
+  String get phoneVerificationTitle;
+
+  /// No description provided for @phoneVerificationExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm or update the mobile number for your account. We’ll text you a one-time verification code.'**
+  String get phoneVerificationExplanation;
+
+  /// No description provided for @phoneVerificationCountryCodeHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Include the country code, for example +1 718 555 0100.'**
+  String get phoneVerificationCountryCodeHelp;
+
+  /// No description provided for @phoneVerificationCodeSentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Code sent'**
+  String get phoneVerificationCodeSentTitle;
+
+  /// No description provided for @phoneVerificationCodeSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 6-digit code sent to {phone}.'**
+  String phoneVerificationCodeSent(Object phone);
+
+  /// No description provided for @phoneVerificationCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification code'**
+  String get phoneVerificationCode;
+
+  /// No description provided for @phoneVerificationSendCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Send verification code'**
+  String get phoneVerificationSendCode;
+
+  /// No description provided for @phoneVerificationSendingCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending code...'**
+  String get phoneVerificationSendingCode;
+
+  /// No description provided for @phoneVerificationVerifying.
+  ///
+  /// In en, this message translates to:
+  /// **'Verifying...'**
+  String get phoneVerificationVerifying;
+
+  /// No description provided for @phoneVerificationResending.
+  ///
+  /// In en, this message translates to:
+  /// **'Resending...'**
+  String get phoneVerificationResending;
+
+  /// No description provided for @phoneVerificationResent.
+  ///
+  /// In en, this message translates to:
+  /// **'A new code was sent.'**
+  String get phoneVerificationResent;
+
+  /// No description provided for @phoneVerificationResend.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend code'**
+  String get phoneVerificationResend;
+
+  /// No description provided for @phoneVerificationResendIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend code in {seconds}s'**
+  String phoneVerificationResendIn(int seconds);
+
+  /// No description provided for @phoneVerificationChangeNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Change number'**
+  String get phoneVerificationChangeNumber;
+
+  /// No description provided for @phoneVerificationSmsNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Standard SMS and data rates may apply. The code is used only to verify that this phone belongs to you.'**
+  String get phoneVerificationSmsNotice;
+
+  /// No description provided for @phoneVerificationInvalidPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid international phone number beginning with + and the country code.'**
+  String get phoneVerificationInvalidPhone;
+
+  /// No description provided for @phoneVerificationEnterCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 6-digit code.'**
+  String get phoneVerificationEnterCode;
+
+  /// No description provided for @phoneVerificationInvalidCode.
+  ///
+  /// In en, this message translates to:
+  /// **'That code is incorrect. Check it and try again.'**
+  String get phoneVerificationInvalidCode;
+
+  /// No description provided for @phoneVerificationExpiredCode.
+  ///
+  /// In en, this message translates to:
+  /// **'That code expired. Request a new code and try again.'**
+  String get phoneVerificationExpiredCode;
+
+  /// No description provided for @phoneVerificationTooManyAttempts.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many verification attempts. Please wait and try again later.'**
+  String get phoneVerificationTooManyAttempts;
+
+  /// No description provided for @phoneVerificationNetworkError.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your connection and try again.'**
+  String get phoneVerificationNetworkError;
+
+  /// No description provided for @phoneVerificationRequestTimedOut.
+  ///
+  /// In en, this message translates to:
+  /// **'We didn’t receive a response. Check your connection and try again.'**
+  String get phoneVerificationRequestTimedOut;
+
+  /// No description provided for @phoneVerificationPhoneInUse.
+  ///
+  /// In en, this message translates to:
+  /// **'That phone number is already linked to another account.'**
+  String get phoneVerificationPhoneInUse;
+
+  /// No description provided for @phoneVerificationRecentLogin.
+  ///
+  /// In en, this message translates to:
+  /// **'For security, sign out, sign back in, and verify your phone again.'**
+  String get phoneVerificationRecentLogin;
+
+  /// No description provided for @phoneVerificationGenericError.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn’t verify your phone. Please try again.'**
+  String get phoneVerificationGenericError;
+
+  /// No description provided for @phoneVerificationSyncPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Your code was accepted, but we couldn’t finish updating your profile. Try finishing verification again—another SMS is not required.'**
+  String get phoneVerificationSyncPending;
+
+  /// No description provided for @phoneVerificationFinish.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish verification'**
+  String get phoneVerificationFinish;
+
+  /// No description provided for @phoneVerificationFinishing.
+  ///
+  /// In en, this message translates to:
+  /// **'Finishing verification...'**
+  String get phoneVerificationFinishing;
+
+  /// No description provided for @phoneVerificationSavePhoneFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Save this phone number before verifying it.'**
+  String get phoneVerificationSavePhoneFirst;
+
+  /// No description provided for @phoneVerificationSaveAndVerify.
+  ///
+  /// In en, this message translates to:
+  /// **'Save and verify'**
+  String get phoneVerificationSaveAndVerify;
+
+  /// No description provided for @phoneVerificationSavingNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving number...'**
+  String get phoneVerificationSavingNumber;
+
+  /// No description provided for @phoneVerificationEditedStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'This number has not been saved or verified.'**
+  String get phoneVerificationEditedStatus;
+
+  /// No description provided for @phoneVerificationUnverifiedHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify this number to use protected account features.'**
+  String get phoneVerificationUnverifiedHelp;
+
+  /// No description provided for @phoneVerificationVerifiedHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'This number matches the phone securely verified on your account.'**
+  String get phoneVerificationVerifiedHelp;
+
+  /// No description provided for @phoneVerificationSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Your phone number is verified.'**
+  String get phoneVerificationSuccess;
+
+  /// No description provided for @phoneVerificationSuccessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone verified'**
+  String get phoneVerificationSuccessTitle;
+
+  /// No description provided for @phoneVerificationReturnToSharedBarrels.
+  ///
+  /// In en, this message translates to:
+  /// **'Return to shared barrels'**
+  String get phoneVerificationReturnToSharedBarrels;
+
+  /// No description provided for @phoneVerificationVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone verified'**
+  String get phoneVerificationVerified;
+
+  /// No description provided for @phoneVerificationNotVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone not verified'**
+  String get phoneVerificationNotVerified;
+
+  /// No description provided for @sharedBarrelActionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn’t complete that shared-barrel action. Please try again.'**
+  String get sharedBarrelActionFailed;
+
+  /// No description provided for @sharedBarrelsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your connection and try again. Your information is safe.'**
+  String get sharedBarrelsLoadFailed;
+
+  /// No description provided for @sharedBarrelFormLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn’t open the shared-barrel form. Check your connection and try again.'**
+  String get sharedBarrelFormLoadFailed;
 
   /// No description provided for @marketplaceBalancePaymentSummary.
   ///

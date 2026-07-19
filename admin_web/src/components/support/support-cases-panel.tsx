@@ -51,6 +51,7 @@ export type SupportCasesPanelProps = {
   currentUid: string;
   currentName?: string;
   canReply: boolean;
+  enabled?: boolean;
   runAction?: ActionRunner;
 };
 
@@ -325,9 +326,11 @@ export function SupportCasesPanel({
   currentUid,
   currentName,
   canReply,
+  enabled: enabledOverride,
   runAction,
 }: SupportCasesPanelProps) {
-  const enabled = scope === "admin" ? true : Boolean(businessId);
+  const enabled =
+    enabledOverride ?? (scope === "admin" ? true : Boolean(businessId));
   const { rows, loading, error } = useSupportCases(scope, businessId, enabled);
   const [selectedId, setSelectedId] = useState("");
   const [search, setSearch] = useState("");

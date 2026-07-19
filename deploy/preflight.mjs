@@ -11,6 +11,7 @@ import {
   HOSTINGER_PRODUCTION_IPV6,
   PRODUCTION_STATIC_HOSTS,
   TRUSTED_DNS_OVER_HTTPS_PROVIDERS,
+  assessStorageRulesFirestoreIam,
   assessStaticDnsHost,
   appCheckWebConfig,
   deploymentJavaEnvironment,
@@ -292,13 +293,43 @@ if (checksBackend) {
 
   const projects = run("firebase", ["projects:list", "--json"]);
   const projectData = parseJsonFromOutput(projects.stdout);
-  const projectVisible = Boolean(
-      projectData?.result?.some((project) => project.projectId === PROJECT_ID),
+  const projectRecord = projectData?.result?.find(
+      (project) => project.projectId === PROJECT_ID,
   );
+  const projectVisible = Boolean(projectRecord);
   addCheck(
       "Firebase project visible",
       projects.ok && projectVisible,
       projectVisible ? PROJECT_ID : "project not found in firebase projects:list",
+  );
+
+  const storageRulesSource = fs.readFileSync(
+      path.join(functionsDir, "storage.rules"),
+      "utf8",
+  );
+  const iamPolicyResult = run("gcloud", [
+    "projects",
+    "get-iam-policy",
+    PROJECT_ID,
+    "--format=json",
+  ]);
+  let iamPolicy;
+  try {
+    iamPolicy = JSON.parse(iamPolicyResult.stdout || "{}");
+  } catch {
+    iamPolicy = null;
+  }
+  const storageRulesIam = assessStorageRulesFirestoreIam({
+    rulesSource: storageRulesSource,
+    iamPolicy,
+    projectNumber: projectRecord?.projectNumber,
+  });
+  addCheck(
+      "Storage rules can read Firestore",
+      iamPolicyResult.ok && storageRulesIam.ok,
+      iamPolicyResult.ok ?
+        storageRulesIam.detail :
+        "authenticate gcloud with permission to inspect project IAM",
   );
 
   const deployedFunctions = run("firebase", [

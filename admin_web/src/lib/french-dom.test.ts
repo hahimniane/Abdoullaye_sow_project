@@ -86,6 +86,94 @@ test("translation does not rewrite identifier-like values", () => {
   );
 });
 
+test("translates dynamic finance summaries without leaving English fragments", () => {
+  assert.equal(
+    translateValue(
+      "Manage platform administrators and global customer support. Business-linked people and records live under Businesses.",
+      "fr",
+    ),
+    "Gérez les administrateurs de la plateforme et l’assistance client globale. Les personnes et dossiers liés à une entreprise se trouvent sous Entreprises.",
+  );
+  assert.equal(
+    translateValue("Access not configured", "fr"),
+    "Accès non configuré",
+  );
+  assert.equal(
+    translateValue("Remove admin access", "fr"),
+    "Retirer l’accès admin",
+  );
+  assert.equal(
+    translateValue("Admin access role", "fr"),
+    "Rôle d’accès admin",
+  );
+  assert.equal(
+    translateValue(
+      "Showing 10 of 10 finance rows • visible amount $37,670.00",
+      "fr",
+    ),
+    "Affichage 10 sur 10 lignes financières • montant visible $37,670.00",
+  );
+  assert.equal(
+    translateValue(
+      "Wallet available $45.00 • Pending return $125.00",
+      "fr",
+    ),
+    "Portefeuille disponible $45.00 • Retour en attente $125.00",
+  );
+});
+
+test("translates dynamic admin overview summaries without English fragments", () => {
+  assert.equal(
+    translateValue(
+      "5 items are waiting across approvals, logistics, and finance.",
+      "fr",
+    ),
+    "5 éléments attendent une action parmi les approbations, la logistique et les finances.",
+  );
+  assert.equal(
+    translateValue("Barrel records: 2 · Freight records: 1", "fr"),
+    "Dossiers de barils : 2 · Dossiers de fret : 1",
+  );
+  assert.equal(
+    translateValue("Purchase records: 1", "fr"),
+    "Dossiers d’achat : 1",
+  );
+  assert.equal(
+    translateValue("Active listings: 2 of 5", "fr"),
+    "Annonces actives : 2 sur 5",
+  );
+  assert.equal(
+    translateValue("Open records: 1 of 2", "fr"),
+    "Dossiers ouverts : 1 sur 2",
+  );
+  assert.equal(translateValue("purchase", "fr"), "achat");
+  assert.equal(translateValue("refund", "fr"), "remboursement");
+  assert.equal(translateValue("business", "fr"), "entreprise");
+  assert.equal(translateValue("shipment", "fr"), "expédition");
+  assert.equal(
+    translateValue("Listings by status", "fr"),
+    "Annonces par statut",
+  );
+  assert.equal(translateValue("Queues", "fr"), "Files");
+});
+
+test("translates the business changes-requested notice as natural French", () => {
+  assert.equal(
+    translateValue(
+      "This business is currently changes requested. Complete Stripe setup and any requested profile details while it waits for platform approval.",
+      "fr",
+    ),
+    "Des modifications ont été demandées pour cette entreprise. Terminez la configuration Stripe et complétez les informations de profil demandées pendant l’attente de l’approbation de la plateforme.",
+  );
+  assert.equal(
+    translateValue(
+      "This business is currently pending. Complete Stripe setup and any requested profile details while it waits for platform approval.",
+      "fr",
+    ),
+    "Cette entreprise est en attente. Terminez la configuration Stripe et complétez les informations de profil demandées pendant l’attente de l’approbation de la plateforme.",
+  );
+});
+
 test("language resolves from a saved preference first, then the device", () => {
   // Saved choice always wins, regardless of device language.
   assert.equal(resolveLang("en", ["fr-FR"]), "en");

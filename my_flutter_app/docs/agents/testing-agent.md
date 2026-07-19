@@ -130,10 +130,11 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   rules, payment reconciliation, customer orders/tracking, operator
   fulfillment, earnings, and English/French rendering. A callable accepting a
   payment is not sufficient evidence that the service is operational.
-- Local iPhone E2E uses the Xcode beta toolchain explicitly:
-  `DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer`. Maestro also
-  needs Java 21 and should clear the simulator keychain before auth tests,
-  because Firebase credentials survive an app-data reset in the iOS Keychain.
+- Local iPhone E2E is verified with stable Xcode 26.6 selected through
+  `xcode-select`; do not require an Xcode beta or a `DEVELOPER_DIR` override.
+  Maestro needs Java 21 and should clear the simulator keychain before auth
+  tests, because Firebase credentials survive an app-data reset in the iOS
+  Keychain.
   With limited disk/RAM, run emulator suites sequentially. Emulator app builds
   must pass `--dart-define=USE_FIREBASE_EMULATORS=true` and set
   `--dart-define=FIREBASE_EMULATOR_PROJECT_ID=...` to the same demo project used
@@ -143,6 +144,10 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   screen, Maestro must `waitForAnimationToEnd` before focusing Email and tap the
   iOS keyboard's `done` control after entering Password; otherwise text input or
   the submit tap can be silently lost even though Maestro reports success.
+- Flutter tappable rows often expose their title and subtitle as one multiline
+  accessibility label. Maestro should use multiline-safe selectors such as
+  `(?s).*Browse cars.*` unless the node has an explicit standalone semantics
+  label.
 - Payment-sheet acceptance tests must distinguish presentation failure from
   post-charge confirmation failure. Only the former may call a cancellation
   endpoint; after the sheet succeeds, server/webhook reconciliation owns
@@ -157,9 +162,6 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
 - Paid vehicle holds need a concurrent two-customer test that proves exactly
   one reservation wins. Destination-change tests must use multi-barrel
   quantities so per-unit rates cannot be mistaken for shipment totals.
-- The current iOS toolchain may require the `objective_c` package hook to derive
-  `DEVELOPER_DIR` from Xcode's compiler path. Treat that as a local cache
-  workaround, not a product fix; retest after Flutter or `objective_c` upgrades.
 - Rebuilt-title regressions must cover required boolean creation, invalid or
   missing rule rejection, legacy-null display as Not provided, edit persistence,
   buyer card/detail visibility, admin review/filtering, and English/French copy.
@@ -191,3 +193,39 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   before publication. Verify the final encoded asset in a real browser several
   times and compare render hashes; simulator captures can contain unstable raster
   data that looks correct once and then renders with black bands.
+- Treat every route opened from customer-tab authentication as a nested-navigator
+  regression risk. Business registration, forgot password, and business/staff
+  home are app-wide destinations and must be pushed through the root navigator;
+  widget tests must begin inside the nested customer navigator so a root-only
+  test cannot produce a false pass.
+- Native support-attachment acceptance must cover picker to Firebase Storage to
+  callable message creation to participant download. On iOS, upload an `XFile`
+  by its file path with `putFile`; do not load full videos into Dart memory.
+  Selection must stop at a review step before any upload: assert image preview,
+  Cancel with zero backend writes, Replace, explicit Upload, and retained Retry
+  state after failure in both English and French.
+  Enforce client limits below the backend's strict `<` limits and test the exact
+  boundary. Production Storage rules that call `firestore.get` or
+  `firestore.exists` also require the Firebase Storage service agent to hold
+  `roles/firebaserules.firestoreServiceAgent`; deployment preflight must fail
+  closed when that cross-service IAM binding cannot be verified.
+- Firestore-backed display formatters must tolerate malformed legacy sentinel
+  values without crashing. Preserve explicit bad financial metadata visibly;
+  do not silently relabel it as a valid currency. Optional/domain helpers must
+  preserve absence as empty so typed fallbacks such as USD can run.
+- Keep the durable release matrix in `docs/ios-role-feature-qa.md`. A feature is
+  not `PASS` merely because it compiles or its callable succeeds: exercise it in
+  the native iOS app, verify the backend record, and verify that the next role
+  can see and act on the result.
+- Always include a restricted staff account with one permission and a staff
+  account with no `businessPermissions`. Verify the Flutter auth state loads
+  the permission list, unauthorized tabs and activity listeners are absent,
+  and the backend rules independently deny the same reads and writes. Seeded
+  owners and full-access staff cannot cover this fail-closed branch.
+- Phone verification coverage must include edited-draft status, initial send,
+  duplicate activation, asynchronous code callback, wrong/expired code, resend
+  cooldown and synchronous resend failure, change-number/cancel, late automatic
+  callbacks, success, and Auth-linked/profile-sync recovery. A failed profile
+  sync must never require another SMS. Only a Firebase-verified phone may reserve
+  a `phoneSignInAliases` document; unverified signup/profile values cannot claim
+  login aliases.

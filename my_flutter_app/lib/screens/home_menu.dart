@@ -14,6 +14,7 @@ import '../widgets/async_action_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_colors.dart';
+import '../utils/business_permissions.dart';
 
 enum ServiceCategory { all, parking, barrels, freight, transport, sales }
 
@@ -77,103 +78,120 @@ class _HomeMenuState extends State<HomeMenu> {
       return collection.where('businessId', isEqualTo: auth.businessId);
     }
 
-    _parkedCarsSubscription =
-        scope(
-          FirebaseFirestore.instance.collection('parkedCars'),
-          'parkingDate',
-        ).snapshots().listen(
-          (snapshot) {
-            final parkedCars = snapshot.docs
-                .map((doc) => ParkedCar.fromFirestore(doc))
-                .toList();
-            _parkedCars
-              ..clear()
-              ..addAll(parkedCars);
-            _parkedLoaded = true;
-            _rebuildActivityRecords();
-          },
-          onError: (_) {
-            _parkedLoaded = true;
-            _rebuildActivityRecords();
-          },
-        );
-
-    _barrelShipmentsSubscription =
-        scope(
-          FirebaseFirestore.instance.collection('barrelShipments'),
-          'createdAt',
-        ).snapshots().listen(
-          (snapshot) {
-            final shipments = snapshot.docs
-                .map((doc) => BarrelShipment.fromFirestore(doc))
-                .toList();
-            _barrelShipments
-              ..clear()
-              ..addAll(shipments);
-            _barrelsLoaded = true;
-            _rebuildActivityRecords();
-          },
-          onError: (_) {
-            _barrelsLoaded = true;
-            _rebuildActivityRecords();
-          },
-        );
-
-    final freightCollection = FirebaseFirestore.instance.collection(
-      'freightShipments',
-    );
-    final freightQuery = auth.isAdmin
-        ? freightCollection
-        : freightCollection.where('businessId', isEqualTo: auth.businessId);
-    _freightShipmentsSubscription = freightQuery.snapshots().listen(
-      (snapshot) {
-        _freightRecords
-          ..clear()
-          ..addAll(
-            snapshot.docs.map((doc) {
-              final data = doc.data();
-              final createdAt = data['createdAt'];
-              return ActivityRecord(
-                category: ServiceCategory.freight,
-                title:
-                    '${data['receiverName'] ?? ''} • ${data['trackingCode'] ?? doc.id}',
-                subtitle: '${data['senderName'] ?? ''}',
-                date: createdAt is Timestamp
-                    ? createdAt.toDate()
-                    : DateTime.fromMillisecondsSinceEpoch(0),
-                payload: doc.id,
-              );
-            }),
+    if (auth.hasBusinessPermission(BusinessPermission.parking)) {
+      _parkedCarsSubscription =
+          scope(
+            FirebaseFirestore.instance.collection('parkedCars'),
+            'parkingDate',
+          ).snapshots().listen(
+            (snapshot) {
+              final parkedCars = snapshot.docs
+                  .map((doc) => ParkedCar.fromFirestore(doc))
+                  .toList();
+              _parkedCars
+                ..clear()
+                ..addAll(parkedCars);
+              _parkedLoaded = true;
+              _rebuildActivityRecords();
+            },
+            onError: (_) {
+              _parkedLoaded = true;
+              _rebuildActivityRecords();
+            },
           );
-        _freightLoaded = true;
-        _rebuildActivityRecords();
-      },
-      onError: (_) {
-        _freightLoaded = true;
-        _rebuildActivityRecords();
-      },
-    );
+    } else {
+      _parkedLoaded = true;
+    }
 
-    _transportRequestsSubscription =
-        scope(
-          FirebaseFirestore.instance.collection('transportRequests'),
-          'createdAt',
-        ).snapshots().listen(
-          (snapshot) {
-            final requests = snapshot.docs
-                .map((doc) => TransportRequest.fromFirestore(doc))
-                .toList();
-            _transportRequests
-              ..clear()
-              ..addAll(requests);
-            _transportLoaded = true;
-            _rebuildActivityRecords();
-          },
-          onError: (_) {
-            _transportLoaded = true;
-            _rebuildActivityRecords();
-          },
-        );
+    if (auth.hasBusinessPermission(BusinessPermission.barrels)) {
+      _barrelShipmentsSubscription =
+          scope(
+            FirebaseFirestore.instance.collection('barrelShipments'),
+            'createdAt',
+          ).snapshots().listen(
+            (snapshot) {
+              final shipments = snapshot.docs
+                  .map((doc) => BarrelShipment.fromFirestore(doc))
+                  .toList();
+              _barrelShipments
+                ..clear()
+                ..addAll(shipments);
+              _barrelsLoaded = true;
+              _rebuildActivityRecords();
+            },
+            onError: (_) {
+              _barrelsLoaded = true;
+              _rebuildActivityRecords();
+            },
+          );
+    } else {
+      _barrelsLoaded = true;
+    }
+
+    if (auth.hasBusinessPermission(BusinessPermission.freight)) {
+      final freightCollection = FirebaseFirestore.instance.collection(
+        'freightShipments',
+      );
+      final freightQuery = auth.isAdmin
+          ? freightCollection
+          : freightCollection.where('businessId', isEqualTo: auth.businessId);
+      _freightShipmentsSubscription = freightQuery.snapshots().listen(
+        (snapshot) {
+          _freightRecords
+            ..clear()
+            ..addAll(
+              snapshot.docs.map((doc) {
+                final data = doc.data();
+                final createdAt = data['createdAt'];
+                return ActivityRecord(
+                  category: ServiceCategory.freight,
+                  title:
+                      '${data['receiverName'] ?? ''} • ${data['trackingCode'] ?? doc.id}',
+                  subtitle: '${data['senderName'] ?? ''}',
+                  date: createdAt is Timestamp
+                      ? createdAt.toDate()
+                      : DateTime.fromMillisecondsSinceEpoch(0),
+                  payload: doc.id,
+                );
+              }),
+            );
+          _freightLoaded = true;
+          _rebuildActivityRecords();
+        },
+        onError: (_) {
+          _freightLoaded = true;
+          _rebuildActivityRecords();
+        },
+      );
+    } else {
+      _freightLoaded = true;
+    }
+
+    if (auth.hasBusinessPermission(BusinessPermission.transport)) {
+      _transportRequestsSubscription =
+          scope(
+            FirebaseFirestore.instance.collection('transportRequests'),
+            'createdAt',
+          ).snapshots().listen(
+            (snapshot) {
+              final requests = snapshot.docs
+                  .map((doc) => TransportRequest.fromFirestore(doc))
+                  .toList();
+              _transportRequests
+                ..clear()
+                ..addAll(requests);
+              _transportLoaded = true;
+              _rebuildActivityRecords();
+            },
+            onError: (_) {
+              _transportLoaded = true;
+              _rebuildActivityRecords();
+            },
+          );
+    } else {
+      _transportLoaded = true;
+    }
+    _rebuildActivityRecords();
   }
 
   void _rebuildActivityRecords() {
@@ -253,29 +271,35 @@ class _HomeMenuState extends State<HomeMenu> {
         : auth.businessServices;
     return {
       if (business_services.hasBusinessService(
-        services,
-        business_services.BusinessServiceKey.carParking,
-      ))
+            services,
+            business_services.BusinessServiceKey.carParking,
+          ) &&
+          auth.hasBusinessPermission(BusinessPermission.parking))
         ServiceCategory.parking,
       if (business_services.hasBusinessService(
-        services,
-        business_services.BusinessServiceKey.barrelShipping,
-      ))
+            services,
+            business_services.BusinessServiceKey.barrelShipping,
+          ) &&
+          auth.hasBusinessPermission(BusinessPermission.barrels))
         ServiceCategory.barrels,
       if (business_services.hasBusinessService(
-        services,
-        business_services.BusinessServiceKey.freight,
-      ))
+            services,
+            business_services.BusinessServiceKey.freight,
+          ) &&
+          auth.hasBusinessPermission(BusinessPermission.freight))
         ServiceCategory.freight,
       if (business_services.hasBusinessService(
-        services,
-        business_services.BusinessServiceKey.carTransport,
-      ))
+            services,
+            business_services.BusinessServiceKey.carTransport,
+          ) &&
+          auth.hasBusinessPermission(BusinessPermission.transport))
         ServiceCategory.transport,
       if (business_services.hasBusinessService(
-        services,
-        business_services.BusinessServiceKey.carSales,
-      ))
+            services,
+            business_services.BusinessServiceKey.carSales,
+          ) &&
+          (auth.hasBusinessPermission(BusinessPermission.listings) ||
+              auth.hasBusinessPermission(BusinessPermission.purchases)))
         ServiceCategory.sales,
     };
   }
@@ -406,10 +430,13 @@ class _ServicesSection extends StatelessWidget {
     final services = auth.businessServices.isEmpty
         ? business_services.defaultBusinessServiceValues
         : auth.businessServices;
-    final showSales = business_services.hasBusinessService(
-      services,
-      business_services.BusinessServiceKey.carSales,
-    );
+    final showSales =
+        business_services.hasBusinessService(
+          services,
+          business_services.BusinessServiceKey.carSales,
+        ) &&
+        (auth.hasBusinessPermission(BusinessPermission.listings) ||
+            auth.hasBusinessPermission(BusinessPermission.purchases));
     return Container(
       padding: EdgeInsets.all(width * 0.06),
       decoration: BoxDecoration(

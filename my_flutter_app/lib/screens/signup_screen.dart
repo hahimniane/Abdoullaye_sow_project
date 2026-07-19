@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../models/marketplace_disclosure_acceptance.dart';
 import '../utils/legal_links.dart';
+import '../utils/business_registration_navigation.dart';
 import '../utils/phone_number_validator.dart';
 import '../widgets/app_snackbars.dart';
 
@@ -670,10 +671,7 @@ class _SignUpScreenState extends State<SignUpScreen>
                                     const SizedBox(height: 8),
                                     OutlinedButton.icon(
                                       onPressed: () {
-                                        Navigator.pushNamed(
-                                          context,
-                                          '/business-register',
-                                        );
+                                        openBusinessRegistration(context);
                                       },
                                       icon: const Icon(
                                         Icons.storefront_outlined,

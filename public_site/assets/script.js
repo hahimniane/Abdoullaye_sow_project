@@ -84,6 +84,10 @@
     "United States": ["New York", "Bronx", "Brooklyn", "Manhattan", "Queens", "Newark", "Jersey City", "Philadelphia", "Atlanta"],
   };
   if (destinationPays && destinationVille) {
+    var countryCatalog = window.LaawolCountryCatalog;
+    if (countryCatalog && typeof countryCatalog.populateCountrySelect === "function") {
+      countryCatalog.populateCountrySelect(destinationPays);
+    }
     destinationPays.addEventListener("change", function () {
       var cities = destinationCities[destinationPays.value] || [];
       destinationVille.innerHTML = "";

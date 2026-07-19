@@ -1,11 +1,15 @@
 const assert = require("node:assert/strict");
 const {before, describe, it} = require("node:test");
 const admin = require("firebase-admin");
+const {
+  MARKETPLACE_DISCLOSURE_VERSION,
+} = require("../marketplace_disclosure");
 
 const OWNER_UID = "test-shared-owner";
 const JOINER_UID = "test-shared-joiner";
 const SECOND_JOINER_UID = "test-shared-second-joiner";
 const UNVERIFIED_UID = "test-shared-unverified";
+const MISMATCHED_PHONE_UID = "test-shared-mismatched-phone";
 const STAFF_UID = "test-shared-staff";
 const BUSINESS_ID = "test-shared-business";
 const COUNTRY_ID = "gn";
@@ -16,13 +20,28 @@ const authEmails = {
   [JOINER_UID]: "joiner@example.test",
   [SECOND_JOINER_UID]: "second-joiner@example.test",
   [UNVERIFIED_UID]: "unverified@example.test",
+  [MISMATCHED_PHONE_UID]: "mismatched@example.test",
   [STAFF_UID]: "staff@example.test",
+};
+
+const authPhones = {
+  [OWNER_UID]: "+15555550101",
+  [JOINER_UID]: "+15555550102",
+  [SECOND_JOINER_UID]: "+15555550104",
+  [MISMATCHED_PHONE_UID]: "+15555550999",
 };
 
 const functions = require("../index");
 admin.auth().getUser = async (uid) => ({
   uid,
   email: authEmails[uid] || `${uid}@example.test`,
+  phoneNumber: authPhones[uid],
+});
+admin.auth().updateUser = async (uid, updates) => ({
+  uid,
+  email: authEmails[uid] || `${uid}@example.test`,
+  phoneNumber: authPhones[uid],
+  ...updates,
 });
 const db = admin.firestore();
 
@@ -41,23 +60,37 @@ function participantInput(label, phone, weightKg = 10) {
   };
 }
 
+function acceptedMarketplaceDisclosure() {
+  return {
+    accepted: true,
+    version: MARKETPLACE_DISCLOSURE_VERSION,
+    locale: "en",
+  };
+}
+
 async function seedSharedBarrelFixture() {
   await Promise.all([
     db.collection("users").doc(OWNER_UID).set({
       role: "customer",
       phoneVerified: true,
+      phone: authPhones[OWNER_UID],
+      normalizedPhone: "15555550101",
       fullName: "Owner Customer",
       email: authEmails[OWNER_UID],
     }),
     db.collection("users").doc(JOINER_UID).set({
       role: "customer",
       phoneVerified: true,
+      phone: authPhones[JOINER_UID],
+      normalizedPhone: "15555550102",
       fullName: "Joiner Customer",
       email: authEmails[JOINER_UID],
     }),
     db.collection("users").doc(SECOND_JOINER_UID).set({
       role: "customer",
       phoneVerified: true,
+      phone: authPhones[SECOND_JOINER_UID],
+      normalizedPhone: "15555550104",
       fullName: "Second Joiner Customer",
       email: authEmails[SECOND_JOINER_UID],
     }),
@@ -66,6 +99,16 @@ async function seedSharedBarrelFixture() {
       phoneVerified: false,
       fullName: "Unverified Customer",
       email: authEmails[UNVERIFIED_UID],
+      phone: "+15555550103",
+      normalizedPhone: "15555550103",
+    }),
+    db.collection("users").doc(MISMATCHED_PHONE_UID).set({
+      role: "customer",
+      phoneVerified: true,
+      fullName: "Mismatched Phone Customer",
+      email: authEmails[MISMATCHED_PHONE_UID],
+      phone: "+15555550888",
+      normalizedPhone: "15555550888",
     }),
     db.collection("users").doc(STAFF_UID).set({
       role: "staff",
@@ -112,6 +155,7 @@ async function createPool({
       approvalMode,
       joinDeadline: deadline,
       shipMode: "sea",
+      marketplaceDisclosure: acceptedMarketplaceDisclosure(),
       ...participantInput("Owner", "+15555550101"),
     },
   });
@@ -131,6 +175,7 @@ async function joinPoolAs({
       poolId,
       destinationCountryId,
       sharesClaimed,
+      marketplaceDisclosure: acceptedMarketplaceDisclosure(),
       ...participantInput(label, phone),
     },
   });
@@ -190,6 +235,9 @@ describe("shared barrel callable lifecycle", () => {
 
   it("requires verified customer phone numbers to create and join pools",
       async () => {
+        const disclosureCountBefore = (
+          await db.collection("marketplaceDisclosureAcceptances").get()
+        ).size;
         await assert.rejects(
             () => functions.createBarrelPool.run({
               auth: {uid: UNVERIFIED_UID},
@@ -205,23 +253,143 @@ describe("shared barrel callable lifecycle", () => {
                     Date.now() + 7 * 24 * 60 * 60 * 1000,
                 ).toISOString(),
                 shipMode: "sea",
+                marketplaceDisclosure: acceptedMarketplaceDisclosure(),
                 ...participantInput("Unverified", "+15555550103"),
               },
             }),
-            /Verify your phone number before using shared barrels/,
+            (error) => {
+              assert.equal(error.code, "failed-precondition");
+              assert.deepEqual(error.details, {
+                reason: "phone-verification-required",
+              });
+              return true;
+            },
+        );
+        const disclosureCountAfterCreateRejection = (
+          await db.collection("marketplaceDisclosureAcceptances").get()
+        ).size;
+        assert.equal(
+            disclosureCountAfterCreateRejection,
+            disclosureCountBefore,
         );
 
         const created = await createPool();
+        const disclosureCountBeforeJoinRejection = (
+          await db.collection("marketplaceDisclosureAcceptances").get()
+        ).size;
         await assert.rejects(
             () => functions.requestJoinBarrelPool.run({
               auth: {uid: UNVERIFIED_UID},
               data: {
                 poolId: created.poolId,
                 sharesClaimed: 1,
+                marketplaceDisclosure: acceptedMarketplaceDisclosure(),
                 ...participantInput("Unverified", "+15555550103"),
               },
             }),
             /Verify your phone number before using shared barrels/,
+        );
+        const disclosureCountAfter = (
+          await db.collection("marketplaceDisclosureAcceptances").get()
+        ).size;
+        assert.equal(
+            disclosureCountAfter,
+            disclosureCountBeforeJoinRejection,
+        );
+      });
+
+  it("rejects a stale verified flag when the Auth phone does not match",
+      async () => {
+        await assert.rejects(
+            () => functions.createBarrelPool.run({
+              auth: {uid: MISMATCHED_PHONE_UID},
+              data: {
+                businessId: BUSINESS_ID,
+                destinationCountryId: COUNTRY_ID,
+                origin: "customerPosted",
+                totalShares: 2,
+                sharesClaimed: 1,
+                maxJoiners: 1,
+                approvalMode: "auto",
+                joinDeadline: new Date(
+                    Date.now() + 7 * 24 * 60 * 60 * 1000,
+                ).toISOString(),
+                shipMode: "sea",
+                marketplaceDisclosure: acceptedMarketplaceDisclosure(),
+                ...participantInput("Mismatched", "+15555550888"),
+              },
+            }),
+            (error) => {
+              assert.equal(error.code, "failed-precondition");
+              assert.equal(
+                  error.details?.reason,
+                  "phone-verification-required",
+              );
+              return true;
+            },
+        );
+      });
+
+  it("syncs only the phone verified by Firebase Auth", async () => {
+    const result = await functions.syncVerifiedCustomerPhone.run({
+      auth: {uid: MISMATCHED_PHONE_UID},
+      data: {},
+    });
+    assert.equal(result.phone, authPhones[MISMATCHED_PHONE_UID]);
+    assert.equal(result.phoneVerified, true);
+
+    const profile = await db.collection("users")
+        .doc(MISMATCHED_PHONE_UID).get();
+    assert.equal(profile.data().phone, authPhones[MISMATCHED_PHONE_UID]);
+    assert.equal(profile.data().normalizedPhone, "15555550999");
+    assert.equal(profile.data().phoneVerified, true);
+    const alias = await db.collection("phoneSignInAliases")
+        .doc("15555550999").get();
+    assert.equal(alias.data().uid, MISMATCHED_PHONE_UID);
+  });
+
+  it("clears verification when the customer changes the profile phone",
+      async () => {
+        const result = await functions.updateCustomerProfile.run({
+          auth: {
+            uid: MISMATCHED_PHONE_UID,
+            token: {email: authEmails[MISMATCHED_PHONE_UID]},
+          },
+          data: {
+            fullName: "Mismatched Phone Customer",
+            phone: "+15555550777",
+          },
+        });
+        assert.equal(result.phoneVerified, false);
+
+        const profile = await db.collection("users")
+            .doc(MISMATCHED_PHONE_UID).get();
+        assert.equal(profile.data().phone, "+15555550777");
+        assert.equal(profile.data().phoneVerified, false);
+        assert.equal(profile.data().phoneVerifiedAt, undefined);
+        const previousAlias = await db.collection("phoneSignInAliases")
+            .doc("15555550999").get();
+        const unverifiedAlias = await db.collection("phoneSignInAliases")
+            .doc("15555550777").get();
+        assert.equal(previousAlias.exists, false);
+        assert.equal(unverifiedAlias.exists, false);
+      });
+
+  it("does not sync a profile when Firebase Auth has no verified phone",
+      async () => {
+        await assert.rejects(
+            () => functions.syncVerifiedCustomerPhone.run({
+              auth: {uid: UNVERIFIED_UID},
+              data: {},
+            }),
+            (error) => {
+              assert.equal(error.code, "failed-precondition");
+              assert.equal(
+                  error.details?.reason,
+                  "phone-verification-required",
+              );
+              return true;
+            },
         );
       });
 
@@ -243,6 +411,7 @@ describe("shared barrel callable lifecycle", () => {
                       Date.now() + 7 * 24 * 60 * 60 * 1000,
                   ).toISOString(),
                   shipMode: "sea",
+                  marketplaceDisclosure: acceptedMarketplaceDisclosure(),
                   ...participantInput(`Customer ${origin}`, "+15555550106"),
                 },
               }),

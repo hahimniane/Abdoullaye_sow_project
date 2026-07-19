@@ -603,6 +603,7 @@
   "returnToCardRequestedStatus": "Retour vers la carte demandé",
   "returnedToCard": "Retourné vers la carte",
   "noWalletActivityYet": "Aucune activité de portefeuille pour le moment.",
+  "walletActivityUnavailable": "Nous n'avons pas pu charger l'activité de votre portefeuille pour le moment. Veuillez réessayer dans un instant.",
   "signInToViewWallet": "Connectez-vous pour voir votre portefeuille.",
   "decline": "Refuser",
   "accept": "Accepter",
@@ -757,6 +758,37 @@
   "approve": "Approuver",
   "suspend": "Suspendre",
   "reject": "Rejeter",
+  "sharedBarrelManageRequests": "Gérer les demandes",
+  "sharedBarrelJoinRequests": "Demandes d’adhésion",
+  "sharedBarrelJoinRequestsHelp": "Approuvez ou refusez les clients qui souhaitent rejoindre ce baril partagé.",
+  "sharedBarrelNoPendingRequests": "Aucune demande d’adhésion n’attend d’approbation.",
+  "sharedBarrelRequestApproved": "Demande d’adhésion approuvée.",
+  "sharedBarrelRequestRejected": "Demande d’adhésion refusée. Le remboursement de l’acompte sera lancé.",
+  "sharedBarrelRequestDecisionFailed": "Impossible de mettre à jour cette demande. Veuillez réessayer.",
+  "sharedBarrelRequestedShareCount": "{count, plural, =1{1 part demandée} other{{count} parts demandées}}",
+  "@sharedBarrelRequestedShareCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sharedBarrelPaidDeposit": "Acompte payé : {amount}",
+  "@sharedBarrelPaidDeposit": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "sharedBarrelCancelPool": "Annuler le baril",
+  "sharedBarrelCancelTitle": "Annuler ce baril partagé ?",
+  "sharedBarrelCancelForfeitureMessage": "Si vous annulez maintenant, votre acompte de {amount} sera perdu. Cette action est irréversible.",
+  "@sharedBarrelCancelForfeitureMessage": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "sharedBarrelKeepPool": "Conserver le baril",
+  "sharedBarrelCancelAndForfeit": "Annuler et perdre l’acompte",
   "requestChanges": "Demander des modifications",
   "reviewNote": "Note d’examen",
   "requestId": "ID de demande : {id}",
@@ -1299,6 +1331,8 @@
   "favoriteCarsSubtitle": "Voir les véhicules que vous avez enregistrés",
   "noFavoriteCarsYet": "Aucune voiture favorite pour le moment",
   "favoriteRemoved": "Favori supprimé",
+  "addToFavorites": "Ajouter aux favoris",
+  "removeFromFavorites": "Retirer des favoris",
   "carNoLongerAvailable": "Cette voiture n’est plus disponible",
   "enterValidPaidHoldPricing": "Entrez un tarif de blocage payant valide.",
   "useBusinessPaidHoldPricing": "Utiliser le tarif de blocage de l’entreprise",
@@ -1741,6 +1775,18 @@
   "supportVideo": "Vidéo",
   "supportFile": "Fichier",
   "supportUploading": "Téléversement...",
+  "supportReviewAttachmentTitle": "Vérifier la pièce jointe",
+  "supportUploadAttachment": "Téléverser",
+  "supportReplaceAttachment": "Remplacer",
+  "supportAttachmentCaption": "Légende (facultative)",
+  "supportPreviewUnavailable": "Aperçu indisponible. Vous pouvez quand même téléverser ce fichier.",
+  "supportUploadFailed": "Échec du téléversement. Vérifiez votre connexion et réessayez.",
+  "supportImagePreviewLabel": "Aperçu de l’image : {name}",
+  "@supportImagePreviewLabel": {
+    "placeholders": {
+      "name": {}
+    }
+  },
   "supportRequestEvidence": "Demander des preuves",
   "supportRequestingEvidence": "Demande...",
   "supportEvidenceNote": "Que doit ajouter le client ?",
@@ -1881,6 +1927,10 @@
   "supportSizeBytes": "Taille en octets",
   "supportFileReadFailed": "Impossible de lire ce fichier. Réessayez.",
   "supportUnsupportedAttachmentType": "Choisissez un fichier PDF, texte, Word ou DOCX.",
+  "supportImageTooLarge": "Choisissez une image de moins de 10 Mo.",
+  "supportVideoTooLarge": "Choisissez une vidéo de moins de 50 Mo.",
+  "supportDocumentTooLarge": "Choisissez un document de moins de 25 Mo.",
+  "supportVoiceTooLarge": "Choisissez un fichier audio de moins de 10 Mo.",
   "supportAttach": "Joindre",
   "supportAttaching": "Ajout...",
   "supportPurchaseCaseSubject": "Support pour {carTitle}",
@@ -1945,6 +1995,54 @@
   "accountLegalAcceptanceRequired": "Veuillez accepter les Conditions d’utilisation et la Politique de confidentialité pour continuer.",
   "businessResponsibilityAcceptance": "Je comprends que mon entreprise est indépendamment responsable de ses annonces, prix, biens, services, exécution, délais de livraison, autorisations et obligations envers les clients.",
   "businessResponsibilityRequired": "Confirmez la déclaration de responsabilité de l’entreprise pour envoyer votre demande."
+  ,"verifyPhoneToContinueTitle": "Vérifiez votre téléphone pour continuer"
+  ,"verifyPhoneToContinueBody": "Les barils partagés sont réservés aux clients dont le numéro de téléphone est vérifié. Nous enverrons un code au numéro associé à votre compte."
+  ,"verifyPhone": "Vérifier le téléphone"
+  ,"notNow": "Pas maintenant"
+  ,"phoneVerificationTitle": "Vérification du téléphone"
+  ,"phoneVerificationExplanation": "Confirmez ou modifiez le numéro de portable de votre compte. Nous vous enverrons un code de vérification à usage unique par SMS."
+  ,"phoneVerificationCountryCodeHelp": "Incluez l’indicatif du pays, par exemple +1 718 555 0100."
+  ,"phoneVerificationCodeSentTitle": "Code envoyé"
+  ,"phoneVerificationCodeSent": "Saisissez le code à 6 chiffres envoyé au {phone}."
+  ,"@phoneVerificationCodeSent": {"placeholders": {"phone": {}}}
+  ,"phoneVerificationCode": "Code de vérification"
+  ,"phoneVerificationSendCode": "Envoyer le code de vérification"
+  ,"phoneVerificationSendingCode": "Envoi du code..."
+  ,"phoneVerificationVerifying": "Vérification..."
+  ,"phoneVerificationResending": "Nouvel envoi..."
+  ,"phoneVerificationResent": "Un nouveau code a été envoyé."
+  ,"phoneVerificationResend": "Renvoyer le code"
+  ,"phoneVerificationResendIn": "Renvoyer le code dans {seconds} s"
+  ,"@phoneVerificationResendIn": {"placeholders": {"seconds": {"type": "int"}}}
+  ,"phoneVerificationChangeNumber": "Changer de numéro"
+  ,"phoneVerificationSmsNotice": "Les frais SMS et de données habituels peuvent s’appliquer. Le code sert uniquement à vérifier que ce téléphone vous appartient."
+  ,"phoneVerificationInvalidPhone": "Saisissez un numéro international valide commençant par + et l’indicatif du pays."
+  ,"phoneVerificationEnterCode": "Saisissez le code à 6 chiffres."
+  ,"phoneVerificationInvalidCode": "Ce code est incorrect. Vérifiez-le et réessayez."
+  ,"phoneVerificationExpiredCode": "Ce code a expiré. Demandez un nouveau code et réessayez."
+  ,"phoneVerificationTooManyAttempts": "Trop de tentatives de vérification. Attendez avant de réessayer."
+  ,"phoneVerificationNetworkError": "Vérifiez votre connexion et réessayez."
+  ,"phoneVerificationRequestTimedOut": "Nous n’avons reçu aucune réponse. Vérifiez votre connexion et réessayez."
+  ,"phoneVerificationPhoneInUse": "Ce numéro de téléphone est déjà associé à un autre compte."
+  ,"phoneVerificationRecentLogin": "Pour des raisons de sécurité, déconnectez-vous, reconnectez-vous, puis vérifiez à nouveau votre téléphone."
+  ,"phoneVerificationGenericError": "Nous n’avons pas pu vérifier votre téléphone. Réessayez."
+  ,"phoneVerificationSyncPending": "Votre code a été accepté, mais nous n’avons pas pu terminer la mise à jour de votre profil. Terminez à nouveau la vérification ; aucun autre SMS n’est nécessaire."
+  ,"phoneVerificationFinish": "Terminer la vérification"
+  ,"phoneVerificationFinishing": "Finalisation de la vérification..."
+  ,"phoneVerificationSavePhoneFirst": "Enregistrez ce numéro avant de le vérifier."
+  ,"phoneVerificationSaveAndVerify": "Enregistrer et vérifier"
+  ,"phoneVerificationSavingNumber": "Enregistrement du numéro..."
+  ,"phoneVerificationEditedStatus": "Ce numéro n’est ni enregistré ni vérifié."
+  ,"phoneVerificationUnverifiedHelp": "Vérifiez ce numéro pour utiliser les fonctions protégées du compte."
+  ,"phoneVerificationVerifiedHelp": "Ce numéro correspond au téléphone vérifié de manière sécurisée sur votre compte."
+  ,"phoneVerificationSuccess": "Votre numéro de téléphone est vérifié."
+  ,"phoneVerificationSuccessTitle": "Téléphone vérifié"
+  ,"phoneVerificationReturnToSharedBarrels": "Retourner aux barils partagés"
+  ,"phoneVerificationVerified": "Téléphone vérifié"
+  ,"phoneVerificationNotVerified": "Téléphone non vérifié"
+  ,"sharedBarrelActionFailed": "Nous n’avons pas pu terminer cette action de baril partagé. Réessayez."
+  ,"sharedBarrelsLoadFailed": "Vérifiez votre connexion et réessayez. Vos informations sont en sécurité."
+  ,"sharedBarrelFormLoadFailed": "Nous n’avons pas pu ouvrir le formulaire de baril partagé. Vérifiez votre connexion et réessayez."
   ,"marketplaceBalancePaymentSummary": "Paiement du solde"
   ,"marketplaceDestinationChangeSummary": "Modification payante de la destination"
 }

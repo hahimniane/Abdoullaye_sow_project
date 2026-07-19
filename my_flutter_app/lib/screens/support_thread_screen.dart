@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart' show XTypeGroup, openFile;
 import 'package:flutter/material.dart';
@@ -13,8 +14,13 @@ import '../models/support_message.dart';
 import '../providers/auth_provider.dart';
 import '../services/support_service.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
+import '../utils/support_attachment_policy.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/async_action_button.dart';
+
+typedef SupportImagePicker = Future<XFile?> Function(ImageSource source);
+typedef SupportAttachmentPicker = Future<XFile?> Function();
 
 class SupportThreadScreen extends StatefulWidget {
   const SupportThreadScreen({
@@ -23,12 +29,18 @@ class SupportThreadScreen extends StatefulWidget {
     this.supportRepository,
     this.userIdOverride,
     this.isAdminOverride,
+    this.imagePicker,
+    this.videoPicker,
+    this.documentPicker,
   });
 
   final String caseId;
   final SupportRepository? supportRepository;
   final String? userIdOverride;
   final bool? isAdminOverride;
+  final SupportImagePicker? imagePicker;
+  final SupportAttachmentPicker? videoPicker;
+  final SupportAttachmentPicker? documentPicker;
 
   @override
   State<SupportThreadScreen> createState() => _SupportThreadScreenState();
@@ -42,6 +54,7 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
   SupportMessage? _editingMessage;
   bool _sending = false;
   bool _uploading = false;
+  bool _attachmentFlowActive = false;
   int _composerRevision = 0;
   Timer? _typingTimer;
   bool _typing = false;
@@ -110,28 +123,28 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
   }
 
   Future<void> _pickImage(ImageSource source) async {
-    if (_uploading) return;
-    final picker = ImagePicker();
-    final image = await picker.pickImage(
-      source: source,
-      imageQuality: 82,
-      maxWidth: 1800,
-    );
-    if (image == null) return;
-    await _uploadPickedFile(
-      file: image,
+    if (_uploading || _attachmentFlowActive) return;
+    await _pickAndReviewAttachment(
+      picker: () {
+        final override = widget.imagePicker;
+        if (override != null) return override(source);
+        return ImagePicker().pickImage(
+          source: source,
+          imageQuality: 82,
+          maxWidth: 1800,
+        );
+      },
       messageType: 'image',
       fallbackMimeType: 'image/jpeg',
     );
   }
 
   Future<void> _pickVideo() async {
-    if (_uploading) return;
-    final picker = ImagePicker();
-    final video = await picker.pickVideo(source: ImageSource.gallery);
-    if (video == null) return;
-    await _uploadPickedFile(
-      file: video,
+    if (_uploading || _attachmentFlowActive) return;
+    await _pickAndReviewAttachment(
+      picker: () =>
+          widget.videoPicker?.call() ??
+          ImagePicker().pickVideo(source: ImageSource.gallery),
       messageType: 'video',
       fallbackMimeType: 'video/mp4',
     );
@@ -139,79 +152,146 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
 
   Future<void> _pickDocument() async {
     final l10n = AppLocalizations.of(context)!;
-    if (_uploading) return;
+    if (_uploading || _attachmentFlowActive) return;
     const documentTypes = XTypeGroup(
       label: 'documents',
       extensions: <String>['pdf', 'txt', 'doc', 'docx'],
     );
-    final pickedFile = await openFile(
-      acceptedTypeGroups: const <XTypeGroup>[documentTypes],
+    await _pickAndReviewAttachment(
+      picker: () =>
+          widget.documentPicker?.call() ??
+          openFile(acceptedTypeGroups: const <XTypeGroup>[documentTypes]),
+      messageType: 'file',
+      resolveMimeType: (file) {
+        final mimeType = _documentMimeType(file.name);
+        if (mimeType == null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.supportUnsupportedAttachmentType)),
+          );
+        }
+        return mimeType;
+      },
     );
-    if (pickedFile == null) return;
-    final mimeType = _documentMimeType(pickedFile.name);
-    if (mimeType == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.supportUnsupportedAttachmentType)),
-      );
-      return;
-    }
-    late final List<int> bytes;
+  }
+
+  Future<void> _pickAndReviewAttachment({
+    required SupportAttachmentPicker picker,
+    required String messageType,
+    String? fallbackMimeType,
+    String? Function(XFile file)? resolveMimeType,
+  }) async {
+    if (_attachmentFlowActive) return;
+    _attachmentFlowActive = true;
     try {
-      bytes = await pickedFile.readAsBytes();
+      Future<_PendingSupportAttachment?> chooseAttachment() async {
+        final file = await picker();
+        if (file == null || !mounted) return null;
+        final resolvedMimeType = resolveMimeType?.call(file);
+        if (resolveMimeType != null && resolvedMimeType == null) return null;
+        return _preparePickedAttachment(
+          file: file,
+          messageType: messageType,
+          mimeType:
+              resolvedMimeType ??
+              file.mimeType ??
+              fallbackMimeType ??
+              'application/octet-stream',
+        );
+      }
+
+      final attachment = await chooseAttachment();
+      if (attachment == null || !mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        isDismissible: false,
+        enableDrag: false,
+        builder: (context) => _AttachmentReviewSheet(
+          initialAttachment: attachment,
+          initialCaption: _messageController.text,
+          onReplace: chooseAttachment,
+          onUpload: _uploadPickedAttachment,
+        ),
+      );
+    } finally {
+      _attachmentFlowActive = false;
+    }
+  }
+
+  Future<_PendingSupportAttachment?> _preparePickedAttachment({
+    required XFile file,
+    required String messageType,
+    required String mimeType,
+  }) async {
+    final l10n = AppLocalizations.of(context)!;
+    late final int byteLength;
+    try {
+      byteLength = await file.length();
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted) return null;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(l10n.supportFileReadFailed)));
-      return;
+      return null;
     }
-    await _uploadAttachmentBytes(
-      fileName: pickedFile.name,
-      bytes: bytes,
-      mimeType: mimeType,
-      messageType: 'file',
-    );
-  }
-
-  Future<void> _uploadPickedFile({
-    required XFile file,
-    required String messageType,
-    required String fallbackMimeType,
-  }) async {
-    await _uploadAttachmentBytes(
-      fileName: file.name,
-      bytes: await file.readAsBytes(),
-      mimeType: file.mimeType ?? fallbackMimeType,
+    if (supportAttachmentExceedsLimit(
       messageType: messageType,
+      byteLength: byteLength,
+    )) {
+      if (!mounted) return null;
+      final message = switch (supportAttachmentKind(messageType)) {
+        SupportAttachmentKind.image => l10n.supportImageTooLarge,
+        SupportAttachmentKind.video => l10n.supportVideoTooLarge,
+        SupportAttachmentKind.file => l10n.supportDocumentTooLarge,
+        SupportAttachmentKind.voice => l10n.supportVoiceTooLarge,
+      };
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+      return null;
+    }
+    Uint8List? previewBytes;
+    if (supportAttachmentKind(messageType) == SupportAttachmentKind.image) {
+      try {
+        previewBytes = await file.readAsBytes();
+      } catch (_) {
+        // The file can still be uploaded by path. The review sheet explains
+        // that only the local preview is unavailable.
+      }
+    }
+    return _PendingSupportAttachment(
+      file: file,
+      mimeType: mimeType,
+      messageType: messageType,
+      byteLength: byteLength,
+      previewBytes: previewBytes,
     );
   }
 
-  Future<void> _uploadAttachmentBytes({
-    required String fileName,
-    required List<int> bytes,
-    required String mimeType,
-    required String messageType,
-  }) async {
+  Future<bool> _uploadPickedAttachment(
+    _PendingSupportAttachment attachment,
+    String caption,
+  ) async {
     final l10n = AppLocalizations.of(context)!;
-    if (_uploading) return;
+    if (!mounted || _uploading) return false;
     setState(() => _uploading = true);
     try {
-      await _supportService.uploadAttachmentFile(
+      await _supportService.uploadPickedAttachment(
         caseId: widget.caseId,
-        fileName: fileName,
-        bytes: bytes,
-        mimeType: mimeType,
-        messageType: messageType,
-        caption: _messageController.text.trim(),
+        file: attachment.file,
+        mimeType: attachment.mimeType,
+        messageType: attachment.messageType,
+        caption: caption.trim(),
       );
       _messageController.clear();
       _composerRevision += 1;
+      return true;
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${l10n.supportActionFailed}: $error')),
       );
+      return false;
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -541,6 +621,375 @@ String? _documentMimeType(String fileName) {
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     _ => null,
   };
+}
+
+class _PendingSupportAttachment {
+  const _PendingSupportAttachment({
+    required this.file,
+    required this.mimeType,
+    required this.messageType,
+    required this.byteLength,
+    this.previewBytes,
+  });
+
+  final XFile file;
+  final String mimeType;
+  final String messageType;
+  final int byteLength;
+  final Uint8List? previewBytes;
+}
+
+class _AttachmentReviewSheet extends StatefulWidget {
+  const _AttachmentReviewSheet({
+    required this.initialAttachment,
+    required this.initialCaption,
+    required this.onReplace,
+    required this.onUpload,
+  });
+
+  final _PendingSupportAttachment initialAttachment;
+  final String initialCaption;
+  final Future<_PendingSupportAttachment?> Function() onReplace;
+  final Future<bool> Function(
+    _PendingSupportAttachment attachment,
+    String caption,
+  )
+  onUpload;
+
+  @override
+  State<_AttachmentReviewSheet> createState() => _AttachmentReviewSheetState();
+}
+
+class _AttachmentReviewSheetState extends State<_AttachmentReviewSheet> {
+  late _PendingSupportAttachment _attachment;
+  late final TextEditingController _captionController;
+  bool _replacing = false;
+  bool _uploading = false;
+  bool _uploadFailed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _attachment = widget.initialAttachment;
+    _captionController = TextEditingController(text: widget.initialCaption);
+  }
+
+  @override
+  void dispose() {
+    _captionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _replace() async {
+    if (_replacing || _uploading) return;
+    setState(() {
+      _replacing = true;
+      _uploadFailed = false;
+    });
+    try {
+      final replacement = await widget.onReplace();
+      if (mounted && replacement != null) {
+        setState(() => _attachment = replacement);
+      }
+    } finally {
+      if (mounted) setState(() => _replacing = false);
+    }
+  }
+
+  Future<void> _upload() async {
+    if (_uploading || _replacing) return;
+    setState(() {
+      _uploading = true;
+      _uploadFailed = false;
+    });
+    final uploaded = await widget.onUpload(
+      _attachment,
+      _captionController.text,
+    );
+    if (!mounted) return;
+    if (uploaded) {
+      Navigator.pop(context);
+      return;
+    }
+    setState(() {
+      _uploading = false;
+      _uploadFailed = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final busy = _uploading || _replacing;
+    return PopScope(
+      canPop: !busy,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.md,
+            AppSpacing.lg,
+            MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.86,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        l10n.supportReviewAttachmentTitle,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: busy ? null : () => Navigator.pop(context),
+                      tooltip: MaterialLocalizations.of(
+                        context,
+                      ).closeButtonTooltip,
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _AttachmentPreview(attachment: _attachment),
+                        const SizedBox(height: AppSpacing.md),
+                        TextField(
+                          controller: _captionController,
+                          enabled: !busy,
+                          minLines: 1,
+                          maxLines: 3,
+                          decoration: InputDecoration(
+                            labelText: l10n.supportAttachmentCaption,
+                          ),
+                        ),
+                        if (_uploadFailed) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          Semantics(
+                            liveRegion: true,
+                            child: Text(
+                              l10n.supportUploadFailed,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: busy ? null : () => Navigator.pop(context),
+                        child: Text(l10n.cancel),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: busy ? null : _replace,
+                        icon: _replacing
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.swap_horiz),
+                        label: Text(l10n.supportReplaceAttachment),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                SizedBox(
+                  width: double.infinity,
+                  child: AsyncActionButton.filled(
+                    onPressed: busy ? null : _upload,
+                    label: _uploadFailed
+                        ? l10n.retry
+                        : l10n.supportUploadAttachment,
+                    loadingLabel: l10n.supportUploading,
+                    icon: Icons.cloud_upload_outlined,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AttachmentPreview extends StatelessWidget {
+  const _AttachmentPreview({required this.attachment});
+
+  final _PendingSupportAttachment attachment;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final kind = supportAttachmentKind(attachment.messageType);
+    final previewBytes = attachment.previewBytes;
+    final preview = switch (kind) {
+      SupportAttachmentKind.image when previewBytes != null => Semantics(
+        image: true,
+        label: l10n.supportImagePreviewLabel(attachment.file.name),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          child: Container(
+            constraints: const BoxConstraints(maxHeight: 320),
+            width: double.infinity,
+            color: AppColors.mist.withValues(alpha: 0.36),
+            child: Image.memory(
+              previewBytes,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) =>
+                  const _PreviewUnavailable(),
+            ),
+          ),
+        ),
+      ),
+      SupportAttachmentKind.image => const _PreviewUnavailable(),
+      SupportAttachmentKind.video => _AttachmentTypePlaceholder(
+        icon: Icons.video_file_outlined,
+        label: l10n.supportVideoAttachment,
+      ),
+      SupportAttachmentKind.file => _AttachmentTypePlaceholder(
+        icon: Icons.insert_drive_file_outlined,
+        label: l10n.supportFileAttachment,
+      ),
+      SupportAttachmentKind.voice => _AttachmentTypePlaceholder(
+        icon: Icons.audio_file_outlined,
+        label: l10n.supportVoiceAttachment,
+      ),
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        preview,
+        const SizedBox(height: AppSpacing.sm),
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.rule),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          ),
+          child: Row(
+            children: [
+              Icon(switch (kind) {
+                SupportAttachmentKind.image => Icons.image_outlined,
+                SupportAttachmentKind.video => Icons.video_file_outlined,
+                SupportAttachmentKind.file => Icons.insert_drive_file_outlined,
+                SupportAttachmentKind.voice => Icons.audio_file_outlined,
+              }, color: AppColors.cobalt),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      attachment.file.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      l10n.supportAttachmentSize(
+                        _formatAttachmentBytes(attachment.byteLength),
+                      ),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AttachmentTypePlaceholder extends StatelessWidget {
+  const _AttachmentTypePlaceholder({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 128),
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      decoration: BoxDecoration(
+        color: AppColors.mist.withValues(alpha: 0.36),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 36, color: AppColors.cobalt),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PreviewUnavailable extends StatelessWidget {
+  const _PreviewUnavailable();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 128),
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      decoration: BoxDecoration(
+        color: AppColors.mist.withValues(alpha: 0.36),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.preview_outlined, size: 36, color: AppColors.muted),
+          const SizedBox(height: AppSpacing.sm),
+          Text(l10n.supportPreviewUnavailable, textAlign: TextAlign.center),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatAttachmentBytes(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).round()} KB';
+  return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
 }
 
 class _AttachmentActionTile extends StatelessWidget {

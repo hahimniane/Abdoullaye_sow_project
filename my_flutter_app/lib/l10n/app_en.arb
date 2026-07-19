@@ -602,6 +602,7 @@
   "returnToCardRequestedStatus": "Return to card requested",
   "returnedToCard": "Returned to card",
   "noWalletActivityYet": "No wallet activity yet.",
+  "walletActivityUnavailable": "We could not load your wallet activity right now. Please try again in a moment.",
   "signInToViewWallet": "Sign in to view your wallet.",
   "decline": "Decline",
   "accept": "Accept",
@@ -756,6 +757,37 @@
   "approve": "Approve",
   "suspend": "Suspend",
   "reject": "Reject",
+  "sharedBarrelManageRequests": "Manage requests",
+  "sharedBarrelJoinRequests": "Join requests",
+  "sharedBarrelJoinRequestsHelp": "Approve or reject customers waiting to join this shared barrel.",
+  "sharedBarrelNoPendingRequests": "No join requests are waiting for approval.",
+  "sharedBarrelRequestApproved": "Join request approved.",
+  "sharedBarrelRequestRejected": "Join request rejected. The deposit will be sent for refund.",
+  "sharedBarrelRequestDecisionFailed": "Could not update this request. Please try again.",
+  "sharedBarrelRequestedShareCount": "{count, plural, =1{1 share requested} other{{count} shares requested}}",
+  "@sharedBarrelRequestedShareCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sharedBarrelPaidDeposit": "Deposit paid: {amount}",
+  "@sharedBarrelPaidDeposit": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "sharedBarrelCancelPool": "Cancel pool",
+  "sharedBarrelCancelTitle": "Cancel this shared barrel?",
+  "sharedBarrelCancelForfeitureMessage": "If you cancel now, your {amount} deposit will be forfeited. This cannot be undone.",
+  "@sharedBarrelCancelForfeitureMessage": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "sharedBarrelKeepPool": "Keep pool",
+  "sharedBarrelCancelAndForfeit": "Cancel and forfeit deposit",
   "requestChanges": "Request changes",
   "reviewNote": "Review note",
   "requestId": "Request ID: {id}",
@@ -1298,6 +1330,8 @@
   "favoriteCarsSubtitle": "View vehicles you saved",
   "noFavoriteCarsYet": "No favorite cars yet",
   "favoriteRemoved": "Favorite removed",
+  "addToFavorites": "Add to favorites",
+  "removeFromFavorites": "Remove from favorites",
   "carNoLongerAvailable": "This car is no longer available",
   "enterValidPaidHoldPricing": "Enter valid paid hold pricing.",
   "useBusinessPaidHoldPricing": "Use business paid hold pricing",
@@ -1740,6 +1774,18 @@
   "supportVideo": "Video",
   "supportFile": "File",
   "supportUploading": "Uploading...",
+  "supportReviewAttachmentTitle": "Review attachment",
+  "supportUploadAttachment": "Upload",
+  "supportReplaceAttachment": "Replace",
+  "supportAttachmentCaption": "Caption (optional)",
+  "supportPreviewUnavailable": "Preview unavailable. You can still upload this file.",
+  "supportUploadFailed": "Upload failed. Check your connection and try again.",
+  "supportImagePreviewLabel": "Image preview: {name}",
+  "@supportImagePreviewLabel": {
+    "placeholders": {
+      "name": {}
+    }
+  },
   "supportRequestEvidence": "Request evidence",
   "supportRequestingEvidence": "Requesting...",
   "supportEvidenceNote": "What should the customer add?",
@@ -1880,6 +1926,10 @@
   "supportSizeBytes": "Size in bytes",
   "supportFileReadFailed": "Could not read that file. Please try again.",
   "supportUnsupportedAttachmentType": "Choose a PDF, text, Word, or DOCX file.",
+  "supportImageTooLarge": "Choose an image smaller than 10 MB.",
+  "supportVideoTooLarge": "Choose a video smaller than 50 MB.",
+  "supportDocumentTooLarge": "Choose a document smaller than 25 MB.",
+  "supportVoiceTooLarge": "Choose an audio file smaller than 10 MB.",
   "supportAttach": "Attach",
   "supportAttaching": "Attaching...",
   "supportPurchaseCaseSubject": "Support for {carTitle}",
@@ -1944,6 +1994,54 @@
   "accountLegalAcceptanceRequired": "Please accept the Terms of Service and Privacy Policy to continue.",
   "businessResponsibilityAcceptance": "I understand that my business is independently responsible for its listings, prices, goods, services, fulfillment, delivery timing, permits, and customer obligations.",
   "businessResponsibilityRequired": "Confirm the business responsibility statement to submit your application."
+  ,"verifyPhoneToContinueTitle": "Verify your phone to continue"
+  ,"verifyPhoneToContinueBody": "Shared barrels are available only to customers with a verified phone number. We’ll send a code to the number in your account."
+  ,"verifyPhone": "Verify phone"
+  ,"notNow": "Not now"
+  ,"phoneVerificationTitle": "Phone verification"
+  ,"phoneVerificationExplanation": "Confirm or update the mobile number for your account. We’ll text you a one-time verification code."
+  ,"phoneVerificationCountryCodeHelp": "Include the country code, for example +1 718 555 0100."
+  ,"phoneVerificationCodeSentTitle": "Code sent"
+  ,"phoneVerificationCodeSent": "Enter the 6-digit code sent to {phone}."
+  ,"@phoneVerificationCodeSent": {"placeholders": {"phone": {}}}
+  ,"phoneVerificationCode": "Verification code"
+  ,"phoneVerificationSendCode": "Send verification code"
+  ,"phoneVerificationSendingCode": "Sending code..."
+  ,"phoneVerificationVerifying": "Verifying..."
+  ,"phoneVerificationResending": "Resending..."
+  ,"phoneVerificationResent": "A new code was sent."
+  ,"phoneVerificationResend": "Resend code"
+  ,"phoneVerificationResendIn": "Resend code in {seconds}s"
+  ,"@phoneVerificationResendIn": {"placeholders": {"seconds": {"type": "int"}}}
+  ,"phoneVerificationChangeNumber": "Change number"
+  ,"phoneVerificationSmsNotice": "Standard SMS and data rates may apply. The code is used only to verify that this phone belongs to you."
+  ,"phoneVerificationInvalidPhone": "Enter a valid international phone number beginning with + and the country code."
+  ,"phoneVerificationEnterCode": "Enter the 6-digit code."
+  ,"phoneVerificationInvalidCode": "That code is incorrect. Check it and try again."
+  ,"phoneVerificationExpiredCode": "That code expired. Request a new code and try again."
+  ,"phoneVerificationTooManyAttempts": "Too many verification attempts. Please wait and try again later."
+  ,"phoneVerificationNetworkError": "Check your connection and try again."
+  ,"phoneVerificationRequestTimedOut": "We didn’t receive a response. Check your connection and try again."
+  ,"phoneVerificationPhoneInUse": "That phone number is already linked to another account."
+  ,"phoneVerificationRecentLogin": "For security, sign out, sign back in, and verify your phone again."
+  ,"phoneVerificationGenericError": "We couldn’t verify your phone. Please try again."
+  ,"phoneVerificationSyncPending": "Your code was accepted, but we couldn’t finish updating your profile. Try finishing verification again—another SMS is not required."
+  ,"phoneVerificationFinish": "Finish verification"
+  ,"phoneVerificationFinishing": "Finishing verification..."
+  ,"phoneVerificationSavePhoneFirst": "Save this phone number before verifying it."
+  ,"phoneVerificationSaveAndVerify": "Save and verify"
+  ,"phoneVerificationSavingNumber": "Saving number..."
+  ,"phoneVerificationEditedStatus": "This number has not been saved or verified."
+  ,"phoneVerificationUnverifiedHelp": "Verify this number to use protected account features."
+  ,"phoneVerificationVerifiedHelp": "This number matches the phone securely verified on your account."
+  ,"phoneVerificationSuccess": "Your phone number is verified."
+  ,"phoneVerificationSuccessTitle": "Phone verified"
+  ,"phoneVerificationReturnToSharedBarrels": "Return to shared barrels"
+  ,"phoneVerificationVerified": "Phone verified"
+  ,"phoneVerificationNotVerified": "Phone not verified"
+  ,"sharedBarrelActionFailed": "We couldn’t complete that shared-barrel action. Please try again."
+  ,"sharedBarrelsLoadFailed": "Check your connection and try again. Your information is safe."
+  ,"sharedBarrelFormLoadFailed": "We couldn’t open the shared-barrel form. Check your connection and try again."
   ,"marketplaceBalancePaymentSummary": "Balance payment"
   ,"marketplaceDestinationChangeSummary": "Paid destination change"
 }

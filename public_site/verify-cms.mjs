@@ -39,6 +39,7 @@ function assertIncludes(source, expected, label) {
 
 const content = read("assets/content.js");
 const countryCatalog = read("assets/country-catalog.js");
+const i18n = read("assets/i18n.js");
 
 assertIncludes(content, '"websiteContent/home"', "content.js");
 assertIncludes(content, '"websiteContent/contact"', "content.js");
@@ -123,6 +124,11 @@ assert(
 const app = read("app.html");
 assertIncludes(
   app,
+  "<h1>Gardez des entreprises de confiance dans votre poche</h1>",
+  "app.html",
+);
+assertIncludes(
+  app,
   'data-src-en="assets/app-activity-en.png?v=2"',
   "app.html",
 );
@@ -153,10 +159,18 @@ for (const asset of [
 }
 
 const contact = read("contact.html");
+assertIncludes(contact, "assets/country-catalog.js?v=", "contact.html");
 assertIncludes(contact, '<select name="destination_country"', "contact.html");
 assertIncludes(contact, 'id="destinationCountry"', "contact.html");
 assertIncludes(contact, '<select name="destination_city"', "contact.html");
 assertIncludes(contact, 'id="destinationCity"', "contact.html");
+assertIncludes(contact, ">Envoyer le message</button>", "contact.html");
+assertIncludes(i18n, '"Send message": "Envoyer le message"', "i18n.js");
+assert(
+  !/<option value="Guinea">/.test(contact) &&
+    !/<option value="United States">/.test(contact),
+  "contact.html must populate destination countries from country-catalog.js instead of a partial hardcoded list",
+);
 
 const partner = read("partner.html");
 assertIncludes(partner, "assets/country-catalog.js?v=", "partner.html");

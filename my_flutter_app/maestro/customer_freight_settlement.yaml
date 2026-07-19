@@ -44,6 +44,11 @@ name: Customer pays a verified freight balance
 - assertVisible: "Pay balance of $25.00"
 - takeScreenshot: "output/ios-e2e/freight-balance-due"
 - tapOn: "Pay balance of $25.00"
+- extendedWaitUntil:
+    visible: "I understand the business’s responsibility and want to continue."
+    timeout: 10000
+- tapOn: "I understand the business’s responsibility and want to continue."
+- tapOn: "Continue to payment"
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element:

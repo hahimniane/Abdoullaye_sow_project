@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 
 const admin = require("firebase-admin");
+const {
+  buildE2EPlatformAdminProfile,
+  buildFreightBalanceFixture,
+} = require("./e2e-seed-fixtures");
 
 if (!process.env.FIRESTORE_EMULATOR_HOST ||
     !process.env.FIREBASE_AUTH_EMULATOR_HOST) {
@@ -38,6 +42,34 @@ const accounts = [
     email: "e2e.customer@laawol.test",
     password: e2ePassword,
     displayName: "E2E Customer",
+    phoneNumber: "+17185550199",
+  },
+  {
+    uid: "e2e-customer-b",
+    email: "e2e.customer.b@laawol.test",
+    password: e2ePassword,
+    displayName: "E2E Customer B",
+    phoneNumber: "+17185550200",
+  },
+  {
+    uid: "e2e-customer-c",
+    email: "e2e.customer.c@laawol.test",
+    password: e2ePassword,
+    displayName: "E2E Customer C",
+    phoneNumber: "+17185550201",
+  },
+  {
+    uid: "e2e-customer-d",
+    email: "e2e.customer.d@laawol.test",
+    password: e2ePassword,
+    displayName: "E2E Customer D",
+    phoneNumber: "+17185550202",
+  },
+  {
+    uid: "e2e-customer-unverified",
+    email: "e2e.customer.unverified@laawol.test",
+    password: e2ePassword,
+    displayName: "E2E Unverified Customer",
   },
   {
     uid: "e2e-business-owner",
@@ -73,14 +105,51 @@ async function main() {
   const businessId = "e2e-logistics";
   const batch = db.batch();
   const set = (path, data) => batch.set(db.doc(path), data, {merge: true});
+  const freightBalanceFixture = buildFreightBalanceFixture({now, businessId});
 
   set("users/e2e-customer", {
     role: "customer",
     fullName: "E2E Customer",
     email: "e2e.customer@laawol.test",
     phone: "+17185550199",
-    normalizedPhone: "+17185550199",
+    normalizedPhone: "17185550199",
     phoneVerified: true,
+    language: "en",
+  });
+  set("users/e2e-customer-b", {
+    role: "customer",
+    fullName: "E2E Customer B",
+    email: "e2e.customer.b@laawol.test",
+    phone: "+17185550200",
+    normalizedPhone: "17185550200",
+    phoneVerified: true,
+    language: "en",
+  });
+  set("users/e2e-customer-c", {
+    role: "customer",
+    fullName: "E2E Customer C",
+    email: "e2e.customer.c@laawol.test",
+    phone: "+17185550201",
+    normalizedPhone: "17185550201",
+    phoneVerified: true,
+    language: "en",
+  });
+  set("users/e2e-customer-d", {
+    role: "customer",
+    fullName: "E2E Customer D",
+    email: "e2e.customer.d@laawol.test",
+    phone: "+17185550202",
+    normalizedPhone: "17185550202",
+    phoneVerified: true,
+    language: "en",
+  });
+  set("users/e2e-customer-unverified", {
+    role: "customer",
+    fullName: "E2E Unverified Customer",
+    email: "e2e.customer.unverified@laawol.test",
+    phone: "+17185550203",
+    normalizedPhone: "17185550203",
+    phoneVerified: false,
     language: "en",
   });
   set("users/e2e-business-owner", {
@@ -93,12 +162,7 @@ async function main() {
       "parking", "cars", "purchases", "earnings", "profile", "support",
     ],
   });
-  set("users/e2e-platform-admin", {
-    role: "admin",
-    platformAdmin: true,
-    fullName: "E2E Platform Admin",
-    email: "e2e.admin@laawol.test",
-  });
+  set("users/e2e-platform-admin", buildE2EPlatformAdminProfile());
   set(`businesses/${businessId}`, {
     name: "E2E Atlantic Logistics",
     status: "approved",
@@ -187,15 +251,16 @@ async function main() {
     walletAppliedCents: 0,
     stripePaymentIntentId: "simulated_freight_e2e_balance",
     paymentStatus: "succeeded",
-    priceSettlementStatus: "awaiting_weight",
-    weightVerificationStatus: "awaiting_business",
-    payoutStatus: "awaiting_settlement",
     platformFeePct: 0.1,
-    status: "awaiting_weight_confirmation",
     paidAt: now,
     createdAt: now,
     updatedAt: now,
+    ...freightBalanceFixture.shipmentUpdate,
   });
+  set(
+      freightBalanceFixture.settlementPath,
+      freightBalanceFixture.settlement,
+  );
   set("barrelShipments/barrel-e2e", {
     trackingCode: "BR-E2E-001",
     customerUid: "e2e-customer",
@@ -248,6 +313,59 @@ async function main() {
     pricePerBarrel: 225,
     pricePerShare: 56.25,
     joinDeadline: later,
+    updatedAt: now,
+  });
+  set("barrelPools/pool-e2e-auto", {
+    destinationCountryId: "gn",
+    destinationCountryName: "Guinea",
+    businessId,
+    businessName: "E2E Atlantic Logistics",
+    origin: "businessPosted",
+    holderRole: "business",
+    createdByUid: "e2e-business-owner",
+    createdByRole: "businessOwner",
+    approvalMode: "auto",
+    trackingCode: "BP-E2E-AUTO",
+    status: "open",
+    totalShares: 2,
+    acceptedShares: 0,
+    requestedShares: 0,
+    takenShares: 0,
+    openShares: 2,
+    maxJoiners: 2,
+    pricePerShare: 112.5,
+    depositPerShare: 33.75,
+    currency: "usd",
+    shipMode: "sea",
+    platformFeePct: 0.1,
+    joinDeadline: later,
+    publicParticipants: {},
+    createdAt: now,
+    updatedAt: now,
+  });
+  set("openBarrels/pool-e2e-auto", {
+    poolId: "pool-e2e-auto",
+    destinationCountryId: "gn",
+    destinationCountryName: "Guinea",
+    businessId,
+    businessName: "E2E Atlantic Logistics",
+    origin: "businessPosted",
+    holderRole: "business",
+    approvalMode: "auto",
+    status: "open",
+    totalShares: 2,
+    acceptedShares: 0,
+    requestedShares: 0,
+    takenShares: 0,
+    openShares: 2,
+    sharesAvailable: 2,
+    maxJoiners: 2,
+    pricePerShare: 112.5,
+    depositPerShare: 33.75,
+    currency: "usd",
+    shipMode: "sea",
+    joinDeadline: later,
+    createdAt: now,
     updatedAt: now,
   });
   set("transportRequests/transport-e2e", {

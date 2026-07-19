@@ -5,6 +5,8 @@ import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../utils/app_feedback.dart';
+import '../utils/auth_navigation.dart';
+import '../utils/business_registration_navigation.dart';
 import '../widgets/app_snackbars.dart';
 
 @visibleForTesting
@@ -91,15 +93,11 @@ class _LoginScreenState extends State<LoginScreen>
 
         if (authProvider.hasBusinessDashboardAccess) {
           debugPrint('🔵 LoginScreen: Navigating to business dashboard');
-          Navigator.pushNamedAndRemoveUntil(
-            context,
-            '/staff-home',
-            (route) => false,
-          );
+          navigateAfterLogin(context, hasBusinessDashboardAccess: true);
         } else {
           debugPrint('🔵 LoginScreen: Navigating to customer home');
           // Regular customer - go to customer home
-          Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+          navigateAfterLogin(context, hasBusinessDashboardAccess: false);
         }
       }
     } catch (error) {
@@ -370,10 +368,7 @@ class _LoginScreenState extends State<LoginScreen>
                                     // Forgot Password
                                     TextButton(
                                       onPressed: () {
-                                        Navigator.pushNamed(
-                                          context,
-                                          '/forgot-password',
-                                        );
+                                        openForgotPassword(context);
                                       },
                                       style: TextButton.styleFrom(
                                         splashFactory: NoSplash.splashFactory,
@@ -455,10 +450,7 @@ class _LoginScreenState extends State<LoginScreen>
                                     const SizedBox(height: 8),
                                     OutlinedButton.icon(
                                       onPressed: () {
-                                        Navigator.pushNamed(
-                                          context,
-                                          '/business-register',
-                                        );
+                                        openBusinessRegistration(context);
                                       },
                                       icon: const Icon(
                                         Icons.storefront_outlined,

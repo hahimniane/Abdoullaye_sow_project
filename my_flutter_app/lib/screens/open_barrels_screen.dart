@@ -1,8 +1,9 @@
 import 'dart:async';
 
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/barrel_pool.dart';
@@ -11,10 +12,17 @@ import '../models/business_service.dart';
 import '../services/barrel_pool_service.dart';
 import '../services/barrel_pricing_service.dart';
 import '../services/business_service.dart';
+import '../providers/auth_provider.dart';
+import '../utils/action_confirmation.dart';
+import '../utils/barrel_pool_actions.dart';
+import '../utils/root_navigation.dart';
+import '../utils/shared_barrel_error.dart';
 import '../widgets/app_back_button.dart';
+import '../widgets/app_snackbars.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/support_entry_button.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
+import 'phone_verification_screen.dart';
 
 class OpenBarrelsScreen extends StatefulWidget {
   const OpenBarrelsScreen({super.key});
@@ -27,6 +35,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
   final _service = BarrelPoolService();
   final _businessService = BusinessService();
   final _currency = NumberFormat.simpleCurrency(name: 'USD');
+  final Set<String> _busyPoolIds = {};
   BarrelPickupPricing _pickupPricing = BarrelPickupPricing.defaultPricing;
   bool _pickupPricingLoaded = false;
 
@@ -68,6 +77,38 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
       _pickupPricing = pricing;
       _pickupPricingLoaded = true;
     });
+  }
+
+  Future<bool> _ensureVerifiedPhone() async {
+    final auth = context.read<AuthProvider>();
+    if (auth.phoneVerified) return true;
+    final shouldVerify = await showDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      builder: (dialogContext) => const PhoneVerificationPromptDialog(),
+    );
+    if (shouldVerify != true || !mounted) return false;
+    final verified = await pushRootNamed<bool>(
+      context,
+      '/verify-phone',
+      arguments: const PhoneVerificationArguments(returnToSharedBarrels: true),
+    );
+    return mounted &&
+        verified == true &&
+        context.read<AuthProvider>().phoneVerified;
+  }
+
+  Future<void> _handleSharedBarrelError(Object error) async {
+    debugPrint('Shared barrel action failed: $error');
+    if (isPhoneVerificationRequired(error)) {
+      await _ensureVerifiedPhone();
+      return;
+    }
+    if (!mounted) return;
+    showErrorSnackBar(
+      context,
+      AppLocalizations.of(context)!.sharedBarrelActionFailed,
+    );
   }
 
   Future<DateTime?> _pickPickupDateTime(DateTime? current) async {
@@ -175,13 +216,14 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
+          debugPrint('Open shared barrels failed: ${snapshot.error}');
           return _StateMessage(
             icon: Icons.error_outline,
             title: copy(
               'Could not load open barrels',
               'Impossible de charger les barils ouverts',
             ),
-            body: snapshot.error.toString(),
+            body: AppLocalizations.of(context)!.sharedBarrelsLoadFailed,
           );
         }
         final pools = snapshot.data ?? const <BarrelPool>[];
@@ -211,6 +253,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
   }
 
   Widget _buildMyPools() {
+    final l10n = AppLocalizations.of(context)!;
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
       return _StateMessage(
@@ -229,13 +272,14 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
+          debugPrint('Customer shared barrels failed: ${snapshot.error}');
           return _StateMessage(
             icon: Icons.error_outline,
             title: copy(
               'Could not load your pools',
               'Impossible de charger vos barils',
             ),
-            body: snapshot.error.toString(),
+            body: AppLocalizations.of(context)!.sharedBarrelsLoadFailed,
           );
         }
         final pools = snapshot.data ?? const <BarrelPool>[];
@@ -257,33 +301,50 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
           currency: _currency,
           copy: copy,
           actionIcon: Icons.cancel_outlined,
-          actionIconFor: (pool) => pool.balancePaymentStatus == 'balance_due'
-              ? Icons.payments_outlined
-              : Icons.cancel_outlined,
-          actionLabelFor: (pool) => pool.participantRole == 'owner'
-              ? (pool.balancePaymentStatus == 'balance_due'
-                    ? copy('Pay balance', 'Payer le solde')
-                    : copy('Cancel pool', 'Annuler le baril'))
-              : (pool.balancePaymentStatus == 'balance_due'
-                    ? copy('Pay balance', 'Payer le solde')
-                    : copy('Leave pool', 'Quitter le baril')),
+          actionIconFor: (pool) => switch (barrelPoolPrimaryActionFor(pool)) {
+            BarrelPoolPrimaryAction.payBalance => Icons.payments_outlined,
+            BarrelPoolPrimaryAction.manageRequests => Icons.group_outlined,
+            BarrelPoolPrimaryAction.cancelPool => Icons.cancel_outlined,
+            BarrelPoolPrimaryAction.leavePool => Icons.logout_outlined,
+          },
+          actionLabelFor: (pool) => switch (barrelPoolPrimaryActionFor(pool)) {
+            BarrelPoolPrimaryAction.payBalance => copy(
+              'Pay balance',
+              'Payer le solde',
+            ),
+            BarrelPoolPrimaryAction.manageRequests =>
+              l10n.sharedBarrelManageRequests,
+            BarrelPoolPrimaryAction.cancelPool => l10n.sharedBarrelCancelPool,
+            BarrelPoolPrimaryAction.leavePool => copy(
+              'Leave pool',
+              'Quitter le baril',
+            ),
+          },
           actionEnabled: (pool) =>
-              pool.balancePaymentStatus == 'balance_due' ||
-              ![
-                'sealed',
-                'cancelled',
-                'expired',
-                'delivered',
-              ].contains(pool.status),
-          onAction: _payBalanceOrLeavePool,
+              !_busyPoolIds.contains(pool.id) &&
+              (pool.balancePaymentStatus == 'balance_due' ||
+                  ![
+                    'sealed',
+                    'cancelled',
+                    'expired',
+                    'delivered',
+                  ].contains(pool.status)),
+          actionBusy: (pool) => _busyPoolIds.contains(pool.id),
+          onAction: _handlePoolAction,
           showSupport: true,
         );
       },
     );
   }
 
-  Future<void> _payBalanceOrLeavePool(BarrelPool pool) async {
-    if (pool.balancePaymentStatus == 'balance_due') {
+  Future<void> _handlePoolAction(BarrelPool pool) async {
+    final l10n = AppLocalizations.of(context)!;
+    final action = barrelPoolPrimaryActionFor(pool);
+    if (action == BarrelPoolPrimaryAction.manageRequests) {
+      await _showJoinRequests(pool);
+      return;
+    }
+    if (action == BarrelPoolPrimaryAction.payBalance) {
       final acceptance = await confirmMarketplaceTransaction(
         context,
         providerNames: pool.businessName,
@@ -299,25 +360,297 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
           SnackBar(content: Text(copy('Balance paid.', 'Solde payé.'))),
         );
       } catch (error) {
+        debugPrint('Shared barrel balance payment failed: $error');
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              copy(
-                    'Balance payment failed: ',
-                    'Échec du paiement du solde : ',
-                  ) +
-                  error.toString(),
-            ),
-          ),
-        );
+        showErrorSnackBar(context, l10n.couldNotPayBalance);
       }
       return;
     }
     await _leaveOrCancelPool(pool);
   }
 
+  Future<void> _showJoinRequests(BarrelPool pool) async {
+    final decidingParticipantIds = <String>{};
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        final l10n = AppLocalizations.of(sheetContext)!;
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            return FractionallySizedBox(
+              heightFactor: 0.82,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 12, 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                l10n.sharedBarrelJoinRequests,
+                                style: Theme.of(sheetContext)
+                                    .textTheme
+                                    .titleLarge
+                                    ?.copyWith(fontWeight: FontWeight.w800),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                l10n.sharedBarrelJoinRequestsHelp,
+                                style: const TextStyle(
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: l10n.close,
+                          onPressed: () => Navigator.pop(sheetContext),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: StreamBuilder<List<BarrelPoolParticipant>>(
+                      stream: _service.participants(pool.id),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        }
+                        if (snapshot.hasError) {
+                          debugPrint(
+                            'Shared barrel join requests failed: '
+                            '${snapshot.error}',
+                          );
+                          return _StateMessage(
+                            icon: Icons.error_outline,
+                            title: l10n.sharedBarrelRequestDecisionFailed,
+                            body: l10n.sharedBarrelsLoadFailed,
+                          );
+                        }
+                        final requests = (snapshot.data ?? const [])
+                            .where(
+                              (participant) =>
+                                  participant.joinStatus == 'requested',
+                            )
+                            .toList();
+                        if (requests.isEmpty) {
+                          return _StateMessage(
+                            icon: Icons.task_alt,
+                            title: l10n.sharedBarrelNoPendingRequests,
+                            body: pool.trackingCode,
+                          );
+                        }
+                        return ListView.separated(
+                          padding: const EdgeInsets.all(18),
+                          itemCount: requests.length,
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            final participant = requests[index];
+                            final deciding = decidingParticipantIds.contains(
+                              participant.uid,
+                            );
+                            return Card(
+                              elevation: 0,
+                              color: const Color(0xFFF8FAFC),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: const BorderSide(
+                                  color: Color(0xFFE2E8F0),
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      participant.senderName,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 5),
+                                    Text(
+                                      l10n.sharedBarrelRequestedShareCount(
+                                        participant.sharesClaimed,
+                                      ),
+                                    ),
+                                    if (participant
+                                        .contentsDescription
+                                        .isNotEmpty) ...[
+                                      const SizedBox(height: 5),
+                                      Text(
+                                        participant.contentsDescription,
+                                        style: const TextStyle(
+                                          color: Color(0xFF475569),
+                                        ),
+                                      ),
+                                    ],
+                                    const SizedBox(height: 5),
+                                    Text(
+                                      l10n.sharedBarrelPaidDeposit(
+                                        _currency.format(
+                                          participant.depositAmount,
+                                        ),
+                                      ),
+                                      style: const TextStyle(
+                                        color: Color(0xFF047857),
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: OutlinedButton(
+                                            onPressed: deciding
+                                                ? null
+                                                : () => _decideJoinRequest(
+                                                    sheetContext,
+                                                    setSheetState,
+                                                    decidingParticipantIds,
+                                                    pool,
+                                                    participant,
+                                                    accept: false,
+                                                  ),
+                                            child: Text(l10n.reject),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: FilledButton(
+                                            onPressed: deciding
+                                                ? null
+                                                : () => _decideJoinRequest(
+                                                    sheetContext,
+                                                    setSheetState,
+                                                    decidingParticipantIds,
+                                                    pool,
+                                                    participant,
+                                                    accept: true,
+                                                  ),
+                                            child: deciding
+                                                ? const SizedBox.square(
+                                                    dimension: 18,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                        ),
+                                                  )
+                                                : Text(l10n.approve),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: TextButton.icon(
+                        onPressed: decidingParticipantIds.isNotEmpty
+                            ? null
+                            : () async {
+                                Navigator.pop(sheetContext);
+                                await _leaveOrCancelPool(pool);
+                              },
+                        icon: const Icon(Icons.cancel_outlined),
+                        label: Text(l10n.sharedBarrelCancelPool),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _decideJoinRequest(
+    BuildContext sheetContext,
+    StateSetter setSheetState,
+    Set<String> decidingParticipantIds,
+    BarrelPool pool,
+    BarrelPoolParticipant participant, {
+    required bool accept,
+  }) async {
+    final l10n = AppLocalizations.of(sheetContext)!;
+    setSheetState(() => decidingParticipantIds.add(participant.uid));
+    try {
+      await _service.decideJoin(
+        poolId: pool.id,
+        participantUid: participant.uid,
+        accept: accept,
+      );
+      if (!sheetContext.mounted) return;
+      ScaffoldMessenger.of(sheetContext).showSnackBar(
+        SnackBar(
+          content: Text(
+            accept
+                ? l10n.sharedBarrelRequestApproved
+                : l10n.sharedBarrelRequestRejected,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!sheetContext.mounted) return;
+      ScaffoldMessenger.of(sheetContext).showSnackBar(
+        SnackBar(content: Text(l10n.sharedBarrelRequestDecisionFailed)),
+      );
+    } finally {
+      if (sheetContext.mounted) {
+        setSheetState(() => decidingParticipantIds.remove(participant.uid));
+      }
+    }
+  }
+
   Future<void> _leaveOrCancelPool(BarrelPool pool) async {
+    if (pool.participantRole != 'owner' &&
+        (!await _ensureVerifiedPhone() || !mounted)) {
+      return;
+    }
+    if (pool.participantRole == 'owner') {
+      final l10n = AppLocalizations.of(context)!;
+      final forfeiture = barrelPoolOwnerCancellationForfeiture(pool);
+      final confirmed = await confirmMajorAction(
+        context,
+        title: l10n.sharedBarrelCancelTitle,
+        message: l10n.sharedBarrelCancelForfeitureMessage(
+          _currency.format(forfeiture),
+        ),
+        confirmLabel: l10n.sharedBarrelCancelAndForfeit,
+        cancelLabel: l10n.sharedBarrelKeepPool,
+        icon: Icons.money_off_outlined,
+        destructive: true,
+      );
+      if (!confirmed || !mounted) return;
+    }
+    if (_busyPoolIds.contains(pool.id)) return;
+    setState(() => _busyPoolIds.add(pool.id));
     try {
       if (pool.participantRole == 'owner') {
         await _service.cancelPool(pool.id);
@@ -335,10 +668,11 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
         ),
       );
     } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
+      await _handleSharedBarrelError(error);
+    } finally {
+      if (mounted) {
+        setState(() => _busyPoolIds.remove(pool.id));
+      }
     }
   }
 
@@ -347,6 +681,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
       Navigator.pushNamed(context, '/login');
       return;
     }
+    if (!await _ensureVerifiedPhone() || !mounted) return;
     final senderController = TextEditingController();
     final receiverController = TextEditingController();
     final phoneController = TextEditingController();
@@ -480,9 +815,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                 );
               } catch (error) {
                 if (!context.mounted || !mounted) return;
-                ScaffoldMessenger.of(
-                  this.context,
-                ).showSnackBar(SnackBar(content: Text(error.toString())));
+                await _handleSharedBarrelError(error);
               } finally {
                 if (mounted) setSheetState(() => busy = false);
               }
@@ -656,6 +989,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
       Navigator.pushNamed(context, '/login');
       return;
     }
+    if (!await _ensureVerifiedPhone() || !mounted) return;
 
     List<BusinessDestinationOption> options;
     try {
@@ -682,17 +1016,11 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
       );
       return;
     } catch (error) {
+      debugPrint('Shared barrel form options failed: $error');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            copy(
-                  'Could not open the form: ',
-                  'Impossible d’ouvrir le formulaire : ',
-                ) +
-                error.toString(),
-          ),
-        ),
+      showErrorSnackBar(
+        context,
+        AppLocalizations.of(context)!.sharedBarrelFormLoadFailed,
       );
       return;
     }
@@ -849,9 +1177,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                 );
               } catch (error) {
                 if (!context.mounted || !mounted) return;
-                ScaffoldMessenger.of(
-                  this.context,
-                ).showSnackBar(SnackBar(content: Text(error.toString())));
+                await _handleSharedBarrelError(error);
               } finally {
                 if (mounted) setSheetState(() => busy = false);
               }
@@ -1303,6 +1629,7 @@ class _PoolList extends StatelessWidget {
     this.actionLabelFor,
     this.actionIconFor,
     this.actionEnabled,
+    this.actionBusy,
     this.showSupport = false,
   });
 
@@ -1315,6 +1642,7 @@ class _PoolList extends StatelessWidget {
   final IconData Function(BarrelPool pool)? actionIconFor;
   final Future<void> Function(BarrelPool pool) onAction;
   final bool Function(BarrelPool pool)? actionEnabled;
+  final bool Function(BarrelPool pool)? actionBusy;
   final bool showSupport;
 
   @override
@@ -1333,6 +1661,7 @@ class _PoolList extends StatelessWidget {
           actionLabel: actionLabelFor?.call(pool) ?? actionLabel ?? '',
           actionIcon: actionIconFor?.call(pool) ?? actionIcon,
           actionEnabled: actionEnabled?.call(pool) ?? true,
+          actionBusy: actionBusy?.call(pool) ?? false,
           onAction: () => onAction(pool),
           copy: copy,
           showSupport: showSupport,
@@ -1353,6 +1682,7 @@ class _PoolCard extends StatelessWidget {
     required this.actionLabel,
     required this.actionIcon,
     required this.actionEnabled,
+    required this.actionBusy,
     required this.onAction,
     required this.copy,
     required this.showSupport,
@@ -1365,6 +1695,7 @@ class _PoolCard extends StatelessWidget {
   final String actionLabel;
   final IconData actionIcon;
   final bool actionEnabled;
+  final bool actionBusy;
   final VoidCallback onAction;
   final String Function(String en, String fr) copy;
   final bool showSupport;
@@ -1432,7 +1763,12 @@ class _PoolCard extends StatelessWidget {
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: actionEnabled ? onAction : null,
-                icon: Icon(actionIcon),
+                icon: actionBusy
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(actionIcon),
                 label: Text(actionLabel),
               ),
             ),

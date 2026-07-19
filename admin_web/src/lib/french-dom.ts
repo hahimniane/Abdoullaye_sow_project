@@ -12,6 +12,8 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "A Stripe payment could not be reconciled safely.":
     "Un paiement Stripe n’a pas pu être rapproché de manière sûre.",
   Active: "Actif",
+  "Active listings:": "Annonces actives :",
+  "active of": "actives sur",
   Available: "Disponible",
   "Active on public site": "Actif sur le site public",
   Add: "Ajouter",
@@ -21,6 +23,26 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   Address: "Adresse",
   "Admin console": "Console admin",
   "All records": "Tous les dossiers",
+  "Barrel records:": "Dossiers de barils :",
+  "barrel ·": "baril(s) ·",
+  "freight records": "dossier(s) de fret",
+  "Freight records:": "Dossiers de fret :",
+  "item is waiting across approvals, logistics, and finance.":
+    "élément attend une action parmi les approbations, la logistique et les finances.",
+  "items are waiting across approvals, logistics, and finance.":
+    "éléments attendent une action parmi les approbations, la logistique et les finances.",
+  listings: "annonces",
+  "open of": "ouverts sur",
+  "Open records:": "Dossiers ouverts :",
+  purchase: "achat",
+  "purchase records": "dossier(s) d’achat",
+  "Purchase records:": "Dossiers d’achat :",
+  Queues: "Files",
+  records: "dossiers",
+  "by status": "par statut",
+  business: "entreprise",
+  refund: "remboursement",
+  shipment: "expédition",
   "All statuses": "Tous les statuts",
   "All title disclosures": "Toutes les déclarations de titre",
   Analytics: "Analyses",
@@ -151,6 +173,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   Message: "Message",
   Model: "Modèle",
   Mode: "Mode",
+  Name: "Nom",
   "Needs action": "Action requise",
   "Not set": "Non défini",
   "New destination": "Nouvelle destination",
@@ -306,6 +329,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Website URL": "URL du site web",
   Year: "Année",
   Yes: "Oui",
+  You: "Vous",
   "Not provided": "Non renseigné",
   "Required. Buyers will see this disclosure.":
     "Obligatoire. Les acheteurs verront cette information.",
@@ -331,6 +355,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Cette console est réservée aux administrateurs de la plateforme, aux propriétaires d’entreprise et au personnel d’entreprise.",
   "Access management": "Gestion des accès",
   "Access role": "Rôle d’accès",
+  "Admin access role": "Rôle d’accès admin",
   "Account settings": "Paramètres du compte",
   "Accounts by role": "Comptes par rôle",
   Activate: "Activer",
@@ -354,6 +379,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Add your first vehicle to start selling on the marketplace.":
     "Ajoutez votre premier véhicule pour commencer à vendre sur la marketplace.",
   "Admin profile": "Profil admin",
+  "Admin access removed": "Accès administrateur retiré",
   "Admin role updated": "Rôle admin mis à jour",
   "Admin sections": "Sections admin",
   Administrator: "Administrateur",
@@ -721,6 +747,12 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "This account is not linked to a business.":
     "Ce compte n’est lié à aucune entreprise.",
   "This business is currently": "Cette entreprise est actuellement",
+  "This business is currently changes requested. Complete Stripe setup and any requested profile details while it waits for platform approval.":
+    "Des modifications ont été demandées pour cette entreprise. Terminez la configuration Stripe et complétez les informations de profil demandées pendant l’attente de l’approbation de la plateforme.",
+  "This business is currently pending. Complete Stripe setup and any requested profile details while it waits for platform approval.":
+    "Cette entreprise est en attente. Terminez la configuration Stripe et complétez les informations de profil demandées pendant l’attente de l’approbation de la plateforme.",
+  "This business is currently rejected. Complete Stripe setup and any requested profile details while it waits for platform approval.":
+    "Cette entreprise a été refusée. Consultez les informations demandées et contactez l’assistance Laawol si vous avez besoin d’aide.",
   "Upgrade to Pro to unlock the advisor.":
     "Passez à Pro pour débloquer le conseiller.",
   "Vehicle moves": "Déplacements de véhicules",
@@ -935,6 +967,8 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Loading...": "Chargement...",
   "Make and model": "Marque et modèle",
   Manage: "Gérer",
+  "Manage platform administrators and global customer support. Business-linked people and records live under Businesses.":
+    "Gérez les administrateurs de la plateforme et l’assistance client globale. Les personnes et dossiers liés à une entreprise se trouvent sous Entreprises.",
   "Manage destinations": "Gérer les destinations",
   "Marketplace filters": "Filtres marketplace",
   "Marketplace listing": "Annonce marketplace",
@@ -1151,6 +1185,9 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Pending refund amount": "Montant de remboursement en attente",
   "Pending refunds": "Remboursements en attente",
   "Pending return": "Retour en attente",
+  "Wallet available": "Portefeuille disponible",
+  "awaiting payout": "en attente de versement",
+  "card return": "retour de carte",
   "Pending seal": "En attente de scellement",
   "People & access": "Équipe et accès",
   "Per day": "Par jour",
@@ -1439,6 +1476,9 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Shipping destinations": "Destinations d’expédition",
   "Shipping fee": "Frais d’expédition",
   Showing: "Affichage",
+  of: "sur",
+  "finance rows": "lignes financières",
+  "visible amount": "montant visible",
   "Sign in before confirming your phone.":
     "Connectez-vous avant de confirmer votre téléphone.",
   "Sign in before uploading a profile photo.":
@@ -1476,6 +1516,8 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Street address (optional)": "Adresse (facultatif)",
   Subject: "Sujet",
   "Super admin": "Super admin",
+  "Access not configured": "Accès non configuré",
+  "Remove admin access": "Retirer l’accès admin",
   "Support admin": "Admin assistance",
   "Support case status emails": "Emails de statut des dossiers d’assistance",
   "Support contacts": "Contacts d’assistance",

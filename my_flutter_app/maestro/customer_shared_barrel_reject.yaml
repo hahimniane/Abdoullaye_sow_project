@@ -1,0 +1,46 @@
+appId: com.laawoldigital.app
+name: Customer rejects a shared barrel join request
+---
+- clearKeychain
+- launchApp:
+    clearState: true
+- waitForAnimationToEnd
+- tapOn: "(?s)Sign in to your wallet.*"
+- extendedWaitUntil:
+    visible: "Account Login"
+    timeout: 20000
+- waitForAnimationToEnd
+- tapOn: "Email"
+- inputText: "e2e.customer@laawol.test"
+- tapOn: "Password"
+- inputText: "${E2E_TEST_PASSWORD}"
+- tapOn: "done"
+- scrollUntilVisible:
+    element:
+      text: "Sign In"
+    direction: DOWN
+- tapOn: "Sign In"
+- extendedWaitUntil:
+    visible: "(?s).*E2E Customer.*"
+    timeout: 30000
+- tapOn: "Shipping"
+- tapOn: "(?s).*Shared barrels.*"
+- extendedWaitUntil:
+    visible: "(?s).*My pools.*"
+    timeout: 30000
+- tapOn: "(?s).*My pools.*"
+- extendedWaitUntil:
+    visible: "Manage requests"
+    timeout: 30000
+- tapOn:
+    text: "Manage requests"
+    index: 0
+- extendedWaitUntil:
+    visible: "Join requests"
+    timeout: 20000
+- assertVisible: '(?s).*E2E Customer B.*Deposit paid: \$33\.75.*'
+- tapOn: "Reject"
+- extendedWaitUntil:
+    visible: "Join request rejected. The deposit will be sent for refund."
+    timeout: 30000
+- takeScreenshot: "output/ios-e2e/shared-barrel-rejected"

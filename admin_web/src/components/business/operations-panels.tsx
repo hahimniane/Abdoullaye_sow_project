@@ -62,6 +62,7 @@ import type { FirestoreRow } from "@/types/admin";
 
 type PanelProps = {
   businessId: string;
+  previewMode?: boolean;
   businessName?: string;
   businessStatus?: string;
   businessProfileImageUrl?: string;
@@ -381,11 +382,11 @@ function defaultPoolRolloverDraft(row?: FirestoreRow | null): PoolRolloverDraft 
   };
 }
 
-export function DestinationsPanel({ businessId, enabledServices = [], openNewToken = 0 }: PanelProps) {
+export function DestinationsPanel({ businessId, previewMode = false, enabledServices = [], openNewToken = 0 }: PanelProps) {
   const destinations = useBusinessSubcollectionRows(
     "destinationCountries",
     businessId,
-    Boolean(businessId),
+    Boolean(businessId && !previewMode),
     100,
   );
   const [draft, setDraft] = useState<DestinationDraft>(emptyDestinationDraft);
@@ -652,12 +653,13 @@ export function DestinationsPanel({ businessId, enabledServices = [], openNewTok
 
 export function ListingsPanel({
   businessId,
+  previewMode = false,
   businessName = "",
   businessStatus = "pending",
   businessProfileImageUrl = "",
   enabledServices = ["carSales"],
 }: PanelProps) {
-  const listings = useBusinessRows("cars", businessId, Boolean(businessId), null);
+  const listings = useBusinessRows("cars", businessId, Boolean(businessId && !previewMode), null);
   const [draft, setDraft] = useState<ListingDraft>(emptyListingDraft);
   const [editingId, setEditingId] = useState("");
   const [images, setImages] = useState<EditImage[]>([]);
@@ -1265,11 +1267,12 @@ function deadlineHasPassed(value: unknown) {
   return Number.isFinite(parsed) && parsed <= Date.now();
 }
 
-export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
-  const shipments = useBusinessRows("barrelShipments", businessId, Boolean(businessId), 500);
-  const pools = useBusinessRows("barrelPools", businessId, Boolean(businessId), 500);
-  const balanceRequests = useBusinessRows("barrelPoolBalanceRequests", businessId, Boolean(businessId), 500);
-  const destinations = useBusinessSubcollectionRows("destinationCountries", businessId, Boolean(businessId), 100);
+export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinations }: PanelProps) {
+  const enabled = Boolean(businessId && !previewMode);
+  const shipments = useBusinessRows("barrelShipments", businessId, enabled, 500);
+  const pools = useBusinessRows("barrelPools", businessId, enabled, 500);
+  const balanceRequests = useBusinessRows("barrelPoolBalanceRequests", businessId, enabled, 500);
+  const destinations = useBusinessSubcollectionRows("destinationCountries", businessId, enabled, 100);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [poolFilter, setPoolFilter] = useState("all");
@@ -2134,8 +2137,8 @@ export function BarrelsPanel({ businessId, onOpenDestinations }: PanelProps) {
   );
 }
 
-export function FreightPanel({ businessId }: PanelProps) {
-  const freight = useBusinessRows("freightShipments", businessId, Boolean(businessId), 500);
+export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
+  const freight = useBusinessRows("freightShipments", businessId, Boolean(businessId && !previewMode), 500);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [message, setMessage] = useState("");
@@ -2285,8 +2288,8 @@ function transportTone(status: string) {
   }
 }
 
-export function TransportPanel({ businessId, businessName = "" }: PanelProps) {
-  const transports = useBusinessRows("transportRequests", businessId, Boolean(businessId), 500);
+export function TransportPanel({ businessId, previewMode = false, businessName = "" }: PanelProps) {
+  const transports = useBusinessRows("transportRequests", businessId, Boolean(businessId && !previewMode), 500);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [message, setMessage] = useState("");
@@ -2514,9 +2517,10 @@ export function TransportPanel({ businessId, businessName = "" }: PanelProps) {
 
 export function ParkingPanel({
   businessId,
+  previewMode = false,
   businessName = "",
 }: PanelProps) {
-  const parkedCars = useBusinessRows("parkedCars", businessId, Boolean(businessId), 500);
+  const parkedCars = useBusinessRows("parkedCars", businessId, Boolean(businessId && !previewMode), 500);
   const [draft, setDraft] = useState<ParkingDraft>(emptyParkingDraft);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
@@ -2758,8 +2762,8 @@ function purchaseTone(status: string) {
   }
 }
 
-export function PurchasesPanel({ businessId }: PanelProps) {
-  const purchases = useBusinessRows("carPurchases", businessId, Boolean(businessId), 250);
+export function PurchasesPanel({ businessId, previewMode = false }: PanelProps) {
+  const purchases = useBusinessRows("carPurchases", businessId, Boolean(businessId && !previewMode), 250);
   const [noteById, setNoteById] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");

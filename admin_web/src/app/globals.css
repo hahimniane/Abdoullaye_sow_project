@@ -291,6 +291,7 @@ button[data-loading="true"]::before {
 }
 
 .content {
+  grid-template-columns: minmax(0, 1fr);
   padding: 18px 20px;
   width: 100%;
 }
@@ -1683,6 +1684,7 @@ button[data-loading="true"]::before {
 
 .primary-button,
 .secondary-button,
+.warning-button,
 .danger-button {
   align-items: center;
   border-radius: 7px;
@@ -1735,6 +1737,12 @@ button[data-loading="true"]::before {
   background: rgba(220, 38, 38, 0.08);
   border: 1px solid rgba(220, 38, 38, 0.2);
   color: var(--danger);
+}
+
+.warning-button {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(180, 83, 9, 0.28);
+  color: #92400e;
 }
 
 .tool-list {
@@ -3968,6 +3976,27 @@ button[data-loading="true"]::before {
   white-space: nowrap;
 }
 .admin-row { grid-template-columns: minmax(0, 1fr) minmax(170px, 220px) auto; }
+.admin-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 600px) {
+  .admin-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin-row-actions {
+    align-items: stretch;
+    flex-direction: column;
+    width: 100%;
+  }
+  .admin-row-actions button {
+    min-height: 44px;
+    width: 100%;
+  }
+}
 
 /* Settings — editable role permissions matrix */
 .perm-matrix-scroll { overflow-x: auto; padding: 4px 2px 2px; }
@@ -4561,7 +4590,7 @@ button[data-loading="true"]::before {
    Business dashboard — Listings (redesign proof, marketing-site styling)
    Scoped under .lst-* so it never affects the admin console.
    =========================================================================== */
-.lst { display: flex; flex-direction: column; gap: 18px; }
+.lst { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 .lst-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .lst-head-text h2 { font-size: 22px; font-weight: 800; color: var(--ink); letter-spacing: -0.01em; }
 .lst-head-text p { margin-top: 3px; color: var(--muted); font-size: 14px; }

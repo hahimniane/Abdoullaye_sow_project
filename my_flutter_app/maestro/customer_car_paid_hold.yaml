@@ -47,6 +47,11 @@ name: Customer places a paid hold on a listed car
     timeout: 10000
 - tapOn: "Continue to payment"
 - extendedWaitUntil:
+    visible: "I understand the business’s responsibility and want to continue."
+    timeout: 10000
+- tapOn: "I understand the business’s responsibility and want to continue."
+- tapOn: "Continue to payment"
+- extendedWaitUntil:
     visible: "(?s).*Deposit received. Your reservation is now active.*"
     timeout: 30000
 - takeScreenshot: "output/ios-e2e/car-paid-hold"

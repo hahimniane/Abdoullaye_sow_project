@@ -46,15 +46,15 @@ name: Customer requests a full barrel shipment
 - extendedWaitUntil:
     visible: "(?s).*E2E Atlantic Logistics.*"
     timeout: 20000
-- tapOn: "(?s).*E2E Atlantic Logistics.*"
-- tapOn: "Receiver Name"
+- tapOn:
+    point: 50%, 46%
+- tapOn:
+    point: 50%, 57%
 - inputText: "Mamadou Bah"
-- tapOn: "Receiver Phone"
+- tapOn: "done"
+- tapOn:
+    point: 50%, 64%
 - inputText: "+224620000002"
-- scrollUntilVisible:
-    element:
-      text: "Add to order"
-    direction: DOWN
 - tapOn: "Add to order"
 - extendedWaitUntil:
     visible: "(?s).*Mamadou Bah.*"
@@ -73,6 +73,11 @@ name: Customer requests a full barrel shipment
     visible: "(?s).*Request barrel shipment?.*"
     timeout: 10000
 - tapOn: "Pay and request"
+- extendedWaitUntil:
+    visible: "(?s).*Understand who provides this service.*"
+    timeout: 10000
+- tapOn: "(?s).*I understand the business’s responsibility and want to continue.*"
+- tapOn: "Continue to payment"
 - extendedWaitUntil:
     visible: "Options"
     timeout: 30000

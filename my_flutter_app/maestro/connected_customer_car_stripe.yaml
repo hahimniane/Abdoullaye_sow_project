@@ -1,0 +1,34 @@
+appId: com.laawoldigital.app
+name: Connected customer opens real Stripe test PaymentSheet for a car
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "(?s).*Codex Stripe QA.*"
+    timeout: 30000
+- tapOn: "Cars"
+- tapOn: "(?s).*Browse cars.*"
+- scrollUntilVisible:
+    element:
+      text: "(?s).*2021 Toyota Camry SE.*"
+    direction: DOWN
+- tapOn: "(?s).*2021 Toyota Camry SE.*"
+- scrollUntilVisible:
+    element:
+      text: "Purchase this car"
+    direction: DOWN
+- tapOn: "Purchase this car"
+- extendedWaitUntil:
+    visible: "Pay Now"
+    timeout: 20000
+- tapOn: "Pay Now"
+- extendedWaitUntil:
+    visible: "Purchase this car?"
+    timeout: 10000
+- tapOn: "Continue to payment"
+- extendedWaitUntil:
+    visible: "I understand the business’s responsibility and want to continue."
+    timeout: 10000
+- tapOn: "I understand the business’s responsibility and want to continue."
+- tapOn: "Continue to payment"
+- waitForAnimationToEnd
+- takeScreenshot: "output/ios-e2e/connected-stripe-payment-sheet"

@@ -53,6 +53,11 @@ name: Customer reserves a car viewing
     timeout: 10000
 - tapOn: "Reserve a viewing"
 - extendedWaitUntil:
+    visible: "I understand the business’s responsibility and want to continue."
+    timeout: 10000
+- tapOn: "I understand the business’s responsibility and want to continue."
+- tapOn: "Continue to payment"
+- extendedWaitUntil:
     visible: "(?s).*Your viewing is reserved for.*"
     timeout: 30000
 - assertVisible: "Edit viewing reservation"

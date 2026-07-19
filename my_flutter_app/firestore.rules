@@ -440,6 +440,7 @@ service cloud.firestore {
           (
             participantId == request.auth.uid ||
             isAdmin(request.auth.uid) ||
+            get(/databases/$(database)/documents/barrelPools/$(poolId)).data.createdByUid == request.auth.uid ||
             canManageBusiness(
               request.auth.uid,
               get(/databases/$(database)/documents/barrelPools/$(poolId)).data.businessId

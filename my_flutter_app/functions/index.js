@@ -323,14 +323,6 @@ exports.createCustomerUser = onCall(
 
       const db = admin.firestore();
       const normalizedPhone = normalizePhoneAlias(phone);
-      const aliasRef = db.collection("phoneSignInAliases").doc(normalizedPhone);
-      const existingAlias = await aliasRef.get();
-      if (existingAlias.exists) {
-        throw new HttpsError(
-            "already-exists",
-            "An account already uses this phone number",
-        );
-      }
 
       let userRecord;
       try {
@@ -359,13 +351,6 @@ exports.createCustomerUser = onCall(
       try {
         const now = FirestoreFieldValue.serverTimestamp();
         await db.runTransaction(async (transaction) => {
-          const aliasSnap = await transaction.get(aliasRef);
-          if (aliasSnap.exists) {
-            throw new HttpsError(
-                "already-exists",
-                "An account already uses this phone number",
-            );
-          }
           transaction.set(db.collection("users").doc(userRecord.uid), {
             email,
             fullName,
@@ -377,13 +362,6 @@ exports.createCustomerUser = onCall(
               ...legalEvidence,
               acceptedAt: now,
             },
-            createdAt: now,
-            updatedAt: now,
-          });
-          transaction.set(aliasRef, {
-            uid: userRecord.uid,
-            email,
-            phone,
             createdAt: now,
             updatedAt: now,
           });
@@ -431,7 +409,16 @@ exports.updateCustomerProfile = onCall(
       const nextAliasRef = db.collection("phoneSignInAliases").doc(
           normalizedPhone,
       );
-      const email = String(request.auth.token.email || "").toLowerCase();
+      const authUser = await admin.auth().getUser(uid);
+      const authPhone = String(authUser.phoneNumber || "").trim();
+      const authNormalizedPhone = normalizePhoneAlias(authPhone);
+      const phoneVerified = Boolean(
+          authNormalizedPhone &&
+          authNormalizedPhone === normalizedPhone,
+      );
+      const email = String(
+          authUser.email || request.auth.token.email || "",
+      ).toLowerCase();
       const now = FirestoreFieldValue.serverTimestamp();
 
       await db.runTransaction(async (transaction) => {
@@ -442,32 +429,47 @@ exports.updateCustomerProfile = onCall(
         const current = userSnap.data() || {};
         const currentAlias = String(current.normalizedPhone || "");
         const nextAliasSnap = await transaction.get(nextAliasRef);
-        if (nextAliasSnap.exists && nextAliasSnap.data()?.uid !== uid) {
+        const currentAliasRef =
+          currentAlias && currentAlias !== normalizedPhone ?
+            db.collection("phoneSignInAliases").doc(currentAlias) :
+            null;
+        const currentAliasSnap = currentAliasRef ?
+          await transaction.get(currentAliasRef) :
+          null;
+        if (phoneVerified &&
+            nextAliasSnap.exists &&
+            nextAliasSnap.data()?.uid !== uid) {
           throw new HttpsError(
               "already-exists",
               "An account already uses this phone number",
           );
         }
 
-        if (currentAlias && currentAlias !== normalizedPhone) {
-          transaction.delete(db.collection("phoneSignInAliases").doc(
-              currentAlias,
-          ));
+        if (currentAliasRef && currentAliasSnap?.data()?.uid === uid) {
+          transaction.delete(currentAliasRef);
         }
-        transaction.set(nextAliasRef, {
-          uid,
-          email,
-          phone,
-          updatedAt: now,
-          createdAt: nextAliasSnap.exists ?
-        nextAliasSnap.data()?.createdAt || now :
-        now,
-        }, {merge: true});
+        if (phoneVerified) {
+          transaction.set(nextAliasRef, {
+            uid,
+            email,
+            phone,
+            updatedAt: now,
+            createdAt: nextAliasSnap.exists ?
+          nextAliasSnap.data()?.createdAt || now :
+          now,
+          }, {merge: true});
+        } else if (nextAliasSnap.data()?.uid === uid) {
+          transaction.delete(nextAliasRef);
+        }
 
         const updates = {
           fullName,
           phone,
           normalizedPhone,
+          phoneVerified,
+          phoneVerifiedAt: phoneVerified ?
+            current.phoneVerifiedAt || now :
+            FirestoreFieldValue.delete(),
           notificationPreferences,
           updatedAt: now,
         };
@@ -477,7 +479,85 @@ exports.updateCustomerProfile = onCall(
       });
 
       await admin.auth().updateUser(uid, {displayName: fullName});
-      return {success: true, normalizedPhone, notificationPreferences};
+      return {
+        success: true,
+        normalizedPhone,
+        phoneVerified,
+        notificationPreferences,
+      };
+    },
+);
+
+exports.syncVerifiedCustomerPhone = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const authUser = await admin.auth().getUser(uid);
+      const phone = String(authUser.phoneNumber || "").trim();
+      const normalizedPhone = normalizePhoneAlias(phone);
+      if (!phone || !normalizedPhone) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Complete Firebase phone verification before syncing your profile",
+            {reason: "phone-verification-required"},
+        );
+      }
+
+      const db = admin.firestore();
+      const userRef = db.collection("users").doc(uid);
+      const nextAliasRef = db.collection("phoneSignInAliases")
+          .doc(normalizedPhone);
+      const now = FirestoreFieldValue.serverTimestamp();
+      await db.runTransaction(async (transaction) => {
+        const [userSnap, nextAliasSnap] = await Promise.all([
+          transaction.get(userRef),
+          transaction.get(nextAliasRef),
+        ]);
+        if (!userSnap.exists) {
+          throw new HttpsError("not-found", "User profile not found");
+        }
+        const current = userSnap.data() || {};
+        if (current.role !== "customer") {
+          throw new HttpsError(
+              "permission-denied",
+              "Only customer accounts can verify a customer phone",
+          );
+        }
+        if (nextAliasSnap.exists && nextAliasSnap.data()?.uid !== uid) {
+          throw new HttpsError(
+              "already-exists",
+              "An account already uses this phone number",
+          );
+        }
+
+        const currentAlias = String(current.normalizedPhone || "");
+        if (currentAlias && currentAlias !== normalizedPhone) {
+          const currentAliasRef = db.collection("phoneSignInAliases")
+              .doc(currentAlias);
+          const currentAliasSnap = await transaction.get(currentAliasRef);
+          if (currentAliasSnap.data()?.uid === uid) {
+            transaction.delete(currentAliasRef);
+          }
+        }
+        transaction.set(nextAliasRef, {
+          uid,
+          email: String(authUser.email || "").toLowerCase(),
+          phone,
+          createdAt: nextAliasSnap.exists ?
+            nextAliasSnap.data()?.createdAt || now :
+            now,
+          updatedAt: now,
+        }, {merge: true});
+        transaction.set(userRef, {
+          phone,
+          normalizedPhone,
+          phoneVerified: true,
+          phoneVerifiedAt: now,
+          updatedAt: now,
+        }, {merge: true});
+      });
+
+      return {success: true, phone, normalizedPhone, phoneVerified: true};
     },
 );
 
@@ -596,12 +676,16 @@ exports.unpublishDeletedFeaturedBusiness = onDocumentDeleted(
     },
 );
 
-async function getUserProfile(uid) {
+async function getStoredUserProfile(uid) {
   const doc = await admin.firestore().collection("users").doc(uid).get();
   if (!doc.exists) {
     throw new HttpsError("permission-denied", "User profile not found");
   }
-  const user = {id: doc.id, ...doc.data()};
+  return {id: doc.id, ...doc.data()};
+}
+
+async function getUserProfile(uid) {
+  const user = await getStoredUserProfile(uid);
   if (user.role === "admin") {
     const authUser = await admin.auth().getUser(uid);
     if (authUser.emailVerified !== true) {
@@ -6520,6 +6604,7 @@ exports.createPlatformManager = onCall(
           email: normalizedEmail,
           password: String(password),
           displayName: managerName,
+          emailVerified: true,
         });
         const db = admin.firestore();
         const batch = db.batch();
@@ -6611,7 +6696,7 @@ exports.setPlatformAdminRole = onCall(
         );
       }
 
-      const target = await getUserProfile(userId);
+      const target = await getStoredUserProfile(userId);
       if (target.role !== "admin") {
         throw new HttpsError(
             "failed-precondition",
@@ -6914,18 +6999,7 @@ exports.updateUserRole = onCall(
       const callerUid = request.auth.uid;
 
       try {
-      // Get the caller's user document to check if they're an admin
-        const callerDoc = await admin
-            .firestore()
-            .collection("users")
-            .doc(callerUid)
-            .get();
-
-        if (!callerDoc.exists) {
-          throw new HttpsError("permission-denied", "User profile not found");
-        }
-
-        const callerData = callerDoc.data();
+        const callerData = await getUserProfile(callerUid);
 
         requireSuperAdmin(
             callerData,
@@ -8106,10 +8180,20 @@ async function requireVerifiedCustomerForSharedPool(uid) {
         "Only customer accounts can use shared barrel customer actions",
     );
   }
-  if (user.phoneVerified !== true) {
+  const authUser = await admin.auth().getUser(uid);
+  const authPhone = normalizePhoneAlias(authUser.phoneNumber);
+  const profilePhone = normalizePhoneAlias(
+      user.normalizedPhone || user.phone,
+  );
+  if (
+    user.phoneVerified !== true ||
+    !authPhone ||
+    authPhone !== profilePhone
+  ) {
     throw new HttpsError(
         "failed-precondition",
         "Verify your phone number before using shared barrels",
+        {reason: "phone-verification-required"},
     );
   }
   return user;
@@ -8375,12 +8459,12 @@ exports.createBarrelPool = onCall(
     },
     async (request) => {
       const customerUid = requireAuth(request);
+      await requireVerifiedCustomerForSharedPool(customerUid);
       await recordMarketplaceDisclosure(
           request,
           customerUid,
           "shared_barrel_create",
       );
-      await requireVerifiedCustomerForSharedPool(customerUid);
       const {
         businessId,
         destinationCountryId,
@@ -9240,12 +9324,12 @@ exports.requestJoinBarrelPool = onCall(
     },
     async (request) => {
       const customerUid = requireAuth(request);
+      await requireVerifiedCustomerForSharedPool(customerUid);
       await recordMarketplaceDisclosure(
           request,
           customerUid,
           "shared_barrel_join",
       );
-      await requireVerifiedCustomerForSharedPool(customerUid);
       const poolId = cleanText(request.data?.poolId, 160);
       const useWalletBalance = request.data?.useWalletBalance === true;
       const requestedDestinationCountryId = cleanText(

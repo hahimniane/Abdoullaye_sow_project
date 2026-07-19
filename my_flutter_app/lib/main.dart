@@ -38,6 +38,7 @@ import 'screens/orders_screen.dart';
 import 'screens/staff_purchase_management_screen.dart';
 import 'screens/destination_countries_screen.dart';
 import 'screens/account_profile_screen.dart';
+import 'screens/phone_verification_screen.dart';
 import 'screens/business_management_screen.dart';
 import 'screens/business_profile_screen.dart';
 import 'screens/business_registration_screen.dart';
@@ -210,6 +211,14 @@ class MyApp extends StatelessWidget {
               '/destination-countries': (context) =>
                   const DestinationCountriesScreen(),
               '/account-profile': (context) => const AccountProfileScreen(),
+              '/verify-phone': (context) {
+                final args =
+                    ModalRoute.of(context)!.settings.arguments
+                        as PhoneVerificationArguments?;
+                return PhoneVerificationScreen(
+                  returnToSharedBarrels: args?.returnToSharedBarrels ?? false,
+                );
+              },
               '/wallet': (context) => const WalletScreen(),
               '/favorite-cars': (context) => const FavoriteCarsScreen(),
               '/businesses': (context) => const BusinessManagementScreen(),
