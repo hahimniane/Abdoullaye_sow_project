@@ -26,6 +26,7 @@ Future<void> _pumpTracking(
   WidgetTester tester,
   _FakeTrackingRepository repository, {
   Locale locale = const Locale('en'),
+  String? focusShipmentId,
 }) async {
   final language = LanguageProvider()..setLanguage(locale.languageCode);
   await tester.pumpWidget(
@@ -39,6 +40,7 @@ Future<void> _pumpTracking(
         home: TrackingScreen(
           repository: repository,
           customerUidOverride: 'customer-freight',
+          focusShipmentId: focusShipmentId,
         ),
       ),
     ),
@@ -110,6 +112,54 @@ void main() {
     await _pumpTracking(tester, repository, locale: const Locale('fr'));
     expect(find.text('FRT-2026-001'), findsOneWidget);
     expect(find.textContaining('Fret aérien'), findsOneWidget);
+  });
+
+  testWidgets('freight order opens focused with plain next steps', (
+    tester,
+  ) async {
+    final repository = _FakeTrackingRepository([
+      CustomerTrackingShipment.fromFreightData('freight-1', {
+        'trackingCode': 'FRT-2026-001',
+        'receiverName': 'Aissatou Diallo',
+        'destinationCountryName': 'Guinea',
+        'businessName': 'Laawol Freight',
+        'price': 125,
+        'estimatedTotal': 125,
+        'status': 'pending',
+        'paymentStatus': 'succeeded',
+        'mode': 'air',
+        'estimatedWeightKg': 10,
+      }),
+      CustomerTrackingShipment.fromFreightData('freight-2', {
+        'trackingCode': 'FRT-OTHER-002',
+        'receiverName': 'Mamadou Diallo',
+        'destinationCountryName': 'Senegal',
+        'businessName': 'Other Freight',
+        'price': 90,
+        'status': 'pending',
+        'mode': 'sea',
+        'estimatedWeightKg': 8,
+      }),
+    ]);
+
+    await _pumpTracking(tester, repository, focusShipmentId: 'freight-1');
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Freight order'), findsOneWidget);
+    expect(find.text('Next step'), findsOneWidget);
+    expect(find.text('Estimate paid'), findsOneWidget);
+    expect(
+      find.text(
+        'Drop off your parcel at Laawol Freight. The business will confirm the weight after drop-off.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Paid estimate: \$125.00'), findsOneWidget);
+    expect(find.text('Estimated weight: 10.0 kg'), findsOneWidget);
+    expect(find.text('FRT-2026-001'), findsOneWidget);
+    expect(find.text('FRT-OTHER-002'), findsNothing);
+    expect(find.text('Search tracking, receiver, country'), findsNothing);
+    expect(find.text('View all shipments'), findsOneWidget);
   });
 
   testWidgets('freight balance is visible and actionable in tracking', (

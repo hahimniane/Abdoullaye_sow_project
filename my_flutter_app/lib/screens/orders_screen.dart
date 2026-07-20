@@ -11,6 +11,7 @@ import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/support_entry_button.dart';
+import 'tracking_screen.dart';
 
 /// Unified "Orders" — every paid transaction (cars, barrels, freight,
 /// transport, parking) in one searchable, type-filtered history.
@@ -155,7 +156,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
         arguments: order.detailArgument,
       );
     } else if (order.trackable) {
-      Navigator.pushNamed(context, '/tracking');
+      Navigator.pushNamed(
+        context,
+        '/tracking',
+        arguments: order.type == OrderType.freight
+            ? TrackingScreenArguments(shipmentId: order.relatedId)
+            : null,
+      );
     }
   }
 

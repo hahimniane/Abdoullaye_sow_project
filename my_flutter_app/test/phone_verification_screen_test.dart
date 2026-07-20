@@ -1,5 +1,7 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/l10n/app_localizations.dart';
@@ -32,6 +34,7 @@ class FakePhoneVerificationClient implements PhoneVerificationClient {
   int? lastResendToken;
   bool failStart = false;
   bool failSync = false;
+  Object? syncError;
   ValueChanged<PhoneVerificationSession>? codeSent;
   Future<void> Function()? verificationCompleted;
   ValueChanged<Object>? verificationFailed;
@@ -69,13 +72,15 @@ class FakePhoneVerificationClient implements PhoneVerificationClient {
     completeCalls += 1;
     lastVerificationId = verificationId;
     lastCode = smsCode;
-    linkedPhoneNumber = customerPhone;
+    linkedPhoneNumber = lastPhone ?? customerPhone;
+    customerPhone = linkedPhoneNumber;
     phoneVerified = true;
   }
 
   @override
   Future<void> syncLinkedPhoneVerification() async {
     syncCalls += 1;
+    if (syncError != null) throw syncError!;
     if (failSync) throw FirebaseAuthException(code: 'network-request-failed');
     phoneVerified = true;
   }
@@ -106,10 +111,22 @@ Future<void> pumpVerification(
   await tester.pump();
 }
 
+Future<void> enterVerificationPhone(
+  WidgetTester tester, [
+  String phone = '7185550100',
+]) async {
+  await tester.enterText(
+    find.byKey(const Key('phone-verification-number')),
+    phone,
+  );
+  await tester.pump();
+}
+
 void main() {
   testWidgets('invalid phone sends no SMS request', (tester) async {
-    final client = FakePhoneVerificationClient(customerPhone: '7185550100');
+    final client = FakePhoneVerificationClient(customerPhone: '+123');
     await pumpVerification(tester, client: client);
+    await enterVerificationPhone(tester, '123');
 
     await tester.tap(find.byKey(const Key('phone-verification-primary')));
     await tester.pump();
@@ -118,11 +135,27 @@ void main() {
     expect(find.textContaining('international phone number'), findsOneWidget);
   });
 
+  testWidgets('unlinked saved phone does not prefill verification field', (
+    tester,
+  ) async {
+    final client = FakePhoneVerificationClient(customerPhone: '+23276123456');
+    await pumpVerification(tester, client: client);
+
+    final field = tester.widget<TextFormField>(
+      find.byKey(const Key('phone-verification-number')),
+    );
+
+    expect(field.controller?.text, '');
+    expect(find.text('+1'), findsOneWidget);
+    expect(find.text('+232'), findsNothing);
+  });
+
   testWidgets('send remains guarded until an asynchronous callback arrives', (
     tester,
   ) async {
     final client = FakePhoneVerificationClient();
     await pumpVerification(tester, client: client);
+    await enterVerificationPhone(tester);
 
     await tester.tap(find.byKey(const Key('phone-verification-primary')));
     await tester.pump();
@@ -149,6 +182,7 @@ void main() {
   testWidgets('six digit code reaches a visible success state', (tester) async {
     final client = FakePhoneVerificationClient();
     await pumpVerification(tester, client: client, returnToSharedBarrels: true);
+    await enterVerificationPhone(tester);
 
     await tester.tap(find.byKey(const Key('phone-verification-primary')));
     await tester.pump();
@@ -173,6 +207,8 @@ void main() {
   testWidgets('short code does not call verification', (tester) async {
     final client = FakePhoneVerificationClient();
     await pumpVerification(tester, client: client);
+    await enterVerificationPhone(tester);
+
     await tester.tap(find.byKey(const Key('phone-verification-primary')));
     await tester.pump();
     client.codeSent!(
@@ -195,6 +231,8 @@ void main() {
   ) async {
     final client = FakePhoneVerificationClient();
     await pumpVerification(tester, client: client);
+    await enterVerificationPhone(tester);
+
     await tester.tap(find.byKey(const Key('phone-verification-primary')));
     await tester.pump();
     client.codeSent!(
@@ -242,6 +280,31 @@ void main() {
     expect(find.text('Phone verified'), findsOneWidget);
   });
 
+  testWidgets(
+    'permanent sync failure surfaces the real reason instead of retry prompt',
+    (tester) async {
+      final client = FakePhoneVerificationClient(
+        linkedPhoneNumber: '+17185550100',
+      );
+      client.syncError = FirebaseFunctionsException(
+        message: 'App Check token rejected',
+        code: 'unauthenticated',
+      );
+      await pumpVerification(tester, client: client);
+
+      expect(find.text('Finish verification'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('phone-verification-primary')));
+      await tester.pump();
+
+      // No SMS is ever sent, and the misleading "just retry" copy is gone in
+      // favour of the actual, actionable App Check reason.
+      expect(client.startCalls, 0);
+      expect(client.syncCalls, 1);
+      expect(find.textContaining('another SMS is not required'), findsNothing);
+      expect(find.textContaining('App security check failed'), findsOneWidget);
+    },
+  );
+
   testWidgets('French code state fits a narrow phone', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -249,6 +312,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final client = FakePhoneVerificationClient();
     await pumpVerification(tester, client: client, locale: const Locale('fr'));
+    await enterVerificationPhone(tester);
 
     await tester.tap(find.byKey(const Key('phone-verification-primary')));
     await tester.pump();
@@ -275,6 +339,16 @@ void main() {
     expect(
       classifyPhoneVerificationError(StateError('sensitive raw failure')),
       PhoneVerificationErrorType.generic,
+    );
+    expect(
+      classifyPhoneVerificationError(
+        PlatformException(
+          code: 'unknown',
+          message:
+              'The server responded with an error: exchangeDebugToken 403 App attestation failed.',
+        ),
+      ),
+      PhoneVerificationErrorType.appCheck,
     );
   });
 }

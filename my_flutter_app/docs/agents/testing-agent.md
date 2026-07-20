@@ -144,6 +144,12 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   screen, Maestro must `waitForAnimationToEnd` before focusing Email and tap the
   iOS keyboard's `done` control after entering Password; otherwise text input or
   the submit tap can be silently lost even though Maestro reports success.
+- If iOS `pod install` fails because CocoaPods reports stale specs for a locked
+  pod such as `GoogleUtilities/UserDefaults` but `pod install --repo-update`
+  repeatedly hits `Error in the HTTP2 framing layer`, fetch the missing locked
+  podspec with `curl --http1.1` into `~/.cocoapods/repos/trunk/Specs/...`, then
+  rerun plain `pod install`. Avoid broad dependency updates unless the locked
+  graph itself is incompatible.
 - Flutter tappable rows often expose their title and subtitle as one multiline
   accessibility label. Maestro should use multiline-safe selectors such as
   `(?s).*Browse cars.*` unless the node has an explicit standalone semantics

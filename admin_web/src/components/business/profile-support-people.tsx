@@ -73,9 +73,26 @@ type ProfileDraft = {
   carHoldFlatFee: string;
   carHoldDailyRate: string;
   carHoldMaxDays: string;
+  freightPickupAvailable: boolean;
+  freightPickupModel: "distance" | "borough";
+  freightPickupBaseFee: string;
+  freightPickupPerKm: string;
+  freightPickupMinFee: string;
+  freightPickupMaxKm: string;
+  freightPickupOriginAddress: string;
+  freightPickupBoroughPrices: Record<string, string>;
   profileImageUrl: string;
   profileImagePath: string;
 };
+
+// The five NYC boroughs, for the freight "borough" pickup pricing model
+// (New York businesses only). Mirrors kNycBoroughs in the Flutter app.
+const NYC_BOROUGHS = ["Bronx", "Manhattan", "Brooklyn", "Queens", "Staten Island"];
+
+function isNewYorkState(state: unknown): boolean {
+  const value = text(state, "").trim().toUpperCase();
+  return value === "NY" || value === "NEW YORK";
+}
 
 type SupportDraft = {
   priority: "normal" | "urgent" | "blocked";
@@ -176,6 +193,13 @@ export function BusinessProfilePanel({
     }));
   }
 
+  function updateBoroughPrice(borough: string, value: string) {
+    setDraft((current) => ({
+      ...current,
+      freightPickupBoroughPrices: { ...current.freightPickupBoroughPrices, [borough]: value },
+    }));
+  }
+
   function selectImage(event: ChangeEvent<HTMLInputElement>) {
     setImageFile(event.target.files?.[0] ?? null);
   }
@@ -225,6 +249,24 @@ export function BusinessProfilePanel({
           throw new Error("Enter valid paid hold pricing.");
         }
 
+        const offersFreight = draft.enabledServices.includes("freight");
+        const businessIsNewYork = isNewYorkState(business?.state);
+        const effectivePickupModel =
+          draft.freightPickupModel === "borough" && businessIsNewYork ? "borough" : "distance";
+        const boroughPrices: Record<string, number> = {};
+        for (const borough of NYC_BOROUGHS) {
+          const fee = Number(draft.freightPickupBoroughPrices[borough] ?? "");
+          if (Number.isFinite(fee) && fee > 0) boroughPrices[borough] = fee;
+        }
+        if (
+          offersFreight &&
+          draft.freightPickupAvailable &&
+          effectivePickupModel === "borough" &&
+          Object.keys(boroughPrices).length === 0
+        ) {
+          throw new Error("Set a pickup fee for at least one borough, or turn off freight pickup.");
+        }
+
         let profileImageUrl = draft.profileImageUrl.trim();
         let profileImagePath = draft.profileImagePath.trim();
         if (imageFile) {
@@ -245,6 +287,14 @@ export function BusinessProfilePanel({
           carHoldFlatFee: holdFlatFee,
           carHoldDailyRate: holdDailyRate,
           carHoldMaxDays: holdMaxDays,
+          freightPickupAvailable: offersFreight && draft.freightPickupAvailable,
+          freightPickupModel: effectivePickupModel,
+          freightPickupBaseFee: Number(draft.freightPickupBaseFee) || 0,
+          freightPickupPerKm: Number(draft.freightPickupPerKm) || 0,
+          freightPickupMinFee: Number(draft.freightPickupMinFee) || 0,
+          freightPickupMaxKm: Number(draft.freightPickupMaxKm) || 0,
+          freightPickupOriginAddress: draft.freightPickupOriginAddress.trim(),
+          freightPickupBoroughPrices: boroughPrices,
           profileImageUrl,
           profileImagePath,
         });
@@ -363,6 +413,66 @@ export function BusinessProfilePanel({
           <label className="lst-field"><span>Max hold days</span>
             <input inputMode="numeric" value={draft.carHoldMaxDays} onChange={(event) => update("carHoldMaxDays", event.target.value)} />
           </label>
+
+          {draft.enabledServices.includes("freight") && (
+            <>
+              <div className="lst-form-section">Freight pickup</div>
+              <div className="dst-note wide">Offer to collect parcels from your customer&apos;s address, and choose how the fee is calculated.</div>
+              <div className="lst-chips wide">
+                <button
+                  type="button"
+                  className={`lst-chip ${draft.freightPickupAvailable ? "on" : ""}`}
+                  onClick={() => updateProfile({ freightPickupAvailable: !draft.freightPickupAvailable })}
+                >
+                  Offer freight pickup
+                </button>
+              </div>
+              {draft.freightPickupAvailable && (
+                <>
+                  {isNewYorkState(business?.state) && (
+                    <label className="lst-field"><span>Pickup pricing model</span>
+                      <select
+                        value={draft.freightPickupModel}
+                        onChange={(event) => updateProfile({ freightPickupModel: event.target.value === "borough" ? "borough" : "distance" })}
+                      >
+                        <option value="distance">By distance</option>
+                        <option value="borough">By borough</option>
+                      </select>
+                    </label>
+                  )}
+                  {(draft.freightPickupModel === "distance" || !isNewYorkState(business?.state)) ? (
+                    <>
+                      <div className="dst-note wide">Fee = base fee + per-km rate × driving distance from your address. Leave rates at 0 to offer free pickup.</div>
+                      <label className="lst-field wide"><span>Pickup origin address</span>
+                        <input value={draft.freightPickupOriginAddress} onChange={(event) => update("freightPickupOriginAddress", event.target.value)} placeholder="Defaults to your business address" />
+                      </label>
+                      <label className="lst-field"><span>Base fee (USD)</span>
+                        <input inputMode="decimal" value={draft.freightPickupBaseFee} onChange={(event) => update("freightPickupBaseFee", event.target.value)} placeholder="0" />
+                      </label>
+                      <label className="lst-field"><span>Per km (USD)</span>
+                        <input inputMode="decimal" value={draft.freightPickupPerKm} onChange={(event) => update("freightPickupPerKm", event.target.value)} placeholder="0" />
+                      </label>
+                      <label className="lst-field"><span>Minimum fee (USD)</span>
+                        <input inputMode="decimal" value={draft.freightPickupMinFee} onChange={(event) => update("freightPickupMinFee", event.target.value)} placeholder="0" />
+                      </label>
+                      <label className="lst-field"><span>Max distance (km)</span>
+                        <input inputMode="decimal" value={draft.freightPickupMaxKm} onChange={(event) => update("freightPickupMaxKm", event.target.value)} placeholder="0 = no limit" />
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <div className="dst-note wide">Set a flat pickup fee for each New York City borough you serve. Leave blank for boroughs you don&apos;t cover.</div>
+                      {NYC_BOROUGHS.map((borough) => (
+                        <label key={borough} className="lst-field"><span>{borough} (USD)</span>
+                          <input inputMode="decimal" value={draft.freightPickupBoroughPrices[borough] ?? ""} onChange={(event) => updateBoroughPrice(borough, event.target.value)} placeholder="0" />
+                        </label>
+                      ))}
+                    </>
+                  )}
+                </>
+              )}
+            </>
+          )}
         </div>
         <BusinessVerificationUploadSection
           busy={busy}
@@ -999,9 +1109,33 @@ function profileDraftFromBusiness(business?: FirestoreRow | null): ProfileDraft 
     carHoldFlatFee: numberText(business?.carHoldFlatFee, "500"),
     carHoldDailyRate: numberText(business?.carHoldDailyRate, "100"),
     carHoldMaxDays: numberText(business?.carHoldMaxDays, "14"),
+    freightPickupAvailable: business?.freightPickupAvailable === true,
+    freightPickupModel:
+      business?.freightPickupModel === "borough" && isNewYorkState(business?.state)
+        ? "borough"
+        : "distance",
+    freightPickupBaseFee: numberText(business?.freightPickupBaseFee, ""),
+    freightPickupPerKm: numberText(business?.freightPickupPerKm, ""),
+    freightPickupMinFee: numberText(business?.freightPickupMinFee, ""),
+    freightPickupMaxKm: numberText(business?.freightPickupMaxKm, ""),
+    freightPickupOriginAddress: optionalBusinessText(business?.freightPickupOriginAddress),
+    freightPickupBoroughPrices: boroughPricesToText(business?.freightPickupBoroughPrices),
     profileImageUrl: optionalBusinessText(business?.profileImageUrl),
     profileImagePath: optionalBusinessText(business?.profileImagePath),
   };
+}
+
+function boroughPricesToText(value: unknown): Record<string, string> {
+  const prices: Record<string, string> = {};
+  if (value && typeof value === "object") {
+    for (const borough of NYC_BOROUGHS) {
+      const raw = (value as Record<string, unknown>)[borough];
+      if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+        prices[borough] = String(raw);
+      }
+    }
+  }
+  return prices;
 }
 
 function numberText(value: unknown, fallback: string) {

@@ -9,6 +9,11 @@ void main() {
     name: 'Sierra Leone',
     code: 'SL',
   );
+  const hongKong = DestinationCountry(
+    id: 'hong-kong',
+    name: 'Hong Kong',
+    code: 'HK',
+  );
 
   String? validate(
     String value,
@@ -30,6 +35,11 @@ void main() {
   test('accepts destination numbers for Guinea and Sierra Leone', () {
     expect(validate('+224 622 12 34 56', guinea), isNull);
     expect(validate('+232 76 123456', sierraLeone), isNull);
+  });
+
+  test('uses the shared catalog for formerly missing destination codes', () {
+    expect(validate('+852 5123 4567', hongKong), isNull);
+    expect(validate('+1 202 555 0184', hongKong), 'Hong Kong:+852');
   });
 
   test('rejects a different-country number unless marked for WhatsApp', () {

@@ -11,6 +11,7 @@ import '../services/transport_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/country_phone_field.dart';
 
 /// Customer-facing flow: request car transport through a business that offers
 /// the service. The business reviews the request and sends back a price quote —
@@ -335,13 +336,10 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
           ),
           const SizedBox(height: 12),
           _CardField(
-            child: TextFormField(
+            child: CountryPhoneField(
               controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                border: InputBorder.none,
-                labelText: l10n.contactPhone,
-              ),
+              labelText: l10n.contactPhone,
+              decoration: const InputDecoration(border: InputBorder.none),
               validator: (value) => (value == null || value.trim().isEmpty)
                   ? l10n.enterContactPhone
                   : null,

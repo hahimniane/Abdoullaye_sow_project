@@ -26,6 +26,12 @@ const trackingShipmentCollections = <String>[
   freightTrackingCollection,
 ];
 
+class TrackingScreenArguments {
+  const TrackingScreenArguments({this.shipmentId});
+
+  final String? shipmentId;
+}
+
 abstract interface class CustomerTrackingRepository {
   Stream<List<CustomerTrackingShipment>> watchCustomerShipments(
     String customerUid,
@@ -123,12 +129,14 @@ class TrackingScreen extends StatefulWidget {
     this.repository,
     this.customerUidOverride,
     this.freightService,
+    this.focusShipmentId,
   });
 
   final bool showBackButton;
   final CustomerTrackingRepository? repository;
   final String? customerUidOverride;
   final FreightShipmentService? freightService;
+  final String? focusShipmentId;
 
   @override
   State<TrackingScreen> createState() => _TrackingScreenState();
@@ -148,6 +156,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
   Stream<List<CustomerTrackingShipment>>? _shipmentsStream;
   FreightShipmentService? _freightService;
   final Set<String> _balancePayments = <String>{};
+  bool _showAllShipments = false;
 
   @override
   void initState() {
@@ -166,6 +175,9 @@ class _TrackingScreenState extends State<TrackingScreen> {
     }
     if (oldWidget.freightService != widget.freightService) {
       _freightService = widget.freightService;
+    }
+    if (oldWidget.focusShipmentId != widget.focusShipmentId) {
+      _showAllShipments = false;
     }
   }
 
@@ -250,6 +262,26 @@ class _TrackingScreenState extends State<TrackingScreen> {
     });
   }
 
+  String? get _activeFocusShipmentId {
+    final shipmentId = widget.focusShipmentId?.trim();
+    if (_showAllShipments || shipmentId == null || shipmentId.isEmpty) {
+      return null;
+    }
+    return shipmentId;
+  }
+
+  CustomerTrackingShipment? _focusedShipment(
+    List<CustomerTrackingShipment> shipments,
+    String shipmentId,
+  ) {
+    for (final shipment in shipments) {
+      if (shipment.id == shipmentId || shipment.trackingCode == shipmentId) {
+        return shipment;
+      }
+    }
+    return null;
+  }
+
   Stream<List<CustomerTrackingShipment>> _streamFor(String customerUid) {
     if (_streamCustomerUid != customerUid || _shipmentsStream == null) {
       _streamCustomerUid = customerUid;
@@ -314,6 +346,68 @@ class _TrackingScreenState extends State<TrackingScreen> {
                 onAction: () => Navigator.pushNamed(context, '/barrel'),
                 onOpenCarrierTracking: _openCarrierTracking,
                 showBackButton: widget.showBackButton,
+              ),
+            );
+          }
+
+          Widget shipmentCard(
+            CustomerTrackingShipment shipment, {
+            bool focused = false,
+          }) {
+            return _ShipmentCard(
+              shipment: shipment,
+              focused: focused,
+              balancePaymentBusy: _balancePayments.contains(shipment.id),
+              onPayBalance: shipment.isFreight && shipment.balanceDue > 0
+                  ? () => _payFreightBalance(shipment)
+                  : null,
+            );
+          }
+
+          final focusShipmentId = _activeFocusShipmentId;
+          if (focusShipmentId != null) {
+            final focusedShipment = _focusedShipment(
+              shipments,
+              focusShipmentId,
+            );
+            return SafeArea(
+              child: Column(
+                children: [
+                  _ShipmentsHeader(
+                    title: focusedShipment?.isFreight == true
+                        ? l10n.freightOrderDetails
+                        : l10n.trackShipment,
+                    onOpenCarrierTracking: _openCarrierTracking,
+                    showBackButton: widget.showBackButton,
+                  ),
+                  Expanded(
+                    child: focusedShipment == null
+                        ? _NoResults(
+                            message: l10n.shipmentStillSyncing,
+                            clearLabel: l10n.viewAllShipments,
+                            onClear: () =>
+                                setState(() => _showAllShipments = true),
+                          )
+                        : ListView(
+                            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                            children: [
+                              shipmentCard(focusedShipment, focused: true),
+                              const SizedBox(height: 12),
+                              Center(
+                                child: TextButton.icon(
+                                  onPressed: () =>
+                                      setState(() => _showAllShipments = true),
+                                  icon: const Icon(
+                                    Icons.format_list_bulleted_outlined,
+                                    size: 18,
+                                  ),
+                                  label: Text(l10n.viewAllShipments),
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                ],
               ),
             );
           }
@@ -391,19 +485,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                             itemBuilder: (context, index) {
                               final group = groups[index];
                               if (group.shipments.length == 1) {
-                                return _ShipmentCard(
-                                  shipment: group.shipments.single,
-                                  balancePaymentBusy: _balancePayments.contains(
-                                    group.shipments.single.id,
-                                  ),
-                                  onPayBalance:
-                                      group.shipments.single.isFreight &&
-                                          group.shipments.single.balanceDue > 0
-                                      ? () => _payFreightBalance(
-                                          group.shipments.single,
-                                        )
-                                      : null,
-                                );
+                                return shipmentCard(group.shipments.single);
                               }
                               return _ShipmentGroupCard(group: group);
                             },
@@ -722,16 +804,197 @@ class _InfoChip extends StatelessWidget {
   }
 }
 
+class _FreightNextStepCallout extends StatelessWidget {
+  const _FreightNextStepCallout({
+    required this.shipment,
+    required this.currency,
+    required this.onPayBalance,
+    required this.balancePaymentBusy,
+  });
+
+  final CustomerTrackingShipment shipment;
+  final NumberFormat currency;
+  final VoidCallback? onPayBalance;
+  final bool balancePaymentBusy;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final amount =
+        shipment.priceSettlementStatus == 'settled' &&
+            shipment.finalTotal != null
+        ? shipment.finalTotal!
+        : (shipment.estimatedTotal > 0
+              ? shipment.estimatedTotal
+              : shipment.price);
+    final businessName = shipment.businessName.trim();
+    final hasBalanceDue = shipment.balanceDue > 0;
+    final title = hasBalanceDue
+        ? l10n.additionalPaymentRequired
+        : (shipment.status == 'completed' ||
+              shipment.priceSettlementStatus == 'settled')
+        ? l10n.freightSettled
+        : (shipment.status == 'in_transit' ||
+              shipment.status == 'ready_for_pickup')
+        ? _ShipmentCard.statusLabel(l10n, shipment.status)
+        : l10n.estimatePaid;
+    final nextStep = hasBalanceDue
+        ? l10n.shipmentHeldForBalance
+        : shipment.status == 'completed'
+        ? l10n.freightNextCompleted
+        : shipment.status == 'in_transit'
+        ? l10n.freightNextInTransit
+        : shipment.status == 'ready_for_pickup'
+        ? l10n.freightNextReadyForPickup
+        : shipment.status == 'awaiting_weight_confirmation'
+        ? l10n.freightNextWeightReview
+        : businessName.isEmpty
+        ? l10n.freightNextDropOffAtBusiness
+        : l10n.freightNextDropOffAtProvider(businessName);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.lightSurfaceVariant,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.task_alt_outlined, color: AppColors.cobalt),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.freightNextStep,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppColors.cobaltDeep,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      nextStep,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.lightMuted,
+                        height: 1.35,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _FreightSummaryChip(
+                icon: Icons.payments_outlined,
+                label: l10n.paidEstimateAmount(currency.format(amount)),
+              ),
+              if (shipment.estimatedWeightKg > 0)
+                _FreightSummaryChip(
+                  icon: Icons.scale_outlined,
+                  label: l10n.estimatedWeightValue(
+                    '${shipment.estimatedWeightKg.toStringAsFixed(1)} kg',
+                  ),
+                ),
+            ],
+          ),
+          if (!hasBalanceDue) ...[
+            const SizedBox(height: 8),
+            Text(
+              l10n.freightNoActionUntilWeightConfirmed,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.lightMuted,
+                height: 1.35,
+              ),
+            ),
+          ],
+          if (onPayBalance != null) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: balancePaymentBusy ? null : onPayBalance,
+                child: Text(
+                  balancePaymentBusy
+                      ? l10n.paymentProcessing
+                      : l10n.payBalanceAmount(
+                          currency.format(shipment.balanceDue),
+                        ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _FreightSummaryChip extends StatelessWidget {
+  const _FreightSummaryChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.paper,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: AppColors.cobaltDeep),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.ink,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ShipmentCard extends StatelessWidget {
   const _ShipmentCard({
     required this.shipment,
     this.onPayBalance,
     this.balancePaymentBusy = false,
+    this.focused = false,
   });
 
   final CustomerTrackingShipment shipment;
   final VoidCallback? onPayBalance;
   final bool balancePaymentBusy;
+  final bool focused;
 
   Future<void> _copyTrackingNumber(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: shipment.trackingCode));
@@ -763,7 +1026,12 @@ class _ShipmentCard extends StatelessWidget {
 
     return Card(
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: focused
+            ? BorderSide(color: AppColors.cobalt.withValues(alpha: 0.32))
+            : BorderSide.none,
+      ),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
         onTap: shipment.isFreight
@@ -809,21 +1077,13 @@ class _ShipmentCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 14),
-              _DetailLine(
-                icon: shipment.isFreight
-                    ? Icons.inventory_2_outlined
-                    : barrel!.pickupRequested
-                    ? Icons.home_work_outlined
-                    : Icons.storefront_outlined,
-                text: shipment.isFreight
-                    ? l10n.freightDropOffNote
-                    : barrel!.pickupRequested
-                    ? (pickupDate == null
-                          ? l10n.pickupRequested
-                          : l10n.pickupRequestedWithDate(pickupDate))
-                    : l10n.customerDropOffAtOffice,
-              ),
               if (shipment.isFreight) ...[
+                _FreightNextStepCallout(
+                  shipment: shipment,
+                  currency: currency,
+                  onPayBalance: onPayBalance,
+                  balancePaymentBusy: balancePaymentBusy,
+                ),
                 const SizedBox(height: 8),
                 _DetailLine(
                   icon: shipment.mode == 'air'
@@ -843,15 +1103,25 @@ class _ShipmentCard extends StatelessWidget {
                         '${shipment.verifiedWeightKg!.toStringAsFixed(1)} kg',
                   ),
                 ],
+              ] else ...[
+                _DetailLine(
+                  icon: barrel!.pickupRequested
+                      ? Icons.home_work_outlined
+                      : Icons.storefront_outlined,
+                  text: barrel.pickupRequested
+                      ? (pickupDate == null
+                            ? l10n.pickupRequested
+                            : l10n.pickupRequestedWithDate(pickupDate))
+                      : l10n.customerDropOffAtOffice,
+                ),
+                const SizedBox(height: 8),
+                _DetailLine(
+                  icon: Icons.payments_outlined,
+                  text:
+                      '${currency.format(shipment.price)} • '
+                      '${paymentLabel(l10n, shipment.paymentStatus)}',
+                ),
               ],
-              const SizedBox(height: 8),
-              _DetailLine(
-                icon: Icons.payments_outlined,
-                text: shipment.isFreight
-                    ? _freightAmountLabel(l10n, currency)
-                    : '${currency.format(shipment.price)} • '
-                          '${paymentLabel(l10n, shipment.paymentStatus)}',
-              ),
               if (shipment.isFreight &&
                   shipment.priceSettlementStatus.isNotEmpty) ...[
                 const SizedBox(height: 8),
@@ -888,7 +1158,7 @@ class _ShipmentCard extends StatelessWidget {
                       label: Text(l10n.receipt),
                     ),
                   ],
-                  if (onPayBalance != null) ...[
+                  if (!shipment.isFreight && onPayBalance != null) ...[
                     const SizedBox(width: 8),
                     Expanded(
                       child: FilledButton(
@@ -977,18 +1247,6 @@ class _ShipmentCard extends StatelessWidget {
       default:
         return paymentStatus.replaceAll('_', ' ');
     }
-  }
-
-  String _freightAmountLabel(AppLocalizations l10n, NumberFormat currency) {
-    if (shipment.priceSettlementStatus == 'settled' &&
-        shipment.finalTotal != null) {
-      return '${l10n.finalTotal}: ${currency.format(shipment.finalTotal)}';
-    }
-    if (shipment.refundDue > 0) {
-      return l10n.refundDueAmount(currency.format(shipment.refundDue));
-    }
-    return '${l10n.estimatedTotal}: '
-        '${currency.format(shipment.estimatedTotal)} • ${l10n.estimatePaid}';
   }
 
   static String freightSettlementLabel(AppLocalizations l10n, String status) {

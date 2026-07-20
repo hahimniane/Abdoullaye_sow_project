@@ -429,3 +429,79 @@ describe("business admin support callable", () => {
         );
       });
 });
+
+describe("support case business owner via document ownership", () => {
+  const OWNER_NO_BID_UID = "support-owner-no-businessid";
+  const OWNED_BUSINESS_ID = "support-owned-business";
+  const OWNED_CUSTOMER_UID = "support-owned-customer";
+  const OWNED_SHIPMENT_ID = "support-owned-shipment";
+  const OWNED_CASE_ID = `barrelShipments_${OWNED_SHIPMENT_ID}`;
+
+  before(async () => {
+    await Promise.all([
+      // Owner profile deliberately carries NO matching businessId; the link to
+      // the business is established only through businesses/{id}.ownerUid.
+      db.collection("users").doc(OWNER_NO_BID_UID).set({
+        role: "businessOwner",
+        fullName: "Owner Without BusinessId",
+        email: "owner-no-bid@example.test",
+      }),
+      db.collection("users").doc(OWNED_CUSTOMER_UID).set({
+        role: "customer",
+        fullName: "Owned Business Customer",
+        email: "owned-customer@example.test",
+      }),
+      db.collection("businesses").doc(OWNED_BUSINESS_ID).set({
+        name: "Owner Document Business",
+        status: "approved",
+        ownerUid: OWNER_NO_BID_UID,
+      }),
+      db.collection("barrelShipments").doc(OWNED_SHIPMENT_ID).set({
+        customerUid: OWNED_CUSTOMER_UID,
+        customerName: "Owned Business Customer",
+        businessId: OWNED_BUSINESS_ID,
+        businessName: "Owner Document Business",
+        trackingCode: "SUPPORT-OWN-001",
+        receiverName: "Receiver",
+        destinationCountryName: "Guinea",
+        status: "pending",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      }),
+    ]);
+    await functions.createOrOpenSupportCase.run({
+      auth: {uid: OWNED_CUSTOMER_UID},
+      data: {
+        relatedCollection: "barrelShipments",
+        relatedId: OWNED_SHIPMENT_ID,
+        subject: "Owned business help",
+        message: "Where is my shipment?",
+      },
+    });
+  });
+
+  it("lets a document-owner business reply and add attachments", async () => {
+    const reply = await functions.sendSupportMessage.run({
+      auth: {uid: OWNER_NO_BID_UID},
+      data: {caseId: OWNED_CASE_ID, content: "On its way."},
+    });
+    assert.ok(reply.messageId);
+    const replyDoc = await db.collection("supportCases").doc(OWNED_CASE_ID)
+        .collection("messages").doc(reply.messageId).get();
+    assert.equal(replyDoc.get("senderRole"), "business");
+
+    const attachment = await functions.uploadSupportAttachmentMetadata.run({
+      auth: {uid: OWNER_NO_BID_UID},
+      data: {
+        caseId: OWNED_CASE_ID,
+        filePath:
+          `support_cases/${OWNED_CASE_ID}/${OWNER_NO_BID_UID}/proof.jpg`,
+        fileName: "proof.jpg",
+        mimeType: "image/jpeg",
+        fileSize: 2048,
+        messageType: "image",
+        caption: "Proof of pickup",
+      },
+    });
+    assert.ok(attachment.messageId, "owner can add files to the support case");
+  });
+});

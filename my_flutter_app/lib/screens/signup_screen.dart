@@ -9,6 +9,7 @@ import '../utils/legal_links.dart';
 import '../utils/business_registration_navigation.dart';
 import '../utils/phone_number_validator.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/country_phone_field.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -278,21 +279,15 @@ class _SignUpScreenState extends State<SignUpScreen>
                                       },
                                     ),
                                     const SizedBox(height: 20),
-                                    TextFormField(
+                                    CountryPhoneField(
                                       controller: _phoneController,
-                                      keyboardType: TextInputType.phone,
-                                      inputFormatters: PhoneNumberValidator
-                                          .allowedInputFormatters,
+                                      labelText: AppLocalizations.of(
+                                        context,
+                                      )!.phoneNumber,
+                                      hintText: AppLocalizations.of(
+                                        context,
+                                      )!.enterPhoneNumber,
                                       decoration: InputDecoration(
-                                        labelText: AppLocalizations.of(
-                                          context,
-                                        )!.phoneNumber,
-                                        hintText: AppLocalizations.of(
-                                          context,
-                                        )!.enterPhoneNumber,
-                                        prefixIcon: const Icon(
-                                          Icons.phone_outlined,
-                                        ),
                                         border: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(
                                             12,
@@ -370,7 +365,8 @@ class _SignUpScreenState extends State<SignUpScreen>
                                         fillColor: Colors.grey.shade50,
                                       ),
                                       validator: (value) {
-                                        if (value == null || value.isEmpty) {
+                                        if (value == null ||
+                                            value.trim().isEmpty) {
                                           return AppLocalizations.of(
                                             context,
                                           )!.pleaseEnterEmail;

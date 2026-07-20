@@ -73,6 +73,12 @@ const {
   calculateFreightSettlement,
 } = require("./freight_settlement");
 const {
+  resolveFreightPickupConfig,
+  sanitizeBoroughPrices,
+  distancePickupFee,
+  boroughPickupFee,
+} = require("./freight_pickup_pricing");
+const {
   accountLegalAcceptance,
   marketplaceDisclosure,
 } = require("./marketplace_disclosure");
@@ -1301,6 +1307,92 @@ function nullableNumberInRange(value, min, max) {
   return numeric;
 }
 
+function destinationServiceMap(country) {
+  const availability = country?.serviceAvailability;
+  return availability && typeof availability === "object" ?
+    availability :
+    null;
+}
+
+function destinationServiceEnabled(country, serviceKey) {
+  const availability = destinationServiceMap(country);
+  if (availability &&
+      Object.prototype.hasOwnProperty.call(availability, serviceKey)) {
+    return availability[serviceKey] === true;
+  }
+
+  const isActive = country?.isActive === true;
+  if (serviceKey === "barrelShipping") {
+    return isActive && Number(country?.barrelShippingPrice || 0) > 0;
+  }
+  if (serviceKey === "freightAir") {
+    return isActive && Number(country?.freightAirPricePerKg || 0) > 0;
+  }
+  if (serviceKey === "freightSea") {
+    return isActive && Number(country?.freightSeaPricePerKg || 0) > 0;
+  }
+  if (serviceKey === "carTransport") {
+    return isActive;
+  }
+  return false;
+}
+
+function destinationServiceAvailability(country) {
+  return {
+    barrelShipping: destinationServiceEnabled(country, "barrelShipping"),
+    freightAir: destinationServiceEnabled(country, "freightAir"),
+    freightSea: destinationServiceEnabled(country, "freightSea"),
+    carTransport: destinationServiceEnabled(country, "carTransport"),
+  };
+}
+
+function barrelDestinationAvailable(country) {
+  const price = Number(country?.barrelShippingPrice || 0);
+  return country?.isActive === true &&
+    destinationServiceEnabled(country, "barrelShipping") &&
+    Number.isFinite(price) &&
+    price > 0;
+}
+
+function freightDestinationAvailable(country, mode) {
+  const serviceKey = mode === "air" ? "freightAir" : "freightSea";
+  const price = mode === "air" ?
+    Number(country?.freightAirPricePerKg || 0) :
+    Number(country?.freightSeaPricePerKg || 0);
+  return country?.isActive === true &&
+    destinationServiceEnabled(country, serviceKey) &&
+    Number.isFinite(price) &&
+    price > 0;
+}
+
+function carTransportDestinationAvailable(country) {
+  return country?.isActive === true &&
+    destinationServiceEnabled(country, "carTransport");
+}
+
+function normalizedDestinationServiceAvailability(data) {
+  const availability = destinationServiceMap(data);
+  if (availability) {
+    return {
+      barrelShipping: availability.barrelShipping === true,
+      freightAir: availability.freightAir === true,
+      freightSea: availability.freightSea === true,
+      carTransport: availability.carTransport === true,
+    };
+  }
+  const active = data?.isActive === true;
+  return {
+    barrelShipping:
+      active && Number(data?.barrelShippingPrice || 0) > 0,
+    freightAir:
+      active && Number(data?.freightAirPricePerKg || 0) > 0,
+    freightSea:
+      active && Number(data?.freightSeaPricePerKg || 0) > 0,
+    carTransport:
+      data?.carTransportAvailable === true || active,
+  };
+}
+
 function intOrFallback(value, fallback) {
   const numeric = Number(value);
   return Number.isInteger(numeric) ? numeric : fallback;
@@ -1538,10 +1630,10 @@ async function getApprovedBusinessDestination({businessId, countryId}) {
   }
   const country = destinationDoc.data();
   const shippingFee = Number(country.barrelShippingPrice || 0);
-  if (!Number.isFinite(shippingFee) || shippingFee <= 0) {
+  if (!barrelDestinationAvailable(country)) {
     throw new HttpsError(
         "failed-precondition",
-        "This destination does not have a barrel shipping price yet",
+        "This destination is not configured for barrel shipping yet",
     );
   }
 
@@ -1573,6 +1665,7 @@ exports.listActiveBarrelDestinationOptions = onCall(
           services.includes("sharedBarrels");
         const offersFreight = services.includes("freight");
         if (!offersBarrels && !offersFreight) continue;
+        const pickupConfig = resolveFreightPickupConfig(business);
 
         const destinations = await businessDoc.ref
             .collection("destinationCountries")
@@ -1586,13 +1679,12 @@ exports.listActiveBarrelDestinationOptions = onCall(
             Number(country.freightAirPricePerKg || 0);
           const freightSeaPricePerKg =
             Number(country.freightSeaPricePerKg || 0);
+          const availability = destinationServiceAvailability(country);
           const hasBarrelRate = offersBarrels &&
-            Number.isFinite(price) && price > 0;
+            barrelDestinationAvailable(country);
           const hasFreightRate = offersFreight &&
-            ((Number.isFinite(freightAirPricePerKg) &&
-              freightAirPricePerKg > 0) ||
-             (Number.isFinite(freightSeaPricePerKg) &&
-              freightSeaPricePerKg > 0));
+            (freightDestinationAvailable(country, "air") ||
+             freightDestinationAvailable(country, "sea"));
           if (!hasBarrelRate && !hasFreightRate) return;
 
           options.push({
@@ -1612,12 +1704,18 @@ exports.listActiveBarrelDestinationOptions = onCall(
             enabledServices: services,
             serviceNote: business.serviceNote || "",
             businessStatus: "approved",
+            freightPickupAvailable: offersFreight && pickupConfig.enabled,
+            freightPickupModel: pickupConfig.model,
             country: {
               id: destinationDoc.id,
               name: country.name || destinationDoc.id,
               code: country.code || "",
               isActive: country.isActive === true,
               sortOrder: Number(country.sortOrder || 0),
+              destinationCoverageVersion:
+                Number(country.destinationCoverageVersion ||
+                  (country.serviceAvailability ? 2 : 1)),
+              serviceAvailability: availability,
               barrelShippingPrice:
                 Number.isFinite(price) && price > 0 ? price : 0,
               freightAirPricePerKg:
@@ -1626,6 +1724,7 @@ exports.listActiveBarrelDestinationOptions = onCall(
               freightSeaPricePerKg:
                 Number.isFinite(freightSeaPricePerKg) ?
                   freightSeaPricePerKg : 0,
+              carTransportAvailable: availability.carTransport,
               destinationNote: country.destinationNote || "",
               ...deliveryEstimateFromCountry(country),
             },
@@ -1667,6 +1766,8 @@ exports.listTransportBusinessOptions = onCall(
 
         destinations.docs.forEach((destinationDoc) => {
           const country = destinationDoc.data();
+          if (!carTransportDestinationAvailable(country)) return;
+          const availability = destinationServiceAvailability(country);
           options.push({
             id: `${businessDoc.id}_${destinationDoc.id}`,
             businessId: businessDoc.id,
@@ -1684,9 +1785,14 @@ exports.listTransportBusinessOptions = onCall(
               code: country.code || "",
               isActive: country.isActive === true,
               sortOrder: Number(country.sortOrder || 0),
+              destinationCoverageVersion:
+                Number(country.destinationCoverageVersion ||
+                  (country.serviceAvailability ? 2 : 1)),
+              serviceAvailability: availability,
               barrelShippingPrice: Number(country.barrelShippingPrice || 0),
               freightAirPricePerKg: Number(country.freightAirPricePerKg || 0),
               freightSeaPricePerKg: Number(country.freightSeaPricePerKg || 0),
+              carTransportAvailable: availability.carTransport,
               destinationNote: country.destinationNote || "",
               ...deliveryEstimateFromCountry(country),
             },
@@ -1739,22 +1845,28 @@ exports.createTransportRequest = onCall(
 
       const destinationCountryId =
           String(data.destinationCountryId || "").trim();
+      if (!destinationCountryId) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Choose a destination for this transport request.",
+        );
+      }
       let destinationCountryName =
           String(data.destinationCountryName || "").trim();
-      if (destinationCountryId) {
-        const destDoc = await businessDoc.ref
-            .collection("destinationCountries")
-            .doc(destinationCountryId)
-            .get();
-        if (!destDoc.exists || destDoc.data().isActive !== true) {
-          throw new HttpsError(
-              "failed-precondition",
-              "That destination is not available for this business.",
-          );
-        }
-        destinationCountryName =
-          destDoc.data().name || destinationCountryName || destinationCountryId;
+      const destDoc = await businessDoc.ref
+          .collection("destinationCountries")
+          .doc(destinationCountryId)
+          .get();
+      if (!destDoc.exists ||
+          !carTransportDestinationAvailable(destDoc.data())) {
+        throw new HttpsError(
+            "failed-precondition",
+            "That destination is not available for car transport with " +
+              "this business.",
+        );
       }
+      destinationCountryName =
+        destDoc.data().name || destinationCountryName || destinationCountryId;
 
       const ownerName = String(data.ownerName || "").trim();
       const carMake = String(data.carMake || "").trim();
@@ -1790,8 +1902,8 @@ exports.createTransportRequest = onCall(
         carModel,
         carYear,
         vinNumber,
-        destinationCountryId: destinationCountryId || "guinea",
-        destinationCountryName: destinationCountryName || "Guinea",
+        destinationCountryId,
+        destinationCountryName,
         transportDate: preferredDate || now,
         preferredDate: preferredDate || null,
         price: 0,
@@ -5397,6 +5509,16 @@ exports.updateBusinessProfile = onCall(
         parkingInstructions,
         parkingLatitude,
         parkingLongitude,
+        freightPickupAvailable,
+        freightPickupModel,
+        freightPickupBaseFee,
+        freightPickupPerKm,
+        freightPickupMinFee,
+        freightPickupMaxKm,
+        freightPickupOriginAddress,
+        freightPickupOriginLat,
+        freightPickupOriginLng,
+        freightPickupBoroughPrices,
       } = request.data || {};
       const user = await requireBusinessManager(callerUid, businessId);
       const db = admin.firestore();
@@ -5517,6 +5639,37 @@ exports.updateBusinessProfile = onCall(
         parkingLongitude: parkingLongitude === undefined ?
           current.parkingLongitude ?? null :
           nullableNumberInRange(parkingLongitude, -180, 180),
+        freightPickupAvailable: freightPickupAvailable === undefined ?
+          current.freightPickupAvailable === true :
+          freightPickupAvailable === true,
+        freightPickupModel:
+          String(freightPickupModel ?? current.freightPickupModel ?? "distance")
+              .toLowerCase() === "borough" ? "borough" : "distance",
+        freightPickupBaseFee: Math.max(0, numberOrFallback(
+            freightPickupBaseFee, current.freightPickupBaseFee || 0,
+        )),
+        freightPickupPerKm: Math.max(0, numberOrFallback(
+            freightPickupPerKm, current.freightPickupPerKm || 0,
+        )),
+        freightPickupMinFee: Math.max(0, numberOrFallback(
+            freightPickupMinFee, current.freightPickupMinFee || 0,
+        )),
+        freightPickupMaxKm: Math.max(0, numberOrFallback(
+            freightPickupMaxKm, current.freightPickupMaxKm || 0,
+        )),
+        freightPickupOriginAddress: String(
+            freightPickupOriginAddress ??
+            current.freightPickupOriginAddress ?? "",
+        ).trim(),
+        freightPickupOriginLat: freightPickupOriginLat === undefined ?
+          current.freightPickupOriginLat ?? null :
+          nullableNumberInRange(freightPickupOriginLat, -90, 90),
+        freightPickupOriginLng: freightPickupOriginLng === undefined ?
+          current.freightPickupOriginLng ?? null :
+          nullableNumberInRange(freightPickupOriginLng, -180, 180),
+        freightPickupBoroughPrices: sanitizeBoroughPrices(
+            freightPickupBoroughPrices ?? current.freightPickupBoroughPrices,
+        ),
         updatedAt: now,
       }, {merge: true});
 
@@ -6294,6 +6447,84 @@ function pickupFeeForBorough(pricing, borough) {
     miles: 0,
     fee,
   };
+}
+
+// ---- Freight home-pickup pricing (per business) ----
+// Pure config/fee math lives in ./freight_pickup_pricing; the async pieces
+// (Distance Matrix call, typed errors) stay here.
+
+async function googleDrivingDistanceKm({origin, destination, key}) {
+  const params = new URLSearchParams({
+    origins: origin,
+    destinations: destination,
+    units: "metric",
+    key,
+  });
+  const response = await fetch(
+      `https://maps.googleapis.com/maps/api/distancematrix/json?${params}`,
+  );
+  const data = await response.json();
+  const element = data.rows?.[0]?.elements?.[0];
+  if (data.status !== "OK" || !element || element.status !== "OK") {
+    logger.warn("Distance Matrix failed", data);
+    throw new HttpsError(
+        "internal",
+        "Could not measure the distance to the pickup address",
+        {reason: "freight_pickup_distance_unavailable"},
+    );
+  }
+  return element.distance.value / 1000;
+}
+
+// Resolves the freight pickup fee for one request. Pure math for borough;
+// calls the Distance Matrix API for distance. Throws typed HttpsErrors so the
+// client can distinguish "unavailable" from "out of range".
+async function computeFreightPickupFee({config, pickup, key}) {
+  if (!config.enabled) {
+    throw new HttpsError(
+        "failed-precondition",
+        "This business does not offer freight pickup",
+        {reason: "freight_pickup_unavailable"},
+    );
+  }
+  if (config.model === "borough") {
+    const borough = String(pickup.borough || "").trim();
+    const fee = boroughPickupFee({config, borough});
+    if (fee == null) {
+      throw new HttpsError(
+          "failed-precondition",
+          "Pickup is not available for this area",
+          {reason: "freight_pickup_out_of_area"},
+      );
+    }
+    return {fee, model: "borough", distanceKm: null, borough};
+  }
+  const origin = config.originLat != null && config.originLng != null ?
+    `${config.originLat},${config.originLng}` :
+    config.originAddress;
+  if (!origin) {
+    throw new HttpsError(
+        "failed-precondition",
+        "This business has not set a pickup origin address",
+        {reason: "freight_pickup_origin_missing"},
+    );
+  }
+  const destination = pickup.latitude != null && pickup.longitude != null ?
+    `${pickup.latitude},${pickup.longitude}` :
+    String(pickup.address || "").trim();
+  if (!destination) {
+    throw new HttpsError("invalid-argument", "A pickup address is required");
+  }
+  const distanceKm = await googleDrivingDistanceKm({origin, destination, key});
+  if (config.maxKm > 0 && distanceKm > config.maxKm) {
+    throw new HttpsError(
+        "failed-precondition",
+        "Pickup location is outside the service area",
+        {reason: "freight_pickup_out_of_range", distanceKm},
+    );
+  }
+  const fee = distancePickupFee({config, distanceKm});
+  return {fee, model: "distance", distanceKm, borough: null};
 }
 
 /**
@@ -7369,6 +7600,8 @@ exports.seedDestinationCountries = onCall(
       const now = FirestoreFieldValue.serverTimestamp();
       ALL_COUNTRIES.forEach((country, index) => {
         const existingData = existingDocs[index].data() || {};
+        const availability =
+          normalizedDestinationServiceAvailability(existingData);
         batch.set(
             refs[index],
             {
@@ -7387,11 +7620,22 @@ exports.seedDestinationCountries = onCall(
               serviceNote: business.serviceNote || "",
               businessStatus: business.status || "pending",
               sortOrder: country.sortOrder,
-              isActive: existingData.isActive === true,
+              destinationCoverageVersion: 2,
+              serviceAvailability: availability,
+              isActive: Object.values(availability).some(Boolean),
               barrelShippingPrice:
                 typeof existingData.barrelShippingPrice === "number" ?
                   existingData.barrelShippingPrice :
                   0,
+              freightAirPricePerKg:
+                typeof existingData.freightAirPricePerKg === "number" ?
+                  existingData.freightAirPricePerKg :
+                  0,
+              freightSeaPricePerKg:
+                typeof existingData.freightSeaPricePerKg === "number" ?
+                  existingData.freightSeaPricePerKg :
+                  0,
+              carTransportAvailable: availability.carTransport,
               updatedAt: now,
             },
             {merge: true},
@@ -7470,6 +7714,22 @@ exports.updateDestinationCoverage = onCall(
       const countryId = String(request.data?.countryId || "").trim();
       const isActive = request.data?.isActive === true;
       const price = Number(request.data?.barrelShippingPrice || 0);
+      const freightAirPricePerKg =
+        Number(request.data?.freightAirPricePerKg || 0);
+      const freightSeaPricePerKg =
+        Number(request.data?.freightSeaPricePerKg || 0);
+      const hasAvailabilityMap =
+        request.data?.serviceAvailability &&
+        typeof request.data.serviceAvailability === "object";
+      const availability = hasAvailabilityMap ?
+        normalizedDestinationServiceAvailability(request.data) :
+        {
+          barrelShipping: isActive && price > 0,
+          freightAir: isActive && freightAirPricePerKg > 0,
+          freightSea: isActive && freightSeaPricePerKg > 0,
+          carTransport: request.data?.carTransportAvailable === true,
+        };
+      const nextIsActive = Object.values(availability).some(Boolean);
       const minDaysRaw = request.data?.deliveryEstimateMinDays;
       const maxDaysRaw = request.data?.deliveryEstimateMaxDays;
       const destinationNote = String(
@@ -7496,10 +7756,35 @@ exports.updateDestinationCoverage = onCall(
             "Barrel shipping price must be zero or more",
         );
       }
-      if (isActive && price <= 0) {
+      if (!Number.isFinite(freightAirPricePerKg) || freightAirPricePerKg < 0 ||
+          !Number.isFinite(freightSeaPricePerKg) || freightSeaPricePerKg < 0) {
         throw new HttpsError(
             "invalid-argument",
-            "Active destinations need a barrel shipping fee greater than 0",
+            "Freight rates must be zero or more",
+        );
+      }
+      if (isActive && !nextIsActive) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Choose at least one destination service before activating",
+        );
+      }
+      if (availability.barrelShipping && price <= 0) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Barrel shipping destinations need a fee greater than 0",
+        );
+      }
+      if (availability.freightAir && freightAirPricePerKg <= 0) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Air freight destinations need a rate greater than 0",
+        );
+      }
+      if (availability.freightSea && freightSeaPricePerKg <= 0) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Sea freight destinations need a rate greater than 0",
         );
       }
       if (
@@ -7537,8 +7822,13 @@ exports.updateDestinationCoverage = onCall(
         enabledServices: normalizeBusinessServices(business.enabledServices),
         serviceNote: business.serviceNote || "",
         businessStatus: business.status || "",
+        destinationCoverageVersion: 2,
+        serviceAvailability: availability,
         barrelShippingPrice: price,
-        isActive,
+        freightAirPricePerKg,
+        freightSeaPricePerKg,
+        carTransportAvailable: availability.carTransport,
+        isActive: nextIsActive,
         destinationNote: destinationNote ||
           FirestoreFieldValue.delete(),
         updatedAt: FirestoreFieldValue.serverTimestamp(),
@@ -7562,9 +7852,21 @@ exports.updateDestinationCoverage = onCall(
         targetCollection: "businesses",
         targetId: `${businessId}/destinationCountries/${countryId}`,
         targetLabel: `${business.name || businessId} ${countryId}`,
-        previousValue:
-          `${previous.isActive === true}:${previous.barrelShippingPrice || 0}`,
-        nextValue: `${isActive}:${price}`,
+        previousValue: JSON.stringify({
+          isActive: previous.isActive === true,
+          barrelShippingPrice: previous.barrelShippingPrice || 0,
+          freightAirPricePerKg: previous.freightAirPricePerKg || 0,
+          freightSeaPricePerKg: previous.freightSeaPricePerKg || 0,
+          serviceAvailability:
+            normalizedDestinationServiceAvailability(previous),
+        }),
+        nextValue: JSON.stringify({
+          isActive: nextIsActive,
+          barrelShippingPrice: price,
+          freightAirPricePerKg,
+          freightSeaPricePerKg,
+          serviceAvailability: availability,
+        }),
       });
       await batch.commit();
 
@@ -7572,6 +7874,8 @@ exports.updateDestinationCoverage = onCall(
         success: true,
         businessId,
         countryId,
+        isActive: nextIsActive,
+        serviceAvailability: availability,
       };
     },
 );
@@ -7865,6 +8169,58 @@ exports.suggestPickupAddresses = onCall(
             return true;
           })
           .slice(0, 6);
+    },
+);
+
+// Live freight pickup quote so the customer sees the fee before paying. Reads
+// the business's chosen pricing model and returns the computed fee (and, for
+// the distance model, the measured distance).
+exports.quoteFreightPickup = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [googleMapsApiKey],
+    },
+    async (request) => {
+      requireAuth(request);
+      await enforceCallableRateLimit(request, {
+        name: "quoteFreightPickup",
+        limit: 30,
+        windowSeconds: 60,
+      });
+      const {
+        businessId,
+        pickupAddress,
+        pickupLatitude,
+        pickupLongitude,
+        pickupBorough,
+      } = request.data || {};
+      if (!businessId) {
+        throw new HttpsError("invalid-argument", "A business is required");
+      }
+      const businessDoc = await admin.firestore()
+          .collection("businesses").doc(String(businessId)).get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+      const config = resolveFreightPickupConfig(businessDoc.data());
+      const result = await computeFreightPickupFee({
+        config,
+        pickup: {
+          address: pickupAddress,
+          latitude: nullableNumberInRange(pickupLatitude, -90, 90),
+          longitude: nullableNumberInRange(pickupLongitude, -180, 180),
+          borough: pickupBorough,
+        },
+        key: googleMapsApiKey.value(),
+      });
+      return {
+        available: true,
+        model: result.model,
+        fee: result.fee,
+        distanceKm: result.distanceKm,
+        currency: SHIPMENT_CURRENCY,
+      };
     },
 );
 
@@ -12876,7 +13232,7 @@ async function getApprovedFreightDestination({businessId, countryId, mode}) {
   const pricePerKg = mode === "air" ?
     Number(country.freightAirPricePerKg || 0) :
     Number(country.freightSeaPricePerKg || 0);
-  if (!Number.isFinite(pricePerKg) || pricePerKg <= 0) {
+  if (!freightDestinationAvailable(country, mode)) {
     throw new HttpsError(
         "failed-precondition",
         `This destination has no ${mode} freight rate yet`,
@@ -12895,7 +13251,7 @@ exports.createFreightShipmentPaymentIntent = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
-      secrets: [stripeSecretKey],
+      secrets: [stripeSecretKey, googleMapsApiKey],
     },
     async (request) => {
       const customerUid = requireAuth(request);
@@ -12915,6 +13271,8 @@ exports.createFreightShipmentPaymentIntent = onCall(
         pickupRequested,
         pickupAddress,
         pickupBorough,
+        pickupLatitude,
+        pickupLongitude,
         pickupDateTime,
         useWalletBalance,
       } = request.data || {};
@@ -12941,13 +13299,10 @@ exports.createFreightShipmentPaymentIntent = onCall(
       }
 
       const wantsPickup = pickupRequested === true;
-      if (
-        wantsPickup &&
-        (!pickupAddress || !pickupBorough || !pickupDateTime)
-      ) {
+      if (wantsPickup && (!pickupAddress || !pickupDateTime)) {
         throw new HttpsError(
             "invalid-argument",
-            "Pickup address, borough, date, and time are required",
+            "Pickup address, date, and time are required",
         );
       }
       const pickupAppointment = wantsPickup ?
@@ -12968,15 +13323,27 @@ exports.createFreightShipmentPaymentIntent = onCall(
       const {business, country, pricePerKg, deliveryEstimate} =
         freightDestination;
 
-      const pricing = barrelPickupPricingFromData(pricingDoc.data());
       const platformFeePct = servicePlatformFeePctForBusiness(
           pricingDoc.data(),
           business,
           ["freightPlatformFeePct"],
       );
+      // Pickup fee comes from the business's chosen model (distance or NY
+      // borough). Server recomputes it from scratch so the client can never
+      // dictate the price it pays.
+      const pickupConfig = resolveFreightPickupConfig(business);
       const pickup = wantsPickup ?
-        pickupFeeForBorough(pricing, String(pickupBorough)) :
-        {miles: 0, fee: 0};
+        await computeFreightPickupFee({
+          config: pickupConfig,
+          pickup: {
+            address: pickupAddress,
+            latitude: nullableNumberInRange(pickupLatitude, -90, 90),
+            longitude: nullableNumberInRange(pickupLongitude, -180, 180),
+            borough: pickupBorough,
+          },
+          key: googleMapsApiKey.value(),
+        }) :
+        {fee: 0, model: null, distanceKm: null, borough: null};
       const shippingFee =
         Math.round(parcelWeightKg * pricePerKg * 100) / 100;
       const shippingFeeCents = Math.round(shippingFee * 100);
@@ -12992,7 +13359,7 @@ exports.createFreightShipmentPaymentIntent = onCall(
       const now = FirestoreFieldValue.serverTimestamp();
       const cleanPickupAddress = wantsPickup ?
         String(pickupAddress).trim() :
-        pricing.officeAddress;
+        (pickupConfig.originAddress || business.addressLine1 || "");
       const connectReady =
         !!business.stripeAccountId && business.payoutsEnabled === true;
       const payoutFields = servicePayoutFields({
@@ -13038,9 +13405,10 @@ exports.createFreightShipmentPaymentIntent = onCall(
           pickupRequested: wantsPickup,
           pickupAddress: cleanPickupAddress,
           pickupBorough: wantsPickup ?
-            String(pickupBorough) :
+            String(pickup.borough || pickupBorough || "") :
             "Office drop-off",
-          pickupMiles: pickup.miles,
+          pickupModel: pickup.model,
+          pickupDistanceKm: pickup.distanceKm,
           pickupFee: pickup.fee,
           pickupFeeCents,
           shippingFee,
@@ -16718,13 +17086,34 @@ async function resolveSupportRelatedRecord({
   };
 }
 
-async function requireSupportCase(db, caseId) {
+// A business owner may not carry the case's businessId on their user profile:
+// they are linked to the business by owning the businesses/{id} document
+// (ownerUid == uid) rather than by a businessId field. Storage rules authorize
+// them via userOwnsBusinessDocument(); mirror that here so the support
+// callables recognize the owner as a business participant. Without this, the
+// owner passes
+// the Storage upload but is rejected by uploadSupportAttachmentMetadata /
+// sendSupportMessage ("your account cannot add files to this support case").
+async function applySupportBusinessOwnership(db, user, supportCase) {
+  if (!user || !supportCase) return;
+  const businessId = supportCase.businessId;
+  if (!businessId || user.businessId === businessId) return;
+  if (user.role !== "businessOwner" && user.role !== "staff") return;
+  const businessDoc = await db.collection("businesses").doc(businessId).get();
+  if (businessDoc.exists && businessDoc.data()?.ownerUid === user.id) {
+    user.businessId = businessId;
+  }
+}
+
+async function requireSupportCase(db, caseId, user = null) {
   const ref = db.collection("supportCases").doc(caseId);
   const doc = await ref.get();
   if (!doc.exists) {
     throw new HttpsError("not-found", "Support case not found");
   }
-  return {ref, doc, data: {id: doc.id, ...doc.data()}};
+  const data = {id: doc.id, ...doc.data()};
+  await applySupportBusinessOwnership(db, user, data);
+  return {ref, doc, data};
 }
 
 function supportMessagePayload({
@@ -17183,7 +17572,8 @@ exports.sendSupportMessage = onCall(
       if (!content && messageType === "text") {
         throw new HttpsError("invalid-argument", "Message is required");
       }
-      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      const {ref, data: supportCase} =
+          await requireSupportCase(db, caseId, user);
       if (!supportCanReply(user, supportCase)) {
         throw new HttpsError("permission-denied", "Support reply denied");
       }
@@ -17311,7 +17701,8 @@ exports.uploadSupportAttachmentMetadata = onCall(
             "Attachment type or size denied",
         );
       }
-      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      const {ref, data: supportCase} =
+          await requireSupportCase(db, caseId, user);
       if (!supportCanReply(user, supportCase)) {
         throw new HttpsError("permission-denied", "Attachment access denied");
       }
@@ -17388,7 +17779,8 @@ exports.markSupportCaseRead = onCall(
       const user = await getUserProfile(uid);
       const db = admin.firestore();
       const caseId = cleanText(request.data?.caseId, 220);
-      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      const {ref, data: supportCase} =
+          await requireSupportCase(db, caseId, user);
       if (!supportCanReadCase(user, supportCase)) {
         throw new HttpsError("permission-denied", "Support read denied");
       }
@@ -17415,7 +17807,8 @@ exports.setSupportTyping = onCall(
       const db = admin.firestore();
       const caseId = cleanText(request.data?.caseId, 220);
       const typing = request.data?.typing === true;
-      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      const {ref, data: supportCase} =
+          await requireSupportCase(db, caseId, user);
       if (!supportCanReply(user, supportCase)) {
         throw new HttpsError("permission-denied", "Support typing denied");
       }
@@ -17441,7 +17834,8 @@ exports.escalateSupportCase = onCall(
       const caseId = cleanText(request.data?.caseId, 220);
       const reason = cleanText(request.data?.reason, 80);
       const note = cleanText(request.data?.note, 2000);
-      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      const {ref, data: supportCase} =
+          await requireSupportCase(db, caseId, user);
       const role = supportRoleForUser(user, supportCase);
       if (role !== "customer" && role !== "business" &&
           !supportCanAdminSeeAll(user)) {
@@ -17508,7 +17902,8 @@ exports.assignSupportCase = onCall(
           request.data?.assignedBusinessUserId,
           180,
       );
-      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      const {ref, data: supportCase} =
+          await requireSupportCase(db, caseId, user);
       if (!supportCanReadCase(user, supportCase)) {
         throw new HttpsError("permission-denied", "Assignment denied");
       }
@@ -17545,7 +17940,8 @@ exports.requestSupportEvidence = onCall(
       const caseId = cleanText(request.data?.caseId, 220);
       const note = cleanText(request.data?.note, 2000) ||
         "Please add more details or evidence.";
-      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      const {ref, data: supportCase} =
+          await requireSupportCase(db, caseId, user);
       if (!supportCanReply(user, supportCase)) {
         throw new HttpsError("permission-denied", "Evidence request denied");
       }
@@ -17616,7 +18012,8 @@ exports.resolveSupportCase = onCall(
       const caseId = cleanText(request.data?.caseId, 220);
       const outcome = cleanText(request.data?.outcome, 80) || "resolved";
       const note = cleanText(request.data?.note, 2000);
-      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      const {ref, data: supportCase} =
+          await requireSupportCase(db, caseId, user);
       if (!supportCanReply(user, supportCase)) {
         throw new HttpsError("permission-denied", "Resolve denied");
       }
@@ -17672,7 +18069,8 @@ exports.reopenSupportCase = onCall(
       const db = admin.firestore();
       const caseId = cleanText(request.data?.caseId, 220);
       const note = cleanText(request.data?.note, 2000);
-      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      const {ref, data: supportCase} =
+          await requireSupportCase(db, caseId, user);
       if (!supportCanReply(user, supportCase)) {
         throw new HttpsError("permission-denied", "Reopen denied");
       }
@@ -17725,7 +18123,8 @@ exports.addSupportInternalNote = onCall(
       const caseId = cleanText(request.data?.caseId, 220);
       const note = cleanText(request.data?.note, 4000);
       if (!note) throw new HttpsError("invalid-argument", "Note is required");
-      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      const {ref, data: supportCase} =
+          await requireSupportCase(db, caseId, user);
       if (!supportCanReadCase(user, supportCase)) {
         throw new HttpsError("permission-denied", "Internal note denied");
       }
@@ -17803,7 +18202,8 @@ exports.deleteSupportMessageForMe = onCall(
       const db = admin.firestore();
       const caseId = cleanText(request.data?.caseId, 220);
       const messageId = cleanText(request.data?.messageId, 220);
-      const {ref, data: supportCase} = await requireSupportCase(db, caseId);
+      const {ref, data: supportCase} =
+          await requireSupportCase(db, caseId, user);
       if (!supportCanReadCase(user, supportCase)) {
         throw new HttpsError("permission-denied", "Message delete denied");
       }

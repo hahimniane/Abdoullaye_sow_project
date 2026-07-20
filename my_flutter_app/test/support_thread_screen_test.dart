@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
@@ -37,6 +39,7 @@ class _FakeSupportRepository implements SupportRepository {
   String? uploadedCaption;
   int uploadCount = 0;
   int uploadFailuresRemaining = 0;
+  Object? uploadFailure;
   bool resolved = false;
   bool reopened = false;
 
@@ -207,7 +210,7 @@ class _FakeSupportRepository implements SupportRepository {
     uploadedCaption = caption;
     if (uploadFailuresRemaining > 0) {
       uploadFailuresRemaining -= 1;
-      throw StateError('test upload failure');
+      throw uploadFailure ?? StateError('test upload failure');
     }
   }
 
@@ -226,9 +229,23 @@ class _FakeSupportRepository implements SupportRepository {
   }
 }
 
+FirebaseFunctionsException _functionsError({
+  required String code,
+  required String message,
+  Object? details,
+}) {
+  // ignore: invalid_use_of_protected_member
+  return FirebaseFunctionsException(
+    code: code,
+    message: message,
+    details: details,
+  );
+}
+
 SupportCase _supportCase({
   String status = 'waiting_for_business',
   String escalationStatus = 'business_first',
+  DateTime? escalationAvailableAt,
 }) {
   return SupportCase(
     id: 'case-1',
@@ -246,6 +263,7 @@ SupportCase _supportCase({
     status: status,
     priority: 'normal',
     escalationStatus: escalationStatus,
+    escalationAvailableAt: escalationAvailableAt,
     lastMessage: 'We are checking the pickup notes.',
     updatedAt: DateTime(2026, 6, 30),
   );
@@ -312,6 +330,28 @@ XFile _testImage(String name) {
     name: name,
     mimeType: 'image/png',
   );
+}
+
+Future<void> _openImageReviewAndUpload(
+  WidgetTester tester,
+  _FakeSupportRepository repository, {
+  Locale locale = const Locale('en'),
+  String imageName = 'retry.png',
+}) async {
+  await _pumpThread(
+    tester,
+    repository,
+    locale: locale,
+    imagePicker: (_) async => _testImage(imageName),
+  );
+  await tester.tap(find.byIcon(Icons.add));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(locale.languageCode == 'fr' ? 'Photo' : 'Photo'));
+  await tester.pumpAndSettle();
+  await tester.tap(
+    find.text(locale.languageCode == 'fr' ? 'Téléverser' : 'Upload'),
+  );
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -389,6 +429,42 @@ void main() {
       expect(repository.deletedMessageId, 'business-message');
     },
   );
+
+  testWidgets('image attachment bubbles hide generated file names', (
+    tester,
+  ) async {
+    const generatedFileName =
+        'image_picker_23BFEC93-42D2-4B20-BCAC-7C5F525F74A7-7749-00000239F3B96915.png';
+    final repository = _FakeSupportRepository(
+      supportCase: _supportCase(),
+      messages: [
+        _message(
+          id: 'image-message',
+          senderId: 'customer-1',
+          senderName: 'Aissatou',
+          content: generatedFileName,
+          messageType: 'image',
+          metadata: const {'fileName': generatedFileName, 'caption': ''},
+        ),
+        _message(
+          id: 'captioned-image-message',
+          senderId: 'customer-1',
+          senderName: 'Aissatou',
+          content: generatedFileName,
+          messageType: 'image',
+          metadata: const {
+            'fileName': generatedFileName,
+            'caption': 'The pickup proof',
+          },
+        ),
+      ],
+    );
+
+    await _pumpThread(tester, repository);
+
+    expect(find.text(generatedFileName), findsNothing);
+    expect(find.text('The pickup proof'), findsOneWidget);
+  });
 
   testWidgets('support thread attachment sheet shows mobile upload actions', (
     tester,
@@ -501,24 +577,11 @@ void main() {
       messages: const [],
     )..uploadFailuresRemaining = 1;
 
-    await _pumpThread(
-      tester,
-      repository,
-      imagePicker: (_) async => _testImage('retry.png'),
-    );
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Photo'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Upload'));
-    await tester.pumpAndSettle();
+    await _openImageReviewAndUpload(tester, repository);
 
     expect(repository.uploadCount, 1);
     expect(find.text('Review attachment'), findsOneWidget);
-    expect(
-      find.text('Upload failed. Check your connection and try again.'),
-      findsOneWidget,
-    );
+    expect(find.text('Upload failed. Try again.'), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
 
     await tester.tap(find.text('Retry'));
@@ -526,6 +589,71 @@ void main() {
 
     expect(repository.uploadCount, 2);
     expect(find.text('Review attachment'), findsNothing);
+  });
+
+  testWidgets('app check upload failure names debug token registration', (
+    tester,
+  ) async {
+    final repository =
+        _FakeSupportRepository(supportCase: _supportCase(), messages: const [])
+          ..uploadFailuresRemaining = 1
+          ..uploadFailure = FirebaseException(
+            plugin: 'firebase_storage',
+            code: 'unauthorized',
+            message: 'Firebase App Check token is invalid.',
+          );
+
+    await _openImageReviewAndUpload(tester, repository);
+
+    expect(repository.uploadCount, 1);
+    expect(find.text('Review attachment'), findsOneWidget);
+    expect(
+      find.text(
+        'Upload blocked by Firebase App Check. Register this debug device token, then retry.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Retry'), findsOneWidget);
+  });
+
+  testWidgets('network upload failure keeps connection guidance', (
+    tester,
+  ) async {
+    final repository =
+        _FakeSupportRepository(supportCase: _supportCase(), messages: const [])
+          ..uploadFailuresRemaining = 1
+          ..uploadFailure = _functionsError(
+            code: 'unavailable',
+            message: 'Service temporarily unavailable.',
+          );
+
+    await _openImageReviewAndUpload(tester, repository);
+
+    expect(
+      find.text('Upload failed. Check your connection and try again.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('permission upload failure stops blaming connection', (
+    tester,
+  ) async {
+    final repository =
+        _FakeSupportRepository(supportCase: _supportCase(), messages: const [])
+          ..uploadFailuresRemaining = 1
+          ..uploadFailure = _functionsError(
+            code: 'permission-denied',
+            message: 'Attachment access denied.',
+          );
+
+    await _openImageReviewAndUpload(tester, repository);
+
+    expect(
+      find.text(
+        'Upload failed because your account cannot add files to this support case.',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('attachment review fits a narrow French phone layout', (
@@ -591,6 +719,76 @@ void main() {
 
     expect(find.text('Business payout review may be needed.'), findsOneWidget);
     expect(find.text('Platform Admin'), findsOneWidget);
+  });
+
+  testWidgets('customer thread shows when a case is already escalated', (
+    tester,
+  ) async {
+    final repository = _FakeSupportRepository(
+      supportCase: _supportCase(
+        status: 'escalated_to_platform',
+        escalationStatus: 'escalated',
+      ),
+      messages: [
+        _message(
+          id: 'business-message',
+          senderId: 'staff-1',
+          senderName: 'Business Staff',
+          senderRole: 'business',
+          content: 'We are checking the pickup notes.',
+        ),
+      ],
+    );
+
+    await _pumpThread(tester, repository);
+
+    expect(find.text('Already escalated to Laawol admin'), findsOneWidget);
+    expect(
+      find.text('This case is already in the Laawol admin queue.'),
+      findsOneWidget,
+    );
+    expect(find.text('Ask Laawol admin to help'), findsNothing);
+  });
+
+  testWidgets('customer can open urgent escalation before normal unlock', (
+    tester,
+  ) async {
+    final repository = _FakeSupportRepository(
+      supportCase: _supportCase(
+        escalationAvailableAt: DateTime.now().add(const Duration(days: 3)),
+      ),
+      messages: [
+        _message(
+          id: 'customer-message',
+          senderId: 'customer-1',
+          senderName: 'Aissatou',
+          content: 'The pickup is today.',
+        ),
+      ],
+    );
+
+    await _pumpThread(tester, repository);
+
+    expect(
+      find.text(
+        'Normal escalation unlocks after the business response window. Urgent reasons can be sent now.',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Ask Laawol admin to help'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Escalation reason'), findsOneWidget);
+    expect(find.text('Business unreachable'), findsOneWidget);
+    expect(find.text('Business did not resolve it'), findsNothing);
+
+    await tester.enterText(find.byType(TextField).last, 'The pickup is today.');
+    await tester.tap(find.text('Ask Laawol admin to help').last);
+    await tester.pumpAndSettle();
+
+    expect(repository.escalationReason, 'business_unreachable');
+    expect(repository.escalationNote, 'The pickup is today.');
   });
 
   testWidgets('business support thread can request info resolve and escalate', (

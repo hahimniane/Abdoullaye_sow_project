@@ -604,6 +604,16 @@ class AuthProvider extends ChangeNotifier {
     required String parkingInstructions,
     double? parkingLatitude,
     double? parkingLongitude,
+    bool? freightPickupAvailable,
+    String? freightPickupModel,
+    double? freightPickupBaseFee,
+    double? freightPickupPerKm,
+    double? freightPickupMinFee,
+    double? freightPickupMaxKm,
+    String? freightPickupOriginAddress,
+    double? freightPickupOriginLat,
+    double? freightPickupOriginLng,
+    Map<String, double>? freightPickupBoroughPrices,
   }) async {
     if (_user == null) {
       throw 'Please sign in first.';
@@ -646,6 +656,16 @@ class AuthProvider extends ChangeNotifier {
       'parkingInstructions': parkingInstructions.trim(),
       'parkingLatitude': parkingLatitude,
       'parkingLongitude': parkingLongitude,
+      'freightPickupAvailable': ?freightPickupAvailable,
+      'freightPickupModel': ?freightPickupModel,
+      'freightPickupBaseFee': ?freightPickupBaseFee,
+      'freightPickupPerKm': ?freightPickupPerKm,
+      'freightPickupMinFee': ?freightPickupMinFee,
+      'freightPickupMaxKm': ?freightPickupMaxKm,
+      'freightPickupOriginAddress': ?freightPickupOriginAddress,
+      'freightPickupOriginLat': ?freightPickupOriginLat,
+      'freightPickupOriginLng': ?freightPickupOriginLng,
+      'freightPickupBoroughPrices': ?freightPickupBoroughPrices,
     });
     await refreshUserProfile();
   }

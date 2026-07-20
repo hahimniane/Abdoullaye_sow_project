@@ -1377,7 +1377,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get businessProfileNotFound => 'Business profile not found.';
 
   @override
-  String get destinationsAndShippingFees => 'Destinations and shipping fees';
+  String get destinationsAndShippingFees => 'Destinations and services';
 
   @override
   String get team => 'Team';
@@ -1952,18 +1952,105 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get selectCountriesAddFees =>
-      'Select the countries this business ships to and add the shipping fee for each destination.';
+      'Choose countries and select what this business offers for each destination.';
 
   @override
   String activeDestinationsHaveFees(Object priced, Object total) {
-    return '$priced of $total active destinations have shipping fees.';
+    return '$priced of $total active destinations have services configured.';
   }
 
   @override
-  String get selectDestinationCountries => 'Select destination countries';
+  String get selectDestinationCountries => 'Select destination services';
 
   @override
-  String get manageDestinationsFees => 'Manage destinations and fees';
+  String get manageDestinationsFees => 'Manage destinations and services';
+
+  @override
+  String get servicesForDestination => 'Services for this destination';
+
+  @override
+  String get servicesForDestinationHelp =>
+      'Turn on only what this business offers for this country.';
+
+  @override
+  String get destinationServiceCoverageTitle => 'Destination services';
+
+  @override
+  String get destinationServiceCoverageSubtitle =>
+      'Set which services are available for this country and add rates where needed.';
+
+  @override
+  String get offerBarrelShipping => 'Barrel shipping';
+
+  @override
+  String get barrelShippingDestinationHelper =>
+      'Customers can send barrels to this country.';
+
+  @override
+  String get offerFreightAir => 'Freight by air';
+
+  @override
+  String get freightAirDestinationHelper =>
+      'Customers can ship parcels by air to this country.';
+
+  @override
+  String get offerFreightSea => 'Freight by sea';
+
+  @override
+  String get freightSeaDestinationHelper =>
+      'Customers can ship parcels by sea to this country.';
+
+  @override
+  String get offerCarTransportDestination => 'Ship cars to this country';
+
+  @override
+  String get carTransportDestinationHelper =>
+      'Customers can request a car transport quote for this country.';
+
+  @override
+  String get freightAirRatePerKg => 'Air freight rate per kg';
+
+  @override
+  String get freightSeaRatePerKg => 'Sea freight rate per kg';
+
+  @override
+  String get chooseAtLeastOneDestinationService =>
+      'Choose at least one service for this destination.';
+
+  @override
+  String destinationServiceRateRequired(Object service) {
+    return 'Add a rate for $service.';
+  }
+
+  @override
+  String destinationServiceRateGreaterThanZero(Object service) {
+    return '$service needs a rate greater than 0.';
+  }
+
+  @override
+  String get destinationBarrelService => 'Barrel';
+
+  @override
+  String get destinationFreightAir => 'Air freight';
+
+  @override
+  String get destinationFreightSea => 'Sea freight';
+
+  @override
+  String get destinationCarTransport => 'Car transport';
+
+  @override
+  String destinationServicePriceSummary(Object service, Object price) {
+    return '$service: $price';
+  }
+
+  @override
+  String destinationServiceRateSummary(Object service, Object rate) {
+    return '$service: $rate/kg';
+  }
+
+  @override
+  String get noDestinationServicesConfigured => 'No services configured';
 
   @override
   String get businessNameRequired => 'Business name is required';
@@ -2327,6 +2414,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'How customers and staff identify this business.';
 
   @override
+  String get businessProfileDetailsSectionError =>
+      'Check the highlighted business details.';
+
+  @override
   String get businessDefaultAddressSubtitle =>
       'Used as the default address for vehicle listings.';
 
@@ -2366,12 +2457,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get parkingAddress => 'Parking address';
 
   @override
-  String get parkingLatitude => 'Latitude';
-
-  @override
-  String get parkingLongitude => 'Longitude';
-
-  @override
   String get totalParkingSpaces => 'Total spaces';
 
   @override
@@ -2404,11 +2489,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get enterValidParkingCapacity =>
-      'Add total spaces, a positive daily rate, and valid blocked spaces before saving parking.';
-
-  @override
-  String get enterValidParkingCoordinates =>
-      'Enter valid parking latitude and longitude, or leave both blank.';
+      'Add the parking address, location, spaces, and daily rate before saving.';
 
   @override
   String get customerParkingTitle => 'Find parking';
@@ -3348,6 +3429,56 @@ class AppLocalizationsEn extends AppLocalizations {
   String get estimatePaid => 'Estimate paid';
 
   @override
+  String get freightOrderDetails => 'Freight order';
+
+  @override
+  String get freightNextStep => 'Next step';
+
+  @override
+  String freightNextDropOffAtProvider(Object businessName) {
+    return 'Drop off your parcel at $businessName. The business will confirm the weight after drop-off.';
+  }
+
+  @override
+  String get freightNextDropOffAtBusiness =>
+      'Drop off your parcel at the business location. The business will confirm the weight after drop-off.';
+
+  @override
+  String get freightNextWeightReview =>
+      'The business is confirming the final weight. We will show any balance or refund here.';
+
+  @override
+  String get freightNextInTransit =>
+      'Your parcel is on the way. Keep this tracking code for updates.';
+
+  @override
+  String get freightNextReadyForPickup => 'Your parcel is ready for pickup.';
+
+  @override
+  String get freightNextCompleted => 'This freight order is complete.';
+
+  @override
+  String paidEstimateAmount(Object amount) {
+    return 'Paid estimate: $amount';
+  }
+
+  @override
+  String estimatedWeightValue(Object weight) {
+    return 'Estimated weight: $weight';
+  }
+
+  @override
+  String get freightNoActionUntilWeightConfirmed =>
+      'After drop-off, no action is needed until the business confirms the weight.';
+
+  @override
+  String get viewAllShipments => 'View all shipments';
+
+  @override
+  String get shipmentStillSyncing =>
+      'This shipment is still syncing. You can view all shipments or try again shortly.';
+
+  @override
   String get awaitingConfirmedWeight => 'Awaiting confirmed weight';
 
   @override
@@ -3643,7 +3774,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activeDestinationsRequireFee =>
-      'Active destinations require a barrel shipping fee.';
+      'Active destinations require at least one configured service.';
 
   @override
   String get seedCountriesEmptyInstruction =>
@@ -4077,6 +4208,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'Admin escalation becomes available after the business response window unless the issue is urgent.';
 
   @override
+  String get supportEscalationUrgentOnly =>
+      'Normal escalation unlocks after the business response window. Urgent reasons can be sent now.';
+
+  @override
+  String get supportAlreadyEscalatedTitle =>
+      'Already escalated to Laawol admin';
+
+  @override
+  String get supportAlreadyEscalatedSubtitle =>
+      'This case is already in the Laawol admin queue.';
+
+  @override
   String get supportReasonUnresolved => 'Business did not resolve it';
 
   @override
@@ -4140,8 +4283,31 @@ class AppLocalizationsEn extends AppLocalizations {
       'Preview unavailable. You can still upload this file.';
 
   @override
-  String get supportUploadFailed =>
+  String get supportUploadFailed => 'Upload failed. Try again.';
+
+  @override
+  String get supportUploadFailedNetwork =>
       'Upload failed. Check your connection and try again.';
+
+  @override
+  String get supportUploadFailedAuth =>
+      'Upload failed because your sign-in expired. Sign in again, then retry.';
+
+  @override
+  String get supportUploadFailedPermission =>
+      'Upload failed because your account cannot add files to this support case.';
+
+  @override
+  String get supportUploadFailedInvalidFile =>
+      'Upload failed because this file type or size is not allowed.';
+
+  @override
+  String get supportUploadFailedAppVerification =>
+      'Upload blocked by app verification. Update the app or contact support.';
+
+  @override
+  String get supportUploadFailedDebugAppCheck =>
+      'Upload blocked by Firebase App Check. Register this debug device token, then retry.';
 
   @override
   String supportImagePreviewLabel(Object name) {
@@ -4736,7 +4902,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get phoneVerificationCountryCodeHelp =>
-      'Include the country code, for example +1 718 555 0100.';
+      'Choose the country code, then enter the mobile number.';
 
   @override
   String get phoneVerificationCodeSentTitle => 'Code sent';
@@ -4815,6 +4981,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'For security, sign out, sign back in, and verify your phone again.';
 
   @override
+  String get phoneVerificationAppCheck =>
+      'App security check failed. Register this debug device in Firebase App Check, then reopen the app.';
+
+  @override
   String get phoneVerificationGenericError =>
       'We couldn’t verify your phone. Please try again.';
 
@@ -4867,6 +5037,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get phoneVerificationNotVerified => 'Phone not verified';
 
   @override
+  String get phoneCountryCode => 'Country code';
+
+  @override
+  String get selectCountryCode => 'Select country code';
+
+  @override
+  String get phoneCountrySearchHint => 'Search country or code';
+
+  @override
+  String get noCountryCodesFound => 'No country codes found';
+
+  @override
   String get sharedBarrelActionFailed =>
       'We couldn’t complete that shared-barrel action. Please try again.';
 
@@ -4883,4 +5065,100 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get marketplaceDestinationChangeSummary => 'Paid destination change';
+
+  @override
+  String get freightPickupSectionTitle => 'Freight pickup';
+
+  @override
+  String get freightPickupSectionSubtitle =>
+      'Offer to collect parcels from your customer\'s address, and choose how the fee is calculated.';
+
+  @override
+  String get freightPickupOfferToggle => 'Offer freight pickup';
+
+  @override
+  String get freightPickupModelDistance => 'By distance';
+
+  @override
+  String get freightPickupModelBorough => 'By borough';
+
+  @override
+  String get freightPickupDistanceHint =>
+      'Fee = base fee + per-km rate × driving distance from your address. Leave rates at 0 to offer free pickup.';
+
+  @override
+  String get freightPickupOriginAddress => 'Pickup origin address';
+
+  @override
+  String get freightPickupOriginAddressHelper =>
+      'Where your drivers start from. Defaults to your business address.';
+
+  @override
+  String get freightPickupBaseFee => 'Base fee';
+
+  @override
+  String get freightPickupPerKm => 'Per km';
+
+  @override
+  String get freightPickupMinFee => 'Minimum fee';
+
+  @override
+  String get freightPickupMaxKm => 'Max distance (km)';
+
+  @override
+  String get freightPickupBoroughHint =>
+      'Set a flat pickup fee for each New York City borough you serve. Leave blank for boroughs you don\'t cover.';
+
+  @override
+  String get freightPickupBoroughPriceRequired =>
+      'Set a pickup fee for at least one borough, or turn off freight pickup.';
+
+  @override
+  String get freightPickupCustomerToggle => 'Pick up from my address';
+
+  @override
+  String get freightPickupAddressLabel => 'Pickup address';
+
+  @override
+  String get freightPickupBoroughLabel => 'Borough';
+
+  @override
+  String get freightPickupDateTimeLabel => 'Pickup date & time';
+
+  @override
+  String get freightPickupChooseDateTime => 'Choose date & time';
+
+  @override
+  String get freightPickupFeeLabel => 'Pickup fee';
+
+  @override
+  String get freightPickupCalculating => 'Calculating pickup fee…';
+
+  @override
+  String get freightPickupEnterDetailsForFee =>
+      'Enter your pickup details to see the fee.';
+
+  @override
+  String get freightPickupSelectDateTime =>
+      'Please choose a pickup date and time.';
+
+  @override
+  String get freightPickupUnavailableCustomer =>
+      'This business doesn\'t offer pickup right now.';
+
+  @override
+  String get freightPickupOutOfRangeCustomer =>
+      'Your address is outside this business\'s pickup area.';
+
+  @override
+  String get freightPickupQuoteFailed =>
+      'We couldn\'t calculate the pickup fee. Check the address and try again.';
+
+  @override
+  String freightPickupDistanceAway(String distanceKm) {
+    return '$distanceKm km away';
+  }
+
+  @override
+  String get freightPickupFreeLabel => 'Free pickup';
 }

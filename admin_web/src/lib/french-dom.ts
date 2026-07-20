@@ -498,6 +498,26 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Max hold days": "Jours de blocage max.",
   "Enter valid paid hold pricing.":
     "Saisissez un tarif de blocage payant valide.",
+  "Freight pickup": "Enlèvement du fret",
+  "Offer to collect parcels from your customer's address, and choose how the fee is calculated.":
+    "Proposez de récupérer les colis à l’adresse de votre client et choisissez le mode de calcul des frais.",
+  "Offer freight pickup": "Proposer l’enlèvement du fret",
+  "Pickup pricing model": "Modèle de tarification de l’enlèvement",
+  "By distance": "Par distance",
+  "By borough": "Par arrondissement",
+  "Fee = base fee + per-km rate × driving distance from your address. Leave rates at 0 to offer free pickup.":
+    "Frais = frais de base + tarif au km × distance de conduite depuis votre adresse. Laissez les tarifs à 0 pour un enlèvement gratuit.",
+  "Pickup origin address": "Adresse de départ de l’enlèvement",
+  "Defaults to your business address": "Par défaut, l’adresse de votre entreprise",
+  "Base fee (USD)": "Frais de base (USD)",
+  "Per km (USD)": "Par km (USD)",
+  "Minimum fee (USD)": "Frais minimum (USD)",
+  "Max distance (km)": "Distance max (km)",
+  "0 = no limit": "0 = aucune limite",
+  "Set a flat pickup fee for each New York City borough you serve. Leave blank for boroughs you don't cover.":
+    "Définissez un tarif d’enlèvement fixe pour chaque arrondissement de New York que vous desservez. Laissez vide ceux que vous ne couvrez pas.",
+  "Set a pickup fee for at least one borough, or turn off freight pickup.":
+    "Définissez un tarif d’enlèvement pour au moins un arrondissement, ou désactivez l’enlèvement du fret.",
   "Business approved": "Entreprise approuvée",
   "Business changes requested": "Modifications demandées à l’entreprise",
   "Business verification saved": "Vérification de l’entreprise enregistrée",

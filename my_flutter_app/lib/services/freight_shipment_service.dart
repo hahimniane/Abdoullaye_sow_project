@@ -30,6 +30,10 @@ class FreightShipmentService {
     required String mode,
     required double weightKg,
     bool useWalletBalance = false,
+    bool pickupRequested = false,
+    String? pickupAddress,
+    String? pickupBorough,
+    String? pickupDateTime,
     required MarketplaceDisclosureAcceptance marketplaceAcceptance,
   }) async {
     final response = await _functions
@@ -42,7 +46,10 @@ class FreightShipmentService {
           'businessId': businessId,
           'mode': mode,
           'weightKg': weightKg,
-          'pickupRequested': false,
+          'pickupRequested': pickupRequested,
+          'pickupAddress': ?pickupAddress,
+          'pickupBorough': ?pickupBorough,
+          'pickupDateTime': ?pickupDateTime,
           'useWalletBalance': useWalletBalance,
           'marketplaceDisclosure': marketplaceAcceptance.toJson(),
         });
@@ -89,6 +96,34 @@ class FreightShipmentService {
     return {'id': snapshot.id, ...?snapshot.data()};
   }
 
+  /// Returns a live pickup fee (and, for the distance model, the measured
+  /// distance in km) for the given business + pickup location. Throws a
+  /// [FirebaseFunctionsException] whose `code`/`details.reason` explains why
+  /// pickup is unavailable so the UI can show a precise message.
+  Future<FreightPickupQuote> quoteFreightPickup({
+    required String businessId,
+    String? pickupAddress,
+    String? pickupBorough,
+    double? pickupLatitude,
+    double? pickupLongitude,
+  }) async {
+    final response = await _functions
+        .httpsCallable('quoteFreightPickup')
+        .call<Map<String, dynamic>>({
+          'businessId': businessId,
+          'pickupAddress': ?pickupAddress,
+          'pickupBorough': ?pickupBorough,
+          'pickupLatitude': ?pickupLatitude,
+          'pickupLongitude': ?pickupLongitude,
+        });
+    final data = Map<String, dynamic>.from(response.data);
+    return FreightPickupQuote(
+      fee: (data['fee'] as num?)?.toDouble() ?? 0,
+      model: data['model'] as String? ?? 'distance',
+      distanceKm: (data['distanceKm'] as num?)?.toDouble(),
+    );
+  }
+
   /// Lets the customer explicitly pay a positive verified-weight adjustment.
   /// Dismissing the sheet leaves the shipment and attempt recoverable.
   Future<Map<String, dynamic>> payFreightBalance({
@@ -132,4 +167,18 @@ class FreightShipmentService {
         .get();
     return {'id': snapshot.id, ...?snapshot.data()};
   }
+}
+
+/// A live freight pickup fee quote. [distanceKm] is only set for the distance
+/// pricing model.
+class FreightPickupQuote {
+  const FreightPickupQuote({
+    required this.fee,
+    required this.model,
+    this.distanceKm,
+  });
+
+  final double fee;
+  final String model;
+  final double? distanceKm;
 }

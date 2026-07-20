@@ -548,7 +548,7 @@
   "requestFeaturing": "Demander la mise en avant",
   "noBusinessProfileAssigned": "Aucun profil d’entreprise n’est attribué.",
   "businessProfileNotFound": "Profil de l’entreprise introuvable.",
-  "destinationsAndShippingFees": "Destinations et frais d’expédition",
+  "destinationsAndShippingFees": "Destinations et services",
   "team": "Équipe",
   "addStaffMemberButton": "Ajouter un membre du personnel",
   "noTeamMembersYet": "Aucun membre du personnel pour le moment.",
@@ -803,16 +803,62 @@
   "parkingStartDate": "Date de début du stationnement",
   "parkingEndDate": "Date de fin du stationnement",
   "costPerDay": "Coût par jour ($)",
-  "selectCountriesAddFees": "Sélectionnez les pays desservis par cette entreprise et ajoutez les frais d’expédition pour chaque destination.",
-  "activeDestinationsHaveFees": "{priced} destination(s) active(s) sur {total} ont des frais d’expédition.",
+  "selectCountriesAddFees": "Choisissez les pays et sélectionnez ce que cette entreprise propose pour chaque destination.",
+  "activeDestinationsHaveFees": "{priced} destination(s) active(s) sur {total} ont des services configurés.",
   "@activeDestinationsHaveFees": {
     "placeholders": {
       "priced": {},
       "total": {}
     }
   },
-  "selectDestinationCountries": "Sélectionner les pays de destination",
-  "manageDestinationsFees": "Gérer les destinations et les frais",
+  "selectDestinationCountries": "Sélectionner les services de destination",
+  "manageDestinationsFees": "Gérer les destinations et services",
+  "servicesForDestination": "Services pour cette destination",
+  "servicesForDestinationHelp": "Activez uniquement ce que cette entreprise propose pour ce pays.",
+  "destinationServiceCoverageTitle": "Services de destination",
+  "destinationServiceCoverageSubtitle": "Définissez les services disponibles pour ce pays et ajoutez les tarifs nécessaires.",
+  "offerBarrelShipping": "Expédition de barils",
+  "barrelShippingDestinationHelper": "Les clients peuvent envoyer des barils vers ce pays.",
+  "offerFreightAir": "Fret aérien",
+  "freightAirDestinationHelper": "Les clients peuvent envoyer des colis par avion vers ce pays.",
+  "offerFreightSea": "Fret maritime",
+  "freightSeaDestinationHelper": "Les clients peuvent envoyer des colis par mer vers ce pays.",
+  "offerCarTransportDestination": "Expédier des voitures vers ce pays",
+  "carTransportDestinationHelper": "Les clients peuvent demander un devis de transport de voiture pour ce pays.",
+  "freightAirRatePerKg": "Tarif du fret aérien par kg",
+  "freightSeaRatePerKg": "Tarif du fret maritime par kg",
+  "chooseAtLeastOneDestinationService": "Choisissez au moins un service pour cette destination.",
+  "destinationServiceRateRequired": "Ajoutez un tarif pour {service}.",
+  "@destinationServiceRateRequired": {
+    "placeholders": {
+      "service": {}
+    }
+  },
+  "destinationServiceRateGreaterThanZero": "{service} nécessite un tarif supérieur à 0.",
+  "@destinationServiceRateGreaterThanZero": {
+    "placeholders": {
+      "service": {}
+    }
+  },
+  "destinationBarrelService": "Baril",
+  "destinationFreightAir": "Fret aérien",
+  "destinationFreightSea": "Fret maritime",
+  "destinationCarTransport": "Transport voiture",
+  "destinationServicePriceSummary": "{service} : {price}",
+  "@destinationServicePriceSummary": {
+    "placeholders": {
+      "service": {},
+      "price": {}
+    }
+  },
+  "destinationServiceRateSummary": "{service} : {rate}/kg",
+  "@destinationServiceRateSummary": {
+    "placeholders": {
+      "service": {},
+      "rate": {}
+    }
+  },
+  "noDestinationServicesConfigured": "Aucun service configuré",
   "businessNameRequired": "Le nom de l’entreprise est requis",
   "businessPhoneRequired": "Le téléphone de l’entreprise est requis",
   "validBusinessPhoneRequired": "Veuillez entrer un téléphone d’entreprise valide",
@@ -983,6 +1029,7 @@
   "passwordRequired": "Le mot de passe est requis",
   "services": "Services",
   "businessIdentitySubtitle": "Comment les clients et l’équipe identifient cette entreprise.",
+  "businessProfileDetailsSectionError": "Vérifiez les informations d’entreprise indiquées.",
   "businessDefaultAddressSubtitle": "Utilisée comme adresse par défaut pour les annonces de véhicules.",
   "paidHoldPricing": "Tarif de retenue payante",
   "paidHoldPricingSubtitle": "Définissez la règle d’acompte par défaut pour retenir les voitures.",
@@ -995,8 +1042,6 @@
   "parkingCapacityTitle": "Capacité de stationnement",
   "parkingCapacitySubtitle": "Définissez l’adresse, les places et les prix que les clients peuvent réserver.",
   "parkingAddress": "Adresse du stationnement",
-  "parkingLatitude": "Latitude",
-  "parkingLongitude": "Longitude",
   "totalParkingSpaces": "Places totales",
   "blockedParkingSpaces": "Places bloquées",
   "dailyParkingRate": "Tarif journalier",
@@ -1007,8 +1052,7 @@
   "pickupAvailableSubtitle": "Les clients peuvent demander la collecte du véhicule avant le stationnement.",
   "pickupFee": "Frais de collecte",
   "parkingInstructions": "Instructions de stationnement",
-  "enterValidParkingCapacity": "Ajoutez les places totales, un tarif journalier positif et des places bloquées valides avant d’enregistrer le stationnement.",
-  "enterValidParkingCoordinates": "Saisissez une latitude et une longitude valides pour le stationnement, ou laissez les deux champs vides.",
+  "enterValidParkingCapacity": "Ajoutez l’adresse, le lieu, les places et le tarif journalier avant d’enregistrer.",
   "customerParkingTitle": "Trouver un stationnement",
   "customerParkingSubtitle": "Choisissez où et quand vous voulez garer la voiture. Nous afficherons les entreprises avec des places libres.",
   "enterCarDetailsToReserveParking": "Entrez les détails de la voiture pour réserver un stationnement",
@@ -1398,6 +1442,22 @@
   "freightEstimateExplanation": "Vous payez une estimation basée sur le poids saisi. L’entreprise confirmera le poids après le dépôt.",
   "payEstimate": "Payer l’estimation",
   "estimatePaid": "Estimation payée",
+  "freightOrderDetails": "Commande de fret",
+  "freightNextStep": "Prochaine étape",
+  "freightNextDropOffAtProvider": "Déposez votre colis chez {businessName}. L’entreprise confirmera le poids après le dépôt.",
+  "@freightNextDropOffAtProvider": {"placeholders": {"businessName": {}}},
+  "freightNextDropOffAtBusiness": "Déposez votre colis à l’adresse de l’entreprise. L’entreprise confirmera le poids après le dépôt.",
+  "freightNextWeightReview": "L’entreprise confirme le poids final. Tout solde ou remboursement apparaîtra ici.",
+  "freightNextInTransit": "Votre colis est en route. Gardez ce numéro de suivi pour les mises à jour.",
+  "freightNextReadyForPickup": "Votre colis est prêt à être récupéré.",
+  "freightNextCompleted": "Cette commande de fret est terminée.",
+  "paidEstimateAmount": "Estimation payée : {amount}",
+  "@paidEstimateAmount": {"placeholders": {"amount": {}}},
+  "estimatedWeightValue": "Poids estimé : {weight}",
+  "@estimatedWeightValue": {"placeholders": {"weight": {}}},
+  "freightNoActionUntilWeightConfirmed": "Après le dépôt, aucune action n’est nécessaire avant la confirmation du poids par l’entreprise.",
+  "viewAllShipments": "Voir toutes les expéditions",
+  "shipmentStillSyncing": "Cette expédition est encore en synchronisation. Vous pouvez voir toutes les expéditions ou réessayer bientôt.",
   "awaitingConfirmedWeight": "En attente du poids confirmé",
   "verifiedWeight": "Poids confirmé",
   "finalTotal": "Total final",
@@ -1570,7 +1630,7 @@
       }
     }
   },
-  "activeDestinationsRequireFee": "Les destinations actives nécessitent des frais d’expédition de baril.",
+  "activeDestinationsRequireFee": "Les destinations actives nécessitent au moins un service configuré.",
   "seedCountriesEmptyInstruction": "Ajoutez le catalogue complet des pays, puis recherchez et activez les destinations que vous servez.",
   "barrelPriceSummary": "Baril : {price}",
   "@barrelPriceSummary": {
@@ -1760,6 +1820,9 @@
   "supportEscalationReason": "Raison de l’escalade",
   "supportEscalationNote": "Ajoutez des détails pour l’admin",
   "supportEscalationUnavailable": "L’escalade vers un admin devient disponible après le délai de réponse de l’entreprise, sauf urgence.",
+  "supportEscalationUrgentOnly": "L’escalade normale se déverrouille après le délai de réponse de l’entreprise. Les motifs urgents peuvent être envoyés maintenant.",
+  "supportAlreadyEscalatedTitle": "Déjà escaladé à un admin Laawol",
+  "supportAlreadyEscalatedSubtitle": "Ce dossier est déjà dans la file des admins Laawol.",
   "supportReasonUnresolved": "L’entreprise n’a pas résolu le problème",
   "supportReasonFraud": "Fraude ou activité suspecte",
   "supportReasonSafety": "Problème de sécurité",
@@ -1780,7 +1843,13 @@
   "supportReplaceAttachment": "Remplacer",
   "supportAttachmentCaption": "Légende (facultative)",
   "supportPreviewUnavailable": "Aperçu indisponible. Vous pouvez quand même téléverser ce fichier.",
-  "supportUploadFailed": "Échec du téléversement. Vérifiez votre connexion et réessayez.",
+  "supportUploadFailed": "Échec du téléversement. Réessayez.",
+  "supportUploadFailedNetwork": "Échec du téléversement. Vérifiez votre connexion et réessayez.",
+  "supportUploadFailedAuth": "Échec du téléversement, car votre session a expiré. Reconnectez-vous, puis réessayez.",
+  "supportUploadFailedPermission": "Échec du téléversement, car votre compte ne peut pas ajouter de fichiers à ce dossier de support.",
+  "supportUploadFailedInvalidFile": "Échec du téléversement, car ce type ou cette taille de fichier n’est pas autorisé.",
+  "supportUploadFailedAppVerification": "Téléversement bloqué par la vérification de l’application. Mettez l’application à jour ou contactez le support.",
+  "supportUploadFailedDebugAppCheck": "Téléversement bloqué par Firebase App Check. Enregistrez le jeton de débogage de cet appareil, puis réessayez.",
   "supportImagePreviewLabel": "Aperçu de l’image : {name}",
   "@supportImagePreviewLabel": {
     "placeholders": {
@@ -2001,7 +2070,7 @@
   ,"notNow": "Pas maintenant"
   ,"phoneVerificationTitle": "Vérification du téléphone"
   ,"phoneVerificationExplanation": "Confirmez ou modifiez le numéro de portable de votre compte. Nous vous enverrons un code de vérification à usage unique par SMS."
-  ,"phoneVerificationCountryCodeHelp": "Incluez l’indicatif du pays, par exemple +1 718 555 0100."
+  ,"phoneVerificationCountryCodeHelp": "Choisissez l’indicatif du pays, puis saisissez le numéro mobile."
   ,"phoneVerificationCodeSentTitle": "Code envoyé"
   ,"phoneVerificationCodeSent": "Saisissez le code à 6 chiffres envoyé au {phone}."
   ,"@phoneVerificationCodeSent": {"placeholders": {"phone": {}}}
@@ -2025,6 +2094,7 @@
   ,"phoneVerificationRequestTimedOut": "Nous n’avons reçu aucune réponse. Vérifiez votre connexion et réessayez."
   ,"phoneVerificationPhoneInUse": "Ce numéro de téléphone est déjà associé à un autre compte."
   ,"phoneVerificationRecentLogin": "Pour des raisons de sécurité, déconnectez-vous, reconnectez-vous, puis vérifiez à nouveau votre téléphone."
+  ,"phoneVerificationAppCheck": "Le contrôle de sécurité de l’app a échoué. Enregistrez cet appareil de débogage dans Firebase App Check, puis rouvrez l’app."
   ,"phoneVerificationGenericError": "Nous n’avons pas pu vérifier votre téléphone. Réessayez."
   ,"phoneVerificationSyncPending": "Votre code a été accepté, mais nous n’avons pas pu terminer la mise à jour de votre profil. Terminez à nouveau la vérification ; aucun autre SMS n’est nécessaire."
   ,"phoneVerificationFinish": "Terminer la vérification"
@@ -2040,9 +2110,42 @@
   ,"phoneVerificationReturnToSharedBarrels": "Retourner aux barils partagés"
   ,"phoneVerificationVerified": "Téléphone vérifié"
   ,"phoneVerificationNotVerified": "Téléphone non vérifié"
+  ,"phoneCountryCode": "Indicatif du pays"
+  ,"selectCountryCode": "Sélectionner l’indicatif du pays"
+  ,"phoneCountrySearchHint": "Rechercher un pays ou un indicatif"
+  ,"noCountryCodesFound": "Aucun indicatif trouvé"
   ,"sharedBarrelActionFailed": "Nous n’avons pas pu terminer cette action de baril partagé. Réessayez."
   ,"sharedBarrelsLoadFailed": "Vérifiez votre connexion et réessayez. Vos informations sont en sécurité."
   ,"sharedBarrelFormLoadFailed": "Nous n’avons pas pu ouvrir le formulaire de baril partagé. Vérifiez votre connexion et réessayez."
   ,"marketplaceBalancePaymentSummary": "Paiement du solde"
   ,"marketplaceDestinationChangeSummary": "Modification payante de la destination"
+  ,"freightPickupSectionTitle": "Enlèvement du fret"
+  ,"freightPickupSectionSubtitle": "Proposez de récupérer les colis à l'adresse de votre client et choisissez le mode de calcul des frais."
+  ,"freightPickupOfferToggle": "Proposer l'enlèvement du fret"
+  ,"freightPickupModelDistance": "Par distance"
+  ,"freightPickupModelBorough": "Par arrondissement"
+  ,"freightPickupDistanceHint": "Frais = frais de base + tarif au km × distance de conduite depuis votre adresse. Laissez les tarifs à 0 pour un enlèvement gratuit."
+  ,"freightPickupOriginAddress": "Adresse de départ de l'enlèvement"
+  ,"freightPickupOriginAddressHelper": "Point de départ de vos chauffeurs. Par défaut, l'adresse de votre entreprise."
+  ,"freightPickupBaseFee": "Frais de base"
+  ,"freightPickupPerKm": "Par km"
+  ,"freightPickupMinFee": "Frais minimum"
+  ,"freightPickupMaxKm": "Distance max (km)"
+  ,"freightPickupBoroughHint": "Définissez un tarif d'enlèvement fixe pour chaque arrondissement de New York que vous desservez. Laissez vide ceux que vous ne couvrez pas."
+  ,"freightPickupBoroughPriceRequired": "Définissez un tarif d'enlèvement pour au moins un arrondissement, ou désactivez l'enlèvement du fret."
+  ,"freightPickupCustomerToggle": "Enlèvement à mon adresse"
+  ,"freightPickupAddressLabel": "Adresse d'enlèvement"
+  ,"freightPickupBoroughLabel": "Arrondissement"
+  ,"freightPickupDateTimeLabel": "Date et heure d'enlèvement"
+  ,"freightPickupChooseDateTime": "Choisir la date et l'heure"
+  ,"freightPickupFeeLabel": "Frais d'enlèvement"
+  ,"freightPickupCalculating": "Calcul des frais d'enlèvement…"
+  ,"freightPickupEnterDetailsForFee": "Saisissez vos détails d'enlèvement pour voir les frais."
+  ,"freightPickupSelectDateTime": "Veuillez choisir une date et une heure d'enlèvement."
+  ,"freightPickupUnavailableCustomer": "Cette entreprise ne propose pas l'enlèvement pour le moment."
+  ,"freightPickupOutOfRangeCustomer": "Votre adresse est en dehors de la zone d'enlèvement de cette entreprise."
+  ,"freightPickupQuoteFailed": "Nous n'avons pas pu calculer les frais d'enlèvement. Vérifiez l'adresse et réessayez."
+  ,"freightPickupDistanceAway": "à {distanceKm} km"
+  ,"@freightPickupDistanceAway": { "placeholders": { "distanceKm": { "type": "String" } } }
+  ,"freightPickupFreeLabel": "Enlèvement gratuit"
 }

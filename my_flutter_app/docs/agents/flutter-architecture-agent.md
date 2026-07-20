@@ -127,6 +127,11 @@ Add future project conventions and repeated architectural decisions here.
   per-kg rate, barrels/shared barrels require a barrel rate, and quoted car
   transport requires only an approved active destination. Do not reuse the
   barrel-only `isAvailable` predicate for another service.
+- Business destination docs now use `destinationCoverageVersion: 2` and a
+  `serviceAvailability` map with `barrelShipping`, `freightAir`, `freightSea`,
+  and `carTransport`. `isActive` is the aggregate query flag for "at least one
+  service is enabled." Explicit `false` entries override legacy rate inference;
+  keep old-doc fallbacks only at model/callable boundaries.
 - Every `CustomerOrder` marked trackable must have a registered source/parser in
   `CustomerTrackingRepository` and an appropriate tracking card/action before
   Orders routes it to `/tracking`.
@@ -166,7 +171,17 @@ Add future project conventions and repeated architectural decisions here.
   native file. Preserve the draft caption on cancel or upload failure, retain
   the pending attachment for retry, and keep picker/review/upload actions
   guarded against duplicate activation.
+- Support thread escalation must be visible where users are actively chatting,
+  not only in the scrollback. Keep the ask-admin action or already-escalated
+  state persistent near the composer. Normal unresolved escalation obeys the
+  response window, but urgent backend-supported reasons can be submitted before
+  that window unlocks.
 - Optional/domain normalization must preserve absence as absence. Display
   sentinels such as `Unknown` must never enter typed identifiers such as
   currency codes, roles, collection names, or business IDs; apply display copy
   only after typed fallbacks and validation have run.
+- Business profile parking location is address-first. Manual latitude/longitude
+  entry should stay hidden from business users; nullable coordinate fields are
+  backend metadata only. Preserve them when the saved address is unchanged, and
+  clear them only through an explicit stale-coordinate path when the address is
+  edited.

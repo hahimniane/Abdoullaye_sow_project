@@ -1,14 +1,18 @@
+import 'dart:async';
+
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
+import '../data/nyc_boroughs.dart';
 import '../l10n/app_localizations.dart';
 import '../models/business_destination_option.dart';
 import '../models/business_service.dart';
 import '../services/business_service.dart';
 import '../services/freight_shipment_service.dart';
-import '../utils/phone_number_validator.dart';
 import '../utils/receiver_phone_rules.dart';
+import '../widgets/country_phone_field.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
 
 /// Customer screen to send a parcel/box by freight, priced by weight,
@@ -29,6 +33,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   final _receiverController = TextEditingController();
   final _phoneController = TextEditingController();
   final _weightController = TextEditingController();
+  final _pickupAddressController = TextEditingController();
 
   List<BusinessDestinationOption> _options = const [];
   BusinessDestinationOption? _selected;
@@ -39,6 +44,19 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   bool _busy = false;
   bool _receiverPhoneIsWhatsappOnly = false;
 
+  // Freight home-pickup state for the selected business.
+  bool _pickupOffered = false;
+  String _pickupModel = 'distance';
+  bool _pickupRequested = false;
+  String? _pickupBorough;
+  DateTime? _pickupDateTime;
+  double? _pickupFee;
+  double? _pickupDistanceKm;
+  bool _pickupQuoting = false;
+  String? _pickupError;
+  Timer? _pickupDebounce;
+  int _pickupQuoteId = 0;
+
   @override
   void initState() {
     super.initState();
@@ -47,11 +65,13 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
 
   @override
   void dispose() {
+    _pickupDebounce?.cancel();
     _searchController.dispose();
     _senderController.dispose();
     _receiverController.dispose();
     _phoneController.dispose();
     _weightController.dispose();
+    _pickupAddressController.dispose();
     super.dispose();
   }
 
@@ -115,6 +135,23 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   double get _weightKg => double.tryParse(_weightController.text.trim()) ?? 0;
   double get _ratePerKg => _selected?.country.freightRatePerKg(_mode) ?? 0;
   double get _price => _weightKg > 0 ? _weightKg * _ratePerKg : 0;
+  double get _appliedPickupFee => _pickupRequested ? (_pickupFee ?? 0) : 0;
+  double get _totalPrice => _price + _appliedPickupFee;
+
+  /// Pickup is blocking the order only when it's requested but not yet resolved
+  /// (still quoting, errored, or missing required details).
+  bool get _pickupBlocksSubmit {
+    if (!_pickupRequested) return false;
+    if (_pickupQuoting || _pickupError != null || _pickupFee == null) {
+      return true;
+    }
+    if (_pickupDateTime == null) return true;
+    if (_pickupAddressController.text.trim().isEmpty) return true;
+    if (_pickupModel == 'borough' && (_pickupBorough ?? '').isEmpty) {
+      return true;
+    }
+    return false;
+  }
 
   void _select(BusinessDestinationOption o) {
     setState(() {
@@ -124,6 +161,120 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       _mode = modes.contains(_mode)
           ? _mode
           : (modes.isNotEmpty ? modes.first : 'sea');
+      _resetPickup();
+      // Pickup availability + model are resolved server-side and travel with
+      // the option, so no extra (rule-blocked) business read is needed here.
+      _pickupOffered = o.freightPickupAvailable;
+      _pickupModel = o.freightPickupModel;
+    });
+  }
+
+  void _resetPickup() {
+    _pickupDebounce?.cancel();
+    _pickupQuoteId++;
+    _pickupOffered = false;
+    _pickupModel = 'distance';
+    _pickupRequested = false;
+    _pickupBorough = null;
+    _pickupDateTime = null;
+    _pickupFee = null;
+    _pickupDistanceKm = null;
+    _pickupQuoting = false;
+    _pickupError = null;
+    _pickupAddressController.clear();
+  }
+
+  void _schedulePickupQuote() {
+    _pickupDebounce?.cancel();
+    final address = _pickupAddressController.text.trim();
+    final needsBorough = _pickupModel == 'borough';
+    if (address.isEmpty || (needsBorough && (_pickupBorough ?? '').isEmpty)) {
+      setState(() {
+        _pickupFee = null;
+        _pickupDistanceKm = null;
+        _pickupQuoting = false;
+        _pickupError = null;
+      });
+      return;
+    }
+    setState(() {
+      _pickupQuoting = true;
+      _pickupError = null;
+    });
+    _pickupDebounce = Timer(
+      const Duration(milliseconds: 700),
+      _requestPickupQuote,
+    );
+  }
+
+  Future<void> _requestPickupQuote() async {
+    final option = _selected;
+    if (option == null) return;
+    final l10n = AppLocalizations.of(context)!;
+    final quoteId = ++_pickupQuoteId;
+    try {
+      final quote = await _freightService.quoteFreightPickup(
+        businessId: option.businessId,
+        pickupAddress: _pickupAddressController.text.trim(),
+        pickupBorough: _pickupModel == 'borough' ? _pickupBorough : null,
+      );
+      if (!mounted || quoteId != _pickupQuoteId) return;
+      setState(() {
+        _pickupFee = quote.fee;
+        _pickupDistanceKm = quote.distanceKm;
+        _pickupQuoting = false;
+        _pickupError = null;
+      });
+    } catch (error) {
+      if (!mounted || quoteId != _pickupQuoteId) return;
+      setState(() {
+        _pickupQuoting = false;
+        _pickupFee = null;
+        _pickupDistanceKm = null;
+        _pickupError = _pickupErrorMessage(error, l10n);
+      });
+    }
+  }
+
+  String _pickupErrorMessage(Object error, AppLocalizations l10n) {
+    final details = error is FirebaseFunctionsException && error.details is Map
+        ? Map<String, dynamic>.from(error.details as Map)
+        : const <String, dynamic>{};
+    final reason = details['reason'];
+    if (reason == 'freight_pickup_unavailable') {
+      return l10n.freightPickupUnavailableCustomer;
+    }
+    if (reason == 'freight_pickup_out_of_range' ||
+        reason == 'freight_pickup_out_of_area') {
+      return l10n.freightPickupOutOfRangeCustomer;
+    }
+    return l10n.freightPickupQuoteFailed;
+  }
+
+  Future<void> _pickPickupDateTime() async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _pickupDateTime ?? now.add(const Duration(days: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 60)),
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(
+        _pickupDateTime ?? now.add(const Duration(hours: 1)),
+      ),
+    );
+    if (time == null || !mounted) return;
+    setState(() {
+      _pickupDateTime = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
     });
   }
 
@@ -158,6 +309,21 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       _snack(l10n.enterParcelWeightKg);
       return;
     }
+    if (_pickupRequested) {
+      if (_pickupAddressController.text.trim().isEmpty ||
+          (_pickupModel == 'borough' && (_pickupBorough ?? '').isEmpty)) {
+        _snack(l10n.freightPickupEnterDetailsForFee);
+        return;
+      }
+      if (_pickupDateTime == null) {
+        _snack(l10n.freightPickupSelectDateTime);
+        return;
+      }
+      if (_pickupQuoting || _pickupFee == null || _pickupError != null) {
+        _snack(_pickupError ?? l10n.freightPickupQuoteFailed);
+        return;
+      }
+    }
     final marketplaceAcceptance = await confirmMarketplaceTransaction(
       context,
       providerNames: option.businessName,
@@ -174,6 +340,16 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         businessId: option.businessId,
         mode: _mode,
         weightKg: _weightKg,
+        pickupRequested: _pickupRequested,
+        pickupAddress: _pickupRequested
+            ? _pickupAddressController.text.trim()
+            : null,
+        pickupBorough: _pickupRequested && _pickupModel == 'borough'
+            ? _pickupBorough
+            : null,
+        pickupDateTime: _pickupRequested
+            ? _pickupDateTime!.toUtc().toIso8601String()
+            : null,
         marketplaceAcceptance: marketplaceAcceptance,
       );
       if (!mounted) return;
@@ -426,6 +602,142 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     );
   }
 
+  Widget _pickupSection(ThemeData theme, AppLocalizations l10n) {
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _pickupRequested,
+              onChanged: _busy
+                  ? null
+                  : (value) {
+                      setState(() => _pickupRequested = value);
+                      if (value) _schedulePickupQuote();
+                    },
+              title: Text(
+                l10n.freightPickupCustomerToggle,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              secondary: const Icon(Icons.home_outlined),
+            ),
+            if (_pickupRequested) ...[
+              TextField(
+                controller: _pickupAddressController,
+                enabled: !_busy,
+                onChanged: (_) => _schedulePickupQuote(),
+                decoration: InputDecoration(
+                  labelText: l10n.freightPickupAddressLabel,
+                  prefixIcon: const Icon(Icons.location_on_outlined),
+                ),
+              ),
+              if (_pickupModel == 'borough') ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  key: ValueKey('borough-${_selected?.businessId}'),
+                  initialValue: _pickupBorough,
+                  decoration: InputDecoration(
+                    labelText: l10n.freightPickupBoroughLabel,
+                    prefixIcon: const Icon(Icons.location_city_outlined),
+                  ),
+                  items: [
+                    for (final borough in kNycBoroughs)
+                      DropdownMenuItem(value: borough, child: Text(borough)),
+                  ],
+                  onChanged: _busy
+                      ? null
+                      : (value) {
+                          setState(() => _pickupBorough = value);
+                          _schedulePickupQuote();
+                        },
+                ),
+              ],
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _pickPickupDateTime,
+                icon: const Icon(Icons.event_outlined),
+                label: Text(
+                  _pickupDateTime == null
+                      ? l10n.freightPickupChooseDateTime
+                      : DateFormat(
+                          'EEE, MMM d • h:mm a',
+                        ).format(_pickupDateTime!),
+                ),
+              ),
+              const SizedBox(height: 10),
+              _pickupFeeStatus(theme, l10n),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _pickupFeeStatus(ThemeData theme, AppLocalizations l10n) {
+    if (_pickupQuoting) {
+      return Row(
+        children: [
+          const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            l10n.freightPickupCalculating,
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
+      );
+    }
+    if (_pickupError != null) {
+      return Text(
+        _pickupError!,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.error,
+          fontWeight: FontWeight.w600,
+        ),
+      );
+    }
+    if (_pickupFee != null) {
+      final feeLabel = _pickupFee == 0
+          ? l10n.freightPickupFreeLabel
+          : '\$${_pickupFee!.toStringAsFixed(2)}';
+      final distance = _pickupDistanceKm;
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Text(
+              distance != null
+                  ? l10n.freightPickupDistanceAway(distance.toStringAsFixed(1))
+                  : l10n.freightPickupFeeLabel,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.hintColor,
+              ),
+            ),
+          ),
+          Text(
+            feeLabel,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      );
+    }
+    return Text(
+      l10n.freightPickupEnterDetailsForFee,
+      style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+    );
+  }
+
   // ---- Step 2: booking form for the selected option ----
   Widget _bookingForm(ThemeData theme) {
     final l10n = AppLocalizations.of(context)!;
@@ -460,21 +772,25 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         const SizedBox(height: 16),
         Text(l10n.shippingMode, style: theme.textTheme.labelLarge),
         const SizedBox(height: 10),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var i = 0; i < modes.length; i++) ...[
-              if (i > 0) const SizedBox(width: 12),
-              Expanded(
-                child: _ModeCard(
-                  mode: modes[i],
-                  rate: o.country.freightRatePerKg(modes[i]),
-                  selected: modes[i] == _mode,
-                  onTap: _busy ? null : () => setState(() => _mode = modes[i]),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < modes.length; i++) ...[
+                if (i > 0) const SizedBox(width: 12),
+                Expanded(
+                  child: _ModeCard(
+                    mode: modes[i],
+                    rate: o.country.freightRatePerKg(modes[i]),
+                    selected: modes[i] == _mode,
+                    onTap: _busy
+                        ? null
+                        : () => setState(() => _mode = modes[i]),
+                  ),
                 ),
-              ),
+              ],
             ],
-          ],
+          ),
         ),
         const SizedBox(height: 14),
         TextField(
@@ -497,10 +813,10 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
           decoration: InputDecoration(labelText: l10n.receiverName),
         ),
         const SizedBox(height: 14),
-        TextField(
+        CountryPhoneField(
           controller: _phoneController,
-          keyboardType: TextInputType.phone,
-          inputFormatters: PhoneNumberValidator.allowedInputFormatters,
+          labelText: l10n.receiverPhone,
+          initialCountryCode: o.country.displayCode,
           onChanged: (_) => setState(() {
             if (!ReceiverPhoneRules.isDifferentCountryNumber(
               value: _phoneController.text,
@@ -509,7 +825,6 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
               _receiverPhoneIsWhatsappOnly = false;
             }
           }),
-          decoration: InputDecoration(labelText: l10n.receiverPhone),
         ),
         if (showWhatsapp)
           CheckboxListTile(
@@ -528,6 +843,10 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
             ),
             subtitle: Text(l10n.receiverWhatsAppNumberSubtitle),
           ),
+        if (_pickupOffered) ...[
+          const SizedBox(height: 8),
+          _pickupSection(theme, l10n),
+        ],
         const SizedBox(height: 18),
         Card(
           elevation: 0,
@@ -554,11 +873,19 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                           color: theme.hintColor,
                         ),
                       ),
+                      if (_appliedPickupFee > 0)
+                        Text(
+                          '+ \$${_appliedPickupFee.toStringAsFixed(2)} '
+                          '${l10n.freightPickupFeeLabel}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.hintColor,
+                          ),
+                        ),
                     ],
                   ),
                 ),
                 Text(
-                  '\$${_price.toStringAsFixed(2)}',
+                  '\$${_totalPrice.toStringAsFixed(2)}',
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w900,
                   ),
@@ -575,7 +902,9 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         ),
         const SizedBox(height: 18),
         FilledButton.icon(
-          onPressed: _busy || _price <= 0 ? null : _submit,
+          onPressed: _busy || _price <= 0 || _pickupBlocksSubmit
+              ? null
+              : _submit,
           icon: _busy
               ? const SizedBox(
                   width: 18,

@@ -547,7 +547,7 @@
   "requestFeaturing": "Request featuring",
   "noBusinessProfileAssigned": "No business profile is assigned.",
   "businessProfileNotFound": "Business profile not found.",
-  "destinationsAndShippingFees": "Destinations and shipping fees",
+  "destinationsAndShippingFees": "Destinations and services",
   "team": "Team",
   "addStaffMemberButton": "Add staff member",
   "noTeamMembersYet": "No team members yet.",
@@ -802,16 +802,62 @@
   "parkingStartDate": "Parking Start Date",
   "parkingEndDate": "Parking End Date",
   "costPerDay": "Cost Per Day ($)",
-  "selectCountriesAddFees": "Select the countries this business ships to and add the shipping fee for each destination.",
-  "activeDestinationsHaveFees": "{priced} of {total} active destinations have shipping fees.",
+  "selectCountriesAddFees": "Choose countries and select what this business offers for each destination.",
+  "activeDestinationsHaveFees": "{priced} of {total} active destinations have services configured.",
   "@activeDestinationsHaveFees": {
     "placeholders": {
       "priced": {},
       "total": {}
     }
   },
-  "selectDestinationCountries": "Select destination countries",
-  "manageDestinationsFees": "Manage destinations and fees",
+  "selectDestinationCountries": "Select destination services",
+  "manageDestinationsFees": "Manage destinations and services",
+  "servicesForDestination": "Services for this destination",
+  "servicesForDestinationHelp": "Turn on only what this business offers for this country.",
+  "destinationServiceCoverageTitle": "Destination services",
+  "destinationServiceCoverageSubtitle": "Set which services are available for this country and add rates where needed.",
+  "offerBarrelShipping": "Barrel shipping",
+  "barrelShippingDestinationHelper": "Customers can send barrels to this country.",
+  "offerFreightAir": "Freight by air",
+  "freightAirDestinationHelper": "Customers can ship parcels by air to this country.",
+  "offerFreightSea": "Freight by sea",
+  "freightSeaDestinationHelper": "Customers can ship parcels by sea to this country.",
+  "offerCarTransportDestination": "Ship cars to this country",
+  "carTransportDestinationHelper": "Customers can request a car transport quote for this country.",
+  "freightAirRatePerKg": "Air freight rate per kg",
+  "freightSeaRatePerKg": "Sea freight rate per kg",
+  "chooseAtLeastOneDestinationService": "Choose at least one service for this destination.",
+  "destinationServiceRateRequired": "Add a rate for {service}.",
+  "@destinationServiceRateRequired": {
+    "placeholders": {
+      "service": {}
+    }
+  },
+  "destinationServiceRateGreaterThanZero": "{service} needs a rate greater than 0.",
+  "@destinationServiceRateGreaterThanZero": {
+    "placeholders": {
+      "service": {}
+    }
+  },
+  "destinationBarrelService": "Barrel",
+  "destinationFreightAir": "Air freight",
+  "destinationFreightSea": "Sea freight",
+  "destinationCarTransport": "Car transport",
+  "destinationServicePriceSummary": "{service}: {price}",
+  "@destinationServicePriceSummary": {
+    "placeholders": {
+      "service": {},
+      "price": {}
+    }
+  },
+  "destinationServiceRateSummary": "{service}: {rate}/kg",
+  "@destinationServiceRateSummary": {
+    "placeholders": {
+      "service": {},
+      "rate": {}
+    }
+  },
+  "noDestinationServicesConfigured": "No services configured",
   "businessNameRequired": "Business name is required",
   "businessPhoneRequired": "Business phone is required",
   "validBusinessPhoneRequired": "Please enter a valid business phone",
@@ -982,6 +1028,7 @@
   "passwordRequired": "Password is required",
   "services": "Services",
   "businessIdentitySubtitle": "How customers and staff identify this business.",
+  "businessProfileDetailsSectionError": "Check the highlighted business details.",
   "businessDefaultAddressSubtitle": "Used as the default address for vehicle listings.",
   "paidHoldPricing": "Paid hold pricing",
   "paidHoldPricingSubtitle": "Set the default deposit rule for customers holding cars.",
@@ -994,8 +1041,6 @@
   "parkingCapacityTitle": "Parking capacity",
   "parkingCapacitySubtitle": "Set the address, spaces, and prices customers can reserve.",
   "parkingAddress": "Parking address",
-  "parkingLatitude": "Latitude",
-  "parkingLongitude": "Longitude",
   "totalParkingSpaces": "Total spaces",
   "blockedParkingSpaces": "Blocked spaces",
   "dailyParkingRate": "Daily parking rate",
@@ -1006,8 +1051,7 @@
   "pickupAvailableSubtitle": "Customers can request vehicle pickup before parking.",
   "pickupFee": "Pickup fee",
   "parkingInstructions": "Parking instructions",
-  "enterValidParkingCapacity": "Add total spaces, a positive daily rate, and valid blocked spaces before saving parking.",
-  "enterValidParkingCoordinates": "Enter valid parking latitude and longitude, or leave both blank.",
+  "enterValidParkingCapacity": "Add the parking address, location, spaces, and daily rate before saving.",
   "customerParkingTitle": "Find parking",
   "customerParkingSubtitle": "Choose where and when you want to park. We will show businesses with open spaces.",
   "enterCarDetailsToReserveParking": "Enter car details to reserve parking",
@@ -1397,6 +1441,22 @@
   "freightEstimateExplanation": "You are paying an estimate based on the weight you entered. The business will confirm the weight after drop-off.",
   "payEstimate": "Pay estimate",
   "estimatePaid": "Estimate paid",
+  "freightOrderDetails": "Freight order",
+  "freightNextStep": "Next step",
+  "freightNextDropOffAtProvider": "Drop off your parcel at {businessName}. The business will confirm the weight after drop-off.",
+  "@freightNextDropOffAtProvider": {"placeholders": {"businessName": {}}},
+  "freightNextDropOffAtBusiness": "Drop off your parcel at the business location. The business will confirm the weight after drop-off.",
+  "freightNextWeightReview": "The business is confirming the final weight. We will show any balance or refund here.",
+  "freightNextInTransit": "Your parcel is on the way. Keep this tracking code for updates.",
+  "freightNextReadyForPickup": "Your parcel is ready for pickup.",
+  "freightNextCompleted": "This freight order is complete.",
+  "paidEstimateAmount": "Paid estimate: {amount}",
+  "@paidEstimateAmount": {"placeholders": {"amount": {}}},
+  "estimatedWeightValue": "Estimated weight: {weight}",
+  "@estimatedWeightValue": {"placeholders": {"weight": {}}},
+  "freightNoActionUntilWeightConfirmed": "After drop-off, no action is needed until the business confirms the weight.",
+  "viewAllShipments": "View all shipments",
+  "shipmentStillSyncing": "This shipment is still syncing. You can view all shipments or try again shortly.",
   "awaitingConfirmedWeight": "Awaiting confirmed weight",
   "verifiedWeight": "Confirmed weight",
   "finalTotal": "Final total",
@@ -1569,7 +1629,7 @@
       }
     }
   },
-  "activeDestinationsRequireFee": "Active destinations require a barrel shipping fee.",
+  "activeDestinationsRequireFee": "Active destinations require at least one configured service.",
   "seedCountriesEmptyInstruction": "Seed the full country catalog, then search and activate the destinations you serve.",
   "barrelPriceSummary": "Barrel: {price}",
   "@barrelPriceSummary": {
@@ -1759,6 +1819,9 @@
   "supportEscalationReason": "Escalation reason",
   "supportEscalationNote": "Add details for the admin",
   "supportEscalationUnavailable": "Admin escalation becomes available after the business response window unless the issue is urgent.",
+  "supportEscalationUrgentOnly": "Normal escalation unlocks after the business response window. Urgent reasons can be sent now.",
+  "supportAlreadyEscalatedTitle": "Already escalated to Laawol admin",
+  "supportAlreadyEscalatedSubtitle": "This case is already in the Laawol admin queue.",
   "supportReasonUnresolved": "Business did not resolve it",
   "supportReasonFraud": "Fraud or suspicious activity",
   "supportReasonSafety": "Safety concern",
@@ -1779,7 +1842,13 @@
   "supportReplaceAttachment": "Replace",
   "supportAttachmentCaption": "Caption (optional)",
   "supportPreviewUnavailable": "Preview unavailable. You can still upload this file.",
-  "supportUploadFailed": "Upload failed. Check your connection and try again.",
+  "supportUploadFailed": "Upload failed. Try again.",
+  "supportUploadFailedNetwork": "Upload failed. Check your connection and try again.",
+  "supportUploadFailedAuth": "Upload failed because your sign-in expired. Sign in again, then retry.",
+  "supportUploadFailedPermission": "Upload failed because your account cannot add files to this support case.",
+  "supportUploadFailedInvalidFile": "Upload failed because this file type or size is not allowed.",
+  "supportUploadFailedAppVerification": "Upload blocked by app verification. Update the app or contact support.",
+  "supportUploadFailedDebugAppCheck": "Upload blocked by Firebase App Check. Register this debug device token, then retry.",
   "supportImagePreviewLabel": "Image preview: {name}",
   "@supportImagePreviewLabel": {
     "placeholders": {
@@ -2000,7 +2069,7 @@
   ,"notNow": "Not now"
   ,"phoneVerificationTitle": "Phone verification"
   ,"phoneVerificationExplanation": "Confirm or update the mobile number for your account. We’ll text you a one-time verification code."
-  ,"phoneVerificationCountryCodeHelp": "Include the country code, for example +1 718 555 0100."
+  ,"phoneVerificationCountryCodeHelp": "Choose the country code, then enter the mobile number."
   ,"phoneVerificationCodeSentTitle": "Code sent"
   ,"phoneVerificationCodeSent": "Enter the 6-digit code sent to {phone}."
   ,"@phoneVerificationCodeSent": {"placeholders": {"phone": {}}}
@@ -2024,6 +2093,7 @@
   ,"phoneVerificationRequestTimedOut": "We didn’t receive a response. Check your connection and try again."
   ,"phoneVerificationPhoneInUse": "That phone number is already linked to another account."
   ,"phoneVerificationRecentLogin": "For security, sign out, sign back in, and verify your phone again."
+  ,"phoneVerificationAppCheck": "App security check failed. Register this debug device in Firebase App Check, then reopen the app."
   ,"phoneVerificationGenericError": "We couldn’t verify your phone. Please try again."
   ,"phoneVerificationSyncPending": "Your code was accepted, but we couldn’t finish updating your profile. Try finishing verification again—another SMS is not required."
   ,"phoneVerificationFinish": "Finish verification"
@@ -2039,9 +2109,42 @@
   ,"phoneVerificationReturnToSharedBarrels": "Return to shared barrels"
   ,"phoneVerificationVerified": "Phone verified"
   ,"phoneVerificationNotVerified": "Phone not verified"
+  ,"phoneCountryCode": "Country code"
+  ,"selectCountryCode": "Select country code"
+  ,"phoneCountrySearchHint": "Search country or code"
+  ,"noCountryCodesFound": "No country codes found"
   ,"sharedBarrelActionFailed": "We couldn’t complete that shared-barrel action. Please try again."
   ,"sharedBarrelsLoadFailed": "Check your connection and try again. Your information is safe."
   ,"sharedBarrelFormLoadFailed": "We couldn’t open the shared-barrel form. Check your connection and try again."
   ,"marketplaceBalancePaymentSummary": "Balance payment"
   ,"marketplaceDestinationChangeSummary": "Paid destination change"
+  ,"freightPickupSectionTitle": "Freight pickup"
+  ,"freightPickupSectionSubtitle": "Offer to collect parcels from your customer's address, and choose how the fee is calculated."
+  ,"freightPickupOfferToggle": "Offer freight pickup"
+  ,"freightPickupModelDistance": "By distance"
+  ,"freightPickupModelBorough": "By borough"
+  ,"freightPickupDistanceHint": "Fee = base fee + per-km rate × driving distance from your address. Leave rates at 0 to offer free pickup."
+  ,"freightPickupOriginAddress": "Pickup origin address"
+  ,"freightPickupOriginAddressHelper": "Where your drivers start from. Defaults to your business address."
+  ,"freightPickupBaseFee": "Base fee"
+  ,"freightPickupPerKm": "Per km"
+  ,"freightPickupMinFee": "Minimum fee"
+  ,"freightPickupMaxKm": "Max distance (km)"
+  ,"freightPickupBoroughHint": "Set a flat pickup fee for each New York City borough you serve. Leave blank for boroughs you don't cover."
+  ,"freightPickupBoroughPriceRequired": "Set a pickup fee for at least one borough, or turn off freight pickup."
+  ,"freightPickupCustomerToggle": "Pick up from my address"
+  ,"freightPickupAddressLabel": "Pickup address"
+  ,"freightPickupBoroughLabel": "Borough"
+  ,"freightPickupDateTimeLabel": "Pickup date & time"
+  ,"freightPickupChooseDateTime": "Choose date & time"
+  ,"freightPickupFeeLabel": "Pickup fee"
+  ,"freightPickupCalculating": "Calculating pickup fee…"
+  ,"freightPickupEnterDetailsForFee": "Enter your pickup details to see the fee."
+  ,"freightPickupSelectDateTime": "Please choose a pickup date and time."
+  ,"freightPickupUnavailableCustomer": "This business doesn't offer pickup right now."
+  ,"freightPickupOutOfRangeCustomer": "Your address is outside this business's pickup area."
+  ,"freightPickupQuoteFailed": "We couldn't calculate the pickup fee. Check the address and try again."
+  ,"freightPickupDistanceAway": "{distanceKm} km away"
+  ,"@freightPickupDistanceAway": { "placeholders": { "distanceKm": { "type": "String" } } }
+  ,"freightPickupFreeLabel": "Free pickup"
 }

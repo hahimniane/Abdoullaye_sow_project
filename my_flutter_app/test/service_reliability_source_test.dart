@@ -25,6 +25,14 @@ void main() {
     },
   );
 
+  test('freight booking mode cards have bounded height in the scroll form', () {
+    final source = File(
+      'lib/screens/send_freight_screen.dart',
+    ).readAsStringSync();
+    expect(source, contains('IntrinsicHeight('));
+    expect(source, contains('crossAxisAlignment: CrossAxisAlignment.stretch'));
+  });
+
   testWidgets('shipping service hub renders its French service labels', (
     tester,
   ) async {

@@ -37,17 +37,28 @@ async function seedBusiness(id, {
     "carTransport",
   ],
   destinationActive = true,
+  barrelRate = 225,
   airRate = 12.5,
   seaRate = 5,
+  serviceAvailability,
+  freightPickup,
 } = {}) {
   const ref = db.collection("businesses").doc(id);
+  const availability = serviceAvailability || {
+    barrelShipping: barrelRate > 0,
+    freightAir: airRate > 0,
+    freightSea: seaRate > 0,
+    carTransport: true,
+  };
   await Promise.all([
     ref.set({
       name: `Service Test ${id}`,
       status,
       enabledServices: services,
       city: "Bronx",
+      state: "NY",
       addressLine1: "100 Test Avenue",
+      ...(freightPickup || {}),
       parkingCity: "Bronx",
       parkingAddressLine1: "100 Test Avenue",
       parkingTotalSpaces: 5,
@@ -63,10 +74,14 @@ async function seedBusiness(id, {
       countryId: COUNTRY_ID,
       name: "Guinea",
       code: "GN",
-      isActive: destinationActive,
-      barrelShippingPrice: 225,
+      destinationCoverageVersion: 2,
+      serviceAvailability: availability,
+      isActive: destinationActive &&
+        Object.values(availability).some(Boolean),
+      barrelShippingPrice: barrelRate,
       freightAirPricePerKg: airRate,
       freightSeaPricePerKg: seaRate,
+      carTransportAvailable: availability.carTransport,
       deliveryEstimateMinDays: 10,
       deliveryEstimateMaxDays: 20,
     }),
@@ -220,10 +235,16 @@ describe("freight service callable lifecycle", () => {
   it("lists freight-only destinations without requiring a barrel rate",
       async () => {
         const businessId = "freight-only-discovery-business";
-        await seedBusiness(businessId, {services: ["freight"]});
-        await db.collection("businesses").doc(businessId)
-            .collection("destinationCountries").doc(COUNTRY_ID)
-            .set({barrelShippingPrice: 0}, {merge: true});
+        await seedBusiness(businessId, {
+          services: ["freight"],
+          barrelRate: 0,
+          serviceAvailability: {
+            barrelShipping: false,
+            freightAir: true,
+            freightSea: true,
+            carTransport: false,
+          },
+        });
         const result = await functions.listActiveBarrelDestinationOptions.run({
           data: {},
         });
@@ -235,6 +256,34 @@ describe("freight service callable lifecycle", () => {
         assert.equal(option.country.freightSeaPricePerKg, 5);
         assert.equal(option.businessAddress, "100 Test Avenue, Bronx");
       });
+
+  it("rejects freight modes disabled for the destination", async () => {
+    const businessId = "freight-mode-disabled-business";
+    await seedBusiness(businessId, {
+      serviceAvailability: {
+        barrelShipping: false,
+        freightAir: false,
+        freightSea: true,
+        carTransport: false,
+      },
+    });
+
+    await assert.rejects(
+        () => functions.createFreightShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: freightInput(businessId, {mode: "air"}),
+        }),
+        /no air freight rate yet/,
+    );
+
+    const sea = await functions.createFreightShipmentPaymentIntent.run({
+      auth: {uid: CUSTOMER_UID},
+      data: freightInput(businessId, {mode: "sea"}),
+    });
+    const seaShipment = await freightData(sea.shipmentId);
+    assert.equal(seaShipment.mode, "sea");
+    assert.equal(seaShipment.pricePerKg, 5);
+  });
 
   it("books air and sea freight at the authoritative configured rate",
       async () => {
@@ -274,9 +323,15 @@ describe("freight service callable lifecycle", () => {
         assert.equal(seaShipment.cardChargeAmountCents, 3750);
       });
 
-  it("prices an optional pickup and records its appointment", async () => {
+  it("prices a NY borough pickup and records its appointment", async () => {
     const businessId = "freight-pickup-business";
-    await seedBusiness(businessId);
+    await seedBusiness(businessId, {
+      freightPickup: {
+        freightPickupAvailable: true,
+        freightPickupModel: "borough",
+        freightPickupBoroughPrices: {Bronx: 40, Manhattan: 64},
+      },
+    });
     const result = await functions.createFreightShipmentPaymentIntent.run({
       auth: {uid: CUSTOMER_UID},
       data: freightInput(businessId, {
@@ -295,7 +350,27 @@ describe("freight service callable lifecycle", () => {
     assert.equal(shipment.cardChargeAmountCents, 9000);
     assert.equal(shipment.pickupRequested, true);
     assert.equal(shipment.pickupBorough, "Bronx");
+    assert.equal(shipment.pickupModel, "borough");
     assert.ok(shipment.pickupDateTime);
+  });
+
+  it("rejects pickup when the business has not enabled it", async () => {
+    const businessId = "freight-no-pickup-business";
+    await seedBusiness(businessId);
+    await assert.rejects(
+        () => functions.createFreightShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: freightInput(businessId, {
+            mode: "sea",
+            weightKg: 10,
+            pickupRequested: true,
+            pickupAddress: "200 Pickup Street, Bronx, NY",
+            pickupBorough: "Bronx",
+            pickupDateTime: futureIso(),
+          }),
+        }),
+        /pickup/i,
+    );
   });
 
   it("applies wallet funds once and makes cancellation reversal idempotent",
@@ -628,6 +703,75 @@ describe("freight service callable lifecycle", () => {
       });
 });
 
+describe("destination coverage admin callable", () => {
+  it("saves service-specific coverage without requiring a barrel fee",
+      async () => {
+        const businessId = "destination-coverage-admin-business";
+        await seedBusiness(businessId);
+
+        const result = await functions.updateDestinationCoverage.run({
+          auth: {uid: DELETE_ADMIN_UID},
+          data: {
+            businessId,
+            countryId: COUNTRY_ID,
+            isActive: true,
+            barrelShippingPrice: 0,
+            freightAirPricePerKg: 0,
+            freightSeaPricePerKg: 7,
+            serviceAvailability: {
+              barrelShipping: false,
+              freightAir: false,
+              freightSea: true,
+              carTransport: true,
+            },
+          },
+        });
+
+        assert.equal(result.success, true);
+        assert.equal(result.isActive, true);
+        assert.deepEqual(result.serviceAvailability, {
+          barrelShipping: false,
+          freightAir: false,
+          freightSea: true,
+          carTransport: true,
+        });
+
+        const doc = await db.collection("businesses").doc(businessId)
+            .collection("destinationCountries").doc(COUNTRY_ID).get();
+        assert.equal(doc.get("isActive"), true);
+        assert.equal(doc.get("barrelShippingPrice"), 0);
+        assert.equal(doc.get("freightSeaPricePerKg"), 7);
+        assert.equal(doc.get("serviceAvailability.freightSea"), true);
+        assert.equal(doc.get("serviceAvailability.carTransport"), true);
+      });
+
+  it("rejects enabled destination services with missing rates", async () => {
+    const businessId = "destination-coverage-rate-required";
+    await seedBusiness(businessId);
+
+    await assert.rejects(
+        () => functions.updateDestinationCoverage.run({
+          auth: {uid: DELETE_ADMIN_UID},
+          data: {
+            businessId,
+            countryId: COUNTRY_ID,
+            isActive: true,
+            barrelShippingPrice: 0,
+            freightAirPricePerKg: 0,
+            freightSeaPricePerKg: 0,
+            serviceAvailability: {
+              barrelShipping: false,
+              freightAir: true,
+              freightSea: false,
+              carTransport: false,
+            },
+          },
+        }),
+        /Air freight destinations need a rate/,
+    );
+  });
+});
+
 describe("car transport service callable lifecycle", () => {
   it("lists eligible businesses and creates a quote request", async () => {
     const businessId = "transport-service-business";
@@ -665,6 +809,44 @@ describe("car transport service callable lifecycle", () => {
     assert.match(snapshot.get("trackingCode"), /^TR/);
   });
 
+  it("excludes car transport destinations disabled for that country",
+      async () => {
+        const businessId = "transport-disabled-destination";
+        await seedBusiness(businessId, {
+          serviceAvailability: {
+            barrelShipping: true,
+            freightAir: true,
+            freightSea: true,
+            carTransport: false,
+          },
+        });
+
+        const options = await functions.listTransportBusinessOptions.run({
+          data: {},
+        });
+        assert.equal(
+            options.options.some((row) =>
+              row.businessId === businessId && row.country.id === COUNTRY_ID),
+            false,
+        );
+
+        await assert.rejects(
+            () => functions.createTransportRequest.run({
+              auth: {uid: CUSTOMER_UID},
+              data: {
+                businessId,
+                destinationCountryId: COUNTRY_ID,
+                ownerName: "Vehicle Owner",
+                carMake: "Toyota",
+                carModel: "Camry",
+                carYear: "2022",
+                customerPhone: "+15555550101",
+              },
+            }),
+            /not available for car transport/,
+        );
+      });
+
   it("rejects businesses without transport or an active destination",
       async () => {
         const noServiceId = "transport-no-service";
@@ -688,6 +870,35 @@ describe("car transport service callable lifecycle", () => {
 });
 
 describe("barrel shipping service callable lifecycle", () => {
+  it("rejects destinations where barrel shipping is disabled", async () => {
+    const businessId = "barrel-disabled-destination";
+    await seedBusiness(businessId, {
+      serviceAvailability: {
+        barrelShipping: false,
+        freightAir: true,
+        freightSea: true,
+        carTransport: true,
+      },
+    });
+
+    await assert.rejects(
+        () => functions.createBarrelShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: {
+            senderName: "Barrel Sender",
+            receiverName: "Barrel Receiver",
+            receiverPhone: "+224620000002",
+            destinationCountryId: COUNTRY_ID,
+            businessId,
+            quantity: 1,
+            pickupRequested: false,
+            useWalletBalance: false,
+          },
+        }),
+        /not configured for barrel shipping/,
+    );
+  });
+
   it("books a direct barrel shipment at the configured destination rate",
       async () => {
         const businessId = "barrel-service-business";

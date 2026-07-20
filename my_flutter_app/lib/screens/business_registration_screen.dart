@@ -1,6 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
@@ -15,6 +16,7 @@ import '../utils/phone_number_validator.dart';
 import '../utils/legal_links.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
 
 class BusinessRegistrationScreen extends StatefulWidget {
@@ -354,13 +356,9 @@ class _BusinessRegistrationScreenState
                                   ),
                                 ),
                                 const SizedBox(height: 12),
-                                _TextField(
+                                CountryPhoneField(
                                   controller: _ownerPhoneController,
-                                  label: l10n.ownerPhone,
-                                  icon: Icons.phone_outlined,
-                                  keyboardType: TextInputType.phone,
-                                  inputFormatters: PhoneNumberValidator
-                                      .allowedInputFormatters,
+                                  labelText: l10n.ownerPhone,
                                   validator: (value) =>
                                       PhoneNumberValidator.validate(
                                         value,
@@ -467,13 +465,9 @@ class _BusinessRegistrationScreenState
                                   ),
                                 ),
                                 const SizedBox(height: 12),
-                                _TextField(
+                                CountryPhoneField(
                                   controller: _businessPhoneController,
-                                  label: l10n.businessPhone,
-                                  icon: Icons.call_outlined,
-                                  keyboardType: TextInputType.phone,
-                                  inputFormatters: PhoneNumberValidator
-                                      .allowedInputFormatters,
+                                  labelText: l10n.businessPhone,
                                   validator: (value) {
                                     final trimmed = value?.trim() ?? '';
                                     if (trimmed.isEmpty) return null;
@@ -861,7 +855,6 @@ class _TextField extends StatelessWidget {
     required this.icon,
     this.validator,
     this.keyboardType,
-    this.inputFormatters,
     this.obscureText = false,
     this.suffixIcon,
     this.minLines,
@@ -873,7 +866,6 @@ class _TextField extends StatelessWidget {
   final IconData icon;
   final String? Function(String?)? validator;
   final TextInputType? keyboardType;
-  final List<TextInputFormatter>? inputFormatters;
   final bool obscureText;
   final Widget? suffixIcon;
   final int? minLines;
@@ -884,7 +876,6 @@ class _TextField extends StatelessWidget {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
-      inputFormatters: inputFormatters,
       obscureText: obscureText,
       minLines: obscureText ? 1 : minLines,
       maxLines: obscureText ? 1 : maxLines ?? 1,

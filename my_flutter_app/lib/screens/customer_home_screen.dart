@@ -56,7 +56,13 @@ Route<dynamic>? _customerTabRoute(RouteSettings settings) {
       page = const RequestTransportScreen();
       break;
     case '/tracking':
-      page = const TrackingScreen(showBackButton: true);
+      final args = settings.arguments is TrackingScreenArguments
+          ? settings.arguments as TrackingScreenArguments
+          : null;
+      page = TrackingScreen(
+        showBackButton: true,
+        focusShipmentId: args?.shipmentId,
+      );
       break;
     case '/my-purchases':
       page = const MyPurchasesScreen(showBackButton: true);

@@ -88,6 +88,9 @@ Return:
   as separate concepts. Use settlement labels for money state and operational
   labels for fulfillment state; when a balance is due, keep the amount and
   payment action visible together on narrow mobile screens.
+- Freight tracking cards should lead with a plain-language "what happens now /
+  what do I owe" summary, especially for estimate-paid pending states, instead
+  of relying on settlement/status labels alone.
 - Vehicle listings must require an explicit rebuilt-title Yes/No disclosure.
   Show it in seller edit/review, customer cards/details, and admin review in
   English and French. Missing legacy values must say Not provided/Unknown and

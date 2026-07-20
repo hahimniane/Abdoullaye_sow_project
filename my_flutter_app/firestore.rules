@@ -121,6 +121,55 @@ service cloud.firestore {
         );
     }
 
+    function hasDestinationServiceMap(data) {
+      return data.get('serviceAvailability', null) is map;
+    }
+
+    function destinationServiceEnabled(data, key) {
+      return hasDestinationServiceMap(data) &&
+        data.get('serviceAvailability', {}).get(key, false) == true;
+    }
+
+    function validDestinationServiceRates(data) {
+      return
+        data.get('barrelShippingPrice', 0) is number &&
+        data.get('barrelShippingPrice', 0) >= 0 &&
+        data.get('freightAirPricePerKg', 0) is number &&
+        data.get('freightAirPricePerKg', 0) >= 0 &&
+        data.get('freightSeaPricePerKg', 0) is number &&
+        data.get('freightSeaPricePerKg', 0) >= 0 &&
+        (
+          !destinationServiceEnabled(data, 'barrelShipping') ||
+          data.get('barrelShippingPrice', 0) > 0
+        ) &&
+        (
+          !destinationServiceEnabled(data, 'freightAir') ||
+          data.get('freightAirPricePerKg', 0) > 0
+        ) &&
+        (
+          !destinationServiceEnabled(data, 'freightSea') ||
+          data.get('freightSeaPricePerKg', 0) > 0
+        );
+    }
+
+    function validDestinationServiceCoverage(data) {
+      return data.isActive != true ||
+        (
+          hasDestinationServiceMap(data) &&
+          (
+            destinationServiceEnabled(data, 'barrelShipping') ||
+            destinationServiceEnabled(data, 'freightAir') ||
+            destinationServiceEnabled(data, 'freightSea') ||
+            destinationServiceEnabled(data, 'carTransport')
+          )
+        ) ||
+        (
+          !hasDestinationServiceMap(data) &&
+          data.get('barrelShippingPrice', 0) is number &&
+          data.get('barrelShippingPrice', 0) > 0
+        );
+    }
+
     function validUserRoleState(data) {
       return data.role == 'customer' ||
         data.role == 'admin' ||
@@ -511,13 +560,8 @@ service cloud.firestore {
           (request.auth != null && canManageBusiness(request.auth.uid, businessId));
         allow write: if request.auth != null &&
           canManageBusinessSection(request.auth.uid, businessId, 'destinations') &&
-          (
-            request.resource.data.isActive != true ||
-            (
-              request.resource.data.barrelShippingPrice is number &&
-              request.resource.data.barrelShippingPrice > 0
-            )
-          ) &&
+          validDestinationServiceRates(request.resource.data) &&
+          validDestinationServiceCoverage(request.resource.data) &&
           validDeliveryEstimate(request.resource.data);
       }
     }

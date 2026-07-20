@@ -26,6 +26,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/async_action_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/country_phone_field.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
 
 class ParkCarScreen extends StatefulWidget {
@@ -1433,10 +1434,31 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                 : null,
           ),
           const SizedBox(height: 12),
-          _RoundedTextField(
+          CountryPhoneField(
             controller: _phoneController,
-            label: l10n.phoneNumber,
-            keyboardType: TextInputType.phone,
+            labelText: l10n.phoneNumber,
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                  color: AppColors.brandRed,
+                  width: 2,
+                ),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Colors.red, width: 2),
+              ),
+              filled: true,
+              fillColor: Colors.grey.shade50,
+            ),
             validator: (value) => value == null || value.trim().isEmpty
                 ? l10n.phoneNumberRequired
                 : null,
@@ -1713,7 +1735,6 @@ class _RoundedTextField extends StatelessWidget {
   final String? Function(String?)? validator;
   final Widget? suffixIcon;
   final TextCapitalization textCapitalization;
-  final TextInputType? keyboardType;
 
   const _RoundedTextField({
     required this.label,
@@ -1721,7 +1742,6 @@ class _RoundedTextField extends StatelessWidget {
     this.validator,
     this.suffixIcon,
     this.textCapitalization = TextCapitalization.none,
-    this.keyboardType,
   });
 
   @override
@@ -1730,7 +1750,6 @@ class _RoundedTextField extends StatelessWidget {
       controller: controller,
       validator: validator,
       textCapitalization: textCapitalization,
-      keyboardType: keyboardType,
       decoration: InputDecoration(
         labelText: label,
         suffixIcon: suffixIcon,

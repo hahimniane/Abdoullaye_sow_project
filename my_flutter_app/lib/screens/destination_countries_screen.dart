@@ -65,19 +65,21 @@ class _DestinationCountriesScreenState
     return error is FirebaseException && error.code == 'permission-denied';
   }
 
-  String? _barrelShippingFeeError({
+  String? _serviceRateError({
     required String value,
-    required bool isActive,
+    required bool isEnabled,
+    required String serviceLabel,
     required AppLocalizations l10n,
   }) {
+    if (!isEnabled) return null;
     final trimmed = value.trim();
     if (trimmed.isEmpty) {
-      return isActive ? l10n.addBarrelFeeBeforeActivating : null;
+      return l10n.destinationServiceRateRequired(serviceLabel);
     }
     final price = double.tryParse(trimmed);
     if (price == null) return l10n.pleaseEnterValidNumber;
-    if (isActive && price <= 0) {
-      return l10n.activeDestinationsNeedFee;
+    if (price <= 0) {
+      return l10n.destinationServiceRateGreaterThanZero(serviceLabel);
     }
     return null;
   }
@@ -149,13 +151,26 @@ class _DestinationCountriesScreenState
           ? ''
           : country!.barrelShippingPrice.toStringAsFixed(0),
     );
+    final freightAirPriceController = TextEditingController(
+      text: (country?.freightAirPricePerKg ?? 0) == 0
+          ? ''
+          : country!.freightAirPricePerKg.toStringAsFixed(0),
+    );
+    final freightSeaPriceController = TextEditingController(
+      text: (country?.freightSeaPricePerKg ?? 0) == 0
+          ? ''
+          : country!.freightSeaPricePerKg.toStringAsFixed(0),
+    );
     final minDaysController = TextEditingController(
       text: country?.deliveryEstimateMinDays?.toString() ?? '',
     );
     final maxDaysController = TextEditingController(
       text: country?.deliveryEstimateMaxDays?.toString() ?? '',
     );
-    var isActive = country?.isActive ?? true;
+    var barrelShippingEnabled = country?.barrelShippingAvailable ?? true;
+    var freightAirEnabled = country?.freightAirAvailable ?? false;
+    var freightSeaEnabled = country?.freightSeaAvailable ?? false;
+    var carTransportEnabled = country?.carTransportAvailable ?? false;
     final formKey = GlobalKey<FormState>();
     final result = await showModalBottomSheet<bool>(
       context: context,
@@ -163,6 +178,11 @@ class _DestinationCountriesScreenState
       useSafeArea: true,
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) {
+          void updateService(VoidCallback update) {
+            setModalState(update);
+            formKey.currentState?.validate();
+          }
+
           return Padding(
             padding: EdgeInsets.only(
               left: 20,
@@ -175,7 +195,25 @@ class _DestinationCountriesScreenState
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Text(
+                      l10n.destinationServiceCoverageTitle,
+                      style: const TextStyle(
+                        color: AppColors.ink,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      l10n.destinationServiceCoverageSubtitle,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                     TextFormField(
                       controller: nameController,
                       decoration: InputDecoration(labelText: l10n.countryName),
@@ -190,20 +228,146 @@ class _DestinationCountriesScreenState
                       decoration: InputDecoration(labelText: l10n.countryCode),
                     ),
                     const SizedBox(height: 12),
-                    TextFormField(
-                      controller: barrelPriceController,
-                      decoration: InputDecoration(
-                        labelText: l10n.barrelShippingPrice,
-                        prefixText: r'$',
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      validator: (value) {
-                        return _barrelShippingFeeError(
-                          value: value ?? '',
-                          isActive: isActive,
-                          l10n: l10n,
+                    FormField<bool>(
+                      validator: (_) =>
+                          barrelShippingEnabled ||
+                              freightAirEnabled ||
+                              freightSeaEnabled ||
+                              carTransportEnabled
+                          ? null
+                          : l10n.chooseAtLeastOneDestinationService,
+                      builder: (field) {
+                        final hasError = field.hasError;
+                        final borderColor = hasError
+                            ? Theme.of(context).colorScheme.error
+                            : AppColors.lightOutline;
+                        return Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: borderColor),
+                            borderRadius: BorderRadius.circular(8),
+                            color: AppColors.lightSurface,
+                          ),
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                l10n.servicesForDestination,
+                                style: const TextStyle(
+                                  color: AppColors.ink,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                l10n.servicesForDestinationHelp,
+                                style: const TextStyle(
+                                  color: AppColors.muted,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              _DestinationServiceToggle(
+                                icon: Icons.inventory_2_outlined,
+                                title: l10n.offerBarrelShipping,
+                                subtitle: l10n.barrelShippingDestinationHelper,
+                                value: barrelShippingEnabled,
+                                onChanged: (value) => updateService(
+                                  () => barrelShippingEnabled = value,
+                                ),
+                                child: TextFormField(
+                                  controller: barrelPriceController,
+                                  decoration: InputDecoration(
+                                    labelText: l10n.barrelShippingPrice,
+                                    prefixText: r'$',
+                                  ),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  validator: (value) => _serviceRateError(
+                                    value: value ?? '',
+                                    isEnabled: barrelShippingEnabled,
+                                    serviceLabel: l10n.destinationBarrelService,
+                                    l10n: l10n,
+                                  ),
+                                ),
+                              ),
+                              _DestinationServiceToggle(
+                                icon: Icons.flight_takeoff_outlined,
+                                title: l10n.offerFreightAir,
+                                subtitle: l10n.freightAirDestinationHelper,
+                                value: freightAirEnabled,
+                                onChanged: (value) => updateService(
+                                  () => freightAirEnabled = value,
+                                ),
+                                child: TextFormField(
+                                  controller: freightAirPriceController,
+                                  decoration: InputDecoration(
+                                    labelText: l10n.freightAirRatePerKg,
+                                    prefixText: r'$',
+                                  ),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  validator: (value) => _serviceRateError(
+                                    value: value ?? '',
+                                    isEnabled: freightAirEnabled,
+                                    serviceLabel: l10n.destinationFreightAir,
+                                    l10n: l10n,
+                                  ),
+                                ),
+                              ),
+                              _DestinationServiceToggle(
+                                icon: Icons.directions_boat_outlined,
+                                title: l10n.offerFreightSea,
+                                subtitle: l10n.freightSeaDestinationHelper,
+                                value: freightSeaEnabled,
+                                onChanged: (value) => updateService(
+                                  () => freightSeaEnabled = value,
+                                ),
+                                child: TextFormField(
+                                  controller: freightSeaPriceController,
+                                  decoration: InputDecoration(
+                                    labelText: l10n.freightSeaRatePerKg,
+                                    prefixText: r'$',
+                                  ),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  validator: (value) => _serviceRateError(
+                                    value: value ?? '',
+                                    isEnabled: freightSeaEnabled,
+                                    serviceLabel: l10n.destinationFreightSea,
+                                    l10n: l10n,
+                                  ),
+                                ),
+                              ),
+                              _DestinationServiceToggle(
+                                icon: Icons.car_rental_outlined,
+                                title: l10n.offerCarTransportDestination,
+                                subtitle: l10n.carTransportDestinationHelper,
+                                value: carTransportEnabled,
+                                onChanged: (value) => updateService(
+                                  () => carTransportEnabled = value,
+                                ),
+                              ),
+                              if (hasError) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  field.errorText!,
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.error,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         );
                       },
                     ),
@@ -256,17 +420,6 @@ class _DestinationCountriesScreenState
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    SwitchListTile(
-                      value: isActive,
-                      onChanged: (value) {
-                        setModalState(() => isActive = value);
-                        formKey.currentState?.validate();
-                      },
-                      title: Text(l10n.active),
-                      subtitle: isActive
-                          ? Text(l10n.activeDestinationsRequireFee)
-                          : null,
-                    ),
                     const SizedBox(height: 16),
                     FilledButton(
                       onPressed: () {
@@ -287,6 +440,12 @@ class _DestinationCountriesScreenState
       if (result != true) return;
       if (!context.mounted) return;
       if (mounted) setState(() => _isSavingDestination = true);
+      final serviceAvailability = {
+        'barrelShipping': barrelShippingEnabled,
+        'freightAir': freightAirEnabled,
+        'freightSea': freightSeaEnabled,
+        'carTransport': carTransportEnabled,
+      };
       final id =
           country?.id ??
           nameController.text
@@ -305,17 +464,27 @@ class _DestinationCountriesScreenState
           .doc(id)
           .set({
             'name': nameController.text.trim(),
-            'code': codeController.text.trim(),
+            'code': codeController.text.trim().toUpperCase(),
             ...businessSnapshot,
-            'barrelShippingPrice':
-                double.tryParse(barrelPriceController.text.trim()) ?? 0,
+            'destinationCoverageVersion': 2,
+            'serviceAvailability': serviceAvailability,
+            'barrelShippingPrice': barrelShippingEnabled
+                ? double.tryParse(barrelPriceController.text.trim()) ?? 0
+                : 0,
+            'freightAirPricePerKg': freightAirEnabled
+                ? double.tryParse(freightAirPriceController.text.trim()) ?? 0
+                : 0,
+            'freightSeaPricePerKg': freightSeaEnabled
+                ? double.tryParse(freightSeaPriceController.text.trim()) ?? 0
+                : 0,
+            'carTransportAvailable': carTransportEnabled,
             'deliveryEstimateMinDays': hasEstimate
                 ? minDays
                 : FieldValue.delete(),
             'deliveryEstimateMaxDays': hasEstimate
                 ? maxDays
                 : FieldValue.delete(),
-            'isActive': isActive,
+            'isActive': serviceAvailability.values.any((enabled) => enabled),
             'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
       if (!context.mounted) return;
@@ -328,6 +497,8 @@ class _DestinationCountriesScreenState
       nameController.dispose();
       codeController.dispose();
       barrelPriceController.dispose();
+      freightAirPriceController.dispose();
+      freightSeaPriceController.dispose();
       minDaysController.dispose();
       maxDaysController.dispose();
     }
@@ -578,6 +749,48 @@ class _DestinationCountriesScreenState
     });
   }
 
+  String _moneyLabel(double amount) {
+    final decimals = amount == amount.roundToDouble() ? 0 : 2;
+    return '\$${amount.toStringAsFixed(decimals)}';
+  }
+
+  List<Widget> _destinationServiceChips(
+    AppLocalizations l10n,
+    DestinationCountry country,
+  ) {
+    return [
+      if (country.isBarrelShippingConfigured)
+        _DestinationSummaryChip(
+          icon: Icons.inventory_2_outlined,
+          label: l10n.destinationServicePriceSummary(
+            l10n.destinationBarrelService,
+            _moneyLabel(country.barrelShippingPrice),
+          ),
+        ),
+      if (country.freightAvailable('air'))
+        _DestinationSummaryChip(
+          icon: Icons.flight_takeoff_outlined,
+          label: l10n.destinationServiceRateSummary(
+            l10n.destinationFreightAir,
+            _moneyLabel(country.freightAirPricePerKg),
+          ),
+        ),
+      if (country.freightAvailable('sea'))
+        _DestinationSummaryChip(
+          icon: Icons.directions_boat_outlined,
+          label: l10n.destinationServiceRateSummary(
+            l10n.destinationFreightSea,
+            _moneyLabel(country.freightSeaPricePerKg),
+          ),
+        ),
+      if (country.carTransportAvailable)
+        _DestinationSummaryChip(
+          icon: Icons.car_rental_outlined,
+          label: l10n.destinationCarTransport,
+        ),
+    ];
+  }
+
   List<Widget> _countryTiles(
     BuildContext context,
     List<DestinationCountry> countries, {
@@ -593,62 +806,58 @@ class _DestinationCountriesScreenState
               style: const TextStyle(fontSize: 28),
             ),
             title: Text(country.name),
-            subtitle: Text(
-              [
-                if (country.displayCode.isNotEmpty) country.displayCode,
-                l10n.barrelPriceSummary(
-                  '\$${country.barrelShippingPrice.toStringAsFixed(0)}',
-                ),
-                if (country.deliveryEstimateLabel != null)
-                  l10n.deliveryEstimateSummary(country.deliveryEstimateLabel!),
-              ].whereType<String>().join(' • '),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (country.displayCode.isNotEmpty) ...[
+                    Text(
+                      country.displayCode,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  Builder(
+                    builder: (context) {
+                      final serviceChips = _destinationServiceChips(
+                        l10n,
+                        country,
+                      );
+                      return Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: serviceChips.isEmpty
+                            ? [
+                                _DestinationSummaryChip(
+                                  icon: Icons.visibility_off_outlined,
+                                  label: l10n.noDestinationServicesConfigured,
+                                  muted: true,
+                                ),
+                              ]
+                            : serviceChips,
+                      );
+                    },
+                  ),
+                  if (country.deliveryEstimateLabel != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      l10n.deliveryEstimateSummary(
+                        country.deliveryEstimateLabel!,
+                      ),
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
-            trailing: Switch(
-              value: country.isActive,
-              onChanged: canEdit && !_isBusy
-                  ? (value) async {
-                      if (_isSavingDestination) return;
-                      if (value && country.barrelShippingPrice <= 0) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(l10n.addBarrelFeeBeforeActivating),
-                          ),
-                        );
-                        await _showForm(context, country: country);
-                        return;
-                      }
-                      try {
-                        if (mounted) {
-                          setState(() => _isSavingDestination = true);
-                        }
-                        final businessId = _currentBusinessId(
-                          context.read<AuthProvider>(),
-                        );
-                        final businessSnapshot =
-                            await _businessDestinationSnapshot(businessId);
-                        await FirebaseFirestore.instance
-                            .collection('businesses')
-                            .doc(businessId)
-                            .collection('destinationCountries')
-                            .doc(country.id)
-                            .set({
-                              ...businessSnapshot,
-                              'isActive': value,
-                              'updatedAt': FieldValue.serverTimestamp(),
-                            }, SetOptions(merge: true));
-                        if (!context.mounted) return;
-                        showSuccessSnackBar(context, l10n.recordUpdated);
-                      } catch (error) {
-                        if (!context.mounted) return;
-                        showErrorSnackBar(context, _friendlyError(l10n, error));
-                      } finally {
-                        if (mounted) {
-                          setState(() => _isSavingDestination = false);
-                        }
-                      }
-                    }
-                  : null,
-            ),
+            trailing: canEdit ? const Icon(Icons.chevron_right) : null,
             onTap: canEdit && !_isBusy
                 ? () => _showForm(context, country: country)
                 : null,
@@ -695,6 +904,122 @@ class _DestinationCountriesScreenState
               right: 0,
               child: LinearProgressIndicator(minHeight: 3),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DestinationServiceToggle extends StatelessWidget {
+  const _DestinationServiceToggle({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+    this.child,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: value
+              ? AppColors.cobalt.withValues(alpha: 0.45)
+              : AppColors.lightOutline,
+        ),
+        borderRadius: BorderRadius.circular(8),
+        color: value
+            ? AppColors.mist.withValues(alpha: 0.35)
+            : AppColors.lightBg,
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: value ? AppColors.cobaltDeep : AppColors.muted),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: AppColors.ink,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch.adaptive(value: value, onChanged: onChanged),
+            ],
+          ),
+          if (value && child != null) ...[const SizedBox(height: 12), child!],
+        ],
+      ),
+    );
+  }
+}
+
+class _DestinationSummaryChip extends StatelessWidget {
+  const _DestinationSummaryChip({
+    required this.icon,
+    required this.label,
+    this.muted = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool muted;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = muted ? AppColors.muted : AppColors.cobaltDeep;
+    final background = muted
+        ? AppColors.lightBg
+        : AppColors.mist.withValues(alpha: 0.45);
+    return Container(
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.lightOutline),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: foreground),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: foreground,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         ],
       ),
     );

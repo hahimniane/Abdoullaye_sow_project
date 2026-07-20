@@ -1406,8 +1406,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get businessProfileNotFound => 'Profil de l’entreprise introuvable.';
 
   @override
-  String get destinationsAndShippingFees =>
-      'Destinations et frais d’expédition';
+  String get destinationsAndShippingFees => 'Destinations et services';
 
   @override
   String get team => 'Équipe';
@@ -1995,19 +1994,107 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get selectCountriesAddFees =>
-      'Sélectionnez les pays desservis par cette entreprise et ajoutez les frais d’expédition pour chaque destination.';
+      'Choisissez les pays et sélectionnez ce que cette entreprise propose pour chaque destination.';
 
   @override
   String activeDestinationsHaveFees(Object priced, Object total) {
-    return '$priced destination(s) active(s) sur $total ont des frais d’expédition.';
+    return '$priced destination(s) active(s) sur $total ont des services configurés.';
   }
 
   @override
   String get selectDestinationCountries =>
-      'Sélectionner les pays de destination';
+      'Sélectionner les services de destination';
 
   @override
-  String get manageDestinationsFees => 'Gérer les destinations et les frais';
+  String get manageDestinationsFees => 'Gérer les destinations et services';
+
+  @override
+  String get servicesForDestination => 'Services pour cette destination';
+
+  @override
+  String get servicesForDestinationHelp =>
+      'Activez uniquement ce que cette entreprise propose pour ce pays.';
+
+  @override
+  String get destinationServiceCoverageTitle => 'Services de destination';
+
+  @override
+  String get destinationServiceCoverageSubtitle =>
+      'Définissez les services disponibles pour ce pays et ajoutez les tarifs nécessaires.';
+
+  @override
+  String get offerBarrelShipping => 'Expédition de barils';
+
+  @override
+  String get barrelShippingDestinationHelper =>
+      'Les clients peuvent envoyer des barils vers ce pays.';
+
+  @override
+  String get offerFreightAir => 'Fret aérien';
+
+  @override
+  String get freightAirDestinationHelper =>
+      'Les clients peuvent envoyer des colis par avion vers ce pays.';
+
+  @override
+  String get offerFreightSea => 'Fret maritime';
+
+  @override
+  String get freightSeaDestinationHelper =>
+      'Les clients peuvent envoyer des colis par mer vers ce pays.';
+
+  @override
+  String get offerCarTransportDestination =>
+      'Expédier des voitures vers ce pays';
+
+  @override
+  String get carTransportDestinationHelper =>
+      'Les clients peuvent demander un devis de transport de voiture pour ce pays.';
+
+  @override
+  String get freightAirRatePerKg => 'Tarif du fret aérien par kg';
+
+  @override
+  String get freightSeaRatePerKg => 'Tarif du fret maritime par kg';
+
+  @override
+  String get chooseAtLeastOneDestinationService =>
+      'Choisissez au moins un service pour cette destination.';
+
+  @override
+  String destinationServiceRateRequired(Object service) {
+    return 'Ajoutez un tarif pour $service.';
+  }
+
+  @override
+  String destinationServiceRateGreaterThanZero(Object service) {
+    return '$service nécessite un tarif supérieur à 0.';
+  }
+
+  @override
+  String get destinationBarrelService => 'Baril';
+
+  @override
+  String get destinationFreightAir => 'Fret aérien';
+
+  @override
+  String get destinationFreightSea => 'Fret maritime';
+
+  @override
+  String get destinationCarTransport => 'Transport voiture';
+
+  @override
+  String destinationServicePriceSummary(Object service, Object price) {
+    return '$service : $price';
+  }
+
+  @override
+  String destinationServiceRateSummary(Object service, Object rate) {
+    return '$service : $rate/kg';
+  }
+
+  @override
+  String get noDestinationServicesConfigured => 'Aucun service configuré';
 
   @override
   String get businessNameRequired => 'Le nom de l’entreprise est requis';
@@ -2382,6 +2469,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Comment les clients et l’équipe identifient cette entreprise.';
 
   @override
+  String get businessProfileDetailsSectionError =>
+      'Vérifiez les informations d’entreprise indiquées.';
+
+  @override
   String get businessDefaultAddressSubtitle =>
       'Utilisée comme adresse par défaut pour les annonces de véhicules.';
 
@@ -2421,12 +2512,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get parkingAddress => 'Adresse du stationnement';
 
   @override
-  String get parkingLatitude => 'Latitude';
-
-  @override
-  String get parkingLongitude => 'Longitude';
-
-  @override
   String get totalParkingSpaces => 'Places totales';
 
   @override
@@ -2459,11 +2544,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get enterValidParkingCapacity =>
-      'Ajoutez les places totales, un tarif journalier positif et des places bloquées valides avant d’enregistrer le stationnement.';
-
-  @override
-  String get enterValidParkingCoordinates =>
-      'Saisissez une latitude et une longitude valides pour le stationnement, ou laissez les deux champs vides.';
+      'Ajoutez l’adresse, le lieu, les places et le tarif journalier avant d’enregistrer.';
 
   @override
   String get customerParkingTitle => 'Trouver un stationnement';
@@ -3423,6 +3504,57 @@ class AppLocalizationsFr extends AppLocalizations {
   String get estimatePaid => 'Estimation payée';
 
   @override
+  String get freightOrderDetails => 'Commande de fret';
+
+  @override
+  String get freightNextStep => 'Prochaine étape';
+
+  @override
+  String freightNextDropOffAtProvider(Object businessName) {
+    return 'Déposez votre colis chez $businessName. L’entreprise confirmera le poids après le dépôt.';
+  }
+
+  @override
+  String get freightNextDropOffAtBusiness =>
+      'Déposez votre colis à l’adresse de l’entreprise. L’entreprise confirmera le poids après le dépôt.';
+
+  @override
+  String get freightNextWeightReview =>
+      'L’entreprise confirme le poids final. Tout solde ou remboursement apparaîtra ici.';
+
+  @override
+  String get freightNextInTransit =>
+      'Votre colis est en route. Gardez ce numéro de suivi pour les mises à jour.';
+
+  @override
+  String get freightNextReadyForPickup =>
+      'Votre colis est prêt à être récupéré.';
+
+  @override
+  String get freightNextCompleted => 'Cette commande de fret est terminée.';
+
+  @override
+  String paidEstimateAmount(Object amount) {
+    return 'Estimation payée : $amount';
+  }
+
+  @override
+  String estimatedWeightValue(Object weight) {
+    return 'Poids estimé : $weight';
+  }
+
+  @override
+  String get freightNoActionUntilWeightConfirmed =>
+      'Après le dépôt, aucune action n’est nécessaire avant la confirmation du poids par l’entreprise.';
+
+  @override
+  String get viewAllShipments => 'Voir toutes les expéditions';
+
+  @override
+  String get shipmentStillSyncing =>
+      'Cette expédition est encore en synchronisation. Vous pouvez voir toutes les expéditions ou réessayer bientôt.';
+
+  @override
   String get awaitingConfirmedWeight => 'En attente du poids confirmé';
 
   @override
@@ -3723,7 +3855,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get activeDestinationsRequireFee =>
-      'Les destinations actives nécessitent des frais d’expédition de baril.';
+      'Les destinations actives nécessitent au moins un service configuré.';
 
   @override
   String get seedCountriesEmptyInstruction =>
@@ -4161,6 +4293,17 @@ class AppLocalizationsFr extends AppLocalizations {
       'L’escalade vers un admin devient disponible après le délai de réponse de l’entreprise, sauf urgence.';
 
   @override
+  String get supportEscalationUrgentOnly =>
+      'L’escalade normale se déverrouille après le délai de réponse de l’entreprise. Les motifs urgents peuvent être envoyés maintenant.';
+
+  @override
+  String get supportAlreadyEscalatedTitle => 'Déjà escaladé à un admin Laawol';
+
+  @override
+  String get supportAlreadyEscalatedSubtitle =>
+      'Ce dossier est déjà dans la file des admins Laawol.';
+
+  @override
   String get supportReasonUnresolved =>
       'L’entreprise n’a pas résolu le problème';
 
@@ -4224,8 +4367,31 @@ class AppLocalizationsFr extends AppLocalizations {
       'Aperçu indisponible. Vous pouvez quand même téléverser ce fichier.';
 
   @override
-  String get supportUploadFailed =>
+  String get supportUploadFailed => 'Échec du téléversement. Réessayez.';
+
+  @override
+  String get supportUploadFailedNetwork =>
       'Échec du téléversement. Vérifiez votre connexion et réessayez.';
+
+  @override
+  String get supportUploadFailedAuth =>
+      'Échec du téléversement, car votre session a expiré. Reconnectez-vous, puis réessayez.';
+
+  @override
+  String get supportUploadFailedPermission =>
+      'Échec du téléversement, car votre compte ne peut pas ajouter de fichiers à ce dossier de support.';
+
+  @override
+  String get supportUploadFailedInvalidFile =>
+      'Échec du téléversement, car ce type ou cette taille de fichier n’est pas autorisé.';
+
+  @override
+  String get supportUploadFailedAppVerification =>
+      'Téléversement bloqué par la vérification de l’application. Mettez l’application à jour ou contactez le support.';
+
+  @override
+  String get supportUploadFailedDebugAppCheck =>
+      'Téléversement bloqué par Firebase App Check. Enregistrez le jeton de débogage de cet appareil, puis réessayez.';
 
   @override
   String supportImagePreviewLabel(Object name) {
@@ -4825,7 +4991,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get phoneVerificationCountryCodeHelp =>
-      'Incluez l’indicatif du pays, par exemple +1 718 555 0100.';
+      'Choisissez l’indicatif du pays, puis saisissez le numéro mobile.';
 
   @override
   String get phoneVerificationCodeSentTitle => 'Code envoyé';
@@ -4904,6 +5070,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Pour des raisons de sécurité, déconnectez-vous, reconnectez-vous, puis vérifiez à nouveau votre téléphone.';
 
   @override
+  String get phoneVerificationAppCheck =>
+      'Le contrôle de sécurité de l’app a échoué. Enregistrez cet appareil de débogage dans Firebase App Check, puis rouvrez l’app.';
+
+  @override
   String get phoneVerificationGenericError =>
       'Nous n’avons pas pu vérifier votre téléphone. Réessayez.';
 
@@ -4957,6 +5127,18 @@ class AppLocalizationsFr extends AppLocalizations {
   String get phoneVerificationNotVerified => 'Téléphone non vérifié';
 
   @override
+  String get phoneCountryCode => 'Indicatif du pays';
+
+  @override
+  String get selectCountryCode => 'Sélectionner l’indicatif du pays';
+
+  @override
+  String get phoneCountrySearchHint => 'Rechercher un pays ou un indicatif';
+
+  @override
+  String get noCountryCodesFound => 'Aucun indicatif trouvé';
+
+  @override
   String get sharedBarrelActionFailed =>
       'Nous n’avons pas pu terminer cette action de baril partagé. Réessayez.';
 
@@ -4974,4 +5156,100 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get marketplaceDestinationChangeSummary =>
       'Modification payante de la destination';
+
+  @override
+  String get freightPickupSectionTitle => 'Enlèvement du fret';
+
+  @override
+  String get freightPickupSectionSubtitle =>
+      'Proposez de récupérer les colis à l\'adresse de votre client et choisissez le mode de calcul des frais.';
+
+  @override
+  String get freightPickupOfferToggle => 'Proposer l\'enlèvement du fret';
+
+  @override
+  String get freightPickupModelDistance => 'Par distance';
+
+  @override
+  String get freightPickupModelBorough => 'Par arrondissement';
+
+  @override
+  String get freightPickupDistanceHint =>
+      'Frais = frais de base + tarif au km × distance de conduite depuis votre adresse. Laissez les tarifs à 0 pour un enlèvement gratuit.';
+
+  @override
+  String get freightPickupOriginAddress => 'Adresse de départ de l\'enlèvement';
+
+  @override
+  String get freightPickupOriginAddressHelper =>
+      'Point de départ de vos chauffeurs. Par défaut, l\'adresse de votre entreprise.';
+
+  @override
+  String get freightPickupBaseFee => 'Frais de base';
+
+  @override
+  String get freightPickupPerKm => 'Par km';
+
+  @override
+  String get freightPickupMinFee => 'Frais minimum';
+
+  @override
+  String get freightPickupMaxKm => 'Distance max (km)';
+
+  @override
+  String get freightPickupBoroughHint =>
+      'Définissez un tarif d\'enlèvement fixe pour chaque arrondissement de New York que vous desservez. Laissez vide ceux que vous ne couvrez pas.';
+
+  @override
+  String get freightPickupBoroughPriceRequired =>
+      'Définissez un tarif d\'enlèvement pour au moins un arrondissement, ou désactivez l\'enlèvement du fret.';
+
+  @override
+  String get freightPickupCustomerToggle => 'Enlèvement à mon adresse';
+
+  @override
+  String get freightPickupAddressLabel => 'Adresse d\'enlèvement';
+
+  @override
+  String get freightPickupBoroughLabel => 'Arrondissement';
+
+  @override
+  String get freightPickupDateTimeLabel => 'Date et heure d\'enlèvement';
+
+  @override
+  String get freightPickupChooseDateTime => 'Choisir la date et l\'heure';
+
+  @override
+  String get freightPickupFeeLabel => 'Frais d\'enlèvement';
+
+  @override
+  String get freightPickupCalculating => 'Calcul des frais d\'enlèvement…';
+
+  @override
+  String get freightPickupEnterDetailsForFee =>
+      'Saisissez vos détails d\'enlèvement pour voir les frais.';
+
+  @override
+  String get freightPickupSelectDateTime =>
+      'Veuillez choisir une date et une heure d\'enlèvement.';
+
+  @override
+  String get freightPickupUnavailableCustomer =>
+      'Cette entreprise ne propose pas l\'enlèvement pour le moment.';
+
+  @override
+  String get freightPickupOutOfRangeCustomer =>
+      'Votre adresse est en dehors de la zone d\'enlèvement de cette entreprise.';
+
+  @override
+  String get freightPickupQuoteFailed =>
+      'Nous n\'avons pas pu calculer les frais d\'enlèvement. Vérifiez l\'adresse et réessayez.';
+
+  @override
+  String freightPickupDistanceAway(String distanceKm) {
+    return 'à $distanceKm km';
+  }
+
+  @override
+  String get freightPickupFreeLabel => 'Enlèvement gratuit';
 }

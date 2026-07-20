@@ -5,20 +5,24 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../data/country_catalog.dart';
 import '../l10n/app_localizations.dart';
 import '../models/barrel_pool.dart';
 import '../models/business_destination_option.dart';
 import '../models/business_service.dart';
+import '../models/destination_country.dart';
 import '../services/barrel_pool_service.dart';
 import '../services/barrel_pricing_service.dart';
 import '../services/business_service.dart';
 import '../providers/auth_provider.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/barrel_pool_actions.dart';
+import '../utils/receiver_phone_rules.dart';
 import '../utils/root_navigation.dart';
 import '../utils/shared_barrel_error.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/support_entry_button.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
@@ -47,6 +51,16 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
 
   String copy(String en, String fr) {
     return Localizations.localeOf(context).languageCode == 'fr' ? fr : en;
+  }
+
+  DestinationCountry? _countryForId(String countryId) {
+    return CountryCatalog.all
+        .where((country) => country.id == countryId)
+        .firstOrNull;
+  }
+
+  String _countryCodeForId(String countryId) {
+    return _countryForId(countryId)?.displayCode ?? 'US';
   }
 
   String _depositSummary(BarrelPoolResult result) {
@@ -723,6 +737,26 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                 );
                 return;
               }
+              final l10n = AppLocalizations.of(context)!;
+              final phoneError = ReceiverPhoneRules.validate(
+                value: phoneController.text,
+                destination: _countryForId(pool.destinationCountryId),
+                allowDifferentCountry: false,
+                requiredMessage: l10n.pleaseEnterReceiverPhone,
+                invalidPhoneMessage: l10n.invalidPhoneWithCountryCode,
+                invalidInternationalPhoneMessage:
+                    l10n.invalidInternationalPhone,
+                whatsAppCountryCodeMessage:
+                    l10n.whatsAppDifferentCountryRequiresCode,
+                destinationMismatchMessage:
+                    l10n.receiverPhoneMustMatchDestination,
+              );
+              if (phoneError != null) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(phoneError)));
+                return;
+              }
               if (pickupRequested) {
                 final pickupDate = pickupDateTime;
                 if (pickupAddressController.text.trim().isEmpty ||
@@ -870,14 +904,12 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                         labelText: copy('Receiver name', 'Nom du destinataire'),
                       ),
                     ),
-                    TextField(
+                    CountryPhoneField(
                       controller: phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: InputDecoration(
-                        labelText: copy(
-                          'Receiver phone',
-                          'Téléphone du destinataire',
-                        ),
+                      enabled: !busy,
+                      labelText: AppLocalizations.of(context)!.receiverPhone,
+                      initialCountryCode: _countryCodeForId(
+                        pool.destinationCountryId,
                       ),
                     ),
                     _PickupSection(
@@ -1081,6 +1113,26 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                     ),
                   ),
                 );
+                return;
+              }
+              final l10n = AppLocalizations.of(context)!;
+              final phoneError = ReceiverPhoneRules.validate(
+                value: phoneController.text,
+                destination: selected.country,
+                allowDifferentCountry: false,
+                requiredMessage: l10n.pleaseEnterReceiverPhone,
+                invalidPhoneMessage: l10n.invalidPhoneWithCountryCode,
+                invalidInternationalPhoneMessage:
+                    l10n.invalidInternationalPhone,
+                whatsAppCountryCodeMessage:
+                    l10n.whatsAppDifferentCountryRequiresCode,
+                destinationMismatchMessage:
+                    l10n.receiverPhoneMustMatchDestination,
+              );
+              if (phoneError != null) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(phoneError)));
                 return;
               }
               if (pickupRequested) {
@@ -1326,15 +1378,11 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                         labelText: copy('Receiver name', 'Nom du destinataire'),
                       ),
                     ),
-                    TextField(
+                    CountryPhoneField(
                       controller: phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: InputDecoration(
-                        labelText: copy(
-                          'Receiver phone',
-                          'Téléphone du destinataire',
-                        ),
-                      ),
+                      enabled: !busy,
+                      labelText: AppLocalizations.of(context)!.receiverPhone,
+                      initialCountryCode: selected.country.displayCode,
                     ),
                     _PickupSection(
                       copy: copy,

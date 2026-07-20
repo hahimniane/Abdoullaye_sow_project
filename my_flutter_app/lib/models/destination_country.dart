@@ -7,9 +7,14 @@ class DestinationCountry {
     this.code,
     this.isActive = false,
     this.sortOrder = 0,
+    this.destinationCoverageVersion = 1,
+    this.barrelShippingAvailable = true,
+    this.freightAirAvailable = true,
+    this.freightSeaAvailable = true,
     this.barrelShippingPrice = 0,
     this.freightAirPricePerKg = 0,
     this.freightSeaPricePerKg = 0,
+    this.carTransportAvailable = true,
     this.deliveryEstimateMinDays,
     this.deliveryEstimateMaxDays,
     this.destinationNote,
@@ -28,20 +33,44 @@ class DestinationCountry {
   final String? code;
   final bool isActive;
   final int sortOrder;
+  final int destinationCoverageVersion;
+  final bool barrelShippingAvailable;
+  final bool freightAirAvailable;
+  final bool freightSeaAvailable;
   final double barrelShippingPrice;
   final double freightAirPricePerKg;
   final double freightSeaPricePerKg;
+  final bool carTransportAvailable;
   final int? deliveryEstimateMinDays;
   final int? deliveryEstimateMaxDays;
   final String? destinationNote;
 
+  Map<String, bool> get serviceAvailability => {
+    'barrelShipping': barrelShippingAvailable,
+    'freightAir': freightAirAvailable,
+    'freightSea': freightSeaAvailable,
+    'carTransport': carTransportAvailable,
+  };
+
+  bool get isBarrelShippingConfigured =>
+      barrelShippingAvailable && barrelShippingPrice > 0;
+
   double freightRatePerKg(String mode) =>
       mode == 'air' ? freightAirPricePerKg : freightSeaPricePerKg;
 
-  bool freightAvailable(String mode) => freightRatePerKg(mode) > 0;
+  bool freightAvailable(String mode) {
+    if (mode == 'air') return freightAirAvailable && freightAirPricePerKg > 0;
+    return freightSeaAvailable && freightSeaPricePerKg > 0;
+  }
 
   bool get hasAnyFreightRate =>
-      freightAirPricePerKg > 0 || freightSeaPricePerKg > 0;
+      freightAvailable('air') || freightAvailable('sea');
+
+  bool get hasAnyServiceCoverage =>
+      isActive &&
+      (isBarrelShippingConfigured ||
+          hasAnyFreightRate ||
+          carTransportAvailable);
 
   String get displayCode => (code ?? '').trim().toUpperCase();
 
@@ -79,12 +108,36 @@ class DestinationCountry {
       code: data['code'] as String?,
       isActive: data['isActive'] == true,
       sortOrder: (data['sortOrder'] as num?)?.toInt() ?? 0,
+      destinationCoverageVersion:
+          (data['destinationCoverageVersion'] as num?)?.toInt() ?? 1,
+      barrelShippingAvailable: _serviceEnabled(
+        data,
+        'barrelShipping',
+        legacy:
+            data['isActive'] == true &&
+            ((data['barrelShippingPrice'] as num?)?.toDouble() ?? 0) > 0,
+      ),
+      freightAirAvailable: _serviceEnabled(
+        data,
+        'freightAir',
+        legacy:
+            data['isActive'] == true &&
+            ((data['freightAirPricePerKg'] as num?)?.toDouble() ?? 0) > 0,
+      ),
+      freightSeaAvailable: _serviceEnabled(
+        data,
+        'freightSea',
+        legacy:
+            data['isActive'] == true &&
+            ((data['freightSeaPricePerKg'] as num?)?.toDouble() ?? 0) > 0,
+      ),
       barrelShippingPrice:
           (data['barrelShippingPrice'] as num?)?.toDouble() ?? 0,
       freightAirPricePerKg:
           (data['freightAirPricePerKg'] as num?)?.toDouble() ?? 0,
       freightSeaPricePerKg:
           (data['freightSeaPricePerKg'] as num?)?.toDouble() ?? 0,
+      carTransportAvailable: _legacyCarTransportAvailable(data),
       deliveryEstimateMinDays: (data['deliveryEstimateMinDays'] as num?)
           ?.toInt(),
       deliveryEstimateMaxDays: (data['deliveryEstimateMaxDays'] as num?)
@@ -99,9 +152,12 @@ class DestinationCountry {
       if (code != null && code!.isNotEmpty) 'code': code,
       'isActive': isActive,
       'sortOrder': sortOrder,
+      'destinationCoverageVersion': 2,
+      'serviceAvailability': serviceAvailability,
       'barrelShippingPrice': barrelShippingPrice,
       'freightAirPricePerKg': freightAirPricePerKg,
       'freightSeaPricePerKg': freightSeaPricePerKg,
+      'carTransportAvailable': carTransportAvailable,
       if (deliveryEstimateMinDays != null)
         'deliveryEstimateMinDays': deliveryEstimateMinDays,
       if (deliveryEstimateMaxDays != null)
@@ -110,5 +166,25 @@ class DestinationCountry {
         'destinationNote': destinationNote,
       'updatedAt': FieldValue.serverTimestamp(),
     };
+  }
+
+  static bool _serviceEnabled(
+    Map<String, dynamic> data,
+    String key, {
+    required bool legacy,
+  }) {
+    final availability = data['serviceAvailability'];
+    if (availability is Map && availability[key] is bool) {
+      return availability[key] as bool;
+    }
+    return legacy;
+  }
+
+  static bool _legacyCarTransportAvailable(Map<String, dynamic> data) {
+    final availability = data['serviceAvailability'];
+    if (availability is Map && availability['carTransport'] is bool) {
+      return availability['carTransport'] as bool;
+    }
+    return data['isActive'] == true;
   }
 }

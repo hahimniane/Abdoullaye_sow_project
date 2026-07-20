@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:geocoding/geocoding.dart';
@@ -22,10 +21,10 @@ import '../services/business_service.dart';
 import '../services/payment_flow_safety.dart';
 import '../utils/barrel_receipt_generator.dart';
 import '../utils/action_confirmation.dart';
-import '../utils/phone_number_validator.dart';
 import '../utils/receiver_phone_rules.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/country_phone_field.dart';
 import '../widgets/destination_country_field.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
 import '../theme/app_colors.dart';
@@ -2545,7 +2544,6 @@ class BarrelTextFormField extends StatelessWidget {
     this.keyboardType,
     this.icon,
     this.onChanged,
-    this.inputFormatters,
   });
 
   final String label;
@@ -2554,7 +2552,6 @@ class BarrelTextFormField extends StatelessWidget {
   final TextInputType? keyboardType;
   final IconData? icon;
   final ValueChanged<String>? onChanged;
-  final List<TextInputFormatter>? inputFormatters;
 
   @override
   Widget build(BuildContext context) {
@@ -2563,7 +2560,6 @@ class BarrelTextFormField extends StatelessWidget {
       validator: validator,
       autovalidateMode: AutovalidateMode.onUserInteraction,
       keyboardType: keyboardType,
-      inputFormatters: inputFormatters,
       onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
@@ -2916,13 +2912,35 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                             : null,
                       ),
                       const SizedBox(height: 14),
-                      BarrelTextFormField(
-                        label: l10n.receiverPhone,
+                      CountryPhoneField(
                         controller: _receiverPhoneController,
-                        icon: Icons.phone_outlined,
-                        keyboardType: TextInputType.phone,
-                        inputFormatters:
-                            PhoneNumberValidator.allowedInputFormatters,
+                        labelText: l10n.receiverPhone,
+                        initialCountryCode: _country?.displayCode ?? 'US',
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(color: AppColors.rule),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(
+                              color: AppColors.brandRed,
+                              width: 2,
+                            ),
+                          ),
+                          errorBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(
+                              color: AppColors.errorRed,
+                              width: 2,
+                            ),
+                          ),
+                          filled: true,
+                          fillColor: AppColors.lightSurfaceVariant,
+                        ),
                         onChanged: (_) => setState(() {
                           if (!_showWhatsapp) {
                             _receiverPhoneIsWhatsappOnly = false;

@@ -17,6 +17,7 @@ import '../utils/phone_verification_status.dart';
 import '../utils/root_navigation.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/country_phone_field.dart';
 import 'phone_verification_screen.dart';
 
 class AccountProfileScreen extends StatefulWidget {
@@ -312,18 +313,13 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
                     decoration: InputDecoration(labelText: l10n.email),
                   ),
                   const SizedBox(height: 12),
-                  TextFormField(
+                  CountryPhoneField(
                     controller: _phoneController,
                     enabled: !profileBusy,
-                    keyboardType: TextInputType.phone,
-                    inputFormatters:
-                        PhoneNumberValidator.allowedInputFormatters,
-                    decoration: InputDecoration(
-                      labelText: l10n.phone,
-                      helperText: auth.role == 'customer'
-                          ? l10n.phoneVerificationCountryCodeHelp
-                          : null,
-                    ),
+                    labelText: l10n.phone,
+                    helperText: auth.role == 'customer'
+                        ? l10n.phoneVerificationCountryCodeHelp
+                        : null,
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
                         return l10n.requiredField;

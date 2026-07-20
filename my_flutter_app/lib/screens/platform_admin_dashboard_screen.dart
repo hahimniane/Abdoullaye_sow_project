@@ -12,6 +12,7 @@ import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../utils/phone_number_validator.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
 import 'staff_car_management_screen.dart';
 
@@ -797,15 +798,9 @@ Future<void> showAddPlatformManagerDialog(BuildContext context) async {
                       },
                     ),
                     const SizedBox(height: 10),
-                    TextFormField(
+                    CountryPhoneField(
                       controller: phoneController,
-                      keyboardType: TextInputType.phone,
-                      inputFormatters:
-                          PhoneNumberValidator.allowedInputFormatters,
-                      decoration: InputDecoration(
-                        labelText: l10n.phone,
-                        prefixIcon: const Icon(Icons.phone_outlined),
-                      ),
+                      labelText: l10n.phone,
                       validator: (value) {
                         final trimmed = value?.trim() ?? '';
                         if (trimmed.isEmpty) return null;
@@ -1209,9 +1204,9 @@ Future<void> _showReviewSheet(
                     decoration: InputDecoration(labelText: l10n.businessName),
                   ),
                   const SizedBox(height: 10),
-                  TextField(
+                  CountryPhoneField(
                     controller: phoneController,
-                    decoration: InputDecoration(labelText: l10n.phone),
+                    labelText: l10n.phone,
                   ),
                   const SizedBox(height: 10),
                   TextField(

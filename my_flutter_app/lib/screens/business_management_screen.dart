@@ -6,6 +6,7 @@ import '../l10n/app_localizations.dart';
 import '../models/business_profile.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
 
 class BusinessManagementScreen extends StatelessWidget {
@@ -77,9 +78,9 @@ class BusinessManagementScreen extends StatelessWidget {
                             : null,
                       ),
                       const SizedBox(height: 12),
-                      TextFormField(
+                      CountryPhoneField(
                         controller: phoneController,
-                        decoration: InputDecoration(labelText: l10n.phone),
+                        labelText: l10n.phone,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(

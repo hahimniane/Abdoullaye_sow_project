@@ -201,8 +201,16 @@ class MyApp extends StatelessWidget {
               '/transport': (context) => const TransportCarScreen(),
               '/request-transport': (context) => const RequestTransportScreen(),
               '/sell': (context) => const SellCarsScreen(showBackButton: true),
-              '/tracking': (context) =>
-                  const TrackingScreen(showBackButton: true),
+              '/tracking': (context) {
+                final rawArgs = ModalRoute.of(context)!.settings.arguments;
+                final args = rawArgs is TrackingScreenArguments
+                    ? rawArgs
+                    : null;
+                return TrackingScreen(
+                  showBackButton: true,
+                  focusShipmentId: args?.shipmentId,
+                );
+              },
               '/my-purchases': (context) =>
                   const MyPurchasesScreen(showBackButton: true),
               '/orders': (context) => const OrdersScreen(showBackButton: true),

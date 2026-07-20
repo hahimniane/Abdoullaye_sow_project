@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/l10n/app_localizations.dart';
+import 'package:my_flutter_app/utils/root_navigation.dart';
 import 'package:my_flutter_app/widgets/app_back_button.dart';
 
 void main() {
@@ -23,11 +24,49 @@ void main() {
     expect(tapped, isTrue);
   });
 
+  testWidgets('root named navigation preserves typed pop results', (
+    tester,
+  ) async {
+    bool? result;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        routes: {
+          '/verify': (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Verified'),
+            ),
+          ),
+        },
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () async {
+                result = await pushRootNamed<bool>(context, '/verify');
+              },
+              child: const Text('Open verification'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open verification'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Verified'));
+    await tester.pumpAndSettle();
+
+    expect(result, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
   test('named root-tab routes request visible back buttons', () {
     final mainSource = File('lib/main.dart').readAsStringSync();
 
     expect(mainSource, contains("const SellCarsScreen(showBackButton: true)"));
-    expect(mainSource, contains("const TrackingScreen(showBackButton: true)"));
+    expect(mainSource, contains("TrackingScreen("));
+    expect(mainSource, contains("showBackButton: true"));
     expect(
       mainSource,
       contains("const MyPurchasesScreen(showBackButton: true)"),
@@ -63,5 +102,18 @@ void main() {
     );
     expect(accountSource, contains('AppBackButton(onPressed: _close)'));
     expect(walletSource, contains('_WalletHeader(onBack: _back)'));
+  });
+
+  test('freight orders pass their shipment id into focused tracking', () {
+    final ordersSource = File(
+      'lib/screens/orders_screen.dart',
+    ).readAsStringSync();
+    final trackingSource = File(
+      'lib/screens/tracking_screen.dart',
+    ).readAsStringSync();
+
+    expect(ordersSource, contains('TrackingScreenArguments'));
+    expect(ordersSource, contains('shipmentId: order.relatedId'));
+    expect(trackingSource, contains('focusShipmentId'));
   });
 }

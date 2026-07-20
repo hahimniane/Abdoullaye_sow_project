@@ -16,9 +16,10 @@ import '../services/business_service.dart';
 import '../services/destination_country_service.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/barrel_receipt_generator.dart';
-import '../utils/phone_number_validator.dart';
+import '../utils/receiver_phone_rules.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/country_phone_field.dart';
 import '../widgets/destination_country_field.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/support_entry_button.dart';
@@ -884,20 +885,31 @@ class _BarrelShipmentDetailsScreenState
                                       },
                                     ),
                                     const SizedBox(height: 14),
-                                    _EditRoundedTextField(
-                                      label: l10n.receiverPhone,
+                                    CountryPhoneField(
                                       controller: _receiverPhoneController,
-                                      icon: Icons.phone_outlined,
-                                      keyboardType: TextInputType.phone,
-                                      inputFormatters: PhoneNumberValidator
-                                          .allowedInputFormatters,
-                                      readOnly: !canEditDetails,
+                                      labelText: l10n.receiverPhone,
+                                      enabled: canEditDetails,
+                                      initialCountryCode:
+                                          _selectedDestinationDraft
+                                              ?.displayCode ??
+                                          'US',
                                       validator: (value) {
                                         if (!canEditDetails) return null;
-                                        return PhoneNumberValidator.validate(
-                                          value,
+                                        return ReceiverPhoneRules.validate(
+                                          value: value,
+                                          destination:
+                                              _selectedDestinationDraft,
+                                          allowDifferentCountry: false,
                                           requiredMessage:
                                               l10n.pleaseEnterReceiverPhone,
+                                          invalidPhoneMessage:
+                                              l10n.invalidPhoneWithCountryCode,
+                                          invalidInternationalPhoneMessage:
+                                              l10n.invalidInternationalPhone,
+                                          whatsAppCountryCodeMessage: l10n
+                                              .whatsAppDifferentCountryRequiresCode,
+                                          destinationMismatchMessage: l10n
+                                              .receiverPhoneMustMatchDestination,
                                         );
                                       },
                                     ),
@@ -1698,7 +1710,6 @@ class _EditRoundedTextField extends StatelessWidget {
     this.validator,
     this.keyboardType,
     this.icon,
-    this.inputFormatters,
     this.readOnly = false,
   });
 
@@ -1707,7 +1718,6 @@ class _EditRoundedTextField extends StatelessWidget {
   final String? Function(String?)? validator;
   final TextInputType? keyboardType;
   final IconData? icon;
-  final List<TextInputFormatter>? inputFormatters;
   final bool readOnly;
 
   @override
@@ -1716,7 +1726,6 @@ class _EditRoundedTextField extends StatelessWidget {
       controller: controller,
       validator: validator,
       keyboardType: keyboardType,
-      inputFormatters: inputFormatters,
       readOnly: readOnly,
       decoration: InputDecoration(
         labelText: label,

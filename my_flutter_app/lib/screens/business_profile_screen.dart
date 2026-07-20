@@ -8,14 +8,18 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../data/business_location_catalog.dart';
+import '../data/nyc_boroughs.dart';
 import '../data/us_locations.dart';
 import '../l10n/app_localizations.dart';
 import '../models/business_profile.dart';
 import '../models/business_service.dart';
+import '../models/destination_country.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
+import '../utils/business_profile_validation.dart';
 import '../utils/phone_number_validator.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
 
 class BusinessProfileScreen extends StatefulWidget {
@@ -25,8 +29,19 @@ class BusinessProfileScreen extends StatefulWidget {
   State<BusinessProfileScreen> createState() => _BusinessProfileScreenState();
 }
 
+enum _BusinessProfileSectionKey {
+  details,
+  paidHoldPricing,
+  parkingCapacity,
+  services,
+}
+
 class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _detailsSectionKey = GlobalKey();
+  final _paidHoldPricingSectionKey = GlobalKey();
+  final _parkingCapacitySectionKey = GlobalKey();
+  final _servicesSectionKey = GlobalKey();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
@@ -52,10 +67,17 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
   final _parkingMinimumDaysController = TextEditingController();
   final _parkingPickupFeeController = TextEditingController();
   final _parkingInstructionsController = TextEditingController();
-  final _parkingLatitudeController = TextEditingController();
-  final _parkingLongitudeController = TextEditingController();
+  final _freightPickupOriginController = TextEditingController();
+  final _freightPickupBaseFeeController = TextEditingController();
+  final _freightPickupPerKmController = TextEditingController();
+  final _freightPickupMinFeeController = TextEditingController();
+  final _freightPickupMaxKmController = TextEditingController();
+  final _freightPickupBoroughControllers = {
+    for (final borough in kNycBoroughs) borough: TextEditingController(),
+  };
   final _featureBlurbController = TextEditingController();
   final _selectedServices = <String>{};
+  final _sectionErrors = <_BusinessProfileSectionKey, String>{};
   String _holdPricingMode = 'flat';
   String? _hydratedBusinessSignature;
   XFile? _image;
@@ -64,6 +86,8 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
   Uint8List? _featureLogoBytes;
   bool _featureConsent = false;
   bool _parkingPickupAvailable = false;
+  bool _freightPickupAvailable = false;
+  String _freightPickupModel = 'distance';
   bool _isSaving = false;
   bool _isRequestingFeature = false;
 
@@ -94,8 +118,14 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
     _parkingMinimumDaysController.dispose();
     _parkingPickupFeeController.dispose();
     _parkingInstructionsController.dispose();
-    _parkingLatitudeController.dispose();
-    _parkingLongitudeController.dispose();
+    _freightPickupOriginController.dispose();
+    _freightPickupBaseFeeController.dispose();
+    _freightPickupPerKmController.dispose();
+    _freightPickupMinFeeController.dispose();
+    _freightPickupMaxKmController.dispose();
+    for (final controller in _freightPickupBoroughControllers.values) {
+      controller.dispose();
+    }
     _featureBlurbController.dispose();
     super.dispose();
   }
@@ -141,6 +171,16 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
       business.parkingInstructions ?? '',
       business.parkingLatitude ?? '',
       business.parkingLongitude ?? '',
+      business.freightPickupAvailable,
+      business.freightPickupModel,
+      business.freightPickupBaseFee,
+      business.freightPickupPerKm,
+      business.freightPickupMinFee,
+      business.freightPickupMaxKm,
+      business.freightPickupOriginAddress ?? '',
+      business.freightPickupBoroughPrices.entries
+          .map((e) => '${e.key}:${e.value}')
+          .join(','),
     ].join('|#|');
     if (_hydratedBusinessSignature == signature) {
       return;
@@ -209,12 +249,27 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
             : business.parkingPickupFee.toStringAsFixed(0);
         _parkingInstructionsController.text =
             business.parkingInstructions ?? '';
-        _parkingLatitudeController.text = business.parkingLatitude == null
+        _freightPickupAvailable = business.freightPickupAvailable;
+        _freightPickupModel = business.effectiveFreightPickupModel;
+        _freightPickupOriginController.text =
+            business.freightPickupOriginAddress ?? '';
+        _freightPickupBaseFeeController.text = business.freightPickupBaseFee == 0
             ? ''
-            : business.parkingLatitude!.toStringAsFixed(6);
-        _parkingLongitudeController.text = business.parkingLongitude == null
+            : business.freightPickupBaseFee.toStringAsFixed(2);
+        _freightPickupPerKmController.text = business.freightPickupPerKm == 0
             ? ''
-            : business.parkingLongitude!.toStringAsFixed(6);
+            : business.freightPickupPerKm.toStringAsFixed(2);
+        _freightPickupMinFeeController.text = business.freightPickupMinFee == 0
+            ? ''
+            : business.freightPickupMinFee.toStringAsFixed(2);
+        _freightPickupMaxKmController.text = business.freightPickupMaxKm == 0
+            ? ''
+            : business.freightPickupMaxKm.toStringAsFixed(0);
+        for (final borough in kNycBoroughs) {
+          final fee = business.freightPickupBoroughPrices[borough];
+          _freightPickupBoroughControllers[borough]!.text =
+              (fee == null || fee == 0) ? '' : fee.toStringAsFixed(0);
+        }
         _featureBlurbController.text = business.marketingBlurb ?? '';
         _featureConsent = business.featureConsent;
         _selectedServices
@@ -338,29 +393,77 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
     }
   }
 
-  double? _optionalCoordinate(
-    TextEditingController controller, {
-    required double min,
-    required double max,
-  }) {
-    final text = controller.text.trim();
-    if (text.isEmpty) return null;
-    final value = double.tryParse(text);
-    if (value == null || value < min || value > max) return null;
-    return value;
+  void _clearSectionError(_BusinessProfileSectionKey section) {
+    if (!_sectionErrors.containsKey(section)) return;
+    setState(() => _sectionErrors.remove(section));
+  }
+
+  GlobalKey _sectionKeyFor(_BusinessProfileSectionKey section) {
+    switch (section) {
+      case _BusinessProfileSectionKey.details:
+        return _detailsSectionKey;
+      case _BusinessProfileSectionKey.paidHoldPricing:
+        return _paidHoldPricingSectionKey;
+      case _BusinessProfileSectionKey.parkingCapacity:
+        return _parkingCapacitySectionKey;
+      case _BusinessProfileSectionKey.services:
+        return _servicesSectionKey;
+    }
+  }
+
+  void _showValidationErrors(
+    Map<_BusinessProfileSectionKey, String> sectionErrors,
+  ) {
+    setState(() {
+      _sectionErrors
+        ..clear()
+        ..addAll(sectionErrors);
+    });
+    final firstError = sectionErrors.entries.first;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(firstError.value),
+        backgroundColor: AppColors.errorRed,
+      ),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final targetContext = _sectionKeyFor(firstError.key).currentContext;
+      if (targetContext == null) return;
+      Scrollable.ensureVisible(
+        targetContext,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+        alignment: 0.08,
+      );
+    });
+  }
+
+  /// Returns a localized error when the freight pickup section is enabled but
+  /// misconfigured, or null when it's fine (free pickup is allowed).
+  String? _validateFreightPickup() {
+    final l10n = AppLocalizations.of(context)!;
+    if (_freightPickupModel == 'borough') {
+      final hasAnyBoroughPrice = _freightPickupBoroughControllers.values.any(
+        (c) => (double.tryParse(c.text.trim()) ?? 0) > 0,
+      );
+      if (!hasAnyBoroughPrice) {
+        return l10n.freightPickupBoroughPriceRequired;
+      }
+    }
+    return null;
   }
 
   Future<void> _save(BusinessProfile business) async {
     final l10n = AppLocalizations.of(context)!;
-    if (!_formKey.currentState!.validate()) return;
+    final sectionErrors = <_BusinessProfileSectionKey, String>{};
+    if (!_formKey.currentState!.validate()) {
+      sectionErrors[_BusinessProfileSectionKey.details] =
+          l10n.businessProfileDetailsSectionError;
+    }
     if (_selectedServices.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.chooseAtLeastOneService),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
+      sectionErrors[_BusinessProfileSectionKey.services] =
+          l10n.chooseAtLeastOneService;
     }
     final holdFlatFee =
         double.tryParse(_holdFlatFeeController.text.trim()) ?? 0;
@@ -381,63 +484,64 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
         int.tryParse(_parkingMinimumDaysController.text.trim()) ?? 1;
     final parkingPickupFee =
         double.tryParse(_parkingPickupFeeController.text.trim()) ?? 0;
-    final parkingLatitude = _optionalCoordinate(
-      _parkingLatitudeController,
-      min: -90,
-      max: 90,
-    );
-    final parkingLongitude = _optionalCoordinate(
-      _parkingLongitudeController,
-      min: -180,
-      max: 180,
-    );
-    final hasParkingLatitude = _parkingLatitudeController.text
-        .trim()
-        .isNotEmpty;
-    final hasParkingLongitude = _parkingLongitudeController.text
-        .trim()
-        .isNotEmpty;
     if ((_holdPricingMode == 'flat' && holdFlatFee <= 0) ||
         (_holdPricingMode == 'per_day' && holdDailyRate <= 0) ||
         holdMaxDays < 1 ||
         holdMaxDays > 30) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.enterValidPaidHoldPricing),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
+      sectionErrors[_BusinessProfileSectionKey.paidHoldPricing] =
+          l10n.enterValidPaidHoldPricing;
     }
     final offersParking = _selectedServices.contains(
       BusinessServiceKey.carParking.value,
     );
-    if (offersParking &&
-        (parkingTotalSpaces <= 0 ||
-            parkingBlockedSpaces < 0 ||
-            parkingBlockedSpaces > parkingTotalSpaces ||
-            parkingDailyRate <= 0 ||
-            parkingMinimumDays < 1)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.enterValidParkingCapacity),
-          backgroundColor: Colors.red,
-        ),
-      );
+    final normalizedParkingState =
+        normalizeUsState(_parkingStateController.text) ?? '';
+    if (parkingCapacityNeedsAttention(
+      offersParking: offersParking,
+      addressLine1: _parkingAddressLine1Controller.text,
+      country: _parkingCountryController.text,
+      state: normalizedParkingState,
+      city: _parkingCityController.text,
+      totalSpaces: parkingTotalSpaces,
+      blockedSpaces: parkingBlockedSpaces,
+      dailyRate: parkingDailyRate,
+      minimumDays: parkingMinimumDays,
+    )) {
+      sectionErrors[_BusinessProfileSectionKey.parkingCapacity] =
+          l10n.enterValidParkingCapacity;
+    }
+    if (_freightPickupAvailable) {
+      final freightError = _validateFreightPickup();
+      if (freightError != null) {
+        showErrorSnackBar(context, freightError);
+        return;
+      }
+    }
+    if (sectionErrors.isNotEmpty) {
+      _showValidationErrors(sectionErrors);
       return;
     }
-    if (offersParking &&
-        ((hasParkingLatitude && parkingLatitude == null) ||
-            (hasParkingLongitude && parkingLongitude == null) ||
-            (hasParkingLatitude != hasParkingLongitude))) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.enterValidParkingCoordinates),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
+    if (_sectionErrors.isNotEmpty) {
+      setState(() => _sectionErrors.clear());
     }
+    final changedParkingLocation = parkingLocationChanged(
+      currentAddressLine1:
+          business.parkingAddressLine1 ?? business.addressLine1 ?? '',
+      currentCountry: business.parkingCountry ?? business.country ?? '',
+      currentState:
+          normalizeUsState(business.parkingState ?? business.state) ?? '',
+      currentCity: business.parkingCity ?? business.city ?? '',
+      nextAddressLine1: _parkingAddressLine1Controller.text,
+      nextCountry: _parkingCountryController.text,
+      nextState: normalizedParkingState,
+      nextCity: _parkingCityController.text,
+    );
+    final parkingLatitude = changedParkingLocation
+        ? null
+        : business.parkingLatitude;
+    final parkingLongitude = changedParkingLocation
+        ? null
+        : business.parkingLongitude;
     setState(() => _isSaving = true);
     try {
       final auth = context.read<AuthProvider>();
@@ -476,6 +580,22 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
         parkingInstructions: _parkingInstructionsController.text,
         parkingLatitude: parkingLatitude,
         parkingLongitude: parkingLongitude,
+        freightPickupAvailable: _freightPickupAvailable,
+        freightPickupModel: _freightPickupModel,
+        freightPickupBaseFee:
+            double.tryParse(_freightPickupBaseFeeController.text.trim()) ?? 0,
+        freightPickupPerKm:
+            double.tryParse(_freightPickupPerKmController.text.trim()) ?? 0,
+        freightPickupMinFee:
+            double.tryParse(_freightPickupMinFeeController.text.trim()) ?? 0,
+        freightPickupMaxKm:
+            double.tryParse(_freightPickupMaxKmController.text.trim()) ?? 0,
+        freightPickupOriginAddress: _freightPickupOriginController.text.trim(),
+        freightPickupBoroughPrices: {
+          for (final entry in _freightPickupBoroughControllers.entries)
+            if ((double.tryParse(entry.value.text.trim()) ?? 0) > 0)
+              entry.key: double.parse(entry.value.text.trim()),
+        },
       );
       if (!mounted) return;
       setState(() {
@@ -526,6 +646,14 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                 ) ||
                 hasBusinessService(
                   business.enabledServices,
+                  BusinessServiceKey.sharedBarrels,
+                ) ||
+                hasBusinessService(
+                  business.enabledServices,
+                  BusinessServiceKey.freight,
+                ) ||
+                hasBusinessService(
+                  business.enabledServices,
                   BusinessServiceKey.carTransport,
                 );
             return ListView(
@@ -554,6 +682,12 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                 _BusinessForm(
                   formKey: _formKey,
                   canEdit: canEdit,
+                  detailsSectionKey: _detailsSectionKey,
+                  paidHoldPricingSectionKey: _paidHoldPricingSectionKey,
+                  parkingCapacitySectionKey: _parkingCapacitySectionKey,
+                  servicesSectionKey: _servicesSectionKey,
+                  sectionErrors: _sectionErrors,
+                  onSectionEdited: _clearSectionError,
                   nameController: _nameController,
                   phoneController: _phoneController,
                   emailController: _emailController,
@@ -581,8 +715,6 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                   parkingMinimumDaysController: _parkingMinimumDaysController,
                   parkingPickupFeeController: _parkingPickupFeeController,
                   parkingInstructionsController: _parkingInstructionsController,
-                  parkingLatitudeController: _parkingLatitudeController,
-                  parkingLongitudeController: _parkingLongitudeController,
                   parkingPickupAvailable: _parkingPickupAvailable,
                   onHoldPricingModeChanged: (value) {
                     setState(() => _holdPricingMode = value);
@@ -633,6 +765,28 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                     });
                   },
                 ),
+                if (hasBusinessService(
+                  business.enabledServices,
+                  BusinessServiceKey.freight,
+                )) ...[
+                  const SizedBox(height: 18),
+                  _FreightPickupPanel(
+                    canEdit: canEdit,
+                    isNewYorkBased: business.isNewYorkBased,
+                    available: _freightPickupAvailable,
+                    model: _freightPickupModel,
+                    originController: _freightPickupOriginController,
+                    baseFeeController: _freightPickupBaseFeeController,
+                    perKmController: _freightPickupPerKmController,
+                    minFeeController: _freightPickupMinFeeController,
+                    maxKmController: _freightPickupMaxKmController,
+                    boroughControllers: _freightPickupBoroughControllers,
+                    onAvailableChanged: (value) =>
+                        setState(() => _freightPickupAvailable = value),
+                    onModelChanged: (value) =>
+                        setState(() => _freightPickupModel = value),
+                  ),
+                ],
                 if (offersDestinationShipping) ...[
                   const SizedBox(height: 18),
                   _DestinationSetupPanel(
@@ -704,24 +858,23 @@ class _DestinationSetupPanel extends StatelessWidget {
             .snapshots(),
         builder: (context, snapshot) {
           final docs = snapshot.data?.docs ?? [];
-          final activeDocs = docs.where((doc) {
-            final data = doc.data() as Map<String, dynamic>? ?? {};
-            return data['isActive'] == true;
-          }).toList();
-          final pricedActiveDocs = activeDocs.where((doc) {
-            final data = doc.data() as Map<String, dynamic>? ?? {};
-            return ((data['barrelShippingPrice'] as num?)?.toDouble() ?? 0) > 0;
-          }).length;
+          final activeCountries = docs
+              .map(DestinationCountry.fromFirestore)
+              .where((country) => country.isActive)
+              .toList();
+          final configuredActiveCount = activeCountries
+              .where((country) => country.hasAnyServiceCoverage)
+              .length;
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                activeDocs.isEmpty
+                activeCountries.isEmpty
                     ? l10n.selectCountriesAddFees
                     : l10n.activeDestinationsHaveFees(
-                        pricedActiveDocs,
-                        activeDocs.length,
+                        configuredActiveCount,
+                        activeCountries.length,
                       ),
                 style: const TextStyle(
                   color: AppColors.muted,
@@ -737,7 +890,7 @@ class _DestinationSetupPanel extends StatelessWidget {
                     : null,
                 icon: const Icon(Icons.public),
                 label: Text(
-                  activeDocs.isEmpty
+                  activeCountries.isEmpty
                       ? l10n.selectDestinationCountries
                       : l10n.manageDestinationsFees,
                 ),
@@ -1175,6 +1328,12 @@ class _BusinessForm extends StatelessWidget {
   const _BusinessForm({
     required this.formKey,
     required this.canEdit,
+    required this.detailsSectionKey,
+    required this.paidHoldPricingSectionKey,
+    required this.parkingCapacitySectionKey,
+    required this.servicesSectionKey,
+    required this.sectionErrors,
+    required this.onSectionEdited,
     required this.nameController,
     required this.phoneController,
     required this.emailController,
@@ -1201,8 +1360,6 @@ class _BusinessForm extends StatelessWidget {
     required this.parkingMinimumDaysController,
     required this.parkingPickupFeeController,
     required this.parkingInstructionsController,
-    required this.parkingLatitudeController,
-    required this.parkingLongitudeController,
     required this.parkingPickupAvailable,
     required this.onHoldPricingModeChanged,
     required this.onAddressCountryChanged,
@@ -1218,6 +1375,12 @@ class _BusinessForm extends StatelessWidget {
 
   final GlobalKey<FormState> formKey;
   final bool canEdit;
+  final GlobalKey detailsSectionKey;
+  final GlobalKey paidHoldPricingSectionKey;
+  final GlobalKey parkingCapacitySectionKey;
+  final GlobalKey servicesSectionKey;
+  final Map<_BusinessProfileSectionKey, String> sectionErrors;
+  final ValueChanged<_BusinessProfileSectionKey> onSectionEdited;
   final TextEditingController nameController;
   final TextEditingController phoneController;
   final TextEditingController emailController;
@@ -1244,8 +1407,6 @@ class _BusinessForm extends StatelessWidget {
   final TextEditingController parkingMinimumDaysController;
   final TextEditingController parkingPickupFeeController;
   final TextEditingController parkingInstructionsController;
-  final TextEditingController parkingLatitudeController;
-  final TextEditingController parkingLongitudeController;
   final bool parkingPickupAvailable;
   final ValueChanged<String> onHoldPricingModeChanged;
   final ValueChanged<String?> onAddressCountryChanged;
@@ -1273,25 +1434,35 @@ class _BusinessForm extends StatelessWidget {
       child: Column(
         children: [
           _ProfileSection(
+            key: detailsSectionKey,
             icon: Icons.badge_outlined,
             title: l10n.details,
             subtitle: l10n.businessIdentitySubtitle,
+            errorText: sectionErrors[_BusinessProfileSectionKey.details],
             children: [
               _BusinessProfileField(
                 controller: nameController,
                 enabled: canEdit,
                 label: l10n.businessName,
                 icon: Icons.storefront_outlined,
+                onChanged: () =>
+                    onSectionEdited(_BusinessProfileSectionKey.details),
                 validator: (value) => value == null || value.trim().isEmpty
                     ? l10n.businessNameRequired
                     : null,
               ),
-              _BusinessProfileField(
+              CountryPhoneField(
                 controller: phoneController,
                 enabled: canEdit,
-                label: l10n.businessPhone,
-                icon: Icons.phone_outlined,
-                keyboardType: TextInputType.phone,
+                labelText: l10n.businessPhone,
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: canEdit
+                      ? AppColors.lightSurfaceVariant
+                      : AppColors.cream,
+                ),
+                onChanged: (_) =>
+                    onSectionEdited(_BusinessProfileSectionKey.details),
                 validator: (value) {
                   final trimmed = value?.trim() ?? '';
                   if (trimmed.isEmpty) return null;
@@ -1308,6 +1479,8 @@ class _BusinessForm extends StatelessWidget {
                 label: l10n.businessEmail,
                 icon: Icons.mail_outline,
                 keyboardType: TextInputType.emailAddress,
+                onChanged: () =>
+                    onSectionEdited(_BusinessProfileSectionKey.details),
               ),
               _BusinessProfileField(
                 controller: websiteController,
@@ -1315,6 +1488,8 @@ class _BusinessForm extends StatelessWidget {
                 label: l10n.website,
                 icon: Icons.language_outlined,
                 keyboardType: TextInputType.url,
+                onChanged: () =>
+                    onSectionEdited(_BusinessProfileSectionKey.details),
               ),
               _BusinessProfileField(
                 controller: noteController,
@@ -1323,6 +1498,8 @@ class _BusinessForm extends StatelessWidget {
                 icon: Icons.notes_outlined,
                 minLines: 2,
                 maxLines: 4,
+                onChanged: () =>
+                    onSectionEdited(_BusinessProfileSectionKey.details),
               ),
             ],
           ),
@@ -1390,9 +1567,12 @@ class _BusinessForm extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           _ProfileSection(
+            key: paidHoldPricingSectionKey,
             icon: Icons.lock_clock_outlined,
             title: l10n.paidHoldPricing,
             subtitle: l10n.paidHoldPricingSubtitle,
+            errorText:
+                sectionErrors[_BusinessProfileSectionKey.paidHoldPricing],
             children: [
               SizedBox(
                 width: double.infinity,
@@ -1411,7 +1591,12 @@ class _BusinessForm extends StatelessWidget {
                   ],
                   selected: {holdPricingMode},
                   onSelectionChanged: canEdit
-                      ? (values) => onHoldPricingModeChanged(values.first)
+                      ? (values) {
+                          onSectionEdited(
+                            _BusinessProfileSectionKey.paidHoldPricing,
+                          );
+                          onHoldPricingModeChanged(values.first);
+                        }
                       : null,
                 ),
               ),
@@ -1428,6 +1613,9 @@ class _BusinessForm extends StatelessWidget {
                           : l10n.dailyHoldRate,
                       icon: Icons.attach_money,
                       keyboardType: TextInputType.number,
+                      onChanged: () => onSectionEdited(
+                        _BusinessProfileSectionKey.paidHoldPricing,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -1439,6 +1627,9 @@ class _BusinessForm extends StatelessWidget {
                       icon: Icons.event_busy_outlined,
                       keyboardType: TextInputType.number,
                       helperText: l10n.holdMaxDaysHelper,
+                      onChanged: () => onSectionEdited(
+                        _BusinessProfileSectionKey.paidHoldPricing,
+                      ),
                     ),
                   ),
                 ],
@@ -1448,15 +1639,21 @@ class _BusinessForm extends StatelessWidget {
           const SizedBox(height: 18),
           if (offersParking) ...[
             _ProfileSection(
+              key: parkingCapacitySectionKey,
               icon: Icons.local_parking_outlined,
               title: l10n.parkingCapacityTitle,
               subtitle: l10n.parkingCapacitySubtitle,
+              errorText:
+                  sectionErrors[_BusinessProfileSectionKey.parkingCapacity],
               children: [
                 _BusinessProfileField(
                   controller: parkingAddressLine1Controller,
                   enabled: canEdit,
                   label: l10n.parkingAddress,
                   icon: Icons.place_outlined,
+                  onChanged: () => onSectionEdited(
+                    _BusinessProfileSectionKey.parkingCapacity,
+                  ),
                 ),
                 _BusinessProfileDropdown(
                   label: l10n.countryName,
@@ -1465,7 +1662,10 @@ class _BusinessForm extends StatelessWidget {
                   value: parkingCountry.isEmpty ? null : parkingCountry,
                   values: businessCountryOptions(parkingCountry),
                   displayLabel: (value) => value,
-                  onChanged: onParkingCountryChanged,
+                  onChanged: (value) {
+                    onSectionEdited(_BusinessProfileSectionKey.parkingCapacity);
+                    onParkingCountryChanged(value);
+                  },
                 ),
                 if (parkingIsUnitedStates)
                   _BusinessProfileDropdown(
@@ -1475,7 +1675,12 @@ class _BusinessForm extends StatelessWidget {
                     value: normalizeUsState(parkingStateController.text),
                     values: usStateOptions(parkingStateController.text),
                     displayLabel: (value) => usStateNames[value] ?? value,
-                    onChanged: onParkingStateChanged,
+                    onChanged: (value) {
+                      onSectionEdited(
+                        _BusinessProfileSectionKey.parkingCapacity,
+                      );
+                      onParkingStateChanged(value);
+                    },
                   ),
                 _BusinessProfileDropdown(
                   label: l10n.locationCity,
@@ -1506,110 +1711,88 @@ class _BusinessForm extends StatelessWidget {
                       : null,
                   displayLabel: (value) =>
                       value == otherCityValue ? l10n.otherOption : value,
-                  onChanged: onParkingCityChanged,
+                  onChanged: (value) {
+                    onSectionEdited(_BusinessProfileSectionKey.parkingCapacity);
+                    onParkingCityChanged(value);
+                  },
                 ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _BusinessProfileField(
-                        controller: parkingLatitudeController,
-                        enabled: canEdit,
-                        label: l10n.parkingLatitude,
-                        icon: Icons.explore_outlined,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          signed: true,
-                          decimal: true,
-                        ),
-                      ),
+                _ResponsiveFieldPair(
+                  first: _BusinessProfileField(
+                    controller: parkingTotalSpacesController,
+                    enabled: canEdit,
+                    label: l10n.totalParkingSpaces,
+                    icon: Icons.directions_car_outlined,
+                    keyboardType: TextInputType.number,
+                    onChanged: () => onSectionEdited(
+                      _BusinessProfileSectionKey.parkingCapacity,
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _BusinessProfileField(
-                        controller: parkingLongitudeController,
-                        enabled: canEdit,
-                        label: l10n.parkingLongitude,
-                        icon: Icons.explore_outlined,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          signed: true,
-                          decimal: true,
-                        ),
-                      ),
+                  ),
+                  second: _BusinessProfileField(
+                    controller: parkingBlockedSpacesController,
+                    enabled: canEdit,
+                    label: l10n.blockedParkingSpaces,
+                    icon: Icons.block_outlined,
+                    keyboardType: TextInputType.number,
+                    onChanged: () => onSectionEdited(
+                      _BusinessProfileSectionKey.parkingCapacity,
                     ),
-                  ],
+                  ),
                 ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _BusinessProfileField(
-                        controller: parkingTotalSpacesController,
-                        enabled: canEdit,
-                        label: l10n.totalParkingSpaces,
-                        icon: Icons.directions_car_outlined,
-                        keyboardType: TextInputType.number,
-                      ),
+                _ResponsiveFieldPair(
+                  first: _BusinessProfileField(
+                    controller: parkingDailyRateController,
+                    enabled: canEdit,
+                    label: l10n.dailyParkingRate,
+                    icon: Icons.attach_money,
+                    keyboardType: TextInputType.number,
+                    onChanged: () => onSectionEdited(
+                      _BusinessProfileSectionKey.parkingCapacity,
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _BusinessProfileField(
-                        controller: parkingBlockedSpacesController,
-                        enabled: canEdit,
-                        label: l10n.blockedParkingSpaces,
-                        icon: Icons.block_outlined,
-                        keyboardType: TextInputType.number,
-                      ),
+                  ),
+                  second: _BusinessProfileField(
+                    controller: parkingMinimumDaysController,
+                    enabled: canEdit,
+                    label: l10n.minimumParkingDays,
+                    icon: Icons.event_outlined,
+                    keyboardType: TextInputType.number,
+                    onChanged: () => onSectionEdited(
+                      _BusinessProfileSectionKey.parkingCapacity,
                     ),
-                  ],
+                  ),
                 ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _BusinessProfileField(
-                        controller: parkingDailyRateController,
-                        enabled: canEdit,
-                        label: l10n.dailyParkingRate,
-                        icon: Icons.attach_money,
-                        keyboardType: TextInputType.number,
-                      ),
+                _ResponsiveFieldPair(
+                  first: _BusinessProfileField(
+                    controller: parkingWeeklyRateController,
+                    enabled: canEdit,
+                    label: l10n.weeklyParkingRate,
+                    icon: Icons.calendar_view_week_outlined,
+                    keyboardType: TextInputType.number,
+                    onChanged: () => onSectionEdited(
+                      _BusinessProfileSectionKey.parkingCapacity,
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _BusinessProfileField(
-                        controller: parkingMinimumDaysController,
-                        enabled: canEdit,
-                        label: l10n.minimumParkingDays,
-                        icon: Icons.event_outlined,
-                        keyboardType: TextInputType.number,
-                      ),
+                  ),
+                  second: _BusinessProfileField(
+                    controller: parkingMonthlyRateController,
+                    enabled: canEdit,
+                    label: l10n.monthlyParkingRate,
+                    icon: Icons.calendar_month_outlined,
+                    keyboardType: TextInputType.number,
+                    onChanged: () => onSectionEdited(
+                      _BusinessProfileSectionKey.parkingCapacity,
                     ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _BusinessProfileField(
-                        controller: parkingWeeklyRateController,
-                        enabled: canEdit,
-                        label: l10n.weeklyParkingRate,
-                        icon: Icons.calendar_view_week_outlined,
-                        keyboardType: TextInputType.number,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _BusinessProfileField(
-                        controller: parkingMonthlyRateController,
-                        enabled: canEdit,
-                        label: l10n.monthlyParkingRate,
-                        icon: Icons.calendar_month_outlined,
-                        keyboardType: TextInputType.number,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   value: parkingPickupAvailable,
-                  onChanged: canEdit ? onParkingPickupChanged : null,
+                  onChanged: canEdit
+                      ? (value) {
+                          onSectionEdited(
+                            _BusinessProfileSectionKey.parkingCapacity,
+                          );
+                          onParkingPickupChanged(value);
+                        }
+                      : null,
                   title: Text(l10n.pickupAvailable),
                   subtitle: Text(l10n.pickupAvailableSubtitle),
                 ),
@@ -1620,6 +1803,9 @@ class _BusinessForm extends StatelessWidget {
                     label: l10n.pickupFee,
                     icon: Icons.local_shipping_outlined,
                     keyboardType: TextInputType.number,
+                    onChanged: () => onSectionEdited(
+                      _BusinessProfileSectionKey.parkingCapacity,
+                    ),
                   ),
                 _BusinessProfileField(
                   controller: parkingInstructionsController,
@@ -1628,23 +1814,35 @@ class _BusinessForm extends StatelessWidget {
                   icon: Icons.notes_outlined,
                   minLines: 2,
                   maxLines: 4,
+                  onChanged: () => onSectionEdited(
+                    _BusinessProfileSectionKey.parkingCapacity,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 18),
           ],
           _ProfileSection(
+            key: servicesSectionKey,
             icon: Icons.apps_outlined,
             title: l10n.services,
             subtitle: l10n.businessServicesSubtitle,
+            errorText: sectionErrors[_BusinessProfileSectionKey.services],
             children: [
               for (final service in businessServiceCatalog) ...[
                 _ServiceChoiceCard(
                   service: service,
                   selected: selectedServices.contains(service.key.value),
                   enabled: canEdit,
-                  onChanged: (value) =>
-                      onServiceChanged(service.key.value, value),
+                  onChanged: (value) {
+                    onSectionEdited(_BusinessProfileSectionKey.services);
+                    if (service.key == BusinessServiceKey.carParking) {
+                      onSectionEdited(
+                        _BusinessProfileSectionKey.parkingCapacity,
+                      );
+                    }
+                    onServiceChanged(service.key.value, value);
+                  },
                 ),
                 if (service != businessServiceCatalog.last)
                   const SizedBox(height: 10),
@@ -1659,26 +1857,39 @@ class _BusinessForm extends StatelessWidget {
 
 class _ProfileSection extends StatelessWidget {
   const _ProfileSection({
+    super.key,
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.children,
+    this.errorText,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final List<Widget> children;
+  final String? errorText;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final hasError = errorText != null;
+    final accentColor = hasError ? AppColors.errorRed : AppColors.cobaltDeep;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.paper,
+        color: hasError
+            ? AppColors.errorRed.withValues(alpha: 0.035)
+            : AppColors.paper,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.rule),
+        border: Border.all(
+          color: hasError
+              ? AppColors.errorRed.withValues(alpha: 0.58)
+              : AppColors.rule,
+          width: hasError ? 1.6 : 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1690,10 +1901,12 @@ class _ProfileSection extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppColors.mist.withValues(alpha: 0.65),
+                  color: hasError
+                      ? AppColors.errorRed.withValues(alpha: 0.09)
+                      : AppColors.mist.withValues(alpha: 0.65),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, color: AppColors.cobaltDeep),
+                child: Icon(icon, color: accentColor),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1704,7 +1917,7 @@ class _ProfileSection extends StatelessWidget {
                       title,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w900,
-                        color: AppColors.ink,
+                        color: hasError ? AppColors.errorRed : AppColors.ink,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -1716,6 +1929,31 @@ class _ProfileSection extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                    if (hasError) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.error_outline,
+                            size: 17,
+                            color: AppColors.errorRed,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              errorText!,
+                              style: const TextStyle(
+                                color: AppColors.errorRed,
+                                fontWeight: FontWeight.w800,
+                                height: 1.25,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1732,6 +1970,31 @@ class _ProfileSection extends StatelessWidget {
   }
 }
 
+class _ResponsiveFieldPair extends StatelessWidget {
+  const _ResponsiveFieldPair({required this.first, required this.second});
+
+  final Widget first;
+  final Widget second;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 360) {
+          return Column(children: [first, const SizedBox(height: 12), second]);
+        }
+        return Row(
+          children: [
+            Expanded(child: first),
+            const SizedBox(width: 10),
+            Expanded(child: second),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _BusinessProfileField extends StatelessWidget {
   const _BusinessProfileField({
     required this.controller,
@@ -1743,6 +2006,7 @@ class _BusinessProfileField extends StatelessWidget {
     this.minLines = 1,
     this.maxLines = 1,
     this.helperText,
+    this.onChanged,
   });
 
   final TextEditingController controller;
@@ -1754,6 +2018,7 @@ class _BusinessProfileField extends StatelessWidget {
   final int minLines;
   final int maxLines;
   final String? helperText;
+  final VoidCallback? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1762,6 +2027,7 @@ class _BusinessProfileField extends StatelessWidget {
       enabled: enabled,
       keyboardType: keyboardType,
       validator: validator,
+      onChanged: onChanged == null ? null : (_) => onChanged!(),
       minLines: minLines,
       maxLines: maxLines,
       decoration: InputDecoration(
@@ -1901,6 +2167,191 @@ class _ServiceChoiceCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Business-facing editor for freight home-pickup pricing. A business enables
+/// pickup and chooses a model: distance (any country) or NYC borough flat fees
+/// (New York businesses only). Free pickup is allowed (leave rates at zero).
+class _FreightPickupPanel extends StatelessWidget {
+  const _FreightPickupPanel({
+    required this.canEdit,
+    required this.isNewYorkBased,
+    required this.available,
+    required this.model,
+    required this.originController,
+    required this.baseFeeController,
+    required this.perKmController,
+    required this.minFeeController,
+    required this.maxKmController,
+    required this.boroughControllers,
+    required this.onAvailableChanged,
+    required this.onModelChanged,
+  });
+
+  final bool canEdit;
+  final bool isNewYorkBased;
+  final bool available;
+  final String model;
+  final TextEditingController originController;
+  final TextEditingController baseFeeController;
+  final TextEditingController perKmController;
+  final TextEditingController minFeeController;
+  final TextEditingController maxKmController;
+  final Map<String, TextEditingController> boroughControllers;
+  final ValueChanged<bool> onAvailableChanged;
+  final ValueChanged<String> onModelChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final effectiveModel =
+        model == 'borough' && isNewYorkBased ? 'borough' : 'distance';
+    return _Panel(
+      title: l10n.freightPickupSectionTitle,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.freightPickupSectionSubtitle,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).hintColor,
+            ),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: available,
+            onChanged: canEdit ? onAvailableChanged : null,
+            title: Text(l10n.freightPickupOfferToggle),
+          ),
+          if (available) ...[
+            if (isNewYorkBased) ...[
+              const SizedBox(height: 4),
+              SegmentedButton<String>(
+                segments: [
+                  ButtonSegment(
+                    value: 'distance',
+                    label: Text(l10n.freightPickupModelDistance),
+                    icon: const Icon(Icons.route_outlined),
+                  ),
+                  ButtonSegment(
+                    value: 'borough',
+                    label: Text(l10n.freightPickupModelBorough),
+                    icon: const Icon(Icons.location_city_outlined),
+                  ),
+                ],
+                selected: {effectiveModel},
+                onSelectionChanged: canEdit
+                    ? (selection) => onModelChanged(selection.first)
+                    : null,
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (effectiveModel == 'distance')
+              ..._distanceFields(context, l10n)
+            else
+              ..._boroughFields(context, l10n),
+          ],
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _distanceFields(BuildContext context, AppLocalizations l10n) {
+    return [
+      Text(
+        l10n.freightPickupDistanceHint,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Theme.of(context).hintColor,
+        ),
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        controller: originController,
+        enabled: canEdit,
+        decoration: InputDecoration(
+          labelText: l10n.freightPickupOriginAddress,
+          helperText: l10n.freightPickupOriginAddressHelper,
+          prefixIcon: const Icon(Icons.store_outlined),
+        ),
+      ),
+      const SizedBox(height: 12),
+      Row(
+        children: [
+          Expanded(
+            child: _numberField(
+              controller: baseFeeController,
+              label: l10n.freightPickupBaseFee,
+              icon: Icons.attach_money,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _numberField(
+              controller: perKmController,
+              label: l10n.freightPickupPerKm,
+              icon: Icons.straighten_outlined,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      Row(
+        children: [
+          Expanded(
+            child: _numberField(
+              controller: minFeeController,
+              label: l10n.freightPickupMinFee,
+              icon: Icons.south_outlined,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _numberField(
+              controller: maxKmController,
+              label: l10n.freightPickupMaxKm,
+              icon: Icons.social_distance_outlined,
+            ),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  List<Widget> _boroughFields(BuildContext context, AppLocalizations l10n) {
+    return [
+      Text(
+        l10n.freightPickupBoroughHint,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Theme.of(context).hintColor,
+        ),
+      ),
+      const SizedBox(height: 12),
+      for (final borough in kNycBoroughs) ...[
+        _numberField(
+          controller: boroughControllers[borough]!,
+          label: borough,
+          icon: Icons.attach_money,
+        ),
+        const SizedBox(height: 12),
+      ],
+    ];
+  }
+
+  Widget _numberField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+  }) {
+    return TextField(
+      controller: controller,
+      enabled: canEdit,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
       ),
     );
   }

@@ -10,6 +10,7 @@ import '../l10n/app_localizations.dart';
 import '../theme/app_colors.dart';
 import '../utils/phone_number_validator.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/country_phone_field.dart';
 
 class AddStaffScreen extends StatefulWidget {
   const AddStaffScreen({super.key});
@@ -243,14 +244,10 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
                           : null,
                     ),
                     const SizedBox(height: 20),
-                    TextFormField(
+                    CountryPhoneField(
                       controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      inputFormatters:
-                          PhoneNumberValidator.allowedInputFormatters,
+                      labelText: l10n.phone,
                       decoration: InputDecoration(
-                        labelText: l10n.phone,
-                        prefixIcon: const Icon(Icons.phone_outlined),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),

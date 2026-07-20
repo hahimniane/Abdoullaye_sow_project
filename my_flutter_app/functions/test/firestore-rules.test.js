@@ -87,6 +87,31 @@ function putSupportAttachment(storage, caseId, uid, fileName, options = {}) {
   );
 }
 
+function destinationCoverage(overrides = {}) {
+  return {
+    businessId: "biz_a",
+    businessName: "Business A",
+    businessStatus: "approved",
+    countryId: "guinea",
+    name: "Guinea",
+    code: "GN",
+    destinationCoverageVersion: 2,
+    serviceAvailability: {
+      barrelShipping: false,
+      freightAir: false,
+      freightSea: false,
+      carTransport: false,
+    },
+    isActive: false,
+    barrelShippingPrice: 0,
+    freightAirPricePerKg: 0,
+    freightSeaPricePerKg: 0,
+    deliveryEstimateMinDays: 10,
+    deliveryEstimateMaxDays: 20,
+    ...overrides,
+  };
+}
+
 async function seedFirestore() {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
@@ -565,6 +590,83 @@ describe("business dashboard Firestore rules", () => {
       parkingStatus: "completed",
     }, {merge: true}));
   });
+
+  it("allows active freight-only and car-transport-only destinations",
+      async () => {
+        const ownerDb = firestoreFor("owner-a");
+
+        await assertSucceeds(
+            ownerDb.doc("businesses/biz_a/destinationCountries/freight").set(
+                destinationCoverage({
+                  countryId: "freight",
+                  name: "Freightland",
+                  isActive: true,
+                  serviceAvailability: {
+                    barrelShipping: false,
+                    freightAir: false,
+                    freightSea: true,
+                    carTransport: false,
+                  },
+                  freightSeaPricePerKg: 5,
+                }),
+            ),
+        );
+
+        await assertSucceeds(
+            ownerDb.doc("businesses/biz_a/destinationCountries/transport").set(
+                destinationCoverage({
+                  countryId: "transport",
+                  name: "Transportland",
+                  isActive: true,
+                  serviceAvailability: {
+                    barrelShipping: false,
+                    freightAir: false,
+                    freightSea: false,
+                    carTransport: true,
+                  },
+                }),
+            ),
+        );
+      });
+
+  it("denies active destination service rows with missing required rates",
+      async () => {
+        const ownerDb = firestoreFor("owner-a");
+
+        await assertFails(
+            ownerDb.doc("businesses/biz_a/destinationCountries/no_service").set(
+                destinationCoverage({isActive: true}),
+            ),
+        );
+        await assertFails(
+            ownerDb.doc("businesses/biz_a/destinationCountries/freight_zero")
+                .set(destinationCoverage({
+                  countryId: "freight_zero",
+                  isActive: true,
+                  serviceAvailability: {
+                    barrelShipping: false,
+                    freightAir: true,
+                    freightSea: false,
+                    carTransport: false,
+                  },
+                  freightAirPricePerKg: 0,
+                })),
+        );
+        await assertFails(
+            ownerDb.doc("businesses/biz_a/destinationCountries/barrel_zero")
+                .set(destinationCoverage({
+                  countryId: "barrel_zero",
+                  isActive: true,
+                  serviceAvailability: {
+                    barrelShipping: true,
+                    freightAir: false,
+                    freightSea: false,
+                    carTransport: false,
+                  },
+                  barrelShippingPrice: 0,
+                })),
+        );
+      });
 
   it("requires an explicit rebuilt-title disclosure on new car listings",
       async () => {

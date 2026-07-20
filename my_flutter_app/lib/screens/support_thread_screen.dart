@@ -1,6 +1,8 @@
 import 'dart:async';
-import 'dart:typed_data';
 
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:file_selector/file_selector.dart' show XTypeGroup, openFile;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -268,12 +270,12 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
     );
   }
 
-  Future<bool> _uploadPickedAttachment(
+  Future<String?> _uploadPickedAttachment(
     _PendingSupportAttachment attachment,
     String caption,
   ) async {
     final l10n = AppLocalizations.of(context)!;
-    if (!mounted || _uploading) return false;
+    if (!mounted || _uploading) return l10n.supportUploadFailed;
     setState(() => _uploading = true);
     try {
       await _supportService.uploadPickedAttachment(
@@ -285,13 +287,10 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
       );
       _messageController.clear();
       _composerRevision += 1;
-      return true;
+      return null;
     } catch (error) {
-      if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${l10n.supportActionFailed}: $error')),
-      );
-      return false;
+      if (!mounted) return l10n.supportUploadFailed;
+      return _supportAttachmentUploadFailureMessage(l10n, error);
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -388,18 +387,12 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
   }
 
   Future<void> _showEscalationSheet(SupportCase supportCase) async {
-    final l10n = AppLocalizations.of(context)!;
-    if (!supportCase.escalationAvailable) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.supportEscalationUnavailable)),
-      );
-      return;
-    }
+    if (supportCase.isEscalated) return;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       builder: (context) =>
-          _EscalationSheet(caseId: supportCase.id, service: _supportService),
+          _EscalationSheet(supportCase: supportCase, service: _supportService),
     );
   }
 
@@ -525,8 +518,6 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
                               supportCase: supportCase,
                               isAdmin: isAdmin,
                               canRequestEvidence: viewerRole != 'customer',
-                              onEscalate: () =>
-                                  _showEscalationSheet(supportCase),
                               onResolve: () => _supportService.resolve(
                                 caseId: supportCase.id,
                               ),
@@ -586,6 +577,10 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
                 ),
                 if (isAdmin)
                   _AdminNotes(caseId: widget.caseId, service: _supportService),
+                _SupportEscalationBar(
+                  supportCase: supportCase,
+                  onEscalate: () => _showEscalationSheet(supportCase),
+                ),
                 _Composer(
                   controller: _messageController,
                   sending: _sending,
@@ -623,6 +618,53 @@ String? _documentMimeType(String fileName) {
   };
 }
 
+String _supportAttachmentUploadFailureMessage(
+  AppLocalizations l10n,
+  Object error,
+) {
+  final code = _firebaseErrorCode(error);
+  final message = _firebaseErrorMessage(error).toLowerCase();
+  final searchable = '$code $message';
+
+  if (searchable.contains('app check') ||
+      searchable.contains('app-check') ||
+      searchable.contains('appcheck')) {
+    return kDebugMode
+        ? l10n.supportUploadFailedDebugAppCheck
+        : l10n.supportUploadFailedAppVerification;
+  }
+
+  return switch (code) {
+    'network-request-failed' ||
+    'unavailable' ||
+    'deadline-exceeded' ||
+    'retry-limit-exceeded' => l10n.supportUploadFailedNetwork,
+    'unauthenticated' => l10n.supportUploadFailedAuth,
+    'permission-denied' || 'unauthorized' => l10n.supportUploadFailedPermission,
+    'invalid-argument' => l10n.supportUploadFailedInvalidFile,
+    _ when message.contains('sign in required') => l10n.supportUploadFailedAuth,
+    _ => l10n.supportUploadFailed,
+  };
+}
+
+String _firebaseErrorCode(Object error) {
+  return switch (error) {
+    FirebaseFunctionsException(:final code) => code.toLowerCase(),
+    FirebaseException(:final code) => code.toLowerCase(),
+    _ => '',
+  };
+}
+
+String _firebaseErrorMessage(Object error) {
+  return switch (error) {
+    FirebaseFunctionsException(:final message, :final details) =>
+      '${message ?? ''} ${details ?? ''}',
+    FirebaseException(:final message, :final plugin) =>
+      '${message ?? ''} $plugin',
+    _ => error.toString(),
+  };
+}
+
 class _PendingSupportAttachment {
   const _PendingSupportAttachment({
     required this.file,
@@ -650,7 +692,7 @@ class _AttachmentReviewSheet extends StatefulWidget {
   final _PendingSupportAttachment initialAttachment;
   final String initialCaption;
   final Future<_PendingSupportAttachment?> Function() onReplace;
-  final Future<bool> Function(
+  final Future<String?> Function(
     _PendingSupportAttachment attachment,
     String caption,
   )
@@ -665,7 +707,7 @@ class _AttachmentReviewSheetState extends State<_AttachmentReviewSheet> {
   late final TextEditingController _captionController;
   bool _replacing = false;
   bool _uploading = false;
-  bool _uploadFailed = false;
+  String? _uploadError;
 
   @override
   void initState() {
@@ -684,7 +726,7 @@ class _AttachmentReviewSheetState extends State<_AttachmentReviewSheet> {
     if (_replacing || _uploading) return;
     setState(() {
       _replacing = true;
-      _uploadFailed = false;
+      _uploadError = null;
     });
     try {
       final replacement = await widget.onReplace();
@@ -700,20 +742,20 @@ class _AttachmentReviewSheetState extends State<_AttachmentReviewSheet> {
     if (_uploading || _replacing) return;
     setState(() {
       _uploading = true;
-      _uploadFailed = false;
+      _uploadError = null;
     });
-    final uploaded = await widget.onUpload(
+    final uploadError = await widget.onUpload(
       _attachment,
       _captionController.text,
     );
     if (!mounted) return;
-    if (uploaded) {
+    if (uploadError == null) {
       Navigator.pop(context);
       return;
     }
     setState(() {
       _uploading = false;
-      _uploadFailed = true;
+      _uploadError = uploadError;
     });
   }
 
@@ -775,12 +817,12 @@ class _AttachmentReviewSheetState extends State<_AttachmentReviewSheet> {
                             labelText: l10n.supportAttachmentCaption,
                           ),
                         ),
-                        if (_uploadFailed) ...[
+                        if (_uploadError != null) ...[
                           const SizedBox(height: AppSpacing.md),
                           Semantics(
                             liveRegion: true,
                             child: Text(
-                              l10n.supportUploadFailed,
+                              _uploadError!,
                               style: TextStyle(
                                 color: Theme.of(context).colorScheme.error,
                                 fontWeight: FontWeight.w700,
@@ -823,7 +865,7 @@ class _AttachmentReviewSheetState extends State<_AttachmentReviewSheet> {
                   width: double.infinity,
                   child: AsyncActionButton.filled(
                     onPressed: busy ? null : _upload,
-                    label: _uploadFailed
+                    label: _uploadError != null
                         ? l10n.retry
                         : l10n.supportUploadAttachment,
                     loadingLabel: l10n.supportUploading,
@@ -1143,7 +1185,6 @@ class _CaseActions extends StatelessWidget {
     required this.supportCase,
     required this.isAdmin,
     required this.canRequestEvidence,
-    required this.onEscalate,
     required this.onResolve,
     required this.onReopen,
     required this.onEvidence,
@@ -1153,7 +1194,6 @@ class _CaseActions extends StatelessWidget {
   final SupportCase supportCase;
   final bool isAdmin;
   final bool canRequestEvidence;
-  final VoidCallback onEscalate;
   final Future<void> Function() onResolve;
   final Future<void> Function() onReopen;
   final VoidCallback onEvidence;
@@ -1168,12 +1208,6 @@ class _CaseActions extends StatelessWidget {
         spacing: 8,
         runSpacing: 8,
         children: [
-          if (!supportCase.isEscalated)
-            ActionChip(
-              avatar: const Icon(Icons.admin_panel_settings_outlined, size: 18),
-              label: Text(l10n.supportAskPlatform),
-              onPressed: onEscalate,
-            ),
           ActionChip(
             avatar: Icon(
               supportCase.isResolved
@@ -1200,6 +1234,123 @@ class _CaseActions extends StatelessWidget {
               onPressed: onNote,
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _SupportEscalationBar extends StatelessWidget {
+  const _SupportEscalationBar({
+    required this.supportCase,
+    required this.onEscalate,
+  });
+
+  final SupportCase supportCase;
+  final VoidCallback onEscalate;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final escalated = supportCase.isEscalated;
+    final color = escalated ? AppColors.saffron : AppColors.cobalt;
+    final title = escalated
+        ? l10n.supportAlreadyEscalatedTitle
+        : l10n.supportPlatformAdmin;
+    final subtitle = escalated
+        ? l10n.supportAlreadyEscalatedSubtitle
+        : (supportCase.escalationAvailable
+              ? l10n.supportEscalationSubtitle
+              : l10n.supportEscalationUrgentOnly);
+    final summary = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          escalated
+              ? Icons.admin_panel_settings_outlined
+              : Icons.support_agent_outlined,
+          color: color,
+          size: 22,
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    final action = OutlinedButton.icon(
+      onPressed: onEscalate,
+      icon: const Icon(Icons.admin_panel_settings_outlined, size: 18),
+      label: Text(
+        l10n.supportAskPlatform,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: escalated
+            ? AppColors.saffron.withValues(alpha: 0.10)
+            : Theme.of(context).colorScheme.surface,
+        border: const Border(top: BorderSide(color: AppColors.rule)),
+      ),
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.md,
+            AppSpacing.lg,
+            AppSpacing.sm,
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              if (escalated) return summary;
+              if (constraints.maxWidth < 430) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    summary,
+                    const SizedBox(height: AppSpacing.sm),
+                    SizedBox(width: double.infinity, child: action),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: summary),
+                  const SizedBox(width: AppSpacing.md),
+                  Flexible(child: action),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -1313,6 +1464,7 @@ class _SupportBubble extends StatelessWidget {
     final textColor = mine
         ? Colors.white
         : Theme.of(context).colorScheme.onSurface;
+    final displayText = _supportMessageDisplayText(message);
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
@@ -1381,10 +1533,9 @@ class _SupportBubble extends StatelessWidget {
               if (message.messageType != 'file' &&
                   message.messageType != 'voice' &&
                   message.messageType != 'video' &&
-                  (message.messageType != 'image' ||
-                      message.content.isNotEmpty))
+                  displayText.isNotEmpty)
                 Text(
-                  message.caption.isEmpty ? message.content : message.caption,
+                  displayText,
                   style: TextStyle(
                     color: textColor,
                     fontSize: 15,
@@ -1409,6 +1560,21 @@ class _SupportBubble extends StatelessWidget {
       ),
     );
   }
+}
+
+String _supportMessageDisplayText(SupportMessage message) {
+  if (!message.isAttachment) return message.content;
+
+  final caption = message.caption;
+  if (caption.isNotEmpty) return caption;
+
+  final content = message.content.trim();
+  if (content.isEmpty || content == message.messageType) return '';
+
+  final fileName = message.fileName;
+  if (fileName.isNotEmpty && content == fileName) return '';
+
+  return content;
 }
 
 class _AttachmentOpenTile extends StatefulWidget {
@@ -1666,9 +1832,9 @@ class _Composer extends StatelessWidget {
 }
 
 class _EscalationSheet extends StatefulWidget {
-  const _EscalationSheet({required this.caseId, required this.service});
+  const _EscalationSheet({required this.supportCase, required this.service});
 
-  final String caseId;
+  final SupportCase supportCase;
   final SupportRepository service;
 
   @override
@@ -1677,7 +1843,15 @@ class _EscalationSheet extends StatefulWidget {
 
 class _EscalationSheetState extends State<_EscalationSheet> {
   final TextEditingController _noteController = TextEditingController();
-  String _reason = 'unresolved';
+  late String _reason;
+
+  @override
+  void initState() {
+    super.initState();
+    _reason = widget.supportCase.escalationAvailable
+        ? 'unresolved'
+        : 'business_unreachable';
+  }
 
   @override
   void dispose() {
@@ -1689,7 +1863,8 @@ class _EscalationSheetState extends State<_EscalationSheet> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final reasons = <String, String>{
-      'unresolved': l10n.supportReasonUnresolved,
+      if (widget.supportCase.escalationAvailable)
+        'unresolved': l10n.supportReasonUnresolved,
       'fraud': l10n.supportReasonFraud,
       'safety': l10n.supportReasonSafety,
       'abuse': l10n.supportReasonAbuse,
@@ -1714,6 +1889,15 @@ class _EscalationSheetState extends State<_EscalationSheet> {
           ),
           const SizedBox(height: 6),
           Text(l10n.supportEscalationSubtitle),
+          if (!widget.supportCase.escalationAvailable) ...[
+            const SizedBox(height: 8),
+            Text(
+              l10n.supportEscalationUrgentOnly,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.warn),
+            ),
+          ],
           const SizedBox(height: 14),
           DropdownButtonFormField<String>(
             initialValue: _reason,
@@ -1744,7 +1928,7 @@ class _EscalationSheetState extends State<_EscalationSheet> {
           AsyncActionButton.filled(
             onPressed: () async {
               await widget.service.escalate(
-                caseId: widget.caseId,
+                caseId: widget.supportCase.id,
                 reason: _reason,
                 note: _noteController.text,
               );

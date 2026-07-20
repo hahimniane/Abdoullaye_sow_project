@@ -12,6 +12,7 @@ import '../services/car_purchase_service.dart';
 import '../services/favorite_cars_service.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
@@ -548,14 +549,9 @@ class CarDetailsScreen extends StatelessWidget {
                       _AccountSummary(name: buyerName, phone: profilePhone),
                       if (needsPhone) ...[
                         const SizedBox(height: 16),
-                        TextFormField(
+                        CountryPhoneField(
                           controller: buyerPhoneController,
-                          decoration: InputDecoration(
-                            labelText: l10n.customerPhone,
-                          ),
-                          keyboardType: TextInputType.phone,
-                          inputFormatters:
-                              PhoneNumberValidator.allowedInputFormatters,
+                          labelText: l10n.customerPhone,
                           validator: (value) => PhoneNumberValidator.validate(
                             value,
                             requiredMessage: l10n.requiredField,
@@ -1135,14 +1131,9 @@ class CarDetailsScreen extends StatelessWidget {
                       _AccountSummary(name: buyerName, phone: profilePhone),
                       if (needsPhone) ...[
                         const SizedBox(height: 16),
-                        TextFormField(
+                        CountryPhoneField(
                           controller: buyerPhoneController,
-                          decoration: InputDecoration(
-                            labelText: l10n.customerPhone,
-                          ),
-                          keyboardType: TextInputType.phone,
-                          inputFormatters:
-                              PhoneNumberValidator.allowedInputFormatters,
+                          labelText: l10n.customerPhone,
                           validator: (value) => PhoneNumberValidator.validate(
                             value,
                             requiredMessage: l10n.requiredField,
@@ -1345,14 +1336,9 @@ class CarDetailsScreen extends StatelessWidget {
                       _AccountSummary(name: buyerName, phone: profilePhone),
                       if (needsPhone) ...[
                         const SizedBox(height: 16),
-                        TextFormField(
+                        CountryPhoneField(
                           controller: buyerPhoneController,
-                          decoration: InputDecoration(
-                            labelText: l10n.customerPhone,
-                          ),
-                          keyboardType: TextInputType.phone,
-                          inputFormatters:
-                              PhoneNumberValidator.allowedInputFormatters,
+                          labelText: l10n.customerPhone,
                           validator: (value) => PhoneNumberValidator.validate(
                             value,
                             requiredMessage: l10n.requiredField,

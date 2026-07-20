@@ -1,7 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -21,6 +22,7 @@ import '../utils/phone_number_validator.dart';
 import '../utils/vin_utils.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
 import 'vin_scanner_screen.dart';
 
@@ -1600,7 +1602,6 @@ class _CarFormSheetState extends State<_CarFormSheet> {
     required String label,
     IconData? icon,
     TextInputType? keyboardType,
-    List<TextInputFormatter>? inputFormatters,
     int minLines = 1,
     int maxLines = 1,
     String? errorText,
@@ -1610,7 +1611,6 @@ class _CarFormSheetState extends State<_CarFormSheet> {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
-      inputFormatters: inputFormatters,
       minLines: minLines,
       maxLines: maxLines,
       onChanged: onChanged,
@@ -2186,12 +2186,9 @@ class _CarFormSheetState extends State<_CarFormSheet> {
               icon: Icons.person_outline,
             ),
             const SizedBox(height: 12),
-            _textField(
+            CountryPhoneField(
               controller: _contactPhoneController,
-              label: l10n.contactPhone,
-              icon: Icons.phone_outlined,
-              keyboardType: TextInputType.phone,
-              inputFormatters: PhoneNumberValidator.allowedInputFormatters,
+              labelText: l10n.contactPhone,
               errorText: _contactPhoneError,
               onChanged: (_) {
                 if (_contactPhoneError != null) {
@@ -2805,14 +2802,9 @@ class _MarkAsSoldSheetState extends State<_MarkAsSoldSheet> {
                       },
                     ),
                     const SizedBox(height: 16),
-                    TextFormField(
+                    CountryPhoneField(
                       controller: _customerPhoneController,
-                      keyboardType: TextInputType.phone,
-                      inputFormatters:
-                          PhoneNumberValidator.allowedInputFormatters,
-                      decoration: InputDecoration(
-                        labelText: l10n.customerPhone,
-                      ),
+                      labelText: l10n.customerPhone,
                       validator: (value) => PhoneNumberValidator.validate(
                         value,
                         requiredMessage: l10n.requiredField,

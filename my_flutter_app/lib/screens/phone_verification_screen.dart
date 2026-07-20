@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +13,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../utils/phone_number_validator.dart';
 import '../widgets/app_back_button.dart';
+import '../widgets/country_phone_field.dart';
 
 class PhoneVerificationArguments {
   const PhoneVerificationArguments({this.returnToSharedBarrels = false});
@@ -103,15 +105,41 @@ enum PhoneVerificationErrorType {
   network,
   phoneInUse,
   recentLogin,
+  appCheck,
   generic,
+}
+
+// TEMP DEBUG: surfaces the raw Firebase error behind the generic
+// "we couldn't verify your phone" message. Remove once the root cause is found.
+void debugLogPhoneVerificationError(String stage, Object error) {
+  if (!kDebugMode) return;
+  final code = switch (error) {
+    FirebaseAuthException() => error.code,
+    FirebaseFunctionsException() => error.code,
+    PlatformException() => error.code,
+    _ => '(no code)',
+  };
+  debugPrint(
+    '📱 PHONE-VERIFY FAIL [$stage] '
+    'code=$code type=${error.runtimeType} '
+    'classified=${classifyPhoneVerificationError(error)} '
+    'message=$error',
+  );
 }
 
 PhoneVerificationErrorType classifyPhoneVerificationError(Object error) {
   final code = switch (error) {
     FirebaseAuthException() => error.code,
     FirebaseFunctionsException() => error.code,
+    PlatformException() => error.code,
     _ => null,
   };
+  final message = error.toString().toLowerCase();
+  if (message.contains('app attestation failed') ||
+      message.contains('exchangeDebugToken'.toLowerCase()) ||
+      message.contains('app check')) {
+    return PhoneVerificationErrorType.appCheck;
+  }
   return switch (code) {
     'invalid-phone-number' => PhoneVerificationErrorType.invalidPhone,
     'invalid-verification-code' => PhoneVerificationErrorType.invalidCode,
@@ -124,6 +152,11 @@ PhoneVerificationErrorType classifyPhoneVerificationError(Object error) {
     'credential-already-in-use' ||
     'already-exists' => PhoneVerificationErrorType.phoneInUse,
     'requires-recent-login' => PhoneVerificationErrorType.recentLogin,
+    'app-check-token-invalid' ||
+    'app-check-token-expired' ||
+    'app-check-token-missing' ||
+    'unauthenticated' ||
+    'permission-denied' => PhoneVerificationErrorType.appCheck,
     _ => PhoneVerificationErrorType.generic,
   };
 }
@@ -200,8 +233,12 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     super.didChangeDependencies();
     if (_hydrated) return;
     _hydrated = true;
-    _phoneController.text = _client.customerPhone?.trim() ?? '';
+    final savedPhone = _client.customerPhone?.trim() ?? '';
     _verified = _client.phoneVerified;
+    if (!_verified &&
+        PhoneNumberValidator.matches(_client.linkedPhoneNumber, savedPhone)) {
+      _phoneController.text = savedPhone;
+    }
     _syncPending =
         !_verified &&
         PhoneNumberValidator.matches(
@@ -238,7 +275,34 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
       PhoneVerificationErrorType.phoneInUse => l10n.phoneVerificationPhoneInUse,
       PhoneVerificationErrorType.recentLogin =>
         l10n.phoneVerificationRecentLogin,
+      PhoneVerificationErrorType.appCheck => l10n.phoneVerificationAppCheck,
       PhoneVerificationErrorType.generic => l10n.phoneVerificationGenericError,
+    };
+  }
+
+  // TEMP DEBUG: append the raw Firebase/Functions code to the on-screen error
+  // in debug builds so the exact cause is visible without reading logs.
+  // Remove once the phone-verification failure is diagnosed.
+  String _decorate(String message, Object error) {
+    if (!kDebugMode) return message;
+    final code = switch (error) {
+      FirebaseAuthException() => error.code,
+      FirebaseFunctionsException() => error.code,
+      PlatformException() => error.code,
+      _ => error.runtimeType.toString(),
+    };
+    return '$message\n\n[debug: $code]';
+  }
+
+  // A sync failure after the phone was already linked is only worth retrying
+  // when it's transient. Permanent causes (App Check not registered, phone in
+  // use, needs recent login, wrong role) get their real message instead of the
+  // misleading "try finishing again" prompt.
+  bool _isTransientSyncError(Object error) {
+    return switch (classifyPhoneVerificationError(error)) {
+      PhoneVerificationErrorType.network ||
+      PhoneVerificationErrorType.generic => true,
+      _ => false,
     };
   }
 
@@ -304,15 +368,18 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
       if (!mounted) return;
       _completeFlow();
     } catch (error) {
+      debugLogPhoneVerificationError('sync', error);
       if (!mounted) return;
+      final retryable = _isTransientSyncError(error);
       setState(() {
         _syncing = false;
-        _syncPending = true;
-        _error =
-            classifyPhoneVerificationError(error) ==
-                PhoneVerificationErrorType.phoneInUse
-            ? _messageFor(error)
-            : AppLocalizations.of(context)!.phoneVerificationSyncPending;
+        _syncPending = retryable;
+        _error = _decorate(
+          retryable
+              ? AppLocalizations.of(context)!.phoneVerificationSyncPending
+              : _messageFor(error),
+          error,
+        );
       });
     }
   }
@@ -320,7 +387,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
   Future<void> _sendCode({bool resend = false}) async {
     if (_busy) return;
     final l10n = AppLocalizations.of(context)!;
-    final phone = _phoneController.text.trim();
+    final phone = PhoneNumberValidator.normalized(_phoneController.text);
     if (!PhoneNumberValidator.isValidE164(phone)) {
       setState(() => _error = l10n.phoneVerificationInvalidPhone);
       return;
@@ -366,6 +433,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
           _completeFlow();
         },
         onVerificationFailed: (error) {
+          debugLogPhoneVerificationError('sendCode/verificationFailed', error);
           if (!mounted || attemptId != _attemptId) return;
           setState(() {
             _clearRequestBusy();
@@ -375,6 +443,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
         },
       );
     } catch (error) {
+      debugLogPhoneVerificationError('sendCode/catch', error);
       if (!mounted || attemptId != _attemptId) return;
       setState(() {
         _clearRequestBusy();
@@ -404,17 +473,23 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
       if (!mounted) return;
       _completeFlow();
     } catch (error) {
+      debugLogPhoneVerificationError('verifyCode', error);
       if (!mounted) return;
       final linkedPhoneMatches = PhoneNumberValidator.matches(
         _client.linkedPhoneNumber,
         _phoneController.text,
       );
+      // The phone linked, but the profile-sync callable failed. Only invite a
+      // retry for transient failures; otherwise show the real reason so the
+      // user isn't stuck retrying a permanent error.
+      final retryable = linkedPhoneMatches && _isTransientSyncError(error);
       setState(() {
         _verifying = false;
-        _syncPending = linkedPhoneMatches;
-        _error = linkedPhoneMatches
-            ? l10n.phoneVerificationSyncPending
-            : _messageFor(error);
+        _syncPending = retryable;
+        _error = _decorate(
+          retryable ? l10n.phoneVerificationSyncPending : _messageFor(error),
+          error,
+        );
       });
     }
   }
@@ -557,14 +632,13 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 24),
-                      TextField(
-                        key: const Key('phone-verification-number'),
+                      CountryPhoneField(
+                        fieldKey: const Key('phone-verification-number'),
                         controller: _phoneController,
                         enabled: !_busy,
-                        keyboardType: TextInputType.phone,
-                        inputFormatters:
-                            PhoneNumberValidator.allowedInputFormatters,
-                        autofillHints: const [AutofillHints.telephoneNumber],
+                        labelText: l10n.phoneNumber,
+                        helperText: l10n.phoneVerificationCountryCodeHelp,
+                        showClearButton: true,
                         onChanged: (value) => setState(() {
                           _error = null;
                           _syncPending = PhoneNumberValidator.matches(
@@ -572,11 +646,6 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
                             value,
                           );
                         }),
-                        decoration: InputDecoration(
-                          labelText: l10n.phoneNumber,
-                          helperText: l10n.phoneVerificationCountryCodeHelp,
-                          prefixIcon: const Icon(Icons.phone_outlined),
-                        ),
                       ),
                     ] else ...[
                       Container(

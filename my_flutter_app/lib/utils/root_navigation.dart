@@ -8,7 +8,9 @@ Future<T?> pushRootNamed<T>(
   return Navigator.of(
     context,
     rootNavigator: true,
-  ).pushNamed<T>(routeName, arguments: arguments);
+  ).pushNamed<dynamic>(routeName, arguments: arguments).then((result) {
+    return result as T?;
+  });
 }
 
 Future<T?> replaceRootWithNamed<T>(
@@ -16,9 +18,13 @@ Future<T?> replaceRootWithNamed<T>(
   String routeName, {
   Object? arguments,
 }) {
-  return Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil<T>(
-    routeName,
-    (route) => false,
-    arguments: arguments,
-  );
+  return Navigator.of(context, rootNavigator: true)
+      .pushNamedAndRemoveUntil<dynamic>(
+        routeName,
+        (route) => false,
+        arguments: arguments,
+      )
+      .then((result) {
+        return result as T?;
+      });
 }

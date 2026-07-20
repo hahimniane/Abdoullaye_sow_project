@@ -2621,7 +2621,7 @@ abstract class AppLocalizations {
   /// No description provided for @destinationsAndShippingFees.
   ///
   /// In en, this message translates to:
-  /// **'Destinations and shipping fees'**
+  /// **'Destinations and services'**
   String get destinationsAndShippingFees;
 
   /// No description provided for @team.
@@ -3653,26 +3653,170 @@ abstract class AppLocalizations {
   /// No description provided for @selectCountriesAddFees.
   ///
   /// In en, this message translates to:
-  /// **'Select the countries this business ships to and add the shipping fee for each destination.'**
+  /// **'Choose countries and select what this business offers for each destination.'**
   String get selectCountriesAddFees;
 
   /// No description provided for @activeDestinationsHaveFees.
   ///
   /// In en, this message translates to:
-  /// **'{priced} of {total} active destinations have shipping fees.'**
+  /// **'{priced} of {total} active destinations have services configured.'**
   String activeDestinationsHaveFees(Object priced, Object total);
 
   /// No description provided for @selectDestinationCountries.
   ///
   /// In en, this message translates to:
-  /// **'Select destination countries'**
+  /// **'Select destination services'**
   String get selectDestinationCountries;
 
   /// No description provided for @manageDestinationsFees.
   ///
   /// In en, this message translates to:
-  /// **'Manage destinations and fees'**
+  /// **'Manage destinations and services'**
   String get manageDestinationsFees;
+
+  /// No description provided for @servicesForDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Services for this destination'**
+  String get servicesForDestination;
+
+  /// No description provided for @servicesForDestinationHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on only what this business offers for this country.'**
+  String get servicesForDestinationHelp;
+
+  /// No description provided for @destinationServiceCoverageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Destination services'**
+  String get destinationServiceCoverageTitle;
+
+  /// No description provided for @destinationServiceCoverageSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Set which services are available for this country and add rates where needed.'**
+  String get destinationServiceCoverageSubtitle;
+
+  /// No description provided for @offerBarrelShipping.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrel shipping'**
+  String get offerBarrelShipping;
+
+  /// No description provided for @barrelShippingDestinationHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers can send barrels to this country.'**
+  String get barrelShippingDestinationHelper;
+
+  /// No description provided for @offerFreightAir.
+  ///
+  /// In en, this message translates to:
+  /// **'Freight by air'**
+  String get offerFreightAir;
+
+  /// No description provided for @freightAirDestinationHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers can ship parcels by air to this country.'**
+  String get freightAirDestinationHelper;
+
+  /// No description provided for @offerFreightSea.
+  ///
+  /// In en, this message translates to:
+  /// **'Freight by sea'**
+  String get offerFreightSea;
+
+  /// No description provided for @freightSeaDestinationHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers can ship parcels by sea to this country.'**
+  String get freightSeaDestinationHelper;
+
+  /// No description provided for @offerCarTransportDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Ship cars to this country'**
+  String get offerCarTransportDestination;
+
+  /// No description provided for @carTransportDestinationHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers can request a car transport quote for this country.'**
+  String get carTransportDestinationHelper;
+
+  /// No description provided for @freightAirRatePerKg.
+  ///
+  /// In en, this message translates to:
+  /// **'Air freight rate per kg'**
+  String get freightAirRatePerKg;
+
+  /// No description provided for @freightSeaRatePerKg.
+  ///
+  /// In en, this message translates to:
+  /// **'Sea freight rate per kg'**
+  String get freightSeaRatePerKg;
+
+  /// No description provided for @chooseAtLeastOneDestinationService.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose at least one service for this destination.'**
+  String get chooseAtLeastOneDestinationService;
+
+  /// No description provided for @destinationServiceRateRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a rate for {service}.'**
+  String destinationServiceRateRequired(Object service);
+
+  /// No description provided for @destinationServiceRateGreaterThanZero.
+  ///
+  /// In en, this message translates to:
+  /// **'{service} needs a rate greater than 0.'**
+  String destinationServiceRateGreaterThanZero(Object service);
+
+  /// No description provided for @destinationBarrelService.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrel'**
+  String get destinationBarrelService;
+
+  /// No description provided for @destinationFreightAir.
+  ///
+  /// In en, this message translates to:
+  /// **'Air freight'**
+  String get destinationFreightAir;
+
+  /// No description provided for @destinationFreightSea.
+  ///
+  /// In en, this message translates to:
+  /// **'Sea freight'**
+  String get destinationFreightSea;
+
+  /// No description provided for @destinationCarTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Car transport'**
+  String get destinationCarTransport;
+
+  /// No description provided for @destinationServicePriceSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{service}: {price}'**
+  String destinationServicePriceSummary(Object service, Object price);
+
+  /// No description provided for @destinationServiceRateSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{service}: {rate}/kg'**
+  String destinationServiceRateSummary(Object service, Object rate);
+
+  /// No description provided for @noDestinationServicesConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'No services configured'**
+  String get noDestinationServicesConfigured;
 
   /// No description provided for @businessNameRequired.
   ///
@@ -4298,6 +4442,12 @@ abstract class AppLocalizations {
   /// **'How customers and staff identify this business.'**
   String get businessIdentitySubtitle;
 
+  /// No description provided for @businessProfileDetailsSectionError.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the highlighted business details.'**
+  String get businessProfileDetailsSectionError;
+
   /// No description provided for @businessDefaultAddressSubtitle.
   ///
   /// In en, this message translates to:
@@ -4370,18 +4520,6 @@ abstract class AppLocalizations {
   /// **'Parking address'**
   String get parkingAddress;
 
-  /// No description provided for @parkingLatitude.
-  ///
-  /// In en, this message translates to:
-  /// **'Latitude'**
-  String get parkingLatitude;
-
-  /// No description provided for @parkingLongitude.
-  ///
-  /// In en, this message translates to:
-  /// **'Longitude'**
-  String get parkingLongitude;
-
   /// No description provided for @totalParkingSpaces.
   ///
   /// In en, this message translates to:
@@ -4445,14 +4583,8 @@ abstract class AppLocalizations {
   /// No description provided for @enterValidParkingCapacity.
   ///
   /// In en, this message translates to:
-  /// **'Add total spaces, a positive daily rate, and valid blocked spaces before saving parking.'**
+  /// **'Add the parking address, location, spaces, and daily rate before saving.'**
   String get enterValidParkingCapacity;
-
-  /// No description provided for @enterValidParkingCoordinates.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter valid parking latitude and longitude, or leave both blank.'**
-  String get enterValidParkingCoordinates;
 
   /// No description provided for @customerParkingTitle.
   ///
@@ -6158,6 +6290,84 @@ abstract class AppLocalizations {
   /// **'Estimate paid'**
   String get estimatePaid;
 
+  /// No description provided for @freightOrderDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Freight order'**
+  String get freightOrderDetails;
+
+  /// No description provided for @freightNextStep.
+  ///
+  /// In en, this message translates to:
+  /// **'Next step'**
+  String get freightNextStep;
+
+  /// No description provided for @freightNextDropOffAtProvider.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop off your parcel at {businessName}. The business will confirm the weight after drop-off.'**
+  String freightNextDropOffAtProvider(Object businessName);
+
+  /// No description provided for @freightNextDropOffAtBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop off your parcel at the business location. The business will confirm the weight after drop-off.'**
+  String get freightNextDropOffAtBusiness;
+
+  /// No description provided for @freightNextWeightReview.
+  ///
+  /// In en, this message translates to:
+  /// **'The business is confirming the final weight. We will show any balance or refund here.'**
+  String get freightNextWeightReview;
+
+  /// No description provided for @freightNextInTransit.
+  ///
+  /// In en, this message translates to:
+  /// **'Your parcel is on the way. Keep this tracking code for updates.'**
+  String get freightNextInTransit;
+
+  /// No description provided for @freightNextReadyForPickup.
+  ///
+  /// In en, this message translates to:
+  /// **'Your parcel is ready for pickup.'**
+  String get freightNextReadyForPickup;
+
+  /// No description provided for @freightNextCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'This freight order is complete.'**
+  String get freightNextCompleted;
+
+  /// No description provided for @paidEstimateAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid estimate: {amount}'**
+  String paidEstimateAmount(Object amount);
+
+  /// No description provided for @estimatedWeightValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated weight: {weight}'**
+  String estimatedWeightValue(Object weight);
+
+  /// No description provided for @freightNoActionUntilWeightConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'After drop-off, no action is needed until the business confirms the weight.'**
+  String get freightNoActionUntilWeightConfirmed;
+
+  /// No description provided for @viewAllShipments.
+  ///
+  /// In en, this message translates to:
+  /// **'View all shipments'**
+  String get viewAllShipments;
+
+  /// No description provided for @shipmentStillSyncing.
+  ///
+  /// In en, this message translates to:
+  /// **'This shipment is still syncing. You can view all shipments or try again shortly.'**
+  String get shipmentStillSyncing;
+
   /// No description provided for @awaitingConfirmedWeight.
   ///
   /// In en, this message translates to:
@@ -6623,7 +6833,7 @@ abstract class AppLocalizations {
   /// No description provided for @activeDestinationsRequireFee.
   ///
   /// In en, this message translates to:
-  /// **'Active destinations require a barrel shipping fee.'**
+  /// **'Active destinations require at least one configured service.'**
   String get activeDestinationsRequireFee;
 
   /// No description provided for @seedCountriesEmptyInstruction.
@@ -7338,6 +7548,24 @@ abstract class AppLocalizations {
   /// **'Admin escalation becomes available after the business response window unless the issue is urgent.'**
   String get supportEscalationUnavailable;
 
+  /// No description provided for @supportEscalationUrgentOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Normal escalation unlocks after the business response window. Urgent reasons can be sent now.'**
+  String get supportEscalationUrgentOnly;
+
+  /// No description provided for @supportAlreadyEscalatedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Already escalated to Laawol admin'**
+  String get supportAlreadyEscalatedTitle;
+
+  /// No description provided for @supportAlreadyEscalatedSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This case is already in the Laawol admin queue.'**
+  String get supportAlreadyEscalatedSubtitle;
+
   /// No description provided for @supportReasonUnresolved.
   ///
   /// In en, this message translates to:
@@ -7461,8 +7689,44 @@ abstract class AppLocalizations {
   /// No description provided for @supportUploadFailed.
   ///
   /// In en, this message translates to:
-  /// **'Upload failed. Check your connection and try again.'**
+  /// **'Upload failed. Try again.'**
   String get supportUploadFailed;
+
+  /// No description provided for @supportUploadFailedNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload failed. Check your connection and try again.'**
+  String get supportUploadFailedNetwork;
+
+  /// No description provided for @supportUploadFailedAuth.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload failed because your sign-in expired. Sign in again, then retry.'**
+  String get supportUploadFailedAuth;
+
+  /// No description provided for @supportUploadFailedPermission.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload failed because your account cannot add files to this support case.'**
+  String get supportUploadFailedPermission;
+
+  /// No description provided for @supportUploadFailedInvalidFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload failed because this file type or size is not allowed.'**
+  String get supportUploadFailedInvalidFile;
+
+  /// No description provided for @supportUploadFailedAppVerification.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload blocked by app verification. Update the app or contact support.'**
+  String get supportUploadFailedAppVerification;
+
+  /// No description provided for @supportUploadFailedDebugAppCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload blocked by Firebase App Check. Register this debug device token, then retry.'**
+  String get supportUploadFailedDebugAppCheck;
 
   /// No description provided for @supportImagePreviewLabel.
   ///
@@ -8565,7 +8829,7 @@ abstract class AppLocalizations {
   /// No description provided for @phoneVerificationCountryCodeHelp.
   ///
   /// In en, this message translates to:
-  /// **'Include the country code, for example +1 718 555 0100.'**
+  /// **'Choose the country code, then enter the mobile number.'**
   String get phoneVerificationCountryCodeHelp;
 
   /// No description provided for @phoneVerificationCodeSentTitle.
@@ -8694,6 +8958,12 @@ abstract class AppLocalizations {
   /// **'For security, sign out, sign back in, and verify your phone again.'**
   String get phoneVerificationRecentLogin;
 
+  /// No description provided for @phoneVerificationAppCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'App security check failed. Register this debug device in Firebase App Check, then reopen the app.'**
+  String get phoneVerificationAppCheck;
+
   /// No description provided for @phoneVerificationGenericError.
   ///
   /// In en, this message translates to:
@@ -8784,6 +9054,30 @@ abstract class AppLocalizations {
   /// **'Phone not verified'**
   String get phoneVerificationNotVerified;
 
+  /// No description provided for @phoneCountryCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Country code'**
+  String get phoneCountryCode;
+
+  /// No description provided for @selectCountryCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Select country code'**
+  String get selectCountryCode;
+
+  /// No description provided for @phoneCountrySearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search country or code'**
+  String get phoneCountrySearchHint;
+
+  /// No description provided for @noCountryCodesFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No country codes found'**
+  String get noCountryCodesFound;
+
   /// No description provided for @sharedBarrelActionFailed.
   ///
   /// In en, this message translates to:
@@ -8813,6 +9107,174 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Paid destination change'**
   String get marketplaceDestinationChangeSummary;
+
+  /// No description provided for @freightPickupSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Freight pickup'**
+  String get freightPickupSectionTitle;
+
+  /// No description provided for @freightPickupSectionSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Offer to collect parcels from your customer\'s address, and choose how the fee is calculated.'**
+  String get freightPickupSectionSubtitle;
+
+  /// No description provided for @freightPickupOfferToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Offer freight pickup'**
+  String get freightPickupOfferToggle;
+
+  /// No description provided for @freightPickupModelDistance.
+  ///
+  /// In en, this message translates to:
+  /// **'By distance'**
+  String get freightPickupModelDistance;
+
+  /// No description provided for @freightPickupModelBorough.
+  ///
+  /// In en, this message translates to:
+  /// **'By borough'**
+  String get freightPickupModelBorough;
+
+  /// No description provided for @freightPickupDistanceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Fee = base fee + per-km rate × driving distance from your address. Leave rates at 0 to offer free pickup.'**
+  String get freightPickupDistanceHint;
+
+  /// No description provided for @freightPickupOriginAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup origin address'**
+  String get freightPickupOriginAddress;
+
+  /// No description provided for @freightPickupOriginAddressHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Where your drivers start from. Defaults to your business address.'**
+  String get freightPickupOriginAddressHelper;
+
+  /// No description provided for @freightPickupBaseFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Base fee'**
+  String get freightPickupBaseFee;
+
+  /// No description provided for @freightPickupPerKm.
+  ///
+  /// In en, this message translates to:
+  /// **'Per km'**
+  String get freightPickupPerKm;
+
+  /// No description provided for @freightPickupMinFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Minimum fee'**
+  String get freightPickupMinFee;
+
+  /// No description provided for @freightPickupMaxKm.
+  ///
+  /// In en, this message translates to:
+  /// **'Max distance (km)'**
+  String get freightPickupMaxKm;
+
+  /// No description provided for @freightPickupBoroughHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a flat pickup fee for each New York City borough you serve. Leave blank for boroughs you don\'t cover.'**
+  String get freightPickupBoroughHint;
+
+  /// No description provided for @freightPickupBoroughPriceRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a pickup fee for at least one borough, or turn off freight pickup.'**
+  String get freightPickupBoroughPriceRequired;
+
+  /// No description provided for @freightPickupCustomerToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick up from my address'**
+  String get freightPickupCustomerToggle;
+
+  /// No description provided for @freightPickupAddressLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup address'**
+  String get freightPickupAddressLabel;
+
+  /// No description provided for @freightPickupBoroughLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Borough'**
+  String get freightPickupBoroughLabel;
+
+  /// No description provided for @freightPickupDateTimeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup date & time'**
+  String get freightPickupDateTimeLabel;
+
+  /// No description provided for @freightPickupChooseDateTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose date & time'**
+  String get freightPickupChooseDateTime;
+
+  /// No description provided for @freightPickupFeeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup fee'**
+  String get freightPickupFeeLabel;
+
+  /// No description provided for @freightPickupCalculating.
+  ///
+  /// In en, this message translates to:
+  /// **'Calculating pickup fee…'**
+  String get freightPickupCalculating;
+
+  /// No description provided for @freightPickupEnterDetailsForFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your pickup details to see the fee.'**
+  String get freightPickupEnterDetailsForFee;
+
+  /// No description provided for @freightPickupSelectDateTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Please choose a pickup date and time.'**
+  String get freightPickupSelectDateTime;
+
+  /// No description provided for @freightPickupUnavailableCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'This business doesn\'t offer pickup right now.'**
+  String get freightPickupUnavailableCustomer;
+
+  /// No description provided for @freightPickupOutOfRangeCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Your address is outside this business\'s pickup area.'**
+  String get freightPickupOutOfRangeCustomer;
+
+  /// No description provided for @freightPickupQuoteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t calculate the pickup fee. Check the address and try again.'**
+  String get freightPickupQuoteFailed;
+
+  /// No description provided for @freightPickupDistanceAway.
+  ///
+  /// In en, this message translates to:
+  /// **'{distanceKm} km away'**
+  String freightPickupDistanceAway(String distanceKm);
+
+  /// No description provided for @freightPickupFreeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Free pickup'**
+  String get freightPickupFreeLabel;
 }
 
 class _AppLocalizationsDelegate

@@ -48,6 +48,16 @@ class BusinessProfile {
     this.parkingInstructions,
     this.parkingLatitude,
     this.parkingLongitude,
+    this.freightPickupAvailable = false,
+    this.freightPickupModel = 'distance',
+    this.freightPickupBaseFee = 0,
+    this.freightPickupPerKm = 0,
+    this.freightPickupMinFee = 0,
+    this.freightPickupMaxKm = 0,
+    this.freightPickupOriginAddress,
+    this.freightPickupOriginLat,
+    this.freightPickupOriginLng,
+    this.freightPickupBoroughPrices = const {},
   });
 
   static const defaultBusinessId = 'keren_auto_sales';
@@ -97,8 +107,31 @@ class BusinessProfile {
   final String? parkingInstructions;
   final double? parkingLatitude;
   final double? parkingLongitude;
+  final bool freightPickupAvailable;
+
+  /// Either `'distance'` (any country) or `'borough'` (New York only).
+  final String freightPickupModel;
+  final double freightPickupBaseFee;
+  final double freightPickupPerKm;
+  final double freightPickupMinFee;
+  final double freightPickupMaxKm;
+  final String? freightPickupOriginAddress;
+  final double? freightPickupOriginLat;
+  final double? freightPickupOriginLng;
+  final Map<String, double> freightPickupBoroughPrices;
 
   bool get isApproved => status == 'approved';
+
+  /// Borough pricing is only meaningful for New York businesses.
+  bool get isNewYorkBased {
+    final value = (state ?? '').trim().toUpperCase();
+    return value == 'NY' || value == 'NEW YORK';
+  }
+
+  /// The effective model, coercing borough → distance outside New York so the
+  /// UI never shows an incoherent state (mirrors the backend rule).
+  String get effectiveFreightPickupModel =>
+      freightPickupModel == 'borough' && isNewYorkBased ? 'borough' : 'distance';
   bool hasService(BusinessServiceKey key) =>
       hasBusinessService(enabledServices, key);
 
@@ -158,7 +191,38 @@ class BusinessProfile {
       parkingInstructions: data['parkingInstructions'] as String?,
       parkingLatitude: _parseNullableDouble(data['parkingLatitude']),
       parkingLongitude: _parseNullableDouble(data['parkingLongitude']),
+      freightPickupAvailable: data['freightPickupAvailable'] == true,
+      freightPickupModel:
+          (data['freightPickupModel'] as String?) == 'borough'
+          ? 'borough'
+          : 'distance',
+      freightPickupBaseFee: _parseDouble(data['freightPickupBaseFee'], 0),
+      freightPickupPerKm: _parseDouble(data['freightPickupPerKm'], 0),
+      freightPickupMinFee: _parseDouble(data['freightPickupMinFee'], 0),
+      freightPickupMaxKm: _parseDouble(data['freightPickupMaxKm'], 0),
+      freightPickupOriginAddress: data['freightPickupOriginAddress'] as String?,
+      freightPickupOriginLat: _parseNullableDouble(
+        data['freightPickupOriginLat'],
+      ),
+      freightPickupOriginLng: _parseNullableDouble(
+        data['freightPickupOriginLng'],
+      ),
+      freightPickupBoroughPrices: _parseBoroughPrices(
+        data['freightPickupBoroughPrices'],
+      ),
     );
+  }
+
+  static Map<String, double> _parseBoroughPrices(dynamic value) {
+    if (value is! Map) return const {};
+    final prices = <String, double>{};
+    value.forEach((key, raw) {
+      final fee = _parseNullableDouble(raw);
+      if (key is String && fee != null && fee >= 0) {
+        prices[key] = fee;
+      }
+    });
+    return prices;
   }
 
   static double _parseDouble(dynamic value, double fallback) {

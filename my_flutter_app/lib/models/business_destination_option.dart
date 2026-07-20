@@ -18,6 +18,8 @@ class BusinessDestinationOption {
     this.enabledServices = defaultBusinessServiceValues,
     this.serviceNote,
     this.businessStatus = 'approved',
+    this.freightPickupAvailable = false,
+    this.freightPickupModel = 'distance',
   });
 
   final String id;
@@ -33,6 +35,11 @@ class BusinessDestinationOption {
   final String? serviceNote;
   final String businessStatus;
 
+  /// Whether this business offers freight home-pickup, and its already-resolved
+  /// pricing model (`'distance'` or `'borough'`), as computed server-side.
+  final bool freightPickupAvailable;
+  final String freightPickupModel;
+
   bool get isApprovedActive => businessStatus == 'approved' && country.isActive;
 
   bool isAvailableFor(BusinessServiceKey service) {
@@ -41,9 +48,9 @@ class BusinessDestinationOption {
     }
     return switch (service) {
       BusinessServiceKey.barrelShipping ||
-      BusinessServiceKey.sharedBarrels => country.barrelShippingPrice > 0,
+      BusinessServiceKey.sharedBarrels => country.isBarrelShippingConfigured,
       BusinessServiceKey.freight => country.hasAnyFreightRate,
-      BusinessServiceKey.carTransport => true,
+      BusinessServiceKey.carTransport => country.carTransportAvailable,
       BusinessServiceKey.carSales || BusinessServiceKey.carParking => true,
     };
   }
@@ -81,18 +88,46 @@ class BusinessDestinationOption {
       enabledServices: normalizeBusinessServices(data['enabledServices']),
       serviceNote: data['serviceNote'] as String?,
       businessStatus: (data['businessStatus'] ?? 'approved') as String,
+      freightPickupAvailable: data['freightPickupAvailable'] == true,
+      freightPickupModel: (data['freightPickupModel'] as String?) == 'borough'
+          ? 'borough'
+          : 'distance',
       country: DestinationCountry(
         id: (country['id'] ?? '') as String,
         name: (country['name'] ?? '') as String,
         code: country['code'] as String?,
         isActive: country['isActive'] == true,
         sortOrder: (country['sortOrder'] as num?)?.toInt() ?? 0,
+        destinationCoverageVersion:
+            (country['destinationCoverageVersion'] as num?)?.toInt() ?? 1,
+        barrelShippingAvailable: _serviceEnabled(
+          country,
+          'barrelShipping',
+          legacy:
+              country['isActive'] == true &&
+              ((country['barrelShippingPrice'] as num?)?.toDouble() ?? 0) > 0,
+        ),
+        freightAirAvailable: _serviceEnabled(
+          country,
+          'freightAir',
+          legacy:
+              country['isActive'] == true &&
+              ((country['freightAirPricePerKg'] as num?)?.toDouble() ?? 0) > 0,
+        ),
+        freightSeaAvailable: _serviceEnabled(
+          country,
+          'freightSea',
+          legacy:
+              country['isActive'] == true &&
+              ((country['freightSeaPricePerKg'] as num?)?.toDouble() ?? 0) > 0,
+        ),
         barrelShippingPrice:
             (country['barrelShippingPrice'] as num?)?.toDouble() ?? 0,
         freightAirPricePerKg:
             (country['freightAirPricePerKg'] as num?)?.toDouble() ?? 0,
         freightSeaPricePerKg:
             (country['freightSeaPricePerKg'] as num?)?.toDouble() ?? 0,
+        carTransportAvailable: _legacyCarTransportAvailable(country),
         deliveryEstimateMinDays: (country['deliveryEstimateMinDays'] as num?)
             ?.toInt(),
         deliveryEstimateMaxDays: (country['deliveryEstimateMaxDays'] as num?)
@@ -154,18 +189,53 @@ class BusinessDestinationOption {
                   ? data['businessStatus']
                   : business['status'] ?? data['businessStatus'] ?? 'pending')
               as String,
+      freightPickupAvailable:
+          (businessData == null
+              ? data['freightPickupAvailable']
+              : business['freightPickupAvailable']) ==
+          true,
+      freightPickupModel: _effectivePickupModel(
+        businessData == null
+            ? data['freightPickupModel']
+            : business['freightPickupModel'],
+        businessData == null ? data['state'] : business['state'],
+      ),
       country: DestinationCountry(
         id: doc.id,
         name: (data['name'] ?? doc.id) as String,
         code: data['code'] as String?,
         isActive: data['isActive'] == true,
         sortOrder: (data['sortOrder'] as num?)?.toInt() ?? 0,
+        destinationCoverageVersion:
+            (data['destinationCoverageVersion'] as num?)?.toInt() ?? 1,
+        barrelShippingAvailable: _serviceEnabled(
+          data,
+          'barrelShipping',
+          legacy:
+              data['isActive'] == true &&
+              ((data['barrelShippingPrice'] as num?)?.toDouble() ?? 0) > 0,
+        ),
+        freightAirAvailable: _serviceEnabled(
+          data,
+          'freightAir',
+          legacy:
+              data['isActive'] == true &&
+              ((data['freightAirPricePerKg'] as num?)?.toDouble() ?? 0) > 0,
+        ),
+        freightSeaAvailable: _serviceEnabled(
+          data,
+          'freightSea',
+          legacy:
+              data['isActive'] == true &&
+              ((data['freightSeaPricePerKg'] as num?)?.toDouble() ?? 0) > 0,
+        ),
         barrelShippingPrice:
             (data['barrelShippingPrice'] as num?)?.toDouble() ?? 0,
         freightAirPricePerKg:
             (data['freightAirPricePerKg'] as num?)?.toDouble() ?? 0,
         freightSeaPricePerKg:
             (data['freightSeaPricePerKg'] as num?)?.toDouble() ?? 0,
+        carTransportAvailable: _legacyCarTransportAvailable(data),
         deliveryEstimateMinDays: (data['deliveryEstimateMinDays'] as num?)
             ?.toInt(),
         deliveryEstimateMaxDays: (data['deliveryEstimateMaxDays'] as num?)
@@ -185,5 +255,33 @@ class BusinessDestinationOption {
       country: country,
       businessStatus: 'approved',
     );
+  }
+
+  /// Borough pricing only holds for New York businesses; anything else resolves
+  /// to distance (mirrors the backend rule) so the client sees a coherent model.
+  static String _effectivePickupModel(dynamic model, dynamic state) {
+    final normalizedState = (state as String? ?? '').trim().toUpperCase();
+    final isNewYork = normalizedState == 'NY' || normalizedState == 'NEW YORK';
+    return model == 'borough' && isNewYork ? 'borough' : 'distance';
+  }
+
+  static bool _serviceEnabled(
+    Map<String, dynamic> data,
+    String key, {
+    required bool legacy,
+  }) {
+    final availability = data['serviceAvailability'];
+    if (availability is Map && availability[key] is bool) {
+      return availability[key] as bool;
+    }
+    return legacy;
+  }
+
+  static bool _legacyCarTransportAvailable(Map<String, dynamic> data) {
+    final availability = data['serviceAvailability'];
+    if (availability is Map && availability['carTransport'] is bool) {
+      return availability['carTransport'] as bool;
+    }
+    return data['isActive'] == true;
   }
 }

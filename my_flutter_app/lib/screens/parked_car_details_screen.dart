@@ -12,6 +12,7 @@ import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../data/car_catalog.dart';
 import '../theme/app_colors.dart';
+import '../utils/parking_status_options.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 
@@ -850,6 +851,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
   }
 
   Widget _buildBillingCard(AppLocalizations l10n, bool canEdit) {
+    final statusOptions = parkedCarStatusOptions(_statusDraft);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -893,9 +895,12 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
             key: ValueKey<String>(_statusDraft),
             initialValue: _statusDraft,
             decoration: InputDecoration(labelText: l10n.status),
-            items: ['active', 'completed']
+            items: statusOptions
                 .map(
-                  (label) => DropdownMenuItem(value: label, child: Text(label)),
+                  (status) => DropdownMenuItem(
+                    value: status,
+                    child: Text(_parkingStatusLabel(l10n, status)),
+                  ),
                 )
                 .toList(),
             onChanged: canEdit
@@ -921,6 +926,23 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
         ],
       ),
     );
+  }
+
+  String _parkingStatusLabel(AppLocalizations l10n, String status) {
+    switch (status) {
+      case 'active':
+        return l10n.active;
+      case 'reserved':
+        return l10n.reserved;
+      case 'completed':
+        return l10n.completed;
+      case 'cancelled':
+        return l10n.cancelled;
+      case 'pending':
+        return l10n.pending;
+      default:
+        return status;
+    }
   }
 
   Widget _buildDropdownField({
