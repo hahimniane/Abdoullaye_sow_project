@@ -56,7 +56,6 @@ async function seedBusiness(id, {
       status,
       enabledServices: services,
       city: "Bronx",
-      state: "NY",
       addressLine1: "100 Test Avenue",
       ...(freightPickup || {}),
       parkingCity: "Bronx",
@@ -327,6 +326,8 @@ describe("freight service callable lifecycle", () => {
     const businessId = "freight-pickup-business";
     await seedBusiness(businessId, {
       freightPickup: {
+        // Borough pricing is New York only, so this business must be NY-based.
+        state: "NY",
         freightPickupAvailable: true,
         freightPickupModel: "borough",
         freightPickupBoroughPrices: {Bronx: 40, Manhattan: 64},
@@ -449,7 +450,7 @@ describe("freight service callable lifecycle", () => {
               pickupBorough: "",
               pickupDateTime: "",
             }),
-            /Pickup address, borough, date, and time are required/,
+            /Pickup address, date, and time are required/,
         );
         await assert.rejects(
             () => call({
