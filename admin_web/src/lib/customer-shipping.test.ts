@@ -891,8 +891,19 @@ test("pickup address entry automatically exposes an accessible searchable sugges
   assert.match(styles, /\.customer-barrel-stage > label\s*\{[\s\S]*display: grid/);
   assert.match(
     styles,
-    /\.customer-barrel-stage > label input\s*\{[\s\S]*min-height: 50px/,
+    /\.customer-barrel-stage > label input\s*\{[\s\S]*background: var\(--paper-soft\)[\s\S]*border: 1px solid var\(--rule-strong, #b8d7d3\)[\s\S]*min-height: 50px/,
   );
+  assert.match(
+    styles,
+    /\.customer-searchable-control\s*\{[\s\S]*background: var\(--paper-soft\)[\s\S]*border: 1px solid var\(--rule-strong, #b8d7d3\)/,
+  );
+  for (const token of ["--brand-deep", "--brand-mist", "--rule-strong"]) {
+    assert.match(
+      styles,
+      new RegExp(`${token}:\\s*[^;]+;`),
+      `${token} must be defined so the live form does not lose its borders or fills`,
+    );
+  }
 });
 
 test("one unavailable shipping service does not hide the other service options", () => {
