@@ -27,7 +27,7 @@ import {
 const disclosure = {
   accepted: true,
   version: "marketplace-provider-responsibility-v1",
-  locale: "en-US",
+  locale: "en",
 } as const;
 type DisclosureFixture = typeof disclosure;
 
