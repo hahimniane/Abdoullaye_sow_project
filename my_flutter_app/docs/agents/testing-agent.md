@@ -257,3 +257,7 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   millisecond before and the exact cutoff instant. A payment-key exception must
   not downgrade the deployment mode or bypass clean-tree, CI, App Check, IAM,
   test, build, or smoke-check gates.
+- A deploy wrapper that verifies a compatible Java runtime must pass that same
+  resolved environment to the real Firebase deploy command; otherwise Firebase
+  predeploy hooks can fail after a green preflight because macOS cannot locate
+  Java from the raw shell environment.

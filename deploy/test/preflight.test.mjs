@@ -365,6 +365,43 @@ test("deployment commands prefer a compatible Java home on the command path", ()
   assert.equal(result.PATH.split(":")[0], path.join(compatibleHome, "bin"));
 });
 
+test("backend deploy shares its Java-compatible environment with Firebase", () => {
+  const source = fs.readFileSync(
+      new URL("../backend-deploy.mjs", import.meta.url),
+      "utf8",
+  );
+
+  assert.match(
+      source,
+      /import\s+\{\s*deploymentJavaEnvironment\s*\}\s+from\s+["']\.\/preflight-lib\.mjs["']/,
+  );
+  assert.match(
+      source,
+      /const\s+commandEnvironment\s*=\s*deploymentJavaEnvironment\(/,
+  );
+  assert.match(
+      source,
+      /function\s+run\([\s\S]*?env:\s*options\.env\s*\|\|\s*commandEnvironment/,
+      "child commands must default to the Java-compatible environment",
+  );
+
+  const preflightRun = source.match(
+      /run\("node",\s*\[path\.join\(__dirname,\s*"preflight\.mjs"\)\][\s\S]*?\}\s*\);/,
+  );
+  assert.ok(preflightRun, "backend deploy must invoke its guarded preflight");
+  assert.match(preflightRun[0], /\.\.\.commandEnvironment/);
+
+  const firebaseRun = source.match(
+      /run\("firebase",\s*\[[\s\S]*?"deploy"[\s\S]*?\],\s*\{([\s\S]*?)\}\s*\);/,
+  );
+  assert.ok(firebaseRun, "backend deploy must invoke the real Firebase CLI");
+  assert.doesNotMatch(
+      firebaseRun[1],
+      /\benv:\s*process\.env\b/,
+      "Firebase must not bypass the compatible environment inherited by predeploy hooks",
+  );
+});
+
 test("DEPLOY_JAVA_HOME overrides auto-detected Java locations", () => {
   const overrideHome = path.join("", "custom", "jdk-22");
   const result = deploymentJavaEnvironment({

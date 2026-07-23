@@ -8,16 +8,24 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { deploymentJavaEnvironment } from "./preflight-lib.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const PROJECT_ID = process.env.FIREBASE_PROJECT || "car-selling-flutter-app";
 const APP_DIR = path.join(ROOT, "my_flutter_app");
+const commandEnvironment = deploymentJavaEnvironment({
+  environment: process.env,
+  candidateHomes: [
+    "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
+    "/usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
+  ],
+});
 
 function run(command, args, options = {}) {
   execFileSync(command, args, {
     cwd: options.cwd || ROOT,
-    env: options.env || process.env,
+    env: options.env || commandEnvironment,
     stdio: "inherit",
   });
 }
@@ -26,7 +34,7 @@ console.log("Running backend deploy preflight...");
 try {
   run("node", [path.join(__dirname, "preflight.mjs")], {
     env: {
-      ...process.env,
+      ...commandEnvironment,
       PREFLIGHT_SCOPE: "backend",
     },
   });
@@ -42,11 +50,11 @@ run("firebase", [
   "functions,firestore:rules,firestore:indexes,storage",
   "--project",
   PROJECT_ID,
-], {cwd: APP_DIR});
+], {cwd: APP_DIR, env: commandEnvironment});
 
 console.log("\nRunning read-only backend smoke checks...");
 run("node", [path.join(__dirname, "post-deploy-smoke.mjs")], {
-  env: {...process.env, SMOKE_SCOPE: "backend"},
+  env: {...commandEnvironment, SMOKE_SCOPE: "backend"},
 });
 
 console.log("\nBackend deploy complete.");
