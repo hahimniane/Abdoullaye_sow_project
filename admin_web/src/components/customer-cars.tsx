@@ -24,7 +24,9 @@ import { startCheckout } from "@/lib/use-checkout";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
 
 type CustomerCarsProps = {
-  firebaseUser: User;
+  firebaseUser?: User | null;
+  authenticated?: boolean;
+  onAuthenticationRequired?: () => void;
   profile: UserProfile;
   state: {
     rows: FirestoreRow[];
@@ -37,6 +39,8 @@ type CarAction = "viewing" | "deposit" | "purchase";
 
 export function CustomerCars({
   firebaseUser,
+  authenticated = true,
+  onAuthenticationRequired,
   profile,
   state,
 }: CustomerCarsProps) {
@@ -47,15 +51,17 @@ export function CustomerCars({
   const [favoritePending, setFavoritePending] = useState("");
   const [error, setError] = useState("");
 
-  useEffect(
-    () =>
-      onSnapshot(
+  useEffect(() => {
+    if (!firebaseUser) {
+      setFavorites(new Set());
+      return undefined;
+    }
+    return onSnapshot(
         collection(db, "users", firebaseUser.uid, "favoriteCars"),
         (snapshot) => setFavorites(new Set(snapshot.docs.map((item) => item.id))),
         () => setError("Favorites could not be loaded."),
-      ),
-    [firebaseUser.uid],
-  );
+      );
+  }, [firebaseUser]);
 
   const filteredCars = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -76,6 +82,10 @@ export function CustomerCars({
 
   async function toggleFavorite(car: FirestoreRow) {
     if (favoritePending) return;
+    if (!firebaseUser || !authenticated) {
+      onAuthenticationRequired?.();
+      return;
+    }
     setFavoritePending(car.id);
     setError("");
     const favoriteRef = doc(
@@ -203,9 +213,10 @@ export function CustomerCars({
       {selectedCar && (
         <CarDetail
           action={action}
+          authenticated={authenticated}
           car={selectedCar}
-          firebaseUser={firebaseUser}
           onAction={setAction}
+          onAuthenticationRequired={onAuthenticationRequired}
           onClose={() => {
             setSelectedCar(null);
             setAction(null);
@@ -219,16 +230,18 @@ export function CustomerCars({
 
 function CarDetail({
   action,
+  authenticated,
   car,
-  firebaseUser,
   onAction,
+  onAuthenticationRequired,
   onClose,
   profile,
 }: {
   action: CarAction | null;
+  authenticated: boolean;
   car: FirestoreRow;
-  firebaseUser: User;
   onAction: (action: CarAction | null) => void;
+  onAuthenticationRequired?: () => void;
   onClose: () => void;
   profile: UserProfile;
 }) {
@@ -262,10 +275,11 @@ function CarDetail({
         {action ? (
           <CarActionForm
             action={action}
+            authenticated={authenticated}
             car={car}
-            firebaseUser={firebaseUser}
             onCancel={() => onAction(null)}
             onComplete={onClose}
+            onAuthenticationRequired={onAuthenticationRequired}
             profile={profile}
           />
         ) : (
@@ -326,17 +340,19 @@ function CarDetail({
 
 function CarActionForm({
   action,
+  authenticated,
   car,
-  firebaseUser,
   onCancel,
   onComplete,
+  onAuthenticationRequired,
   profile,
 }: {
   action: CarAction;
+  authenticated: boolean;
   car: FirestoreRow;
-  firebaseUser: User;
   onCancel: () => void;
   onComplete: () => void;
+  onAuthenticationRequired?: () => void;
   profile: UserProfile;
 }) {
   const [buyerName, setBuyerName] = useState(text(profile.fullName, ""));
@@ -356,6 +372,10 @@ function CarActionForm({
 
   async function submit() {
     if (!valid || submitting) return;
+    if (!authenticated) {
+      onAuthenticationRequired?.();
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
@@ -424,11 +444,13 @@ function CarActionForm({
         </div>
       }
       submitLabel={
-        action === "viewing"
-          ? "Reserve viewing"
-          : action === "deposit"
-            ? "Continue to deposit"
-            : "Continue to purchase"
+        !authenticated
+          ? "Sign in to save & continue"
+          : action === "viewing"
+            ? "Reserve viewing"
+            : action === "deposit"
+              ? "Continue to deposit"
+              : "Continue to purchase"
       }
       submitting={submitting}
       title={

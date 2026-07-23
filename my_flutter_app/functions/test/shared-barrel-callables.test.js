@@ -233,6 +233,34 @@ async function refundRequestsFor(poolId) {
 describe("shared barrel callable lifecycle", () => {
   before(seedSharedBarrelFixture);
 
+  it("lists sanitized open pools without requiring authentication",
+      async () => {
+        await db.collection("openBarrels").doc("public-pool-option").set({
+          businessId: BUSINESS_ID,
+          businessName: "Shared Barrel Test Business",
+          destinationCountryId: COUNTRY_ID,
+          destinationCountryName: "Guinea",
+          sharesAvailable: 2,
+          totalShares: 4,
+          pricePerShare: 100,
+          depositPerShare: 30,
+          currency: "usd",
+          status: "open",
+          createdByUid: OWNER_UID,
+          publicParticipants: {[OWNER_UID]: {name: "Private Owner"}},
+        });
+
+        const result = await functions.listOpenBarrelPoolOptions.run({
+          data: {},
+        });
+        const option = result.options.find((row) =>
+          row.id === "public-pool-option");
+        assert.ok(option);
+        assert.equal(option.sharesAvailable, 2);
+        assert.equal(Object.hasOwn(option, "createdByUid"), false);
+        assert.equal(Object.hasOwn(option, "publicParticipants"), false);
+      });
+
   it("requires verified customer phone numbers to create and join pools",
       async () => {
         const disclosureCountBefore = (

@@ -4923,6 +4923,238 @@ button[data-loading="true"]::before {
   }
 }
 
+/* Public customer service entry — browse and prepare before account creation. */
+.customer-entry-shell {
+  background:
+    radial-gradient(circle at 88% 0%, rgba(20, 184, 166, 0.12), transparent 34%),
+    var(--bg);
+  min-height: 100vh;
+}
+
+.customer-entry-header {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  min-height: 74px;
+  padding: 12px clamp(18px, 4vw, 54px);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.customer-entry-brand {
+  align-items: center;
+  color: inherit;
+  display: flex;
+  gap: 14px;
+  min-width: 0;
+  text-decoration: none;
+}
+
+.customer-entry-brand > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.customer-entry-brand strong {
+  font-size: 15px;
+}
+
+.customer-entry-brand small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.customer-entry-header-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.customer-entry-header-actions .text-button,
+.customer-entry-header-actions .secondary-button {
+  align-items: center;
+  display: inline-flex;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.customer-entry-main {
+  display: grid;
+  gap: 16px;
+  margin: 0 auto;
+  max-width: 1220px;
+  padding: 28px clamp(16px, 4vw, 40px) 64px;
+}
+
+.customer-entry-assurance,
+.customer-entry-locked-note {
+  align-items: center;
+  background: rgba(236, 253, 245, 0.78);
+  border: 1px solid rgba(13, 148, 136, 0.25);
+  border-radius: 8px;
+  color: var(--brand-strong);
+  display: flex;
+  gap: 12px;
+  padding: 13px 15px;
+}
+
+.customer-entry-assurance > svg {
+  flex: 0 0 auto;
+}
+
+.customer-entry-assurance div,
+.customer-entry-locked-note div {
+  display: grid;
+  gap: 2px;
+}
+
+.customer-entry-assurance strong,
+.customer-entry-locked-note strong {
+  font-size: 13px;
+}
+
+.customer-entry-assurance span,
+.customer-entry-locked-note span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.customer-entry-locked-note {
+  justify-content: space-between;
+  margin-top: 14px;
+}
+
+.customer-auth-overlay {
+  align-items: center;
+  background: rgba(2, 44, 42, 0.66);
+  display: grid;
+  inset: 0;
+  justify-items: center;
+  overflow-y: auto;
+  padding: 24px;
+  position: fixed;
+  z-index: 100;
+}
+
+.customer-auth-sheet {
+  background: #fff;
+  border: 1px solid rgba(13, 148, 136, 0.25);
+  border-radius: 10px;
+  box-shadow: 0 28px 80px rgba(2, 44, 42, 0.28);
+  max-width: 560px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.customer-auth-context {
+  align-items: flex-start;
+  background: linear-gradient(135deg, #073b3a, #0f766e);
+  color: #fff;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  padding: 22px 24px;
+}
+
+.customer-auth-context h2 {
+  color: #fff;
+  font-size: 20px;
+  margin: 4px 0 5px;
+}
+
+.customer-auth-context p {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.customer-auth-context .icon-button {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #fff;
+  flex: 0 0 auto;
+}
+
+.login-screen-embedded {
+  background: #fff;
+  min-height: 0;
+  padding: 22px 24px 26px;
+}
+
+.login-screen-embedded::before,
+.login-screen-embedded .login-header {
+  display: none;
+}
+
+.login-screen-embedded .login-card {
+  border: 0;
+  box-shadow: none;
+  max-width: none;
+  padding: 0;
+}
+
+.customer-auth-progress {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  min-height: 190px;
+  padding: 28px;
+}
+
+@media (max-width: 700px) {
+  .customer-entry-header {
+    align-items: flex-start;
+    position: static;
+  }
+
+  .customer-entry-brand > span:last-child,
+  .customer-entry-header-actions .text-button {
+    display: none;
+  }
+
+  .customer-entry-main {
+    padding-top: 16px;
+  }
+
+  .customer-entry-assurance,
+  .customer-entry-locked-note {
+    align-items: flex-start;
+  }
+
+  .customer-entry-locked-note {
+    display: grid;
+  }
+
+  .customer-entry-locked-note .secondary-button {
+    width: 100%;
+  }
+
+  .customer-auth-overlay {
+    align-items: end;
+    padding: 0;
+  }
+
+  .customer-auth-sheet {
+    border-radius: 10px 10px 0 0;
+    max-height: 94vh;
+    overflow-y: auto;
+  }
+
+  .customer-auth-context,
+  .login-screen-embedded {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+}
+
 /* Listings modal — full field set extras */
 .lst-modal { max-width: 720px; }
 .lst-form-section {
@@ -6819,6 +7051,7 @@ button[data-loading="true"]::before {
   display: grid;
   gap: 12px;
   grid-template-columns: minmax(150px, 1.3fr) repeat(2, minmax(140px, 1fr));
+  padding: 18px;
 }
 
 .customer-parking-search-grid > label {
@@ -7217,6 +7450,32 @@ button[data-loading="true"]::before {
 }
 
 @media (max-width: 560px) {
+  .customer-service-search .panel-header {
+    align-items: flex-start;
+    padding: 16px;
+  }
+
+  .customer-service-search .panel-header > div {
+    align-items: flex-start;
+    display: grid;
+    gap: 6px;
+  }
+
+  .customer-service-search .panel-header p {
+    line-height: 1.4;
+    margin: 0;
+  }
+
+  .customer-parking-search-grid {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 14px 16px 16px;
+  }
+
+  .customer-parking-search-grid .customer-choice-row,
+  .customer-search-button {
+    grid-column: 1;
+  }
+
   .login-screen {
     align-content: center;
     padding: 20px 14px 76px;

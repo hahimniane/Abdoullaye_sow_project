@@ -2,6 +2,28 @@
   var storageKey = "laawol:lang";
   var defaultLang = "fr";
   var enToFr = {
+    "Air or sea freight": "Fret aérien ou maritime",
+    "Barrel shipping": "Expédition de barils",
+    "Browse listings, photos, prices, and title information before preparing a viewing or purchase.": "Parcourez les annonces, photos, prix et informations de titre avant de préparer une visite ou un achat.",
+    "Browse listings, photos, prices, and title information, then prepare a viewing, reservation, or purchase.": "Consultez les annonces, photos, prix et informations de titre, puis préparez une visite, une réservation ou un achat.",
+    "Car transport": "Transport de véhicules",
+    "Choose a city and dates, then prepare your vehicle to reserve a space.": "Choisissez une ville et des dates, puis préparez votre véhicule pour réserver une place.",
+    "Choose a destination and prepare your vehicle details to request a quote.": "Choisissez une destination et préparez les informations de votre véhicule pour demander un devis.",
+    "Compare approved businesses and per-kilogram rates, then prepare your shipment online.": "Comparez les entreprises approuvées et les tarifs au kilo, puis préparez votre expédition en ligne.",
+    "Compare destinations, businesses, and prices before preparing your request.": "Comparez les destinations, les entreprises et les prix avant de préparer votre demande.",
+    "Compare per-kilogram rates and prepare your shipment online before creating an account.": "Comparez les tarifs au kilo et préparez votre expédition en ligne avant de créer un compte.",
+    "Compare approved businesses, destinations, and prices, then prepare your shipment online.": "Comparez les entreprises approuvées, les destinations et les prix, puis préparez votre expédition en ligne.",
+    "Find parking": "Trouver un stationnement",
+    "Open shares in a barrel or join a shared load heading to the same destination.": "Ouvrez des parts dans un baril ou rejoignez un chargement partagé vers la même destination.",
+    "Parking": "Stationnement",
+    "Post available shares or prepare a request to join a shared load.": "Publiez des parts disponibles ou préparez une demande pour rejoindre un chargement partagé.",
+    "Prepare the vehicle and destination details to request a quote from an approved business.": "Préparez les détails du véhicule et de la destination pour demander un devis à une entreprise approuvée.",
+    "Request car transport": "Demander un transport",
+    "Search for a space with an approved business, compare dates, and prepare your reservation.": "Recherchez une place auprès d’une entreprise approuvée, comparez les dates et préparez votre réservation.",
+    "Share a barrel": "Partager un baril",
+    "Shared barrels": "Barils partagés",
+    "Ship a barrel": "Expédier un baril",
+    "Start a freight request": "Commencer une demande de fret",
     "Privacy": "Confidentialité",
     "Terms of Service": "Conditions d’utilisation",
     "A better way to find serious businesses": "Une meilleure façon de trouver des entreprises sérieuses",
@@ -320,6 +342,7 @@
   frToEn["Vente de voitures"] = "Car sales";
   frToEn["Stationnement de voitures"] = "Car parking";
   frToEn["Transport de voitures"] = "Car transport";
+  frToEn["Transport de véhicules"] = "Car transport";
   frToEn["Barils partagés"] = "Shared barrels";
 
   function getLang() {

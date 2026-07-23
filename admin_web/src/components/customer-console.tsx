@@ -931,7 +931,7 @@ function useCustomerCarPurchases(uid: string) {
   return useCustomerCollection("carPurchases", "buyerUid", uid);
 }
 
-function usePublicCars(enabled: boolean): CustomerCollection {
+export function usePublicCars(enabled: boolean): CustomerCollection {
   const [state, setState] = useState<CustomerCollection>({ rows: [], loading: false, error: "" });
   useEffect(() => {
     if (!enabled) return undefined;

@@ -1079,6 +1079,18 @@ describe("car parking service callable lifecycle", () => {
     assert.equal(option.availableSpaces, 5);
     assert.equal(option.estimatedTotal, 50);
 
+    const publicListed = await functions.listPublicParkingOptions.run({
+      data: {city: "Bronx", startDate, endDate, pickupRequested: false},
+    });
+    const publicOption = publicListed.options.find((row) =>
+      row.businessId === businessId);
+    assert.ok(publicOption);
+    assert.equal(publicOption.address, "Bronx");
+    assert.equal(Object.hasOwn(publicOption, "phone"), false);
+    assert.equal(Object.hasOwn(publicOption, "email"), false);
+    assert.equal(Object.hasOwn(publicOption, "latitude"), false);
+    assert.equal(Object.hasOwn(publicOption, "longitude"), false);
+
     const created = await functions.createParkingReservation.run({
       auth: {uid: CUSTOMER_UID},
       data: {

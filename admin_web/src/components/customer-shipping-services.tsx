@@ -78,6 +78,8 @@ type CustomerShippingServicesProps = {
   profile: UserProfile;
   freightShipments?: FirestoreRow[];
   initialService?: ShippingService;
+  authenticated?: boolean;
+  onAuthenticationRequired?: () => void;
   onTransportCreated?: (result: {
     id: string;
     trackingCode: string;
@@ -139,6 +141,8 @@ export function CustomerShippingServices({
   profile,
   freightShipments = [],
   initialService = "barrel",
+  authenticated = true,
+  onAuthenticationRequired,
   onTransportCreated,
 }: CustomerShippingServicesProps) {
   const [service, setService] = useState<ShippingService>(initialService);
@@ -282,17 +286,26 @@ export function CustomerShippingServices({
       ) : (
         <>
           {service === "barrel" && (
-            <BarrelShipmentForm options={barrelOptions} profile={profile} />
+            <BarrelShipmentForm
+              authenticated={authenticated}
+              onAuthenticationRequired={onAuthenticationRequired}
+              options={barrelOptions}
+              profile={profile}
+            />
           )}
           {service === "freight" && (
             <FreightShipmentForm
+              authenticated={authenticated}
               freightShipments={freightShipments}
+              onAuthenticationRequired={onAuthenticationRequired}
               options={destinationOptions}
               profile={profile}
             />
           )}
           {service === "transport" && (
             <TransportRequestForm
+              authenticated={authenticated}
+              onAuthenticationRequired={onAuthenticationRequired}
               onCreated={onTransportCreated}
               options={transportOptions}
               profile={profile}
@@ -335,9 +348,13 @@ function ServiceTab({
 }
 
 function BarrelShipmentForm({
+  authenticated,
+  onAuthenticationRequired,
   options,
   profile,
 }: {
+  authenticated: boolean;
+  onAuthenticationRequired?: () => void;
   options: DestinationOption[];
   profile: UserProfile;
 }) {
@@ -371,6 +388,10 @@ function BarrelShipmentForm({
 
   async function submit() {
     if (!valid || submitting || !destination) return;
+    if (!authenticated) {
+      onAuthenticationRequired?.();
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
@@ -439,14 +460,20 @@ function BarrelShipmentForm({
             label="Pickup"
             value={pickup.requested ? pickup.address : "Drop off"}
           />
-          <ReviewDetail
-            label="Wallet"
-            value={useWalletBalance ? "Use available balance" : "Do not use"}
-          />
+          {authenticated && (
+            <ReviewDetail
+              label="Wallet"
+              value={useWalletBalance ? "Use available balance" : "Do not use"}
+            />
+          )}
           <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
         </ReviewGrid>
       }
-      submitLabel="Continue to secure payment"
+      submitLabel={
+        authenticated
+          ? "Continue to secure payment"
+          : "Sign in to save & continue"
+      }
       submitting={submitting}
       title="Send a barrel"
     >
@@ -493,18 +520,24 @@ function BarrelShipmentForm({
             value={quantity}
           />
         </label>
-        <PickupFields pickup={pickup} setPickup={setPickup} />
-        <label className="customer-choice-row customer-form-span">
-          <input
-            checked={useWalletBalance}
-            onChange={(event) => setUseWalletBalance(event.target.checked)}
-            type="checkbox"
-          />
-          <span>
-            <strong>Use my available wallet balance</strong>
-            <small>Any remaining amount continues to secure payment.</small>
-          </span>
-        </label>
+        <PickupFields
+          pickup={pickup}
+          setPickup={setPickup}
+          suggestionsEnabled={authenticated}
+        />
+        {authenticated && (
+          <label className="customer-choice-row customer-form-span">
+            <input
+              checked={useWalletBalance}
+              onChange={(event) => setUseWalletBalance(event.target.checked)}
+              type="checkbox"
+            />
+            <span>
+              <strong>Use my available wallet balance</strong>
+              <small>Any remaining amount continues to secure payment.</small>
+            </span>
+          </label>
+        )}
         <div className="customer-form-span">
           <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
         </div>
@@ -514,11 +547,15 @@ function BarrelShipmentForm({
 }
 
 function FreightShipmentForm({
+  authenticated,
   freightShipments,
+  onAuthenticationRequired,
   options,
   profile,
 }: {
+  authenticated: boolean;
   freightShipments: FirestoreRow[];
+  onAuthenticationRequired?: () => void;
   options: DestinationOption[];
   profile: UserProfile;
 }) {
@@ -571,7 +608,9 @@ function FreightShipmentForm({
   const pickupAllowed = destination?.freightPickupAvailable !== false;
   const quoteReady =
     !pickup.requested ||
-    (pickupAllowed && pickupIsComplete(pickup) && quote !== null);
+    (pickupAllowed &&
+      pickupIsComplete(pickup) &&
+      (!authenticated || quote !== null));
   const valid =
     Boolean(
       senderName.trim() &&
@@ -619,7 +658,21 @@ function FreightShipmentForm({
   }
 
   async function submit() {
-    if (!valid || submitting || !destination) return;
+    if (submitting || !destination) return;
+    if (!authenticated) {
+      onAuthenticationRequired?.();
+      return;
+    }
+    if (
+      pickup.requested &&
+      pickupAllowed &&
+      pickupIsComplete(pickup) &&
+      !quote
+    ) {
+      await requestQuote();
+      return;
+    }
+    if (!valid) return;
     setSubmitting(true);
     setError("");
     try {
@@ -703,7 +756,13 @@ function FreightShipmentForm({
               <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
             </ReviewGrid>
           }
-          submitLabel="Continue to secure payment"
+          submitLabel={
+            !authenticated
+              ? "Sign in to save & continue"
+              : pickup.requested && !quote
+                ? "Calculate pickup & continue"
+                : "Continue to secure payment"
+          }
           submitting={submitting}
           title="Send freight"
         >
@@ -787,6 +846,7 @@ function FreightShipmentForm({
               onPickupChanged={() => setQuote(null)}
               pickup={pickup}
               setPickup={setPickup}
+              suggestionsEnabled={authenticated}
             />
             {pickup.requested && pickupAllowed && (
               <div className="customer-quote-row customer-form-span">
@@ -827,26 +887,28 @@ function FreightShipmentForm({
                 another provider.
               </div>
             )}
-            <label className="customer-choice-row customer-form-span">
-              <input
-                checked={useWalletBalance}
-                onChange={(event) =>
-                  setUseWalletBalance(event.target.checked)
-                }
-                type="checkbox"
-              />
-              <span>
-                <strong>Use my available wallet balance</strong>
-                <small>Any remaining amount continues to secure payment.</small>
-              </span>
-            </label>
+            {authenticated && (
+              <label className="customer-choice-row customer-form-span">
+                <input
+                  checked={useWalletBalance}
+                  onChange={(event) =>
+                    setUseWalletBalance(event.target.checked)
+                  }
+                  type="checkbox"
+                />
+                <span>
+                  <strong>Use my available wallet balance</strong>
+                  <small>Any remaining amount continues to secure payment.</small>
+                </span>
+              </label>
+            )}
             <div className="customer-form-span">
               <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
             </div>
           </div>
         </ServiceRequestForm>
       )}
-      <FreightSettlements shipments={freightShipments} />
+      {authenticated && <FreightSettlements shipments={freightShipments} />}
     </div>
   );
 }
@@ -928,10 +990,14 @@ function FreightSettlements({ shipments }: { shipments: FirestoreRow[] }) {
 }
 
 function TransportRequestForm({
+  authenticated,
+  onAuthenticationRequired,
   onCreated,
   options,
   profile,
 }: {
+  authenticated: boolean;
+  onAuthenticationRequired?: () => void;
   onCreated?: (result: { id: string; trackingCode: string }) => void;
   options: DestinationOption[];
   profile: UserProfile;
@@ -970,6 +1036,10 @@ function TransportRequestForm({
 
   async function submit() {
     if (!valid || submitting || !destination) return;
+    if (!authenticated) {
+      onAuthenticationRequired?.();
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
@@ -1082,7 +1152,11 @@ function TransportRequestForm({
           />
         </ReviewGrid>
       }
-      submitLabel="Request business quote"
+      submitLabel={
+        authenticated
+          ? "Request business quote"
+          : "Sign in to save & continue"
+      }
       submitting={submitting}
       title="Request car transport"
     >
@@ -1213,12 +1287,14 @@ function PickupFields({
   onPickupChanged,
   pickup,
   setPickup,
+  suggestionsEnabled = true,
 }: {
   disabled?: boolean;
   onAddressSelected?: (suggestion: AddressSuggestion) => void;
   onPickupChanged?: () => void;
   pickup: PickupDetails;
   setPickup: (pickup: PickupDetails) => void;
+  suggestionsEnabled?: boolean;
 }) {
   return (
     <>
@@ -1240,6 +1316,7 @@ function PickupFields({
       {pickup.requested && (
         <>
           <AddressAutocomplete
+            suggestionsEnabled={suggestionsEnabled}
             onChange={(address) => {
               setPickup({ ...pickup, address, borough: "" });
               onPickupChanged?.();
@@ -1288,10 +1365,12 @@ function PickupFields({
 function AddressAutocomplete({
   onChange,
   onSelect,
+  suggestionsEnabled,
   value,
 }: {
   onChange: (value: string) => void;
   onSelect: (suggestion: AddressSuggestion) => void;
+  suggestionsEnabled: boolean;
   value: string;
 }) {
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
@@ -1300,7 +1379,11 @@ function AddressAutocomplete({
 
   useEffect(() => {
     const query = value.trim();
-    if (query.length < 3 || query === selectedAddress) {
+    if (
+      !suggestionsEnabled ||
+      query.length < 3 ||
+      query === selectedAddress
+    ) {
       setSuggestions([]);
       setLoading(false);
       return;
@@ -1325,7 +1408,7 @@ function AddressAutocomplete({
       active = false;
       clearTimeout(debounce);
     };
-  }, [selectedAddress, value]);
+  }, [selectedAddress, suggestionsEnabled, value]);
 
   return (
     <div className="customer-address-field customer-form-span">
@@ -1339,7 +1422,11 @@ function AddressAutocomplete({
             setSelectedAddress("");
             onChange(event.target.value);
           }}
-          placeholder="Start typing a New York pickup address"
+          placeholder={
+            suggestionsEnabled
+              ? "Start typing a New York pickup address"
+              : "Enter a New York pickup address"
+          }
           required
           value={value}
         />

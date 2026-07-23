@@ -9,7 +9,8 @@ const source = readFileSync(
 const styles = readFileSync("src/app/globals.css", "utf8");
 
 test("parking uses server search pricing and the shared checkout path", () => {
-  assert.match(source, /functions, "listParkingOptions"/);
+  assert.match(source, /"listParkingOptions"/);
+  assert.match(source, /"listPublicParkingOptions"/);
   assert.match(source, /startCheckout\("parking", \{/);
   for (const key of [
     "businessId",
@@ -38,6 +39,7 @@ test("shared barrels use customer-scoped membership and public open-pool reads",
     source,
     /collection\(db, "users", firebaseUser\.uid, "barrelPools"\)/,
   );
+  assert.match(source, /"listOpenBarrelPoolOptions"/);
 });
 
 test("shared barrel actions use exact callables and checkout order types", () => {
@@ -73,4 +75,19 @@ test("shared-barrel acknowledgements keep compact checkboxes inside the form", (
   );
   assert.match(styles, /flex: 0 0 18px;/);
   assert.match(styles, /overflow-wrap: anywhere;/);
+});
+
+test("narrow parking layouts keep headings and fields in one readable column", () => {
+  const tabletBreakpoint = styles.lastIndexOf("@media (max-width: 820px)");
+  const narrowBreakpoint = styles.lastIndexOf("@media (max-width: 560px)");
+  assert.ok(narrowBreakpoint > tabletBreakpoint);
+  const narrowStyles = styles.slice(narrowBreakpoint);
+  assert.match(
+    narrowStyles,
+    /\.customer-service-search \.panel-header > div\s*\{[^}]*display: grid;/s,
+  );
+  assert.match(
+    narrowStyles,
+    /\.customer-parking-search-grid\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\);/s,
+  );
 });

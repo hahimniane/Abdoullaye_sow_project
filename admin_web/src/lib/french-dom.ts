@@ -7,6 +7,44 @@ import { LANGUAGE_STORAGE_KEY, currentWebLanguage } from "./language.ts";
 export { resolveLang } from "./language.ts";
 
 const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
+  "Almost there": "Vous y êtes presque",
+  "Calculate pickup & continue": "Calculer la collecte et continuer",
+  "Close account access": "Fermer l’accès au compte",
+  "Compare first. Create an account only when you continue.":
+    "Comparez d’abord. Créez un compte seulement lorsque vous continuez.",
+  "Enter a New York pickup address":
+    "Saisissez une adresse de collecte à New York",
+  "Explore services": "Découvrir les services",
+  "No account needed to compare options and prepare your request.":
+    "Aucun compte n’est nécessaire pour comparer les options et préparer votre demande.",
+  "Open my workspace": "Ouvrir mon espace client",
+  "Prepare your service request": "Préparez votre demande de service",
+  "Access your Laawol account": "Accédez à votre compte Laawol",
+  "Sign in to open your workspace, or create an account if you are new to Laawol.":
+    "Connectez-vous pour ouvrir votre espace, ou créez un compte si vous découvrez Laawol.",
+  "Save your barrel request": "Enregistrez votre demande de baril",
+  "Save your car request": "Enregistrez votre demande de voiture",
+  "Save your car transport request":
+    "Enregistrez votre demande de transport de véhicule",
+  "Save your freight request": "Enregistrez votre demande de fret",
+  "Save your parking request": "Enregistrez votre demande de stationnement",
+  "Save your shared-barrel request":
+    "Enregistrez votre demande de baril partagé",
+  "Securing your account and restoring the request...":
+    "Sécurisation de votre compte et restauration de la demande...",
+  "Sign in or create a free account only when you are ready to save and continue.":
+    "Connectez-vous ou créez un compte gratuit seulement lorsque vous êtes prêt à enregistrer et continuer.",
+  "Sign in or create a free account to save this request and continue. Your details will stay here.":
+    "Connectez-vous ou créez un compte gratuit pour enregistrer cette demande et continuer. Vos informations resteront ici.",
+  "Sign in to browse shares": "Se connecter pour voir les parts",
+  "Sign in to save & continue": "Se connecter pour enregistrer et continuer",
+  "Sign in to see available shared barrels":
+    "Connectez-vous pour voir les barils partagés disponibles",
+  "Sign in to see parking": "Se connecter pour voir le stationnement",
+  "You can still prepare a new shared-barrel request before creating an account.":
+    "Vous pouvez toujours préparer une nouvelle demande de baril partagé avant de créer un compte.",
+  "Your request is ready to continue.":
+    "Votre demande est prête à continuer.",
   "Shipping services": "Services d’expédition",
   "Move what matters, with a business you choose":
     "Transportez ce qui compte avec l’entreprise de votre choix",

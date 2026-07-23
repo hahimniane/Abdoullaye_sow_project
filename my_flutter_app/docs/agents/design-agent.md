@@ -116,3 +116,8 @@ Return:
   completeness, especially the flag/calling-code phone picker and locale-aware
   country names. Treat a simplified or partial web substitute as a parity bug,
   and visually verify the control at narrow phone widths.
+- Public customer journeys must be service-specific for every implemented
+  marketplace service. Let signed-out visitors browse, fill, and review a
+  request; require authentication only when an action saves, submits, reserves,
+  or pays. Keep the draft mounted through sign-in/signup/verification and return
+  to the exact service and review state instead of a generic dashboard.

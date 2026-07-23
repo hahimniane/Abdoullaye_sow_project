@@ -89,6 +89,10 @@ const {
   paymentIntentIdFromClientSecret,
   requireCustomerCheckoutAction,
 } = require("./customer_checkout");
+const {
+  publicOpenBarrelOption,
+  publicParkingOption,
+} = require("./public_service_options");
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
@@ -6272,6 +6276,77 @@ function parkingOptionFromBusiness({
   };
 }
 
+async function parkingOptionsForRequest(data) {
+  const {
+    city,
+    startDate,
+    endDate,
+    pickupRequested,
+    customerLatitude,
+    customerLongitude,
+  } = data || {};
+  const normalizedCity = String(city || "").trim().toLowerCase();
+  if (!normalizedCity) {
+    throw new HttpsError("invalid-argument", "Parking city is required");
+  }
+  const start = parseParkingDate(startDate, "Parking start date");
+  const end = parseParkingDate(endDate, "Parking end date");
+  if (end.getTime() < start.getTime()) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Parking end date must be after the start date",
+    );
+  }
+
+  const db = admin.firestore();
+  const businesses = await db.collection("businesses")
+      .where("status", "==", "approved")
+      .get();
+  const options = [];
+  for (const doc of businesses.docs) {
+    const business = doc.data() || {};
+    const businessCity = String(
+        business.parkingCity || business.city || "",
+    ).trim().toLowerCase();
+    if (
+      !businessOffersParking(business) ||
+      businessCity !== normalizedCity
+    ) {
+      continue;
+    }
+    const reservations = await db.collection("parkedCars")
+        .where("businessId", "==", doc.id)
+        .limit(500)
+        .get();
+    const option = parkingOptionFromBusiness({
+      businessId: doc.id,
+      business,
+      reservations: reservations.docs.map((reservation) =>
+        reservation.data() || {},
+      ),
+      start,
+      end,
+      pickupRequested: pickupRequested === true,
+      customerLatitude,
+      customerLongitude,
+    });
+    if (option.availableSpaces > 0) options.push(option);
+  }
+  options.sort((a, b) => {
+    if (a.distanceMiles !== null && b.distanceMiles !== null) {
+      const distance = Number(a.distanceMiles) - Number(b.distanceMiles);
+      if (distance !== 0) return distance;
+    }
+    if (a.distanceMiles !== null) return -1;
+    if (b.distanceMiles !== null) return 1;
+    const price = Number(a.estimatedTotal || 0) -
+      Number(b.estimatedTotal || 0);
+    if (price !== 0) return price;
+    return String(a.businessName).localeCompare(String(b.businessName));
+  });
+  return options;
+}
+
 exports.listParkingOptions = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
@@ -6279,74 +6354,20 @@ exports.listParkingOptions = onCall(
     },
     async (request) => {
       requireAuth(request);
-      const {
-        city,
-        startDate,
-        endDate,
-        pickupRequested,
-        customerLatitude,
-        customerLongitude,
-      } = request.data || {};
-      const normalizedCity = String(city || "").trim().toLowerCase();
-      if (!normalizedCity) {
-        throw new HttpsError("invalid-argument", "Parking city is required");
-      }
-      const start = parseParkingDate(startDate, "Parking start date");
-      const end = parseParkingDate(endDate, "Parking end date");
-      if (end.getTime() < start.getTime()) {
-        throw new HttpsError(
-            "invalid-argument",
-            "Parking end date must be after the start date",
-        );
-      }
+      return {options: await parkingOptionsForRequest(request.data)};
+    },
+);
 
-      const db = admin.firestore();
-      const businesses = await db.collection("businesses")
-          .where("status", "==", "approved")
-          .get();
-      const options = [];
-      for (const doc of businesses.docs) {
-        const business = doc.data() || {};
-        const businessCity = String(
-            business.parkingCity || business.city || "",
-        ).trim().toLowerCase();
-        if (
-          !businessOffersParking(business) ||
-          businessCity !== normalizedCity
-        ) {
-          continue;
-        }
-        const reservations = await db.collection("parkedCars")
-            .where("businessId", "==", doc.id)
-            .limit(500)
-            .get();
-        const option = parkingOptionFromBusiness({
-          businessId: doc.id,
-          business,
-          reservations: reservations.docs.map((reservation) =>
-            reservation.data() || {},
-          ),
-          start,
-          end,
-          pickupRequested: pickupRequested === true,
-          customerLatitude,
-          customerLongitude,
-        });
-        if (option.availableSpaces > 0) options.push(option);
-      }
-      options.sort((a, b) => {
-        if (a.distanceMiles !== null && b.distanceMiles !== null) {
-          const distance = Number(a.distanceMiles) - Number(b.distanceMiles);
-          if (distance !== 0) return distance;
-        }
-        if (a.distanceMiles !== null) return -1;
-        if (b.distanceMiles !== null) return 1;
-        const price = Number(a.estimatedTotal || 0) -
-          Number(b.estimatedTotal || 0);
-        if (price !== 0) return price;
-        return String(a.businessName).localeCompare(String(b.businessName));
-      });
-      return {options};
+exports.listPublicParkingOptions = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    async (request) => {
+      const options = await parkingOptionsForRequest(request.data);
+      return {
+        options: options.map(publicParkingOption),
+      };
     },
 );
 
@@ -12215,6 +12236,24 @@ exports.expireBarrelPools = onSchedule(
         });
       }));
       logger.info("Expired shared barrel pools", {count: snapshot.size});
+    },
+);
+
+exports.listOpenBarrelPoolOptions = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    async () => {
+      const snapshot = await admin.firestore().collection("openBarrels")
+          .where("status", "==", "open")
+          .limit(100)
+          .get();
+      return {
+        options: snapshot.docs.map((doc) =>
+          publicOpenBarrelOption(doc.id, doc.data()),
+        ),
+      };
     },
 );
 

@@ -16,9 +16,11 @@ import { RefreshCw } from "lucide-react";
 import { AdminConsole } from "@/components/admin-console";
 import { BusinessConsole } from "@/components/business-console";
 import { CustomerConsole } from "@/components/customer-console";
+import { CustomerServiceEntry } from "@/components/customer-service-entry";
 import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { resolveConsoleKind } from "@/lib/console-routing";
+import { customerServiceFromSearch } from "@/lib/customer-service-intent";
 import { legalAcceptance } from "@/lib/disclosures";
 import { auth, db, functions } from "@/lib/firebase";
 import { useFrenchDomTranslation } from "@/lib/french-dom";
@@ -159,6 +161,13 @@ export function ConsoleRouter() {
   const [previewConsole, setPreviewConsole] = useState<"admin" | "business">("admin");
   const [previewStripeState, setPreviewStripeState] = useState<PreviewStripeState>("none");
   const [profileRetry, setProfileRetry] = useState(0);
+  const [serviceIntent, setServiceIntent] = useState(
+    null as ReturnType<typeof customerServiceFromSearch>,
+  );
+
+  useEffect(() => {
+    setServiceIntent(customerServiceFromSearch(window.location.search));
+  }, []);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -205,17 +214,6 @@ export function ConsoleRouter() {
     };
   }, [profileRetry]);
 
-  if (booting) {
-    return (
-      <div className="app-shell">
-        <div className="center-panel">
-          <RefreshCw className="spin" size={28} />
-          <p>Ouverture de la console...</p>
-        </div>
-      </div>
-    );
-  }
-
   if (previewMode) {
     if (previewConsole === "business") {
       return (
@@ -228,6 +226,46 @@ export function ConsoleRouter() {
       );
     }
     return <AdminConsole />;
+  }
+
+  const resolvedKind = profile ? resolveConsoleKind(profile.role) : null;
+  if (
+    serviceIntent &&
+    (!profile || resolvedKind === "customer")
+  ) {
+    return (
+      <CustomerServiceEntry
+        authenticated={Boolean(firebaseUser && profile)}
+        authenticating={booting && Boolean(firebaseUser)}
+        authPanel={(initialMode) => (
+          <RoleSignInCard
+            authError={authError}
+            embedded
+            initialMode={initialMode}
+            key={initialMode}
+          />
+        )}
+        firebaseUser={firebaseUser}
+        initialService={serviceIntent}
+        profile={
+          profile ?? {
+            id: "guest",
+            role: "customer",
+          }
+        }
+      />
+    );
+  }
+
+  if (booting) {
+    return (
+      <div className="app-shell">
+        <div className="center-panel">
+          <RefreshCw className="spin" size={28} />
+          <p>Ouverture de la console...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!firebaseUser || !profile) {
@@ -304,9 +342,17 @@ function ConsoleLoadError({
   );
 }
 
-function RoleSignInCard({authError}: {authError: string}) {
+function RoleSignInCard({
+  authError,
+  embedded = false,
+  initialMode = "sign-in",
+}: {
+  authError: string;
+  embedded?: boolean;
+  initialMode?: "sign-in" | "sign-up";
+}) {
   const [mode, setMode] = useState<"sign-in" | "sign-up" | "forgot">(
-    "sign-in",
+    initialMode,
   );
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -361,9 +407,8 @@ function RoleSignInCard({authError}: {authError: string}) {
     }
   }
 
-  return (
-    <div className="app-shell">
-      <div className="login-screen">
+  const screen = (
+      <div className={`login-screen ${embedded ? "login-screen-embedded" : ""}`}>
         <div className="login-header">
           <div className="brand-mark">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -499,8 +544,8 @@ function RoleSignInCard({authError}: {authError: string}) {
           )}
         </form>
       </div>
-    </div>
   );
+  return embedded ? screen : <div className="app-shell">{screen}</div>;
 }
 
 function readableAuthError(error: unknown) {

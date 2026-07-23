@@ -244,3 +244,8 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   publishing. `customer.laawoldigital.com` is a separate Hostinger website at
   `~/domains/customer.laawoldigital.com/public_html`; it is not a sibling
   folder beside the admin and business roots under `laawoldigital.com`.
+- Guest marketplace discovery must use App Check-protected, sanitized read
+  projections. Regression tests should prove that public parking and
+  shared-barrel responses omit private contact details, exact coordinates,
+  participant identities, and owner UIDs while authenticated create/pay paths
+  remain unchanged.

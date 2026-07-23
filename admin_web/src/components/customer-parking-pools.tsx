@@ -34,7 +34,10 @@ const ACTION_TIMEOUT_MS = 30_000;
 const SNAPSHOT_TIMEOUT_MS = 15_000;
 
 type CustomerParkingPoolsProps = {
-  firebaseUser: User;
+  firebaseUser?: User | null;
+  authenticated?: boolean;
+  initialArea?: "parking" | "pools";
+  onAuthenticationRequired?: () => void;
   profile: UserProfile;
 };
 
@@ -78,9 +81,12 @@ type PoolAction =
 
 export function CustomerParkingPools({
   firebaseUser,
+  authenticated = true,
+  initialArea = "parking",
+  onAuthenticationRequired,
   profile,
 }: CustomerParkingPoolsProps) {
-  const [area, setArea] = useState<"parking" | "pools">("parking");
+  const [area, setArea] = useState<"parking" | "pools">(initialArea);
 
   return (
     <section className="customer-service-hub">
@@ -114,15 +120,32 @@ export function CustomerParkingPools({
         </button>
       </div>
       {area === "parking" ? (
-        <ParkingWorkspace profile={profile} />
+        <ParkingWorkspace
+          authenticated={authenticated}
+          onAuthenticationRequired={onAuthenticationRequired}
+          profile={profile}
+        />
       ) : (
-        <PoolWorkspace firebaseUser={firebaseUser} profile={profile} />
+        <PoolWorkspace
+          authenticated={authenticated}
+          firebaseUser={firebaseUser}
+          onAuthenticationRequired={onAuthenticationRequired}
+          profile={profile}
+        />
       )}
     </section>
   );
 }
 
-function ParkingWorkspace({ profile }: { profile: UserProfile }) {
+function ParkingWorkspace({
+  authenticated,
+  onAuthenticationRequired,
+  profile,
+}: {
+  authenticated: boolean;
+  onAuthenticationRequired?: () => void;
+  profile: UserProfile;
+}) {
   const today = new Date().toISOString().slice(0, 10);
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000)
     .toISOString()
@@ -159,7 +182,12 @@ function ParkingWorkspace({ profile }: { profile: UserProfile }) {
             pickupRequested: boolean;
           },
           { options?: unknown[] }
-        >(functions, "listParkingOptions")({
+        >(
+          functions,
+          authenticated
+            ? "listParkingOptions"
+            : "listPublicParkingOptions",
+        )({
           city: city.trim(),
           startDate: localDateToIso(startDate, 9),
           endDate: localDateToIso(endDate, 17),
@@ -311,7 +339,9 @@ function ParkingWorkspace({ profile }: { profile: UserProfile }) {
 
       {selected && (
         <ParkingReservationForm
+          authenticated={authenticated}
           endDate={endDate}
+          onAuthenticationRequired={onAuthenticationRequired}
           onCancel={() => setSelected(null)}
           option={selected}
           pickupRequested={pickupRequested}
@@ -324,15 +354,19 @@ function ParkingWorkspace({ profile }: { profile: UserProfile }) {
 }
 
 function ParkingReservationForm({
+  authenticated,
   endDate,
   onCancel,
+  onAuthenticationRequired,
   option,
   pickupRequested,
   profile,
   startDate,
 }: {
+  authenticated: boolean;
   endDate: string;
   onCancel: () => void;
+  onAuthenticationRequired?: () => void;
   option: ParkingOption;
   pickupRequested: boolean;
   profile: UserProfile;
@@ -357,6 +391,10 @@ function ParkingReservationForm({
 
   async function submit() {
     if (!valid || submitting) return;
+    if (!authenticated) {
+      onAuthenticationRequired?.();
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
@@ -409,7 +447,11 @@ function ParkingReservationForm({
           <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
         </dl>
       }
-      submitLabel="Continue to secure payment"
+      submitLabel={
+        authenticated
+          ? "Continue to secure payment"
+          : "Sign in to save & continue"
+      }
       submitting={submitting}
       title="Reserve parking"
     >
@@ -479,9 +521,16 @@ function ParkingReservationForm({
 }
 
 function PoolWorkspace({
+  authenticated,
   firebaseUser,
+  onAuthenticationRequired,
   profile,
-}: CustomerParkingPoolsProps) {
+}: {
+  authenticated: boolean;
+  firebaseUser?: User | null;
+  onAuthenticationRequired?: () => void;
+  profile: UserProfile;
+}) {
   const [openPools, setOpenPools] = useState<FirestoreRow[]>([]);
   const [myPools, setMyPools] = useState<FirestoreRow[]>([]);
   const [openLoading, setOpenLoading] = useState(true);
@@ -495,6 +544,44 @@ function PoolWorkspace({
   const [actionError, setActionError] = useState("");
 
   useEffect(() => {
+    if (!authenticated) {
+      let active = true;
+      setOpenPools([]);
+      setOpenLoading(true);
+      setOpenError("");
+      void withTimeout(
+        httpsCallable<Record<string, never>, { options?: unknown[] }>(
+          functions,
+          "listOpenBarrelPoolOptions",
+        )({}),
+      )
+        .then((response) => {
+          if (!active) return;
+          setOpenPools(
+            (Array.isArray(response.data.options)
+              ? response.data.options
+              : []
+            ).filter(
+              (option): option is FirestoreRow =>
+                Boolean(option) &&
+                typeof option === "object" &&
+                typeof (option as { id?: unknown }).id === "string",
+            ),
+          );
+          setOpenError("");
+        })
+        .catch(() => {
+          if (active) {
+            setOpenError("Open shared barrels could not be loaded.");
+          }
+        })
+        .finally(() => {
+          if (active) setOpenLoading(false);
+        });
+      return () => {
+        active = false;
+      };
+    }
     setOpenLoading(true);
     setOpenError("");
     const timeoutId = setTimeout(() => {
@@ -521,9 +608,15 @@ function PoolWorkspace({
       clearTimeout(timeoutId);
       unsubscribe();
     };
-  }, []);
+  }, [authenticated]);
 
   useEffect(() => {
+    if (!authenticated || !firebaseUser) {
+      setMyPools([]);
+      setMyLoading(false);
+      setMyError("");
+      return undefined;
+    }
     setMyLoading(true);
     setMyError("");
     const timeoutId = setTimeout(() => {
@@ -550,7 +643,7 @@ function PoolWorkspace({
       clearTimeout(timeoutId);
       unsubscribe();
     };
-  }, [firebaseUser.uid]);
+  }, [authenticated, firebaseUser]);
 
   const joinedIds = useMemo(
     () => new Set(myPools.map((pool) => pool.id)),
@@ -568,6 +661,10 @@ function PoolWorkspace({
 
   async function runPoolExit(pool: FirestoreRow) {
     if (pendingPoolId) return;
+    if (!firebaseUser || !authenticated) {
+      onAuthenticationRequired?.();
+      return;
+    }
     const owner =
       text(pool.participantRole, "") === "owner" ||
       text(pool.createdByUid, "") === firebaseUser.uid;
@@ -659,7 +756,7 @@ function PoolWorkspace({
         </div>
       </section>
 
-      <section className="panel">
+      {authenticated && <section className="panel">
         <div className="panel-header">
           <div>
             <h2>My shared barrels</h2>
@@ -682,7 +779,7 @@ function PoolWorkspace({
           {myPools.map((pool) => {
             const owner =
               text(pool.participantRole, "") === "owner" ||
-              text(pool.createdByUid, "") === firebaseUser.uid;
+              text(pool.createdByUid, "") === firebaseUser?.uid;
             const active = [
               "open",
               "partially_filled",
@@ -755,19 +852,23 @@ function PoolWorkspace({
             );
           })}
         </div>
-      </section>
+      </section>}
 
       {action?.kind === "create" && (
         <PoolRequestForm
           action={action}
+          authenticated={authenticated}
           onCancel={() => setAction(null)}
+          onAuthenticationRequired={onAuthenticationRequired}
           profile={profile}
         />
       )}
       {action?.kind === "join" && (
         <PoolRequestForm
           action={action}
+          authenticated={authenticated}
           onCancel={() => setAction(null)}
+          onAuthenticationRequired={onAuthenticationRequired}
           profile={profile}
         />
       )}
@@ -867,11 +968,15 @@ function PoolCard({
 
 function PoolRequestForm({
   action,
+  authenticated,
   onCancel,
+  onAuthenticationRequired,
   profile,
 }: {
   action: Extract<PoolAction, { kind: "create" | "join" }>;
+  authenticated: boolean;
   onCancel: () => void;
+  onAuthenticationRequired?: () => void;
   profile: UserProfile;
 }) {
   const creating = action.kind === "create";
@@ -972,6 +1077,10 @@ function PoolRequestForm({
 
   async function submit() {
     if (!valid || submitting) return;
+    if (!authenticated) {
+      onAuthenticationRequired?.();
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
@@ -1071,7 +1180,11 @@ function PoolRequestForm({
         </div>
       }
       submitLabel={
-        creating ? "Continue to deposit" : "Continue to share deposit"
+        !authenticated
+          ? "Sign in to save & continue"
+          : creating
+            ? "Continue to deposit"
+            : "Continue to share deposit"
       }
       submitting={submitting}
       title={creating ? "Post a shared barrel" : "Request a share"}
@@ -1215,14 +1328,16 @@ function PoolRequestForm({
             </select>
           </label>
         )}
-        <label className="customer-choice-row customer-form-span">
-          <input
-            checked={useWalletBalance}
-            onChange={(event) => setUseWalletBalance(event.target.checked)}
-            type="checkbox"
-          />
-          Use my available wallet balance first
-        </label>
+        {authenticated && (
+          <label className="customer-choice-row customer-form-span">
+            <input
+              checked={useWalletBalance}
+              onChange={(event) => setUseWalletBalance(event.target.checked)}
+              type="checkbox"
+            />
+            Use my available wallet balance first
+          </label>
+        )}
         <div className="customer-attestation-group customer-form-span">
           <strong>Required acknowledgements</strong>
           <label className="customer-choice-row">
