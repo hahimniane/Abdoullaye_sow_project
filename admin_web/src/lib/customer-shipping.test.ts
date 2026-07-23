@@ -891,7 +891,7 @@ test("pickup address entry automatically exposes an accessible searchable sugges
   assert.match(styles, /\.customer-barrel-stage > label\s*\{[\s\S]*display: grid/);
   assert.match(
     styles,
-    /\.customer-barrel-stage > label input\s*\{[\s\S]*background: var\(--paper-soft\)[\s\S]*border: 1px solid var\(--rule-strong, #b8d7d3\)[\s\S]*min-height: 50px/,
+    /\.customer-barrel-stage\s*>\s*label\s*>\s*input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\)\s*\{[\s\S]*background: var\(--paper-soft\)[\s\S]*border: 1px solid var\(--rule-strong, #b8d7d3\)[\s\S]*min-height: 50px/,
   );
   assert.match(
     styles,
@@ -904,6 +904,42 @@ test("pickup address entry automatically exposes an accessible searchable sugges
       `${token} must be defined so the live form does not lose its borders or fills`,
     );
   }
+});
+
+test("barrel wallet choice keeps a compact checkbox and contained localized copy", () => {
+  const source = readFileSync(
+    new URL("../components/customer-shipping-services.tsx", import.meta.url),
+    "utf8",
+  );
+  const styles = readFileSync(
+    new URL("../app/globals.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    source,
+    /<label className="customer-choice-row">[\s\S]*type="checkbox"[\s\S]*<strong>Use wallet balance<\/strong>[\s\S]*<small>Available balance will be applied first\.<\/small>/,
+  );
+  assert.doesNotMatch(
+    styles,
+    /\.customer-barrel-stage\s*>\s*label input\s*\{/,
+  );
+  assert.match(
+    styles,
+    /\.customer-barrel-stage\s*>\s*label\s*>\s*input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\)/,
+  );
+  assert.match(
+    styles,
+    /\.customer-choice-row > input\s*\{[\s\S]*height: 18px;[\s\S]*min-height: 0;[\s\S]*width: 18px;/,
+  );
+  assert.equal(
+    translateValue("Use wallet balance", "fr"),
+    "Utiliser le solde du portefeuille",
+  );
+  assert.equal(
+    translateValue("Available balance will be applied first.", "fr"),
+    "Le solde disponible sera appliqué en premier.",
+  );
 });
 
 test("one unavailable shipping service does not hide the other service options", () => {
