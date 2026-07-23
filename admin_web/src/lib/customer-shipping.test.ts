@@ -392,8 +392,8 @@ test("dynamic pickup office and pending-total copy translates completely", () =>
     "Apportez le baril à",
   );
   assert.equal(
-    translateValue("the business office", "fr"),
-    "le bureau de l’entreprise",
+    translateValue("Drop off at the business office", "fr"),
+    "Déposer au bureau de l’entreprise",
   );
   assert.equal(
     translateValue(

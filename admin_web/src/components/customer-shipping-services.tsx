@@ -2003,7 +2003,13 @@ function PickupFields({
         </button>
         {!pickup.requested && (
           <small className="customer-pickup-office">
-            <span>Drop off at</span> {officeAddress}
+            {officeAddress === "the business office" ? (
+              <span>Drop off at the business office</span>
+            ) : (
+              <>
+                <span>Drop off at</span> {officeAddress}
+              </>
+            )}
           </small>
         )}
       </fieldset>

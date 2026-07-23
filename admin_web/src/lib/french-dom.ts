@@ -18,6 +18,7 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Pick up": "Collecte",
   "Bring to office": "Apporter au bureau",
   "Drop off at": "Déposer à",
+  "Drop off at the business office": "Déposer au bureau de l’entreprise",
   "Detected from the address. Change it only if needed.":
     "Détecté à partir de l’adresse. Modifiez-le seulement si nécessaire.",
   "Pickup pricing is based on the selected New York City borough.":
@@ -39,7 +40,6 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "Détecté à partir de l’adresse ou du code postal.",
   "Select borough": "Sélectionnez un arrondissement",
   "Bring the barrel to": "Apportez le baril à",
-  "the business office": "le bureau de l’entreprise",
   "Explore services": "Découvrir les services",
   "Open my workspace": "Ouvrir mon espace client",
   "Prepare your service request": "Préparez votre demande de service",
