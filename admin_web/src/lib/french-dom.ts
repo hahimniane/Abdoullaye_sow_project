@@ -72,6 +72,20 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Choose an approved business and destination. Your total is calculated securely by Laawol.":
     "Choisissez une entreprise approuvée et une destination. Votre total est calculé de manière sécurisée par Laawol.",
   "Send a barrel": "Envoyer un baril",
+  "Destination country": "Pays de destination",
+  "Where are you sending the barrel?": "Vers quel pays envoyez-vous le baril ?",
+  "Choose a country": "Choisissez un pays",
+  "Shipping business": "Entreprise d’expédition",
+  "Approved businesses shipping to":
+    "Entreprises approuvées expédiant vers",
+  "Change country": "Modifier le pays",
+  "Choose a shipping business": "Choisissez une entreprise d’expédition",
+  "approved businesses available": "entreprises approuvées disponibles",
+  "per barrel": "par baril",
+  "Shipment details": "Détails de l’envoi",
+  "Tell us who is sending and receiving.":
+    "Indiquez-nous qui envoie et qui reçoit.",
+  "Change": "Modifier",
   "Sender name": "Nom de l’expéditeur",
   "Destination and business": "Destination et entreprise",
   "Choose a destination and business":
@@ -88,6 +102,18 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Pickup is added at secure checkout when requested.":
     "La collecte est ajoutée lors du paiement sécurisé lorsqu’elle est demandée.",
   "Number of barrels": "Nombre de barils",
+  "Enter the receiver phone number.":
+    "Saisissez le numéro de téléphone du destinataire.",
+  "Enter a valid international phone number.":
+    "Saisissez un numéro de téléphone international valide.",
+  "Receiver phone must match the destination country. Use the WhatsApp option below for a number from another country.":
+    "Le téléphone du destinataire doit correspondre au pays de destination. Utilisez l’option WhatsApp ci-dessous pour un numéro d’un autre pays.",
+  "Include the country calling code for a WhatsApp number.":
+    "Incluez l’indicatif du pays pour un numéro WhatsApp.",
+  "This receiver uses a WhatsApp number from another country":
+    "Ce destinataire utilise un numéro WhatsApp d’un autre pays",
+  "The number must include its international calling code.":
+    "Le numéro doit inclure son indicatif téléphonique international.",
   "Barrels": "Barils",
   "Request pickup": "Demander la collecte",
   "Choose an address and appointment time.":

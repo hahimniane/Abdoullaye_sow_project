@@ -4,12 +4,15 @@ import test from "node:test";
 
 import {
   barrelShippingEstimate,
+  barrelDestinationCountries,
+  barrelProvidersForCountry,
   buildBarrelShipmentPayload,
   buildFreightSettlementPayload,
   buildFreightShipmentPayload,
   buildTransportRequestPayload,
   freightShippingEstimate,
   freightSettlementIsPayable,
+  pickupDetailsAreComplete,
   shippingProviderRate,
 } from "./customer-shipping.ts";
 
@@ -184,6 +187,107 @@ test("selected barrel providers expose their own rate and quantity estimate", ()
   );
 });
 
+test("barrel flow presents unique countries before providers for that country", () => {
+  const options = [
+    {
+      id: "gn-b",
+      businessId: "b",
+      businessName: "Zulu Shipping",
+      country: {
+        id: "gn",
+        code: "GN",
+        name: "Guinea",
+        barrelShippingPrice: 80,
+      },
+    },
+    {
+      id: "sl-a",
+      businessId: "a",
+      businessName: "Sierra Cargo",
+      country: {
+        id: "sl",
+        code: "SL",
+        name: "Sierra Leone",
+        barrelShippingPrice: 95,
+      },
+    },
+    {
+      id: "gn-a",
+      businessId: "a",
+      businessName: "Alpha Cargo",
+      country: {
+        id: "gn",
+        code: "GN",
+        name: "Guinea",
+        barrelShippingPrice: 75,
+      },
+    },
+    {
+      id: "gm-freight",
+      businessId: "freight",
+      businessName: "Freight only",
+      country: {
+        id: "gm",
+        code: "GM",
+        name: "Gambia",
+        barrelShippingPrice: 0,
+        freightAirPricePerKg: 5,
+      },
+    },
+  ];
+
+  assert.deepEqual(
+    barrelDestinationCountries(options).map((country) => country.id),
+    ["gn", "sl"],
+  );
+  assert.deepEqual(
+    barrelProvidersForCountry(options, "gn").map(
+      (option) => option.businessName,
+    ),
+    ["Alpha Cargo", "Zulu Shipping"],
+  );
+});
+
+test("pickup details require a recognized NYC borough and a future appointment", () => {
+  const now = new Date("2030-01-01T12:00:00.000Z").getTime();
+  assert.equal(
+    pickupDetailsAreComplete(
+      {
+        requested: true,
+        address: "123 Grand Concourse, Bronx, NY",
+        borough: "Bronx",
+        dateTime: "2030-01-02T12:00:00.000Z",
+      },
+      now,
+    ),
+    true,
+  );
+  assert.equal(
+    pickupDetailsAreComplete(
+      {
+        requested: true,
+        address: "123 Main St",
+        borough: "Albany",
+        dateTime: "2030-01-02T12:00:00.000Z",
+      },
+      now,
+    ),
+    false,
+  );
+  assert.equal(
+    pickupDetailsAreComplete(
+      {
+        requested: true,
+        address: "123 Main St",
+        borough: "Queens",
+        dateTime: "2029-12-31T12:00:00.000Z",
+      },
+      now,
+    ),
+    false,
+  );
+});
+
 test("selected freight providers expose mode-specific rates and estimates", () => {
   const country = {
     freightAirPricePerKg: 8.5,
@@ -304,4 +408,27 @@ test("one unavailable shipping service does not hide the other service options",
   assert.match(source, /setDestinationOptionsError\(/);
   assert.match(source, /setTransportOptionsError\(/);
   assert.match(source, /actionLabel="Retry"/);
+});
+
+test("barrel UI reveals personal details only after country and provider selection", () => {
+  const source = readFileSync(
+    new URL("../components/customer-shipping-services.tsx", import.meta.url),
+    "utf8",
+  );
+  const countryStage = source.indexOf("Where are you sending the barrel?");
+  const providerStage = source.indexOf("Approved businesses shipping to");
+  const detailsStage = source.indexOf("Tell us who is sending and receiving.");
+  const senderField = source.indexOf("Sender name", detailsStage);
+
+  assert.ok(countryStage > 0);
+  assert.ok(providerStage > countryStage);
+  assert.ok(detailsStage > providerStage);
+  assert.ok(senderField > detailsStage);
+  assert.match(
+    source,
+    /\{selectedCountry && \([\s\S]*\{destination && \(/,
+  );
+  assert.match(source, /type="radio"/);
+  assert.match(source, /initialCountryCode=\{selectedCountry\?\.code \|\| "US"\}/);
+  assert.match(source, /This receiver uses a WhatsApp number from another country/);
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
 import {
@@ -17,6 +17,8 @@ type CustomerPhoneFieldProps = {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
+  error?: string;
+  onBlur?: () => void;
   required?: boolean;
   initialCountryCode?: string;
 };
@@ -27,6 +29,8 @@ export function CustomerPhoneField({
   value,
   onChange,
   disabled = false,
+  error,
+  onBlur,
   required = false,
   initialCountryCode = "US",
 }: CustomerPhoneFieldProps) {
@@ -34,6 +38,9 @@ export function CustomerPhoneField({
   const [countryCode, setCountryCode] = useState(
     inferred?.code ?? initialCountryCode,
   );
+  useEffect(() => {
+    if (!value.trim()) setCountryCode(initialCountryCode);
+  }, [initialCountryCode, value]);
   const option =
     callingCodeOptionForCountry(countryCode) ??
     inferred ??
@@ -83,6 +90,8 @@ export function CustomerPhoneField({
           </select>
         </span>
         <input
+          aria-describedby={error && id ? `${id}-error` : undefined}
+          aria-invalid={Boolean(error)}
           autoComplete="tel-national"
           disabled={disabled}
           id={id}
@@ -95,6 +104,7 @@ export function CustomerPhoneField({
               ),
             )
           }
+          onBlur={onBlur}
           placeholder="Phone number"
           required={required}
           type="tel"
@@ -102,6 +112,11 @@ export function CustomerPhoneField({
         />
       </span>
       <small>International number: {value || option.dialCode}</small>
+      {error && (
+        <small className="customer-field-error" id={id ? `${id}-error` : undefined}>
+          {error}
+        </small>
+      )}
     </label>
   );
 }

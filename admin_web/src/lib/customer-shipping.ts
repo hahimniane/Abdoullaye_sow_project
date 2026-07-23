@@ -50,6 +50,9 @@ export type TransportRequestFields = {
 };
 
 export type ShippingPricingCountry = {
+  id?: string;
+  code?: string;
+  name?: string;
   barrelShippingPrice?: unknown;
   freightAirPricePerKg?: unknown;
   freightSeaPricePerKg?: unknown;
@@ -61,6 +64,16 @@ export type ShippingPricingCountry = {
 };
 
 export type FreightMode = "air" | "sea";
+
+export type ShippingDestinationOption = {
+  id: string;
+  businessId: string;
+  businessName: string;
+  country: ShippingPricingCountry & {
+    id: string;
+    name: string;
+  };
+};
 
 function trimmed(value: string) {
   return value.trim();
@@ -105,6 +118,65 @@ export function barrelShippingEstimate(
     quantity: units,
     subtotal: rate * units,
   };
+}
+
+export function barrelDestinationCountries(
+  options: readonly ShippingDestinationOption[],
+) {
+  const countries = new Map<
+    string,
+    ShippingDestinationOption["country"]
+  >();
+  for (const option of options.filter(barrelOptionIsEligible)) {
+    if (!countries.has(option.country.id)) {
+      countries.set(option.country.id, option.country);
+    }
+  }
+  return [...countries.values()].sort((left, right) =>
+    left.name.localeCompare(right.name),
+  );
+}
+
+export function barrelProvidersForCountry(
+  options: readonly ShippingDestinationOption[],
+  countryId: string,
+) {
+  return options
+    .filter(
+      (option) =>
+        option.country.id === countryId && barrelOptionIsEligible(option),
+    )
+    .sort((left, right) =>
+      left.businessName.localeCompare(right.businessName),
+    );
+}
+
+function barrelOptionIsEligible(option: ShippingDestinationOption) {
+  return shippingProviderRate(option.country, "barrel") !== null;
+}
+
+const NYC_BOROUGHS = new Set([
+  "bronx",
+  "brooklyn",
+  "manhattan",
+  "queens",
+  "staten island",
+]);
+
+export function pickupDetailsAreComplete(
+  pickup: PickupDetails,
+  now = Date.now(),
+) {
+  if (!pickup.requested) return true;
+  const pickupTime = pickup.dateTime
+    ? new Date(pickup.dateTime).getTime()
+    : Number.NaN;
+  return Boolean(
+    pickup.address.trim() &&
+      NYC_BOROUGHS.has(pickup.borough.trim().toLowerCase()) &&
+      Number.isFinite(pickupTime) &&
+      pickupTime > now,
+  );
 }
 
 export function freightShippingEstimate({

@@ -129,3 +129,7 @@ Return:
   rate before selection. Keep the selected provider and live estimate visually
   prominent, with a one-column layout and the full action content visible at
   narrow phone widths.
+- Customer marketplace forms use progressive disclosure: select the destination
+  first, show only eligible businesses and their rates second, and ask for
+  sender/receiver details only after a provider is chosen. Do not flatten
+  destination and provider into one card catalog when one filters the other.

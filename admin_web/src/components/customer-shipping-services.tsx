@@ -19,6 +19,8 @@ import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
 import { ServiceRequestForm } from "@/components/service-request-form";
 import {
+  barrelDestinationCountries,
+  barrelProvidersForCountry,
   barrelShippingEstimate,
   buildBarrelShipmentPayload,
   buildFreightSettlementPayload,
@@ -26,6 +28,7 @@ import {
   buildTransportRequestPayload,
   freightShippingEstimate,
   freightSettlementIsPayable,
+  pickupDetailsAreComplete,
   shippingProviderRate,
   type PickupDetails,
 } from "@/lib/customer-shipping";
@@ -33,6 +36,10 @@ import { marketplaceDisclosure } from "@/lib/disclosures";
 import { functions } from "@/lib/firebase";
 import { formatMoney, text } from "@/lib/format";
 import { isValidPhone } from "@/lib/phone";
+import {
+  receiverPhoneIsDifferentCountry,
+  validateReceiverPhone,
+} from "@/lib/receiver-phone-rules";
 import { startCheckout } from "@/lib/use-checkout";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
 
@@ -42,6 +49,7 @@ type ShippingService = "barrel" | "freight" | "transport";
 
 type DestinationCountry = {
   id: string;
+  code?: string;
   name: string;
   barrelShippingPrice?: number;
   freightAirPricePerKg?: number;
@@ -124,17 +132,6 @@ function selectedOption(
   id: string,
 ) {
   return options.find((option) => option.id === id);
-}
-
-function pickupIsComplete(pickup: PickupDetails) {
-  return (
-    !pickup.requested ||
-    Boolean(
-      pickup.address.trim() &&
-        pickup.borough.trim() &&
-        pickup.dateTime,
-    )
-  );
 }
 
 function localDateTimeIso(value: string) {
@@ -365,6 +362,10 @@ function BarrelShipmentForm({
   const [senderName, setSenderName] = useState(text(profile.fullName, ""));
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
+  const [receiverPhoneIsWhatsappOnly, setReceiverPhoneIsWhatsappOnly] =
+    useState(false);
+  const [receiverPhoneTouched, setReceiverPhoneTouched] = useState(false);
+  const [destinationCountryId, setDestinationCountryId] = useState("");
   const [destinationOptionId, setDestinationOptionId] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [pickup, setPickup] = useState<PickupDetails>({
@@ -377,6 +378,36 @@ function BarrelShipmentForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const destination = selectedOption(options, destinationOptionId);
+  const countries = useMemo(
+    () => barrelDestinationCountries(options),
+    [options],
+  );
+  const providers = useMemo(
+    () => barrelProvidersForCountry(options, destinationCountryId),
+    [destinationCountryId, options],
+  );
+  const selectedCountry = countries.find(
+    (country) => country.id === destinationCountryId,
+  );
+  const phoneValidation = validateReceiverPhone({
+    allowDifferentCountry: receiverPhoneIsWhatsappOnly,
+    destinationCountryCode: selectedCountry?.code,
+    value: receiverPhone,
+  });
+  const showWhatsappOption = receiverPhoneIsDifferentCountry({
+    destinationCountryCode: selectedCountry?.code,
+    value: receiverPhone,
+  });
+  const phoneError =
+    receiverPhoneTouched && !phoneValidation.valid
+      ? phoneValidation.reason === "required"
+        ? "Enter the receiver phone number."
+        : phoneValidation.reason === "destination-mismatch"
+          ? "Receiver phone must match the destination country. Use the WhatsApp option below for a number from another country."
+          : phoneValidation.reason === "whatsapp-country-code"
+            ? "Include the country calling code for a WhatsApp number."
+            : "Enter a valid international phone number."
+      : "";
   const pricing = destination
     ? barrelShippingEstimate(destination.country, quantity)
     : null;
@@ -389,8 +420,8 @@ function BarrelShipmentForm({
         quantity >= 1 &&
         quantity <= 20,
     ) &&
-    isValidPhone(receiverPhone) &&
-    pickupIsComplete(pickup) &&
+    phoneValidation.valid &&
+    pickupDetailsAreComplete(pickup) &&
     accepted;
 
   async function submit() {
@@ -449,6 +480,9 @@ function BarrelShipmentForm({
       onCancel={() => {
         setReceiverName("");
         setReceiverPhone("");
+        setReceiverPhoneIsWhatsappOnly(false);
+        setReceiverPhoneTouched(false);
+        setDestinationCountryId("");
         setDestinationOptionId("");
         setAccepted(false);
       }}
@@ -496,89 +530,249 @@ function BarrelShipmentForm({
       submitting={submitting}
       title="Send a barrel"
     >
-      <div className="customer-form-grid customer-shipping-form-grid">
-        <label>
-          Sender name
-          <input
-            autoComplete="name"
-            onChange={(event) => setSenderName(event.target.value)}
-            required
-            value={senderName}
-          />
-        </label>
-        <label>
-          Receiver name
-          <input
-            onChange={(event) => setReceiverName(event.target.value)}
-            required
-            value={receiverName}
-          />
-        </label>
-        <CustomerPhoneField
-          label="Receiver phone"
-          onChange={setReceiverPhone}
-          required
-          value={receiverPhone}
-        />
-        <DestinationPicker
-          label="Destination and business"
-          onChange={setDestinationOptionId}
-          options={options}
-          service="barrel"
-          value={destinationOptionId}
-        />
-        <label>
-          Number of barrels
-          <input
-            max={20}
-            min={1}
-            onChange={(event) =>
-              setQuantity(Number(event.target.value || 1))
-            }
-            required
-            type="number"
-            value={quantity}
-          />
-        </label>
-        {destination && pricing && (
-          <ShippingPriceSummary
-            details={[
-              {
-                label: "Price per barrel",
-                value: formatMoney(pricing.rate),
-              },
-              {
-                label: "Barrels",
-                value: String(pricing.quantity),
-              },
-            ]}
-            note="Pickup is added at secure checkout when requested."
-            provider={destination.businessName}
-            total={formatMoney(pricing.subtotal)}
-            totalLabel="Estimated shipping"
-          />
-        )}
-        <PickupFields
-          pickup={pickup}
-          setPickup={setPickup}
-          suggestionsEnabled={authenticated}
-        />
-        {authenticated && (
-          <label className="customer-choice-row customer-form-span">
-            <input
-              checked={useWalletBalance}
-              onChange={(event) => setUseWalletBalance(event.target.checked)}
-              type="checkbox"
-            />
-            <span>
-              <strong>Use my available wallet balance</strong>
-              <small>Any remaining amount continues to secure payment.</small>
-            </span>
+      <div className="customer-barrel-journey">
+        <section className="customer-barrel-stage active">
+          <header className="customer-barrel-stage-header">
+            <span aria-hidden="true">1</span>
+            <div>
+              <small>Destination country</small>
+              <h3>Where are you sending the barrel?</h3>
+            </div>
+          </header>
+          <label className="customer-barrel-country">
+            Destination country
+            <select
+              onChange={(event) => {
+                setDestinationCountryId(event.target.value);
+                setDestinationOptionId("");
+                setReceiverPhoneIsWhatsappOnly(false);
+                setReceiverPhoneTouched(false);
+              }}
+              required
+              value={destinationCountryId}
+            >
+              <option value="">Choose a country</option>
+              {countries.map((country) => (
+                <option key={country.id} value={country.id}>
+                  {country.name}
+                </option>
+              ))}
+            </select>
           </label>
+        </section>
+
+        {selectedCountry && (
+          <section className="customer-barrel-stage active">
+            <header className="customer-barrel-stage-header">
+              <span aria-hidden="true">2</span>
+              <div>
+                <small>Shipping business</small>
+                <h3>
+                  Approved businesses shipping to{" "}
+                  <strong>{selectedCountry.name}</strong>
+                </h3>
+              </div>
+              <button
+                className="customer-barrel-change"
+                onClick={() => {
+                  setDestinationCountryId("");
+                  setDestinationOptionId("");
+                  setReceiverPhoneIsWhatsappOnly(false);
+                }}
+                type="button"
+              >
+                Change country
+              </button>
+            </header>
+            <fieldset className="customer-barrel-providers">
+              <legend className="sr-only">Choose a shipping business</legend>
+              <p aria-live="polite" className="sr-only">
+                {providers.length} approved businesses available
+              </p>
+              {providers.map((option) => {
+                const rate = shippingProviderRate(option.country, "barrel");
+                return (
+                  <label
+                    className={`customer-barrel-provider${destinationOptionId === option.id ? " selected" : ""}`}
+                    key={option.id}
+                  >
+                    <input
+                      checked={destinationOptionId === option.id}
+                      name="barrel-provider"
+                      onChange={() => setDestinationOptionId(option.id)}
+                      type="radio"
+                      value={option.id}
+                    />
+                    <span className="customer-option-icon">
+                      <Store aria-hidden="true" size={19} />
+                    </span>
+                    <span className="customer-barrel-provider-name">
+                      <strong>{option.businessName}</strong>
+                      <small>Approved business</small>
+                    </span>
+                    <span className="customer-barrel-provider-price">
+                      <strong>{rate ? formatMoney(rate) : "Rate unavailable"}</strong>
+                      <small>per barrel</small>
+                    </span>
+                  </label>
+                );
+              })}
+            </fieldset>
+          </section>
         )}
-        <div className="customer-form-span">
-          <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
-        </div>
+
+        {destination && (
+          <section className="customer-barrel-stage customer-barrel-details active">
+            <header className="customer-barrel-stage-header">
+              <span aria-hidden="true">3</span>
+              <div>
+                <small>Shipment details</small>
+                <h3>Tell us who is sending and receiving.</h3>
+              </div>
+            </header>
+            <div className="customer-barrel-selected-provider">
+              <span className="customer-option-icon">
+                <Store aria-hidden="true" size={19} />
+              </span>
+              <span>
+                <strong>{destination.businessName}</strong>
+                <small>{destination.country.name}</small>
+              </span>
+              <span>
+                <strong>
+                  {pricing ? formatMoney(pricing.rate) : "Rate unavailable"}
+                </strong>
+                <small>per barrel</small>
+              </span>
+              <button
+                className="customer-barrel-change"
+                onClick={() => setDestinationOptionId("")}
+                type="button"
+              >
+                Change
+              </button>
+            </div>
+            <div className="customer-form-grid customer-shipping-form-grid">
+              <label>
+                Sender name
+                <input
+                  autoComplete="name"
+                  onChange={(event) => setSenderName(event.target.value)}
+                  required
+                  value={senderName}
+                />
+              </label>
+              <label>
+                Receiver name
+                <input
+                  onChange={(event) => setReceiverName(event.target.value)}
+                  required
+                  value={receiverName}
+                />
+              </label>
+              <CustomerPhoneField
+                error={phoneError}
+                id="barrel-receiver-phone"
+                initialCountryCode={selectedCountry?.code || "US"}
+                label="Receiver phone"
+                onBlur={() => setReceiverPhoneTouched(true)}
+                onChange={(value) => {
+                  setReceiverPhone(value);
+                  if (receiverPhoneTouched) setReceiverPhoneTouched(true);
+                  if (
+                    !receiverPhoneIsDifferentCountry({
+                      destinationCountryCode: selectedCountry?.code,
+                      value,
+                    })
+                  ) {
+                    setReceiverPhoneIsWhatsappOnly(false);
+                  }
+                }}
+                required
+                value={receiverPhone}
+              />
+              <label>
+                Number of barrels
+                <input
+                  max={20}
+                  min={1}
+                  onChange={(event) =>
+                    setQuantity(Number(event.target.value || 1))
+                  }
+                  required
+                  type="number"
+                  value={quantity}
+                />
+              </label>
+              {showWhatsappOption && (
+                <label className="customer-choice-row customer-form-span">
+                  <input
+                    checked={receiverPhoneIsWhatsappOnly}
+                    onChange={(event) => {
+                      setReceiverPhoneIsWhatsappOnly(event.target.checked);
+                      setReceiverPhoneTouched(true);
+                    }}
+                    type="checkbox"
+                  />
+                  <span>
+                    <strong>
+                      This receiver uses a WhatsApp number from another country
+                    </strong>
+                    <small>
+                      The number must include its international calling code.
+                    </small>
+                  </span>
+                </label>
+              )}
+              <PickupFields
+                pickup={pickup}
+                setPickup={setPickup}
+                suggestionsEnabled={authenticated}
+              />
+              {pricing && (
+                <ShippingPriceSummary
+                  details={[
+                    {
+                      label: "Price per barrel",
+                      value: formatMoney(pricing.rate),
+                    },
+                    {
+                      label: "Barrels",
+                      value: String(pricing.quantity),
+                    },
+                  ]}
+                  note="Pickup is added at secure checkout when requested."
+                  provider={destination.businessName}
+                  total={formatMoney(pricing.subtotal)}
+                  totalLabel="Estimated shipping"
+                />
+              )}
+              {authenticated && (
+                <label className="customer-choice-row customer-form-span">
+                  <input
+                    checked={useWalletBalance}
+                    onChange={(event) =>
+                      setUseWalletBalance(event.target.checked)
+                    }
+                    type="checkbox"
+                  />
+                  <span>
+                    <strong>Use my available wallet balance</strong>
+                    <small>
+                      Any remaining amount continues to secure payment.
+                    </small>
+                  </span>
+                </label>
+              )}
+              <div className="customer-form-span">
+                <DisclosureCheckbox
+                  accepted={accepted}
+                  onChange={setAccepted}
+                />
+              </div>
+            </div>
+          </section>
+        )}
       </div>
     </ServiceRequestForm>
   );
@@ -656,7 +850,7 @@ function FreightShipmentForm({
   const quoteReady =
     !pickup.requested ||
     (pickupAllowed &&
-      pickupIsComplete(pickup) &&
+      pickupDetailsAreComplete(pickup) &&
       (!authenticated || quote !== null));
   const valid =
     Boolean(
@@ -713,7 +907,7 @@ function FreightShipmentForm({
     if (
       pickup.requested &&
       pickupAllowed &&
-      pickupIsComplete(pickup) &&
+      pickupDetailsAreComplete(pickup) &&
       !quote
     ) {
       await requestQuote();
