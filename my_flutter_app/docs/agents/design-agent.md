@@ -121,3 +121,11 @@ Return:
   request; require authentication only when an action saves, submits, reserves,
   or pays. Keep the draft mounted through sign-in/signup/verification and return
   to the exact service and review state instead of a generic dashboard.
+- Public headers should use a plain `Log in` / `Se connecter` account action,
+  never the internal-sounding “Customer workspace.” Service cards must look
+  actionable before hover: keep the full card clickable and give each one a
+  persistent bottom action row with a service-specific verb and arrow.
+- Customer provider cards must expose each business's own barrel or freight
+  rate before selection. Keep the selected provider and live estimate visually
+  prominent, with a one-column layout and the full action content visible at
+  narrow phone widths.

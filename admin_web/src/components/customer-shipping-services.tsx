@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Scale,
   Ship,
+  Store,
   Truck,
 } from "lucide-react";
 
@@ -18,11 +19,14 @@ import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
 import { ServiceRequestForm } from "@/components/service-request-form";
 import {
+  barrelShippingEstimate,
   buildBarrelShipmentPayload,
   buildFreightSettlementPayload,
   buildFreightShipmentPayload,
   buildTransportRequestPayload,
+  freightShippingEstimate,
   freightSettlementIsPayable,
+  shippingProviderRate,
   type PickupDetails,
 } from "@/lib/customer-shipping";
 import { marketplaceDisclosure } from "@/lib/disclosures";
@@ -373,6 +377,9 @@ function BarrelShipmentForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const destination = selectedOption(options, destinationOptionId);
+  const pricing = destination
+    ? barrelShippingEstimate(destination.country, quantity)
+    : null;
   const valid =
     Boolean(
       senderName.trim() &&
@@ -455,6 +462,18 @@ function BarrelShipmentForm({
             label="Destination"
             value={destination ? optionLabel(destination) : ""}
           />
+          {pricing && (
+            <>
+              <ReviewDetail
+                label="Price per barrel"
+                value={formatMoney(pricing.rate)}
+              />
+              <ReviewDetail
+                label="Estimated shipping"
+                value={formatMoney(pricing.subtotal)}
+              />
+            </>
+          )}
           <ReviewDetail label="Barrels" value={String(quantity)} />
           <ReviewDetail
             label="Pickup"
@@ -501,10 +520,11 @@ function BarrelShipmentForm({
           required
           value={receiverPhone}
         />
-        <DestinationSelect
+        <DestinationPicker
           label="Destination and business"
           onChange={setDestinationOptionId}
           options={options}
+          service="barrel"
           value={destinationOptionId}
         />
         <label>
@@ -520,6 +540,24 @@ function BarrelShipmentForm({
             value={quantity}
           />
         </label>
+        {destination && pricing && (
+          <ShippingPriceSummary
+            details={[
+              {
+                label: "Price per barrel",
+                value: formatMoney(pricing.rate),
+              },
+              {
+                label: "Barrels",
+                value: String(pricing.quantity),
+              },
+            ]}
+            note="Pickup is added at secure checkout when requested."
+            provider={destination.businessName}
+            total={formatMoney(pricing.subtotal)}
+            totalLabel="Estimated shipping"
+          />
+        )}
         <PickupFields
           pickup={pickup}
           setPickup={setPickup}
@@ -594,6 +632,15 @@ function FreightShipmentForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const destination = selectedOption(availableOptions, destinationOptionId);
+  const pricing = destination
+    ? freightShippingEstimate({
+        country: destination.country,
+        mode,
+        pickupQuote: quote?.fee,
+        pickupRequested: pickup.requested,
+        weightKg,
+      })
+    : null;
 
   useEffect(() => {
     if (
@@ -739,6 +786,24 @@ function FreightShipmentForm({
                 label="Destination"
                 value={destination ? optionLabel(destination) : ""}
               />
+              {pricing && (
+                <>
+                  <ReviewDetail
+                    label="Rate per kg"
+                    value={formatMoney(pricing.rate)}
+                  />
+                  <ReviewDetail
+                    label="Estimated freight"
+                    value={formatMoney(pricing.subtotal)}
+                  />
+                  {pricing.total !== null && (
+                    <ReviewDetail
+                      label="Estimated total"
+                      value={formatMoney(pricing.total)}
+                    />
+                  )}
+                </>
+              )}
               <ReviewDetail
                 label="Estimated weight"
                 value={`${weightKg} kg`}
@@ -815,13 +880,15 @@ function FreightShipmentForm({
               required
               value={receiverPhone}
             />
-            <DestinationSelect
+            <DestinationPicker
               label="Destination and business"
               onChange={(value) => {
                 setDestinationOptionId(value);
                 setQuote(null);
               }}
+              mode={mode}
               options={availableOptions}
+              service="freight"
               value={destinationOptionId}
             />
             <label>
@@ -886,6 +953,42 @@ function FreightShipmentForm({
                 Pickup is not available from this business. Choose drop off or
                 another provider.
               </div>
+            )}
+            {destination && pricing && (
+              <ShippingPriceSummary
+                details={[
+                  {
+                    label: mode === "air" ? "Air freight rate" : "Sea freight rate",
+                    value: `${formatMoney(pricing.rate)} / kg`,
+                  },
+                  {
+                    label: "Estimated weight",
+                    value: `${pricing.weightKg} kg`,
+                  },
+                  {
+                    label: "Shipping subtotal",
+                    value: formatMoney(pricing.subtotal),
+                  },
+                  ...(pricing.pickupFee !== null && pricing.pickupFee > 0
+                    ? [
+                        {
+                          label: "Pickup quote",
+                          value: formatMoney(pricing.pickupFee),
+                        },
+                      ]
+                    : []),
+                ]}
+                note={
+                  pricing.pickupPending
+                    ? "Pickup quote pending. Sign in to calculate the full estimate."
+                    : "Final weight is verified by the selected business before settlement."
+                }
+                provider={destination.businessName}
+                total={formatMoney(pricing.total ?? pricing.subtotal)}
+                totalLabel={
+                  pricing.total === null ? "Shipping subtotal" : "Estimated total"
+                }
+              />
             )}
             {authenticated && (
               <label className="customer-choice-row customer-form-span">
@@ -1161,12 +1264,25 @@ function TransportRequestForm({
       title="Request car transport"
     >
       <div className="customer-form-grid customer-shipping-form-grid">
-        <DestinationSelect
+        <DestinationPicker
           label="Destination and business"
           onChange={setDestinationOptionId}
           options={options}
+          service="transport"
           value={destinationOptionId}
         />
+        {destination && (
+          <div className="customer-provider-banner customer-form-span">
+            <Store size={19} />
+            <div>
+              <strong>{destination.businessName}</strong>
+              <span>
+                Price provided after review. No payment is due when you submit
+                this request.
+              </span>
+            </div>
+          </div>
+        )}
         <label>
           Vehicle owner
           <input
@@ -1251,33 +1367,178 @@ function TransportRequestForm({
   );
 }
 
-function DestinationSelect({
+function DestinationPicker({
   label,
+  mode = "air",
   onChange,
   options,
+  service,
   value,
 }: {
   label: string;
+  mode?: "air" | "sea";
   onChange: (value: string) => void;
   options: DestinationOption[];
+  service: ShippingService;
   value: string;
 }) {
   return (
-    <label>
-      {label}
-      <select
-        onChange={(event) => onChange(event.target.value)}
-        required
-        value={value}
+    <fieldset className="customer-destination-picker customer-form-span">
+      <legend>{label}</legend>
+      <p>
+        Choose an approved provider. Each rate comes directly from that
+        business.
+      </p>
+      <div
+        aria-label={label}
+        className="customer-destination-grid"
+        role="radiogroup"
       >
-        <option value="">Choose a destination and business</option>
-        {options.map((option) => (
-          <option key={option.id} value={option.id}>
-            {optionLabel(option)}
-          </option>
+        {options.map((option) => {
+          const selected = value === option.id;
+          const rate =
+            service === "transport"
+              ? null
+              : shippingProviderRate(
+                  option.country,
+                  service,
+                  mode,
+                );
+          const airRate = shippingProviderRate(
+            option.country,
+            "freight",
+            "air",
+          );
+          const seaRate = shippingProviderRate(
+            option.country,
+            "freight",
+            "sea",
+          );
+          const ServiceIcon =
+            service === "barrel"
+              ? Box
+              : service === "freight"
+                ? mode === "air"
+                  ? Plane
+                  : Ship
+                : Truck;
+
+          return (
+            <button
+              aria-checked={selected}
+              className={`customer-destination-card${selected ? " selected" : ""}`}
+              key={option.id}
+              onClick={() => onChange(option.id)}
+              role="radio"
+              type="button"
+            >
+              <span className="customer-destination-card-head">
+                <span className="customer-option-icon">
+                  <ServiceIcon aria-hidden="true" size={20} />
+                </span>
+                <span>
+                  <strong>{option.businessName}</strong>
+                  <small>
+                    <MapPin aria-hidden="true" size={13} />
+                    {option.country.name}
+                  </small>
+                </span>
+                <CheckCircle2
+                  aria-hidden="true"
+                  className="customer-destination-check"
+                  size={20}
+                />
+              </span>
+              {service === "transport" ? (
+                <span className="customer-destination-price">
+                  <small>Business quote</small>
+                  <strong>Price provided after review</strong>
+                </span>
+              ) : (
+                <span className="customer-destination-price">
+                  <small>
+                    {service === "barrel"
+                      ? "Price per barrel"
+                      : mode === "air"
+                        ? "Air freight rate"
+                        : "Sea freight rate"}
+                  </small>
+                  <strong>
+                    {rate
+                      ? `${formatMoney(rate)}${service === "freight" ? " / kg" : ""}`
+                      : "Rate unavailable"}
+                  </strong>
+                </span>
+              )}
+              {service === "freight" && (
+                <span className="customer-destination-rate-list">
+                  {airRate && (
+                    <span>
+                      <small>Air freight</small>
+                      <strong>{formatMoney(airRate)} / kg</strong>
+                    </span>
+                  )}
+                  {seaRate && (
+                    <span>
+                      <small>Sea freight</small>
+                      <strong>{formatMoney(seaRate)} / kg</strong>
+                    </span>
+                  )}
+                </span>
+              )}
+              <span className="customer-approved-label">
+                <CheckCircle2 aria-hidden="true" size={14} />
+                Approved business
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
+function ShippingPriceSummary({
+  details,
+  note,
+  provider,
+  total,
+  totalLabel,
+}: {
+  details: Array<{ label: string; value: string }>;
+  note: string;
+  provider: string;
+  total: string;
+  totalLabel: string;
+}) {
+  return (
+    <section
+      aria-live="polite"
+      className="customer-shipping-price-summary customer-form-span"
+    >
+      <header>
+        <span className="customer-shipping-price-icon">
+          <Scale aria-hidden="true" size={21} />
+        </span>
+        <span>
+          <small>Selected provider</small>
+          <strong>{provider}</strong>
+        </span>
+        <span className="customer-shipping-price-total">
+          <small>{totalLabel}</small>
+          <strong>{total}</strong>
+        </span>
+      </header>
+      <dl>
+        {details.map((detail) => (
+          <div key={detail.label}>
+            <dt>{detail.label}</dt>
+            <dd>{detail.value}</dd>
+          </div>
         ))}
-      </select>
-    </label>
+      </dl>
+      <p>{note}</p>
+    </section>
   );
 }
 

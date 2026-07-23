@@ -76,7 +76,19 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Destination and business": "Destination et entreprise",
   "Choose a destination and business":
     "Choisissez une destination et une entreprise",
+  "Choose an approved provider. Each rate comes directly from that business.":
+    "Choisissez un prestataire approuvé. Chaque tarif provient directement de cette entreprise.",
+  "Selected provider": "Prestataire sélectionné",
+  "Business quote": "Devis de l’entreprise",
+  "Price provided after review": "Prix fourni après examen",
+  "Price provided after review. No payment is due when you submit this request.":
+    "Prix fourni après examen. Aucun paiement n’est dû lorsque vous envoyez cette demande.",
+  "Price per barrel": "Prix par baril",
+  "Estimated shipping": "Expédition estimée",
+  "Pickup is added at secure checkout when requested.":
+    "La collecte est ajoutée lors du paiement sécurisé lorsqu’elle est demandée.",
   "Number of barrels": "Nombre de barils",
+  "Barrels": "Barils",
   "Request pickup": "Demander la collecte",
   "Choose an address and appointment time.":
     "Choisissez une adresse et une heure de rendez-vous.",
@@ -95,6 +107,16 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Shipping method": "Mode d’expédition",
   "Air freight": "Fret aérien",
   "Sea freight": "Fret maritime",
+  "Air freight rate": "Tarif du fret aérien",
+  "Sea freight rate": "Tarif du fret maritime",
+  "Rate per kg": "Tarif par kg",
+  "Rate unavailable": "Tarif indisponible",
+  "Estimated freight": "Fret estimé",
+  "Shipping subtotal": "Sous-total de l’expédition",
+  "Pickup quote pending. Sign in to calculate the full estimate.":
+    "Devis de collecte en attente. Connectez-vous pour calculer l’estimation complète.",
+  "Final weight is verified by the selected business before settlement.":
+    "Le poids final est vérifié par l’entreprise sélectionnée avant le règlement.",
   "Estimated weight (kg)": "Poids estimé (kg)",
   "Estimated weight": "Poids estimé",
   "Live pickup quote": "Devis de collecte en direct",

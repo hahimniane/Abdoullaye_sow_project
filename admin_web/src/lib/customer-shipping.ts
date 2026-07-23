@@ -49,8 +49,102 @@ export type TransportRequestFields = {
   preferredDate?: string;
 };
 
+export type ShippingPricingCountry = {
+  barrelShippingPrice?: unknown;
+  freightAirPricePerKg?: unknown;
+  freightSeaPricePerKg?: unknown;
+  serviceAvailability?: {
+    barrelShipping?: boolean;
+    freightAir?: boolean;
+    freightSea?: boolean;
+  };
+};
+
+export type FreightMode = "air" | "sea";
+
 function trimmed(value: string) {
   return value.trim();
+}
+
+function positiveFinite(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+export function shippingProviderRate(
+  country: ShippingPricingCountry,
+  service: "barrel" | "freight",
+  mode: FreightMode = "air",
+) {
+  if (service === "barrel") {
+    if (country.serviceAvailability?.barrelShipping === false) return null;
+    return positiveFinite(country.barrelShippingPrice);
+  }
+
+  const availability =
+    mode === "air"
+      ? country.serviceAvailability?.freightAir
+      : country.serviceAvailability?.freightSea;
+  if (availability === false) return null;
+  return positiveFinite(
+    mode === "air"
+      ? country.freightAirPricePerKg
+      : country.freightSeaPricePerKg,
+  );
+}
+
+export function barrelShippingEstimate(
+  country: ShippingPricingCountry,
+  quantity: unknown,
+) {
+  const rate = shippingProviderRate(country, "barrel");
+  const units = Number(quantity);
+  if (!rate || !Number.isInteger(units) || units <= 0) return null;
+  return {
+    rate,
+    quantity: units,
+    subtotal: rate * units,
+  };
+}
+
+export function freightShippingEstimate({
+  country,
+  mode,
+  pickupQuote,
+  pickupRequested,
+  weightKg,
+}: {
+  country: ShippingPricingCountry;
+  mode: FreightMode;
+  pickupQuote?: unknown;
+  pickupRequested: boolean;
+  weightKg: unknown;
+}) {
+  const rate = shippingProviderRate(country, "freight", mode);
+  const weight = Number(weightKg);
+  if (!rate || !Number.isFinite(weight) || weight <= 0) return null;
+
+  const subtotal = rate * weight;
+  const normalizedPickupQuote =
+    pickupQuote === undefined || pickupQuote === null
+      ? null
+      : Number(pickupQuote);
+  const pickupFee =
+    normalizedPickupQuote !== null &&
+    Number.isFinite(normalizedPickupQuote) &&
+    normalizedPickupQuote >= 0
+      ? normalizedPickupQuote
+      : null;
+  const pickupPending = pickupRequested && pickupFee === null;
+
+  return {
+    rate,
+    weightKg: weight,
+    subtotal,
+    pickupFee: pickupRequested ? pickupFee : 0,
+    pickupPending,
+    total: pickupPending ? null : subtotal + (pickupFee ?? 0),
+  };
 }
 
 function pickupPayload(pickup: PickupDetails) {

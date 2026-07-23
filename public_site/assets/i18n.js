@@ -88,7 +88,7 @@
     "Use Laawol online": "Utiliser Laawol en ligne",
     "Continue online": "Continuer en ligne",
     "Laawol access": "Accès Laawol",
-    "Customer workspace": "Espace client",
+    "Log in": "Se connecter",
     "Customers should know who is providing the service, what it costs, where it goes, and what happens next. Laawol helps businesses publish those details and keeps support records in one place.": "Les clients doivent savoir qui fournit le service, combien il coûte, où il va et quelle est la prochaine étape. Laawol aide les entreprises à publier ces informations et conserve les dossiers d’assistance au même endroit.",
     "Dakar & regions": "Dakar et régions",
     "Describe it or add a photo": "Décrivez-le ou ajoutez une photo",

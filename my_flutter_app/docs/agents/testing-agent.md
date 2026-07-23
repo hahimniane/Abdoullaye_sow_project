@@ -249,3 +249,7 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   shared-barrel responses omit private contact details, exact coordinates,
   participant identities, and owner UIDs while authenticated create/pay paths
   remain unchanged.
+- Customer pricing parity tests must use at least two providers with distinct
+  rates, then switch providers, barrel quantity, freight air/sea mode, and
+  weight. Assert the displayed estimate changes accordingly. An unavailable or
+  pickup-pending price must remain absent/pending and must never render as zero.

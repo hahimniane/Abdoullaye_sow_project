@@ -79,12 +79,14 @@ test("phase 5 components use exact callables and ownership-scoped support reads"
   assert.match(wallet, /"requestWalletCardRefund"/);
 });
 
-test("the shared public-site script adds the customer CTA without duplicates", () => {
+test("the shared public-site script adds a clear customer login without duplicates", () => {
   const source = readFileSync("../public_site/assets/script.js", "utf8");
   assert.match(source, /https:\/\/customer\.laawoldigital\.com/);
-  assert.match(source, /data-customer-workspace/);
-  assert.ok(source.includes(`[data-customer-workspace="true"]`));
+  assert.match(source, /data-customer-login/);
+  assert.ok(source.includes(`[data-customer-login="true"]`));
   assert.match(source, /a\[href="https:\/\/customer\.laawoldigital\.com"\]/);
+  assert.match(source, /\? "Log in"\s*: "Se connecter"/);
+  assert.doesNotMatch(source, /Customer workspace|Espace client/);
 });
 
 test("every public HTML page loads the shared customer CTA mechanism", () => {
@@ -94,6 +96,16 @@ test("every public HTML page loads the shared customer CTA mechanism", () => {
   assert.ok(pages.length >= 10);
   for (const page of pages) {
     const html = readFileSync(`../public_site/${page}`, "utf8");
-    assert.match(html, /assets\/script\.js\?v=12/, page);
+    assert.match(html, /assets\/script\.js\?v=13/, page);
   }
+});
+
+test("public service cards expose a visible action and keyboard focus state", () => {
+  const styles = readFileSync("../public_site/assets/styles.css", "utf8");
+  const services = readFileSync("../public_site/services.html", "utf8");
+  assert.match(styles, /a\.service-card\{[\s\S]*display:flex/);
+  assert.match(styles, /a\.service-card \.link-arrow\{[\s\S]*min-height:44px/);
+  assert.match(styles, /\.service-card:focus-visible/);
+  assert.equal((services.match(/class="service-card"/g) ?? []).length, 6);
+  assert.equal((services.match(/class="link-arrow"/g) ?? []).length, 6);
 });

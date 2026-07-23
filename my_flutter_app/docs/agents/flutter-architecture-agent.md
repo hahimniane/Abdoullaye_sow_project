@@ -185,3 +185,8 @@ Add future project conventions and repeated architectural decisions here.
   backend metadata only. Preserve them when the saved address is unchanged, and
   clear them only through an explicit stale-coordinate path when the address is
   edited.
+- Customer web pricing must display the server-projected provider rates already
+  returned by the destination callable: barrel per-unit rates and freight
+  air/sea per-kilogram rates. Keep checkout payloads price-free so the backend
+  remains authoritative. Car transport stays quote-only, and freight pickup
+  keeps the final total pending until an authoritative quote exists.

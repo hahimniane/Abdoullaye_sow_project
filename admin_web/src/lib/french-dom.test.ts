@@ -174,6 +174,25 @@ test("translates the business changes-requested notice as natural French", () =>
   );
 });
 
+test("translates every customer provider-pricing label", () => {
+  assert.equal(translateValue("Selected provider", "fr"), "Prestataire sélectionné");
+  assert.equal(translateValue("Price per barrel", "fr"), "Prix par baril");
+  assert.equal(translateValue("Air freight rate", "fr"), "Tarif du fret aérien");
+  assert.equal(translateValue("Sea freight rate", "fr"), "Tarif du fret maritime");
+  assert.equal(translateValue("Shipping subtotal", "fr"), "Sous-total de l’expédition");
+  assert.equal(
+    translateValue(
+      "Pickup quote pending. Sign in to calculate the full estimate.",
+      "fr",
+    ),
+    "Devis de collecte en attente. Connectez-vous pour calculer l’estimation complète.",
+  );
+  assert.equal(
+    translateValue("Price provided after review", "fr"),
+    "Prix fourni après examen",
+  );
+});
+
 test("language resolves from a saved preference first, then the device", () => {
   // Saved choice always wins, regardless of device language.
   assert.equal(resolveLang("en", ["fr-FR"]), "en");

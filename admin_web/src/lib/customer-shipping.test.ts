@@ -3,11 +3,14 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  barrelShippingEstimate,
   buildBarrelShipmentPayload,
   buildFreightSettlementPayload,
   buildFreightShipmentPayload,
   buildTransportRequestPayload,
+  freightShippingEstimate,
   freightSettlementIsPayable,
+  shippingProviderRate,
 } from "./customer-shipping.ts";
 
 const disclosure = {
@@ -149,6 +152,123 @@ test("only a positive verified freight balance is payable", () => {
   );
 });
 
+test("selected barrel providers expose their own rate and quantity estimate", () => {
+  const first = {
+    barrelShippingPrice: 125,
+    serviceAvailability: { barrelShipping: true },
+  };
+  const second = {
+    barrelShippingPrice: 175,
+    serviceAvailability: { barrelShipping: true },
+  };
+
+  assert.deepEqual(barrelShippingEstimate(first, 2), {
+    rate: 125,
+    quantity: 2,
+    subtotal: 250,
+  });
+  assert.deepEqual(barrelShippingEstimate(second, 2), {
+    rate: 175,
+    quantity: 2,
+    subtotal: 350,
+  });
+  assert.equal(
+    shippingProviderRate(
+      {
+        barrelShippingPrice: 125,
+        serviceAvailability: { barrelShipping: false },
+      },
+      "barrel",
+    ),
+    null,
+  );
+});
+
+test("selected freight providers expose mode-specific rates and estimates", () => {
+  const country = {
+    freightAirPricePerKg: 8.5,
+    freightSeaPricePerKg: 3.25,
+    serviceAvailability: { freightAir: true, freightSea: true },
+  };
+
+  assert.deepEqual(
+    freightShippingEstimate({
+      country,
+      mode: "air",
+      pickupRequested: false,
+      weightKg: 10,
+    }),
+    {
+      rate: 8.5,
+      weightKg: 10,
+      subtotal: 85,
+      pickupFee: 0,
+      pickupPending: false,
+      total: 85,
+    },
+  );
+  assert.deepEqual(
+    freightShippingEstimate({
+      country,
+      mode: "sea",
+      pickupQuote: 20,
+      pickupRequested: true,
+      weightKg: 10,
+    }),
+    {
+      rate: 3.25,
+      weightKg: 10,
+      subtotal: 32.5,
+      pickupFee: 20,
+      pickupPending: false,
+      total: 52.5,
+    },
+  );
+});
+
+test("shipping estimates never present unavailable or pending prices as zero", () => {
+  assert.equal(
+    shippingProviderRate({ freightAirPricePerKg: 0 }, "freight", "air"),
+    null,
+  );
+  assert.equal(
+    shippingProviderRate(
+      {
+        freightSeaPricePerKg: Number.POSITIVE_INFINITY,
+      },
+      "freight",
+      "sea",
+    ),
+    null,
+  );
+  assert.equal(barrelShippingEstimate({ barrelShippingPrice: -5 }, 1), null);
+  assert.equal(
+    freightShippingEstimate({
+      country: { freightAirPricePerKg: 7 },
+      mode: "air",
+      pickupRequested: false,
+      weightKg: Number.NaN,
+    }),
+    null,
+  );
+  assert.deepEqual(
+    freightShippingEstimate({
+      country: { freightAirPricePerKg: 7 },
+      mode: "air",
+      pickupRequested: true,
+      weightKg: 2,
+    }),
+    {
+      rate: 7,
+      weightKg: 2,
+      subtotal: 14,
+      pickupFee: null,
+      pickupPending: true,
+      total: null,
+    },
+  );
+});
+
 test("shipping UI uses the canonical server option, quote, request, and checkout rails", () => {
   const source = readFileSync(
     new URL("../components/customer-shipping-services.tsx", import.meta.url),
@@ -164,6 +284,9 @@ test("shipping UI uses the canonical server option, quote, request, and checkout
   assert.match(source, /startCheckout\(\s*"barrelShipment"/);
   assert.match(source, /startCheckout\(\s*"freightShipment"/);
   assert.match(source, /startCheckout\(\s*"freightSettlement"/);
+  assert.match(source, /<DestinationPicker/);
+  assert.match(source, /<ShippingPriceSummary/);
+  assert.match(source, /Price provided after review/);
   assert.doesNotMatch(source, /unit_amount|price_data|estimatedTotal:/);
 });
 
