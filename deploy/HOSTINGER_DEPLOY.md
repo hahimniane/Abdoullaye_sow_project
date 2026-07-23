@@ -19,6 +19,11 @@ Hostinger. Three static artifacts are deployed:
 > document root is `~/domains/laawoldigital.com/public_html/business`. It uses
 > the same static export as the admin console (`admin_web/out/`) and is also
 > served at the subdomain root.
+>
+> The customer workspace runs on `customer.laawoldigital.com`, whose Hostinger
+> website document root is
+> `~/domains/customer.laawoldigital.com/public_html`. It is a separate
+> Hostinger website root, not `laawoldigital.com/public_html/customer`.
 
 All three are **static** (plain HTML/CSS/JS), so Hostinger shared hosting serves them
 directly — no Node runtime is needed on the server.
@@ -41,6 +46,11 @@ directly — no Node runtime is needed on the server.
   `~/domains/laawoldigital.com/public_html/business`
   - Hostinger maps this folder to `https://business.laawoldigital.com/`.
   - The same `admin_web/out/` static export is deployed here for business users.
+- **Customer workspace root:**
+  `~/domains/customer.laawoldigital.com/public_html`
+  - Hostinger maps this separate website root to
+    `https://customer.laawoldigital.com/`.
+  - The same `admin_web/out/` static export is deployed here for customers.
 
 ### SSH / SFTP access (preferred)
 - **Host:** `46.202.183.189` (or `hniane.com`)

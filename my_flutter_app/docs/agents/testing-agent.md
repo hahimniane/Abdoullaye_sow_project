@@ -240,3 +240,7 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   page/runtime-asset smoke checks, Firebase Auth authorized domains, and the
   reCAPTCHA Enterprise/App Check allowlist. Browser-test every host even when
   multiple hosts serve the same compiled bundle.
+- Resolve and verify each Hostinger website's real document root over SSH before
+  publishing. `customer.laawoldigital.com` is a separate Hostinger website at
+  `~/domains/customer.laawoldigital.com/public_html`; it is not a sibling
+  folder beside the admin and business roots under `laawoldigital.com`.

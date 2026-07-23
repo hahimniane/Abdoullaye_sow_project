@@ -36,7 +36,9 @@ const cfg = {
   remoteRoot: process.env.REMOTE_ROOT || "public_html",
   remoteAdmin: process.env.REMOTE_ADMIN || "public_html/admin",
   remoteBusiness: process.env.REMOTE_BUSINESS || "public_html/business",
-  remoteCustomer: process.env.REMOTE_CUSTOMER || "public_html/customer",
+  remoteCustomer:
+    process.env.REMOTE_CUSTOMER ||
+    "domains/customer.laawoldigital.com/public_html",
   deployAdmin: String(process.env.DEPLOY_ADMIN || "true").toLowerCase() === "true",
   deployBusiness: String(process.env.DEPLOY_BUSINESS || "true").toLowerCase() === "true",
   deployCustomer: String(process.env.DEPLOY_CUSTOMER || "true").toLowerCase() === "true",

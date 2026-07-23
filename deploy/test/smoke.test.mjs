@@ -91,8 +91,13 @@ test("remote static smoke verifies HTTPS pages and console runtime assets", () =
   }), /host is invalid/);
 });
 
-test("SSH deploy protects and publishes the customer console directory", () => {
+test("SSH deploy publishes the customer console to its dedicated document root", () => {
   const source = readFileSync(new URL("../ssh-static-deploy.mjs", import.meta.url), "utf8");
-  assert.match(source, /"--exclude",\s*\n\s*"customer\/"/);
-  assert.match(source, /\$\{dest\}\/customer\//);
+  assert.match(
+    source,
+    /"domains\/customer\.laawoldigital\.com\/public_html"/,
+  );
+  assert.match(source, /const customerDest =/);
+  assert.match(source, /\$\{customerDest\}\//);
+  assert.doesNotMatch(source, /\$\{dest\}\/customer\//);
 });

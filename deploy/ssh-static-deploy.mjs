@@ -4,7 +4,7 @@
 //   public_site/      -> domains/laawoldigital.com/public_html/
 //   admin_web/out/   -> domains/laawoldigital.com/public_html/admin/
 //   admin_web/out/   -> domains/laawoldigital.com/public_html/business/
-//   admin_web/out/   -> domains/laawoldigital.com/public_html/customer/
+//   admin_web/out/   -> domains/customer.laawoldigital.com/public_html/
 
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -22,6 +22,9 @@ const cfg = {
   user: process.env.SSH_USER || "u161013520",
   remoteRoot:
     process.env.REMOTE_ROOT || "domains/laawoldigital.com/public_html",
+  remoteCustomer:
+    process.env.REMOTE_CUSTOMER ||
+    "domains/customer.laawoldigital.com/public_html",
 };
 
 const SITE_DIR = path.join(ROOT, "public_site");
@@ -73,6 +76,7 @@ const ssh = [
 ].join(" ");
 
 const dest = `${cfg.user}@${cfg.host}:${cfg.remoteRoot}`;
+const customerDest = `${cfg.user}@${cfg.host}:${cfg.remoteCustomer}`;
 const common = ["-rtz", "--delete", "--omit-dir-times", "--no-perms", "-e", ssh];
 
 console.log(`\nPublishing marketing site -> ${dest}/`);
@@ -94,8 +98,8 @@ run("rsync", [...common, `${ADMIN_DIR}/`, `${dest}/admin/`]);
 console.log(`\nPublishing business console -> ${dest}/business/`);
 run("rsync", [...common, `${ADMIN_DIR}/`, `${dest}/business/`]);
 
-console.log(`\nPublishing customer console -> ${dest}/customer/`);
-run("rsync", [...common, `${ADMIN_DIR}/`, `${dest}/customer/`]);
+console.log(`\nPublishing customer console -> ${customerDest}/`);
+run("rsync", [...common, `${ADMIN_DIR}/`, `${customerDest}/`]);
 
 console.log("\nRunning read-only static smoke checks...");
 run("node", [path.join(__dirname, "post-deploy-smoke.mjs")], {

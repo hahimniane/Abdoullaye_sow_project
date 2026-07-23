@@ -100,6 +100,7 @@ FTP_PASS=your_ftp_password \
 REMOTE_ROOT=public_html \
 REMOTE_ADMIN=public_html/admin \
 REMOTE_BUSINESS=public_html/business \
+REMOTE_CUSTOMER=domains/customer.laawoldigital.com/public_html \
 FTP_SECURE=true \
 node deploy.mjs
 ```
