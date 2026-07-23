@@ -65,6 +65,11 @@ export type ShippingPricingCountry = {
 
 export type FreightMode = "air" | "sea";
 
+const SHIPPING_REGION_NAMES = {
+  en: new Intl.DisplayNames(["en"], { type: "region" }),
+  fr: new Intl.DisplayNames(["fr"], { type: "region" }),
+} as const;
+
 export type ShippingDestinationOption = {
   id: string;
   businessId: string;
@@ -82,6 +87,17 @@ function trimmed(value: string) {
 function positiveFinite(value: unknown) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+export function shippingCountryDisplayName(
+  country: Pick<ShippingPricingCountry, "code" | "name">,
+  language: "en" | "fr",
+) {
+  const code = String(country.code || "").trim().toUpperCase();
+  return (
+    (code && SHIPPING_REGION_NAMES[language].of(code)) ||
+    String(country.name || "").trim()
+  );
 }
 
 export function shippingProviderRate(

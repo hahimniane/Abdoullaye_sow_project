@@ -14,6 +14,7 @@ import {
   freightSettlementIsPayable,
   pickupDetailsAreComplete,
   shippingProviderRate,
+  shippingCountryDisplayName,
 } from "./customer-shipping.ts";
 
 const disclosure = {
@@ -285,6 +286,21 @@ test("pickup details require a recognized NYC borough and a future appointment",
       now,
     ),
     false,
+  );
+});
+
+test("shipping countries render from their ISO code in both languages", () => {
+  assert.equal(
+    shippingCountryDisplayName({ code: "GN", name: "Guinea" }, "en"),
+    "Guinea",
+  );
+  assert.equal(
+    shippingCountryDisplayName({ code: "GN", name: "Guinea" }, "fr"),
+    "Guinée",
+  );
+  assert.equal(
+    shippingCountryDisplayName({ name: "Legacy destination" }, "fr"),
+    "Legacy destination",
   );
 });
 

@@ -29,12 +29,14 @@ import {
   freightShippingEstimate,
   freightSettlementIsPayable,
   pickupDetailsAreComplete,
+  shippingCountryDisplayName,
   shippingProviderRate,
   type PickupDetails,
 } from "@/lib/customer-shipping";
 import { marketplaceDisclosure } from "@/lib/disclosures";
 import { functions } from "@/lib/firebase";
 import { formatMoney, text } from "@/lib/format";
+import { currentWebLanguage } from "@/lib/language";
 import { isValidPhone } from "@/lib/phone";
 import {
   receiverPhoneIsDifferentCountry,
@@ -389,6 +391,11 @@ function BarrelShipmentForm({
   const selectedCountry = countries.find(
     (country) => country.id === destinationCountryId,
   );
+  const language = currentWebLanguage();
+  const countryName = (
+    country: Pick<DestinationCountry, "code" | "name">,
+  ) =>
+    shippingCountryDisplayName(country, language);
   const phoneValidation = validateReceiverPhone({
     allowDifferentCountry: receiverPhoneIsWhatsappOnly,
     destinationCountryCode: selectedCountry?.code,
@@ -494,7 +501,11 @@ function BarrelShipmentForm({
           <ReviewDetail label="Receiver phone" value={receiverPhone} />
           <ReviewDetail
             label="Destination"
-            value={destination ? optionLabel(destination) : ""}
+            value={
+              destination
+                ? `${countryName(destination.country)} · ${destination.businessName}`
+                : ""
+            }
           />
           {pricing && (
             <>
@@ -554,7 +565,7 @@ function BarrelShipmentForm({
               <option value="">Choose a country</option>
               {countries.map((country) => (
                 <option key={country.id} value={country.id}>
-                  {country.name}
+                  {countryName(country)}
                 </option>
               ))}
             </select>
@@ -569,7 +580,7 @@ function BarrelShipmentForm({
                 <small>Shipping business</small>
                 <h3>
                   Approved businesses shipping to{" "}
-                  <strong>{selectedCountry.name}</strong>
+                  <strong>{countryName(selectedCountry)}</strong>
                 </h3>
               </div>
               <button
@@ -636,7 +647,7 @@ function BarrelShipmentForm({
               </span>
               <span>
                 <strong>{destination.businessName}</strong>
-                <small>{destination.country.name}</small>
+                <small>{countryName(destination.country)}</small>
               </span>
               <span>
                 <strong>
