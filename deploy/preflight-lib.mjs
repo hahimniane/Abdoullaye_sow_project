@@ -3,6 +3,8 @@ import net from "node:net";
 import path from "node:path";
 
 export const DEFAULT_PRODUCTION_PROJECT = "car-selling-flutter-app";
+export const DEVELOPMENT_PAYMENT_WINDOW_END =
+  "2026-09-01T04:00:00.000Z";
 export const HOSTINGER_PRODUCTION_IPV4 = "46.202.183.189";
 export const HOSTINGER_PRODUCTION_IPV6 = "2a02:4780:2b:1948:0:998:df10:5";
 export const TRUSTED_DNS_OVER_HTTPS_PROVIDERS = [
@@ -294,16 +296,36 @@ export function deploymentMode({
   projectId,
   productionProjectId = DEFAULT_PRODUCTION_PROJECT,
   deployEnvironment = "",
+  now = new Date(),
 }) {
   const environment = String(deployEnvironment).trim().toLowerCase();
   const isProductionProject = projectId === productionProjectId;
+  const nowTimestamp = new Date(now).getTime();
+  const developmentPaymentWindowActive =
+    environment === "development" &&
+    Number.isFinite(nowTimestamp) &&
+    nowTimestamp < Date.parse(DEVELOPMENT_PAYMENT_WINDOW_END);
 
   if (isProductionProject) {
+    if (developmentPaymentWindowActive) {
+      return {
+        ok: true,
+        mode: "production",
+        allowsTestPayments: true,
+        detail:
+          `production project ${projectId}; test payments authorized ` +
+          "through August 31, 2026",
+      };
+    }
+
     return {
       ok: environment === "" || environment === "production",
       mode: "production",
+      allowsTestPayments: false,
       detail: environment && environment !== "production" ?
-        `project ${projectId} cannot use DEPLOY_ENV=${environment}` :
+        environment === "development" ?
+          "the authorized development payment window ended August 31, 2026" :
+          `project ${projectId} cannot use DEPLOY_ENV=${environment}` :
         `production project ${projectId}`,
     };
   }

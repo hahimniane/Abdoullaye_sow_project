@@ -27,19 +27,84 @@ afterEach(() => {
 });
 
 describe("deployment mode", () => {
-  test("recognizes the production project and rejects a test label", () => {
-    assert.equal(deploymentMode({projectId: "car-selling-flutter-app"}).mode, "production");
-    assert.equal(deploymentMode({
+  const beforeDevelopmentCutoff = new Date("2026-09-01T03:59:59.999Z");
+  const atDevelopmentCutoff = new Date("2026-09-01T04:00:00.000Z");
+
+  test("keeps the production project production by default", () => {
+    assert.deepEqual(deploymentMode({
       projectId: "car-selling-flutter-app",
-      deployEnvironment: "test",
-    }).ok, false);
+      now: beforeDevelopmentCutoff,
+    }), {
+      ok: true,
+      mode: "production",
+      allowsTestPayments: false,
+      detail: "production project car-selling-flutter-app",
+    });
   });
 
-  test("requires non-production projects to be explicitly labeled", () => {
-    assert.equal(deploymentMode({projectId: "demo-laawol"}).ok, false);
+  test("temporarily permits explicit development test payments in production", () => {
+    assert.deepEqual(deploymentMode({
+      projectId: "car-selling-flutter-app",
+      deployEnvironment: "development",
+      now: beforeDevelopmentCutoff,
+    }), {
+      ok: true,
+      mode: "production",
+      allowsTestPayments: true,
+      detail:
+        "production project car-selling-flutter-app; " +
+        "test payments authorized through August 31, 2026",
+    });
+  });
+
+  test("fails closed at the development cutoff", () => {
+    assert.deepEqual(deploymentMode({
+      projectId: "car-selling-flutter-app",
+      deployEnvironment: "development",
+      now: atDevelopmentCutoff,
+    }), {
+      ok: false,
+      mode: "production",
+      allowsTestPayments: false,
+      detail: "the authorized development payment window ended August 31, 2026",
+    });
+  });
+
+  test("rejects other non-production labels for the production project", () => {
+    for (const deployEnvironment of ["test", "staging", "nonproduction"]) {
+      const result = deploymentMode({
+        projectId: "car-selling-flutter-app",
+        deployEnvironment,
+        now: beforeDevelopmentCutoff,
+      });
+      assert.equal(result.ok, false, deployEnvironment);
+      assert.equal(result.mode, "production", deployEnvironment);
+      assert.equal(result.allowsTestPayments, false, deployEnvironment);
+    }
+  });
+
+  test("accepts an explicit production label without test payments", () => {
+    assert.deepEqual(deploymentMode({
+      projectId: "car-selling-flutter-app",
+      deployEnvironment: "production",
+      now: beforeDevelopmentCutoff,
+    }), {
+      ok: true,
+      mode: "production",
+      allowsTestPayments: false,
+      detail: "production project car-selling-flutter-app",
+    });
+  });
+
+  test("preserves explicit labeling for non-production projects", () => {
+    assert.equal(deploymentMode({
+      projectId: "demo-laawol",
+      now: atDevelopmentCutoff,
+    }).ok, false);
     assert.deepEqual(deploymentMode({
       projectId: "demo-laawol",
       deployEnvironment: "staging",
+      now: atDevelopmentCutoff,
     }), {
       ok: true,
       mode: "nonproduction",

@@ -253,3 +253,7 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   rates, then switch providers, barrel quantity, freight air/sea mode, and
   weight. Assert the displayed estimate changes accordingly. An unavailable or
   pickup-pending price must remain absent/pending and must never render as zero.
+- Time-boxed release exceptions must accept an injected clock and test both one
+  millisecond before and the exact cutoff instant. A payment-key exception must
+  not downgrade the deployment mode or bypass clean-tree, CI, App Check, IAM,
+  test, build, or smoke-check gates.

@@ -155,9 +155,14 @@ The admin and business dashboards talk to Firebase project
   payment-mode checks before any write:
   ```bash
   cd deploy
-  DEPLOY_ENV=production FIREBASE_PROJECT=car-selling-flutter-app \
+  DEPLOY_ENV=development FIREBASE_PROJECT=car-selling-flutter-app \
     npm run deploy:backend
   ```
+  Through August 31, 2026, the explicit development label authorizes the
+  project's Stripe test key while retaining every other production release
+  gate. The authorization expires automatically at
+  `2026-09-01T04:00:00Z`; after that, use `DEPLOY_ENV=production` with a live
+  Stripe key.
 - If deploys fail with `ACCESS_TOKEN_TYPE_UNSUPPORTED` while checking
   `cloudresourcemanager.googleapis.com` or `iam.googleapis.com`, the Firebase
   CLI token is stale or unsupported for Google Cloud APIs. Reauth the Firebase

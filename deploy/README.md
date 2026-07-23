@@ -48,9 +48,19 @@ unit/callable/Firestore/Storage emulator suite. Java 21 or newer and Firebase
 CLI `14.22.0` must be available locally. The deploy tooling automatically
 prefers Homebrew's versioned Java 21 installation on macOS and prepends the
 selected `JAVA_HOME/bin` to `PATH`; set `DEPLOY_JAVA_HOME` to override it. For
-the production project it rejects
-`SIMULATE_PAYMENTS` and requires `STRIPE_SECRET_KEY` to be a live key. A
-non-production project must be explicitly labeled, for example:
+the production project it rejects `SIMULATE_PAYMENTS` and normally requires
+`STRIPE_SECRET_KEY` to be a live key. While the product is being built, the
+same project has a time-boxed test-payment authorization through August 31,
+2026. It retains every production release gate and requires both an explicit
+development label and a Stripe test key:
+
+```bash
+DEPLOY_ENV=development FIREBASE_PROJECT=car-selling-flutter-app \
+  npm run preflight:backend
+```
+
+The authorization expires automatically at `2026-09-01T04:00:00Z`. A
+non-production project must still be explicitly labeled, for example:
 
 ```bash
 DEPLOY_ENV=test FIREBASE_PROJECT=demo-laawol npm run preflight:backend

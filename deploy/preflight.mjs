@@ -363,8 +363,10 @@ if (checksBackend) {
       .filter(Boolean)
       .at(-1) || "";
   const secretMode = stripeKeyMode(secretPayload);
+  const allowsTestPayments = mode.mode === "production" &&
+    mode.allowsTestPayments === true;
   const stripeKeyOk = mode.mode === "production" ?
-    secretMode === "live" :
+    allowsTestPayments ? secretMode === "test" : secretMode === "live" :
     paymentEvidence.simulationEnabled || secretMode !== "invalid";
   addCheck(
       "Stripe key matches deployment mode",
@@ -372,8 +374,12 @@ if (checksBackend) {
         (stripeSecret.ok || (mode.mode !== "production" &&
           paymentEvidence.simulationEnabled)),
       mode.mode === "production" ?
-        (secretMode === "live" ? "live Stripe key is configured" :
-          "production requires STRIPE_SECRET_KEY to start with sk_live_") :
+        allowsTestPayments ?
+          (secretMode === "test" ?
+            "time-boxed development mode uses a Stripe test key" :
+            "development mode requires STRIPE_SECRET_KEY to start with sk_test_") :
+          (secretMode === "live" ? "live Stripe key is configured" :
+            "production requires STRIPE_SECRET_KEY to start with sk_live_") :
         paymentEvidence.simulationEnabled ?
           "non-production payment simulation; Stripe secret is optional" :
           `${secretMode} Stripe key`,

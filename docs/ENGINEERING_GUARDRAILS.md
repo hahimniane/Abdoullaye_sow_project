@@ -53,6 +53,18 @@ CI (`.github/workflows/ci.yml`) runs typecheck + test + build (admin_web), lint
 (functions), and analyze (flutter) on every push and PR. **A red CI run means
 the change does not ship.** Do not merge or deploy around a failing check.
 
+### Time-boxed development payment mode
+
+The Firebase project `car-selling-flutter-app` remains subject to every
+production release gate, including a clean tree, green CI for the exact commit,
+tests, builds, App Check, IAM verification, and post-deploy smoke checks.
+Through **August 31, 2026 at 11:59:59 p.m. America/New_York**, an explicit
+`DEPLOY_ENV=development` may use a Stripe `sk_test_` key while the product is
+under construction. The authorization expires automatically at
+`2026-09-01T04:00:00Z`; after that instant the preflight fails closed and the
+project again requires `DEPLOY_ENV=production` with an `sk_live_` key.
+Simulation remains prohibited and no other production check is relaxed.
+
 ## 3. Design patterns that prevent the incident class
 
 These are the specific lessons from the freeze. They generalize — apply the
