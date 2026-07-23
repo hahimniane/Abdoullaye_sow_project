@@ -27,7 +27,19 @@ test("guest service entry gates only final submission and preserves the mounted 
   );
   const router = readFileSync("src/components/console-router.tsx", "utf8");
 
-  assert.match(entry, /No account needed to compare options and prepare your request\./);
+  assert.doesNotMatch(
+    entry,
+    /No account needed/,
+  );
+  assert.doesNotMatch(
+    entry,
+    /Sign in or create a free account only/,
+  );
+  assert.doesNotMatch(
+    entry,
+    /Compare first\. Create an account only when you continue\./,
+  );
+  assert.match(entry, /Compare services and prepare your request\./);
   assert.match(entry, /Your details will stay here\./);
   assert.match(entry, /setAuthIntent\("account-access"\)/);
   assert.match(entry, /setAuthIntent\("service-continuation"\)/);
@@ -67,13 +79,6 @@ test("public CTAs deep-link to every guest customer journey", () => {
 });
 
 test("guest continuation copy is localized in French", () => {
-  assert.equal(
-    translateValue(
-      "No account needed to compare options and prepare your request.",
-      "fr",
-    ),
-    "Aucun compte n’est nécessaire pour comparer les options et préparer votre demande.",
-  );
   assert.equal(
     translateValue("Sign in to save & continue", "fr"),
     "Se connecter pour enregistrer et continuer",

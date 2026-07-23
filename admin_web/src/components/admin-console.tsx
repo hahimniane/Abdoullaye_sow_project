@@ -63,6 +63,8 @@ import {
   X,
 } from "lucide-react";
 
+import { SearchableSelect } from "@/components/searchable-select";
+import { COUNTRY_CATALOG } from "@/lib/country-catalog";
 import { auth, db, functions, storage } from "@/lib/firebase";
 import {
   resolveAdminRoleKey,
@@ -4453,17 +4455,65 @@ function MoreSettings({
             <span>Max days</span>
             <span></span>
           </div>
-          {draft.shipping.destinations.map((row, index) => (
+          {draft.shipping.destinations.map((row, index) => {
+            const rowCode = text(row.code, "").toUpperCase();
+            const selectedCountry = COUNTRY_CATALOG.find(
+              (country) =>
+                country.code === rowCode ||
+                country.name.toLowerCase() ===
+                  text(row.name, "").toLowerCase(),
+            );
+            const legacyValue = `legacy-country-${index}`;
+            return (
             <div className="dest-editor-row" key={index}>
-              <input
-                placeholder="Country"
-                value={text(row.name, "")}
-                onChange={(e) => setDestination(index, "name", e.target.value)}
+              <SearchableSelect
+                className="dest-editor-country"
+                emptyMessage="No countries match your search."
+                hideLabel
+                label="Country"
+                listLabel="Country options"
+                onChange={(countryCode) => {
+                  const country = COUNTRY_CATALOG.find(
+                    (item) => item.code === countryCode,
+                  );
+                  if (!country) return;
+                  setShipping(
+                    "destinations",
+                    draft.shipping.destinations.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? {
+                            ...item,
+                            code: country.code,
+                            name: country.name,
+                          }
+                        : item,
+                    ),
+                  );
+                }}
+                options={[
+                  ...(!selectedCountry && text(row.name, "")
+                    ? [{
+                        label: `${countryFlag(rowCode)} ${text(row.name, "")}`,
+                        keywords: rowCode,
+                        value: legacyValue,
+                      }]
+                    : []),
+                  ...COUNTRY_CATALOG.map((country) => ({
+                    label: `${countryFlag(country.code)} ${country.name}`,
+                    keywords: country.code,
+                    value: country.code,
+                  })),
+                ]}
+                placeholder="Search country"
+                value={
+                  selectedCountry?.code ??
+                  (text(row.name, "") ? legacyValue : "")
+                }
               />
               <input
                 placeholder="Code"
                 value={text(row.code, "")}
-                onChange={(e) => setDestination(index, "code", e.target.value)}
+                readOnly
               />
               <input
                 placeholder="Price"
@@ -4496,7 +4546,8 @@ function MoreSettings({
                 <X size={15} />
               </button>
             </div>
-          ))}
+            );
+          })}
           {draft.shipping.destinations.length === 0 && (
             <EmptyState text="No default destinations yet." />
           )}
@@ -5674,21 +5725,19 @@ function WebsiteView({
                 </label>
               ))}
             </fieldset>
-            <label>
-              Country
-              <select
-                value={featureDraft.country}
-                disabled={!featureDraft.businessId}
-                onChange={(e) => setFeatureCountry(e.target.value)}
-              >
-                <option value="">Select country</option>
-                {locationOptions.countries.map((country) => (
-                  <option key={country} value={country}>
-                    {country}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <SearchableSelect
+              disabled={!featureDraft.businessId}
+              emptyMessage="No countries match your search."
+              label="Country"
+              listLabel="Country options"
+              onChange={setFeatureCountry}
+              options={locationOptions.countries.map((country) => ({
+                label: country,
+                value: country,
+              }))}
+              placeholder="Search or choose a country"
+              value={featureDraft.country}
+            />
             <label>
               City
               <select

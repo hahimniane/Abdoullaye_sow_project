@@ -39,6 +39,7 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { SearchableSelect } from "@/components/searchable-select";
 import { db, functions, storage } from "@/lib/firebase";
 import {
   DESTINATION_COUNTRIES,
@@ -604,13 +605,23 @@ export function DestinationsPanel({ businessId, previewMode = false, enabledServ
             <div className="lst-modal-body">
               {message && <div className="lst-form-error" role="alert">{message}</div>}
               <div className="lst-form-grid">
-                <label className="lst-field wide"><span>Country</span>
-                  <select value={draft.countryId} disabled={Boolean(editingId)} onChange={(event) => setDraft((value) => ({ ...value, countryId: event.target.value }))}>
-                    {destinationCountryOptions.map((country) => (
-                      <option key={country.id} value={country.id}>{countryFlag(country.code)} {countryName(country.id)}</option>
-                    ))}
-                  </select>
-                </label>
+                <SearchableSelect
+                  className="lst-field wide"
+                  disabled={Boolean(editingId)}
+                  emptyMessage="No countries match your search."
+                  label="Country"
+                  listLabel="Country options"
+                  onChange={(countryId) =>
+                    setDraft((value) => ({ ...value, countryId }))
+                  }
+                  options={destinationCountryOptions.map((country) => ({
+                    label: `${countryFlag(country.code)} ${countryName(country.id)}`,
+                    keywords: `${country.code} ${country.name}`,
+                    value: country.id,
+                  }))}
+                  placeholder="Search or choose a country"
+                  value={draft.countryId}
+                />
                 {enabledServices.includes("barrelShipping") && <label className="lst-field"><span>Price per barrel (USD)</span>
                   <input inputMode="decimal" value={draft.price} onChange={(event) => setDraft((value) => ({ ...value, price: event.target.value }))} placeholder="250" />
                 </label>}
@@ -1965,18 +1976,36 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
                     <option value="dropOff">Customer drop-off</option>
                   </select>
                 </label>
-                <label className="lst-field"><span>Destination</span>
-                  <select data-pool-field="destinationCountryId" aria-invalid={poolFormErrorField === "destinationCountryId"} value={poolDraft.destinationCountryId} onChange={(event) => setPoolDraft((value) => ({ ...value, destinationCountryId: event.target.value }))}>
-                    {activeDestinations.map((row) => {
-                      const country = countries.find((item) => item.id === row.id);
-                      return (
-                        <option key={row.id} value={row.id}>
-                          {countryFlag(text(row.code ?? row.countryCode ?? country?.code, ""))} {countryName(row.id)} · {formatMoney(row.barrelShippingPrice)}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </label>
+                <SearchableSelect
+                  className="lst-field"
+                  dataField="destinationCountryId"
+                  emptyMessage="No destinations match your search."
+                  invalid={poolFormErrorField === "destinationCountryId"}
+                  label="Destination"
+                  listLabel="Destination country options"
+                  onChange={(destinationCountryId) =>
+                    setPoolDraft((value) => ({
+                      ...value,
+                      destinationCountryId,
+                    }))
+                  }
+                  options={activeDestinations.map((row) => {
+                    const country = countries.find(
+                      (item) => item.id === row.id,
+                    );
+                    const code = text(
+                      row.code ?? row.countryCode ?? country?.code,
+                      "",
+                    );
+                    return {
+                      label: `${countryFlag(code)} ${countryName(row.id)} · ${formatMoney(row.barrelShippingPrice)}`,
+                      keywords: code,
+                      value: row.id,
+                    };
+                  })}
+                  placeholder="Search or choose a destination"
+                  value={poolDraft.destinationCountryId}
+                />
                 <label className="lst-field"><span>Total shares</span>
                   <select data-pool-field="totalShares" aria-invalid={poolFormErrorField === "totalShares"} value={poolDraft.totalShares} onChange={(event) => setPoolDraft((value) => ({ ...value, totalShares: event.target.value }))}>
                     <option value="2">2 halves</option>
@@ -2483,11 +2512,22 @@ export function TransportPanel({ businessId, previewMode = false, businessName =
                 <label className="lst-field"><span>VIN</span>
                   <input value={draft.vinNumber} onChange={(event) => setDraft((value) => ({ ...value, vinNumber: event.target.value }))} placeholder="17 characters" />
                 </label>
-                <label className="lst-field"><span>Destination</span>
-                  <select value={draft.countryId} onChange={(event) => setDraft((value) => ({ ...value, countryId: event.target.value }))}>
-                    {countries.map((country) => (<option key={country.id} value={country.id}>{countryFlag(country.code)} {country.name}</option>))}
-                  </select>
-                </label>
+                <SearchableSelect
+                  className="lst-field"
+                  emptyMessage="No countries match your search."
+                  label="Destination"
+                  listLabel="Country options"
+                  onChange={(countryId) =>
+                    setDraft((value) => ({ ...value, countryId }))
+                  }
+                  options={countries.map((country) => ({
+                    label: `${countryFlag(country.code)} ${countryName(country.id)}`,
+                    keywords: `${country.code} ${country.name}`,
+                    value: country.id,
+                  }))}
+                  placeholder="Search or choose a country"
+                  value={draft.countryId}
+                />
                 <label className="lst-field"><span>Transport date</span>
                   <input type="date" value={draft.transportDate} onChange={(event) => setDraft((value) => ({ ...value, transportDate: event.target.value }))} />
                 </label>

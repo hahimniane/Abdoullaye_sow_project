@@ -10,13 +10,36 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Almost there": "Vous y êtes presque",
   "Calculate pickup & continue": "Calculer la collecte et continuer",
   "Close account access": "Fermer l’accès au compte",
-  "Compare first. Create an account only when you continue.":
-    "Comparez d’abord. Créez un compte seulement lorsque vous continuez.",
+  "Compare services and prepare your request.":
+    "Comparez les services et préparez votre demande.",
   "Enter a New York pickup address":
     "Saisissez une adresse de collecte à New York",
+  "Pickup option": "Option de collecte",
+  "Pick up": "Collecte",
+  "Bring to office": "Apporter au bureau",
+  "Drop off at": "Déposer à",
+  "Detected from the address. Change it only if needed.":
+    "Détecté à partir de l’adresse. Modifiez-le seulement si nécessaire.",
+  "Pickup pricing is based on the selected New York City borough.":
+    "Le tarif de collecte dépend de l’arrondissement de New York sélectionné.",
+  "Enter a valid New York City pickup address to see the complete total.":
+    "Saisissez une adresse de collecte valide à New York pour voir le total complet.",
+  "Include a New York City borough or ZIP code.":
+    "Indiquez un arrondissement de New York ou un code postal.",
+  "Pickup time must be in the future.":
+    "L’heure de collecte doit être dans le futur.",
+  "Loading pickup pricing...":
+    "Chargement du tarif de collecte...",
+  "Pickup pricing could not be loaded. Try again or choose office drop-off.":
+    "Le tarif de collecte n’a pas pu être chargé. Réessayez ou choisissez le dépôt au bureau.",
+  "Retry pickup pricing": "Réessayer le tarif de collecte",
+  "Waiting for a valid NYC address":
+    "En attente d’une adresse valide à New York",
+  "Detected from the address or ZIP code.":
+    "Détecté à partir de l’adresse ou du code postal.",
+  "Select borough": "Sélectionnez un arrondissement",
+  "Bring the barrel to": "Apportez le baril à",
   "Explore services": "Découvrir les services",
-  "No account needed to compare options and prepare your request.":
-    "Aucun compte n’est nécessaire pour comparer les options et préparer votre demande.",
   "Open my workspace": "Ouvrir mon espace client",
   "Prepare your service request": "Préparez votre demande de service",
   "Access your Laawol account": "Accédez à votre compte Laawol",
@@ -32,8 +55,6 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "Enregistrez votre demande de baril partagé",
   "Securing your account and restoring the request...":
     "Sécurisation de votre compte et restauration de la demande...",
-  "Sign in or create a free account only when you are ready to save and continue.":
-    "Connectez-vous ou créez un compte gratuit seulement lorsque vous êtes prêt à enregistrer et continuer.",
   "Sign in or create a free account to save this request and continue. Your details will stay here.":
     "Connectez-vous ou créez un compte gratuit pour enregistrer cette demande et continuer. Vos informations resteront ici.",
   "Sign in to browse shares": "Se connecter pour voir les parts",
@@ -75,6 +96,21 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Destination country": "Pays de destination",
   "Where are you sending the barrel?": "Vers quel pays envoyez-vous le baril ?",
   "Choose a country": "Choisissez un pays",
+  "Search or choose a country": "Recherchez ou choisissez un pays",
+  "Search or choose a destination":
+    "Recherchez ou choisissez une destination",
+  "Search destination or provider":
+    "Recherchez une destination ou un prestataire",
+  "Search country": "Rechercher un pays",
+  "Destination country options": "Options de pays de destination",
+  "Destination & provider options":
+    "Options de destination et de prestataire",
+  "Country options": "Options de pays",
+  "Phone country options": "Options de pays du téléphone",
+  "No countries match your search.":
+    "Aucun pays ne correspond à votre recherche.",
+  "No destination countries match your search.":
+    "Aucun pays de destination ne correspond à votre recherche.",
   "Shipping business": "Entreprise d’expédition",
   "Approved businesses shipping to":
     "Entreprises approuvées expédiant vers",
@@ -298,7 +334,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Full name": "Nom complet",
   "Phone number": "Numéro de téléphone",
   "Phone country": "Pays du téléphone",
-  "International number: ": "Numéro international : ",
+  "International number:": "Numéro international :",
   "I accept the ": "J’accepte les ",
   "Terms of Service": "Conditions d’utilisation",
   " and ": " et la ",

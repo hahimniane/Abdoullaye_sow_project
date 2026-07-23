@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { translateValue } from "./french-dom.ts";
 import {
+  barrelPickupFee,
+  barrelPickupPricingFromData,
+  barrelShipmentEstimate,
   barrelShippingEstimate,
   barrelDestinationCountries,
   barrelProvidersForCountry,
@@ -12,6 +16,8 @@ import {
   buildTransportRequestPayload,
   freightShippingEstimate,
   freightSettlementIsPayable,
+  localDateTimeInputValue,
+  nycBoroughFromAddress,
   pickupDetailsAreComplete,
   shippingProviderRate,
   shippingCountryDisplayName,
@@ -279,13 +285,118 @@ test("pickup details require a recognized NYC borough and a future appointment",
     pickupDetailsAreComplete(
       {
         requested: true,
-        address: "123 Main St",
+        address: "123 Main St, Queens, NY 11375",
         borough: "Queens",
         dateTime: "2029-12-31T12:00:00.000Z",
       },
       now,
     ),
     false,
+  );
+  assert.equal(
+    pickupDetailsAreComplete(
+      {
+        requested: true,
+        address: "123 Grand Concourse, Bronx, NY",
+        borough: "Queens",
+        dateTime: "2030-01-02T12:00:00.000Z",
+      },
+      now,
+    ),
+    false,
+  );
+});
+
+test("barrel pickup matches mobile borough detection and live fee fallbacks", () => {
+  assert.equal(nycBoroughFromAddress("bronx new york"), "Bronx");
+  assert.equal(nycBoroughFromAddress("3184 Webster Ave, NY 10467"), "Bronx");
+  assert.equal(nycBoroughFromAddress("Main Street, Flushing, NY"), "Queens");
+  assert.equal(nycBoroughFromAddress("123 Main Street, Albany, NY"), null);
+
+  const pricing = barrelPickupPricingFromData({
+    officeAddress: "42 Test Ave, Bronx, NY",
+    boroughPrices: { Bronx: 55, Queens: 95, Brooklyn: -1 },
+  });
+  assert.equal(pricing.officeAddress, "42 Test Ave, Bronx, NY");
+  assert.equal(barrelPickupFee(pricing, "Bronx"), 55);
+  assert.equal(barrelPickupFee(pricing, "Queens"), 95);
+  assert.equal(barrelPickupFee(pricing, "Brooklyn"), 108);
+  assert.equal(barrelPickupFee(pricing, "Albany"), null);
+
+  const legacyPricing = barrelPickupPricingFromData({
+    basePickupFee: 20,
+    perMileFee: 4,
+    minimumPickupFee: 35,
+    boroughMiles: { Bronx: 5, Brooklyn: 22 },
+  });
+  assert.equal(barrelPickupFee(legacyPricing, "Bronx"), 40);
+  assert.equal(barrelPickupFee(legacyPricing, "Brooklyn"), 108);
+});
+
+test("barrel pickup is charged once per shipment and is required for a pickup total", () => {
+  const country = {
+    id: "gn",
+    name: "Guinea",
+    barrelShippingPrice: 120,
+  };
+  const pricing = barrelPickupPricingFromData({
+    boroughPrices: { Bronx: 40 },
+  });
+  assert.deepEqual(
+    barrelShipmentEstimate({
+      country,
+      pickupBorough: "Bronx",
+      pickupPricing: pricing,
+      pickupRequested: true,
+      quantity: 2,
+    }),
+    {
+      rate: 120,
+      quantity: 2,
+      subtotal: 240,
+      pickupFee: 40,
+      total: 280,
+    },
+  );
+  assert.equal(
+    barrelShipmentEstimate({
+      country,
+      pickupBorough: "Bronx",
+      pickupPricing: null,
+      pickupRequested: true,
+      quantity: 2,
+    })?.total,
+    null,
+  );
+  assert.equal(
+    barrelShipmentEstimate({
+      country,
+      pickupBorough: "",
+      pickupPricing: pricing,
+      pickupRequested: false,
+      quantity: 2,
+    })?.total,
+    240,
+  );
+});
+
+test("pickup datetime minimum uses local wall-clock time", () => {
+  const date = new Date(2030, 0, 2, 15, 45);
+  assert.equal(localDateTimeInputValue(date), "2030-01-02T15:45");
+});
+
+test("dynamic pickup office and pending-total copy translates completely", () => {
+  assert.equal(translateValue("Drop off at", "fr"), "Déposer à");
+  assert.equal(
+    translateValue("Bring the barrel to", "fr"),
+    "Apportez le baril à",
+  );
+  assert.equal(
+    translateValue(
+      "Enter a valid New York City pickup address to see the complete total.",
+      "fr",
+    ),
+    "Saisissez une adresse de collecte valide à New York pour voir le total complet.",
   );
 });
 

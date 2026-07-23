@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useEffect, useState } from "react";
-import { ArrowLeft, LogIn, ShieldCheck, X } from "lucide-react";
+import { ArrowLeft, LogIn, X } from "lucide-react";
 import type { User } from "firebase/auth";
 
 import { CustomerCars } from "@/components/customer-cars";
@@ -70,7 +70,7 @@ export function CustomerServiceEntry({
           <span className="brand-badge">Laawol Digital</span>
           <span>
             <strong>Prepare your service request</strong>
-            <small>Compare first. Create an account only when you continue.</small>
+            <small>Compare services and prepare your request.</small>
           </span>
         </a>
         <div className="customer-entry-header-actions">
@@ -96,16 +96,6 @@ export function CustomerServiceEntry({
       </header>
 
       <main className="customer-entry-main">
-        <div className="customer-entry-assurance">
-          <ShieldCheck aria-hidden="true" size={20} />
-          <div>
-            <strong>No account needed to compare options and prepare your request.</strong>
-            <span>
-              Sign in or create a free account only when you are ready to save
-              and continue.
-            </span>
-          </div>
-        </div>
         {continuedAfterAuth && (
           <div className="info-band" role="status">
             Your request is ready to continue.

@@ -133,3 +133,9 @@ Return:
   first, show only eligible businesses and their rates second, and ask for
   sender/receiver details only after a provider is chosen. Do not flatten
   destination and provider into one card catalog when one filters the other.
+- Never show a complete estimated total using an assumed pickup borough. Keep
+  pickup geography pending until a valid address determines it, and distinguish
+  the shipping subtotal from the final pickup-inclusive estimate.
+- Search within a staged marketplace selector must preserve the committed
+  destination, provider, and draft until the user selects a replacement.
+  Typing, blurring, Escape, and Tab must not discard prepared form state.

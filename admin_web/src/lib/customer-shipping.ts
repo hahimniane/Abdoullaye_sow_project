@@ -11,6 +11,32 @@ export type PickupDetails = {
   dateTime?: string;
 };
 
+export const NYC_PICKUP_BOROUGHS = [
+  "Bronx",
+  "Manhattan",
+  "Queens",
+  "Brooklyn",
+  "Staten Island",
+] as const;
+
+export type NycPickupBorough = (typeof NYC_PICKUP_BOROUGHS)[number];
+
+export type BarrelPickupPricing = {
+  officeAddress: string;
+  boroughPrices: Record<NycPickupBorough, number>;
+};
+
+export const DEFAULT_BARREL_PICKUP_PRICING: BarrelPickupPricing = {
+  officeAddress: "Bronx, NY",
+  boroughPrices: {
+    Bronx: 40,
+    Manhattan: 64,
+    Queens: 84,
+    Brooklyn: 108,
+    "Staten Island": 148,
+  },
+};
+
 export type BarrelShipmentFields = {
   senderName: string;
   receiverName: string;
@@ -171,28 +197,163 @@ function barrelOptionIsEligible(option: ShippingDestinationOption) {
   return shippingProviderRate(option.country, "barrel") !== null;
 }
 
-const NYC_BOROUGHS = new Set([
-  "bronx",
-  "brooklyn",
-  "manhattan",
-  "queens",
-  "staten island",
-]);
+const NYC_BOROUGHS = new Set(
+  NYC_PICKUP_BOROUGHS.map((borough) => borough.toLowerCase()),
+);
+
+function zipInRange(value: string, start: number, end: number) {
+  for (const match of value.matchAll(/\b\d{5}\b/g)) {
+    const zip = Number(match[0]);
+    if (zip >= start && zip <= end) return true;
+  }
+  return false;
+}
+
+export function nycBoroughFromAddress(value: string): NycPickupBorough | null {
+  const normalized = value.toLowerCase();
+  if (normalized.includes("bronx") || zipInRange(normalized, 10400, 10499)) {
+    return "Bronx";
+  }
+  if (
+    normalized.includes("manhattan") ||
+    normalized.includes("new york, ny") ||
+    zipInRange(normalized, 10000, 10299)
+  ) {
+    return "Manhattan";
+  }
+  if (
+    normalized.includes("brooklyn") ||
+    zipInRange(normalized, 11200, 11299)
+  ) {
+    return "Brooklyn";
+  }
+  if (
+    normalized.includes("queens") ||
+    normalized.includes("jamaica") ||
+    normalized.includes("flushing") ||
+    zipInRange(normalized, 11000, 11199) ||
+    zipInRange(normalized, 11300, 11699)
+  ) {
+    return "Queens";
+  }
+  if (
+    normalized.includes("staten island") ||
+    zipInRange(normalized, 10300, 10399)
+  ) {
+    return "Staten Island";
+  }
+  return null;
+}
+
+export function barrelPickupPricingFromData(
+  value: unknown,
+): BarrelPickupPricing {
+  const data =
+    value && typeof value === "object"
+      ? (value as Record<string, unknown>)
+      : {};
+  const rawPrices =
+    data.boroughPrices && typeof data.boroughPrices === "object"
+      ? (data.boroughPrices as Record<string, unknown>)
+      : {};
+  const boroughPrices = { ...DEFAULT_BARREL_PICKUP_PRICING.boroughPrices };
+  const rawMiles =
+    data.boroughMiles && typeof data.boroughMiles === "object"
+      ? (data.boroughMiles as Record<string, unknown>)
+      : null;
+  if (rawMiles) {
+    const baseFee = Number.isFinite(Number(data.basePickupFee))
+      ? Number(data.basePickupFee)
+      : 20;
+    const perMileFee = Number.isFinite(Number(data.perMileFee))
+      ? Number(data.perMileFee)
+      : 4;
+    const minimumFee = Number.isFinite(Number(data.minimumPickupFee))
+      ? Number(data.minimumPickupFee)
+      : 35;
+    for (const borough of NYC_PICKUP_BOROUGHS) {
+      const miles = Number(rawMiles[borough]);
+      if (Number.isFinite(miles) && miles >= 0) {
+        boroughPrices[borough] = Math.max(
+          baseFee + miles * perMileFee,
+          minimumFee,
+        );
+      }
+    }
+  }
+  for (const borough of NYC_PICKUP_BOROUGHS) {
+    const price = Number(rawPrices[borough]);
+    if (Number.isFinite(price) && price > 0) {
+      boroughPrices[borough] = price;
+    }
+  }
+  const officeAddress =
+    typeof data.officeAddress === "string" && data.officeAddress.trim()
+      ? data.officeAddress.trim()
+      : DEFAULT_BARREL_PICKUP_PRICING.officeAddress;
+  return { boroughPrices, officeAddress };
+}
+
+export function barrelPickupFee(
+  pricing: BarrelPickupPricing,
+  borough: string,
+) {
+  const canonical = NYC_PICKUP_BOROUGHS.find(
+    (option) => option.toLowerCase() === borough.trim().toLowerCase(),
+  );
+  return canonical ? pricing.boroughPrices[canonical] : null;
+}
+
+export function barrelShipmentEstimate({
+  country,
+  pickupBorough,
+  pickupPricing,
+  pickupRequested,
+  quantity,
+}: {
+  country: ShippingPricingCountry;
+  pickupBorough: string;
+  pickupPricing: BarrelPickupPricing | null;
+  pickupRequested: boolean;
+  quantity: unknown;
+}) {
+  const shipping = barrelShippingEstimate(country, quantity);
+  if (!shipping) return null;
+  const pickupFee = pickupRequested
+    ? pickupPricing
+      ? barrelPickupFee(pickupPricing, pickupBorough)
+      : null
+    : 0;
+  return {
+    ...shipping,
+    pickupFee,
+    total: pickupFee === null ? null : shipping.subtotal + pickupFee,
+  };
+}
 
 export function pickupDetailsAreComplete(
   pickup: PickupDetails,
   now = Date.now(),
 ) {
   if (!pickup.requested) return true;
+  const detectedBorough = nycBoroughFromAddress(pickup.address);
   const pickupTime = pickup.dateTime
     ? new Date(pickup.dateTime).getTime()
     : Number.NaN;
   return Boolean(
     pickup.address.trim() &&
+      detectedBorough &&
+      detectedBorough.toLowerCase() === pickup.borough.trim().toLowerCase() &&
       NYC_BOROUGHS.has(pickup.borough.trim().toLowerCase()) &&
       Number.isFinite(pickupTime) &&
       pickupTime > now,
   );
+}
+
+export function localDateTimeInputValue(date: Date) {
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 16);
 }
 
 export function freightShippingEstimate({

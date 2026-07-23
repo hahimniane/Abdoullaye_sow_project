@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown } from "lucide-react";
 
+import { SearchableSelect } from "@/components/searchable-select";
 import {
   CALLING_CODE_OPTIONS,
   callingCodeOptionForCountry,
@@ -51,44 +51,48 @@ export function CustomerPhoneField({
     normalized.startsWith("+") && allDigits.startsWith(option.callingCode)
       ? allDigits.slice(option.callingCode.length)
       : allDigits;
+  const language = currentWebLanguage() === "fr" ? "fr" : "en";
   const displayNames = useMemo(
     () =>
-      new Intl.DisplayNames(
-        [currentWebLanguage() === "fr" ? "fr" : "en"],
-        { type: "region" },
-      ),
-    [],
+      new Intl.DisplayNames([language], {
+        type: "region",
+      }),
+    [language],
   );
 
   return (
-    <label className="customer-phone-label" htmlFor={id}>
-      {label}
+    <div className="customer-phone-label">
+      <label htmlFor={id}>{label}</label>
       <span className="customer-phone-control">
-        <span className="customer-phone-country">
-          <span aria-hidden="true">{option.flag}</span>
-          <strong>{option.dialCode}</strong>
-          <ChevronDown aria-hidden="true" size={15} />
-          <select
-            aria-label="Phone country"
-            disabled={disabled}
-            onChange={(event) => {
-              const next = callingCodeOptionForCountry(event.target.value);
-              if (!next) return;
-              setCountryCode(next.code);
-              onChange(
-                composeInternationalPhone(next.callingCode, nationalNumber),
-              );
-            }}
-            value={option.code}
-          >
-            {CALLING_CODE_OPTIONS.map((item) => (
-              <option key={item.code} value={item.code}>
-                {item.flag} {displayNames.of(item.code) ?? item.countryName} (
-                {item.dialCode})
-              </option>
-            ))}
-          </select>
-        </span>
+        <SearchableSelect
+          className="customer-phone-country"
+          clearOnSearch={false}
+          disabled={disabled}
+          emptyMessage="No countries match your search."
+          hideLabel
+          label="Phone country"
+          listLabel="Phone country options"
+          onChange={(country) => {
+            const next = callingCodeOptionForCountry(country);
+            if (!next) return;
+            setCountryCode(next.code);
+            onChange(
+              composeInternationalPhone(next.callingCode, nationalNumber),
+            );
+          }}
+          options={CALLING_CODE_OPTIONS.map((item) => {
+            const countryName =
+              displayNames.of(item.code) ?? item.countryName;
+            return {
+              label: `${item.flag} ${countryName} (${item.dialCode})`,
+              keywords: `${item.code} ${item.countryName} ${item.callingCode}`,
+              selectedLabel: `${item.flag} ${item.dialCode}`,
+              value: item.code,
+            };
+          })}
+          placeholder="Search country"
+          value={option.code}
+        />
         <input
           aria-describedby={error && id ? `${id}-error` : undefined}
           aria-invalid={Boolean(error)}
@@ -111,12 +115,14 @@ export function CustomerPhoneField({
           value={nationalNumber}
         />
       </span>
-      <small>International number: {value || option.dialCode}</small>
+      <small>
+        <span>International number:</span> {value || option.dialCode}
+      </small>
       {error && (
         <small className="customer-field-error" id={id ? `${id}-error` : undefined}>
           {error}
         </small>
       )}
-    </label>
+    </div>
   );
 }

@@ -22,6 +22,7 @@ import {
 
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
+import { SearchableSelect } from "@/components/searchable-select";
 import { ServiceRequestForm } from "@/components/service-request-form";
 import { marketplaceDisclosure } from "@/lib/disclosures";
 import { db, functions } from "@/lib/firebase";
@@ -1191,26 +1192,26 @@ function PoolRequestForm({
     >
       <div className="customer-form-grid customer-form-grid-two">
         {creating && (
-          <label className="customer-form-span">
-            Destination & provider
-            <select
-              disabled={destinationLoading}
-              onChange={(event) => setDestinationId(event.target.value)}
-              required
-              value={destinationId}
-            >
-              <option value="">
-                {destinationLoading
-                  ? "Loading destinations..."
-                  : "Select a destination"}
-              </option>
-              {destinations.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.country.name} · {option.businessName}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SearchableSelect
+            className="customer-form-span"
+            disabled={destinationLoading}
+            emptyMessage="No destinations match your search."
+            label="Destination & provider"
+            listLabel="Destination & provider options"
+            onChange={setDestinationId}
+            options={destinations.map((option) => ({
+              label: `${option.country.name} · ${option.businessName}`,
+              keywords: `${option.country.code} ${option.businessName}`,
+              value: option.id,
+            }))}
+            placeholder={
+              destinationLoading
+                ? "Loading destinations..."
+                : "Search destination or provider"
+            }
+            required
+            value={destinationId}
+          />
         )}
         {!creating && (
           <div className="customer-provider-banner customer-form-span">
