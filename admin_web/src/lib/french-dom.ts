@@ -39,6 +39,7 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "Détecté à partir de l’adresse ou du code postal.",
   "Select borough": "Sélectionnez un arrondissement",
   "Bring the barrel to": "Apportez le baril à",
+  "the business office": "le bureau de l’entreprise",
   "Explore services": "Découvrir les services",
   "Open my workspace": "Ouvrir mon espace client",
   "Prepare your service request": "Préparez votre demande de service",
