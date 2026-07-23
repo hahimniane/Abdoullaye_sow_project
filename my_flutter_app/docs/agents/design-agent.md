@@ -108,3 +108,11 @@ Return:
   action, keep the one-field OTP and Verify action together above the keyboard,
   and give resend, error, synchronization recovery, and success their own
   visible states in English and French.
+- Expected authentication conflicts such as duplicate phone numbers or emails
+  are recoverable account states, not crashes. Show concise localized guidance
+  near the form with a direct sign-in action, retain entered values, and never
+  expose backend exception text or stack traces in customer UI.
+- Web signup controls must preserve the mobile app’s interaction model and
+  completeness, especially the flag/calling-code phone picker and locale-aware
+  country names. Treat a simplified or partial web substitute as a parity bug,
+  and visually verify the control at narrow phone widths.

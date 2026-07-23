@@ -11,6 +11,7 @@ Three static targets are deployed:
 | Marketing site  | `public_site/`        | `laawoldigital.com` web root  |
 | Admin console   | `admin_web/out/`      | `admin.laawoldigital.com`     |
 | Business console| `admin_web/out/`      | `business.laawoldigital.com`  |
+| Customer console| `admin_web/out/`      | `customer.laawoldigital.com`  |
 
 ## 1. Confirm static deploy access
 
@@ -25,8 +26,8 @@ hPanel → **Domains → Subdomains** → create `admin` and `business` for
 
 ## 3. Add authorized domains in Firebase (for login safety)
 Firebase Console → Authentication → Settings → **Authorized domains** →
-add `laawoldigital.com`, `admin.laawoldigital.com`, and
-`business.laawoldigital.com`.
+add `laawoldigital.com`, `admin.laawoldigital.com`,
+`business.laawoldigital.com`, and `customer.laawoldigital.com`.
 
 ## 4. Deploy
 Before uploading or deploying backend code, run the non-destructive preflight:

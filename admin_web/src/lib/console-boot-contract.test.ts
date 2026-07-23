@@ -27,3 +27,9 @@ test("console loading failures use localized human-readable copy", () => {
     "Nous n’avons pas pu ouvrir votre console",
   );
 });
+
+test("customer accounts enter the dedicated customer console", () => {
+  assert.match(source, /import \{ CustomerConsole \}/);
+  assert.match(source, /consoleKind === "customer"/);
+  assert.match(source, /<CustomerConsole/);
+});

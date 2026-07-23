@@ -13,6 +13,7 @@ export const PRODUCTION_STATIC_HOSTS = [
   "laawoldigital.com",
   "admin.laawoldigital.com",
   "business.laawoldigital.com",
+  "customer.laawoldigital.com",
 ];
 export const FIREBASE_RULES_FIRESTORE_SERVICE_AGENT_ROLE =
   "roles/firebaserules.firestoreServiceAgent";

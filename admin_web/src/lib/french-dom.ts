@@ -6,7 +6,425 @@ import { LANGUAGE_STORAGE_KEY, currentWebLanguage } from "./language.ts";
 
 export { resolveLang } from "./language.ts";
 
+const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
+  "Shipping services": "Services d’expédition",
+  "Move what matters, with a business you choose":
+    "Transportez ce qui compte avec l’entreprise de votre choix",
+  "Compare approved providers, review every detail, and pay securely when payment is required.":
+    "Comparez les prestataires approuvés, vérifiez chaque détail et payez en toute sécurité lorsqu’un paiement est requis.",
+  "Send one or more barrels": "Envoyez un ou plusieurs barils",
+  "Air or sea by weight": "Par avion ou bateau, selon le poids",
+  "Request a business quote": "Demandez un devis à une entreprise",
+  "Shipping options could not be loaded. Try again.":
+    "Les options d’expédition n’ont pas pu être chargées. Réessayez.",
+  "We couldn't securely load barrel and freight destinations. Refresh and try again. Local previews must be registered with Firebase App Check.":
+    "Nous n’avons pas pu charger les destinations de barils et de fret de manière sécurisée. Actualisez la page et réessayez. Les aperçus locaux doivent être enregistrés auprès de Firebase App Check.",
+  "We couldn't securely load car transport providers. Refresh and try again. Local previews must be registered with Firebase App Check.":
+    "Nous n’avons pas pu charger les prestataires de transport automobile de manière sécurisée. Actualisez la page et réessayez. Les aperçus locaux doivent être enregistrés auprès de Firebase App Check.",
+  "Shipping destinations could not be loaded":
+    "Les destinations d’expédition n’ont pas pu être chargées",
+  "Car transport providers could not be loaded":
+    "Les prestataires de transport automobile n’ont pas pu être chargés",
+  "Retry": "Réessayer",
+  "Loading shipping options...": "Chargement des options d’expédition...",
+  "Barrel shipping is temporarily unavailable":
+    "L’expédition de barils est temporairement indisponible",
+  "No approved barrel destinations are available right now.":
+    "Aucune destination approuvée pour les barils n’est disponible actuellement.",
+  "Choose an approved business and destination. Your total is calculated securely by Laawol.":
+    "Choisissez une entreprise approuvée et une destination. Votre total est calculé de manière sécurisée par Laawol.",
+  "Send a barrel": "Envoyer un baril",
+  "Sender name": "Nom de l’expéditeur",
+  "Destination and business": "Destination et entreprise",
+  "Choose a destination and business":
+    "Choisissez une destination et une entreprise",
+  "Number of barrels": "Nombre de barils",
+  "Request pickup": "Demander la collecte",
+  "Choose an address and appointment time.":
+    "Choisissez une adresse et une heure de rendez-vous.",
+  "Use my available wallet balance": "Utiliser le solde disponible du portefeuille",
+  "Any remaining amount continues to secure payment.":
+    "Tout montant restant sera réglé par paiement sécurisé.",
+  "Continue to secure payment": "Continuer vers le paiement sécurisé",
+  "Use available balance": "Utiliser le solde disponible",
+  "Do not use": "Ne pas utiliser",
+  "Drop off": "Dépôt sur place",
+  "The barrel shipment could not be started. Check the details and try again.":
+    "L’expédition du baril n’a pas pu être lancée. Vérifiez les détails et réessayez.",
+  "Choose air or sea freight. The approved business verifies the final weight before settlement.":
+    "Choisissez le fret aérien ou maritime. L’entreprise approuvée vérifie le poids final avant le règlement.",
+  "Send freight": "Envoyer du fret",
+  "Shipping method": "Mode d’expédition",
+  "Air freight": "Fret aérien",
+  "Sea freight": "Fret maritime",
+  "Estimated weight (kg)": "Poids estimé (kg)",
+  "Estimated weight": "Poids estimé",
+  "Live pickup quote": "Devis de collecte en direct",
+  "The fee comes directly from the selected business's pickup rules.":
+    "Les frais proviennent directement des règles de collecte de l’entreprise sélectionnée.",
+  "Get pickup quote": "Obtenir le devis de collecte",
+  "Calculating...": "Calcul en cours...",
+  "Pickup quote": "Devis de collecte",
+  "Pickup is not available from this business. Choose drop off or another provider.":
+    "La collecte n’est pas disponible auprès de cette entreprise. Choisissez le dépôt sur place ou un autre prestataire.",
+  "This freight mode is temporarily unavailable":
+    "Ce mode de fret est temporairement indisponible",
+  "No approved businesses currently have a rate for this freight mode.":
+    "Aucune entreprise approuvée ne propose actuellement de tarif pour ce mode de fret.",
+  "The freight shipment could not be started. Check the details and try again.":
+    "L’expédition de fret n’a pas pu être lancée. Vérifiez les détails et réessayez.",
+  "The pickup quote could not be calculated. Check the address and try again.":
+    "Le devis de collecte n’a pas pu être calculé. Vérifiez l’adresse et réessayez.",
+  "Verified-weight balances": "Soldes après vérification du poids",
+  "Complete a balance after the business confirms final weight.":
+    "Réglez le solde après confirmation du poids final par l’entreprise.",
+  "Opening payment...": "Ouverture du paiement...",
+  "Pay balance": "Payer le solde",
+  "The freight balance payment could not be started. Try again.":
+    "Le paiement du solde de fret n’a pas pu être lancé. Réessayez.",
+  "Request car transport": "Demander le transport d’une voiture",
+  "Send the vehicle details to an approved business. They will review your request and provide the price.":
+    "Envoyez les détails du véhicule à une entreprise approuvée. Elle examinera votre demande et fournira le prix.",
+  "Vehicle owner": "Propriétaire du véhicule",
+  "Contact phone": "Téléphone de contact",
+  "Car make": "Marque de la voiture",
+  "For example, Toyota": "Par exemple, Toyota",
+  "Car model": "Modèle de la voiture",
+  "For example, RAV4": "Par exemple, RAV4",
+  "Car year": "Année de la voiture",
+  "VIN number (optional)": "Numéro VIN (facultatif)",
+  "Preferred transport date (optional)":
+    "Date de transport souhaitée (facultatif)",
+  "Pickup address (optional)": "Adresse de collecte (facultatif)",
+  "Street, city, state, ZIP code": "Rue, ville, État, code postal",
+  "Notes for the business (optional)": "Notes pour l’entreprise (facultatif)",
+  "Share vehicle condition or pickup details":
+    "Indiquez l’état du véhicule ou les détails de collecte",
+  "Request business quote": "Demander un devis à l’entreprise",
+  "Preferred date": "Date souhaitée",
+  Flexible: "Flexible",
+  "The transport request could not be submitted. Check the details and try again.":
+    "La demande de transport n’a pas pu être envoyée. Vérifiez les détails et réessayez.",
+  "Car transport is temporarily unavailable":
+    "Le transport de voitures est temporairement indisponible",
+  "No approved car transport businesses are available right now.":
+    "Aucune entreprise approuvée de transport de voitures n’est disponible actuellement.",
+  "Request received": "Demande reçue",
+  "Your car transport quote is underway":
+    "Votre devis de transport de voiture est en préparation",
+  "The selected business will review the vehicle and destination before setting a price.":
+    "L’entreprise sélectionnée examinera le véhicule et la destination avant de fixer un prix.",
+  "Tracking code:": "Code de suivi :",
+  "Start another request": "Commencer une autre demande",
+  "Selected from the address": "Sélectionné à partir de l’adresse",
+  "Pickup date and time": "Date et heure de collecte",
+  "Start typing a New York pickup address":
+    "Commencez à saisir une adresse de collecte à New York",
+  "The request timed out. Try again.": "La demande a expiré. Réessayez.",
+};
+
 export const TEXT_TRANSLATIONS: Record<string, string> = {
+  ...CUSTOMER_SHIPPING_TRANSLATIONS,
+  "Return wallet balance": "Rembourser le solde du portefeuille",
+  "Return to card": "Retour vers la carte",
+  "Move your available balance back to your payment card.":
+    "Renvoyez votre solde disponible vers votre carte de paiement.",
+  "The full available balance is reserved for refund. Laawol confirms the final amount securely on the server.":
+    "La totalité du solde disponible est réservée au remboursement. Laawol confirme le montant final de façon sécurisée sur le serveur.",
+  " is already being returned.": " est déjà en cours de remboursement.",
+  "Your return to card was requested. We will send an update when it is processed.":
+    "Votre retour vers la carte a été demandé. Nous vous informerons lorsqu’il sera traité.",
+  "The return to card could not be requested. Try again.":
+    "Le retour vers la carte n’a pas pu être demandé. Réessayez.",
+  "Request return to card": "Demander le retour vers la carte",
+  "Return ": "Renvoyer ",
+  " to the original card?": " vers la carte d’origine ?",
+  "Requesting return...": "Demande de retour...",
+  "Confirm card return": "Confirmer le retour vers la carte",
+  "Keep in wallet": "Conserver dans le portefeuille",
+  "Copy tracking number": "Copier le numéro de suivi",
+  "Tracking number copied": "Numéro de suivi copié",
+  "Open carrier tracking": "Ouvrir le suivi du transporteur",
+  "The tracking number could not be copied. Select and copy it manually.":
+    "Le numéro de suivi n’a pas pu être copié. Sélectionnez-le et copiez-le manuellement.",
+  "Shipment tracking": "Suivi des expéditions",
+  "Follow your Laawol status or continue on the carrier’s secure site.":
+    "Suivez le statut Laawol ou continuez sur le site sécurisé du transporteur.",
+  "Search tracking": "Rechercher un suivi",
+  "Tracking number, destination, or business":
+    "Numéro de suivi, destination ou entreprise",
+  "No tracked shipments match your search.":
+    "Aucune expédition suivie ne correspond à votre recherche.",
+  "Tracking number": "Numéro de suivi",
+  "Destination not set": "Destination non définie",
+  "Real people, one secure conversation.":
+    "De vraies personnes, une conversation sécurisée.",
+  "Ask about one of your Laawol orders and see replies here in real time. Text messages are available on web.":
+    "Posez une question sur l’une de vos commandes Laawol et consultez les réponses ici en temps réel. Les messages texte sont disponibles sur le web.",
+  "Start a support request": "Démarrer une demande d’assistance",
+  "Support is taking longer to load. Try again.":
+    "Le chargement de l’assistance prend plus de temps. Réessayez.",
+  "Your support conversations could not be loaded.":
+    "Vos conversations d’assistance n’ont pas pu être chargées.",
+  "The support request could not be opened. Try again.":
+    "La demande d’assistance n’a pas pu être ouverte. Réessayez.",
+  "Loading support conversations...":
+    "Chargement des conversations d’assistance...",
+  "No support conversations yet.":
+    "Aucune conversation d’assistance pour le moment.",
+  "Open an order and choose support when you need help.":
+    "Ouvrez une commande et choisissez l’assistance lorsque vous avez besoin d’aide.",
+  "Laawol order": "Commande Laawol",
+  "Open conversation": "Ouvrir la conversation",
+  "Get help with an order": "Obtenir de l’aide pour une commande",
+  "The selected provider and Laawol support can reply here.":
+    "Le prestataire sélectionné et l’assistance Laawol peuvent répondre ici.",
+  "Related order": "Commande concernée",
+  "Normal": "Normale",
+  "Urgent": "Urgente",
+  "Service blocked": "Service bloqué",
+  "What do you need help with?": "Pour quoi avez-vous besoin d’aide ?",
+  "Share the details that will help us answer.":
+    "Partagez les détails qui nous aideront à répondre.",
+  "Opening conversation...": "Ouverture de la conversation...",
+  "Open support conversation": "Ouvrir une conversation d’assistance",
+  "Back to support conversations": "Retour aux conversations d’assistance",
+  "Secure support": "Assistance sécurisée",
+  "Support conversation": "Conversation d’assistance",
+  "This conversation is taking longer to load. Try again.":
+    "Le chargement de cette conversation prend plus de temps. Réessayez.",
+  "This support conversation could not be loaded.":
+    "Cette conversation d’assistance n’a pas pu être chargée.",
+  "Your message could not be sent. Try again.":
+    "Votre message n’a pas pu être envoyé. Réessayez.",
+  "Loading conversation...": "Chargement de la conversation...",
+  "Send a message to start this conversation.":
+    "Envoyez un message pour démarrer cette conversation.",
+  "Write a message...": "Écrivez un message...",
+  "Send message": "Envoyer le message",
+  "Sending message...": "Envoi du message...",
+  "Text chat is available on web. For files or photos, use the mobile app.":
+    "Le chat texte est disponible sur le web. Pour les fichiers ou les photos, utilisez l’application mobile.",
+  "Welcome, ": "Bienvenue, ",
+  "Create account": "Créer un compte",
+  "Create your customer account": "Créez votre compte client",
+  "Reset your password": "Réinitialisez votre mot de passe",
+  "Full name": "Nom complet",
+  "Phone number": "Numéro de téléphone",
+  "Phone country": "Pays du téléphone",
+  "International number: ": "Numéro international : ",
+  "I accept the ": "J’accepte les ",
+  "Terms of Service": "Conditions d’utilisation",
+  " and ": " et la ",
+  "Privacy Policy": "Politique de confidentialité",
+  "Please wait...": "Veuillez patienter...",
+  "Send reset email": "Envoyer l’email de réinitialisation",
+  "Forgot password?": "Mot de passe oublié ?",
+  "Back to sign in": "Retour à la connexion",
+  "Password reset email sent. Check your inbox.":
+    "Email de réinitialisation envoyé. Consultez votre boîte de réception.",
+  "Enter a valid phone number with 7 to 15 digits.":
+    "Saisissez un numéro de téléphone valide de 7 à 15 chiffres.",
+  "Accept the terms and privacy policy to continue.":
+    "Acceptez les conditions et la politique de confidentialité pour continuer.",
+  "An account already exists with this email. Sign in instead.":
+    "Un compte existe déjà avec cet email. Connectez-vous plutôt.",
+  "Check the information you entered and try again.":
+    "Vérifiez les renseignements saisis et réessayez.",
+  "We could not complete this request. Try again.":
+    "Nous n’avons pas pu terminer cette demande. Réessayez.",
+  "Verify your email to keep your account secure.":
+    "Vérifiez votre email pour sécuriser votre compte.",
+  "Send verification email": "Envoyer l’email de vérification",
+  "Verification email sent. Check your inbox.":
+    "Email de vérification envoyé. Consultez votre boîte de réception.",
+  "The verification email could not be sent. Try again.":
+    "L’email de vérification n’a pas pu être envoyé. Réessayez.",
+  "Search car listings": "Rechercher des voitures",
+  "Make, model, year, business, or location":
+    "Marque, modèle, année, entreprise ou emplacement",
+  "No cars match your search.": "Aucune voiture ne correspond à votre recherche.",
+  "Favorites could not be loaded.":
+    "Les favoris n’ont pas pu être chargés.",
+  "The favorite could not be updated. Try again.":
+    "Le favori n’a pas pu être mis à jour. Réessayez.",
+  "Remove car from favorites": "Retirer la voiture des favoris",
+  "Add car to favorites": "Ajouter la voiture aux favoris",
+  "Approved business": "Entreprise approuvée",
+  "View details": "Voir les détails",
+  "Close car details": "Fermer les détails de la voiture",
+  "Buy this car": "Acheter cette voiture",
+  "Reserve with a deposit": "Réserver avec un acompte",
+  "Reserve a viewing": "Réserver une visite",
+  "Choose a time to visit the approved business.":
+    "Choisissez une heure pour visiter l’entreprise approuvée.",
+  "Review your contact details before secure payment.":
+    "Vérifiez vos coordonnées avant le paiement sécurisé.",
+  "Appointment time": "Heure du rendez-vous",
+  "Review & pay": "Vérifier et payer",
+  "Request progress": "Progression de la demande",
+  "Review request": "Vérifier la demande",
+  "Opening secure payment...": "Ouverture du paiement sécurisé...",
+  "Back": "Retour",
+  "Reserve viewing": "Réserver la visite",
+  "Continue to deposit": "Continuer vers l’acompte",
+  "Continue to purchase": "Continuer vers l’achat",
+  "Car": "Voiture",
+  "The request could not be completed. Check the details and try again.":
+    "La demande n’a pas pu être terminée. Vérifiez les détails et réessayez.",
+  "I understand that the selected business is the independent service provider responsible for fulfillment, timing, and performance.":
+    "Je comprends que l’entreprise sélectionnée est le prestataire indépendant responsable de l’exécution, des délais et de la qualité du service.",
+  "The secure payment page could not be opened.":
+    "La page de paiement sécurisé n’a pas pu être ouverte.",
+  "The payment request timed out. Try again.":
+    "La demande de paiement a expiré. Réessayez.",
+  "Profile saved.": "Profil enregistré.",
+  "Your profile could not be saved. Try again.":
+    "Votre profil n’a pas pu être enregistré. Réessayez.",
+  "Save profile": "Enregistrer le profil",
+  "Phone verified": "Téléphone vérifié",
+  "Phone not verified": "Téléphone non vérifié",
+  "Not verified": "Non vérifié",
+  "Verify your phone number": "Vérifiez votre numéro de téléphone",
+  "We will text a 6-digit code to":
+    "Nous enverrons un code à 6 chiffres par SMS au",
+  "your phone": "votre téléphone",
+  "Standard messaging rates may apply.":
+    "Les frais de messagerie standard peuvent s’appliquer.",
+  "Send verification code": "Envoyer le code de vérification",
+  "Sending verification code...": "Envoi du code de vérification...",
+  "Verification code sent. Enter the 6-digit code below.":
+    "Code de vérification envoyé. Saisissez le code à 6 chiffres ci-dessous.",
+  "6-digit verification code": "Code de vérification à 6 chiffres",
+  "Verify phone": "Vérifier le téléphone",
+  "Verifying phone...": "Vérification du téléphone...",
+  "Resend code": "Renvoyer le code",
+  "The phone number changed. Send a new verification code.":
+    "Le numéro de téléphone a changé. Envoyez un nouveau code de vérification.",
+  "Enter a valid international phone number and try again.":
+    "Saisissez un numéro international valide et réessayez.",
+  "Phone verification is not configured for this local address. Add it to Firebase Authorized domains.":
+    "La vérification du téléphone n’est pas configurée pour cette adresse locale. Ajoutez-la aux domaines autorisés Firebase.",
+  "Phone verification is not configured for this website. Contact Laawol support.":
+    "La vérification du téléphone n’est pas configurée pour ce site. Contactez l’assistance Laawol.",
+  "The phone security check could not start. Refresh the page and try again.":
+    "Le contrôle de sécurité du téléphone n’a pas pu démarrer. Actualisez la page et réessayez.",
+  "Phone verification is not enabled. Contact Laawol support.":
+    "La vérification du téléphone n’est pas activée. Contactez l’assistance Laawol.",
+  "Too many verification attempts. Wait a few minutes and try again.":
+    "Trop de tentatives de vérification. Attendez quelques minutes puis réessayez.",
+  "SMS verification is temporarily unavailable. Try again later.":
+    "La vérification par SMS est temporairement indisponible. Réessayez plus tard.",
+  "This phone number is already linked to another Laawol account.":
+    "Ce numéro de téléphone est déjà lié à un autre compte Laawol.",
+  "Phone verification is taking longer than expected. Try again.":
+    "La vérification du téléphone prend plus de temps que prévu. Réessayez.",
+  "The verification code could not be sent. Check the phone number and try again.":
+    "Le code de vérification n’a pas pu être envoyé. Vérifiez le numéro puis réessayez.",
+  "Use an international phone number beginning with +.":
+    "Utilisez un numéro international commençant par +.",
+  "Verification code sent.": "Code de vérification envoyé.",
+  "The verification code could not be sent. Try again.":
+    "Le code de vérification n’a pas pu être envoyé. Réessayez.",
+  "Save and verify": "Enregistrer et vérifier",
+  "Verification code": "Code de vérification",
+  "Verifying...": "Vérification...",
+  "Verify": "Vérifier",
+  "Phone number verified.": "Numéro de téléphone vérifié.",
+  "The code is invalid or expired. Request a new code.":
+    "Le code est invalide ou expiré. Demandez un nouveau code.",
+  "Delete account": "Supprimer le compte",
+  "Current password": "Mot de passe actuel",
+  "Request account deletion": "Demander la suppression du compte",
+  "Requesting...": "Envoi de la demande...",
+  "Enter your password to request deletion. Required transaction records may be retained for legal and accounting obligations.":
+    "Saisissez votre mot de passe pour demander la suppression. Les dossiers de transaction requis peuvent être conservés pour des obligations légales et comptables.",
+  "Account deletion requested. Laawol will complete it within 30 days.":
+    "Suppression du compte demandée. Laawol la terminera sous 30 jours.",
+  "The deletion request could not be submitted. Check your password.":
+    "La demande de suppression n’a pas pu être envoyée. Vérifiez votre mot de passe.",
+  "Payment confirmed": "Paiement confirmé",
+  "Your payment was confirmed and your order is up to date.":
+    "Votre paiement a été confirmé et votre commande est à jour.",
+  "Payment was not completed": "Le paiement n’a pas été effectué",
+  "The payment failed or expired. You can safely try again.":
+    "Le paiement a échoué ou expiré. Vous pouvez réessayer en toute sécurité.",
+  "Payment cancelled": "Paiement annulé",
+  "You left the secure payment page before completing payment.":
+    "Vous avez quitté la page de paiement sécurisé avant de terminer.",
+  "Payment link is invalid": "Le lien de paiement est invalide",
+  "Open your customer workspace to review your orders.":
+    "Ouvrez votre espace client pour consulter vos commandes.",
+  "Sign in to check payment": "Connectez-vous pour vérifier le paiement",
+  "Use the same Laawol account that started this payment.":
+    "Utilisez le même compte Laawol qui a lancé ce paiement.",
+  "Payment confirmation is taking longer":
+    "La confirmation du paiement prend plus de temps",
+  "Your order is safe. Check it again from your customer workspace.":
+    "Votre commande est sécurisée. Vérifiez-la depuis votre espace client.",
+  "Confirming your payment": "Confirmation de votre paiement",
+  "Stripe is securely confirming the payment with Laawol.":
+    "Stripe confirme le paiement de manière sécurisée auprès de Laawol.",
+  "Return to customer workspace": "Retourner à l’espace client",
+  "Contact support": "Contacter l’assistance",
+  "Reference: ": "Référence : ",
+  Reference: "Référence",
+  "Open order details": "Ouvrir les détails de la commande",
+  "Service provider": "Prestataire de services",
+  "Close order details": "Fermer les détails de la commande",
+  "Cancel request": "Annuler la demande",
+  "Cancelling...": "Annulation...",
+  "The request could not be cancelled. Try again.":
+    "La demande n’a pas pu être annulée. Réessayez.",
+  "Customer workspace": "Espace client",
+  "Shop, track, and manage your Laawol services from any device.":
+    "Achetez, suivez et gérez vos services Laawol depuis n’importe quel appareil.",
+  "Customer sections": "Sections client",
+  "Home": "Accueil",
+  "Your activity at a glance": "Votre activité en un coup d’œil",
+  "Browse cars": "Parcourir les voitures",
+  "Listings from approved businesses": "Annonces d’entreprises approuvées",
+  "Orders & tracking": "Commandes et suivi",
+  "Shipping and vehicle services": "Expédition et services automobiles",
+  "Wallet": "Portefeuille",
+  "Balance and transactions": "Solde et transactions",
+  "Profile": "Profil",
+  "Account and security": "Compte et sécurité",
+  "Customer account": "Compte client",
+  "Your mobile and web activity stays together in the same Laawol account.":
+    "Votre activité mobile et web reste réunie dans le même compte Laawol.",
+  "View orders": "Voir les commandes",
+  "Open orders": "Commandes en cours",
+  "All activity": "Toute l’activité",
+  "Account access": "Accès au compte",
+  "Web + mobile": "Web + mobile",
+  "New service requests and web payments are being added service by service. Your existing orders, purchases, tracking, wallet, and account remain shared with the mobile app.":
+    "Les nouvelles demandes de service et les paiements web sont ajoutés service par service. Vos commandes, achats, suivis, portefeuille et compte existants restent partagés avec l’application mobile.",
+  "Loading car listings...": "Chargement des annonces de voitures...",
+  "Car listings could not be loaded.": "Les annonces de voitures n’ont pas pu être chargées.",
+  "No active car listings are available right now.":
+    "Aucune annonce de voiture active n’est disponible pour le moment.",
+  "Location not provided": "Emplacement non fourni",
+  "Loading your activity...": "Chargement de votre activité...",
+  "You do not have any activity here yet.": "Vous n’avez encore aucune activité ici.",
+  "Freight shipment": "Expédition de fret",
+  "Wallet activity": "Activité du portefeuille",
+  "Loading wallet...": "Chargement du portefeuille...",
+  "Wallet could not be loaded.": "Le portefeuille n’a pas pu être chargé.",
+  "No wallet transactions yet.": "Aucune transaction de portefeuille pour le moment.",
+  "Available balance": "Solde disponible",
+  "Transactions": "Transactions",
+  "Account": "Compte",
+  "Profile editing and account security controls are coming to the web workspace next.":
+    "La modification du profil et les contrôles de sécurité du compte arrivent prochainement dans l’espace web.",
+  "We could not load all of your activity.":
+    "Nous n’avons pas pu charger toute votre activité.",
+  "This account role is not supported. Contact Laawol support.":
+    "Ce rôle de compte n’est pas pris en charge. Contactez l’assistance Laawol.",
+  "Sign in to open your customer, business, or platform workspace.":
+    "Connectez-vous pour ouvrir votre espace client, entreprise ou plateforme.",
+  "Expand navigation": "Développer la navigation",
+  "Collapse navigation": "Réduire la navigation",
   "Administration Laawol Digital": "Administration Laawol Digital",
   "Action failed.": "L’action a échoué.",
   "A Stripe payment could not be reconciled safely.":
@@ -435,7 +853,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Shared barrel balance collected": "Solde de baril partagé encaissé",
   "Shared barrel balance collected.": "Solde de baril partagé encaissé.",
   "Shared barrel balance due": "Solde de baril partagé à encaisser",
-  "Shared barrels": "Barils partagés",
   "Shared balances due": "Soldes partagés à encaisser",
   "Balance due amount": "Montant des soldes dus",
   "Blocked pending settlement": "Bloqué en attente du règlement",
@@ -640,7 +1057,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Estimated weight": "Poids estimé",
   "Verified weight": "Poids confirmé",
   "Rate locked at booking": "Tarif fixé lors de la réservation",
-  "Estimated total": "Total estimé",
   "Final total": "Total final",
   Settlement: "Règlement",
   "Enter verified weight": "Saisir le poids confirmé",
@@ -1219,7 +1635,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Pick a partner to manage its people, listings, services, payments, and support history in one place.":
     "Choisissez un partenaire pour gérer son équipe, ses annonces, ses services, ses paiements et son historique d’assistance au même endroit.",
   "Pick-up": "Collecte",
-  Pickup: "Collecte",
   "Pickup address": "Adresse de collecte",
   "Pickup borough": "Arrondissement de collecte",
   "Pickup fee": "Frais de collecte",
@@ -1756,6 +2171,138 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   Photo: "Photo",
   File: "Fichier",
   "Sending…": "Envoi…",
+  "Vehicle & shipping services": "Services automobiles et d’expédition",
+  "Plan the next step with confidence": "Planifiez la prochaine étape en toute confiance",
+  "Compare live availability, review the provider, and pay securely without leaving your Laawol account.":
+    "Comparez les disponibilités en direct, vérifiez le prestataire et payez en toute sécurité depuis votre compte Laawol.",
+  "Choose a service": "Choisir un service",
+  "Shared barrels": "Barils partagés",
+  "Find secure parking": "Trouver un stationnement sécurisé",
+  "Search approved providers for your exact parking dates.":
+    "Recherchez des prestataires approuvés pour vos dates exactes de stationnement.",
+  "Enter a city": "Saisissez une ville",
+  "Start date": "Date de début",
+  "End date": "Date de fin",
+  "I need vehicle pickup": "J’ai besoin de la collecte du véhicule",
+  "Searching parking...": "Recherche de stationnement...",
+  "Search parking": "Rechercher un stationnement",
+  "Parking options could not be loaded. Try again.":
+    "Les options de stationnement n’ont pas pu être chargées. Réessayez.",
+  "No parking is available for these dates.":
+    "Aucun stationnement n’est disponible à ces dates.",
+  "Try another city or adjust your dates.":
+    "Essayez une autre ville ou modifiez vos dates.",
+  "Available parking": "Stationnements disponibles",
+  spaces: "places",
+  "Estimated total": "Total estimé",
+  "miles away": "miles de distance",
+  "Daily rate": "Tarif journalier",
+  Pickup: "Collecte",
+  "Not available": "Indisponible",
+  "Reserve this space": "Réserver cette place",
+  "The parking reservation could not be started. Check the details and try again.":
+    "La réservation de stationnement n’a pas pu démarrer. Vérifiez les renseignements et réessayez.",
+  "Add your vehicle details, then review the provider and dates.":
+    "Ajoutez les renseignements du véhicule, puis vérifiez le prestataire et les dates.",
+  "Parking dates": "Dates de stationnement",
+  "Continue to secure payment": "Continuer vers le paiement sécurisé",
+  "Reserve parking": "Réserver le stationnement",
+  "Car make": "Marque du véhicule",
+  "Car model": "Modèle du véhicule",
+  "Car year": "Année du véhicule",
+  "VIN number": "Numéro VIN",
+  "17-character VIN": "VIN à 17 caractères",
+  "Open shared barrels": "Barils partagés ouverts",
+  "Reserve one or more available shares with an approved provider.":
+    "Réservez une ou plusieurs parts disponibles auprès d’un prestataire approuvé.",
+  "Post a shared barrel": "Publier un baril partagé",
+  "Search open shared barrels": "Rechercher des barils partagés ouverts",
+  "Destination, business, or tracking code":
+    "Destination, entreprise ou code de suivi",
+  "Open shared barrels are taking too long to load.":
+    "Le chargement des barils partagés ouverts prend trop de temps.",
+  "Open shared barrels could not be loaded.":
+    "Les barils partagés ouverts n’ont pas pu être chargés.",
+  "Loading open shared barrels...": "Chargement des barils partagés ouverts...",
+  "No shared barrels are open right now.":
+    "Aucun baril partagé n’est ouvert pour le moment.",
+  "Post one and invite others to share the space.":
+    "Publiez-en un et invitez d’autres personnes à partager l’espace.",
+  "No shared barrels match your search.":
+    "Aucun baril partagé ne correspond à votre recherche.",
+  "Already joined": "Déjà rejoint",
+  "Request a share": "Demander une part",
+  "My shared barrels": "Mes barils partagés",
+  "Follow your requests, balances, and next available actions.":
+    "Suivez vos demandes, soldes et prochaines actions disponibles.",
+  "Your shared barrels are taking too long to load.":
+    "Le chargement de vos barils partagés prend trop de temps.",
+  "Your shared barrels could not be loaded.":
+    "Vos barils partagés n’ont pas pu être chargés.",
+  "Loading your shared barrels...": "Chargement de vos barils partagés...",
+  "You have not joined a shared barrel yet.":
+    "Vous n’avez pas encore rejoint de baril partagé.",
+  "Pay balance": "Payer le solde",
+  "Cancel this shared barrel?": "Annuler ce baril partagé ?",
+  "Leave this shared barrel?": "Quitter ce baril partagé ?",
+  "Keep it": "Le conserver",
+  "Yes, cancel": "Oui, annuler",
+  "Yes, leave": "Oui, quitter",
+  "Cancel pool": "Annuler le baril",
+  "Leave pool": "Quitter le baril",
+  "The shared barrel could not be cancelled. Try again.":
+    "Le baril partagé n’a pas pu être annulé. Réessayez.",
+  "You could not leave this shared barrel. Try again.":
+    "Vous n’avez pas pu quitter ce baril partagé. Réessayez.",
+  "Shared barrel": "Baril partagé",
+  "Shared barrel availability": "Disponibilité du baril partagé",
+  "open shares": "parts ouvertes",
+  "Deposit per share": "Acompte par part",
+  "Full price per share": "Prix total par part",
+  "Your request": "Votre demande",
+  "Shared-barrel destinations could not be loaded. Try again.":
+    "Les destinations de barils partagés n’ont pas pu être chargées. Réessayez.",
+  "The shared barrel could not be posted. Check the details and try again.":
+    "Le baril partagé n’a pas pu être publié. Vérifiez les renseignements et réessayez.",
+  "The share request could not be started. Check the details and try again.":
+    "La demande de part n’a pas pu démarrer. Vérifiez les renseignements et réessayez.",
+  "Select a destination": "Sélectionner une destination",
+  "Open part of your barrel to other customers traveling to the same destination.":
+    "Ouvrez une partie de votre baril à d’autres clients allant vers la même destination.",
+  "Reserve available space and send your deposit securely.":
+    "Réservez l’espace disponible et envoyez votre acompte en toute sécurité.",
+  "Your shares": "Vos parts",
+  "Shares requested": "Parts demandées",
+  "Use wallet first, then card": "Utiliser d’abord le portefeuille, puis la carte",
+  "Secure card payment": "Paiement sécurisé par carte",
+  "All content and shared-liability acknowledgements confirmed":
+    "Tous les engagements relatifs au contenu et à la responsabilité partagée sont confirmés",
+  "Continue to share deposit": "Continuer vers l’acompte de partage",
+  "Loading destinations...": "Chargement des destinations...",
+  "Destination & provider": "Destination et prestataire",
+  "Street, city, state, postal code": "Rue, ville, État, code postal",
+  "Contents description": "Description du contenu",
+  "Describe what will be placed in your share":
+    "Décrivez ce qui sera placé dans votre part",
+  "Shares you keep": "Parts que vous conservez",
+  "Use my available wallet balance first":
+    "Utiliser d’abord le solde disponible de mon portefeuille",
+  "Required acknowledgements": "Engagements obligatoires",
+  "My contents description is complete and accurate.":
+    "Ma description du contenu est complète et exacte.",
+  "I will not include prohibited or dangerous items.":
+    "Je n’inclurai aucun article interdit ou dangereux.",
+  "I accept the limits and responsibilities of shared-barrel service.":
+    "J’accepte les limites et responsabilités du service de baril partagé.",
+  "The balance payment could not be started. Try again.":
+    "Le paiement du solde n’a pas pu démarrer. Réessayez.",
+  "Review the verified balance before opening secure payment.":
+    "Vérifiez le solde confirmé avant d’ouvrir le paiement sécurisé.",
+  "Continue to balance payment": "Continuer vers le paiement du solde",
+  "Pay shared-barrel balance": "Payer le solde du baril partagé",
+  "Verified balance due": "Solde confirmé dû",
+  "This amount was calculated by the provider after the barrel was sealed.":
+    "Ce montant a été calculé par le prestataire après la fermeture du baril.",
 };
 
 const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {

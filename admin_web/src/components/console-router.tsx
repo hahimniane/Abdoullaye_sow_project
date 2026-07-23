@@ -1,14 +1,28 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { User, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import {
+  User,
+  onAuthStateChanged,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signOut,
+} from "firebase/auth";
+import { httpsCallable } from "firebase/functions";
 import { doc, getDoc } from "firebase/firestore";
 import { RefreshCw } from "lucide-react";
 
 import { AdminConsole } from "@/components/admin-console";
 import { BusinessConsole } from "@/components/business-console";
-import { auth, db } from "@/lib/firebase";
+import { CustomerConsole } from "@/components/customer-console";
+import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
+import { CustomerPhoneField } from "@/components/customer-phone-field";
+import { resolveConsoleKind } from "@/lib/console-routing";
+import { legalAcceptance } from "@/lib/disclosures";
+import { auth, db, functions } from "@/lib/firebase";
 import { useFrenchDomTranslation } from "@/lib/french-dom";
+import { isValidPhone } from "@/lib/phone";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
 
 const previewBusinessUser = {
@@ -153,7 +167,8 @@ export function ConsoleRouter() {
       ["localhost", "127.0.0.1"].includes(window.location.hostname);
     if (localPreview) {
       setPreviewMode(true);
-      setPreviewConsole(url.searchParams.get("console") === "business" ? "business" : "admin");
+      const requestedConsole = url.searchParams.get("console");
+      setPreviewConsole(requestedConsole === "business" ? "business" : "admin");
       setPreviewStripeState(resolvePreviewStripeState(url.searchParams.get("stripe")));
       setBooting(false);
       return undefined;
@@ -228,11 +243,13 @@ export function ConsoleRouter() {
     return <RoleSignInCard authError={authError} />;
   }
 
-  if (profile.role === "admin") {
+  const consoleKind = resolveConsoleKind(profile.role);
+
+  if (consoleKind === "admin") {
     return <AdminConsole />;
   }
 
-  if (profile.role === "businessOwner" || profile.role === "staff") {
+  if (consoleKind === "business") {
     return (
       <BusinessConsole
         firebaseUser={firebaseUser}
@@ -242,9 +259,19 @@ export function ConsoleRouter() {
     );
   }
 
+  if (consoleKind === "customer") {
+    return (
+      <CustomerConsole
+        firebaseUser={firebaseUser}
+        profile={profile}
+        onSignOut={() => signOut(auth)}
+      />
+    );
+  }
+
   return (
     <div className="app-shell">
-      <RoleSignInCard authError="Cette console est réservée aux administrateurs de la plateforme, aux propriétaires d’entreprise et au personnel d’entreprise." />
+      <RoleSignInCard authError="This account role is not supported. Contact Laawol support." />
     </div>
   );
 }
@@ -278,19 +305,57 @@ function ConsoleLoadError({
 }
 
 function RoleSignInCard({authError}: {authError: string}) {
+  const [mode, setMode] = useState<"sign-in" | "sign-up" | "forgot">(
+    "sign-in",
+  );
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [accepted, setAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submitting) return;
     setSubmitting(true);
     setError("");
+    setNotice("");
     try {
+      if (mode === "forgot") {
+        await sendPasswordResetEmail(auth, email.trim());
+        setNotice("Password reset email sent. Check your inbox.");
+        return;
+      }
+      if (mode === "sign-up") {
+        if (!isValidPhone(phone)) {
+          throw new Error("Enter a valid phone number with 7 to 15 digits.");
+        }
+        if (!accepted) {
+          throw new Error("Accept the terms and privacy policy to continue.");
+        }
+        await httpsCallable(functions, "createCustomerUser")({
+          email: email.trim(),
+          password,
+          fullName: fullName.trim(),
+          phone: phone.trim(),
+          legalAcceptance: legalAcceptance(),
+        });
+        const credential = await signInWithEmailAndPassword(
+          auth,
+          email.trim(),
+          password,
+        );
+        if (!credential.user.emailVerified) {
+          await sendEmailVerification(credential.user);
+        }
+        return;
+      }
       await signInWithEmailAndPassword(auth, email.trim(), password);
-    } catch (signInError) {
-      setError(readableAuthError(signInError));
+    } catch (authActionError) {
+      setError(readableAuthError(authActionError));
     } finally {
       setSubmitting(false);
     }
@@ -305,12 +370,54 @@ function RoleSignInCard({authError}: {authError: string}) {
             <img src="/logo.png" alt="Laawol" width={34} height={34} style={{ borderRadius: 8, display: "block" }} />
           </div>
           <div>
-            <h1>Console Laawol Digital</h1>
-            <p>Connectez-vous pour gérer la plateforme ou l’espace de votre entreprise.</p>
+            <h1>Laawol Digital</h1>
+            <p>Sign in to open your customer, business, or platform workspace.</p>
           </div>
         </div>
         <form className="login-card" onSubmit={submit}>
-          <h2>Connexion</h2>
+          <div className="auth-mode-tabs" aria-label="Account access">
+            <button
+              className={mode === "sign-in" ? "active" : ""}
+              onClick={() => {
+                setMode("sign-in");
+                setError("");
+                setNotice("");
+              }}
+              type="button"
+            >
+              Sign in
+            </button>
+            <button
+              className={mode === "sign-up" ? "active" : ""}
+              onClick={() => {
+                setMode("sign-up");
+                setError("");
+                setNotice("");
+              }}
+              type="button"
+            >
+              Create account
+            </button>
+          </div>
+          <h2>
+            {mode === "sign-up"
+              ? "Create your customer account"
+              : mode === "forgot"
+                ? "Reset your password"
+                : "Sign in"}
+          </h2>
+          {mode === "sign-up" && (
+            <label>
+              Full name
+              <input
+                autoComplete="name"
+                required
+                type="text"
+                value={fullName}
+                onChange={(event) => setFullName(event.target.value)}
+              />
+            </label>
+          )}
           <label>
             Email
             <input
@@ -322,20 +429,74 @@ function RoleSignInCard({authError}: {authError: string}) {
               onChange={(event) => setEmail(event.target.value)}
             />
           </label>
-          <label>
-            Mot de passe
-            <input
-              autoComplete="current-password"
-              required
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-          </label>
+          {mode !== "forgot" && (
+            <label>
+              Password
+              <input
+                autoComplete={
+                  mode === "sign-up" ? "new-password" : "current-password"
+                }
+                minLength={6}
+                required
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </label>
+          )}
+          {mode === "sign-up" && (
+            <>
+              <CustomerPhoneField
+                id="signup-phone"
+                label="Phone number"
+                onChange={setPhone}
+                required
+                value={phone}
+              />
+              <DisclosureCheckbox
+                accepted={accepted}
+                onChange={setAccepted}
+                variant="legal"
+              />
+            </>
+          )}
           {(error || authError) && <div className="error-box">{error || authError}</div>}
+          {notice && <div className="info-band">{notice}</div>}
           <button className="primary-button" type="submit" disabled={submitting}>
-            {submitting ? "Connexion..." : "Se connecter"}
+            {submitting
+              ? "Please wait..."
+              : mode === "sign-up"
+                ? "Create account"
+                : mode === "forgot"
+                  ? "Send reset email"
+                  : "Sign in"}
           </button>
+          {mode === "sign-in" && (
+            <button
+              className="text-button"
+              onClick={() => {
+                setMode("forgot");
+                setError("");
+                setNotice("");
+              }}
+              type="button"
+            >
+              Forgot password?
+            </button>
+          )}
+          {mode === "forgot" && (
+            <button
+              className="text-button"
+              onClick={() => {
+                setMode("sign-in");
+                setError("");
+                setNotice("");
+              }}
+              type="button"
+            >
+              Back to sign in
+            </button>
+          )}
         </form>
       </div>
     </div>
@@ -357,5 +518,21 @@ function readableAuthError(error: unknown) {
   if (message.includes("auth/network-request-failed")) {
     return "Network error. Check your connection and try again.";
   }
-  return message;
+  if (
+    message.includes("already-exists") ||
+    message.includes("email-already-exists")
+  ) {
+    return "An account already exists with this email. Sign in instead.";
+  }
+  if (
+    message.includes("invalid-argument") ||
+    message.includes("invalid-email")
+  ) {
+    return "Check the information you entered and try again.";
+  }
+  if (message.includes("resource-exhausted")) {
+    return "Too many attempts. Wait a moment and try again.";
+  }
+  if (error instanceof Error && !message.includes("Firebase")) return message;
+  return "We could not complete this request. Try again.";
 }

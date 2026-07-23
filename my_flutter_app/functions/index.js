@@ -82,6 +82,13 @@ const {
   accountLegalAcceptance,
   marketplaceDisclosure,
 } = require("./marketplace_disclosure");
+const {
+  checkoutRecordId,
+  checkoutSessionIdempotencyKey,
+  customerCheckoutReturnUrls,
+  paymentIntentIdFromClientSecret,
+  requireCustomerCheckoutAction,
+} = require("./customer_checkout");
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
@@ -2086,7 +2093,7 @@ async function createStripeRefund(params) {
   });
 }
 
-async function createStripeCheckoutSession(params) {
+async function createStripeSubscriptionCheckoutSession(params) {
   const body = new URLSearchParams();
   body.set("mode", "subscription");
   body.set("client_reference_id", params.businessId);
@@ -2108,6 +2115,45 @@ async function createStripeCheckoutSession(params) {
   });
 }
 
+async function createStripeCustomerCheckoutSession(params) {
+  const body = new URLSearchParams();
+  body.set("mode", "payment");
+  body.set("client_reference_id", params.recordId);
+  body.set("success_url", params.successUrl);
+  body.set("cancel_url", params.cancelUrl);
+  body.set("line_items[0][quantity]", "1");
+  body.set(
+      "line_items[0][price_data][currency]",
+      String(params.currency).toLowerCase(),
+  );
+  body.set(
+      "line_items[0][price_data][unit_amount]",
+      String(params.amount),
+  );
+  body.set(
+      "line_items[0][price_data][product_data][name]",
+      params.productName,
+  );
+  if (params.customerEmail) {
+    body.set("customer_email", params.customerEmail);
+  }
+  Object.entries(params.metadata).forEach(([key, value]) => {
+    body.set(`metadata[${key}]`, String(value));
+    body.set(`payment_intent_data[metadata][${key}]`, String(value));
+  });
+  return stripeFormRequest("/checkout/sessions", body, {
+    idempotencyKey:
+      checkoutSessionIdempotencyKey(params.originalPaymentIntentId),
+  });
+}
+
+async function expireStripeCheckoutSession(sessionId) {
+  return stripeFormRequest(
+      `/checkout/sessions/${encodeURIComponent(sessionId)}/expire`,
+      new URLSearchParams(),
+  );
+}
+
 function verifyStripeWebhookSignature(req, secret) {
   if (!secret || !secret.startsWith("whsec_")) {
     throw new Error("Stripe webhook secret is not configured");
@@ -2124,6 +2170,14 @@ function verifyStripeWebhookSignature(req, secret) {
   const signature = parts.v1;
   if (!timestamp || !signature || !req.rawBody) {
     throw new Error("Missing Stripe webhook signature");
+  }
+  const timestampSeconds = Number(timestamp);
+  const currentSeconds = Math.floor(Date.now() / 1000);
+  if (
+    !Number.isSafeInteger(timestampSeconds) ||
+    Math.abs(currentSeconds - timestampSeconds) > 5 * 60
+  ) {
+    throw new Error("Stripe webhook timestamp is outside the allowed window");
   }
   const signedPayload = `${timestamp}.${req.rawBody.toString("utf8")}`;
   const expected = crypto
@@ -3778,7 +3832,7 @@ exports.createBusinessProCheckout = onCall(
         throw new HttpsError("not-found", "Business not found");
       }
       const business = businessDoc.data() || {};
-      const session = await createStripeCheckoutSession({
+      const session = await createStripeSubscriptionCheckoutSession({
         businessId,
         priceId,
         successUrl,
@@ -3806,6 +3860,178 @@ exports.createBusinessProCheckout = onCall(
         success: true,
         sessionId: session.id,
         url: session.url,
+      };
+    },
+);
+
+async function attachCheckoutSessionToPaymentTarget({
+  target,
+  originalPaymentIntentId,
+  session,
+  orderType,
+}) {
+  const checkoutPaymentIntentId = String(session.payment_intent || "").trim();
+  const patch = {
+    checkoutSessionId: session.id,
+    checkoutOrderType: orderType,
+    checkoutStatus: "open",
+    checkoutOriginalPaymentIntentId: originalPaymentIntentId,
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  };
+  if (checkoutPaymentIntentId.startsWith("pi_")) {
+    if (target.config.intentArrayField) {
+      patch[target.config.intentArrayField] =
+        FirestoreFieldValue.arrayUnion(checkoutPaymentIntentId);
+    } else {
+      patch[target.config.intentField] = checkoutPaymentIntentId;
+    }
+  }
+  await admin.firestore().doc(target.path).set(patch, {merge: true});
+  return checkoutPaymentIntentId;
+}
+
+exports.createCustomerCheckoutSession = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const orderType = cleanText(request.data?.orderType, 80);
+      let action;
+      try {
+        action = requireCustomerCheckoutAction(orderType);
+      } catch {
+        throw new HttpsError(
+            "invalid-argument",
+            "This payment action is not supported",
+        );
+      }
+      const payload = request.data?.payload;
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        throw new HttpsError(
+            "invalid-argument",
+            "A payment request is required",
+        );
+      }
+      const createCallable = exports[action.createFunction];
+      if (!createCallable || typeof createCallable.run !== "function") {
+        throw new HttpsError(
+            "internal",
+            "The payment action is temporarily unavailable",
+        );
+      }
+
+      const creationResult = await createCallable.run({
+        auth: request.auth,
+        data: payload,
+        rawRequest: request.rawRequest,
+        app: request.app,
+        instanceIdToken: request.instanceIdToken,
+      });
+      const recordId = checkoutRecordId(action, creationResult);
+      if (!recordId) {
+        throw new HttpsError(
+            "internal",
+            "The payment record could not be created",
+        );
+      }
+      if (
+        creationResult?.simulatedPayment === true ||
+        creationResult?.alreadySettled === true ||
+        creationResult?.requiresPayment === false
+      ) {
+        return {
+          recordId,
+          url: null,
+          simulatedPayment: true,
+        };
+      }
+
+      const originalPaymentIntentId = paymentIntentIdFromClientSecret(
+          creationResult?.clientSecret,
+      );
+      if (!originalPaymentIntentId) {
+        throw new HttpsError(
+            "internal",
+            "The payment action did not create a payable record",
+        );
+      }
+      const originalIntent =
+        await retrieveStripePaymentIntent(originalPaymentIntentId);
+      const target = routePaymentIntentMetadata(originalIntent.metadata);
+      if (target.customerUid !== customerUid) {
+        throw new HttpsError(
+            "permission-denied",
+            "This payment belongs to a different account",
+        );
+      }
+      if (
+        !Number.isSafeInteger(Number(originalIntent.amount)) ||
+        Number(originalIntent.amount) <= 0
+      ) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This payment does not have a valid amount",
+        );
+      }
+      if (
+        !["requires_payment_method", "requires_confirmation"].includes(
+            String(originalIntent.status || ""),
+        )
+      ) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This payment is already being processed",
+        );
+      }
+
+      const returnUrls = customerCheckoutReturnUrls({
+        consoleUrl: process.env.CUSTOMER_CONSOLE_URL,
+        orderType,
+        recordId,
+      });
+      const checkoutMetadata = {
+        ...originalIntent.metadata,
+        checkoutOrderType: orderType,
+        checkoutRecordId: recordId,
+      };
+      const session = await createStripeCustomerCheckoutSession({
+        amount: Number(originalIntent.amount),
+        currency: originalIntent.currency,
+        customerEmail: request.auth?.token?.email || "",
+        metadata: checkoutMetadata,
+        originalPaymentIntentId,
+        productName: action.productName,
+        recordId,
+        ...returnUrls,
+      });
+
+      try {
+        await attachCheckoutSessionToPaymentTarget({
+          target,
+          originalPaymentIntentId,
+          session,
+          orderType,
+        });
+      } catch (error) {
+        await expireStripeCheckoutSession(session.id).catch(
+            (expireError) => logger.error(
+                "Could not expire an unattached Checkout Session",
+                {
+                  sessionId: session.id,
+                  message: expireError.message,
+                },
+            ),
+        );
+        throw error;
+      }
+      return {
+        recordId,
+        sessionId: session.id,
+        url: session.url,
+        simulatedPayment: false,
       };
     },
 );
@@ -3935,6 +4161,18 @@ const PAYMENT_COMPLETION_EXPORTS = Object.freeze({
   hold_extension: "completePaidHoldExtensionPayment",
 });
 
+const PAYMENT_CANCELLATION_EXPORTS = Object.freeze({
+  parking_deposit: "cancelPendingParkingReservation",
+  barrel_pool_deposit: "cancelPendingBarrelPoolDeposit",
+  barrel_pool_join: "cancelPendingBarrelPoolDeposit",
+  barrel_shipment: "cancelPendingBarrelShipment",
+  barrel_destination_change: "cancelPendingBarrelDestinationChange",
+  barrel_order: "cancelPendingBarrelOrder",
+  freight_shipment: "cancelPendingFreightShipment",
+  reservation_deposit: "cancelPendingCarPurchase",
+  full_purchase: "cancelPendingCarPurchase",
+});
+
 function paymentCompletionData(target) {
   const identity = target.identity;
   switch (target.paymentType) {
@@ -3966,6 +4204,32 @@ function paymentCompletionData(target) {
       return {purchaseId: identity.purchaseId};
     default:
       throw new Error(`Unsupported payment completion: ${target.paymentType}`);
+  }
+}
+
+function paymentCancellationData(target) {
+  const identity = target.identity;
+  switch (target.paymentType) {
+    case "parking_deposit":
+      return {reservationId: identity.reservationId};
+    case "barrel_pool_deposit":
+    case "barrel_pool_join":
+      return {poolId: identity.poolId};
+    case "barrel_shipment":
+    case "freight_shipment":
+      return {shipmentId: identity.shipmentId};
+    case "barrel_destination_change":
+      return {
+        shipmentId: identity.shipmentId,
+        changeRequestId: identity.changeRequestId,
+      };
+    case "barrel_order":
+      return {orderId: identity.orderId};
+    case "reservation_deposit":
+    case "full_purchase":
+      return {purchaseId: identity.purchaseId};
+    default:
+      return {};
   }
 }
 
@@ -4030,13 +4294,19 @@ async function loadAndValidatePaymentTarget({event, intent}) {
     throw new Error(`Payment target not found: ${target.path}`);
   }
   const document = {id: snapshot.id, data: snapshot.data() || {}};
+  if (
+    document.data.checkoutSessionId &&
+    document.data.checkoutOriginalPaymentIntentId === intent.id
+  ) {
+    return {target, superseded: true};
+  }
   const decision = buildReconciliationDecision({
     target,
     intent,
     document,
     event,
   });
-  return {target, decision};
+  return {target, decision, superseded: false};
 }
 
 async function runPaymentCompletion(target) {
@@ -4054,14 +4324,111 @@ async function runPaymentCompletion(target) {
   });
 }
 
+async function runPaymentCancellation(target, eventType) {
+  const exportName = PAYMENT_CANCELLATION_EXPORTS[target.paymentType];
+  if (exportName) {
+    const callable = exports[exportName];
+    if (!callable || typeof callable.run !== "function") {
+      throw new Error(
+          `Payment cancellation handler unavailable: ${exportName}`,
+      );
+    }
+    await callable.run({
+      auth: {
+        uid: target.customerUid,
+        token: {uid: target.customerUid},
+      },
+      data: paymentCancellationData(target),
+    });
+    return;
+  }
+  const checkoutStatus =
+    eventType === "checkout.session.expired" ? "expired" : "failed";
+  await admin.firestore().doc(target.path).set({
+    [target.config.paymentStatusField]: "failed",
+    checkoutStatus,
+    stripeReconciliationState: PAYMENT_STATES.FAILED,
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  }, {merge: true});
+}
+
+async function reconcileCustomerCheckoutFailure(event) {
+  if (![
+    "checkout.session.expired",
+    "checkout.session.async_payment_failed",
+  ].includes(String(event?.type || ""))) {
+    return false;
+  }
+  const metadata = event?.data?.object?.metadata || {};
+  if (!metadata.paymentType) return false;
+  const target = routePaymentIntentMetadata(metadata);
+  await runPaymentCancellation(target, event.type);
+  await admin.firestore().doc(target.path).set({
+    checkoutSessionId: String(event.data.object.id || ""),
+    checkoutStatus:
+      event.type === "checkout.session.expired" ? "expired" : "failed",
+    stripeLastEventId: event.id,
+    stripeLastEventCreated: Number(event.created || 0),
+    stripeReconciledAt: FirestoreFieldValue.serverTimestamp(),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  }, {merge: true});
+  return true;
+}
+
+async function bindCheckoutPaymentIntent(event) {
+  const object = event?.data?.object || {};
+  const eventType = String(event?.type || "");
+  if (!eventType.startsWith("checkout.session.")) return false;
+  const metadata = object.metadata || {};
+  const paymentIntentId = String(object.payment_intent || "").trim();
+  if (!metadata.paymentType || !paymentIntentId.startsWith("pi_")) return false;
+  const target = routePaymentIntentMetadata(metadata);
+  const ref = admin.firestore().doc(target.path);
+  await admin.firestore().runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) {
+      throw new Error(`Payment target not found: ${target.path}`);
+    }
+    const data = snapshot.data() || {};
+    if (
+      data.checkoutSessionId &&
+      String(data.checkoutSessionId) !== String(object.id || "")
+    ) {
+      throw new Error("Checkout Session does not match the payment record");
+    }
+    const patch = {
+      checkoutSessionId: String(object.id || ""),
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    };
+    if (target.config.intentArrayField) {
+      patch[target.config.intentArrayField] =
+        FirestoreFieldValue.arrayUnion(paymentIntentId);
+    } else {
+      const currentIntentId = String(data[target.config.intentField] || "");
+      if (
+        currentIntentId &&
+        currentIntentId !== paymentIntentId &&
+        currentIntentId !==
+          String(data.checkoutOriginalPaymentIntentId || "")
+      ) {
+        throw new Error("Payment record already uses a different intent");
+      }
+      patch[target.config.intentField] = paymentIntentId;
+    }
+    transaction.set(ref, patch, {merge: true});
+  });
+  return true;
+}
+
 async function reconcileStripePaymentEvent(event) {
   const intent = await paymentIntentForStripeEvent(event);
   const paymentType = String(intent?.metadata?.paymentType || "").trim();
   if (!intent || !PAYMENT_COMPLETION_EXPORTS[paymentType]) return false;
-  const {target, decision} = await loadAndValidatePaymentTarget({
+  const {target, decision, superseded} = await loadAndValidatePaymentTarget({
     event,
     intent,
   });
+  if (superseded) return false;
   const ref = admin.firestore().doc(target.path);
   if (decision.state === PAYMENT_STATES.SUCCEEDED) {
     if (decision.changed) {
@@ -4072,6 +4439,10 @@ async function reconcileStripePaymentEvent(event) {
       stripeLastEventId: event.id,
       stripeLastEventCreated: Number(event.created || 0),
       stripeReconciledAt: FirestoreFieldValue.serverTimestamp(),
+      ...(event.type === "checkout.session.completed" && {
+        checkoutSessionId: String(event.data.object.id || ""),
+        checkoutStatus: "completed",
+      }),
       updatedAt: FirestoreFieldValue.serverTimestamp(),
     }, {merge: true});
     return true;
@@ -4125,7 +4496,12 @@ exports.handleBusinessProStripeWebhook = onRequest(
           res.status(200).json({received: true, duplicate: true});
           return;
         }
-        const paymentHandled = await reconcileStripePaymentEvent(event);
+        const checkoutIntentBound = await bindCheckoutPaymentIntent(event);
+        const checkoutFailureHandled =
+          await reconcileCustomerCheckoutFailure(event);
+        const paymentHandled = checkoutFailureHandled ?
+          false :
+          await reconcileStripePaymentEvent(event);
         if (event.type === "account.updated") {
           const accountId = object.id || "";
           const businessId = object.metadata?.businessId ||
@@ -4133,7 +4509,10 @@ exports.handleBusinessProStripeWebhook = onRequest(
           if (businessId) {
             await persistStripeAccountStatus({businessId, account: object});
           }
-        } else if (event.type === "checkout.session.completed") {
+        } else if (
+          event.type === "checkout.session.completed" &&
+          !object.metadata?.paymentType
+        ) {
           const businessId = stripeSubscriptionBusinessId(object);
           const status = object.payment_status === "unpaid" ?
             "incomplete" :
@@ -4174,8 +4553,14 @@ exports.handleBusinessProStripeWebhook = onRequest(
         }
         await finishStripeWebhookEvent(
             event.id,
-            paymentHandled ? "completed" : "ignored",
-            {paymentHandled},
+            paymentHandled || checkoutFailureHandled ?
+              "completed" :
+              "ignored",
+            {
+              checkoutIntentBound,
+              paymentHandled,
+              checkoutFailureHandled,
+            },
         );
         res.status(200).json({received: true});
       } catch (error) {
@@ -4195,6 +4580,9 @@ exports.handleBusinessProStripeWebhook = onRequest(
       }
     },
 );
+// Backward-compatible alias: production may continue sending all Stripe events
+// to the original endpoint while customer Checkout is rolled out.
+exports.stripeCheckoutWebhook = exports.handleBusinessProStripeWebhook;
 
 const STALE_PAYMENT_SCANS = Object.freeze([
   {id: "parking", collection: "parkedCars", intent: "stripePaymentIntentId"},

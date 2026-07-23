@@ -29,6 +29,7 @@ class _SignUpScreenState extends State<SignUpScreen>
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
   bool _legalAccepted = false;
+  SignUpFailureKind? _signUpFailure;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -76,6 +77,10 @@ class _SignUpScreenState extends State<SignUpScreen>
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
+    if (_signUpFailure != null) {
+      setState(() => _signUpFailure = null);
+    }
+
     try {
       final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
@@ -118,12 +123,39 @@ class _SignUpScreenState extends State<SignUpScreen>
           AppLocalizations.of(context)!.signUpFailedTryAgain,
         );
       }
+    } on SignUpFailure catch (error) {
+      debugPrint('SignUpScreen: Sign up failed with ${error.kind.name}');
+      if (mounted) {
+        setState(() => _signUpFailure = error.kind);
+      }
     } catch (error) {
       debugPrint('🔴 SignUpScreen: Error caught: $error');
       if (mounted) {
-        showErrorSnackBar(context, error.toString());
+        setState(() => _signUpFailure = SignUpFailureKind.unknown);
       }
     }
+  }
+
+  void _openSignIn() {
+    final routeArgs = ModalRoute.of(context)?.settings.arguments;
+    final shouldReturn =
+        routeArgs is Map && routeArgs['returnToPrevious'] == true;
+    if (shouldReturn) {
+      Navigator.pushReplacementNamed(
+        context,
+        '/login',
+        arguments: const {'returnToPrevious': true},
+      );
+      return;
+    }
+    Navigator.pushNamed(context, '/login');
+  }
+
+  String _signUpFailureMessage(AppLocalizations l10n) {
+    return switch (_signUpFailure) {
+      SignUpFailureKind.phoneAlreadyInUse => l10n.phoneVerificationPhoneInUse,
+      _ => l10n.signUpFailedTryAgain,
+    };
   }
 
   @override
@@ -313,6 +345,21 @@ class _SignUpScreenState extends State<SignUpScreen>
                                         filled: true,
                                         fillColor: Colors.grey.shade50,
                                       ),
+                                      errorText:
+                                          _signUpFailure ==
+                                              SignUpFailureKind
+                                                  .phoneAlreadyInUse
+                                          ? AppLocalizations.of(
+                                              context,
+                                            )!.phoneVerificationPhoneInUse
+                                          : null,
+                                      onChanged: (_) {
+                                        if (_signUpFailure ==
+                                            SignUpFailureKind
+                                                .phoneAlreadyInUse) {
+                                          setState(() => _signUpFailure = null);
+                                        }
+                                      },
                                       validator: (value) {
                                         return PhoneNumberValidator.validate(
                                           value,
@@ -561,6 +608,77 @@ class _SignUpScreenState extends State<SignUpScreen>
                                     ),
                                     const SizedBox(height: 20),
 
+                                    if (_signUpFailure != null) ...[
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.brandRed.withValues(
+                                            alpha: 0.08,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          border: Border.all(
+                                            color: AppColors.brandRed
+                                                .withValues(alpha: 0.35),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            const Icon(
+                                              Icons.error_outline,
+                                              color: AppColors.brandRed,
+                                              size: 20,
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    _signUpFailureMessage(
+                                                      AppLocalizations.of(
+                                                        context,
+                                                      )!,
+                                                    ),
+                                                    style: const TextStyle(
+                                                      color: AppColors.brandRed,
+                                                    ),
+                                                  ),
+                                                  if (_signUpFailure ==
+                                                      SignUpFailureKind
+                                                          .phoneAlreadyInUse)
+                                                    TextButton(
+                                                      onPressed: _openSignIn,
+                                                      style:
+                                                          TextButton.styleFrom(
+                                                            padding:
+                                                                EdgeInsets.zero,
+                                                            minimumSize:
+                                                                const Size(
+                                                                  0,
+                                                                  40,
+                                                                ),
+                                                          ),
+                                                      child: Text(
+                                                        AppLocalizations.of(
+                                                          context,
+                                                        )!.signIn,
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                    ],
+
                                     // Sign Up Button
                                     Consumer<AuthProvider>(
                                       builder: (context, authProvider, child) {
@@ -582,16 +700,28 @@ class _SignUpScreenState extends State<SignUpScreen>
                                               elevation: 0,
                                             ),
                                             child: authProvider.isLoading
-                                                ? const SizedBox(
-                                                    width: 24,
-                                                    height: 24,
-                                                    child: CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                      valueColor:
-                                                          AlwaysStoppedAnimation<
-                                                            Color
-                                                          >(Colors.white),
-                                                    ),
+                                                ? Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      const SizedBox(
+                                                        width: 20,
+                                                        height: 20,
+                                                        child: CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                          valueColor:
+                                                              AlwaysStoppedAnimation<
+                                                                Color
+                                                              >(Colors.white),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 10),
+                                                      Text(
+                                                        AppLocalizations.of(
+                                                          context,
+                                                        )!.creating,
+                                                      ),
+                                                    ],
                                                   )
                                                 : Text(
                                                     AppLocalizations.of(
@@ -624,29 +754,7 @@ class _SignUpScreenState extends State<SignUpScreen>
                                           ),
                                         ),
                                         TextButton(
-                                          onPressed: () {
-                                            final routeArgs = ModalRoute.of(
-                                              context,
-                                            )?.settings.arguments;
-                                            final shouldReturn =
-                                                routeArgs is Map &&
-                                                routeArgs['returnToPrevious'] ==
-                                                    true;
-                                            if (shouldReturn) {
-                                              Navigator.pushReplacementNamed(
-                                                context,
-                                                '/login',
-                                                arguments: const {
-                                                  'returnToPrevious': true,
-                                                },
-                                              );
-                                              return;
-                                            }
-                                            Navigator.pushNamed(
-                                              context,
-                                              '/login',
-                                            );
-                                          },
+                                          onPressed: _openSignIn,
                                           style: TextButton.styleFrom(
                                             splashFactory:
                                                 NoSplash.splashFactory,

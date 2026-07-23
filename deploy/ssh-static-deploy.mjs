@@ -4,6 +4,7 @@
 //   public_site/      -> domains/laawoldigital.com/public_html/
 //   admin_web/out/   -> domains/laawoldigital.com/public_html/admin/
 //   admin_web/out/   -> domains/laawoldigital.com/public_html/business/
+//   admin_web/out/   -> domains/laawoldigital.com/public_html/customer/
 
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -81,6 +82,8 @@ run("rsync", [
   "admin/",
   "--exclude",
   "business/",
+  "--exclude",
+  "customer/",
   `${SITE_DIR}/`,
   `${dest}/`,
 ]);
@@ -90,6 +93,9 @@ run("rsync", [...common, `${ADMIN_DIR}/`, `${dest}/admin/`]);
 
 console.log(`\nPublishing business console -> ${dest}/business/`);
 run("rsync", [...common, `${ADMIN_DIR}/`, `${dest}/business/`]);
+
+console.log(`\nPublishing customer console -> ${dest}/customer/`);
+run("rsync", [...common, `${ADMIN_DIR}/`, `${dest}/customer/`]);
 
 console.log("\nRunning read-only static smoke checks...");
 run("node", [path.join(__dirname, "post-deploy-smoke.mjs")], {

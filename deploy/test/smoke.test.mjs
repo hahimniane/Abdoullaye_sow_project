@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {EventEmitter} from "node:events";
 import {Readable} from "node:stream";
 import {test} from "node:test";
+import {readFileSync} from "node:fs";
 
 import {
   pinnedLookup,
@@ -73,14 +74,25 @@ test("pinned smoke follows only allowlisted redirects", async () => {
 test("remote static smoke verifies HTTPS pages and console runtime assets", () => {
   const script = remoteStaticSmokeScript({
     marketingHost: "laawoldigital.com",
-    consoleHosts: ["admin.laawoldigital.com", "business.laawoldigital.com"],
+    consoleHosts: [
+      "admin.laawoldigital.com",
+      "business.laawoldigital.com",
+      "customer.laawoldigital.com",
+    ],
   });
   assert.match(script, /--resolve "laawoldigital\.com:443:127\.0\.0\.1"/);
   assert.match(script, /--resolve "admin\.laawoldigital\.com:443:127\.0\.0\.1"/);
   assert.match(script, /\/_next\//);
   assert.match(script, /https:\/\/business\.laawoldigital\.com\$asset/);
+  assert.match(script, /https:\/\/customer\.laawoldigital\.com\$asset/);
   assert.throws(() => remoteStaticSmokeScript({
     marketingHost: "laawoldigital.com; rm -rf /",
     consoleHosts: [],
   }), /host is invalid/);
+});
+
+test("SSH deploy protects and publishes the customer console directory", () => {
+  const source = readFileSync(new URL("../ssh-static-deploy.mjs", import.meta.url), "utf8");
+  assert.match(source, /"--exclude",\s*\n\s*"customer\/"/);
+  assert.match(source, /\$\{dest\}\/customer\//);
 });

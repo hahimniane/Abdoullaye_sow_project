@@ -40,6 +40,15 @@ function assertIncludes(source, expected, label) {
 const content = read("assets/content.js");
 const countryCatalog = read("assets/country-catalog.js");
 const i18n = read("assets/i18n.js");
+const home = read("index.html");
+
+assertIncludes(
+  home,
+  'href="https://customer.laawoldigital.com"',
+  "homepage customer workspace CTA",
+);
+assertIncludes(home, "Utiliser Laawol en ligne", "homepage customer CTA label");
+assertIncludes(i18n, '"Use Laawol online": "Utiliser Laawol en ligne"', "customer CTA translation");
 
 assertIncludes(content, '"websiteContent/home"', "content.js");
 assertIncludes(content, '"websiteContent/contact"', "content.js");

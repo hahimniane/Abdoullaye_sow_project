@@ -112,7 +112,11 @@ function requireRemoteStaticSites() {
   const user = process.env.SSH_USER || "u161013520";
   const script = remoteStaticSmokeScript({
     marketingHost: "laawoldigital.com",
-    consoleHosts: ["admin.laawoldigital.com", "business.laawoldigital.com"],
+    consoleHosts: [
+      "admin.laawoldigital.com",
+      "business.laawoldigital.com",
+      "customer.laawoldigital.com",
+    ],
   });
   const result = spawnSync("ssh", [
     "-i", key,

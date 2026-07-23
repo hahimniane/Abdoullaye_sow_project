@@ -1,0 +1,213 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import {
+  collection,
+  doc,
+  limit,
+  onSnapshot,
+  query,
+  where,
+} from "firebase/firestore";
+import { CheckCircle2, CircleX, Clock3, RefreshCw } from "lucide-react";
+
+import { auth, db } from "@/lib/firebase";
+import {
+  isCustomerCheckoutOrderType,
+  paymentReturnState,
+  type CustomerCheckoutOrderType,
+  type PaymentReturnState,
+} from "@/lib/customer-checkout";
+import { SUPPORT_URL } from "@/lib/legal-links";
+
+const PAYMENT_RETURN_TIMEOUT_MS = 60_000;
+
+type ReturnViewState =
+  | PaymentReturnState
+  | "invalid"
+  | "signed-out"
+  | "timeout";
+
+function directPaymentPath(
+  orderType: CustomerCheckoutOrderType,
+  recordId: string,
+  uid: string,
+): [string, ...string[]] | null {
+  switch (orderType) {
+    case "parking":
+      return ["parkedCars", recordId];
+    case "barrelPoolDeposit":
+    case "barrelPoolJoin":
+      return ["barrelPools", recordId, "participants", uid];
+    case "barrelPoolBalance":
+      return ["barrelPoolBalanceRequests", recordId];
+    case "barrelShipment":
+    case "barrelDestinationChange":
+      return ["barrelShipments", recordId];
+    case "barrelOrder":
+      return ["barrelOrders", recordId];
+    case "freightShipment":
+      return ["freightShipments", recordId];
+    case "carDeposit":
+    case "carPurchase":
+    case "holdExtension":
+      return ["carPurchases", recordId];
+    case "freightSettlement":
+      return null;
+  }
+}
+
+export function PayReturn() {
+  const [state, setState] = useState<ReturnViewState>("pending");
+  const [params, setParams] = useState<{
+    orderType: CustomerCheckoutOrderType;
+    recordId: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const search = new URLSearchParams(window.location.search);
+    const type = search.get("type") || "";
+    const recordId = search.get("id")?.trim() || "";
+    if (!isCustomerCheckoutOrderType(type) || !recordId) {
+      setState("invalid");
+      return undefined;
+    }
+    setParams({ orderType: type, recordId });
+    if (search.get("status") === "cancel") {
+      setState("cancelled");
+      return undefined;
+    }
+
+    let stopSnapshot: (() => void) | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const stopAuth = onAuthStateChanged(auth, (user) => {
+      stopSnapshot?.();
+      if (!user) {
+        setState("signed-out");
+        return;
+      }
+      setState("pending");
+      const path = directPaymentPath(type, recordId, user.uid);
+      if (path) {
+        stopSnapshot = onSnapshot(
+          doc(db, ...path),
+          (snapshot) => {
+            if (!snapshot.exists()) return;
+            setState(paymentReturnState(type, snapshot.data()));
+          },
+          () => setState("failed"),
+        );
+      } else {
+        const attemptQuery = query(
+          collection(
+            db,
+            "freightSettlements",
+            recordId,
+            "paymentAttempts",
+          ),
+          where("customerUid", "==", user.uid),
+          limit(5),
+        );
+        stopSnapshot = onSnapshot(
+          attemptQuery,
+          (snapshot) => {
+            if (snapshot.empty) return;
+            const states = snapshot.docs.map((item) =>
+              paymentReturnState(type, item.data()),
+            );
+            if (states.includes("success")) setState("success");
+            else if (states.includes("failed")) setState("failed");
+            else if (states.includes("cancelled")) setState("cancelled");
+          },
+          () => setState("failed"),
+        );
+      }
+      timeoutId = setTimeout(
+        () => setState((current) => current === "pending" ? "timeout" : current),
+        PAYMENT_RETURN_TIMEOUT_MS,
+      );
+    });
+    return () => {
+      stopAuth();
+      stopSnapshot?.();
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, []);
+
+  const content = returnContent(state);
+  const Icon = content.icon;
+  return (
+    <main className="payment-return-screen">
+      <section className="login-card payment-return-card" aria-live="polite">
+        <div className={`payment-return-icon ${state}`}>
+          <Icon className={state === "pending" ? "spin" : ""} size={30} />
+        </div>
+        <h1>{content.title}</h1>
+        <p>{content.body}</p>
+        {params && (
+          <small>
+            Reference: {params.recordId}
+          </small>
+        )}
+        <div className="button-row">
+          <a className="primary-button" href="/">
+            Return to customer workspace
+          </a>
+          {(state === "failed" || state === "timeout") && (
+            <a className="secondary-button" href={SUPPORT_URL}>
+              Contact support
+            </a>
+          )}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function returnContent(state: ReturnViewState) {
+  switch (state) {
+    case "success":
+      return {
+        icon: CheckCircle2,
+        title: "Payment confirmed",
+        body: "Your payment was confirmed and your order is up to date.",
+      };
+    case "failed":
+      return {
+        icon: CircleX,
+        title: "Payment was not completed",
+        body: "The payment failed or expired. You can safely try again.",
+      };
+    case "cancelled":
+      return {
+        icon: CircleX,
+        title: "Payment cancelled",
+        body: "You left the secure payment page before completing payment.",
+      };
+    case "invalid":
+      return {
+        icon: CircleX,
+        title: "Payment link is invalid",
+        body: "Open your customer workspace to review your orders.",
+      };
+    case "signed-out":
+      return {
+        icon: CircleX,
+        title: "Sign in to check payment",
+        body: "Use the same Laawol account that started this payment.",
+      };
+    case "timeout":
+      return {
+        icon: Clock3,
+        title: "Payment confirmation is taking longer",
+        body: "Your order is safe. Check it again from your customer workspace.",
+      };
+    case "pending":
+      return {
+        icon: RefreshCw,
+        title: "Confirming your payment",
+        body: "Stripe is securely confirming the payment with Laawol.",
+      };
+  }
+}

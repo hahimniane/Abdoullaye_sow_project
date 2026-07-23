@@ -236,6 +236,7 @@ test("static DNS gate covers every production hostname", () => {
     "laawoldigital.com",
     "admin.laawoldigital.com",
     "business.laawoldigital.com",
+    "customer.laawoldigital.com",
   ]);
 });
 

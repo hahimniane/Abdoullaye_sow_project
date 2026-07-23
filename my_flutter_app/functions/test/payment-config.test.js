@@ -32,6 +32,7 @@ const STRIPE_CALLABLES = [
   "completePaidHoldExtensionPayment",
   "createParkingReservation",
   "completeParkingReservation",
+  "createCustomerCheckoutSession",
 ];
 
 describe("payment runtime configuration", () => {
@@ -90,6 +91,17 @@ describe("payment runtime configuration", () => {
     assert.match(source, /runPaymentCompletion\(target\)/);
     assert.match(source, /Idempotency-Key/);
     assert.match(source, /exports\.reconcileStaleStripePayments/);
+    assert.match(
+        source,
+        new RegExp(
+            "exports\\.stripeCheckoutWebhook =\\s*" +
+            "exports\\.handleBusinessProStripeWebhook",
+        ),
+    );
+    assert.match(source, /bindCheckoutPaymentIntent\(event\)/);
+    assert.match(source, /reconcileCustomerCheckoutFailure\(event\)/);
+    assert.match(source, /checkoutOriginalPaymentIntentId/);
+    assert.match(source, /outside the allowed window/);
   });
 
   it("guards unauthenticated barrel order completion recovery", () => {

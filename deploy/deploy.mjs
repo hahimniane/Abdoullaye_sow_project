@@ -3,6 +3,7 @@
 //   Root marketing site (public_site/)  -> laawoldigital.com web root
 //   Admin console (admin_web/out/)      -> admin.laawoldigital.com web root
 //   Business console (admin_web/out/)   -> business.laawoldigital.com web root
+//   Customer console (admin_web/out/)   -> customer.laawoldigital.com web root
 //
 // Usage (from project root):
 //   cd deploy && npm i basic-ftp
@@ -35,8 +36,10 @@ const cfg = {
   remoteRoot: process.env.REMOTE_ROOT || "public_html",
   remoteAdmin: process.env.REMOTE_ADMIN || "public_html/admin",
   remoteBusiness: process.env.REMOTE_BUSINESS || "public_html/business",
+  remoteCustomer: process.env.REMOTE_CUSTOMER || "public_html/customer",
   deployAdmin: String(process.env.DEPLOY_ADMIN || "true").toLowerCase() === "true",
   deployBusiness: String(process.env.DEPLOY_BUSINESS || "true").toLowerCase() === "true",
+  deployCustomer: String(process.env.DEPLOY_CUSTOMER || "true").toLowerCase() === "true",
 };
 
 const SITE_DIR = path.join(ROOT, "public_site");
@@ -99,6 +102,13 @@ try {
     await client.cd(home);
     await client.uploadFromDir(ADMIN_DIR, cfg.remoteBusiness);
     console.log("Business console uploaded.");
+  }
+
+  if (cfg.deployCustomer) {
+    console.log(`\nUploading customer console -> ${cfg.remoteCustomer}`);
+    await client.cd(home);
+    await client.uploadFromDir(ADMIN_DIR, cfg.remoteCustomer);
+    console.log("Customer console uploaded.");
   }
 
   console.log("\nRunning read-only static smoke checks...");

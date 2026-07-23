@@ -36,6 +36,34 @@
       : value;
   }
 
+  // Keep the customer web app one tap away on every public page. The shared
+  // script owns this CTA so legal and future pages cannot accidentally omit it.
+  function addCustomerWorkspaceLink(container, mobile) {
+    if (!container) return;
+    var existing = container.querySelector(
+      '[data-customer-workspace="true"], a[href="https://customer.laawoldigital.com"]'
+    );
+    if (existing) {
+      existing.dataset.customerWorkspace = "true";
+      return;
+    }
+    var link = document.createElement("a");
+    link.href = "https://customer.laawoldigital.com";
+    link.textContent = document.documentElement.lang === "en"
+      ? "Customer workspace"
+      : "Espace client";
+    link.dataset.customerWorkspace = "true";
+    if (mobile) {
+      link.className = "btn btn-primary";
+    } else {
+      link.className = "btn btn-customer";
+    }
+    container.appendChild(link);
+  }
+
+  addCustomerWorkspaceLink(document.querySelector(".nav-cta"), false);
+  addCustomerWorkspaceLink(document.getElementById("mobileMenu"), true);
+
   // Mobile menu toggle
   var toggle = document.getElementById("navToggle");
   var menu = document.getElementById("mobileMenu");

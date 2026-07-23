@@ -13,6 +13,47 @@ import '../models/marketplace_disclosure_acceptance.dart';
 
 enum AuthInitializationIssue { profileUnavailable, profileMissing }
 
+enum SignUpFailureKind {
+  phoneAlreadyInUse,
+  emailAlreadyInUse,
+  invalidInput,
+  rateLimited,
+  serviceUnavailable,
+  unknown,
+}
+
+class SignUpFailure implements Exception {
+  const SignUpFailure(this.kind);
+
+  final SignUpFailureKind kind;
+
+  @override
+  String toString() => 'SignUpFailure(${kind.name})';
+}
+
+SignUpFailureKind classifySignUpFunctionsFailure({
+  required String code,
+  String? message,
+}) {
+  final normalizedCode = code.trim().toLowerCase();
+  if (normalizedCode == 'already-exists') {
+    final normalizedMessage = message?.toLowerCase() ?? '';
+    return normalizedMessage.contains('phone')
+        ? SignUpFailureKind.phoneAlreadyInUse
+        : SignUpFailureKind.emailAlreadyInUse;
+  }
+
+  return switch (normalizedCode) {
+    'invalid-argument' ||
+    'failed-precondition' => SignUpFailureKind.invalidInput,
+    'resource-exhausted' => SignUpFailureKind.rateLimited,
+    'unavailable' ||
+    'deadline-exceeded' ||
+    'internal' => SignUpFailureKind.serviceUnavailable,
+    _ => SignUpFailureKind.unknown,
+  };
+}
+
 class PhoneVerificationSession {
   const PhoneVerificationSession({
     required this.verificationId,
@@ -715,6 +756,14 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       debugPrint('🎉 Sign up completed successfully!');
       return true;
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('Firebase Functions sign-up failed with code: ${e.code}');
+      _isLoading = false;
+      notifyListeners();
+
+      throw SignUpFailure(
+        classifySignUpFunctionsFailure(code: e.code, message: e.message),
+      );
     } on FirebaseAuthException catch (e) {
       debugPrint('❌ Firebase Auth Exception: ${e.code} - ${e.message}');
       _isLoading = false;

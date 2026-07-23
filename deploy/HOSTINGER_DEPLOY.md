@@ -8,6 +8,7 @@ Hostinger. Three static artifacts are deployed:
 | Marketing website        | `public_site/`       | `https://laawoldigital.com/`                 |
 | Admin console            | `admin_web/out/`     | `https://admin.laawoldigital.com/`           |
 | Business owner dashboard | `admin_web/out/`     | `https://business.laawoldigital.com/`        |
+| Customer workspace        | `admin_web/out/`     | `https://customer.laawoldigital.com/`        |
 
 > The admin console runs on its own subdomain `admin.laawoldigital.com`, whose
 > document root is `~/domains/laawoldigital.com/public_html/admin`. It is served
@@ -132,8 +133,8 @@ The admin and business dashboards talk to Firebase project
 **`car-selling-flutter-app`**.
 
 - **Authorized domains:** Firebase Console → Authentication → Settings →
-  Authorized domains → add `laawoldigital.com`, `admin.laawoldigital.com`, and
-  `business.laawoldigital.com`. Email/password sign-in technically works
+  Authorized domains → add `laawoldigital.com`, `admin.laawoldigital.com`,
+  `business.laawoldigital.com`, and `customer.laawoldigital.com`. Email/password sign-in technically works
   without this, but add them for safety/OAuth.
 - **First super admin:** create and verify the Firebase Auth user, then run the
   explicit confirmation-gated command from `my_flutter_app/functions`:
@@ -230,6 +231,7 @@ The admin and business dashboards talk to Firebase project
 curl -sS -o /dev/null -w "root  %{http_code}\n"  https://laawoldigital.com
 curl -sS -o /dev/null -w "admin %{http_code}\n"  https://admin.laawoldigital.com/
 curl -sS -o /dev/null -w "biz   %{http_code}\n"  https://business.laawoldigital.com/
+curl -sS -o /dev/null -w "customer %{http_code}\n" https://customer.laawoldigital.com/
 # Confirm an admin asset resolves (must be 200, root-absolute on subdomain):
 asset=$(curl -sS https://admin.laawoldigital.com/ | grep -o '/_next/[^"]*\.js' | head -1)
 curl -sS -o /dev/null -w "asset %{http_code}\n" "https://admin.laawoldigital.com$asset"

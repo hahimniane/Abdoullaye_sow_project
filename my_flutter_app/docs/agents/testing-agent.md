@@ -235,3 +235,8 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   sync must never require another SMS. Only a Firebase-verified phone may reserve
   a `phoneSignInAliases` document; unverified signup/profile values cannot claim
   login aliases.
+- Every new static subdomain must be added atomically to the marketing rsync
+  `--delete` exclusions, its own destination sync, the dual-resolver DNS gate,
+  page/runtime-asset smoke checks, Firebase Auth authorized domains, and the
+  reCAPTCHA Enterprise/App Check allowlist. Browser-test every host even when
+  multiple hosts serve the same compiled bundle.
