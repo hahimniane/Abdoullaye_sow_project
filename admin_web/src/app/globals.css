@@ -5876,6 +5876,31 @@ button[data-loading="true"]::before {
   padding: 22px;
 }
 
+.customer-barrel-stage > label {
+  color: var(--muted);
+  display: grid;
+  font-size: 0.84rem;
+  font-weight: 800;
+  gap: 7px;
+}
+
+.customer-barrel-stage > label input {
+  background: #fff;
+  border: 1px solid var(--rule-strong);
+  border-radius: 9px;
+  color: var(--ink);
+  font: inherit;
+  min-height: 50px;
+  outline: none;
+  padding: 0 12px;
+  width: 100%;
+}
+
+.customer-barrel-stage > label input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.16);
+}
+
 .customer-barrel-stage-header {
   align-items: center;
   display: flex;
@@ -6136,6 +6161,137 @@ button[data-loading="true"]::before {
 .customer-field-error {
   color: var(--danger) !important;
   font-weight: 700;
+}
+
+.customer-barrel-order-lines,
+.customer-line-pickups {
+  display: grid;
+  gap: 12px;
+}
+
+.customer-barrel-order-line {
+  align-items: center;
+  background: var(--paper-soft);
+  border: 1px solid var(--rule);
+  border-radius: 11px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  padding: 14px;
+}
+
+.customer-barrel-order-line > div:not(.customer-barrel-line-actions),
+.customer-line-pickup > header {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.customer-barrel-order-line small,
+.customer-line-pickup header span,
+.customer-line-subtotal small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.customer-barrel-order-line strong,
+.customer-barrel-order-line span,
+.customer-line-pickup strong {
+  overflow-wrap: anywhere;
+}
+
+.customer-barrel-order-line > div > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.customer-barrel-line-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.customer-barrel-remove {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--rule));
+  border-radius: 8px;
+  color: var(--danger);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  min-height: 42px;
+  padding: 8px 12px;
+}
+
+.customer-barrel-add-line {
+  margin-top: 12px;
+  min-height: 46px;
+  width: 100%;
+}
+
+.customer-line-subtotal {
+  align-content: center;
+  background: var(--brand-mist);
+  border: 1px solid color-mix(in srgb, var(--brand) 25%, transparent);
+  border-radius: 9px;
+  display: grid;
+  gap: 4px;
+  min-height: 70px;
+  padding: 12px 14px;
+}
+
+.customer-line-subtotal strong {
+  color: var(--brand-deep);
+  font-size: 1.1rem;
+}
+
+.customer-line-pickup {
+  background: var(--paper-soft);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.customer-pickup-availability {
+  align-items: center;
+  background: var(--paper-soft);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  min-height: 54px;
+  padding: 11px 13px;
+}
+
+.customer-pickup-availability.success {
+  background: color-mix(in srgb, var(--brand-mist) 75%, white);
+  border-color: color-mix(in srgb, var(--brand) 35%, var(--rule));
+  color: var(--brand-deep);
+  justify-content: flex-start;
+}
+
+.customer-pickup-availability.error {
+  background: color-mix(in srgb, var(--danger) 7%, white);
+  border-color: color-mix(in srgb, var(--danger) 30%, var(--rule));
+  color: var(--danger);
+}
+
+.customer-pickup-availability > span {
+  display: grid;
+  gap: 3px;
+}
+
+.customer-pickup-availability small {
+  color: inherit;
+  font-size: 0.78rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -6549,7 +6705,8 @@ button[data-loading="true"]::before {
   text-align: left;
 }
 
-.customer-address-suggestions button:hover {
+.customer-address-suggestions button:hover,
+.customer-address-suggestions button.active {
   background: #f0fdfa;
 }
 
@@ -6565,6 +6722,16 @@ button[data-loading="true"]::before {
 
 .customer-address-suggestions small {
   color: var(--muted);
+}
+
+.customer-address-status {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.customer-address-status.error {
+  color: #b42318;
 }
 
 .customer-quote-row {
@@ -6816,6 +6983,30 @@ button[data-loading="true"]::before {
 
   .customer-barrel-provider {
     grid-template-columns: auto auto minmax(0, 1fr);
+  }
+
+  .customer-barrel-order-line {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .customer-barrel-line-actions {
+    justify-content: stretch;
+  }
+
+  .customer-barrel-line-actions > button {
+    flex: 1 1 0;
+    min-height: 46px;
+  }
+
+  .customer-pickup-availability {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .customer-pickup-availability > button {
+    min-height: 46px;
+    width: 100%;
   }
 
   .customer-barrel-provider-price {

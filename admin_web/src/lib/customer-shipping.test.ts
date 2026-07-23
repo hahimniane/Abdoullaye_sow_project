@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import * as customerShipping from "./customer-shipping.ts";
 import { translateValue } from "./french-dom.ts";
 import {
   barrelPickupFee,
@@ -28,6 +29,63 @@ const disclosure = {
   version: "marketplace-provider-responsibility-v1",
   locale: "en-US",
 } as const;
+type DisclosureFixture = typeof disclosure;
+
+type BarrelOrderLineInput = {
+  destinationCountryId: string;
+  businessId: string;
+  receiverName: string;
+  receiverPhone: string;
+  quantity: number;
+  pickup?: {
+    requested: boolean;
+    address: string;
+    borough: string;
+    dateTime?: string;
+  };
+};
+
+const barrelOrderApi = customerShipping as typeof customerShipping & {
+  barrelOrderAllowsDifferentPickupDetails: (
+    lines: ReadonlyArray<{ quantity: number }>,
+  ) => boolean;
+  barrelOrderPickupDetailsAreComplete: (fields: {
+    lines: ReadonlyArray<{ pickup?: BarrelOrderLineInput["pickup"] }>;
+    sharedPickup?: BarrelOrderLineInput["pickup"];
+    useDifferentPickupDetails: boolean;
+    now?: number;
+  }) => boolean;
+  barrelOrderTotals: (fields: {
+    lines: Array<{
+      unitShippingFee: number;
+      quantity: number;
+      pickupFee: number;
+    }>;
+    sharedPickupFee: number;
+    useDifferentPickupDetails: boolean;
+  }) => {
+    shippingFee: number;
+    pickupFee: number;
+    total: number;
+    totalBarrels: number;
+    lineCount: number;
+  };
+  buildBarrelOrderPayload: (
+    fields: {
+      senderName: string;
+      lines: BarrelOrderLineInput[];
+      sharedPickup?: {
+        requested: boolean;
+        address: string;
+        borough: string;
+        dateTime?: string;
+      };
+      useDifferentPickupDetails: boolean;
+      useWalletBalance: boolean;
+    },
+    disclosure: DisclosureFixture,
+  ) => Record<string, unknown>;
+};
 
 test("barrel payload matches the mobile callable and omits pickup details when disabled", () => {
   assert.deepEqual(
@@ -57,6 +115,43 @@ test("barrel payload matches the mobile callable and omits pickup details when d
       quantity: 2,
       pickupRequested: false,
       useWalletBalance: true,
+      marketplaceDisclosure: disclosure,
+    },
+  );
+});
+
+test("barrel payload preserves an arbitrary pickup address without inventing a pricing zone", () => {
+  assert.deepEqual(
+    buildBarrelShipmentPayload(
+      {
+        senderName: " Sender ",
+        receiverName: " Receiver ",
+        receiverPhone: " +224620000000 ",
+        destinationCountryId: "gn",
+        businessId: "business-1",
+        quantity: 1,
+        pickup: {
+          requested: true,
+          address: " 500 Market Street, Newark, NJ 07105 ",
+          borough: "",
+          dateTime: "2030-01-02T15:00:00.000Z",
+        },
+        useWalletBalance: false,
+      },
+      disclosure,
+    ),
+    {
+      senderName: "Sender",
+      receiverName: "Receiver",
+      receiverPhone: "+224620000000",
+      destinationCountryId: "gn",
+      businessId: "business-1",
+      quantity: 1,
+      pickupRequested: true,
+      pickupAddress: "500 Market Street, Newark, NJ 07105",
+      pickupBorough: "",
+      pickupDateTime: "2030-01-02T15:00:00.000Z",
+      useWalletBalance: false,
       marketplaceDisclosure: disclosure,
     },
   );
@@ -255,14 +350,14 @@ test("barrel flow presents unique countries before providers for that country", 
   );
 });
 
-test("pickup details require a recognized NYC borough and a future appointment", () => {
+test("pickup details accept any nonempty address with a future appointment", () => {
   const now = new Date("2030-01-01T12:00:00.000Z").getTime();
   assert.equal(
     pickupDetailsAreComplete(
       {
         requested: true,
-        address: "123 Grand Concourse, Bronx, NY",
-        borough: "Bronx",
+        address: "500 Market Street, Newark, NJ 07105",
+        borough: "",
         dateTime: "2030-01-02T12:00:00.000Z",
       },
       now,
@@ -273,13 +368,13 @@ test("pickup details require a recognized NYC borough and a future appointment",
     pickupDetailsAreComplete(
       {
         requested: true,
-        address: "123 Main St",
-        borough: "Albany",
+        address: "500 Market Street, Newark, NJ 07105",
+        borough: "",
         dateTime: "2030-01-02T12:00:00.000Z",
       },
       now,
     ),
-    false,
+    true,
   );
   assert.equal(
     pickupDetailsAreComplete(
@@ -297,8 +392,8 @@ test("pickup details require a recognized NYC borough and a future appointment",
     pickupDetailsAreComplete(
       {
         requested: true,
-        address: "123 Grand Concourse, Bronx, NY",
-        borough: "Queens",
+        address: "",
+        borough: "Bronx",
         dateTime: "2030-01-02T12:00:00.000Z",
       },
       now,
@@ -380,6 +475,244 @@ test("barrel pickup is charged once per shipment and is required for a pickup to
   );
 });
 
+test("barrel order totals preserve independent line quantities and pickup scope", () => {
+  const lines = [
+    { unitShippingFee: 225, quantity: 1, pickupFee: 108 },
+    { unitShippingFee: 300, quantity: 2, pickupFee: 40 },
+  ];
+
+  assert.deepEqual(
+    barrelOrderApi.barrelOrderTotals({
+      lines,
+      sharedPickupFee: 108,
+      useDifferentPickupDetails: false,
+    }),
+    {
+      shippingFee: 825,
+      pickupFee: 216,
+      total: 1041,
+      totalBarrels: 3,
+      lineCount: 2,
+    },
+  );
+  assert.deepEqual(
+    barrelOrderApi.barrelOrderTotals({
+      lines,
+      sharedPickupFee: 108,
+      useDifferentPickupDetails: true,
+    }),
+    {
+      shippingFee: 825,
+      pickupFee: 148,
+      total: 973,
+      totalBarrels: 3,
+      lineCount: 2,
+    },
+  );
+  assert.deepEqual(
+    barrelOrderApi.barrelOrderTotals({
+      lines: [{ unitShippingFee: 225, quantity: 3, pickupFee: 108 }],
+      sharedPickupFee: 108,
+      useDifferentPickupDetails: false,
+    }),
+    {
+      shippingFee: 675,
+      pickupFee: 108,
+      total: 783,
+      totalBarrels: 3,
+      lineCount: 1,
+    },
+  );
+});
+
+test("different pickup details require multiple independent destination lines", () => {
+  assert.equal(
+    barrelOrderApi.barrelOrderAllowsDifferentPickupDetails([
+      { quantity: 2 },
+    ]),
+    false,
+  );
+  assert.equal(
+    barrelOrderApi.barrelOrderAllowsDifferentPickupDetails([
+      { quantity: 1 },
+      { quantity: 1 },
+    ]),
+    true,
+  );
+});
+
+test("different pickup mode requires a complete override for every line", () => {
+  const now = new Date("2030-01-01T12:00:00.000Z").getTime();
+  const pickup = {
+    requested: true,
+    address: "500 Market Street, Newark, NJ 07105",
+    borough: "",
+    dateTime: "2030-01-02T12:00:00.000Z",
+  };
+  assert.equal(
+    barrelOrderApi.barrelOrderPickupDetailsAreComplete({
+      lines: [{ pickup }, {}],
+      useDifferentPickupDetails: true,
+      now,
+    }),
+    false,
+  );
+  assert.equal(
+    barrelOrderApi.barrelOrderPickupDetailsAreComplete({
+      lines: [
+        { pickup },
+        {
+          pickup: {
+            requested: false,
+            address: "Bronx Test Office",
+            borough: "Office drop-off",
+          },
+        },
+      ],
+      useDifferentPickupDetails: true,
+      now,
+    }),
+    true,
+  );
+  assert.equal(
+    barrelOrderApi.barrelOrderPickupDetailsAreComplete({
+      lines: [{}, {}],
+      sharedPickup: pickup,
+      useDifferentPickupDetails: false,
+      now,
+    }),
+    true,
+  );
+});
+
+test("shared pickup stays top-level while every destination remains an independent order line", () => {
+  assert.deepEqual(
+    barrelOrderApi.buildBarrelOrderPayload(
+      {
+        senderName: " Multi-line Sender ",
+        lines: [
+          {
+            destinationCountryId: "gn",
+            businessId: "business-guinea",
+            receiverName: " Guinea Receiver ",
+            receiverPhone: " +224620000010 ",
+            quantity: 1,
+          },
+          {
+            destinationCountryId: "gh",
+            businessId: "business-ghana",
+            receiverName: " Ghana Receiver ",
+            receiverPhone: " +233201234567 ",
+            quantity: 2,
+          },
+        ],
+        sharedPickup: {
+          requested: true,
+          address: " 500 Market Street, Newark, NJ 07105 ",
+          borough: "",
+          dateTime: "2030-01-02T15:00:00.000Z",
+        },
+        useDifferentPickupDetails: false,
+        useWalletBalance: true,
+      },
+      disclosure,
+    ),
+    {
+      senderName: "Multi-line Sender",
+      lines: [
+        {
+          destinationCountryId: "gn",
+          businessId: "business-guinea",
+          receiverName: "Guinea Receiver",
+          receiverPhone: "+224620000010",
+          quantity: 1,
+        },
+        {
+          destinationCountryId: "gh",
+          businessId: "business-ghana",
+          receiverName: "Ghana Receiver",
+          receiverPhone: "+233201234567",
+          quantity: 2,
+        },
+      ],
+      pickupRequested: true,
+      pickupAddress: "500 Market Street, Newark, NJ 07105",
+      pickupBorough: "",
+      pickupDateTime: "2030-01-02T15:00:00.000Z",
+      useWalletBalance: true,
+      marketplaceDisclosure: disclosure,
+    },
+  );
+});
+
+test("different pickup details serialize per line without shared pickup keys", () => {
+  assert.deepEqual(
+    barrelOrderApi.buildBarrelOrderPayload(
+      {
+        senderName: "Multi-line Sender",
+        lines: [
+          {
+            destinationCountryId: "gn",
+            businessId: "business-guinea",
+            receiverName: "Guinea Receiver",
+            receiverPhone: "+224620000010",
+            quantity: 1,
+            pickup: {
+              requested: true,
+              address: "500 Market Street, Newark, NJ 07105",
+              borough: "",
+              dateTime: "2030-01-02T15:00:00.000Z",
+            },
+          },
+          {
+            destinationCountryId: "gh",
+            businessId: "business-ghana",
+            receiverName: "Ghana Receiver",
+            receiverPhone: "+233201234567",
+            quantity: 2,
+            pickup: {
+              requested: false,
+              address: "Bronx Test Office",
+              borough: "Office drop-off",
+            },
+          },
+        ],
+        useDifferentPickupDetails: true,
+        useWalletBalance: false,
+      },
+      disclosure,
+    ),
+    {
+      senderName: "Multi-line Sender",
+      lines: [
+        {
+          destinationCountryId: "gn",
+          businessId: "business-guinea",
+          receiverName: "Guinea Receiver",
+          receiverPhone: "+224620000010",
+          quantity: 1,
+          pickupRequested: true,
+          pickupAddress: "500 Market Street, Newark, NJ 07105",
+          pickupBorough: "",
+          pickupDateTime: "2030-01-02T15:00:00.000Z",
+        },
+        {
+          destinationCountryId: "gh",
+          businessId: "business-ghana",
+          receiverName: "Ghana Receiver",
+          receiverPhone: "+233201234567",
+          quantity: 2,
+          pickupRequested: false,
+          pickupAddress: "Bronx Test Office",
+          pickupBorough: "Office drop-off",
+        },
+      ],
+      useWalletBalance: false,
+      marketplaceDisclosure: disclosure,
+    },
+  );
+});
+
 test("pickup datetime minimum uses local wall-clock time", () => {
   const date = new Date(2030, 0, 2, 15, 45);
   assert.equal(localDateTimeInputValue(date), "2030-01-02T15:45");
@@ -397,10 +730,22 @@ test("dynamic pickup office and pending-total copy translates completely", () =>
   );
   assert.equal(
     translateValue(
-      "Enter a valid New York City pickup address to see the complete total.",
+      "Enter a pickup address to see the complete total.",
       "fr",
     ),
-    "Saisissez une adresse de collecte valide à New York pour voir le total complet.",
+    "Saisissez une adresse de collecte pour voir le total complet.",
+  );
+  assert.equal(
+    translateValue("3 barrels · 2 destination shipments", "fr"),
+    "3 barils · 2 expéditions de destination",
+  );
+  assert.equal(
+    translateValue("1 barrel · 1 destination shipment", "fr"),
+    "1 baril · 1 expédition de destination",
+  );
+  assert.equal(
+    translateValue("Service area: Newark · Pickup fee: $42.00", "fr"),
+    "Zone desservie: Newark · Frais de collecte: $42.00",
   );
 });
 
@@ -517,12 +862,37 @@ test("shipping UI uses the canonical server option, quote, request, and checkout
     "createTransportRequest",
   ].forEach((callable) => assert.match(source, new RegExp(`"${callable}"`)));
   assert.match(source, /startCheckout\(\s*"barrelShipment"/);
+  assert.match(source, /startCheckout\(\s*"barrelOrder"/);
   assert.match(source, /startCheckout\(\s*"freightShipment"/);
   assert.match(source, /startCheckout\(\s*"freightSettlement"/);
   assert.match(source, /<DestinationPicker/);
   assert.match(source, /<ShippingPriceSummary/);
   assert.match(source, /Price provided after review/);
   assert.doesNotMatch(source, /unit_amount|price_data|estimatedTotal:/);
+});
+
+test("pickup address entry automatically exposes an accessible searchable suggestion list", () => {
+  const source = readFileSync(
+    new URL("../components/customer-shipping-services.tsx", import.meta.url),
+    "utf8",
+  );
+  const styles = readFileSync(
+    new URL("../app/globals.css", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /callFunction<AddressSuggestion\[\]>\("suggestPickupAddresses"/);
+  assert.match(source, /aria-autocomplete="list"/);
+  assert.match(source, /role="combobox"/);
+  assert.match(source, /role="listbox"/);
+  assert.match(source, /event\.key === "ArrowDown"/);
+  assert.match(source, /event\.key === "Enter"/);
+  assert.match(source, /Searching addresses\.\.\./);
+  assert.match(source, /No matching addresses\./);
+  assert.match(styles, /\.customer-barrel-stage > label\s*\{[\s\S]*display: grid/);
+  assert.match(
+    styles,
+    /\.customer-barrel-stage > label input\s*\{[\s\S]*min-height: 50px/,
+  );
 });
 
 test("one unavailable shipping service does not hide the other service options", () => {

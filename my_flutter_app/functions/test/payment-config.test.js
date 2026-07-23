@@ -35,6 +35,12 @@ const STRIPE_CALLABLES = [
   "createCustomerCheckoutSession",
 ];
 
+const MAPS_PRICED_PAYMENT_CALLABLES = new Set([
+  "createBarrelShipmentPaymentIntent",
+  "createBarrelOrderPaymentIntent",
+  "createCustomerCheckoutSession",
+]);
+
 describe("payment runtime configuration", () => {
   it("declares Stripe secrets on real-payment callables", () => {
     const script = `
@@ -59,7 +65,13 @@ describe("payment runtime configuration", () => {
     });
     const secretsByCallable = JSON.parse(output);
     for (const name of STRIPE_CALLABLES) {
-      assert.deepEqual(secretsByCallable[name], ["STRIPE_SECRET_KEY"], name);
+      assert.deepEqual(
+          secretsByCallable[name],
+          MAPS_PRICED_PAYMENT_CALLABLES.has(name) ?
+            ["STRIPE_SECRET_KEY", "GOOGLE_MAPS_API_KEY"] :
+            ["STRIPE_SECRET_KEY"],
+          name,
+      );
     }
   });
 

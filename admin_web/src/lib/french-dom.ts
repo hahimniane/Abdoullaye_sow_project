@@ -7,7 +7,68 @@ import { LANGUAGE_STORAGE_KEY, currentWebLanguage } from "./language.ts";
 export { resolveLang } from "./language.ts";
 
 const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
+  "Add a destination": "Ajouter une destination",
+  "Add another destination": "Ajouter une autre destination",
+  "Add each destination, business, receiver, and barrel quantity to one order.":
+    "Ajoutez chaque destination, entreprise, destinataire et quantité de barils à une seule commande.",
+  "Add to order": "Ajouter à la commande",
+  "Address suggestions": "Suggestions d’adresses",
+  "Address suggestions are unavailable. Enter the complete address to continue.":
+    "Les suggestions d’adresses sont indisponibles. Saisissez l’adresse complète pour continuer.",
   "Almost there": "Vous y êtes presque",
+  "Barrel order": "Commande de barils",
+  barrel: "baril",
+  barrels: "barils",
+  "Barrels for this destination": "Barils pour cette destination",
+  "Check pickup price": "Vérifier le tarif de collecte",
+  "Checking pickup availability...":
+    "Vérification de la disponibilité de la collecte...",
+  "Choose the country, business, receiver, and quantity.":
+    "Choisissez le pays, l’entreprise, le destinataire et la quantité.",
+  "Confirmed from the pickup address.":
+    "Confirmée à partir de l’adresse de collecte.",
+  "Destination shipments": "Expéditions de destination",
+  "destination shipment": "expédition de destination",
+  "destination shipments": "expéditions de destination",
+  "Different pickups": "Collectes différentes",
+  "Edit destination": "Modifier la destination",
+  "Each pickup fee is shown for its destination shipment.":
+    "Chaque frais de collecte est indiqué pour son expédition de destination.",
+  "Enter a complete pickup address.":
+    "Saisissez une adresse de collecte complète.",
+  "Enter a complete pickup address to check availability and price.":
+    "Saisissez une adresse de collecte complète pour vérifier la disponibilité et le tarif.",
+  "Enter a pickup address": "Saisissez une adresse de collecte",
+  "Enter a pickup address to see the complete total.":
+    "Saisissez une adresse de collecte pour voir le total complet.",
+  "How should these destination shipments be collected?":
+    "Comment ces expéditions de destination doivent-elles être collectées ?",
+  "Pickup available": "Collecte disponible",
+  "Pickup details": "Détails de collecte",
+  "Pickup total": "Total de la collecte",
+  Shipping: "Expédition",
+  "Same pickup": "Même collecte",
+  "Searching addresses...": "Recherche d’adresses...",
+  "Save destination": "Enregistrer la destination",
+  "Send barrels": "Envoyer des barils",
+  "Service area": "Zone desservie",
+  "Start typing a pickup address":
+    "Commencez à saisir une adresse de collecte",
+  "The barrel order could not be started. Check the details and try again.":
+    "La commande de barils n’a pas pu être démarrée. Vérifiez les informations et réessayez.",
+  "The shared pickup fee is charged once per destination shipment.":
+    "Les frais de collecte partagée sont facturés une fois par expédition de destination.",
+  "No matching addresses. Keep typing or enter the complete address.":
+    "Aucune adresse correspondante. Continuez à saisir ou entrez l’adresse complète.",
+  "Total barrels": "Nombre total de barils",
+  "Total pending": "Total en attente",
+  "Use wallet balance": "Utiliser le solde du portefeuille",
+  "Available balance will be applied first.":
+    "Le solde disponible sera appliqué en premier.",
+  "We couldn’t check pickup availability. Check the address and try again.":
+    "Nous n’avons pas pu vérifier la disponibilité de la collecte. Vérifiez l’adresse et réessayez.",
+  "Who is sending this barrel order?":
+    "Qui envoie cette commande de barils ?",
   "Calculate pickup & continue": "Calculer la collecte et continuer",
   "Close account access": "Fermer l’accès au compte",
   "Compare services and prepare your request.":
@@ -565,7 +626,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Admin console": "Console admin",
   "All records": "Tous les dossiers",
   "Barrel records:": "Dossiers de barils :",
-  "barrel ·": "baril(s) ·",
+  "barrel ·": "baril ·",
   "freight records": "dossier(s) de fret",
   "Freight records:": "Dossiers de fret :",
   "item is waiting across approvals, logistics, and finance.":
@@ -746,7 +807,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "No transport requests yet": "Aucune demande de transport pour le moment",
   Operations: "Opérations",
   "Operations mix": "Répartition des opérations",
-  Order: "Ordre",
+  Order: "Commande",
   Owner: "Propriétaire",
   Parking: "Stationnement",
   "Page not found": "Page introuvable",

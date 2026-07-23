@@ -26,6 +26,17 @@ export type BarrelPickupPricing = {
   boroughPrices: Record<NycPickupBorough, number>;
 };
 
+export type BarrelPickupQuote = {
+  available: true;
+  normalizedAddress: string;
+  serviceArea: string;
+  borough: string;
+  model: "borough" | "distance";
+  distanceMiles: number | null;
+  fee: number;
+  currency: string;
+};
+
 export const DEFAULT_BARREL_PICKUP_PRICING: BarrelPickupPricing = {
   officeAddress: "Bronx, NY",
   boroughPrices: {
@@ -45,6 +56,23 @@ export type BarrelShipmentFields = {
   businessId: string;
   quantity: number;
   pickup: PickupDetails;
+  useWalletBalance: boolean;
+};
+
+export type BarrelOrderLineFields = {
+  destinationCountryId: string;
+  businessId: string;
+  receiverName: string;
+  receiverPhone: string;
+  quantity: number;
+  pickup?: PickupDetails;
+};
+
+export type BarrelOrderFields = {
+  senderName: string;
+  lines: BarrelOrderLineFields[];
+  sharedPickup?: PickupDetails;
+  useDifferentPickupDetails: boolean;
   useWalletBalance: boolean;
 };
 
@@ -197,10 +225,6 @@ function barrelOptionIsEligible(option: ShippingDestinationOption) {
   return shippingProviderRate(option.country, "barrel") !== null;
 }
 
-const NYC_BOROUGHS = new Set(
-  NYC_PICKUP_BOROUGHS.map((borough) => borough.toLowerCase()),
-);
-
 function zipInRange(value: string, start: number, end: number) {
   for (const match of value.matchAll(/\b\d{5}\b/g)) {
     const zip = Number(match[0]);
@@ -308,21 +332,23 @@ export function barrelShipmentEstimate({
   country,
   pickupBorough,
   pickupPricing,
+  pickupQuote,
   pickupRequested,
   quantity,
 }: {
   country: ShippingPricingCountry;
   pickupBorough: string;
   pickupPricing: BarrelPickupPricing | null;
+  pickupQuote?: unknown;
   pickupRequested: boolean;
   quantity: unknown;
 }) {
   const shipping = barrelShippingEstimate(country, quantity);
   if (!shipping) return null;
+  const quotedPickupFee = positiveFinite(pickupQuote);
   const pickupFee = pickupRequested
-    ? pickupPricing
-      ? barrelPickupFee(pickupPricing, pickupBorough)
-      : null
+    ? quotedPickupFee ??
+      (pickupPricing ? barrelPickupFee(pickupPricing, pickupBorough) : null)
     : 0;
   return {
     ...shipping,
@@ -336,15 +362,11 @@ export function pickupDetailsAreComplete(
   now = Date.now(),
 ) {
   if (!pickup.requested) return true;
-  const detectedBorough = nycBoroughFromAddress(pickup.address);
   const pickupTime = pickup.dateTime
     ? new Date(pickup.dateTime).getTime()
     : Number.NaN;
   return Boolean(
     pickup.address.trim() &&
-      detectedBorough &&
-      detectedBorough.toLowerCase() === pickup.borough.trim().toLowerCase() &&
-      NYC_BOROUGHS.has(pickup.borough.trim().toLowerCase()) &&
       Number.isFinite(pickupTime) &&
       pickupTime > now,
   );
@@ -405,6 +427,107 @@ function pickupPayload(pickup: PickupDetails) {
       ...(pickup.dateTime && { pickupDateTime: pickup.dateTime }),
     }),
   };
+}
+
+function barrelOrderLinePayload(
+  line: BarrelOrderLineFields,
+  includePickup: boolean,
+) {
+  return {
+    destinationCountryId: trimmed(line.destinationCountryId),
+    businessId: trimmed(line.businessId),
+    receiverName: trimmed(line.receiverName),
+    receiverPhone: trimmed(line.receiverPhone),
+    quantity: line.quantity,
+    ...(includePickup &&
+      line.pickup && {
+        pickupRequested: line.pickup.requested,
+        pickupAddress: trimmed(line.pickup.address),
+        pickupBorough: trimmed(line.pickup.borough),
+        ...(line.pickup.dateTime && {
+          pickupDateTime: line.pickup.dateTime,
+        }),
+      }),
+  };
+}
+
+export function buildBarrelOrderPayload(
+  fields: BarrelOrderFields,
+  disclosure: MarketplaceDisclosurePayload,
+) {
+  return {
+    senderName: trimmed(fields.senderName),
+    lines: fields.lines.map((line) =>
+      barrelOrderLinePayload(line, fields.useDifferentPickupDetails),
+    ),
+    ...(!fields.useDifferentPickupDetails &&
+      fields.sharedPickup &&
+      pickupPayload(fields.sharedPickup)),
+    useWalletBalance: fields.useWalletBalance,
+    marketplaceDisclosure: disclosure,
+  };
+}
+
+export function barrelOrderTotals({
+  lines,
+  sharedPickupFee,
+  useDifferentPickupDetails,
+}: {
+  lines: Array<{
+    unitShippingFee: number;
+    quantity: number;
+    pickupFee: number;
+  }>;
+  sharedPickupFee: number;
+  useDifferentPickupDetails: boolean;
+}) {
+  const shippingFee = lines.reduce(
+    (total, line) => total + line.unitShippingFee * line.quantity,
+    0,
+  );
+  const pickupFee = useDifferentPickupDetails
+    ? lines.reduce((total, line) => total + line.pickupFee, 0)
+    : sharedPickupFee * lines.length;
+  return {
+    shippingFee,
+    pickupFee,
+    total: shippingFee + pickupFee,
+    totalBarrels: lines.reduce((total, line) => total + line.quantity, 0),
+    lineCount: lines.length,
+  };
+}
+
+export function barrelOrderAllowsDifferentPickupDetails(
+  lines: ReadonlyArray<{ quantity: number }>,
+) {
+  return (
+    lines.length > 1 &&
+    lines.reduce((total, line) => total + Number(line.quantity || 0), 0) > 1
+  );
+}
+
+export function barrelOrderPickupDetailsAreComplete({
+  lines,
+  now = Date.now(),
+  sharedPickup,
+  useDifferentPickupDetails,
+}: {
+  lines: ReadonlyArray<{ pickup?: PickupDetails }>;
+  now?: number;
+  sharedPickup?: PickupDetails;
+  useDifferentPickupDetails: boolean;
+}) {
+  if (!useDifferentPickupDetails) {
+    return Boolean(sharedPickup && pickupDetailsAreComplete(sharedPickup, now));
+  }
+  return (
+    lines.length > 0 &&
+    lines.every(
+      (line) =>
+        line.pickup !== undefined &&
+        pickupDetailsAreComplete(line.pickup, now),
+    )
+  );
 }
 
 export function buildBarrelShipmentPayload(

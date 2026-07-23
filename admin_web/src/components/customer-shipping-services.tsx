@@ -22,9 +22,11 @@ import { ServiceRequestForm } from "@/components/service-request-form";
 import { SearchableSelect } from "@/components/searchable-select";
 import {
   barrelDestinationCountries,
+  barrelOrderTotals,
   barrelPickupPricingFromData,
   barrelProvidersForCountry,
   barrelShipmentEstimate,
+  buildBarrelOrderPayload,
   buildBarrelShipmentPayload,
   buildFreightSettlementPayload,
   buildFreightShipmentPayload,
@@ -39,6 +41,7 @@ import {
   shippingCountryDisplayName,
   shippingProviderRate,
   type BarrelPickupPricing,
+  type BarrelPickupQuote,
   type PickupDetails,
 } from "@/lib/customer-shipping";
 import { marketplaceDisclosure } from "@/lib/disclosures";
@@ -77,6 +80,7 @@ type DestinationOption = {
   businessId: string;
   businessName: string;
   freightPickupAvailable?: boolean;
+  freightPickupModel?: "borough" | "distance";
   country: DestinationCountry;
 };
 
@@ -309,7 +313,7 @@ export function CustomerShippingServices({
       ) : (
         <>
           {service === "barrel" && (
-            <BarrelShipmentForm
+            <BarrelOrderForm
               authenticated={authenticated}
               onAuthenticationRequired={onAuthenticationRequired}
               options={barrelOptions}
@@ -931,6 +935,961 @@ function BarrelShipmentForm({
   );
 }
 
+type BarrelOrderLine = {
+  id: string;
+  option: DestinationOption;
+  receiverName: string;
+  receiverPhone: string;
+  receiverPhoneIsWhatsappOnly: boolean;
+  quantity: number;
+  pickup: PickupDetails;
+  pickupQuote: BarrelPickupQuote | null;
+};
+
+function BarrelOrderForm({
+  authenticated,
+  onAuthenticationRequired,
+  options,
+  profile,
+}: {
+  authenticated: boolean;
+  onAuthenticationRequired?: () => void;
+  options: DestinationOption[];
+  profile: UserProfile;
+}) {
+  const [senderName, setSenderName] = useState(text(profile.fullName, ""));
+  const [lines, setLines] = useState<BarrelOrderLine[]>([]);
+  const [editorOpen, setEditorOpen] = useState(true);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [destinationCountryId, setDestinationCountryId] = useState("");
+  const [destinationOptionId, setDestinationOptionId] = useState("");
+  const [receiverName, setReceiverName] = useState("");
+  const [receiverPhone, setReceiverPhone] = useState("");
+  const [receiverPhoneIsWhatsappOnly, setReceiverPhoneIsWhatsappOnly] =
+    useState(false);
+  const [receiverPhoneTouched, setReceiverPhoneTouched] = useState(false);
+  const [quantity, setQuantity] = useState(1);
+  const [sharedPickup, setSharedPickup] = useState<PickupDetails>({
+    requested: true,
+    address: "",
+    borough: "",
+  });
+  const [sharedPickupQuote, setSharedPickupQuote] =
+    useState<BarrelPickupQuote | null>(null);
+  const [differentPickups, setDifferentPickups] = useState(false);
+  const [pickupPricing, setPickupPricing] =
+    useState<BarrelPickupPricing | null>(null);
+  const [pickupPricingLoading, setPickupPricingLoading] = useState(true);
+  const [pickupPricingError, setPickupPricingError] = useState("");
+  const [pickupPricingReloadKey, setPickupPricingReloadKey] = useState(0);
+  const [quotingPickupId, setQuotingPickupId] = useState("");
+  const [pickupQuoteError, setPickupQuoteError] = useState("");
+  const [useWalletBalance, setUseWalletBalance] = useState(false);
+  const [accepted, setAccepted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const countries = useMemo(
+    () => barrelDestinationCountries(options),
+    [options],
+  );
+  const providers = useMemo(
+    () => barrelProvidersForCountry(options, destinationCountryId),
+    [destinationCountryId, options],
+  );
+  const selectedCountry = countries.find(
+    (country) => country.id === destinationCountryId,
+  );
+  const destination = selectedOption(options, destinationOptionId);
+  const language = currentWebLanguage();
+  const countryName = (
+    country: Pick<DestinationCountry, "code" | "name">,
+  ) => shippingCountryDisplayName(country, language);
+  const phoneValidation = validateReceiverPhone({
+    allowDifferentCountry: receiverPhoneIsWhatsappOnly,
+    destinationCountryCode: selectedCountry?.code,
+    value: receiverPhone,
+  });
+  const showWhatsappOption = receiverPhoneIsDifferentCountry({
+    destinationCountryCode: selectedCountry?.code,
+    value: receiverPhone,
+  });
+  const phoneError =
+    receiverPhoneTouched && !phoneValidation.valid
+      ? phoneValidation.reason === "required"
+        ? "Enter the receiver phone number."
+        : phoneValidation.reason === "destination-mismatch"
+          ? "Receiver phone must match the destination country. Use the WhatsApp option below for a number from another country."
+          : phoneValidation.reason === "whatsapp-country-code"
+            ? "Include the country calling code for a WhatsApp number."
+            : "Enter a valid international phone number."
+      : "";
+  const officeAddress =
+    pickupPricing?.officeAddress ??
+    DEFAULT_BARREL_PICKUP_PRICING.officeAddress;
+  const totalBarrels = lines.reduce(
+    (total, line) => total + line.quantity,
+    0,
+  );
+  const canUseDifferentPickups = lines.length > 1 && totalBarrels > 1;
+  const usesDifferentPickups = canUseDifferentPickups && differentPickups;
+  const totals = barrelOrderTotals({
+    lines: lines.map((line) => ({
+      unitShippingFee:
+        shippingProviderRate(line.option.country, "barrel") ?? 0,
+      quantity: line.quantity,
+      pickupFee: line.pickup.requested
+        ? line.pickupQuote?.fee ?? 0
+        : 0,
+    })),
+    sharedPickupFee: sharedPickup.requested
+      ? sharedPickupQuote?.fee ?? 0
+      : 0,
+    useDifferentPickupDetails: usesDifferentPickups,
+  });
+  const pickupReady = usesDifferentPickups
+    ? lines.every(
+        (line) =>
+          pickupDetailsAreComplete(line.pickup) &&
+          (!line.pickup.requested || line.pickupQuote !== null),
+      )
+    : pickupDetailsAreComplete(sharedPickup) &&
+      (!sharedPickup.requested || sharedPickupQuote !== null);
+  const draftValid =
+    Boolean(
+      destination &&
+        receiverName.trim() &&
+        Number.isInteger(quantity) &&
+        quantity >= 1 &&
+        quantity <= 20,
+    ) && phoneValidation.valid;
+  const readyForReview = Boolean(
+    senderName.trim() && lines.length > 0 && pickupReady,
+  );
+  const valid = readyForReview && accepted;
+
+  useEffect(() => {
+    let active = true;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    setPickupPricingLoading(true);
+    setPickupPricingError("");
+    const timeout = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(
+        () => reject(new Error("Pickup pricing request timed out.")),
+        15_000,
+      );
+    });
+    void Promise.race([
+      getDoc(doc(db, "shipmentPricing", "barrelPickup")),
+      timeout,
+    ])
+      .then((snapshot) => {
+        if (active) {
+          setPickupPricing(barrelPickupPricingFromData(snapshot.data()));
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setPickupPricing(null);
+          setPickupPricingError(
+            "Pickup pricing could not be loaded. Try again or choose office drop-off.",
+          );
+        }
+      })
+      .finally(() => {
+        if (timeoutId) clearTimeout(timeoutId);
+        if (active) setPickupPricingLoading(false);
+      });
+    return () => {
+      active = false;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [pickupPricingReloadKey]);
+
+  function resetEditor() {
+    setEditingIndex(null);
+    setDestinationCountryId("");
+    setDestinationOptionId("");
+    setReceiverName("");
+    setReceiverPhone("");
+    setReceiverPhoneIsWhatsappOnly(false);
+    setReceiverPhoneTouched(false);
+    setQuantity(1);
+  }
+
+  function saveLine() {
+    if (!draftValid || !destination) {
+      setReceiverPhoneTouched(true);
+      return;
+    }
+    const previous =
+      editingIndex === null ? null : lines[editingIndex];
+    const line: BarrelOrderLine = {
+      id:
+        previous?.id ??
+        `barrel-line-${Date.now()}-${lines.length}`,
+      option: destination,
+      receiverName: receiverName.trim(),
+      receiverPhone: receiverPhone.trim(),
+      receiverPhoneIsWhatsappOnly,
+      quantity,
+      pickup: previous?.pickup ?? { ...sharedPickup },
+      pickupQuote: previous?.pickupQuote ?? sharedPickupQuote,
+    };
+    setLines((current) =>
+      editingIndex === null
+        ? [...current, line]
+        : current.map((item, index) =>
+            index === editingIndex ? line : item,
+          ),
+    );
+    resetEditor();
+    setEditorOpen(false);
+  }
+
+  function editLine(index: number) {
+    const line = lines[index];
+    setEditingIndex(index);
+    setDestinationCountryId(line.option.country.id);
+    setDestinationOptionId(line.option.id);
+    setReceiverName(line.receiverName);
+    setReceiverPhone(line.receiverPhone);
+    setReceiverPhoneIsWhatsappOnly(
+      line.receiverPhoneIsWhatsappOnly,
+    );
+    setReceiverPhoneTouched(false);
+    setQuantity(line.quantity);
+    setEditorOpen(true);
+  }
+
+  async function requestPickupQuote(
+    pickup: PickupDetails,
+    id: string,
+    addressOverride?: string,
+  ) {
+    const pickupAddress = (addressOverride ?? pickup.address).trim();
+    if (!pickupAddress || quotingPickupId) return null;
+    setQuotingPickupId(id);
+    setPickupQuoteError("");
+    try {
+      return await callFunction<BarrelPickupQuote>("quoteBarrelPickup", {
+        pickupAddress,
+      });
+    } catch {
+      setPickupQuoteError(
+        "We couldn’t check pickup availability. Check the address and try again.",
+      );
+      return null;
+    } finally {
+      setQuotingPickupId("");
+    }
+  }
+
+  async function quoteSharedPickup(addressOverride?: string) {
+    const quote = await requestPickupQuote(
+      sharedPickup,
+      "shared",
+      addressOverride,
+    );
+    if (!quote) return;
+    setSharedPickup({
+      ...sharedPickup,
+      address: quote.normalizedAddress,
+      borough: quote.borough,
+    });
+    setSharedPickupQuote(quote);
+  }
+
+  async function quoteLinePickup(lineId: string, addressOverride?: string) {
+    const line = lines.find((item) => item.id === lineId);
+    if (!line) return;
+    const quote = await requestPickupQuote(
+      line.pickup,
+      lineId,
+      addressOverride,
+    );
+    if (!quote) return;
+    setLines((current) =>
+      current.map((item) =>
+        item.id === lineId
+          ? {
+              ...item,
+              pickup: {
+                ...item.pickup,
+                address: quote.normalizedAddress,
+                borough: quote.borough,
+              },
+              pickupQuote: quote,
+            }
+          : item,
+      ),
+    );
+  }
+
+  async function submit() {
+    if (!valid || submitting) return;
+    if (!authenticated) {
+      onAuthenticationRequired?.();
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      await startCheckout(
+        "barrelOrder",
+        buildBarrelOrderPayload(
+          {
+            senderName,
+            lines: lines.map((line) => ({
+              destinationCountryId: line.option.country.id,
+              businessId: line.option.businessId,
+              receiverName: line.receiverName,
+              receiverPhone: line.receiverPhone,
+              quantity: line.quantity,
+              ...(usesDifferentPickups && {
+                pickup: {
+                  ...line.pickup,
+                  ...(line.pickup.dateTime && {
+                    dateTime: localDateTimeIso(line.pickup.dateTime),
+                  }),
+                },
+              }),
+            })),
+            ...(!usesDifferentPickups && {
+              sharedPickup: {
+                ...sharedPickup,
+                ...(sharedPickup.dateTime && {
+                  dateTime: localDateTimeIso(sharedPickup.dateTime),
+                }),
+              },
+            }),
+            useDifferentPickupDetails: usesDifferentPickups,
+            useWalletBalance,
+          },
+          marketplaceDisclosure(),
+        ),
+      );
+    } catch {
+      setError(
+        "The barrel order could not be started. Check the details and try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (options.length === 0) {
+    return (
+      <ServiceUnavailable
+        message="No approved barrel destinations are available right now."
+        title="Barrel shipping is temporarily unavailable"
+      />
+    );
+  }
+
+  return (
+    <ServiceRequestForm
+      canReview={readyForReview}
+      canSubmit={valid}
+      error={error}
+      intro="Add each destination, business, receiver, and barrel quantity to one order."
+      onCancel={() => {
+        setLines([]);
+        resetEditor();
+        setEditorOpen(true);
+        setSharedPickup({ requested: true, address: "", borough: "" });
+        setSharedPickupQuote(null);
+        setDifferentPickups(false);
+        setAccepted(false);
+      }}
+      onSubmit={submit}
+      review={
+        <ReviewGrid>
+          <ReviewDetail label="Sender" value={senderName} />
+          <ReviewDetail
+            label="Order"
+            value={`${totals.totalBarrels} ${
+              totals.totalBarrels === 1 ? "barrel" : "barrels"
+            } · ${totals.lineCount} ${
+              totals.lineCount === 1
+                ? "destination shipment"
+                : "destination shipments"
+            }`}
+          />
+          {lines.map((line, index) => (
+            <ReviewDetail
+              key={line.id}
+              label={`Destination ${index + 1}`}
+              value={`${countryName(line.option.country)} · ${
+                line.option.businessName
+              } · ${line.quantity} ${
+                line.quantity === 1 ? "barrel" : "barrels"
+              } · ${line.receiverName}`}
+            />
+          ))}
+          <ReviewDetail
+            label="Shipping subtotal"
+            value={formatMoney(totals.shippingFee)}
+          />
+          <ReviewDetail
+            label="Pickup total"
+            value={formatMoney(totals.pickupFee)}
+          />
+          <ReviewDetail
+            label="Estimated total"
+            value={formatMoney(totals.total)}
+          />
+          {authenticated && (
+            <ReviewDetail
+              label="Wallet"
+              value={useWalletBalance ? "Use available balance" : "Do not use"}
+            />
+          )}
+          <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
+        </ReviewGrid>
+      }
+      submitLabel={
+        authenticated
+          ? "Continue to secure payment"
+          : "Sign in to save & continue"
+      }
+      submitting={submitting}
+      title="Send barrels"
+    >
+      <div className="customer-barrel-journey">
+        <section className="customer-barrel-stage active">
+          <header className="customer-barrel-stage-header">
+            <span aria-hidden="true">1</span>
+            <div>
+              <small>Sender</small>
+              <h3>Who is sending this barrel order?</h3>
+            </div>
+          </header>
+          <label>
+            Sender name
+            <input
+              autoComplete="name"
+              onChange={(event) => setSenderName(event.target.value)}
+              required
+              value={senderName}
+            />
+          </label>
+        </section>
+
+        {lines.length > 0 && (
+          <section className="customer-barrel-stage active">
+            <header className="customer-barrel-stage-header">
+              <span aria-hidden="true">2</span>
+              <div>
+                <small>Destinations</small>
+                <h3>
+                  {totals.totalBarrels}{" "}
+                  {totals.totalBarrels === 1 ? "barrel" : "barrels"} ·{" "}
+                  {totals.lineCount}{" "}
+                  {totals.lineCount === 1
+                    ? "destination shipment"
+                    : "destination shipments"}
+                </h3>
+              </div>
+            </header>
+            <div className="customer-barrel-order-lines">
+              {lines.map((line, index) => {
+                const rate =
+                  shippingProviderRate(line.option.country, "barrel") ?? 0;
+                return (
+                  <article className="customer-barrel-order-line" key={line.id}>
+                    <div>
+                      <small>Destination {index + 1}</small>
+                      <strong>{countryName(line.option.country)}</strong>
+                      <span>{line.option.businessName}</span>
+                    </div>
+                    <div>
+                      <small>Receiver</small>
+                      <strong>{line.receiverName}</strong>
+                      <span>{line.receiverPhone}</span>
+                    </div>
+                    <div>
+                      <small>Shipping</small>
+                      <strong>{formatMoney(rate * line.quantity)}</strong>
+                      <span>
+                        {line.quantity} × {formatMoney(rate)}
+                      </span>
+                    </div>
+                    <div className="customer-barrel-line-actions">
+                      <button
+                        className="secondary-button"
+                        onClick={() => editLine(index)}
+                        type="button"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="customer-barrel-remove"
+                        onClick={() => {
+                          setLines((current) =>
+                            current.filter(
+                              (_, lineIndex) => lineIndex !== index,
+                            ),
+                          );
+                          if (lines.length <= 2) setDifferentPickups(false);
+                        }}
+                        type="button"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+            {lines.length < 10 && !editorOpen && (
+              <button
+                className="secondary-button customer-barrel-add-line"
+                onClick={() => {
+                  resetEditor();
+                  setEditorOpen(true);
+                }}
+                type="button"
+              >
+                Add another destination
+              </button>
+            )}
+          </section>
+        )}
+
+        {editorOpen && (
+          <section className="customer-barrel-stage active">
+            <header className="customer-barrel-stage-header">
+              <span aria-hidden="true">{lines.length > 0 ? "＋" : "2"}</span>
+              <div>
+                <small>
+                  {editingIndex === null
+                    ? "Add a destination"
+                    : "Edit destination"}
+                </small>
+                <h3>Choose the country, business, receiver, and quantity.</h3>
+              </div>
+              {lines.length > 0 && (
+                <button
+                  className="customer-barrel-change"
+                  onClick={() => {
+                    resetEditor();
+                    setEditorOpen(false);
+                  }}
+                  type="button"
+                >
+                  Close
+                </button>
+              )}
+            </header>
+            <SearchableSelect
+              className="customer-barrel-country"
+              emptyMessage="No destination countries match your search."
+              label="Destination country"
+              listLabel="Destination country options"
+              onChange={(value) => {
+                setDestinationCountryId(value);
+                setDestinationOptionId("");
+                setReceiverPhoneIsWhatsappOnly(false);
+                setReceiverPhoneTouched(false);
+              }}
+              options={countries.map((country) => ({
+                label: countryName(country),
+                keywords: `${country.code || ""} ${country.name}`,
+                value: country.id,
+              }))}
+              placeholder="Search or choose a country"
+              value={destinationCountryId}
+            />
+            {selectedCountry && (
+              <fieldset className="customer-barrel-providers">
+                <legend>Choose a shipping business</legend>
+                {providers.map((option) => {
+                  const rate = shippingProviderRate(option.country, "barrel");
+                  return (
+                    <label
+                      className={`customer-barrel-provider${destinationOptionId === option.id ? " selected" : ""}`}
+                      key={option.id}
+                    >
+                      <input
+                        checked={destinationOptionId === option.id}
+                        name="barrel-provider"
+                        onChange={() => setDestinationOptionId(option.id)}
+                        type="radio"
+                        value={option.id}
+                      />
+                      <span className="customer-option-icon">
+                        <Store aria-hidden="true" size={19} />
+                      </span>
+                      <span className="customer-barrel-provider-name">
+                        <strong>{option.businessName}</strong>
+                        <small>Approved business</small>
+                      </span>
+                      <span className="customer-barrel-provider-price">
+                        <strong>
+                          {rate ? formatMoney(rate) : "Rate unavailable"}
+                        </strong>
+                        <small>per barrel</small>
+                      </span>
+                    </label>
+                  );
+                })}
+              </fieldset>
+            )}
+            {destination && (
+              <div className="customer-form-grid customer-shipping-form-grid">
+                <label>
+                  Receiver name
+                  <input
+                    onChange={(event) => setReceiverName(event.target.value)}
+                    required
+                    value={receiverName}
+                  />
+                </label>
+                <CustomerPhoneField
+                  error={phoneError}
+                  id="barrel-order-receiver-phone"
+                  initialCountryCode={selectedCountry?.code || "US"}
+                  label="Receiver phone"
+                  onBlur={() => setReceiverPhoneTouched(true)}
+                  onChange={(value) => {
+                    setReceiverPhone(value);
+                    if (
+                      !receiverPhoneIsDifferentCountry({
+                        destinationCountryCode: selectedCountry?.code,
+                        value,
+                      })
+                    ) {
+                      setReceiverPhoneIsWhatsappOnly(false);
+                    }
+                  }}
+                  required
+                  value={receiverPhone}
+                />
+                <label>
+                  Barrels for this destination
+                  <input
+                    max={20}
+                    min={1}
+                    onChange={(event) =>
+                      setQuantity(Number(event.target.value || 1))
+                    }
+                    required
+                    type="number"
+                    value={quantity}
+                  />
+                </label>
+                <div className="customer-line-subtotal">
+                  <small>Shipping subtotal</small>
+                  <strong>
+                    {formatMoney(
+                      (shippingProviderRate(destination.country, "barrel") ??
+                        0) * quantity,
+                    )}
+                  </strong>
+                </div>
+                {showWhatsappOption && (
+                  <label className="customer-choice-row customer-form-span">
+                    <input
+                      checked={receiverPhoneIsWhatsappOnly}
+                      onChange={(event) => {
+                        setReceiverPhoneIsWhatsappOnly(event.target.checked);
+                        setReceiverPhoneTouched(true);
+                      }}
+                      type="checkbox"
+                    />
+                    <span>
+                      <strong>
+                        This receiver uses a WhatsApp number from another country
+                      </strong>
+                      <small>
+                        The number must include its international calling code.
+                      </small>
+                    </span>
+                  </label>
+                )}
+                <button
+                  className="primary-button customer-form-span"
+                  disabled={!draftValid}
+                  onClick={saveLine}
+                  type="button"
+                >
+                  {editingIndex === null
+                    ? "Add to order"
+                    : "Save destination"}
+                </button>
+              </div>
+            )}
+          </section>
+        )}
+
+        {lines.length > 0 && (
+          <section className="customer-barrel-stage active">
+            <header className="customer-barrel-stage-header">
+              <span aria-hidden="true">3</span>
+              <div>
+                <small>Pickup</small>
+                <h3>How should these destination shipments be collected?</h3>
+              </div>
+            </header>
+            {canUseDifferentPickups && (
+              <fieldset className="customer-segmented customer-form-span">
+                <legend>Pickup details</legend>
+                <button
+                  aria-pressed={!usesDifferentPickups}
+                  className={!usesDifferentPickups ? "active" : ""}
+                  onClick={() => setDifferentPickups(false)}
+                  type="button"
+                >
+                  Same pickup
+                </button>
+                <button
+                  aria-pressed={usesDifferentPickups}
+                  className={usesDifferentPickups ? "active" : ""}
+                  onClick={() => {
+                    setDifferentPickups(true);
+                    setLines((current) =>
+                      current.map((line) => ({
+                        ...line,
+                        pickup: { ...sharedPickup },
+                        pickupQuote: sharedPickupQuote,
+                      })),
+                    );
+                  }}
+                  type="button"
+                >
+                  Different pickups
+                </button>
+              </fieldset>
+            )}
+            {!usesDifferentPickups ? (
+              <div className="customer-form-grid customer-shipping-form-grid">
+                <PickupFields
+                  idSuffix="shared-order"
+                  lockDetectedBorough
+                  officeAddress={officeAddress}
+                  onAddressBlur={() => void quoteSharedPickup()}
+                  onAddressSelected={(suggestion) =>
+                    void quoteSharedPickup(
+                      suggestion.formattedAddress || suggestion.description,
+                    )
+                  }
+                  onPickupChanged={() => {
+                    setSharedPickupQuote(null);
+                    setPickupQuoteError("");
+                  }}
+                  pickup={sharedPickup}
+                  setPickup={setSharedPickup}
+                  suggestionsEnabled
+                />
+                {sharedPickup.requested && (
+                  <PickupAvailability
+                    error={pickupQuoteError}
+                    onRetry={() => void quoteSharedPickup()}
+                    quote={sharedPickupQuote}
+                    quoting={quotingPickupId === "shared"}
+                  />
+                )}
+              </div>
+            ) : (
+              <div className="customer-line-pickups">
+                {lines.map((line, index) => (
+                  <article className="customer-line-pickup" key={line.id}>
+                    <header>
+                      <span>Destination {index + 1}</span>
+                      <strong>
+                        {countryName(line.option.country)} ·{" "}
+                        {line.option.businessName}
+                      </strong>
+                    </header>
+                    <div className="customer-form-grid customer-shipping-form-grid">
+                      <PickupFields
+                        idSuffix={line.id}
+                        lockDetectedBorough
+                        officeAddress={officeAddress}
+                        onAddressBlur={() => void quoteLinePickup(line.id)}
+                        onAddressSelected={(suggestion) =>
+                          void quoteLinePickup(
+                            line.id,
+                            suggestion.formattedAddress ||
+                              suggestion.description,
+                          )
+                        }
+                        onPickupChanged={() => {
+                          setLines((current) =>
+                            current.map((item) =>
+                              item.id === line.id
+                                ? { ...item, pickupQuote: null }
+                                : item,
+                            ),
+                          );
+                          setPickupQuoteError("");
+                        }}
+                        pickup={line.pickup}
+                        setPickup={(pickup) =>
+                          setLines((current) =>
+                            current.map((item) =>
+                              item.id === line.id
+                                ? { ...item, pickup }
+                                : item,
+                            ),
+                          )
+                        }
+                        suggestionsEnabled
+                      />
+                      {line.pickup.requested && (
+                        <PickupAvailability
+                          error={
+                            quotingPickupId === line.id
+                              ? ""
+                              : pickupQuoteError
+                          }
+                          onRetry={() => void quoteLinePickup(line.id)}
+                          quote={line.pickupQuote}
+                          quoting={quotingPickupId === line.id}
+                        />
+                      )}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+            {pickupPricingLoading && (
+              <div className="customer-inline-note" aria-live="polite">
+                <span className="loading-spinner" />
+                Loading pickup pricing...
+              </div>
+            )}
+            {pickupPricingError && (
+              <div className="customer-inline-note error" role="alert">
+                <span>{pickupPricingError}</span>
+                <button
+                  className="secondary-button"
+                  disabled={pickupPricingLoading}
+                  onClick={() =>
+                    setPickupPricingReloadKey((current) => current + 1)
+                  }
+                  type="button"
+                >
+                  Retry pickup pricing
+                </button>
+              </div>
+            )}
+            <ShippingPriceSummary
+              details={[
+                {
+                  label: "Total barrels",
+                  value: String(totals.totalBarrels),
+                },
+                {
+                  label: "Destination shipments",
+                  value: String(totals.lineCount),
+                },
+                {
+                  label: "Shipping subtotal",
+                  value: formatMoney(totals.shippingFee),
+                },
+                {
+                  label: "Pickup total",
+                  value: pickupReady
+                    ? formatMoney(totals.pickupFee)
+                    : "Pending",
+                },
+              ]}
+              note={
+                pickupReady
+                  ? usesDifferentPickups
+                    ? "Each pickup fee is shown for its destination shipment."
+                    : "The shared pickup fee is charged once per destination shipment."
+                  : "Enter a pickup address to see the complete total."
+              }
+              provider="Barrel order"
+              total={pickupReady ? formatMoney(totals.total) : "—"}
+              totalLabel={pickupReady ? "Estimated total" : "Total pending"}
+            />
+            {authenticated && (
+              <label className="customer-choice-row">
+                <input
+                  checked={useWalletBalance}
+                  onChange={(event) =>
+                    setUseWalletBalance(event.target.checked)
+                  }
+                  type="checkbox"
+                />
+                <span>
+                  <strong>Use wallet balance</strong>
+                  <small>Available balance will be applied first.</small>
+                </span>
+              </label>
+            )}
+          </section>
+        )}
+      </div>
+    </ServiceRequestForm>
+  );
+}
+
+function PickupAvailability({
+  error,
+  onRetry,
+  quote,
+  quoting,
+}: {
+  error: string;
+  onRetry: () => void;
+  quote: BarrelPickupQuote | null;
+  quoting: boolean;
+}) {
+  if (quoting) {
+    return (
+      <div
+        aria-live="polite"
+        className="customer-pickup-availability customer-form-span"
+      >
+        <span className="loading-spinner" />
+        <span>Checking pickup availability...</span>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div
+        className="customer-pickup-availability error customer-form-span"
+        role="alert"
+      >
+        <span>{error}</span>
+        <button className="secondary-button" onClick={onRetry} type="button">
+          Retry
+        </button>
+      </div>
+    );
+  }
+  if (quote) {
+    return (
+      <div
+        aria-live="polite"
+        className="customer-pickup-availability success customer-form-span"
+      >
+        <CheckCircle2 aria-hidden="true" size={20} />
+        <span>
+          <strong>Pickup available</strong>
+          <small>
+            Service area: {quote.serviceArea} · Pickup fee:{" "}
+            {formatMoney(quote.fee)}
+          </small>
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="customer-pickup-availability customer-form-span">
+      <span>Enter a complete pickup address to check availability and price.</span>
+      <button className="secondary-button" onClick={onRetry} type="button">
+        Check pickup price
+      </button>
+    </div>
+  );
+}
+
 function FreightShipmentForm({
   authenticated,
   freightShipments,
@@ -1014,6 +1973,8 @@ function FreightShipmentForm({
   }, [availableOptions, destinationOptionId]);
 
   const pickupAllowed = destination?.freightPickupAvailable !== false;
+  const pickupUsesBoroughPricing =
+    destination?.freightPickupModel === "borough";
   const quoteReady =
     !pickup.requested ||
     (pickupAllowed &&
@@ -1036,7 +1997,7 @@ function FreightShipmentForm({
       quoting ||
       !destination ||
       !pickup.address.trim() ||
-      !pickup.borough.trim()
+      (pickupUsesBoroughPricing && !pickup.borough.trim())
     ) {
       return;
     }
@@ -1288,6 +2249,8 @@ function FreightShipmentForm({
             </label>
             <PickupFields
               disabled={Boolean(destination && !pickupAllowed)}
+              idSuffix="freight"
+              lockDetectedBorough={!pickupUsesBoroughPricing}
               onAddressSelected={(suggestion) => {
                 setPickupLocation(suggestion);
                 setQuote(null);
@@ -1295,7 +2258,7 @@ function FreightShipmentForm({
               onPickupChanged={() => setQuote(null)}
               pickup={pickup}
               setPickup={setPickup}
-              suggestionsEnabled={authenticated}
+              suggestionsEnabled
             />
             {pickup.requested && pickupAllowed && (
               <div className="customer-quote-row customer-form-span">
@@ -1320,7 +2283,7 @@ function FreightShipmentForm({
                     disabled={
                       quoting ||
                       !pickup.address.trim() ||
-                      !pickup.borough.trim()
+                      (pickupUsesBoroughPricing && !pickup.borough.trim())
                     }
                     onClick={() => void requestQuote()}
                     type="button"
@@ -1957,8 +2920,10 @@ function ShippingPriceSummary({
 
 function PickupFields({
   disabled = false,
+  idSuffix = "default",
   lockDetectedBorough = false,
   officeAddress = "the business office",
+  onAddressBlur,
   onAddressSelected,
   onPickupChanged,
   pickup,
@@ -1966,8 +2931,10 @@ function PickupFields({
   suggestionsEnabled = true,
 }: {
   disabled?: boolean;
+  idSuffix?: string;
   lockDetectedBorough?: boolean;
   officeAddress?: string;
+  onAddressBlur?: () => void;
   onAddressSelected?: (suggestion: AddressSuggestion) => void;
   onPickupChanged?: () => void;
   pickup: PickupDetails;
@@ -2016,6 +2983,8 @@ function PickupFields({
       {pickup.requested && (
         <>
           <AddressAutocomplete
+            id={`customer-pickup-address-${idSuffix}`}
+            onBlur={onAddressBlur}
             suggestionsEnabled={suggestionsEnabled}
             onChange={(address) => {
               setPickup({
@@ -2036,17 +3005,18 @@ function PickupFields({
                   nycBoroughFromAddress(address) ||
                   "",
               });
+              onPickupChanged?.();
               onAddressSelected?.(suggestion);
             }}
             value={pickup.address}
           />
-          {lockDetectedBorough ? (
+          {lockDetectedBorough && pickup.borough ? (
             <div className="customer-detected-borough">
-              <small>Pickup borough</small>
-              <strong>{pickup.borough || "Waiting for a valid NYC address"}</strong>
-              <span>Detected from the address or ZIP code.</span>
+              <small>Service area</small>
+              <strong>{pickup.borough}</strong>
+              <span>Confirmed from the pickup address.</span>
             </div>
-          ) : (
+          ) : !lockDetectedBorough ? (
             <label>
               Pickup borough
               <select
@@ -2065,7 +3035,7 @@ function PickupFields({
                 ))}
               </select>
             </label>
-          )}
+          ) : null}
           <label>
             Pickup date and time
             <input
@@ -2098,11 +3068,15 @@ function PickupFields({
 }
 
 function AddressAutocomplete({
+  id,
+  onBlur,
   onChange,
   onSelect,
   suggestionsEnabled,
   value,
 }: {
+  id: string;
+  onBlur?: () => void;
   onChange: (value: string) => void;
   onSelect: (suggestion: AddressSuggestion) => void;
   suggestionsEnabled: boolean;
@@ -2110,15 +3084,25 @@ function AddressAutocomplete({
 }) {
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
+  const [suggestionError, setSuggestionError] = useState(false);
+  const [searchedQuery, setSearchedQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(-1);
   const [selectedAddress, setSelectedAddress] = useState("");
   const [touched, setTouched] = useState(false);
-  const addressInvalid =
-    touched &&
-    value.trim().length > 0 &&
-    nycBoroughFromAddress(value) === null;
+  const addressInvalid = touched && value.trim().length === 0;
+  const query = value.trim();
+  const listboxId = `${id}-suggestions`;
+
+  function selectSuggestion(suggestion: AddressSuggestion) {
+    const resolved =
+      suggestion.formattedAddress || suggestion.description;
+    setSelectedAddress(resolved);
+    setSuggestions([]);
+    setActiveIndex(-1);
+    onSelect(suggestion);
+  }
 
   useEffect(() => {
-    const query = value.trim();
     if (
       !suggestionsEnabled ||
       query.length < 3 ||
@@ -2126,53 +3110,106 @@ function AddressAutocomplete({
     ) {
       setSuggestions([]);
       setLoading(false);
+      setSuggestionError(false);
+      setSearchedQuery("");
+      setActiveIndex(-1);
       return;
     }
     let active = true;
     const debounce = setTimeout(() => {
       setLoading(true);
+      setSuggestionError(false);
       void callFunction<AddressSuggestion[]>("suggestPickupAddresses", {
         input: query,
       })
         .then((result) => {
-          if (active) setSuggestions(Array.isArray(result) ? result : []);
+          if (!active) return;
+          setSuggestions(Array.isArray(result) ? result : []);
+          setSearchedQuery(query);
+          setActiveIndex(-1);
         })
         .catch(() => {
-          if (active) setSuggestions([]);
+          if (!active) return;
+          setSuggestions([]);
+          setSearchedQuery(query);
+          setSuggestionError(true);
+          setActiveIndex(-1);
         })
         .finally(() => {
           if (active) setLoading(false);
         });
-    }, 350);
+    }, 250);
     return () => {
       active = false;
       clearTimeout(debounce);
     };
-  }, [selectedAddress, suggestionsEnabled, value]);
+  }, [query, selectedAddress, suggestionsEnabled]);
 
   return (
     <div className="customer-address-field customer-form-span">
-      <label htmlFor="customer-pickup-address">Pickup address</label>
+      <label htmlFor={id}>Pickup address</label>
       <div className="customer-address-control">
         <MapPin aria-hidden="true" size={17} />
         <input
-          aria-describedby={
-            addressInvalid ? "customer-pickup-address-error" : undefined
+          aria-activedescendant={
+            activeIndex >= 0
+              ? `${listboxId}-option-${activeIndex}`
+              : undefined
           }
+          aria-autocomplete="list"
+          aria-busy={loading}
+          aria-controls={suggestionsEnabled ? listboxId : undefined}
+          aria-describedby={
+            addressInvalid ? `${id}-error` : undefined
+          }
+          aria-expanded={suggestions.length > 0}
           aria-invalid={addressInvalid}
-          autoComplete="street-address"
-          id="customer-pickup-address"
-          onBlur={() => setTouched(true)}
+          autoComplete="off"
+          id={id}
+          onBlur={() => {
+            setTouched(true);
+            onBlur?.();
+          }}
           onChange={(event) => {
             setSelectedAddress("");
+            setSuggestionError(false);
+            setSearchedQuery("");
+            setActiveIndex(-1);
             onChange(event.target.value);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowDown" && suggestions.length > 0) {
+              event.preventDefault();
+              setActiveIndex((current) =>
+                Math.min(current + 1, suggestions.length - 1),
+              );
+            } else if (
+              event.key === "ArrowUp" &&
+              suggestions.length > 0
+            ) {
+              event.preventDefault();
+              setActiveIndex((current) =>
+                current <= 0 ? suggestions.length - 1 : current - 1,
+              );
+            } else if (
+              event.key === "Enter" &&
+              activeIndex >= 0 &&
+              suggestions[activeIndex]
+            ) {
+              event.preventDefault();
+              selectSuggestion(suggestions[activeIndex]);
+            } else if (event.key === "Escape") {
+              setSuggestions([]);
+              setActiveIndex(-1);
+            }
           }}
           placeholder={
             suggestionsEnabled
-              ? "Start typing a New York pickup address"
-              : "Enter a New York pickup address"
+              ? "Start typing a pickup address"
+              : "Enter a pickup address"
           }
           required
+          role="combobox"
           value={value}
         />
         {loading && <span className="loading-spinner" />}
@@ -2180,23 +3217,26 @@ function AddressAutocomplete({
       {addressInvalid && (
         <small
           className="customer-field-error"
-          id="customer-pickup-address-error"
+          id={`${id}-error`}
         >
-          Include a New York City borough or ZIP code.
+          Enter a complete pickup address.
         </small>
       )}
       {suggestions.length > 0 && (
-        <div className="customer-address-suggestions" role="listbox">
-          {suggestions.map((suggestion) => (
+        <div
+          aria-label="Address suggestions"
+          className="customer-address-suggestions"
+          id={listboxId}
+          role="listbox"
+        >
+          {suggestions.map((suggestion, index) => (
             <button
+              aria-selected={activeIndex === index}
+              className={activeIndex === index ? "active" : ""}
+              id={`${listboxId}-option-${index}`}
               key={suggestion.placeId}
-              onClick={() => {
-                const resolved =
-                  suggestion.formattedAddress || suggestion.description;
-                setSelectedAddress(resolved);
-                setSuggestions([]);
-                onSelect(suggestion);
-              }}
+              onClick={() => selectSuggestion(suggestion)}
+              onMouseEnter={() => setActiveIndex(index)}
               onMouseDown={(event) => event.preventDefault()}
               role="option"
               type="button"
@@ -2209,6 +3249,27 @@ function AddressAutocomplete({
             </button>
           ))}
         </div>
+      )}
+      {loading && (
+        <small className="customer-address-status" role="status">
+          Searching addresses...
+        </small>
+      )}
+      {!loading &&
+        !suggestionError &&
+        query.length >= 3 &&
+        searchedQuery === query &&
+        suggestions.length === 0 && (
+          <small className="customer-address-status" role="status">
+            No matching addresses. Keep typing or enter the complete address.
+          </small>
+        )}
+      {suggestionError && (
+        <small className="customer-address-status error" role="status">
+          {
+            "Address suggestions are unavailable. Enter the complete address to continue."
+          }
+        </small>
       )}
     </div>
   );

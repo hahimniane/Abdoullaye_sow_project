@@ -2,6 +2,11 @@ const assert = require("node:assert/strict");
 const {before, describe, it} = require("node:test");
 const admin = require("firebase-admin");
 
+// These handlers run directly against the Firestore emulator instead of
+// through the Functions emulator, so declare the runtime explicitly before
+// loading index.js.
+process.env.FUNCTIONS_EMULATOR = "true";
+
 const CUSTOMER_UID = "service-test-customer";
 const OTHER_UID = "service-test-other";
 const FINANCE_UID = "service-test-finance";
@@ -985,6 +990,79 @@ describe("barrel shipping service callable lifecycle", () => {
         );
       });
 
+  it("books pickup from a resolved address without trusting the client zone",
+      async () => {
+        const businessId = "barrel-any-address-pickup";
+        await seedBusiness(businessId);
+        const pickupDateTime = futureIso();
+        const created = await functions.createBarrelShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: {
+            senderName: "Barrel Pickup Sender",
+            receiverName: "Barrel Pickup Receiver",
+            receiverPhone: "+224620000022",
+            destinationCountryId: COUNTRY_ID,
+            businessId,
+            quantity: 1,
+            pickupRequested: true,
+            pickupAddress: "123 Atlantic Ave, Brooklyn, NY 11201",
+            pickupBorough: "Albany",
+            pickupDateTime,
+            useWalletBalance: false,
+          },
+        });
+        const shipment = await db.collection("barrelShipments")
+            .doc(created.shipmentId).get();
+        assert.equal(shipment.get("pickupRequested"), true);
+        assert.equal(
+            shipment.get("pickupAddress"),
+            "123 Atlantic Ave, Brooklyn, NY 11201",
+        );
+        assert.equal(shipment.get("pickupBorough"), "Brooklyn");
+        assert.equal(shipment.get("pickupFee"), 108);
+        assert.equal(shipment.get("shippingFee"), 225);
+        assert.equal(shipment.get("price"), 333);
+        assert.equal(
+            shipment.get("pickupDateTime").toDate().toISOString(),
+            pickupDateTime,
+        );
+      });
+
+  it("rejects incomplete pickup details and past appointments",
+      async () => {
+        const businessId = "barrel-pickup-validation";
+        await seedBusiness(businessId);
+        const call = (overrides = {}) =>
+          functions.createBarrelShipmentPaymentIntent.run({
+            auth: {uid: CUSTOMER_UID},
+            data: {
+              senderName: "Barrel Pickup Sender",
+              receiverName: "Barrel Pickup Receiver",
+              receiverPhone: "+224620000023",
+              destinationCountryId: COUNTRY_ID,
+              businessId,
+              quantity: 1,
+              pickupRequested: true,
+              pickupAddress: "123 Atlantic Ave, Brooklyn, NY 11201",
+              pickupBorough: "Bronx",
+              pickupDateTime: futureIso(),
+              useWalletBalance: false,
+              ...overrides,
+            },
+          });
+
+        await assert.rejects(
+            () => call({pickupAddress: ""}),
+            /Pickup address, date, and time are required/,
+        );
+        await assert.rejects(
+            () => call({
+              pickupDateTime: new Date(Date.now() - 60000).toISOString(),
+            }),
+            /Pickup time must be in the future/,
+        );
+      });
+
   it("rejects a business that does not offer barrel shipping", async () => {
     const businessId = "barrel-no-service";
     await seedBusiness(businessId, {services: ["freight"]});
@@ -1060,6 +1138,152 @@ describe("barrel shipping service callable lifecycle", () => {
         );
         assert.ok(shipments.every((shipment) =>
           shipment.get("paymentStatus") === "succeeded"));
+      });
+
+  it("charges shared pickup once for every independent order line",
+      async () => {
+        const businessId = "barrel-order-shared-pickup";
+        const businessRef = await seedBusiness(businessId);
+        await businessRef.collection("destinationCountries").doc("gh").set({
+          countryId: "gh",
+          name: "Ghana",
+          code: "GH",
+          isActive: true,
+          barrelShippingPrice: 300,
+          deliveryEstimateMinDays: 12,
+          deliveryEstimateMaxDays: 24,
+        });
+        const pickupDateTime = futureIso();
+        const created = await functions.createBarrelOrderPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: {
+            senderName: "Shared Pickup Sender",
+            pickupRequested: true,
+            pickupAddress: "123 Atlantic Ave, Brooklyn, NY 11201",
+            pickupBorough: "Brooklyn",
+            pickupDateTime,
+            useWalletBalance: false,
+            lines: [
+              {
+                destinationCountryId: COUNTRY_ID,
+                businessId,
+                receiverName: "Guinea Receiver",
+                receiverPhone: "+224620000030",
+                quantity: 1,
+              },
+              {
+                destinationCountryId: "gh",
+                businessId,
+                receiverName: "Ghana Receiver",
+                receiverPhone: "+233201234567",
+                quantity: 2,
+              },
+            ],
+          },
+        });
+        const [order, ...shipments] = await Promise.all([
+          db.collection("barrelOrders").doc(created.orderId).get(),
+          ...created.shipmentIds.map((id) =>
+            db.collection("barrelShipments").doc(id).get()),
+        ]);
+
+        assert.equal(order.get("lineCount"), 2);
+        assert.equal(order.get("quantity"), 3);
+        assert.equal(order.get("orderTotal"), 1041);
+        assert.deepEqual(
+            shipments.map((shipment) => shipment.get("pickupFee")),
+            [108, 108],
+        );
+        assert.deepEqual(
+            shipments.map((shipment) => shipment.get("price")),
+            [333, 708],
+        );
+        assert.ok(shipments.every((shipment) =>
+          shipment.get("pickupAddress") ===
+            "123 Atlantic Ave, Brooklyn, NY 11201" &&
+          shipment.get("pickupBorough") === "Brooklyn" &&
+          shipment.get("pickupRequested") === true &&
+          shipment.get("pickupDateTime").toDate().toISOString() ===
+            pickupDateTime));
+      });
+
+  it("preserves independent pickup and drop-off details per order line",
+      async () => {
+        const businessId = "barrel-order-line-pickups";
+        const businessRef = await seedBusiness(businessId);
+        await businessRef.collection("destinationCountries").doc("gh").set({
+          countryId: "gh",
+          name: "Ghana",
+          code: "GH",
+          isActive: true,
+          barrelShippingPrice: 300,
+          deliveryEstimateMinDays: 12,
+          deliveryEstimateMaxDays: 24,
+        });
+        const pickupDateTime = futureIso();
+        const created = await functions.createBarrelOrderPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: {
+            senderName: "Line Pickup Sender",
+            useWalletBalance: false,
+            lines: [
+              {
+                destinationCountryId: COUNTRY_ID,
+                businessId,
+                receiverName: "Guinea Receiver",
+                receiverPhone: "+224620000031",
+                quantity: 1,
+                pickupRequested: true,
+                pickupAddress: "123 Atlantic Ave, Brooklyn, NY 11201",
+                pickupBorough: "Brooklyn",
+                pickupDateTime,
+              },
+              {
+                destinationCountryId: "gh",
+                businessId,
+                receiverName: "Ghana Receiver",
+                receiverPhone: "+233201234568",
+                quantity: 2,
+                pickupRequested: false,
+                pickupAddress: "Ignored customer drop-off address",
+                pickupBorough: "Office drop-off",
+              },
+            ],
+          },
+        });
+        const [order, ...shipments] = await Promise.all([
+          db.collection("barrelOrders").doc(created.orderId).get(),
+          ...created.shipmentIds.map((id) =>
+            db.collection("barrelShipments").doc(id).get()),
+        ]);
+
+        assert.equal(order.get("pickupRequested"), true);
+        assert.equal(order.get("pickupAddress"), "See shipment pickup details");
+        assert.equal(order.get("pickupBorough"), "Multiple/line-specific");
+        assert.equal(order.get("orderTotal"), 933);
+        assert.deepEqual(
+            shipments.map((shipment) => shipment.get("pickupRequested")),
+            [true, false],
+        );
+        assert.deepEqual(
+            shipments.map((shipment) => shipment.get("pickupAddress")),
+            [
+              "123 Atlantic Ave, Brooklyn, NY 11201",
+              "Bronx Test Office",
+            ],
+        );
+        assert.deepEqual(
+            shipments.map((shipment) => shipment.get("pickupBorough")),
+            ["Brooklyn", "Office drop-off"],
+        );
+        assert.deepEqual(
+            shipments.map((shipment) => shipment.get("pickupFee")),
+            [108, 0],
+        );
+        assert.deepEqual(
+            shipments.map((shipment) => shipment.get("price")),
+            [333, 600],
+        );
       });
 });
 

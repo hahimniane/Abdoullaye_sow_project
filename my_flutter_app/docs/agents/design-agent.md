@@ -139,3 +139,10 @@ Return:
 - Search within a staged marketplace selector must preserve the committed
   destination, provider, and draft until the user selects a replacement.
   Typing, blurring, Escape, and Tab must not discard prepared form state.
+- Multi-barrel web orders must mirror the mobile order builder: each
+  destination/business/receiver/phone/quantity combination is an independently
+  editable line with its own visible subtotal. Pickup can be shared or set per
+  destination, and every fee must remain auditable in the order summary.
+- Pickup addresses are global, not New York-only. Use a fast Stripe-style
+  address autocomplete as the user types, support mouse and keyboard selection,
+  and preserve a clear manual-entry fallback when suggestions are unavailable.

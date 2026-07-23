@@ -79,6 +79,11 @@ const {
   boroughPickupFee,
 } = require("./freight_pickup_pricing");
 const {
+  normalizeBarrelPickupPricing,
+  barrelBoroughPickupFee,
+  barrelDistancePickupFee,
+} = require("./barrel_pickup_pricing");
+const {
   accountLegalAcceptance,
   marketplaceDisclosure,
 } = require("./marketplace_disclosure");
@@ -3898,7 +3903,7 @@ exports.createCustomerCheckoutSession = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
-      secrets: [stripeSecretKey],
+      secrets: [stripeSecretKey, googleMapsApiKey],
     },
     async (request) => {
       const customerUid = requireAuth(request);
@@ -6726,26 +6731,7 @@ exports.cancelPendingParkingReservation = onCall(
 );
 
 function barrelPickupPricingFromData(data) {
-  const defaults = {
-    officeAddress: "Bronx, NY",
-    boroughPrices: {
-      Bronx: 40,
-      Manhattan: 64,
-      Queens: 84,
-      Brooklyn: 108,
-      "Staten Island": 148,
-    },
-  };
-  const pricing = data || {};
-  const legacyPrices = boroughPricesFromLegacyMileage(pricing);
-  return {
-    officeAddress: pricing.officeAddress || defaults.officeAddress,
-    boroughPrices: {
-      ...defaults.boroughPrices,
-      ...legacyPrices,
-      ...(pricing.boroughPrices || {}),
-    },
-  };
+  return normalizeBarrelPickupPricing(data);
 }
 
 const NYC_BOROUGHS = new Set([
@@ -6765,6 +6751,27 @@ function boroughFromPostalCode(postalCode) {
   if (zip >= 11200 && zip <= 11299) return "Brooklyn";
   if ((zip >= 11000 && zip <= 11199) || (zip >= 11300 && zip <= 11699)) {
     return "Queens";
+  }
+  return null;
+}
+
+function boroughFromAddressText(value) {
+  const address = String(value || "").toLowerCase();
+  const zipMatches = address.match(/\b\d{5}(?:-\d{4})?\b/g) || [];
+  for (const zip of zipMatches) {
+    const borough = boroughFromPostalCode(zip);
+    if (borough) return borough;
+  }
+  if (address.includes("staten island")) return "Staten Island";
+  if (address.includes("brooklyn")) return "Brooklyn";
+  if (address.includes("queens") ||
+      address.includes("jamaica") ||
+      address.includes("flushing")) {
+    return "Queens";
+  }
+  if (address.includes("bronx")) return "Bronx";
+  if (address.includes("manhattan") || address.includes("new york, ny")) {
+    return "Manhattan";
   }
   return null;
 }
@@ -6799,20 +6806,19 @@ function pickupSuggestionFromPlace(place) {
   const route = addressComponent(components, "route");
   const postalCode = addressComponent(components, "postal_code");
   const borough = boroughFromComponents(components);
-  if (!borough || !streetNumber || !route) return null;
+  if (!streetNumber || !route) return null;
 
   const street = `${streetNumber.long_name} ${route.long_name}`;
   const zip = postalCode?.long_name || "";
-  const description = [street, borough, "NY", zip]
-      .filter(Boolean)
-      .join(", ");
+  const description = String(place.formatted_address || "").trim() ||
+    [street, borough, zip].filter(Boolean).join(", ");
 
   return {
     description,
     placeId: place.place_id || "",
-    borough,
+    borough: borough || "",
     postalCode: zip,
-    formattedAddress: place.formatted_address || description,
+    formattedAddress: description,
     latitude: place.geometry?.location?.lat ?? null,
     longitude: place.geometry?.location?.lng ?? null,
   };
@@ -6833,27 +6839,96 @@ async function googlePlacesJson(path, params) {
   return data;
 }
 
-function boroughPricesFromLegacyMileage(pricing) {
-  if (!pricing || !pricing.boroughMiles) return {};
-  const basePickupFee = Number(pricing.basePickupFee ?? 20);
-  const perMileFee = Number(pricing.perMileFee ?? 4);
-  const minimumPickupFee = Number(pricing.minimumPickupFee ?? 35);
-  return Object.entries(pricing.boroughMiles).reduce(
-      (prices, [borough, miles]) => {
-        const calculated = basePickupFee + Number(miles || 0) * perMileFee;
-        prices[borough] = Math.max(calculated, minimumPickupFee);
-        return prices;
-      },
-      {},
-  );
-}
-
 function pickupFeeForBorough(pricing, borough) {
-  const fee = Number(
-      pricing.boroughPrices[borough] || pricing.boroughPrices.Bronx || 0,
-  );
+  const fee = barrelBoroughPickupFee(pricing, borough);
+  if (fee == null) {
+    throw new HttpsError(
+        "failed-precondition",
+        "Unsupported pickup area",
+        {reason: "barrel_pickup_area_unsupported"},
+    );
+  }
   return {
     miles: 0,
+    fee,
+  };
+}
+
+async function googleGeocodePickupAddress(address, key) {
+  const params = new URLSearchParams({
+    address: String(address || "").trim(),
+    key,
+  });
+  const response = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?${params}`,
+  );
+  const data = await response.json();
+  const result = data.results?.[0];
+  if (data.status !== "OK" || !result) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Enter a complete pickup address",
+        {reason: "barrel_pickup_address_unresolved"},
+    );
+  }
+  return {
+    address: String(result.formatted_address || address).trim(),
+    borough: boroughFromComponents(result.address_components || []),
+  };
+}
+
+async function computeBarrelPickupFee({pricing, address, key}) {
+  const textBorough = boroughFromAddressText(address);
+  const textBoroughFee = textBorough ?
+    barrelBoroughPickupFee(pricing, textBorough) :
+    null;
+  if (process.env.FUNCTIONS_EMULATOR === "true" && textBoroughFee != null) {
+    return {
+      address: String(address).trim(),
+      borough: textBorough,
+      serviceArea: textBorough,
+      model: "borough",
+      distanceMiles: null,
+      fee: textBoroughFee,
+    };
+  }
+  const resolved = await googleGeocodePickupAddress(address, key);
+  const boroughFee = resolved.borough ?
+    barrelBoroughPickupFee(pricing, resolved.borough) :
+    null;
+  if (boroughFee != null) {
+    return {
+      address: resolved.address,
+      borough: resolved.borough,
+      serviceArea: resolved.borough,
+      model: "borough",
+      distanceMiles: null,
+      fee: boroughFee,
+    };
+  }
+  const distanceKm = await googleDrivingDistanceKm({
+    origin: pricing.officeAddress,
+    destination: resolved.address,
+    key,
+  });
+  const distanceMiles = distanceKm * 0.621371;
+  const fee = barrelDistancePickupFee(pricing, distanceMiles);
+  if (fee == null) {
+    throw new HttpsError(
+        "failed-precondition",
+        "Pickup location is outside the service area",
+        {
+          reason: "barrel_pickup_out_of_range",
+          distanceMiles,
+        },
+    );
+  }
+  return {
+    address: resolved.address,
+    borough: "",
+    serviceArea: "Distance pickup",
+    model: "distance",
+    distanceMiles: Math.round(distanceMiles * 10) / 10,
     fee,
   };
 }
@@ -8532,7 +8607,6 @@ exports.suggestPickupAddresses = onCall(
       secrets: [googleMapsApiKey],
     },
     async (request) => {
-      requireAuth(request);
       await enforceCallableRateLimit(request, {
         name: "suggestPickupAddresses",
         limit: 30,
@@ -8547,11 +8621,7 @@ exports.suggestPickupAddresses = onCall(
       const params = new URLSearchParams({
         input,
         key,
-        components: "country:us",
         types: "address",
-        location: "40.8448,-73.8648",
-        radius: "26000",
-        strictbounds: "true",
       });
       const data = await googlePlacesJson("autocomplete", params);
       const predictions = (data.predictions || []).slice(0, 8);
@@ -8578,6 +8648,51 @@ exports.suggestPickupAddresses = onCall(
             return true;
           })
           .slice(0, 6);
+    },
+);
+
+// Public, rate-limited barrel pickup quote. The server resolves the address
+// and recomputes the same fee again during checkout, so clients never choose
+// their own pickup area or price.
+exports.quoteBarrelPickup = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [googleMapsApiKey],
+    },
+    async (request) => {
+      await enforceCallableRateLimit(request, {
+        name: "quoteBarrelPickup",
+        limit: 30,
+        windowSeconds: 60,
+      });
+      const pickupAddress = String(
+          request.data?.pickupAddress || "",
+      ).trim();
+      if (!pickupAddress) {
+        throw new HttpsError(
+            "invalid-argument",
+            "A pickup address is required",
+        );
+      }
+      const pricingDoc = await admin.firestore()
+          .collection("shipmentPricing").doc("barrelPickup").get();
+      const pricing = barrelPickupPricingFromData(pricingDoc.data());
+      const quote = await computeBarrelPickupFee({
+        pricing,
+        address: pickupAddress,
+        key: googleMapsApiKey.value(),
+      });
+      return {
+        available: true,
+        normalizedAddress: quote.address,
+        serviceArea: quote.serviceArea,
+        borough: quote.borough,
+        model: quote.model,
+        distanceMiles: quote.distanceMiles,
+        fee: quote.fee,
+        currency: SHIPMENT_CURRENCY,
+      };
     },
 );
 
@@ -12621,7 +12736,7 @@ exports.createBarrelShipmentPaymentIntent = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
-      secrets: [stripeSecretKey],
+      secrets: [stripeSecretKey, googleMapsApiKey],
     },
     async (request) => {
       const customerUid = requireAuth(request);
@@ -12661,11 +12776,11 @@ exports.createBarrelShipmentPaymentIntent = onCall(
       const wantsPickup = pickupRequested === true;
       if (
         wantsPickup &&
-        (!pickupAddress || !pickupBorough || !pickupDateTime)
+        (!pickupAddress || !pickupDateTime)
       ) {
         throw new HttpsError(
             "invalid-argument",
-            "Pickup address, borough, date, and time are required",
+            "Pickup address, date, and time are required",
         );
       }
 
@@ -12691,8 +12806,19 @@ exports.createBarrelShipmentPaymentIntent = onCall(
           business,
       );
       const pickup = wantsPickup ?
-        pickupFeeForBorough(pricing, String(pickupBorough)) :
-        {miles: 0, fee: 0};
+        await computeBarrelPickupFee({
+          pricing,
+          address: pickupAddress,
+          key: googleMapsApiKey.value(),
+        }) :
+        {
+          address: pricing.officeAddress,
+          borough: "",
+          serviceArea: "Office drop-off",
+          model: null,
+          distanceMiles: 0,
+          fee: 0,
+        };
       const lineShippingFee =
         Math.round(shippingFee * barrelQuantity * 100) / 100;
       const lineShippingFeeCents = Math.round(lineShippingFee * 100);
@@ -12713,7 +12839,7 @@ exports.createBarrelShipmentPaymentIntent = onCall(
       const trackingCode = await generateTrackingCode("BS", "barrelShipments");
       const now = FirestoreFieldValue.serverTimestamp();
       const cleanPickupAddress = wantsPickup ?
-        String(pickupAddress).trim() :
+        pickup.address :
         pricing.officeAddress;
       let walletAppliedCents = 0;
       await db.runTransaction(async (transaction) => {
@@ -12746,9 +12872,11 @@ exports.createBarrelShipmentPaymentIntent = onCall(
           pickupRequested: wantsPickup,
           pickupAddress: cleanPickupAddress,
           pickupBorough: wantsPickup ?
-            String(pickupBorough) :
+            String(pickup.borough || pickupBorough || "") :
             "Office drop-off",
-          pickupMiles: pickup.miles,
+          pickupArea: pickup.serviceArea,
+          pickupModel: pickup.model,
+          pickupMiles: pickup.distanceMiles || 0,
           pickupFee: pickup.fee,
           quantity: barrelQuantity,
           shippingFee: lineShippingFee,
@@ -12864,7 +12992,7 @@ exports.createBarrelOrderPaymentIntent = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
-      secrets: [stripeSecretKey],
+      secrets: [stripeSecretKey, googleMapsApiKey],
     },
     async (request) => {
       const customerUid = requireAuth(request);
@@ -12902,11 +13030,11 @@ exports.createBarrelOrderPaymentIntent = onCall(
       const wantsPickup = pickupRequested === true;
       if (
         wantsPickup &&
-        (!pickupAddress || !pickupBorough || !pickupDateTime)
+        (!pickupAddress || !pickupDateTime)
       ) {
         throw new HttpsError(
             "invalid-argument",
-            "Pickup address, borough, date, and time are required",
+            "Pickup address, date, and time are required",
         );
       }
       const pickupAppointment = wantsPickup ?
@@ -12923,6 +13051,21 @@ exports.createBarrelOrderPaymentIntent = onCall(
       const cleanPickupAddress = wantsPickup ?
         String(pickupAddress).trim() :
         pickupPricing.officeAddress;
+      const pickupQuoteCache = new Map();
+      const pickupQuoteForAddress = async (address) => {
+        const key = String(address || "").trim().toLowerCase();
+        if (!pickupQuoteCache.has(key)) {
+          pickupQuoteCache.set(
+              key,
+              computeBarrelPickupFee({
+                pricing: pickupPricing,
+                address,
+                key: googleMapsApiKey.value(),
+              }),
+          );
+        }
+        return pickupQuoteCache.get(key);
+      };
 
       const validatedLines = [];
       for (let index = 0; index < lines.length; index++) {
@@ -12959,20 +13102,26 @@ exports.createBarrelOrderPaymentIntent = onCall(
         requireValidPhoneNumber(receiverPhone, "Receiver phone");
         if (
           lineWantsPickup &&
-          (!linePickupAddress || !linePickupBorough || !linePickupDateTime)
+          (!linePickupAddress || !linePickupDateTime)
         ) {
           throw new HttpsError(
               "invalid-argument",
-              "Every pickup destination needs an address, borough, date, " +
-                "and time",
+              "Every pickup destination needs an address, date, and time",
           );
         }
         const linePickupAppointment = lineWantsPickup ?
           parseFuturePickup(linePickupDateTime) :
           null;
         const linePickup = lineWantsPickup ?
-          pickupFeeForBorough(pickupPricing, linePickupBorough) :
-          {miles: 0, fee: 0};
+          await pickupQuoteForAddress(linePickupAddress) :
+          {
+            address: pickupPricing.officeAddress,
+            borough: "",
+            serviceArea: "Office drop-off",
+            model: null,
+            distanceMiles: 0,
+            fee: 0,
+          };
         const linePickupFeeCents = Math.round(linePickup.fee * 100);
         const businessDestination = await getApprovedBusinessDestination({
           businessId,
@@ -13001,10 +13150,16 @@ exports.createBarrelOrderPaymentIntent = onCall(
           receiverPhone,
           quantity,
           pickupRequested: lineWantsPickup,
-          pickupAddress: linePickupAddress,
-          pickupBorough: linePickupBorough,
+          pickupAddress: lineWantsPickup ?
+            linePickup.address :
+            linePickupAddress,
+          pickupBorough: lineWantsPickup ?
+            String(linePickup.borough || linePickupBorough || "") :
+            linePickupBorough,
+          pickupArea: linePickup.serviceArea,
+          pickupModel: linePickup.model,
           pickupAppointment: linePickupAppointment,
-          pickupMiles: linePickup.miles,
+          pickupMiles: linePickup.distanceMiles || 0,
           unitShippingFee: shippingFee,
           lineShippingFee,
           lineShippingFeeCents,
@@ -13115,6 +13270,8 @@ exports.createBarrelOrderPaymentIntent = onCall(
             pickupRequested: line.pickupRequested,
             pickupAddress: line.pickupAddress,
             pickupBorough: line.pickupBorough,
+            pickupArea: line.pickupArea,
+            pickupModel: line.pickupModel,
             pickupMiles: line.pickupMiles,
             pickupFee: dollarsFromCents(line.pickupFeeCents),
             quantity: line.quantity,

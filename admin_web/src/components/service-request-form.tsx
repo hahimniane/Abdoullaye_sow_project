@@ -9,6 +9,7 @@ type ServiceRequestFormProps = {
   children: ReactNode;
   review: ReactNode;
   canReview: boolean;
+  canSubmit?: boolean;
   submitting: boolean;
   error: string;
   submitLabel: string;
@@ -22,6 +23,7 @@ export function ServiceRequestForm({
   children,
   review,
   canReview,
+  canSubmit = true,
   submitting,
   error,
   submitLabel,
@@ -70,7 +72,7 @@ export function ServiceRequestForm({
             aria-busy={submitting}
             className="primary-button"
             data-loading={submitting}
-            disabled={submitting}
+            disabled={submitting || !canSubmit}
             onClick={() => void onSubmit()}
             type="button"
           >
