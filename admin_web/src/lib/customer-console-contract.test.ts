@@ -20,4 +20,5 @@ test("customer console reads wallet data only below the signed-in UID", () => {
 
 test("customer marketplace only requests active public listings", () => {
   assert.match(source, /where\("status", "==", "active"\)/);
+  assert.match(source, /\.filter\(customerCarListingIsEligible\)/);
 });

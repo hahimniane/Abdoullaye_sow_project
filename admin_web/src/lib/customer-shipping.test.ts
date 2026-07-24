@@ -15,6 +15,7 @@ import {
   buildFreightSettlementPayload,
   buildFreightShipmentPayload,
   buildTransportRequestPayload,
+  freightProvidersForMode,
   freightShippingEstimate,
   freightSettlementIsPayable,
   localDateTimeInputValue,
@@ -295,10 +296,13 @@ test("barrel flow presents unique countries before providers for that country", 
       id: "gn-b",
       businessId: "b",
       businessName: "Zulu Shipping",
+      enabledServices: ["barrelShipping"],
+      businessStatus: "approved",
       country: {
         id: "gn",
         code: "GN",
         name: "Guinea",
+        isActive: true,
         barrelShippingPrice: 80,
       },
     },
@@ -306,10 +310,13 @@ test("barrel flow presents unique countries before providers for that country", 
       id: "sl-a",
       businessId: "a",
       businessName: "Sierra Cargo",
+      enabledServices: ["barrelShipping"],
+      businessStatus: "approved",
       country: {
         id: "sl",
         code: "SL",
         name: "Sierra Leone",
+        isActive: true,
         barrelShippingPrice: 95,
       },
     },
@@ -317,10 +324,13 @@ test("barrel flow presents unique countries before providers for that country", 
       id: "gn-a",
       businessId: "a",
       businessName: "Alpha Cargo",
+      enabledServices: ["barrelShipping"],
+      businessStatus: "approved",
       country: {
         id: "gn",
         code: "GN",
         name: "Guinea",
+        isActive: true,
         barrelShippingPrice: 75,
       },
     },
@@ -328,10 +338,13 @@ test("barrel flow presents unique countries before providers for that country", 
       id: "gm-freight",
       businessId: "freight",
       businessName: "Freight only",
+      enabledServices: ["freight"],
+      businessStatus: "approved",
       country: {
         id: "gm",
         code: "GM",
         name: "Gambia",
+        isActive: true,
         barrelShippingPrice: 0,
         freightAirPricePerKg: 5,
       },
@@ -347,6 +360,88 @@ test("barrel flow presents unique countries before providers for that country", 
       (option) => option.businessName,
     ),
     ["Alpha Cargo", "Zulu Shipping"],
+  );
+});
+
+test("stale cross-service prices never expose a business for a disabled service", () => {
+  const options = [
+    {
+      id: "barrel-only-algeria",
+      businessId: "barrel-only",
+      businessName: "Barrel only",
+      enabledServices: ["barrelShipping"],
+      businessStatus: "approved",
+      country: {
+        id: "dz",
+        code: "DZ",
+        name: "Algeria",
+        isActive: true,
+        barrelShippingPrice: 120,
+        freightAirPricePerKg: 12,
+        serviceAvailability: {
+          barrelShipping: true,
+          freightAir: true,
+        },
+      },
+    },
+    {
+      id: "freight-only-guinea",
+      businessId: "freight-only",
+      businessName: "Freight only",
+      enabledServices: ["freight"],
+      businessStatus: "approved",
+      country: {
+        id: "gn",
+        code: "GN",
+        name: "Guinea",
+        isActive: true,
+        barrelShippingPrice: 95,
+        freightAirPricePerKg: 8,
+        serviceAvailability: {
+          barrelShipping: true,
+          freightAir: true,
+        },
+      },
+    },
+    {
+      id: "shared-only-sierra-leone",
+      businessId: "shared-only",
+      businessName: "Shared barrels only",
+      enabledServices: ["sharedBarrels"],
+      businessStatus: "approved",
+      country: {
+        id: "sl",
+        code: "SL",
+        name: "Sierra Leone",
+        isActive: true,
+        barrelShippingPrice: 90,
+        serviceAvailability: { barrelShipping: true },
+      },
+    },
+    {
+      id: "unapproved-freight",
+      businessId: "unapproved",
+      businessName: "Unapproved freight",
+      enabledServices: ["freight"],
+      businessStatus: "pending",
+      country: {
+        id: "gm",
+        code: "GM",
+        name: "Gambia",
+        isActive: true,
+        freightAirPricePerKg: 6,
+        serviceAvailability: { freightAir: true },
+      },
+    },
+  ];
+
+  assert.deepEqual(
+    barrelDestinationCountries(options).map((country) => country.id),
+    ["dz"],
+  );
+  assert.deepEqual(
+    freightProvidersForMode(options, "air").map((option) => option.businessId),
+    ["freight-only"],
   );
 });
 
@@ -867,6 +962,11 @@ test("shipping UI uses the canonical server option, quote, request, and checkout
   assert.match(source, /startCheckout\(\s*"freightSettlement"/);
   assert.match(source, /<DestinationPicker/);
   assert.match(source, /<ShippingPriceSummary/);
+  assert.match(source, /id="freight-receiver-phone"/);
+  assert.equal(
+    source.match(/const phoneValidation = validateReceiverPhone/g)?.length,
+    3,
+  );
   assert.match(source, /Price provided after review/);
   assert.doesNotMatch(source, /unit_amount|price_data|estimatedTotal:/);
 });

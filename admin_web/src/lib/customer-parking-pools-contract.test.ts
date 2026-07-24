@@ -40,6 +40,10 @@ test("shared barrels use customer-scoped membership and public open-pool reads",
     /collection\(db, "users", firebaseUser\.uid, "barrelPools"\)/,
   );
   assert.match(source, /"listOpenBarrelPoolOptions"/);
+  assert.match(
+    source,
+    /enabledServices\.includes\("barrelShipping"\)[\s\S]*enabledServices\.includes\("sharedBarrels"\)/,
+  );
 });
 
 test("shared barrel actions use exact callables and checkout order types", () => {

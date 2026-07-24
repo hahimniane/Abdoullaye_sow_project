@@ -1020,6 +1020,7 @@ function PoolRequestForm({
           .map(destinationOptionFromData)
           .filter(
             (option) =>
+              option.enabledServices.includes("barrelShipping") &&
               option.enabledServices.includes("sharedBarrels") &&
               option.country.barrelShippingPrice > 0 &&
               option.country.serviceAvailability?.barrelShipping !== false,

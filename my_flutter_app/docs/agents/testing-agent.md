@@ -266,3 +266,8 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   prove a paid return Session can self-heal a delayed or missing webhook, cannot
   cross user/type/record boundaries, and redirects exactly once only after the
   persisted payment state succeeds.
+- Customer service discovery tests must join business capabilities to
+  destination pricing. Seed misleading cross-service rates (barrel-only with a
+  freight price and freight-only with a barrel price) and prove the web exposes
+  only options the corresponding create callable will accept. A passing
+  pricing-arithmetic test plus a separate backend rejection test is not enough.

@@ -31,6 +31,7 @@ import {
   buildFreightSettlementPayload,
   buildFreightShipmentPayload,
   buildTransportRequestPayload,
+  freightProvidersForMode,
   freightShippingEstimate,
   freightSettlementIsPayable,
   localDateTimeInputValue,
@@ -38,6 +39,7 @@ import {
   NYC_PICKUP_BOROUGHS,
   nycBoroughFromAddress,
   pickupDetailsAreComplete,
+  shippingOptionIsEligible,
   shippingCountryDisplayName,
   shippingProviderRate,
   type BarrelPickupPricing,
@@ -64,6 +66,7 @@ type DestinationCountry = {
   id: string;
   code?: string;
   name: string;
+  isActive?: boolean;
   barrelShippingPrice?: number;
   freightAirPricePerKg?: number;
   freightSeaPricePerKg?: number;
@@ -79,6 +82,8 @@ type DestinationOption = {
   id: string;
   businessId: string;
   businessName: string;
+  enabledServices?: readonly string[];
+  businessStatus?: string;
   freightPickupAvailable?: boolean;
   freightPickupModel?: "borough" | "distance";
   country: DestinationCountry;
@@ -242,10 +247,8 @@ export function CustomerShippingServices({
 
   const barrelOptions = useMemo(
     () =>
-      destinationOptions.filter(
-        (option) =>
-          Number(option.country.barrelShippingPrice || 0) > 0 &&
-          option.country.serviceAvailability?.barrelShipping !== false,
+      destinationOptions.filter((option) =>
+        shippingOptionIsEligible(option, "barrel"),
       ),
     [destinationOptions],
   );
@@ -1905,23 +1908,15 @@ function FreightShipmentForm({
 }) {
   const [mode, setMode] = useState<"air" | "sea">("air");
   const availableOptions = useMemo(
-    () =>
-      options.filter((option) => {
-        const rate =
-          mode === "air"
-            ? option.country.freightAirPricePerKg
-            : option.country.freightSeaPricePerKg;
-        const availability =
-          mode === "air"
-            ? option.country.serviceAvailability?.freightAir
-            : option.country.serviceAvailability?.freightSea;
-        return Number(rate || 0) > 0 && availability !== false;
-      }),
+    () => freightProvidersForMode(options, mode),
     [mode, options],
   );
   const [senderName, setSenderName] = useState(text(profile.fullName, ""));
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
+  const [receiverPhoneIsWhatsappOnly, setReceiverPhoneIsWhatsappOnly] =
+    useState(false);
+  const [receiverPhoneTouched, setReceiverPhoneTouched] = useState(false);
   const [destinationCountryId, setDestinationCountryId] = useState("");
   const [destinationOptionId, setDestinationOptionId] = useState("");
   const [weightKg, setWeightKg] = useState(1);
@@ -1950,7 +1945,29 @@ function FreightShipmentForm({
     [availableOptions, destinationCountryId],
   );
   const destination = selectedOption(providerOptions, destinationOptionId);
+  const selectedCountry = countries.find(
+    (country) => country.id === destinationCountryId,
+  );
   const language = currentWebLanguage();
+  const phoneValidation = validateReceiverPhone({
+    allowDifferentCountry: receiverPhoneIsWhatsappOnly,
+    destinationCountryCode: selectedCountry?.code,
+    value: receiverPhone,
+  });
+  const showWhatsappOption = receiverPhoneIsDifferentCountry({
+    destinationCountryCode: selectedCountry?.code,
+    value: receiverPhone,
+  });
+  const phoneError =
+    receiverPhoneTouched && !phoneValidation.valid
+      ? phoneValidation.reason === "required"
+        ? "Enter the receiver phone number."
+        : phoneValidation.reason === "destination-mismatch"
+          ? "Receiver phone must match the destination country. Use the WhatsApp option below for a number from another country."
+          : phoneValidation.reason === "whatsapp-country-code"
+            ? "Include the country calling code for a WhatsApp number."
+            : "Enter a valid international phone number."
+      : "";
   const pricing = destination
     ? freightShippingEstimate({
         country: destination.country,
@@ -1988,7 +2005,7 @@ function FreightShipmentForm({
         Number.isFinite(weightKg) &&
         weightKg > 0,
     ) &&
-    isValidPhone(receiverPhone) &&
+    phoneValidation.valid &&
     quoteReady &&
     accepted;
 
@@ -2093,6 +2110,8 @@ function FreightShipmentForm({
             setReceiverPhone("");
             setDestinationCountryId("");
             setDestinationOptionId("");
+            setReceiverPhoneIsWhatsappOnly(false);
+            setReceiverPhoneTouched(false);
             setAccepted(false);
           }}
           onSubmit={submit}
@@ -2198,8 +2217,22 @@ function FreightShipmentForm({
               />
             </label>
             <CustomerPhoneField
+              error={phoneError}
+              id="freight-receiver-phone"
+              initialCountryCode={selectedCountry?.code || "US"}
               label="Receiver phone"
-              onChange={setReceiverPhone}
+              onBlur={() => setReceiverPhoneTouched(true)}
+              onChange={(value) => {
+                setReceiverPhone(value);
+                if (
+                  !receiverPhoneIsDifferentCountry({
+                    destinationCountryCode: selectedCountry?.code,
+                    value,
+                  })
+                ) {
+                  setReceiverPhoneIsWhatsappOnly(false);
+                }
+              }}
               required
               value={receiverPhone}
             />
@@ -2211,6 +2244,8 @@ function FreightShipmentForm({
               onChange={(value) => {
                 setDestinationCountryId(value);
                 setDestinationOptionId("");
+                setReceiverPhoneIsWhatsappOnly(false);
+                setReceiverPhoneTouched(false);
                 setQuote(null);
               }}
               options={countries.map((country) => ({
@@ -2233,6 +2268,26 @@ function FreightShipmentForm({
                 service="freight"
                 value={destinationOptionId}
               />
+            )}
+            {showWhatsappOption && (
+              <label className="customer-choice-row customer-form-span">
+                <input
+                  checked={receiverPhoneIsWhatsappOnly}
+                  onChange={(event) => {
+                    setReceiverPhoneIsWhatsappOnly(event.target.checked);
+                    setReceiverPhoneTouched(true);
+                  }}
+                  type="checkbox"
+                />
+                <span>
+                  <strong>
+                    This receiver uses a WhatsApp number from another country
+                  </strong>
+                  <small>
+                    The number must include its international calling code.
+                  </small>
+                </span>
+              </label>
             )}
             <label>
               Estimated weight (kg)

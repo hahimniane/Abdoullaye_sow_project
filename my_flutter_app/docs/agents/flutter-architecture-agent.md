@@ -195,3 +195,10 @@ Add future project conventions and repeated architectural decisions here.
   from Stripe, validates its user/type/record metadata and attached Firestore
   record, binds the Checkout-created PaymentIntent, and reuses the idempotent
   reconciliation path. Redirect only after persisted payment success.
+- Shared destination projections can contain prices for more than one service,
+  so web eligibility must mirror `BusinessDestinationOption.isAvailableFor`:
+  approved/active business, exact enabled service, destination availability,
+  and a positive finite service/mode rate. A price alone never proves that the
+  business offers that service. When one customer service exposes this class of
+  mismatch, audit every service selector rather than waiting for separate user
+  reports.

@@ -107,6 +107,7 @@ export type ShippingPricingCountry = {
   id?: string;
   code?: string;
   name?: string;
+  isActive?: boolean;
   barrelShippingPrice?: unknown;
   freightAirPricePerKg?: unknown;
   freightSeaPricePerKg?: unknown;
@@ -128,6 +129,8 @@ export type ShippingDestinationOption = {
   id: string;
   businessId: string;
   businessName: string;
+  enabledServices?: readonly string[];
+  businessStatus?: string;
   country: ShippingPricingCountry & {
     id: string;
     name: string;
@@ -173,6 +176,43 @@ export function shippingProviderRate(
     mode === "air"
       ? country.freightAirPricePerKg
       : country.freightSeaPricePerKg,
+  );
+}
+
+function shippingBusinessOffersService(
+  option: ShippingDestinationOption,
+  service: "barrel" | "freight",
+) {
+  if (option.businessStatus !== "approved") return false;
+  if (!Array.isArray(option.enabledServices)) {
+    // The callable always supplies normalized service capabilities, including
+    // for legacy businesses. Missing metadata is therefore malformed and must
+    // not expose a provider the create callable could reject.
+    return false;
+  }
+  return option.enabledServices.includes(
+    service === "barrel" ? "barrelShipping" : "freight",
+  );
+}
+
+export function shippingOptionIsEligible(
+  option: ShippingDestinationOption,
+  service: "barrel" | "freight",
+  mode: FreightMode = "air",
+) {
+  return (
+    shippingBusinessOffersService(option, service) &&
+    option.country.isActive === true &&
+    shippingProviderRate(option.country, service, mode) !== null
+  );
+}
+
+export function freightProvidersForMode<T extends ShippingDestinationOption>(
+  options: readonly T[],
+  mode: FreightMode,
+) {
+  return options.filter((option) =>
+    shippingOptionIsEligible(option, "freight", mode),
   );
 }
 
@@ -222,7 +262,7 @@ export function barrelProvidersForCountry(
 }
 
 function barrelOptionIsEligible(option: ShippingDestinationOption) {
-  return shippingProviderRate(option.country, "barrel") !== null;
+  return shippingOptionIsEligible(option, "barrel");
 }
 
 function zipInRange(value: string, start: number, end: number) {

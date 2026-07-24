@@ -41,6 +41,7 @@ import {
 
 import { auth, db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
+import { customerCarListingIsEligible } from "@/lib/customer-service-eligibility";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
 import { CustomerCars } from "@/components/customer-cars";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
@@ -938,7 +939,10 @@ export function usePublicCars(enabled: boolean): CustomerCollection {
     setState({ rows: [], loading: true, error: "" });
     const request = query(collection(db, "cars"), where("status", "==", "active"), limit(100));
     return onSnapshot(request, (snapshot) => {
-      setState({ rows: snapshot.docs.map((item) => ({ id: item.id, ...item.data() })), loading: false, error: "" });
+      const rows = snapshot.docs
+        .map((item) => ({ id: item.id, ...item.data() }))
+        .filter(customerCarListingIsEligible);
+      setState({ rows, loading: false, error: "" });
     }, (error) => setState({ rows: [], loading: false, error: error.message }));
   }, [enabled]);
   return state;
