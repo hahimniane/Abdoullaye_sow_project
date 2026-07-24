@@ -132,6 +132,27 @@ const navGroups: Array<{ label: string; tabs: Tab[] }> = [
 
 const accountRoleOptions: Role[] = ["admin", "customer"];
 const businessRoleOptions = ["businessOwner", "staff"] as const;
+// AUTO-PORTED from my_flutter_app/functions/index.js
+// VALID_BUSINESS_PERMISSIONS. Keep the invitation payload complete.
+const businessStaffPermissionOptions = [
+  "profile",
+  "listings",
+  "purchases",
+  "barrels",
+  "freight",
+  "transport",
+  "parking",
+  "destinations",
+  "people",
+  "support",
+  "growth",
+] as const;
+
+function businessPermissionLabel(permission: string) {
+  return permission === "carSales"
+    ? "Car sales"
+    : permission.charAt(0).toUpperCase() + permission.slice(1);
+}
 
 // ---- Admin roles & privileges (RBAC) ----
 // Roles are fully dynamic: super admins create/edit them in Settings and they
@@ -616,20 +637,33 @@ const previewData = {
       fullName: "Platform Administrator",
       email: "admin@laawoldigital.com",
       role: "admin",
+      adminRole: "superAdmin",
+      emailVerified: true,
+      hasAuth: true,
+      hasProfile: true,
     },
     {
       id: "owner-keren",
       fullName: "Keren Manager",
       email: "owner@kerenautos.com",
       role: "businessOwner",
+      businessId: "keren_auto_sales",
       businessName: "Keren Auto Sales",
+      emailVerified: true,
+      hasAuth: true,
+      hasProfile: true,
     },
     {
       id: "staff-yard",
       fullName: "Yard Staff",
       email: "yard@laawoldigital.com",
       role: "staff",
+      businessId: "keren_auto_sales",
       businessName: "Keren Auto Sales",
+      disabled: true,
+      emailVerified: true,
+      hasAuth: true,
+      hasProfile: true,
     },
     {
       id: "customer-a",
@@ -637,6 +671,41 @@ const previewData = {
       email: "mamadou@example.com",
       phone: "+1 718 555 0199",
       role: "customer",
+      emailVerified: false,
+      hasAuth: true,
+      hasProfile: true,
+      activityReferences: [
+        {
+          id: "VX-BRL-1048",
+          label: "VX-BRL-1048",
+          service: "Barrel shipping",
+          status: "In transit",
+        },
+      ],
+    },
+    {
+      id: "invitation-preview",
+      invitationId: "invitation-preview",
+      fullName: "Fatou Barry",
+      email: "fatou@example.com",
+      role: "invited",
+      category: "invitation",
+      invitationKind: "business",
+      businessId: "atlantic_exports",
+      businessName: "Atlantic Exports",
+      accountStatus: "pending",
+      hasAuth: true,
+      hasProfile: false,
+    },
+    {
+      id: "deletion-preview",
+      fullName: "Ousmane Ba",
+      email: "ousmane@example.com",
+      role: "customer",
+      accountDeletionStatus: "pending",
+      emailVerified: true,
+      hasAuth: true,
+      hasProfile: true,
     },
     {
       id: "contact-aissatou",
@@ -1463,6 +1532,269 @@ function userMeta(user: FirestoreRow) {
     .join(" • ");
 }
 
+type PeoplePersonKind =
+  | "admin"
+  | "business"
+  | "customer"
+  | "invitation"
+  | "contact";
+type PeoplePersonStatus =
+  | "active"
+  | "unverified"
+  | "suspended"
+  | "invited"
+  | "pendingDeletion"
+  | "reference";
+
+async function setMarketplacePersonStatus(
+  payload: Record<string, unknown>,
+) {
+  return httpsCallable(functions, "setMarketplaceUserStatus")(payload);
+}
+
+async function revokeMarketplacePersonSessions(
+  payload: Record<string, unknown>,
+) {
+  return httpsCallable(functions, "revokeUserSessions")(payload);
+}
+
+async function sendMarketplaceRecoveryEmail(
+  payload: Record<string, unknown>,
+) {
+  return httpsCallable(functions, "sendUserRecoveryEmail")(payload);
+}
+
+async function inviteMarketplaceAdmin(payload: Record<string, unknown>) {
+  return httpsCallable(functions, "invitePlatformAdmin")(payload);
+}
+
+async function inviteMarketplaceBusinessMember(
+  payload: Record<string, unknown>,
+) {
+  return httpsCallable(functions, "inviteBusinessMember")(payload);
+}
+
+async function resendMarketplaceInvitation(
+  payload: Record<string, unknown>,
+) {
+  return httpsCallable(functions, "resendAccessInvitation")(payload);
+}
+
+async function cancelMarketplaceInvitation(
+  payload: Record<string, unknown>,
+) {
+  return httpsCallable(functions, "cancelAccessInvitation")(payload);
+}
+
+async function updateMarketplaceMembership(
+  payload: Record<string, unknown>,
+) {
+  return httpsCallable(functions, "updateBusinessMembership")(payload);
+}
+
+async function transferMarketplaceOwnership(
+  payload: Record<string, unknown>,
+) {
+  return httpsCallable(functions, "transferBusinessOwnership")(payload);
+}
+
+async function reviewMarketplaceDeletion(
+  payload: Record<string, unknown>,
+) {
+  return httpsCallable(functions, "reviewAccountDeletion")(payload);
+}
+
+async function finalizeMarketplaceDeletion(
+  payload: Record<string, unknown>,
+) {
+  return httpsCallable(functions, "finalizeAccountDeletion")(payload);
+}
+
+function peoplePersonId(user: Record<string, unknown>) {
+  return text(
+    user.id ?? user.uid ?? user.invitationId ?? user.email ?? user.phone,
+    "",
+  );
+}
+
+function peoplePersonStatus(user: FirestoreRow): PeoplePersonStatus {
+  if (text(user.category, "") === "invitation") return "invited";
+  if (isContactReference(user)) return "reference";
+  const deletion = text(
+    user.accountDeletionStatus ?? user.deletionStatus,
+    "",
+  ).toLowerCase();
+  if (
+    deletion === "pending" ||
+    deletion === "requested" ||
+    user.deletionRequested === true
+  ) {
+    return "pendingDeletion";
+  }
+  const invitation = text(
+    user.invitationStatus ?? user.inviteStatus,
+    "",
+  ).toLowerCase();
+  if (
+    invitation === "pending" ||
+    invitation === "sent" ||
+    invitation === "invited" ||
+    user.invited === true
+  ) {
+    return "invited";
+  }
+  const accountStatus = text(user.accountStatus ?? user.status, "").toLowerCase();
+  if (
+    user.disabled === true ||
+    accountStatus === "disabled" ||
+    accountStatus === "suspended"
+  ) {
+    return "suspended";
+  }
+  if (user.hasAuth !== false && user.emailVerified === false) {
+    return "unverified";
+  }
+  return "active";
+}
+
+function peoplePersonKind(user: FirestoreRow): PeoplePersonKind {
+  const category = text(user.category, "");
+  if (category === "invitation") return "invitation";
+  if (category === "platform") return "admin";
+  if (category === "business") return "business";
+  if (category === "missing_profile") return "contact";
+  if (peoplePersonStatus(user) === "invited") return "invitation";
+  if (isPlatformAdmin(user)) return "admin";
+  if (isBusinessMember(user)) return "business";
+  if (isContactReference(user)) return "contact";
+  return "customer";
+}
+
+function peoplePersonKindLabel(user: FirestoreRow) {
+  const labels: Record<PeoplePersonKind, string> = {
+    admin: "Platform admin",
+    business: "Business person",
+    customer: "Customer",
+    invitation: "Invitation",
+    contact: "Contact reference",
+  };
+  return labels[peoplePersonKind(user)];
+}
+
+function peoplePersonStatusLabel(user: FirestoreRow) {
+  const labels: Record<PeoplePersonStatus, string> = {
+    active: "Active",
+    unverified: "Unverified",
+    suspended: "Suspended",
+    invited: "Invited",
+    pendingDeletion: "Pending deletion",
+    reference: "Reference only",
+  };
+  return labels[peoplePersonStatus(user)];
+}
+
+function peopleInitials(value: string) {
+  const parts = value
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) return "—";
+  return `${parts[0]?.[0] ?? ""}${parts[1]?.[0] ?? ""}`.toUpperCase();
+}
+
+type PeopleMembership = {
+  businessId: string;
+  businessName: string;
+  role: string;
+};
+
+function peopleMemberships(user: FirestoreRow): PeopleMembership[] {
+  const memberships = Array.isArray(user.businessMemberships)
+    ? user.businessMemberships
+    : [];
+  const normalized = memberships.flatMap((value) => {
+    if (!value || typeof value !== "object") return [];
+    const membership = value as Record<string, unknown>;
+    const businessId = text(membership.businessId ?? membership.id, "");
+    const businessName = text(
+      membership.businessName ?? membership.name,
+      businessId,
+    );
+    if (!businessId && !businessName) return [];
+    return [
+      {
+        businessId,
+        businessName,
+        role: text(membership.role, "staff"),
+      },
+    ];
+  });
+  if (normalized.length > 0) return normalized;
+  if (!isBusinessMember(user)) return [];
+  return [
+    {
+      businessId: text(user.businessId, ""),
+      businessName: text(
+        user.businessName,
+        text(user.businessId, "Business"),
+      ),
+      role: text(user.role, "staff"),
+    },
+  ];
+}
+
+type PeopleActivityReference = {
+  id: string;
+  label: string;
+  meta: string;
+};
+
+function peopleActivityReferences(user: FirestoreRow) {
+  const values = Array.isArray(user.activityReferences)
+    ? user.activityReferences
+    : Array.isArray(user.marketplaceActivity)
+      ? user.marketplaceActivity
+      : [];
+  const references: PeopleActivityReference[] = values.flatMap(
+    (value, index) => {
+      if (typeof value === "string") {
+        return [{id: `${index}-${value}`, label: value, meta: "Marketplace record"}];
+      }
+      if (!value || typeof value !== "object") return [];
+      const reference = value as Record<string, unknown>;
+      const id = text(reference.id ?? reference.code, String(index));
+      return [
+        {
+          id,
+          label: text(
+            reference.label ??
+              reference.title ??
+              reference.trackingCode ??
+              reference.purchaseCode ??
+              reference.code,
+            "Marketplace record",
+          ),
+          meta: [
+            reference.service ?? reference.type ?? reference.collection,
+            reference.status,
+          ]
+            .filter(Boolean)
+            .map((item) => text(item, ""))
+            .join(" • "),
+        },
+      ];
+    },
+  );
+  if (user._inferred === true) {
+    references.unshift({
+      id: text(user._sourceId, peoplePersonId(user)),
+      label: text(user._sourceCode, "Service record"),
+      meta: "Contact reference",
+    });
+  }
+  return references;
+}
+
 function userDirectory(
   profiles: FirestoreRow[],
   authUsers: FirestoreRow[],
@@ -1598,58 +1930,47 @@ function useAdminCollectionGroup(name: string, enabled: boolean, max = 500) {
 function useAdminAuthUsers(enabled: boolean) {
   const [rows, setRows] = useState<FirestoreRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
+  const [pageToken, setPageToken] = useState("");
   const [refreshToken, setRefreshToken] = useState(0);
 
   useEffect(() => {
     if (!enabled) {
       setRows([]);
       setLoading(false);
+      setLoadingMore(false);
       setError("");
+      setPageToken("");
       return;
     }
 
     let active = true;
-    const backendReady = process.env.NEXT_PUBLIC_ADMIN_BACKEND_READY === "1";
-    const forceAuthUsers =
-      new URL(window.location.href).searchParams.get("authUsers") === "1";
-    if (!backendReady && !forceAuthUsers) {
-      setRows([]);
-      setLoading(false);
-      setError("");
-      return () => {
-        active = false;
-      };
-    }
-
     setLoading(true);
     setError("");
-    const loadEveryAuthPage = async () => {
-      const users: FirestoreRow[] = [];
-      let pageToken = "";
-      do {
-        const result = await httpsCallable(
-          functions,
-          "listPlatformUsers",
-        )({
-          maxResults: 500,
-          pageToken,
-        });
+    const safetyTimeout = window.setTimeout(() => {
+      if (!active) return;
+      active = false;
+      setLoading(false);
+      setError(
+        "People are taking too long to load. Refresh and try again.",
+      );
+    }, 12000);
+    httpsCallable(functions, "listMarketplacePeople")({
+      pageSize: 100,
+      pageToken: "",
+    })
+      .then((result) => {
+        if (!active) return;
         const data = result.data as {
+          people?: FirestoreRow[];
           users?: FirestoreRow[];
+          nextPageToken?: string;
           pageToken?: string;
         };
-        users.push(...(data.users ?? []));
-        pageToken = data.pageToken ?? "";
-      } while (pageToken && active);
-      return users;
-    };
-
-    loadEveryAuthPage()
-      .then((users) => {
-          if (!active) return;
-        setRows(users);
-        })
+        setRows(data.people ?? data.users ?? []);
+        setPageToken(data.nextPageToken ?? data.pageToken ?? "");
+      })
         .catch((listError) => {
           if (!active) return;
           setRows([]);
@@ -1658,11 +1979,13 @@ function useAdminAuthUsers(enabled: boolean) {
         );
         })
         .finally(() => {
+          window.clearTimeout(safetyTimeout);
           if (active) setLoading(false);
         });
 
     return () => {
       active = false;
+      window.clearTimeout(safetyTimeout);
     };
   }, [enabled, refreshToken]);
 
@@ -1670,7 +1993,87 @@ function useAdminAuthUsers(enabled: boolean) {
     setRefreshToken((value) => value + 1);
   }, []);
 
-  return {rows, loading, error, refresh};
+  const loadMore = useCallback(async () => {
+    if (!enabled || !pageToken || loadingMore) return;
+    setLoadingMore(true);
+    setError("");
+    try {
+      const result = await httpsCallable(
+        functions,
+        "listMarketplacePeople",
+      )({
+        pageSize: 100,
+        pageToken,
+        includeInvitations: false,
+      });
+      const data = result.data as {
+        people?: FirestoreRow[];
+        users?: FirestoreRow[];
+        nextPageToken?: string;
+        pageToken?: string;
+      };
+      const nextRows = data.people ?? data.users ?? [];
+      setRows((current) => {
+        const seen = new Set(current.map((row) => peoplePersonId(row)));
+        return [
+          ...current,
+          ...nextRows.filter((row) => !seen.has(peoplePersonId(row))),
+        ];
+      });
+      setPageToken(data.nextPageToken ?? data.pageToken ?? "");
+    } catch {
+      setError("More people could not be loaded. Try again.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [enabled, loadingMore, pageToken]);
+
+  const searchAll = useCallback(
+    async (search: string) => {
+      const value = search.trim();
+      if (!enabled || !value) return;
+      setLoading(true);
+      setError("");
+      try {
+        const result = await httpsCallable(
+          functions,
+          "listMarketplacePeople",
+        )({search: value});
+        const data = result.data as {
+          people?: FirestoreRow[];
+          users?: FirestoreRow[];
+        };
+        const matches = data.people ?? data.users ?? [];
+        setRows((current) => {
+          const matchIds = new Set(
+            matches.map((row) => peoplePersonId(row)),
+          );
+          return [
+            ...matches,
+            ...current.filter(
+              (row) => !matchIds.has(peoplePersonId(row)),
+            ),
+          ];
+        });
+      } catch {
+        setError("Marketplace-wide people search could not be completed.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [enabled],
+  );
+
+  return {
+    rows,
+    loading,
+    loadingMore,
+    error,
+    hasMore: pageToken.length > 0,
+    loadMore,
+    searchAll,
+    refresh,
+  };
 }
 
 function useAdminDestinationCoverage(enabled: boolean) {
@@ -1756,7 +2159,7 @@ export function AdminConsole() {
     enabled && required.includes(activeTab);
   const userProfiles = useAdminCollection(
     "users",
-    tabNeeds("today", "people", "businesses", "support"),
+    tabNeeds("today", "businesses", "support"),
     1000,
   );
   const businesses = useAdminCollection(
@@ -1764,6 +2167,7 @@ export function AdminConsole() {
     tabNeeds(
       "today",
       "businesses",
+      "people",
       "marketplace",
       "operations",
       "finance",
@@ -2209,14 +2613,24 @@ export function AdminConsole() {
             <UsersView
               users={userRows}
               loading={userProfiles.loading || authUsers.loading}
+              loadingMore={authUsers.loadingMore}
+              hasMore={authUsers.hasMore}
               error={[userProfiles.error, authUsers.error]
                 .filter(Boolean)
                 .join(" ")}
               currentUserId={firebaseUser?.uid ?? ""}
               refreshUsers={authUsers.refresh}
+              loadMoreUsers={authUsers.loadMore}
+              searchAllUsers={authUsers.searchAll}
               runAction={runAction}
               canManage={perms.can("users")}
+              canManageBusinesses={perms.can("businesses")}
+              isSuperAdmin={
+                resolveAdminRoleKey(profile?.adminRole, previewMode) ===
+                "superAdmin"
+              }
               permsConfig={rolePermsConfig}
+              businesses={businessRows}
             />
           )}
           {activeTab === "businesses" && (
@@ -2362,8 +2776,7 @@ function SignInCard({ authError }: { authError: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submit() {
     setSubmitting(true);
     setError("");
     try {
@@ -3062,49 +3475,148 @@ function SectionIntro({
 
 function UsersView({
   users,
+  businesses,
   loading,
+  loadingMore,
+  hasMore,
   error,
   currentUserId,
   refreshUsers,
+  loadMoreUsers,
+  searchAllUsers,
   runAction,
   canManage,
+  canManageBusinesses,
+  isSuperAdmin,
   permsConfig,
 }: {
   users: FirestoreRow[];
+  businesses: FirestoreRow[];
   loading: boolean;
+  loadingMore: boolean;
+  hasMore: boolean;
   error: string;
   currentUserId: string;
   refreshUsers: () => void;
+  loadMoreUsers: () => void;
+  searchAllUsers: (search: string) => void;
   runAction: ActionRunner;
   canManage: boolean;
+  canManageBusinesses: boolean;
+  isSuperAdmin: boolean;
   permsConfig: PermissionsConfig | null;
 }) {
   const roleOptions = roleOptionList(permsConfig);
   const [search, setSearch] = useState("");
+  const [personType, setPersonType] = useState("all");
+  const [personStatus, setPersonStatus] = useState("all");
+  const [selectedPersonId, setSelectedPersonId] = useState("");
+  const [personDetail, setPersonDetail] = useState<FirestoreRow | null>(null);
+  const [personDetailLoading, setPersonDetailLoading] = useState(false);
+  const [personDetailError, setPersonDetailError] = useState("");
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    const visibleUsers = users.filter((item) => !isBusinessMember(item));
-    if (!needle) return visibleUsers;
-    return visibleUsers.filter((item) =>
-      [item.email, item.fullName, item.phone, item.role, item.businessName]
+    return users.filter((item) => {
+      const kind = peoplePersonKind(item);
+      const status = peoplePersonStatus(item);
+      if (
+        personType !== "all" &&
+        !(
+          kind === personType ||
+          (personType === "businessOwner" &&
+            text(item.role, "") === "businessOwner") ||
+          (personType === "businessStaff" && text(item.role, "") === "staff") ||
+          (personType === "missingProfile" && isContactReference(item))
+        )
+      ) {
+        return false;
+      }
+      if (personStatus !== "all" && status !== personStatus) return false;
+      if (!needle) return true;
+      return [
+        item.email,
+        item.fullName,
+        item.phone,
+        item.role,
+        item.adminRole,
+        item.businessName,
+        item._sourceCode,
+      ]
         .map((value) => String(value ?? "").toLowerCase())
         .join(" ")
-        .includes(needle),
-    );
-  }, [search, users]);
-  const platformAdmins = filtered.filter(isPlatformAdmin);
-  const customerAccounts = filtered.filter(isCustomerAccount);
-  const contactReferences = filtered
-      .filter(isContactReference)
-      .filter((user) => !text(user.businessId ?? user.businessName, ""));
-  const businessMemberCount = countWhere(users, isBusinessMember);
+        .includes(needle);
+    });
+  }, [personStatus, personType, search, users]);
+  const selectedPerson =
+    filtered.find((item) => peoplePersonId(item) === selectedPersonId) ??
+    filtered[0] ??
+    null;
+  const selectedPersonKey = selectedPerson
+    ? peoplePersonId(selectedPerson)
+    : "";
+  const selectedPersonUserId = selectedPerson
+    ? text(selectedPerson.uid ?? selectedPerson.id, "")
+    : "";
+  const displayedPerson =
+    personDetail && peoplePersonId(personDetail) === selectedPersonKey
+      ? personDetail
+      : selectedPerson;
+  const attentionCount = countWhere(users, (item) =>
+    ["unverified", "suspended", "invited", "pendingDeletion"].includes(
+      peoplePersonStatus(item),
+    ),
+  );
+
+  useEffect(() => {
+    if (
+      !selectedPersonKey ||
+      peoplePersonKind(selectedPerson as FirestoreRow) === "invitation"
+    ) {
+      setPersonDetail(null);
+      setPersonDetailLoading(false);
+      setPersonDetailError("");
+      return;
+    }
+    let active = true;
+    setPersonDetailLoading(true);
+    setPersonDetailError("");
+    const safetyTimeout = window.setTimeout(() => {
+      if (!active) return;
+      active = false;
+      setPersonDetailLoading(false);
+      setPersonDetailError(
+        "Person details are taking too long to load. Try again.",
+      );
+    }, 12000);
+    httpsCallable(functions, "getMarketplacePerson")({
+      userId: selectedPersonUserId,
+    })
+      .then((result) => {
+        if (!active) return;
+        const data = result.data as {person?: FirestoreRow};
+        setPersonDetail(data.person ?? null);
+      })
+      .catch((detailError) => {
+        if (!active) return;
+        setPersonDetail(null);
+        setPersonDetailError(
+          detailError instanceof Error
+            ? detailError.message
+            : "Person details could not be loaded.",
+        );
+      })
+      .finally(() => {
+        window.clearTimeout(safetyTimeout);
+        if (active) setPersonDetailLoading(false);
+      });
+    return () => {
+      active = false;
+      window.clearTimeout(safetyTimeout);
+    };
+  }, [selectedPerson, selectedPersonKey, selectedPersonUserId]);
 
   async function updateRole(userId: string, newRole: Role) {
     await httpsCallable(functions, "updateUserRole")({ userId, newRole });
-  }
-
-  async function deleteUser(userId: string) {
-    await httpsCallable(functions, "deleteUser")({ userId });
   }
 
   async function createMissingProfile(userId: string) {
@@ -3119,30 +3631,70 @@ function UsersView({
   }
 
   return (
-    <div className="stack">
+    <div className="stack people-directory">
       <SectionIntro
-        title="Access management"
-        description="Manage platform administrators and global customer support. Business-linked people and records live under Businesses."
+        title="People & access"
+        description="Search every account, business membership, invitation, and deletion request from one directory."
         stats={[
-          [
-            "Admins",
-            String(
-              countWhere(users, (item) => rowStatus(item, "role") === "admin"),
-            ),
-          ],
-          ["Business people", String(businessMemberCount)],
+          ["Admins", String(countWhere(users, isPlatformAdmin))],
+          ["Business people", String(countWhere(users, isBusinessMember))],
           ["Customers", String(countWhere(users, isCustomerAccount))],
-          ["Global contacts", String(contactReferences.length)],
+          ["Needs attention", String(attentionCount)],
         ]}
       />
-      <div className="tool-row">
+      <div className="people-toolbar">
         <SearchBox
           value={search}
           onChange={setSearch}
-          placeholder="Search users"
+          onSubmit={searchAllUsers}
+          placeholder="Search people, email, phone, or business"
         />
-        {canManage && (
+        <label>
+          <span>Person type</span>
+          <select
+            aria-label="Filter by person type"
+            value={personType}
+            onChange={(event) => setPersonType(event.target.value)}
+          >
+            <option value="all">All people</option>
+            <option value="admin">Platform administrators</option>
+            <option value="businessOwner">Business owners</option>
+            <option value="businessStaff">Business staff</option>
+            <option value="customer">Customers</option>
+            <option value="invitation">Pending invitations</option>
+            <option value="missingProfile">Missing profiles</option>
+          </select>
+        </label>
+        <label>
+          <span>Account status</span>
+          <select
+            aria-label="Filter by account status"
+            value={personStatus}
+            onChange={(event) => setPersonStatus(event.target.value)}
+          >
+            <option value="all">All statuses</option>
+            <option value="active">Active</option>
+            <option value="unverified">Unverified</option>
+            <option value="suspended">Suspended</option>
+            <option value="invited">Invited</option>
+            <option value="pendingDeletion">Pending deletion</option>
+            <option value="reference">Reference only</option>
+          </select>
+        </label>
+        <button
+          className="secondary-button"
+          disabled={loading}
+          onClick={refreshUsers}
+          type="button"
+        >
+          <RefreshCw className={loading ? "spin" : ""} size={15} />
+          Refresh
+        </button>
+        {canManage && (isSuperAdmin || canManageBusinesses) && (
           <CreatePersonForms
+            businesses={businesses}
+            canInviteAdmins={isSuperAdmin}
+            canInviteBusiness={canManageBusinesses}
             runAction={runAction}
             roleOptions={roleOptions.filter(
               (option) => option.key !== "superAdmin",
@@ -3152,229 +3704,789 @@ function UsersView({
       </div>
       {!canManage && (
         <div className="info-band">
-          You have view access to people. Managing administrators, roles, and
-          accounts requires the Super admin or User-management privilege.
+          You have view access to people. Managing invitations, roles, account
+          security, and deletion requests requires the Super admin or
+          User-management privilege.
         </div>
       )}
-      <Panel
-        title="Platform admins"
-        icon={<Users size={18} />}
-        action={
+      {error && (
+        <div className="people-error">
+          <div>
+            <strong>People could not be loaded.</strong>
+            <span>{error}</span>
+          </div>
           <button
             className="secondary-button"
             disabled={loading}
             onClick={refreshUsers}
+            type="button"
           >
             <RefreshCw className={loading ? "spin" : ""} size={15} />
-            Refresh Auth
+            Try again
           </button>
-        }
-      >
-        {error && <div className="inline-error">{error}</div>}
-        {loading && <div className="empty-state">Loading user accounts...</div>}
-        <div className="table">
-          {platformAdmins.map((user) => {
-            const isCurrentUser =
-              text(user.uid ?? user.id, "") === currentUserId;
-            const adminRole = resolveAssignableAdminRole(
-              user.adminRole,
-              roleOptions.map((option) => option.key),
-            );
-            return (
-              <div className="table-row admin-row" key={user.id}>
-                <div>
-                  <strong>{userDisplayName(user)}</strong>
-                  <small>
-                    {[userMeta(user), isCurrentUser ? "Signed in" : ""]
-                      .filter(Boolean)
-                      .join(" • ")}
-                  </small>
-                </div>
-                {canManage ? (
-                  <select
-                    aria-label="Admin access role"
-                    disabled={isCurrentUser}
-                    value={adminRole}
-                    onChange={(event) =>
-                      runAction(
-                        "Admin role updated",
-                        () => setAdminRole(user.id, event.target.value),
-                        {
-                          confirm: `Change admin access for ${userDisplayName(user)}?`,
-                          confirmFr: `Modifier l’accès admin de ${userDisplayName(user)} ?`,
-                        },
-                      )
-                    }
+        </div>
+      )}
+      <section className="people-workspace" aria-label="People directory">
+        <div className="people-master">
+          <div className="people-master-head">
+            <div>
+              <strong>Directory</strong>
+              <span>{filtered.length} people</span>
+            </div>
+            <span className="status-pill compact">All account types</span>
+          </div>
+          {loading && (
+            <div className="people-loading" role="status">
+              <RefreshCw className="spin" size={18} />
+              Loading people and access...
+            </div>
+          )}
+          {!loading && filtered.length === 0 && (
+            <div className="people-empty">
+              <Users size={24} />
+              <strong>No people match these filters</strong>
+              <span>Clear a filter or search for another email or phone.</span>
+            </div>
+          )}
+          <div className="people-list">
+            {filtered.map((user) => {
+              const personId = peoplePersonId(user);
+              const status = peoplePersonStatus(user);
+              return (
+                <button
+                  aria-current={
+                    selectedPerson &&
+                    peoplePersonId(selectedPerson) === personId
+                      ? "true"
+                      : undefined
+                  }
+                  className={
+                    selectedPerson &&
+                    peoplePersonId(selectedPerson) === personId
+                      ? "people-list-row selected"
+                      : "people-list-row"
+                  }
+                  key={personId}
+                  onClick={() => setSelectedPersonId(personId)}
+                  type="button"
+                >
+                  <span className="people-avatar">
+                    {peopleInitials(userDisplayName(user))}
+                  </span>
+                  <span className="people-list-copy">
+                    <strong>{userDisplayName(user)}</strong>
+                    <span>{text(user.email ?? user.phone, "No contact information")}</span>
+                    <small>{peoplePersonKindLabel(user)}</small>
+                  </span>
+                  <span
+                    className={`people-state people-state-${status}`}
                   >
-                    {!adminRole && (
-                      <option disabled value="">
-                        Access not configured
-                      </option>
-                    )}
-                    {roleOptions.map((option) => (
-                      <option key={option.key} value={option.key}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <span className="admin-role-pill">
-                    {roleLabel(adminRole, permsConfig) ||
-                      "Access not configured"}
+                    {peoplePersonStatusLabel(user)}
                   </span>
-                )}
-                {canManage && !isCurrentUser ? (
-                  <div className="admin-row-actions">
-                    <button
-                      className="warning-button"
-                      onClick={() =>
-                        runAction(
-                          "Admin access removed",
-                          () => updateRole(user.id, "customer"),
-                          {
-                            confirm: `Remove admin access for ${userDisplayName(user)}? This account will become a customer account and immediately lose access to the admin console. The account and its history will not be deleted.`,
-                            confirmFr: `Retirer l’accès administrateur de ${userDisplayName(user)} ? Ce compte deviendra un compte client et perdra immédiatement l’accès à la console d’administration. Le compte et son historique ne seront pas supprimés.`,
-                          },
-                        )
-                      }
-                    >
-                      <ShieldOff size={15} />
-                      Remove admin access
-                    </button>
-                    <button
-                      className="danger-button"
-                      onClick={() =>
-                        runAction("User deleted", () => deleteUser(user.id), {
-                          confirm: `Delete ${text(user.email ?? user.fullName, user.id)}? This cannot be undone from the console.`,
-                          confirmFr: `Supprimer ${text(user.email ?? user.fullName, user.id)} ? Cette action ne peut pas être annulée depuis la console.`,
-                        })
-                      }
-                    >
-                      <X size={15} />
-                      Delete
-                    </button>
-                  </div>
-                ) : (
-                  <span className="muted-action">
-                    {isCurrentUser ? "You" : "—"}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-          {!loading && platformAdmins.length === 0 && (
-            <div className="empty-state">
-              No platform administrators match this search.
+                </button>
+              );
+            })}
+            {hasMore && (
+              <button
+                className="secondary-button people-load-more"
+                disabled={loadingMore}
+                onClick={loadMoreUsers}
+                type="button"
+              >
+                <RefreshCw
+                  className={loadingMore ? "spin" : ""}
+                  size={15}
+                />
+                {loadingMore ? "Loading more..." : "Load more people"}
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="people-detail">
+          {displayedPerson ? (
+            <>
+              {personDetailLoading && (
+                <div className="people-detail-progress" role="status">
+                  <RefreshCw className="spin" size={14} />
+                  Loading complete person details...
+                </div>
+              )}
+              {personDetailError && (
+                <div className="people-detail-progress error">
+                  {personDetailError}
+                </div>
+              )}
+              <PersonDetailWorkspace
+                canManage={canManage}
+                canManageBusinesses={canManageBusinesses}
+                createMissingProfile={createMissingProfile}
+                currentUserId={currentUserId}
+                isSuperAdmin={isSuperAdmin}
+                permsConfig={permsConfig}
+                roleOptions={roleOptions}
+                runAction={runAction}
+                setAdminRole={setAdminRole}
+                updateRole={updateRole}
+                user={displayedPerson}
+              />
+            </>
+          ) : (
+            <div className="people-empty people-detail-empty">
+              <UserCog size={28} />
+              <strong>Select a person</strong>
+              <span>Identity, access, security, and activity will appear here.</span>
             </div>
           )}
         </div>
-      </Panel>
+      </section>
+    </div>
+  );
+}
 
-      <Panel title="Customer accounts" icon={<UserCog size={18} />}>
-        <div className="table">
-          {customerAccounts.map((user) => (
-            <div className="table-row" key={user.id}>
+function PersonDetailWorkspace({
+  user,
+  currentUserId,
+  canManage,
+  canManageBusinesses,
+  isSuperAdmin,
+  roleOptions,
+  permsConfig,
+  runAction,
+  updateRole,
+  createMissingProfile,
+  setAdminRole,
+}: {
+  user: FirestoreRow;
+  currentUserId: string;
+  canManage: boolean;
+  canManageBusinesses: boolean;
+  isSuperAdmin: boolean;
+  roleOptions: Array<{ key: string; label: string }>;
+  permsConfig: PermissionsConfig | null;
+  runAction: ActionRunner;
+  updateRole: (userId: string, newRole: Role) => Promise<void>;
+  createMissingProfile: (userId: string) => Promise<void>;
+  setAdminRole: (userId: string, adminRole: string) => Promise<void>;
+}) {
+  const userId = text(user.uid ?? user.id, "");
+  const invitationId = text(user.invitationId ?? user.id, "");
+  const isCurrentUser = userId === currentUserId;
+  const status = peoplePersonStatus(user);
+  const kind = peoplePersonKind(user);
+  const memberships = peopleMemberships(user);
+  const activityReferences = peopleActivityReferences(user);
+  const adminRole = resolveAssignableAdminRole(
+    user.adminRole,
+    roleOptions.map((option) => option.key),
+  );
+  const canActOnAccount =
+    canManage &&
+    !isCurrentUser &&
+    kind !== "contact" &&
+    kind !== "invitation" &&
+    (kind !== "admin" || isSuperAdmin);
+  const canManageInvitation =
+    canManage &&
+    (text(user.invitationKind, "") === "platform"
+      ? isSuperAdmin
+      : canManageBusinesses);
+
+  async function updateMembership(
+    businessId: string,
+    businessRole: string,
+  ) {
+    const payload = {
+      userId,
+      businessId,
+      role: businessRole,
+      businessPermissions: user.businessPermissions,
+    };
+    if (businessRole === "businessOwner") {
+      await transferMarketplaceOwnership(payload);
+      return;
+    }
+    await updateMarketplaceMembership(payload);
+  }
+
+  return (
+    <>
+      <header className="people-detail-head">
+        <div className="people-detail-identity">
+          <span className="people-avatar large">
+            {peopleInitials(userDisplayName(user))}
+          </span>
+          <div>
+            <div className="people-detail-title">
+              <h3>{userDisplayName(user)}</h3>
+              {isCurrentUser && (
+                <span className="status-pill compact">Signed in</span>
+              )}
+            </div>
+            <p>{text(user.email ?? user.phone, "No contact information")}</p>
+            <div className="people-detail-badges">
+              <span className="status-pill compact">
+                {peoplePersonKindLabel(user)}
+              </span>
+              <span className={`people-state people-state-${status}`}>
+                {peoplePersonStatusLabel(user)}
+              </span>
+            </div>
+          </div>
+        </div>
+        <span className="people-record-id">ID {userId || "Not available"}</span>
+      </header>
+
+      {status === "pendingDeletion" && (
+        <div className="people-attention-band">
+          <div>
+            <strong>Deletion request needs review</strong>
+            <span>
+              Confirm any required record retention before completing this
+              request.
+            </span>
+          </div>
+          {canManage && !isCurrentUser && (
+            <div>
+              <button
+                className="secondary-button"
+                onClick={() =>
+                  runAction(
+                    "Deletion request reviewed",
+                    () => reviewMarketplaceDeletion({userId}),
+                    {
+                      confirm: `Review account dependencies for ${userDisplayName(user)} before deletion?`,
+                      confirmFr: `Examiner les dépendances du compte de ${userDisplayName(user)} avant sa suppression ?`,
+                    },
+                  )
+                }
+                type="button"
+              >
+                Review deletion request
+              </button>
+              {isSuperAdmin && (
+                <button
+                  className="danger-button"
+                  onClick={() =>
+                    runAction(
+                      "Account deletion finalized",
+                      () =>
+                        finalizeMarketplaceDeletion({
+                          userId,
+                          confirmation: userId,
+                        }),
+                      {
+                        confirm: `Finalize account deletion for ${userDisplayName(user)}? This permanently removes access and cannot be undone from the console.`,
+                        confirmFr: `Finaliser la suppression du compte de ${userDisplayName(user)} ? Cette action retire définitivement l’accès et ne peut pas être annulée depuis la console.`,
+                      },
+                    )
+                  }
+                  type="button"
+                >
+                  Finalize account deletion
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {status === "suspended" && (
+        <div className="people-attention-band danger">
+          <div>
+            <strong>Account access is suspended</strong>
+            <span>
+              The person cannot sign in until an authorized admin restores
+              access.
+            </span>
+          </div>
+        </div>
+      )}
+
+      <div className="people-detail-sections">
+        <section className="people-detail-section">
+          <div className="people-detail-section-head">
+            <Shield size={17} />
+            <div>
+              <h4>Identity & security</h4>
+              <span>Authentication and verification state</span>
+            </div>
+          </div>
+          <dl className="people-facts">
+            <div>
+              <dt>Email</dt>
+              <dd>{text(user.email, "Not provided")}</dd>
+            </div>
+            <div>
+              <dt>Phone</dt>
+              <dd>{text(user.phone, "Not provided")}</dd>
+            </div>
+            <div>
+              <dt>Email verification</dt>
+              <dd>{user.emailVerified === false ? "Not verified" : "Verified"}</dd>
+            </div>
+            <div>
+              <dt>Authentication</dt>
+              <dd>
+                {user.hasAuth === false
+                  ? "Profile only"
+                  : user.hasAuth === true
+                    ? "Firebase Auth"
+                    : "Not reported"}
+              </dd>
+            </div>
+            <div>
+              <dt>Created</dt>
+              <dd>{user.createdAt ? formatDate(user.createdAt) : "Not reported"}</dd>
+            </div>
+            <div>
+              <dt>Last sign-in</dt>
+              <dd>
+                {user.lastSignInAt
+                  ? formatDate(user.lastSignInAt)
+                  : "Not reported"}
+              </dd>
+            </div>
+          </dl>
+          {canManage &&
+            kind !== "contact" &&
+            kind !== "invitation" &&
+            (kind !== "admin" || isSuperAdmin) && (
+            <div className="people-action-row">
+              <button
+                className="secondary-button"
+                onClick={() =>
+                  runAction(
+                    "Password reset sent",
+                    () =>
+                      sendMarketplaceRecoveryEmail({
+                        userId,
+                        action: "password_reset",
+                      }),
+                    {
+                      confirm: `Send a password reset email to ${userDisplayName(user)}?`,
+                      confirmFr: `Envoyer un courriel de réinitialisation du mot de passe à ${userDisplayName(user)} ?`,
+                    },
+                  )
+                }
+                type="button"
+              >
+                Send password reset
+              </button>
+              {status === "unverified" && (
+                <button
+                  className="secondary-button"
+                  onClick={() =>
+                    runAction(
+                      "Verification email sent",
+                      () =>
+                        sendMarketplaceRecoveryEmail({
+                          userId,
+                          action: "verify_email",
+                        }),
+                      {
+                        confirm: `Resend verification to ${userDisplayName(user)}?`,
+                        confirmFr: `Renvoyer la vérification à ${userDisplayName(user)} ?`,
+                      },
+                    )
+                  }
+                  type="button"
+                >
+                  Send verification email
+                </button>
+              )}
+            </div>
+          )}
+        </section>
+
+        <section className="people-detail-section">
+          <div className="people-detail-section-head">
+            <UserCog size={17} />
+            <div>
+              <h4>Roles & memberships</h4>
+              <span>Platform and business access</span>
+            </div>
+          </div>
+          {kind === "admin" && (
+            <label className="people-control">
+              <span>Platform admin role</span>
+              {isSuperAdmin ? (
+                <select
+                  aria-label="Admin access role"
+                  disabled={isCurrentUser}
+                  value={adminRole}
+                  onChange={(event) =>
+                    runAction(
+                      "Admin role updated",
+                      () => setAdminRole(userId, event.target.value),
+                      {
+                        confirm: `Change admin access for ${userDisplayName(user)}?`,
+                        confirmFr: `Modifier l’accès admin de ${userDisplayName(user)} ?`,
+                      },
+                    )
+                  }
+                >
+                  {!adminRole && (
+                    <option disabled value="">
+                      Access not configured
+                    </option>
+                  )}
+                  {roleOptions.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <strong>
+                  {roleLabel(adminRole, permsConfig) || "Access not configured"}
+                </strong>
+              )}
+              {isCurrentUser && (
+                <small>Your own admin role cannot be changed here.</small>
+              )}
+              <small>
+                The last super admin cannot be suspended or demoted.
+              </small>
+            </label>
+          )}
+          {kind === "customer" && (
+            <label className="people-control">
+              <span>Account role</span>
+              {isSuperAdmin ? (
+                <select
+                  value={text(user.role, "customer")}
+                  onChange={(event) =>
+                    runAction(
+                      "User role updated",
+                      () => updateRole(userId, event.target.value as Role),
+                      {
+                        confirm: `Change account role for ${userDisplayName(user)}?`,
+                        confirmFr: `Modifier le rôle du compte de ${userDisplayName(user)} ?`,
+                      },
+                    )
+                  }
+                >
+                  {accountRoleOptions.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <strong>{text(user.role, "customer")}</strong>
+              )}
+            </label>
+          )}
+          {memberships.map((membership) => (
+            <div
+              className="people-membership"
+              key={`${membership.businessId}-${membership.businessName}`}
+            >
+              <span className="people-membership-icon">
+                <Building2 size={17} />
+              </span>
               <div>
-                <strong>{userDisplayName(user)}</strong>
-                <small>{userMeta(user)}</small>
+                <strong>{membership.businessName}</strong>
+                <span>Business membership</span>
               </div>
               {canManage ? (
-                <>
-                  <select
-                    value={text(user.role, "customer")}
-                    onChange={(event) =>
-                      runAction(
-                        "User role updated",
-                        () => updateRole(user.id, event.target.value as Role),
-                        {
-                          confirm: `Change account role for ${userDisplayName(user)}?`,
-                          confirmFr: `Modifier le rôle du compte de ${userDisplayName(user)} ?`,
-                        },
-                      )
-                    }
-                  >
-                    {accountRoleOptions.map((role) => (
-                      <option key={role} value={role}>
-                        {role}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    className="danger-button"
-                    onClick={() =>
-                      runAction("User deleted", () => deleteUser(user.id), {
-                        confirm: `Delete ${text(user.email ?? user.fullName, user.id)}? This cannot be undone from the console.`,
-                        confirmFr: `Supprimer ${text(user.email ?? user.fullName, user.id)} ? Cette action ne peut pas être annulée depuis la console.`,
-                      })
-                    }
-                  >
-                    <X size={15} />
-                    Delete
-                  </button>
-                </>
+                <select
+                  aria-label="Business membership role"
+                  value={membership.role}
+                  onChange={(event) =>
+                    runAction(
+                      "Business membership updated",
+                      () =>
+                        updateMembership(
+                          membership.businessId,
+                          event.target.value,
+                        ),
+                      {
+                        confirm: `Change this membership for ${userDisplayName(user)}?`,
+                        confirmFr: `Modifier cette adhésion pour ${userDisplayName(user)} ?`,
+                      },
+                    )
+                  }
+                >
+                  {businessRoleOptions.map((role) => (
+                    <option key={role} value={role}>
+                      {role === "businessOwner" ? "Business owner" : "Staff"}
+                    </option>
+                  ))}
+                </select>
               ) : (
-                <span className="status-pill">Customer</span>
+                <span className="status-pill compact">
+                  {membership.role === "businessOwner"
+                    ? "Business owner"
+                    : "Staff"}
+                </span>
               )}
             </div>
           ))}
-          {!loading && customerAccounts.length === 0 && (
-            <div className="empty-state">
-              No customer accounts match this search.
+          {isSuperAdmin &&
+            text(user.role, "") === "staff" &&
+            memberships[0]?.businessId && (
+              <div className="people-ownership-action">
+                <div>
+                  <strong>Business ownership</strong>
+                  <span>
+                    This makes the selected person the business owner and moves
+                    the current owner to staff. A last business owner cannot be
+                    removed without a transfer.
+                  </span>
+                </div>
+                <button
+                  className="warning-button"
+                  onClick={() =>
+                    runAction(
+                      "Business ownership transferred",
+                      () =>
+                        transferMarketplaceOwnership({
+                          userId,
+                          businessId: memberships[0]?.businessId,
+                          businessPermissions: user.businessPermissions,
+                        }),
+                      {
+                        confirm: `Transfer ownership of ${memberships[0]?.businessName} to ${userDisplayName(user)}? The current owner will become staff.`,
+                        confirmFr: `Transférer la propriété de ${memberships[0]?.businessName} à ${userDisplayName(user)} ? Le propriétaire actuel deviendra membre du personnel.`,
+                      },
+                    )
+                  }
+                  type="button"
+                >
+                  Transfer ownership
+                </button>
+              </div>
+            )}
+          {kind !== "admin" &&
+            kind !== "customer" &&
+            memberships.length === 0 && (
+              <div className="people-section-empty">
+                No platform or business access is assigned.
+              </div>
+            )}
+          {kind === "invitation" && (
+            <div className="people-invitation-access">
+              <strong>Invitation awaiting acceptance</strong>
+              <span>
+                Access starts only after the recipient accepts the invitation.
+              </span>
             </div>
           )}
-        </div>
-      </Panel>
+        </section>
 
-      <Panel
-        title="Contact-only support references"
-        icon={<ClipboardList size={18} />}
-      >
-        <div className="list-summary">
-          These people were found on shipments, purchases, refunds, or service
-          records. They are not editable accounts unless Firebase Auth has a
-          matching user.
-        </div>
-        <div className="table">
-          {contactReferences.map((user) => (
-            <div className="table-row" key={user.id}>
-              <div>
-                <strong>{userDisplayName(user)}</strong>
-                <small>{userMeta(user)}</small>
-              </div>
-              <span className="status-pill warning">Contact only</span>
-              {canManage &&
-              user.hasAuth === true &&
-              user.hasProfile === false ? (
+        <section className="people-detail-section people-detail-activity">
+          <div className="people-detail-section-head">
+            <Activity size={17} />
+            <div>
+              <h4>Marketplace activity</h4>
+              <span>Linked orders, requests, and support records</span>
+            </div>
+          </div>
+          {activityReferences.length > 0 ? (
+            <div className="people-activity-list">
+              {activityReferences.map((reference) => (
+                <div key={reference.id}>
+                  <span className="people-membership-icon">
+                    <ClipboardList size={16} />
+                  </span>
+                  <div>
+                    <strong>{reference.label}</strong>
+                    <span>{reference.meta || "Marketplace record"}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="people-section-empty">
+              No marketplace activity is linked to this person.
+            </div>
+          )}
+          <dl className="people-audit">
+            <div>
+              <dt>Profile updated</dt>
+              <dd>
+                {user.updatedAt ? formatDate(user.updatedAt) : "Not reported"}
+              </dd>
+            </div>
+            <div>
+              <dt>Deletion requested</dt>
+              <dd>
+                {user.deletionRequestedAt
+                  ? formatDate(user.deletionRequestedAt)
+                  : status === "pendingDeletion"
+                    ? "Date not reported"
+                    : "No"}
+              </dd>
+            </div>
+          </dl>
+        </section>
+      </div>
+
+      {canManage && (
+        <footer className="people-detail-actions">
+          {kind === "contact" ? (
+            user.hasAuth === true && user.hasProfile === false ? (
+              <button
+                className="primary-button"
+                onClick={() =>
+                  runAction(
+                    "User profile created",
+                    () => createMissingProfile(userId),
+                    {
+                      confirm: `Create a user profile for ${userDisplayName(user)}?`,
+                      confirmFr: `Créer un profil utilisateur pour ${userDisplayName(user)} ?`,
+                    },
+                  )
+                }
+                type="button"
+              >
+                <Check size={15} />
+                Create profile
+              </button>
+            ) : (
+              <span className="muted-action">
+                A matching Auth account is required before access can be assigned.
+              </span>
+            )
+          ) : kind === "invitation" && canManageInvitation ? (
+            <>
+              <button
+                className="secondary-button"
+                onClick={() =>
+                  runAction(
+                    "Invitation resent",
+                    () =>
+                      resendMarketplaceInvitation({invitationId}),
+                  )
+                }
+                type="button"
+              >
+                <Send size={15} />
+                Resend invitation
+              </button>
+              <button
+                className="danger-button"
+                onClick={() =>
+                  runAction(
+                    "Invitation revoked",
+                    () =>
+                      cancelMarketplaceInvitation({invitationId}),
+                    {
+                      confirm: `Revoke the invitation for ${userDisplayName(user)}?`,
+                      confirmFr: `Révoquer l’invitation de ${userDisplayName(user)} ?`,
+                    },
+                  )
+                }
+                type="button"
+              >
+                Cancel invitation
+              </button>
+            </>
+          ) : (
+            <>
+              {canActOnAccount && (
+                <>
                   <button
+                    className={
+                      status === "suspended"
+                        ? "primary-button"
+                        : "warning-button"
+                    }
                     onClick={() =>
                       runAction(
-                        "User profile created",
-                        () => createMissingProfile(user.id),
+                        status === "suspended"
+                          ? "Account restored"
+                          : "Account suspended",
+                        () =>
+                          setMarketplacePersonStatus({
+                            userId,
+                            action:
+                              status === "suspended" ? "restore" : "suspend",
+                          }),
                         {
-                        confirm: `Create a user profile for ${userDisplayName(user)}?`,
-                        confirmFr: `Créer un profil utilisateur pour ${userDisplayName(user)} ?`,
+                          confirm:
+                            status === "suspended"
+                              ? `Restore sign-in access for ${userDisplayName(user)}?`
+                              : `Suspend ${userDisplayName(user)}? They will lose sign-in access until restored.`,
+                          confirmFr:
+                            status === "suspended"
+                              ? `Rétablir l’accès de connexion de ${userDisplayName(user)} ?`
+                              : `Suspendre ${userDisplayName(user)} ? Cette personne perdra l’accès jusqu’à son rétablissement.`,
                         },
                       )
                     }
+                    type="button"
                   >
-                    <Check size={15} />
-                    Create profile
+                    {status === "suspended" ? (
+                      <Check size={15} />
+                    ) : (
+                      <ShieldOff size={15} />
+                    )}
+                    {status === "suspended" ? "Restore account" : "Suspend account"}
                   </button>
-                ) : user._inferred === true ? (
-                  <span className="muted-action">Contact only</span>
-                ) : (
-                  <span className="muted-action">Needs Auth match</span>
-                )}
-            </div>
-          ))}
-          {!loading && contactReferences.length === 0 && (
-            <div className="empty-state">
-              No contact-only references match this search.
-            </div>
+                  <button
+                    className="secondary-button"
+                    onClick={() =>
+                      runAction(
+                        "Sessions revoked",
+                        () => revokeMarketplacePersonSessions({userId}),
+                        {
+                          confirm: `Sign ${userDisplayName(user)} out on all devices?`,
+                          confirmFr: `Déconnecter ${userDisplayName(user)} de tous les appareils ?`,
+                        },
+                      )
+                    }
+                    type="button"
+                  >
+                    Revoke sessions
+                  </button>
+                </>
+              )}
+              {kind === "admin" && !isCurrentUser && isSuperAdmin && (
+                <button
+                  className="warning-button"
+                  onClick={() =>
+                    runAction(
+                      "Admin access removed",
+                      () => updateRole(userId, "customer"),
+                      {
+                        confirm: `Remove admin access for ${userDisplayName(user)}? This account will become a customer account and immediately lose access to the admin console. The account and its history will not be deleted.`,
+                        confirmFr: `Retirer l’accès administrateur de ${userDisplayName(user)} ? Ce compte deviendra un compte client et perdra immédiatement l’accès à la console d’administration. Le compte et son historique ne seront pas supprimés.`,
+                      },
+                    )
+                  }
+                  type="button"
+                >
+                  Remove admin access
+                </button>
+              )}
+              {canActOnAccount && status !== "pendingDeletion" && (
+                <button
+                  className="warning-button people-delete-action"
+                  onClick={() =>
+                    runAction("Deletion request reviewed", () =>
+                      reviewMarketplaceDeletion({userId}), {
+                      confirm: `Review account dependencies for ${userDisplayName(user)} before deletion? No account will be deleted during this review.`,
+                      confirmFr: `Examiner les dépendances du compte de ${userDisplayName(user)} avant sa suppression ? Aucun compte ne sera supprimé pendant cet examen.`,
+                    })
+                  }
+                  type="button"
+                >
+                  <ClipboardList size={15} />
+                  Review deletion request
+                </button>
+              )}
+              {isCurrentUser && (
+                <span className="muted-action">
+                  Sign in as another authorized admin to change your own access.
+                </span>
+              )}
+            </>
           )}
-        </div>
-      </Panel>
-    </div>
+        </footer>
+      )}
+    </>
   );
 }
 
@@ -6228,95 +7340,276 @@ function AdminAccountPanel({
 function CreatePersonForms({
   runAction,
   roleOptions,
+  businesses,
+  canInviteAdmins,
+  canInviteBusiness,
 }: {
   runAction: ActionRunner;
   roleOptions: Array<{ key: string; label: string }>;
+  businesses: FirestoreRow[];
+  canInviteAdmins: boolean;
+  canInviteBusiness: boolean;
 }) {
+  const [open, setOpen] = useState(false);
+  const [personType, setPersonType] = useState<"platformAdmin" | "businessPerson">(
+    "platformAdmin",
+  );
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
   const [platformAdminRole, setPlatformAdminRole] =
     useState<string>("operationsManager");
+  const [businessId, setBusinessId] = useState("");
+  const [businessPermissions, setBusinessPermissions] = useState<string[]>([
+    "profile",
+    "people",
+  ]);
 
   function reset() {
+    setPersonType("platformAdmin");
     setFullName("");
     setEmail("");
-    setPhone("");
-    setPassword("");
     setPlatformAdminRole("operationsManager");
+    setBusinessId("");
+    setBusinessPermissions(["profile", "people"]);
   }
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submit() {
     const payload = {
       fullName: fullName.trim(),
       email: email.trim().toLowerCase(),
-      phone: phone.trim(),
-      password,
-      adminRole: platformAdminRole,
+      personType,
+      adminRole:
+        personType === "platformAdmin" ? platformAdminRole : undefined,
+      businessId: personType === "businessPerson" ? businessId : undefined,
+      businessPermissions:
+        personType === "businessPerson"
+          ? businessPermissions
+          : undefined,
     };
-    await httpsCallable(functions, "createPlatformManager")(payload);
+    if (personType === "platformAdmin") {
+      await inviteMarketplaceAdmin(payload);
+    } else {
+      await inviteMarketplaceBusinessMember(payload);
+    }
     reset();
+    setOpen(false);
   }
 
   return (
-    <form
-      className="inline-form"
-      onSubmit={(event) =>
-        runAction("Platform manager created", () => submit(event), {
-          confirm: "Create this platform manager account?",
-          confirmFr: "Créer ce compte gestionnaire de plateforme ?",
-        })
-      }
-    >
-      <span className="form-note strong">Platform manager</span>
-      <input
-        required
-        autoComplete="name"
-        name="fullName"
-        placeholder="Name"
-        value={fullName}
-        onChange={(event) => setFullName(event.target.value)}
-      />
-      <input
-        required
-        autoComplete="username"
-        name="username"
-        placeholder="Email"
-        type="email"
-        value={email}
-        onChange={(event) => setEmail(event.target.value)}
-      />
-      <input
-        autoComplete="tel"
-        name="phone"
-        placeholder="Phone"
-        value={phone}
-        onChange={(event) => setPhone(event.target.value)}
-      />
-      <input
-        required
-        autoComplete="new-password"
-        minLength={6}
-        name="new-password"
-        placeholder="Password"
-        type="password"
-        value={password}
-        onChange={(event) => setPassword(event.target.value)}
-      />
-      <select
-        value={platformAdminRole}
-        onChange={(event) => setPlatformAdminRole(event.target.value)}
+    <>
+      <button
+        className="primary-button people-invite-button"
+        onClick={() => {
+          setPersonType(
+            canInviteAdmins ? "platformAdmin" : "businessPerson",
+          );
+          setOpen(true);
+        }}
+        type="button"
       >
-        {roleOptions.map((option) => (
-          <option key={option.key} value={option.key}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <button className="primary-button">Create</button>
-    </form>
+        <Send size={15} />
+        Invite person
+      </button>
+      {open && (
+        <div className="account-overlay people-invite-overlay">
+          <button
+            aria-label="Close invitation"
+            className="account-backdrop"
+            onClick={() => setOpen(false)}
+            type="button"
+          />
+          <aside
+            aria-label="Invite a person"
+            aria-modal="true"
+            className="account-drawer people-invite-drawer"
+            role="dialog"
+          >
+            <header className="account-drawer-head">
+              <div className="account-id">
+                <span className="account-avatar">
+                  <Send size={19} />
+                </span>
+                <div>
+                  <h2>Invite a person</h2>
+                  <p>
+                    They will create their own password after accepting the
+                    email invitation.
+                  </p>
+                </div>
+              </div>
+              <button
+                aria-label="Close invitation"
+                className="icon-button subtle"
+                onClick={() => setOpen(false)}
+                type="button"
+              >
+                <X size={18} />
+              </button>
+            </header>
+            <form
+              className="people-invite-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void runAction("Invitation sent", submit, {
+                  confirm: `Send this ${personType === "platformAdmin" ? "platform admin" : "business personnel"} invitation?`,
+                  confirmFr: `Envoyer cette invitation ${personType === "platformAdmin" ? "d’administrateur de plateforme" : "de membre d’entreprise"} ?`,
+                });
+              }}
+            >
+              <fieldset className="people-invite-type">
+                <legend>Access type</legend>
+                {canInviteAdmins && (
+                  <label>
+                    <input
+                      checked={personType === "platformAdmin"}
+                      name="personType"
+                      onChange={() => setPersonType("platformAdmin")}
+                      type="radio"
+                    />
+                    <span>
+                      <strong>Platform admin</strong>
+                      <small>Access to authorized admin console sections</small>
+                    </span>
+                  </label>
+                )}
+                {canInviteBusiness && (
+                  <label>
+                    <input
+                      checked={personType === "businessPerson"}
+                      name="personType"
+                      onChange={() => setPersonType("businessPerson")}
+                      type="radio"
+                    />
+                    <span>
+                      <strong>Business person</strong>
+                      <small>Staff access for one business</small>
+                    </span>
+                  </label>
+                )}
+              </fieldset>
+              <div className="people-invite-fields">
+                <label>
+                  <span>Full name</span>
+                  <input
+                    autoComplete="name"
+                    name="fullName"
+                    onChange={(event) => setFullName(event.target.value)}
+                    placeholder="Full name"
+                    required
+                    value={fullName}
+                  />
+                </label>
+                <label>
+                  <span>Email address</span>
+                  <input
+                    autoComplete="email"
+                    name="email"
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="Email address"
+                    required
+                    type="email"
+                    value={email}
+                  />
+                </label>
+                {personType === "platformAdmin" ? (
+                  <label>
+                    <span>Platform admin role</span>
+                    <select
+                      value={platformAdminRole}
+                      onChange={(event) =>
+                        setPlatformAdminRole(event.target.value)
+                      }
+                    >
+                      {roleOptions.map((option) => (
+                        <option key={option.key} value={option.key}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <>
+                    <label>
+                      <span>Business</span>
+                      <select
+                        onChange={(event) => setBusinessId(event.target.value)}
+                        required
+                        value={businessId}
+                      >
+                        <option disabled value="">
+                          Select a business
+                        </option>
+                        {businesses.map((business) => (
+                          <option key={business.id} value={business.id}>
+                            {text(business.name, business.id)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="people-invite-role-note">
+                      <strong>Business staff</strong>
+                      <span>
+                        Ownership can be transferred after the invitation is
+                        accepted.
+                      </span>
+                    </div>
+                    <fieldset className="people-permission-picker">
+                      <legend>Business permissions</legend>
+                      <p>
+                        Grant only the tools this person needs. Access can be
+                        adjusted later.
+                      </p>
+                      <div>
+                        {businessStaffPermissionOptions.map((permission) => (
+                          <label key={permission}>
+                            <input
+                              checked={businessPermissions.includes(
+                                permission,
+                              )}
+                              onChange={(event) =>
+                                setBusinessPermissions((current) =>
+                                  event.target.checked
+                                    ? [...current, permission]
+                                    : current.filter(
+                                        (item) => item !== permission,
+                                      ),
+                                )
+                              }
+                              type="checkbox"
+                            />
+                            <span>{businessPermissionLabel(permission)}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                  </>
+                )}
+              </div>
+              <div className="people-invite-note">
+                <Shield size={17} />
+                <span>
+                  No password is collected here. The invitation expires and
+                  access remains inactive until it is accepted.
+                </span>
+              </div>
+              <div className="account-drawer-actions">
+                <button
+                  className="secondary-button"
+                  onClick={() => setOpen(false)}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button className="primary-button" type="submit">
+                  <Send size={15} />
+                  Send invitation
+                </button>
+              </div>
+            </form>
+          </aside>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -6750,27 +8043,24 @@ function CreateBusinessStaffForm({
 }) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
+  const [businessPermissions, setBusinessPermissions] = useState<string[]>([
+    "profile",
+    "people",
+  ]);
 
   function reset() {
     setFullName("");
     setEmail("");
-    setPhone("");
-    setPassword("");
+    setBusinessPermissions(["profile", "people"]);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await httpsCallable(
-      functions,
-      "createStaffUser",
-    )({
+    await inviteMarketplaceBusinessMember({
       fullName: fullName.trim(),
       email: email.trim().toLowerCase(),
-      phone: phone.trim(),
-      password,
       businessId: business.id,
+      businessPermissions,
     });
     reset();
   }
@@ -6779,14 +8069,14 @@ function CreateBusinessStaffForm({
     <form
       className="membership-form staff-create-form"
       onSubmit={(event) =>
-        runAction("Business staff created", () => submit(event), {
-          confirm: `Create this staff account for ${text(business.name, business.id)}?`,
-          confirmFr: `Créer ce compte employé pour ${text(business.name, business.id)} ?`,
+        runAction("Business staff invitation sent", () => submit(event), {
+          confirm: `Send this staff invitation for ${text(business.name, business.id)}?`,
+          confirmFr: `Envoyer cette invitation d’employé pour ${text(business.name, business.id)} ?`,
         })
       }
     >
       <span className="form-note strong">
-        New staff for {text(business.name, business.id)}
+        Invite staff to {text(business.name, business.id)}
       </span>
       <input
         required
@@ -6805,24 +8095,32 @@ function CreateBusinessStaffForm({
         value={email}
         onChange={(event) => setEmail(event.target.value)}
       />
-      <input
-        autoComplete="tel"
-        name={`staff-phone-${business.id}`}
-        placeholder="Phone"
-        value={phone}
-        onChange={(event) => setPhone(event.target.value)}
-      />
-      <input
-        required
-        autoComplete="new-password"
-        minLength={6}
-        name={`staff-password-${business.id}`}
-        placeholder="Password"
-        type="password"
-        value={password}
-        onChange={(event) => setPassword(event.target.value)}
-      />
-      <button className="primary-button">Create staff</button>
+      <fieldset className="people-permission-picker compact">
+        <legend>Business permissions</legend>
+        <div>
+          {businessStaffPermissionOptions.map((permission) => (
+            <label key={permission}>
+              <input
+                checked={businessPermissions.includes(permission)}
+                onChange={(event) =>
+                  setBusinessPermissions((current) =>
+                    event.target.checked
+                      ? [...current, permission]
+                      : current.filter((item) => item !== permission),
+                  )
+                }
+                type="checkbox"
+              />
+              <span>{businessPermissionLabel(permission)}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <p className="form-note">
+        No password is collected. The person will set one from the expiring
+        email invitation.
+      </p>
+      <button className="primary-button">Send invitation</button>
     </form>
   );
 }
@@ -10987,10 +12285,12 @@ function CollectionRow({
 function SearchBox({
   value,
   onChange,
+  onSubmit,
   placeholder,
 }: {
   value: string;
   onChange: (value: string) => void;
+  onSubmit?: (value: string) => void;
   placeholder: string;
 }) {
   return (
@@ -10999,6 +12299,11 @@ function SearchBox({
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" || !onSubmit) return;
+          event.preventDefault();
+          onSubmit(value);
+        }}
         placeholder={placeholder}
       />
     </label>

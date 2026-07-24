@@ -205,6 +205,13 @@ const ADMIN_PURCHASE_STATUSES = [
   "refunded",
   "forfeited",
 ];
+const BLOCKED_ACCOUNT_STATUSES = new Set([
+  "suspended",
+  "deleting",
+  "deleted",
+]);
+const ACCESS_INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const USER_DIRECTORY_PAGE_SIZE = 100;
 const DEFAULT_BUSINESS_SERVICES = [...VALID_BUSINESS_SERVICES];
 const DEFAULT_BUSINESS_ADVISOR_MODEL = "claude-fable-5";
 const DEFAULT_PLATFORM_SERVICE_FEE_PCT = 0.1;
@@ -713,8 +720,25 @@ async function getStoredUserProfile(uid) {
   return {id: doc.id, ...doc.data()};
 }
 
+function userManagementError(status, reason, message, details = {}) {
+  return new HttpsError(status, message, {reason, ...details});
+}
+
+function accountAccessBlocked(user) {
+  return BLOCKED_ACCOUNT_STATUSES.has(
+      String(user?.accountStatus || "").trim().toLowerCase(),
+  );
+}
+
 async function getUserProfile(uid) {
   const user = await getStoredUserProfile(uid);
+  if (accountAccessBlocked(user)) {
+    throw userManagementError(
+        "permission-denied",
+        "account-access-blocked",
+        "This account cannot access the platform",
+    );
+  }
   if (user.role === "admin") {
     const authUser = await admin.auth().getUser(uid);
     if (authUser.emailVerified !== true) {
@@ -729,17 +753,28 @@ async function getUserProfile(uid) {
         "users", "businesses", "marketplace",
         "operations", "finance", "support", "website",
       ];
+      user.effectiveSections = {
+        people: "manage",
+        businesses: "manage",
+        marketplace: "manage",
+        operations: "manage",
+        finance: "manage",
+        support: "manage",
+        website: "manage",
+      };
       user.effectiveServices = null; // null = all services
     } else {
       const config = await loadPermissionsConfig();
       const roleConfig = roleConfigFor(role, config);
       if (roleConfig) {
+        user.effectiveSections = {...(roleConfig.sections || {})};
         user.effectiveCapabilities =
           capabilitiesFromSections(roleConfig.sections);
         const svc = roleConfig.services;
         user.effectiveServices =
           (Array.isArray(svc) && svc.length) ? svc : null;
       } else {
+        user.effectiveSections = {};
         user.effectiveCapabilities = [];
         user.effectiveServices = [];
       }
@@ -970,6 +1005,29 @@ function requireAdminCapability(user, capability, message) {
   }
 }
 
+function hasAdminSectionAccess(user, section, requiredLevel = "view") {
+  if (user.role !== "admin") return false;
+  if (platformAdminRole(user) === "superAdmin") return true;
+  const level = String(user.effectiveSections?.[section] || "none");
+  if (requiredLevel === "manage") return level === "manage";
+  return level === "view" || level === "manage";
+}
+
+function requireAdminSectionAccess(
+    user,
+    section,
+    requiredLevel = "view",
+    message,
+) {
+  if (!hasAdminSectionAccess(user, section, requiredLevel)) {
+    throw userManagementError(
+        "permission-denied",
+        `admin-${section}-${requiredLevel}-required`,
+        message || "Platform administrator permission required",
+    );
+  }
+}
+
 function requireSuperAdmin(user, message) {
   if (platformAdminRole(user) !== "superAdmin") {
     throw new HttpsError(
@@ -1071,12 +1129,16 @@ function adminRecordLabel(collectionName, id, data = {}) {
 function setAdminAuditLog(batch, {
   action,
   actorUid,
+  actorRole,
   targetCollection,
   targetId,
   targetLabel,
   statusField,
   previousValue,
   nextValue,
+  reason,
+  requestId,
+  metadata,
 }) {
   const ref = admin.firestore().collection("adminAuditLogs").doc();
   const payload = {
@@ -1091,9 +1153,15 @@ function setAdminAuditLog(batch, {
         Date.now() + 400 * 24 * 60 * 60 * 1000,
     ),
   };
+  if (actorRole) payload.actorRole = String(actorRole);
   if (statusField) payload.statusField = statusField;
   if (previousValue !== undefined) payload.previousValue = previousValue;
   if (nextValue !== undefined) payload.nextValue = nextValue;
+  if (reason) payload.reason = String(reason);
+  if (requestId) payload.requestId = String(requestId);
+  if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
+    payload.metadata = metadata;
+  }
   batch.set(ref, payload);
 }
 
@@ -8002,22 +8070,18 @@ exports.createStaffUser = onCall(
 
       try {
       // Get the caller's user document to check staff creation scope.
-        const callerDoc = await admin
-            .firestore()
-            .collection("users")
-            .doc(callerUid)
-            .get();
-
-        if (!callerDoc.exists) {
-          throw new HttpsError("permission-denied", "User profile not found");
-        }
-
-        const callerData = callerDoc.data();
+        const callerData = await getUserProfile(callerUid);
 
         const requestedBusinessId =
           request.data.businessId ||
-          callerData.businessId ||
-          DEFAULT_BUSINESS_ID;
+          callerData.businessId;
+        if (!requestedBusinessId) {
+          throw userManagementError(
+              "invalid-argument",
+              "business-required",
+              "Business is required",
+          );
+        }
         const businessDoc = await admin.firestore()
             .collection("businesses")
             .doc(requestedBusinessId)
@@ -8028,7 +8092,8 @@ exports.createStaffUser = onCall(
         const business = businessDoc.data();
 
         const callerCanCreateStaff =
-          hasAdminCapability(callerData, "operations") ||
+          hasAdminCapability(callerData, "users") ||
+          hasAdminCapability(callerData, "businesses") ||
           (
             callerData.role === "businessOwner" &&
             callerData.businessId === requestedBusinessId
@@ -8352,6 +8417,453 @@ exports.createPlatformManager = onCall(
     },
 );
 
+function requirePeopleAccess(user, requiredLevel = "view") {
+  requireAdminSectionAccess(
+      user,
+      "people",
+      requiredLevel,
+      requiredLevel === "manage" ?
+        "Only people administrators can manage users" :
+        "Only people administrators can view users",
+  );
+}
+
+function assertCanManageTarget(caller, target, callerUid, targetUid) {
+  if (callerUid === targetUid) {
+    throw userManagementError(
+        "failed-precondition",
+        "self-access-change-not-allowed",
+        "You cannot perform this access action on your own account",
+    );
+  }
+  if (target.role === "admin" || target.platformAdmin === true) {
+    requireSuperAdmin(
+        caller,
+        "Only super admins can manage platform administrators",
+    );
+  }
+}
+
+function userDirectoryProfile(profile = {}) {
+  return {
+    role: String(profile.role || "missing_profile"),
+    adminRole: String(profile.adminRole || ""),
+    businessId: String(profile.businessId || ""),
+    businessName: String(profile.businessName || ""),
+    businessPermissions: normalizeBusinessPermissions(
+        profile.businessPermissions,
+    ),
+    accountStatus: String(profile.accountStatus || "active"),
+    fullName: String(profile.fullName || ""),
+    email: String(profile.email || "").toLowerCase(),
+    phone: String(profile.phone || ""),
+    profileImageUrl: String(profile.profileImageUrl || ""),
+  };
+}
+
+function userDirectoryDto(userRecord, profileSnapshot = null) {
+  const hasAuth = Boolean(userRecord);
+  const hasProfile = Boolean(profileSnapshot?.exists);
+  const profile = hasProfile ? profileSnapshot.data() || {} : {};
+  const projection = userDirectoryProfile(profile);
+  const uid = String(
+      userRecord?.uid || profileSnapshot?.id || profile.uid || "",
+  );
+  const role = hasProfile ? projection.role : "missing_profile";
+  const category = role === "admin" ?
+    "platform" :
+    (role === "businessOwner" || role === "staff") ?
+      "business" :
+      role === "customer" ?
+        "customer" :
+        "missing_profile";
+  return {
+    id: uid,
+    uid,
+    email: projection.email || String(userRecord?.email || "").toLowerCase(),
+    fullName: projection.fullName || String(userRecord?.displayName || ""),
+    phone: projection.phone || String(userRecord?.phoneNumber || ""),
+    profileImageUrl:
+      projection.profileImageUrl || String(userRecord?.photoURL || ""),
+    role,
+    category,
+    adminRole: hasProfile ? projection.adminRole : "",
+    businessId: hasProfile ? projection.businessId : "",
+    businessName: hasProfile ? projection.businessName : "",
+    businessPermissions: hasProfile ?
+      projection.businessPermissions : [],
+    accountStatus: hasProfile ? projection.accountStatus : "profile_missing",
+    disabled: hasAuth ? userRecord.disabled === true : null,
+    emailVerified: hasAuth ? userRecord.emailVerified === true : null,
+    createdAt: hasAuth ?
+      String(userRecord.metadata?.creationTime || "") :
+      profile.createdAt || null,
+    lastSignInAt: hasAuth ?
+      String(userRecord.metadata?.lastSignInTime || "") : "",
+    hasProfile,
+    hasAuth,
+  };
+}
+
+function invitationDirectoryDto(snapshot) {
+  const invitation = snapshot.data() || {};
+  return {
+    id: `invitation:${snapshot.id}`,
+    uid: String(invitation.targetUid || ""),
+    email: String(invitation.email || "").toLowerCase(),
+    fullName: String(invitation.fullName || ""),
+    phone: "",
+    profileImageUrl: "",
+    role: "invited",
+    category: "invitation",
+    invitationId: snapshot.id,
+    invitationKind: String(invitation.kind || ""),
+    adminRole: String(invitation.adminRole || ""),
+    businessId: String(invitation.businessId || ""),
+    businessName: String(invitation.businessName || ""),
+    businessPermissions: normalizeBusinessPermissions(
+        invitation.businessPermissions,
+    ),
+    accountStatus: String(invitation.status || "pending"),
+    disabled: null,
+    emailVerified: null,
+    createdAt: invitation.createdAt || null,
+    expiresAt: invitation.expiresAt || null,
+    lastSignInAt: "",
+    hasProfile: false,
+    hasAuth: Boolean(invitation.targetUid),
+  };
+}
+
+async function profileSnapshotsForAuthUsers(db, authUsers) {
+  if (!authUsers.length) return [];
+  const refs = authUsers.map((record) =>
+    db.collection("users").doc(record.uid),
+  );
+  return db.getAll(...refs);
+}
+
+async function exactAuthUserSearch(search) {
+  const value = String(search || "").trim();
+  if (!value) return null;
+  try {
+    if (isValidEmail(value)) {
+      return await admin.auth().getUserByEmail(value.toLowerCase());
+    }
+    if (/^\+[1-9]\d{7,14}$/.test(value)) {
+      return await admin.auth().getUserByPhoneNumber(value);
+    }
+    return await admin.auth().getUser(value);
+  } catch (error) {
+    if (error.code === "auth/user-not-found" ||
+        error.code === "auth/invalid-uid") {
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function exactProfileSearch(db, search) {
+  const value = String(search || "").trim();
+  if (!value) return null;
+  const candidates = [];
+  if (isValidEmail(value)) {
+    candidates.push(["email", value.toLowerCase()]);
+  }
+  if (/^\+?[0-9]{8,15}$/.test(value)) {
+    candidates.push(["phone", value]);
+    candidates.push(["normalizedPhone", normalizePhoneAlias(value)]);
+  }
+  for (const [field, candidate] of candidates) {
+    const snapshot = await db.collection("users")
+        .where(field, "==", candidate)
+        .limit(1)
+        .get();
+    if (!snapshot.empty) return snapshot.docs[0];
+  }
+  const direct = await db.collection("users").doc(value).get();
+  return direct.exists ? direct : null;
+}
+
+async function listMarketplacePeopleHandler(request) {
+  const callerUid = requireAuth(request);
+  const caller = await getUserProfile(callerUid);
+  requirePeopleAccess(caller, "view");
+
+  const db = admin.firestore();
+  const search = cleanText(request.data?.search, 320);
+  if (search) {
+    const authUser = await exactAuthUserSearch(search);
+    if (authUser) {
+      const profile = await db.collection("users").doc(authUser.uid).get();
+      return {
+        people: [userDirectoryDto(authUser, profile)],
+        users: [userDirectoryDto(authUser, profile)],
+        nextPageToken: "",
+        pageToken: "",
+        searchMode: "exact",
+      };
+    }
+    const profile = await exactProfileSearch(db, search);
+    const people = profile ? [userDirectoryDto(null, profile)] : [];
+    return {
+      people,
+      users: people,
+      nextPageToken: "",
+      pageToken: "",
+      searchMode: "exact",
+    };
+  }
+
+  const requestedSize = Number(
+      request.data?.pageSize ?? request.data?.maxResults,
+  );
+  const pageSize = Math.min(
+      Math.max(requestedSize || USER_DIRECTORY_PAGE_SIZE, 1),
+      250,
+  );
+  const pageToken =
+    cleanText(request.data?.pageToken, 2000) || undefined;
+  const authPage = await admin.auth().listUsers(pageSize, pageToken);
+  const profiles = await profileSnapshotsForAuthUsers(db, authPage.users);
+  const people = authPage.users.map((record, index) =>
+    userDirectoryDto(record, profiles[index]),
+  );
+  if (!pageToken && request.data?.includeInvitations !== false) {
+    const invitations = await db.collection("accessInvitations")
+        .where("status", "==", "pending")
+        .limit(50)
+        .get();
+    const presentInvitations = new Set(
+        people.map((person) => person.uid).filter(Boolean),
+    );
+    for (const invitation of invitations.docs) {
+      const targetUid = String(invitation.get("targetUid") || "");
+      if (targetUid && presentInvitations.has(targetUid)) {
+        const person = people.find((item) => item.uid === targetUid);
+        if (person?.category === "missing_profile") {
+          Object.assign(person, invitationDirectoryDto(invitation), {
+            id: person.id,
+            uid: person.uid,
+            hasAuth: true,
+          });
+          continue;
+        }
+      }
+      people.push(invitationDirectoryDto(invitation));
+    }
+  }
+  return {
+    people,
+    users: people,
+    nextPageToken: authPage.pageToken || "",
+    pageToken: authPage.pageToken || "",
+    searchMode: "paged",
+  };
+}
+
+async function getMarketplacePersonHandler(request) {
+  const callerUid = requireAuth(request);
+  const caller = await getUserProfile(callerUid);
+  requirePeopleAccess(caller, "view");
+
+  const userId = cleanText(request.data?.userId, 160);
+  if (!userId) {
+    throw userManagementError(
+        "invalid-argument",
+        "user-id-required",
+        "User ID is required",
+    );
+  }
+  const db = admin.firestore();
+  const profile = await db.collection("users").doc(userId).get();
+  let authUser = null;
+  try {
+    authUser = await admin.auth().getUser(userId);
+  } catch (error) {
+    if (error.code !== "auth/user-not-found") throw error;
+  }
+  if (!profile.exists && !authUser) {
+    throw userManagementError(
+        "not-found",
+        "user-not-found",
+        "User not found",
+    );
+  }
+  return {person: userDirectoryDto(authUser, profile)};
+}
+
+async function activeSuperAdminIds(excludeUid = "") {
+  const snapshot = await admin.firestore().collection("users")
+      .where("role", "==", "admin")
+      .get();
+  const candidates = snapshot.docs.filter((doc) => {
+    const data = doc.data() || {};
+    return doc.id !== excludeUid &&
+      data.adminRole === "superAdmin" &&
+      !accountAccessBlocked(data);
+  });
+  const active = [];
+  for (const candidate of candidates) {
+    try {
+      const authUser = await admin.auth().getUser(candidate.id);
+      if (!authUser.disabled && authUser.emailVerified) {
+        active.push(candidate.id);
+      }
+    } catch (error) {
+      if (error.code !== "auth/user-not-found") throw error;
+    }
+  }
+  return active;
+}
+
+async function assertSuperAdminContinuity(targetUid, target) {
+  if (target.role !== "admin" || target.adminRole !== "superAdmin") return;
+  if ((await activeSuperAdminIds(targetUid)).length === 0) {
+    throw userManagementError(
+        "failed-precondition",
+        "last-super-admin",
+        "Another active super admin is required before this action",
+    );
+  }
+}
+
+async function setMarketplaceUserStatusHandler(request) {
+  const callerUid = requireAuth(request);
+  const caller = await getUserProfile(callerUid);
+  requirePeopleAccess(caller, "manage");
+
+  const userId = cleanText(request.data?.userId, 160);
+  const action = cleanText(request.data?.action, 40).toLowerCase();
+  const reason = cleanText(request.data?.reason, 500);
+  if (!userId || !["suspend", "restore"].includes(action)) {
+    throw userManagementError(
+        "invalid-argument",
+        "invalid-user-status-action",
+        "Choose suspend or restore for a valid user",
+    );
+  }
+
+  const target = await getStoredUserProfile(userId);
+  assertCanManageTarget(caller, target, callerUid, userId);
+  if (target.role === "businessOwner" && action === "suspend") {
+    throw userManagementError(
+        "failed-precondition",
+        "ownership-transfer-required",
+        "Transfer business ownership before suspending this account",
+        {businessId: String(target.businessId || "")},
+    );
+  }
+  if (action === "suspend") {
+    await assertSuperAdminContinuity(userId, target);
+  }
+
+  try {
+    await admin.auth().getUser(userId);
+  } catch (error) {
+    if (error.code === "auth/user-not-found") {
+      throw userManagementError(
+          "failed-precondition",
+          "user-auth-required",
+          "The target user must have a Firebase Auth account",
+      );
+    }
+    throw error;
+  }
+
+  const db = admin.firestore();
+  const userRef = db.collection("users").doc(userId);
+  const nextStatus = action === "suspend" ? "suspended" : "active";
+  if (action === "suspend") {
+    const batch = db.batch();
+    batch.set(userRef, {
+      accountStatus: nextStatus,
+      suspendedAt: FirestoreFieldValue.serverTimestamp(),
+      suspendedBy: callerUid,
+      suspensionReason: reason,
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+      updatedBy: callerUid,
+    }, {merge: true});
+    setAdminAuditLog(batch, {
+      action: "user_suspended",
+      actorUid: callerUid,
+      actorRole: platformAdminRole(caller),
+      targetCollection: "users",
+      targetId: userId,
+      targetLabel: target.email || target.fullName || userId,
+      statusField: "accountStatus",
+      previousValue: target.accountStatus || "active",
+      nextValue: nextStatus,
+      reason,
+    });
+    await batch.commit();
+    await admin.auth().updateUser(userId, {disabled: true});
+    await admin.auth().revokeRefreshTokens(userId);
+  } else {
+    await admin.auth().updateUser(userId, {disabled: false});
+    const batch = db.batch();
+    batch.set(userRef, {
+      accountStatus: nextStatus,
+      suspendedAt: FirestoreFieldValue.delete(),
+      suspendedBy: FirestoreFieldValue.delete(),
+      suspensionReason: FirestoreFieldValue.delete(),
+      restoredAt: FirestoreFieldValue.serverTimestamp(),
+      restoredBy: callerUid,
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+      updatedBy: callerUid,
+    }, {merge: true});
+    setAdminAuditLog(batch, {
+      action: "user_restored",
+      actorUid: callerUid,
+      actorRole: platformAdminRole(caller),
+      targetCollection: "users",
+      targetId: userId,
+      targetLabel: target.email || target.fullName || userId,
+      statusField: "accountStatus",
+      previousValue: target.accountStatus || "active",
+      nextValue: nextStatus,
+      reason,
+    });
+    await batch.commit();
+  }
+  return {
+    success: true,
+    userId,
+    accountStatus: nextStatus,
+    authDisabled: action === "suspend",
+  };
+}
+
+async function revokeUserSessionsHandler(request) {
+  const callerUid = requireAuth(request);
+  const caller = await getUserProfile(callerUid);
+  requirePeopleAccess(caller, "manage");
+  const userId = cleanText(request.data?.userId, 160);
+  const reason = cleanText(request.data?.reason, 500);
+  if (!userId) {
+    throw userManagementError(
+        "invalid-argument",
+        "user-id-required",
+        "User ID is required",
+    );
+  }
+  const target = await getStoredUserProfile(userId);
+  assertCanManageTarget(caller, target, callerUid, userId);
+  await admin.auth().revokeRefreshTokens(userId);
+  const batch = admin.firestore().batch();
+  setAdminAuditLog(batch, {
+    action: "user_sessions_revoked",
+    actorUid: callerUid,
+    actorRole: platformAdminRole(caller),
+    targetCollection: "users",
+    targetId: userId,
+    targetLabel: target.email || target.fullName || userId,
+    reason,
+  });
+  await batch.commit();
+  return {success: true, userId, sessionsRevoked: true};
+}
+
 exports.setPlatformAdminRole = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
@@ -8385,6 +8897,9 @@ exports.setPlatformAdminRole = onCall(
             "This user is not a platform administrator",
         );
       }
+      if (target.adminRole === "superAdmin" && adminRole !== "superAdmin") {
+        await assertSuperAdminContinuity(userId, target);
+      }
 
       const db = admin.firestore();
       const batch = db.batch();
@@ -8413,49 +8928,742 @@ exports.setPlatformAdminRole = onCall(
     },
 );
 
+exports.listMarketplacePeople = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    listMarketplacePeopleHandler,
+);
+
+// Compatibility for the existing admin web while it migrates to the canonical
+// marketplace people contract.
 exports.listPlatformUsers = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
-    async (request) => {
-      const callerUid = requireAuth(request);
-      const caller = await getUserProfile(callerUid);
-      requireAdminCapability(
-          caller,
-          "users",
-          "Only people administrators can list users",
-      );
+    listMarketplacePeopleHandler,
+);
 
-      const maxResults = Math.min(
-          Math.max(Number(request.data?.maxResults) || 1000, 1),
-          1000,
-      );
-      const pageToken = String(request.data?.pageToken || "") || undefined;
-      const authPage = await admin.auth().listUsers(maxResults, pageToken);
-      const users = authPage.users.map((userRecord) => {
-        return {
-          id: userRecord.uid,
-          uid: userRecord.uid,
-          email: userRecord.email || "",
-          fullName: userRecord.displayName || "",
-          phone: userRecord.phoneNumber || "",
-          profileImageUrl: userRecord.photoURL || "",
-          role: "missing_profile",
-          disabled: userRecord.disabled,
-          emailVerified: userRecord.emailVerified,
-          createdAt: userRecord.metadata.creationTime,
-          lastSignInAt: userRecord.metadata.lastSignInTime || "",
-          hasProfile: false,
-          hasAuth: true,
-        };
-      });
-
-      return {
-        users,
-        pageToken: authPage.pageToken || "",
-      };
+exports.getMarketplacePerson = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
     },
+    getMarketplacePersonHandler,
+);
+
+exports.setMarketplaceUserStatus = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    setMarketplaceUserStatusHandler,
+);
+
+exports.revokeUserSessions = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    revokeUserSessionsHandler,
+);
+
+function accessEmailCopy(locale, kind, links) {
+  const french = String(locale || "").toLowerCase().startsWith("fr");
+  const passwordLink = links.passwordResetLink || "";
+  const verificationLink = links.verificationLink || "";
+  if (kind === "password_reset") {
+    return french ? {
+      title: "Réinitialisez votre mot de passe Laawol Digital",
+      body:
+        "Utilisez ce lien sécurisé pour choisir un nouveau mot de passe : " +
+        passwordLink,
+    } : {
+      title: "Reset your Laawol Digital password",
+      body:
+        "Use this secure link to choose a new password: " + passwordLink,
+    };
+  }
+  if (kind === "verify_email") {
+    return french ? {
+      title: "Vérifiez votre adresse e-mail Laawol Digital",
+      body:
+        "Utilisez ce lien sécurisé pour vérifier votre adresse e-mail : " +
+        verificationLink,
+    } : {
+      title: "Verify your Laawol Digital email",
+      body: "Use this secure link to verify your email address: " +
+        verificationLink,
+    };
+  }
+  return french ? {
+    title: "Votre invitation Laawol Digital",
+    body:
+      "Vous avez été invité à accéder à Laawol Digital. " +
+      "Créez votre mot de passe : " + passwordLink +
+      "\n\nVérifiez ensuite votre adresse e-mail : " + verificationLink,
+  } : {
+    title: "Your Laawol Digital invitation",
+    body:
+      "You have been invited to access Laawol Digital. " +
+      "Create your password: " + passwordLink +
+      "\n\nThen verify your email address: " + verificationLink,
+  };
+}
+
+async function authActionLinks(email, actions) {
+  const links = {};
+  if (actions.includes("password_reset")) {
+    links.passwordResetLink =
+      await admin.auth().generatePasswordResetLink(email);
+  }
+  if (actions.includes("verify_email")) {
+    links.verificationLink =
+      await admin.auth().generateEmailVerificationLink(email);
+  }
+  return links;
+}
+
+async function queueAccessEmail({
+  db,
+  uid,
+  email,
+  locale,
+  kind,
+  links,
+  audit,
+}) {
+  const settings = await loadPlatformNotificationSettings(db);
+  const copy = accessEmailCopy(locale, kind, links);
+  const deliveryRef = db.collection("notificationDeliveries").doc();
+  const now = FirestoreFieldValue.serverTimestamp();
+  const configured = settings.emailProvider === "firebaseTriggerEmail";
+  const batch = db.batch();
+  batch.set(deliveryRef, {
+    channel: "email",
+    provider: settings.emailProvider,
+    status: configured ? "queued" : "provider_not_configured",
+    to: email,
+    recipientUid: uid,
+    preferenceKey: "securityActivity",
+    title: copy.title,
+    body: "A secure account action email was requested.",
+    data: {type: kind},
+    lastError: configured ? "" : "Email sender provider is not connected.",
+    createdAt: now,
+    updatedAt: now,
+  });
+  if (configured) {
+    batch.set(db.collection("mail").doc(deliveryRef.id), {
+      to: [email],
+      message: {
+        subject: copy.title,
+        text: copy.body,
+        html: notificationHtml(copy.title, copy.body),
+      },
+      deliveryId: deliveryRef.id,
+      recipientUid: uid,
+      createdAt: now,
+    });
+  }
+  if (audit) setAdminAuditLog(batch, audit);
+  await batch.commit();
+  return {
+    deliveryId: deliveryRef.id,
+    deliveryStatus: configured ? "queued" : "provider_not_configured",
+  };
+}
+
+async function sendUserRecoveryEmailHandler(request) {
+  const callerUid = requireAuth(request);
+  const caller = await getUserProfile(callerUid);
+  requirePeopleAccess(caller, "manage");
+  const userId = cleanText(request.data?.userId, 160);
+  const action = cleanText(
+      request.data?.action || "password_reset",
+      40,
+  ).toLowerCase();
+  const locale = cleanText(request.data?.locale, 12) || "en";
+  if (!userId || !["password_reset", "verify_email"].includes(action)) {
+    throw userManagementError(
+        "invalid-argument",
+        "invalid-recovery-action",
+        "Choose password_reset or verify_email for a valid user",
+    );
+  }
+  const target = await getStoredUserProfile(userId);
+  if (target.role === "admin" || target.platformAdmin === true) {
+    requireSuperAdmin(
+        caller,
+        "Only super admins can send administrator recovery emails",
+    );
+  }
+  const authUser = await admin.auth().getUser(userId);
+  const email = String(authUser.email || target.email || "").toLowerCase();
+  if (!isValidEmail(email)) {
+    throw userManagementError(
+        "failed-precondition",
+        "user-email-required",
+        "The user needs a valid email address",
+    );
+  }
+  const links = await authActionLinks(email, [action]);
+  const delivery = await queueAccessEmail({
+    db: admin.firestore(),
+    uid: userId,
+    email,
+    locale,
+    kind: action,
+    links,
+    audit: {
+      action: "user_recovery_email_requested",
+      actorUid: callerUid,
+      actorRole: platformAdminRole(caller),
+      targetCollection: "users",
+      targetId: userId,
+      targetLabel: email,
+      nextValue: action,
+    },
+  });
+  return {success: true, userId, action, ...delivery};
+}
+
+function invitationIdFor(kind, email, businessId = "") {
+  return crypto.createHash("sha256")
+      .update(`${kind}:${email.toLowerCase()}:${businessId}`)
+      .digest("hex")
+      .slice(0, 40);
+}
+
+async function requireInvitationManager(caller, invitation) {
+  if (invitation.kind === "platform") {
+    requireSuperAdmin(
+        caller,
+        "Only super admins can manage administrator invitations",
+    );
+    return;
+  }
+  if (caller.role === "admin") {
+    requireAdminSectionAccess(
+        caller,
+        "businesses",
+        "manage",
+        "Only business administrators can manage business invitations",
+    );
+    return;
+  }
+  if (caller.role !== "businessOwner" ||
+      caller.businessId !== invitation.businessId) {
+    throw userManagementError(
+        "permission-denied",
+        "business-owner-required",
+        "Only the business owner can manage this invitation",
+    );
+  }
+}
+
+async function createAccessInvitation(request, kind) {
+  const callerUid = requireAuth(request);
+  const caller = await getUserProfile(callerUid);
+  const email = cleanText(request.data?.email, 320).toLowerCase();
+  const fullName = cleanText(request.data?.fullName, 200);
+  const locale = cleanText(request.data?.locale, 12) || "en";
+  const businessId = kind === "business" ?
+    cleanText(request.data?.businessId, 160) : "";
+  const adminRole = kind === "platform" ?
+    cleanText(request.data?.adminRole, 120) : "";
+  const businessPermissions = kind === "business" ?
+    normalizeBusinessPermissions(request.data?.businessPermissions) : [];
+  const invitation = {kind, businessId};
+  await requireInvitationManager(caller, invitation);
+
+  if (!isValidEmail(email)) {
+    throw userManagementError(
+        "invalid-argument",
+        "valid-email-required",
+        "Enter a valid email address",
+    );
+  }
+  if (kind === "platform") {
+    await assertAssignableRole(adminRole);
+    if (adminRole === "superAdmin") {
+      throw userManagementError(
+          "failed-precondition",
+          "super-admin-invitation-not-allowed",
+          "Grant super-admin access only to an existing verified account",
+      );
+    }
+  }
+
+  const db = admin.firestore();
+  let business = null;
+  if (kind === "business") {
+    if (!businessId) {
+      throw userManagementError(
+          "invalid-argument",
+          "business-required",
+          "Business is required",
+      );
+    }
+    const businessDoc = await db.collection("businesses").doc(businessId).get();
+    if (!businessDoc.exists) {
+      throw userManagementError(
+          "not-found",
+          "business-not-found",
+          "Business not found",
+      );
+    }
+    business = businessDoc.data() || {};
+  }
+
+  let authUser;
+  let createdAuthUser = false;
+  try {
+    authUser = await admin.auth().getUserByEmail(email);
+  } catch (error) {
+    if (error.code !== "auth/user-not-found") throw error;
+    authUser = await admin.auth().createUser({
+      email,
+      displayName: fullName || undefined,
+      emailVerified: false,
+    });
+    createdAuthUser = true;
+  }
+
+  const existingProfile = await db.collection("users").doc(authUser.uid).get();
+  if (existingProfile.exists) {
+    const existing = existingProfile.data() || {};
+    if (!["customer", ""].includes(String(existing.role || ""))) {
+      if (createdAuthUser) await admin.auth().deleteUser(authUser.uid);
+      throw userManagementError(
+          "failed-precondition",
+          "existing-authority-conflict",
+          "Remove the user's existing privileged access before inviting them",
+      );
+    }
+  }
+
+  const invitationId = invitationIdFor(kind, email, businessId);
+  const invitationRef = db.collection("accessInvitations").doc(invitationId);
+  const previousInvitation = await invitationRef.get();
+  const previous = previousInvitation.data() || {};
+  const previousExpiry = previous.expiresAt?.toMillis?.() || 0;
+  if (previousInvitation.exists &&
+      previous.status === "pending" &&
+      previousExpiry > Date.now()) {
+    if (createdAuthUser) await admin.auth().deleteUser(authUser.uid);
+    throw userManagementError(
+        "already-exists",
+        "invitation-already-pending",
+        "An active invitation already exists",
+        {invitationId},
+    );
+  }
+
+  let links;
+  try {
+    links = await authActionLinks(
+        email,
+        authUser.emailVerified ?
+          ["password_reset"] :
+          ["password_reset", "verify_email"],
+    );
+    const now = FirestoreTimestamp.now();
+    const expiresAt = FirestoreTimestamp.fromMillis(
+        Date.now() + ACCESS_INVITATION_TTL_MS,
+    );
+    const batch = db.batch();
+    batch.set(invitationRef, {
+      kind,
+      email,
+      fullName,
+      locale,
+      targetUid: authUser.uid,
+      status: "pending",
+      adminRole,
+      businessId,
+      businessName: String(business?.name || ""),
+      businessPermissions,
+      createdAt: now,
+      updatedAt: now,
+      expiresAt,
+      invitedBy: callerUid,
+      sendCount: Number(previous.sendCount || 0) + 1,
+    });
+    setAdminAuditLog(batch, {
+      action: kind === "platform" ?
+        "platform_admin_invited" :
+        "business_member_invited",
+      actorUid: callerUid,
+      actorRole: platformAdminRole(caller) || caller.role,
+      targetCollection: "accessInvitations",
+      targetId: invitationId,
+      targetLabel: email,
+      nextValue: kind === "platform" ? adminRole : `staff:${businessId}`,
+    });
+    await batch.commit();
+  } catch (error) {
+    if (createdAuthUser) {
+      await admin.auth().deleteUser(authUser.uid).catch(() => {});
+    }
+    throw error;
+  }
+
+  const delivery = await queueAccessEmail({
+    db,
+    uid: authUser.uid,
+    email,
+    locale,
+    kind: "invitation",
+    links,
+  });
+  return {
+    success: true,
+    invitationId,
+    targetUid: authUser.uid,
+    email,
+    status: "pending",
+    ...delivery,
+  };
+}
+
+async function invitationForManagement(request) {
+  const callerUid = requireAuth(request);
+  const caller = await getUserProfile(callerUid);
+  const invitationId = cleanText(request.data?.invitationId, 160);
+  if (!invitationId) {
+    throw userManagementError(
+        "invalid-argument",
+        "invitation-id-required",
+        "Invitation ID is required",
+    );
+  }
+  const db = admin.firestore();
+  const ref = db.collection("accessInvitations").doc(invitationId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) {
+    throw userManagementError(
+        "not-found",
+        "invitation-not-found",
+        "Invitation not found",
+    );
+  }
+  const invitation = snapshot.data() || {};
+  await requireInvitationManager(caller, invitation);
+  return {callerUid, caller, invitationId, invitation, ref, db};
+}
+
+async function resendAccessInvitationHandler(request) {
+  const context = await invitationForManagement(request);
+  const {invitation, invitationId, callerUid, caller, ref, db} = context;
+  if (invitation.status !== "pending") {
+    throw userManagementError(
+        "failed-precondition",
+        "invitation-not-pending",
+        "Only pending invitations can be resent",
+    );
+  }
+  const authUser = await admin.auth().getUser(invitation.targetUid);
+  const links = await authActionLinks(
+      invitation.email,
+      authUser.emailVerified ?
+        ["password_reset"] :
+        ["password_reset", "verify_email"],
+  );
+  const expiresAt = FirestoreTimestamp.fromMillis(
+      Date.now() + ACCESS_INVITATION_TTL_MS,
+  );
+  const batch = db.batch();
+  batch.set(ref, {
+    expiresAt,
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+    sendCount: Number(invitation.sendCount || 0) + 1,
+    lastSentBy: callerUid,
+  }, {merge: true});
+  setAdminAuditLog(batch, {
+    action: "access_invitation_resent",
+    actorUid: callerUid,
+    actorRole: platformAdminRole(caller) || caller.role,
+    targetCollection: "accessInvitations",
+    targetId: invitationId,
+    targetLabel: invitation.email,
+  });
+  await batch.commit();
+  const delivery = await queueAccessEmail({
+    db,
+    uid: invitation.targetUid,
+    email: invitation.email,
+    locale: invitation.locale || "en",
+    kind: "invitation",
+    links,
+  });
+  return {success: true, invitationId, status: "pending", ...delivery};
+}
+
+async function cancelAccessInvitationHandler(request) {
+  const context = await invitationForManagement(request);
+  const {invitation, invitationId, callerUid, caller, ref, db} = context;
+  if (invitation.status !== "pending") {
+    throw userManagementError(
+        "failed-precondition",
+        "invitation-not-pending",
+        "Only pending invitations can be cancelled",
+    );
+  }
+  const batch = db.batch();
+  batch.set(ref, {
+    status: "cancelled",
+    cancelledAt: FirestoreFieldValue.serverTimestamp(),
+    cancelledBy: callerUid,
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  }, {merge: true});
+  setAdminAuditLog(batch, {
+    action: "access_invitation_cancelled",
+    actorUid: callerUid,
+    actorRole: platformAdminRole(caller) || caller.role,
+    targetCollection: "accessInvitations",
+    targetId: invitationId,
+    targetLabel: invitation.email,
+    previousValue: "pending",
+    nextValue: "cancelled",
+  });
+  await batch.commit();
+  return {success: true, invitationId, status: "cancelled"};
+}
+
+async function invitationRefForAcceptance({
+  db,
+  uid,
+  email,
+  invitationId,
+}) {
+  if (invitationId) {
+    return db.collection("accessInvitations").doc(invitationId);
+  }
+  const pending = await db.collection("accessInvitations")
+      .where("targetUid", "==", uid)
+      .where("email", "==", email)
+      .where("status", "==", "pending")
+      .orderBy("expiresAt", "desc")
+      .limit(2)
+      .get();
+  const active = pending.docs.filter((snapshot) =>
+    (snapshot.get("expiresAt")?.toMillis?.() || 0) > Date.now(),
+  );
+  if (active.length === 0) {
+    throw userManagementError(
+        "not-found",
+        "active-invitation-not-found",
+        "No active invitation was found for this verified account",
+    );
+  }
+  if (active.length > 1) {
+    throw userManagementError(
+        "failed-precondition",
+        "invitation-selection-required",
+        "More than one active invitation exists; choose a specific invitation",
+        {invitationCount: active.length},
+    );
+  }
+  return active[0].ref;
+}
+
+async function acceptAccessInvitationHandler(request) {
+  const uid = requireAuth(request);
+  const requestedInvitationId =
+    cleanText(request.data?.invitationId, 160);
+  const authUser = await admin.auth().getUser(uid);
+  if (!authUser.emailVerified || !isValidEmail(authUser.email || "")) {
+    throw userManagementError(
+        "failed-precondition",
+        "verified-email-required",
+        "Verify your invited email before accepting access",
+    );
+  }
+  const db = admin.firestore();
+  const verifiedEmail = String(authUser.email).toLowerCase();
+  const invitationRef = await invitationRefForAcceptance({
+    db,
+    uid,
+    email: verifiedEmail,
+    invitationId: requestedInvitationId,
+  });
+  const invitationId = invitationRef.id;
+  const userRef = db.collection("users").doc(uid);
+  await db.runTransaction(async (transaction) => {
+    const invitationDoc = await transaction.get(invitationRef);
+    if (!invitationDoc.exists) {
+      throw userManagementError(
+          "not-found",
+          "invitation-not-found",
+          "Invitation not found",
+      );
+    }
+    const invitation = invitationDoc.data() || {};
+    if (invitation.status !== "pending") {
+      throw userManagementError(
+          "failed-precondition",
+          "invitation-not-pending",
+          "This invitation is no longer active",
+      );
+    }
+    if ((invitation.expiresAt?.toMillis?.() || 0) <= Date.now()) {
+      throw userManagementError(
+          "failed-precondition",
+          "invitation-expired",
+          "This invitation has expired",
+      );
+    }
+    if (invitation.targetUid !== uid ||
+        String(invitation.email || "").toLowerCase() !==
+        String(authUser.email || "").toLowerCase()) {
+      throw userManagementError(
+          "permission-denied",
+          "invitation-identity-mismatch",
+          "This invitation belongs to another account",
+      );
+    }
+    const userDoc = await transaction.get(userRef);
+    const current = userDoc.data() || {};
+    if (userDoc.exists &&
+        !["customer", ""].includes(String(current.role || ""))) {
+      throw userManagementError(
+          "failed-precondition",
+          "existing-authority-conflict",
+          "Remove existing privileged access before accepting this invitation",
+      );
+    }
+    let update;
+    let createUpdate;
+    if (invitation.kind === "platform") {
+      createUpdate = {
+        role: "admin",
+        platformAdmin: true,
+        adminRole: invitation.adminRole,
+      };
+      update = {
+        ...createUpdate,
+        ...nonBusinessAuthorityCleanup(),
+      };
+    } else {
+      const businessRef = db.collection("businesses")
+          .doc(invitation.businessId);
+      const businessDoc = await transaction.get(businessRef);
+      if (!businessDoc.exists) {
+        throw userManagementError(
+            "not-found",
+            "business-not-found",
+            "Business not found",
+        );
+      }
+      const business = businessDoc.data() || {};
+      createUpdate = {
+        role: "staff",
+        businessId: invitation.businessId,
+        businessName: business.name || invitation.businessName || "",
+        businessServices: normalizeBusinessServices(business.enabledServices),
+        businessPermissions: normalizeBusinessPermissions(
+            invitation.businessPermissions,
+        ),
+      };
+      update = {
+        ...createUpdate,
+        ...nonAdminAuthorityCleanup(),
+      };
+    }
+    const now = FirestoreFieldValue.serverTimestamp();
+    if (userDoc.exists) {
+      transaction.update(userRef, {
+        ...update,
+        email: authUser.email,
+        fullName: current.fullName || invitation.fullName || "",
+        accountStatus: "active",
+        updatedAt: now,
+        updatedBy: uid,
+      });
+    } else {
+      transaction.create(userRef, {
+        ...createUpdate,
+        email: authUser.email,
+        fullName: invitation.fullName || authUser.displayName || "",
+        phone: authUser.phoneNumber || "",
+        accountStatus: "active",
+        createdAt: now,
+        updatedAt: now,
+        createdBy: invitation.invitedBy || uid,
+      });
+    }
+    transaction.set(invitationRef, {
+      status: "accepted",
+      acceptedAt: now,
+      acceptedBy: uid,
+      updatedAt: now,
+    }, {merge: true});
+    setAdminAuditLog(transaction, {
+      action: "access_invitation_accepted",
+      actorUid: uid,
+      actorRole: invitation.kind === "platform" ?
+        invitation.adminRole : "staff",
+      targetCollection: "users",
+      targetId: uid,
+      targetLabel: authUser.email,
+      nextValue: invitation.kind === "platform" ?
+        `admin:${invitation.adminRole}` :
+        `staff:${invitation.businessId}`,
+      metadata: {invitationId},
+    });
+  });
+  return {success: true, invitationId, status: "accepted"};
+}
+
+exports.sendUserRecoveryEmail = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    sendUserRecoveryEmailHandler,
+);
+
+exports.invitePlatformAdmin = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    (request) => createAccessInvitation(request, "platform"),
+);
+
+exports.inviteBusinessMember = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    (request) => createAccessInvitation(request, "business"),
+);
+
+exports.resendAccessInvitation = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    resendAccessInvitationHandler,
+);
+
+exports.cancelAccessInvitation = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    cancelAccessInvitationHandler,
+);
+
+exports.acceptAccessInvitation = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    acceptAccessInvitationHandler,
 );
 
 exports.createMissingUserProfile = onCall(
@@ -8480,9 +9688,18 @@ exports.createMissingUserProfile = onCall(
       const userRecord = await admin.auth().getUser(userId);
       const now = FirestoreFieldValue.serverTimestamp();
       const db = admin.firestore();
+      const userRef = db.collection("users").doc(userId);
+      const existing = await userRef.get();
+      if (existing.exists) {
+        throw userManagementError(
+            "already-exists",
+            "user-profile-already-exists",
+            "User profile already exists",
+        );
+      }
       const batch = db.batch();
-      batch.set(
-          db.collection("users").doc(userId),
+      batch.create(
+          userRef,
           {
             email: userRecord.email || "",
             fullName: userRecord.displayName || "",
@@ -8492,7 +9709,6 @@ exports.createMissingUserProfile = onCall(
             updatedAt: now,
             createdBy: callerUid,
           },
-          {merge: true},
       );
       setAdminAuditLog(batch, {
         action: "missing_user_profile_created",
@@ -8512,150 +9728,235 @@ exports.createMissingUserProfile = onCall(
     },
 );
 
+function nonBusinessAuthorityCleanup() {
+  return {
+    businessId: FirestoreFieldValue.delete(),
+    businessName: FirestoreFieldValue.delete(),
+    businessServices: FirestoreFieldValue.delete(),
+    businessPermissions: FirestoreFieldValue.delete(),
+  };
+}
+
+function nonAdminAuthorityCleanup() {
+  return {
+    platformAdmin: FirestoreFieldValue.delete(),
+    adminRole: FirestoreFieldValue.delete(),
+  };
+}
+
+async function updateBusinessMembershipHandler(request, forcedRole = "") {
+  const callerUid = requireAuth(request);
+  const caller = await getUserProfile(callerUid);
+  requireSuperAdmin(
+      caller,
+      "Only super admins can update business membership",
+  );
+
+  const userId = cleanText(request.data?.userId, 160);
+  const role = forcedRole || cleanText(request.data?.role, 40);
+  const businessId = cleanText(request.data?.businessId, 160);
+  const requestedPermissions = normalizeBusinessPermissions(
+      request.data?.businessPermissions,
+  );
+  if (!userId || !role) {
+    throw userManagementError(
+        "invalid-argument",
+        "membership-fields-required",
+        "User ID and membership role are required",
+    );
+  }
+  if (!["businessOwner", "staff", "customer"].includes(role)) {
+    throw userManagementError(
+        "invalid-argument",
+        "invalid-business-role",
+        "Role must be businessOwner, staff, or customer",
+    );
+  }
+  if (role !== "customer" && !businessId) {
+    throw userManagementError(
+        "invalid-argument",
+        "business-required",
+        "Business is required for owners and staff",
+    );
+  }
+  if (userId === callerUid) {
+    throw userManagementError(
+        "failed-precondition",
+        "self-membership-change-not-allowed",
+        "You cannot change your own business membership",
+    );
+  }
+
+  try {
+    await admin.auth().getUser(userId);
+  } catch (error) {
+    if (error.code === "auth/user-not-found") {
+      throw userManagementError(
+          "failed-precondition",
+          "business-member-auth-required",
+          "Business members must have a Firebase Auth account",
+      );
+    }
+    throw error;
+  }
+
+  const db = admin.firestore();
+  const userRef = db.collection("users").doc(userId);
+  const businessRef = businessId ?
+    db.collection("businesses").doc(businessId) : null;
+  const ownerQuery = businessId ?
+    db.collection("users")
+        .where("businessId", "==", businessId)
+        .where("role", "==", "businessOwner") :
+    null;
+  const now = FirestoreFieldValue.serverTimestamp();
+
+  await db.runTransaction(async (transaction) => {
+    const targetDoc = await transaction.get(userRef);
+    if (!targetDoc.exists) {
+      throw userManagementError(
+          "not-found",
+          "user-profile-required",
+          "Create this user's profile before assigning membership",
+      );
+    }
+    const current = targetDoc.data() || {};
+    if (current.role === "businessOwner" &&
+        (role !== "businessOwner" || current.businessId !== businessId)) {
+      throw userManagementError(
+          "failed-precondition",
+          "ownership-transfer-required",
+          "Transfer business ownership before changing this account",
+          {businessId: String(current.businessId || "")},
+      );
+    }
+
+    let business = null;
+    let owners = null;
+    if (businessRef) {
+      const reads = await Promise.all([
+        transaction.get(businessRef),
+        transaction.get(ownerQuery),
+      ]);
+      const businessDoc = reads[0];
+      owners = reads[1];
+      if (!businessDoc.exists) {
+        throw userManagementError(
+            "not-found",
+            "business-not-found",
+            "Business not found",
+        );
+      }
+      business = businessDoc.data() || {};
+    }
+
+    if (role === "customer") {
+      transaction.update(userRef, {
+        role: "customer",
+        ...nonBusinessAuthorityCleanup(),
+        ...nonAdminAuthorityCleanup(),
+        updatedAt: now,
+        updatedBy: callerUid,
+      });
+    } else {
+      const businessName = String(business.name || businessId);
+      const services = normalizeBusinessServices(business.enabledServices);
+      if (role === "businessOwner") {
+        owners.docs.forEach((ownerDoc) => {
+          if (ownerDoc.id === userId) return;
+          const owner = ownerDoc.data() || {};
+          transaction.update(ownerDoc.ref, {
+            role: "staff",
+            businessName,
+            businessServices: services,
+            businessPermissions: [...VALID_BUSINESS_PERMISSIONS],
+            ...nonAdminAuthorityCleanup(),
+            updatedAt: now,
+            updatedBy: callerUid,
+          });
+          setAdminAuditLog(transaction, {
+            action: "business_owner_demoted",
+            actorUid: callerUid,
+            actorRole: platformAdminRole(caller),
+            targetCollection: "users",
+            targetId: ownerDoc.id,
+            targetLabel: owner.email || owner.fullName || ownerDoc.id,
+            statusField: "role",
+            previousValue: "businessOwner",
+            nextValue: "staff",
+            metadata: {businessId},
+          });
+        });
+        transaction.update(businessRef, {
+          ownerUid: userId,
+          updatedAt: now,
+          updatedBy: callerUid,
+        });
+      }
+
+      const preservePermissions =
+        role === "staff" &&
+        current.role === "staff" &&
+        current.businessId === businessId &&
+        request.data?.businessPermissions === undefined;
+      transaction.update(userRef, {
+        role,
+        businessId,
+        businessName,
+        businessServices: services,
+        businessPermissions: role === "staff" ?
+          (preservePermissions ?
+            normalizeBusinessPermissions(current.businessPermissions) :
+            requestedPermissions) :
+          FirestoreFieldValue.delete(),
+        ...nonAdminAuthorityCleanup(),
+        updatedAt: now,
+        updatedBy: callerUid,
+      });
+    }
+
+    setAdminAuditLog(transaction, {
+      action: role === "businessOwner" ?
+        "business_ownership_transferred" :
+        "business_membership_updated",
+      actorUid: callerUid,
+      actorRole: platformAdminRole(caller),
+      targetCollection: "users",
+      targetId: userId,
+      targetLabel: current.email || current.fullName || userId,
+      statusField: "role",
+      previousValue:
+        `${String(current.role || "")}:${String(current.businessId || "")}`,
+      nextValue: role === "customer" ? "customer" : `${role}:${businessId}`,
+      metadata: role === "staff" ?
+        {businessId, businessPermissions: requestedPermissions} :
+        {businessId},
+    });
+  });
+
+  return {
+    success: true,
+    userId,
+    role,
+    businessId: role === "customer" ? "" : businessId,
+    businessPermissions: role === "staff" ? requestedPermissions : [],
+  };
+}
+
 exports.updateBusinessMembership = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
-    async (request) => {
-      const callerUid = requireAuth(request);
-      const caller = await getUserProfile(callerUid);
-      requireSuperAdmin(
-          caller,
-          "Only super admins can update business membership",
-      );
+    (request) => updateBusinessMembershipHandler(request),
+);
 
-      const userId = String(request.data?.userId || "").trim();
-      const role = String(request.data?.role || "").trim();
-      const businessId = String(request.data?.businessId || "").trim();
-      if (!userId || !role) {
-        throw new HttpsError(
-            "invalid-argument",
-            "User ID and membership role are required",
-        );
-      }
-      if (!["businessOwner", "staff", "customer"].includes(role)) {
-        throw new HttpsError(
-            "invalid-argument",
-            "Role must be businessOwner, staff, or customer",
-        );
-      }
-      if ((role === "businessOwner" || role === "staff") && !businessId) {
-        throw new HttpsError(
-            "invalid-argument",
-            "Business is required for owners and staff",
-        );
-      }
-      if (userId === callerUid) {
-        throw new HttpsError(
-            "invalid-argument",
-            "You cannot change your own business membership",
-        );
-      }
-
-      try {
-        await admin.auth().getUser(userId);
-      } catch (error) {
-        throw new HttpsError(
-            "failed-precondition",
-            "Business members must have a Firebase Auth account",
-        );
-      }
-
-      const db = admin.firestore();
-      const userRef = db.collection("users").doc(userId);
-      const userDoc = await userRef.get();
-      if (!userDoc.exists) {
-        throw new HttpsError(
-            "not-found",
-            "Create this user's profile before assigning membership",
-        );
-      }
-      const current = userDoc.data() || {};
-      const batch = db.batch();
-      const now = FirestoreFieldValue.serverTimestamp();
-
-      let business = null;
-      if (role === "businessOwner" || role === "staff") {
-        const businessDoc = await db.collection("businesses")
-            .doc(businessId)
-            .get();
-        if (!businessDoc.exists) {
-          throw new HttpsError("not-found", "Business not found");
-        }
-        business = businessDoc.data() || {};
-        const businessName = business.name || businessId;
-        if (role === "businessOwner") {
-          const ownerSnapshot = await db.collection("users")
-              .where("businessId", "==", businessId)
-              .where("role", "==", "businessOwner")
-              .get();
-          ownerSnapshot.docs.forEach((ownerDoc) => {
-            if (ownerDoc.id === userId) return;
-            batch.update(ownerDoc.ref, {
-              role: "staff",
-              businessName,
-              businessServices: normalizeBusinessServices(
-                  business.enabledServices,
-              ),
-              updatedAt: now,
-              updatedBy: callerUid,
-            });
-            const owner = ownerDoc.data() || {};
-            setAdminAuditLog(batch, {
-              action: "business_owner_demoted",
-              actorUid: callerUid,
-              targetCollection: "users",
-              targetId: ownerDoc.id,
-              targetLabel: owner.email || owner.fullName || ownerDoc.id,
-              statusField: "role",
-              previousValue: "businessOwner",
-              nextValue: "staff",
-            });
-          });
-        }
-        batch.update(userRef, {
-          role,
-          businessId,
-          businessName,
-          businessServices: normalizeBusinessServices(business.enabledServices),
-          platformAdmin: FirestoreFieldValue.delete(),
-          adminRole: FirestoreFieldValue.delete(),
-          updatedAt: now,
-          updatedBy: callerUid,
-        });
-      } else {
-        batch.update(userRef, {
-          role: "customer",
-          businessId: FirestoreFieldValue.delete(),
-          businessName: FirestoreFieldValue.delete(),
-          businessServices: FirestoreFieldValue.delete(),
-          platformAdmin: FirestoreFieldValue.delete(),
-          adminRole: FirestoreFieldValue.delete(),
-          updatedAt: now,
-          updatedBy: callerUid,
-        });
-      }
-
-      setAdminAuditLog(batch, {
-        action: "business_membership_updated",
-        actorUid: callerUid,
-        targetCollection: "users",
-        targetId: userId,
-        targetLabel: current.email || current.fullName || userId,
-        statusField: "role",
-        previousValue: current.role || "",
-        nextValue: role === "customer" ? "customer" : `${role}:${businessId}`,
-      });
-      await batch.commit();
-
-      return {
-        success: true,
-        userId,
-        role,
-        businessId: role === "customer" ? "" : businessId,
-      };
+exports.transferBusinessOwnership = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
     },
+    (request) => updateBusinessMembershipHandler(request, "businessOwner"),
 );
 
 /**
@@ -8728,6 +10029,44 @@ exports.updateUserRole = onCall(
           throw new HttpsError("not-found", "User profile not found");
         }
         const target = targetDoc.data() || {};
+        if (target.role === "businessOwner") {
+          throw userManagementError(
+              "failed-precondition",
+              "ownership-transfer-required",
+              "Transfer business ownership before changing this account",
+              {businessId: String(target.businessId || "")},
+          );
+        }
+        if (target.role === "admin" && newRole !== "admin") {
+          await assertSuperAdminContinuity(userId, target);
+        }
+        let targetAuth;
+        try {
+          targetAuth = await admin.auth().getUser(userId);
+        } catch (error) {
+          if (error.code === "auth/user-not-found") {
+            throw userManagementError(
+                "failed-precondition",
+                "user-auth-required",
+                "The target user must have a Firebase Auth account",
+            );
+          }
+          throw error;
+        }
+        if (newRole === "admin" && !targetAuth.emailVerified) {
+          throw userManagementError(
+              "failed-precondition",
+              "verified-email-required",
+              "Verify the target email before granting administrator access",
+          );
+        }
+        if (newRole === "admin" && targetAuth.disabled) {
+          throw userManagementError(
+              "failed-precondition",
+              "active-auth-user-required",
+              "Restore the target account before granting administrator access",
+          );
+        }
         const batch = db.batch();
         const updatePayload = {
           role: newRole,
@@ -8735,13 +10074,10 @@ exports.updateUserRole = onCall(
           updatedBy: callerUid,
         };
         if (newRole === "customer" || newRole === "admin") {
-          updatePayload.businessId = FirestoreFieldValue.delete();
-          updatePayload.businessName = FirestoreFieldValue.delete();
-          updatePayload.businessServices = FirestoreFieldValue.delete();
+          Object.assign(updatePayload, nonBusinessAuthorityCleanup());
         }
         if (newRole === "customer") {
-          updatePayload.platformAdmin = FirestoreFieldValue.delete();
-          updatePayload.adminRole = FirestoreFieldValue.delete();
+          Object.assign(updatePayload, nonAdminAuthorityCleanup());
         }
         if (newRole === "admin") {
           updatePayload.platformAdmin = true;
@@ -8901,109 +10237,255 @@ exports.requestOwnAccountDeletion = onCall(
     },
 );
 
-/**
- * Cloud Function to delete a user
- * This allows admins to delete user accounts
- */
+const USER_DELETION_DEPENDENCIES = [
+  ["barrelShipments", ["customerUid", "senderUid"]],
+  ["freightShipments", ["customerUid", "senderUid"]],
+  ["transportRequests", ["customerUid"]],
+  ["parkedCars", ["customerUid", "ownerUid"]],
+  ["carPurchases", ["customerUid", "buyerUid"]],
+  ["barrelPoolBalanceRequests", ["customerUid", "userId"]],
+  ["walletRefundRequests", ["customerUid", "userId"]],
+  ["supportCases", ["customerUid"]],
+];
+
+async function userDeletionReview(userId, target) {
+  const blockers = [];
+  if (target.role === "admin" || target.platformAdmin === true) {
+    blockers.push({
+      code: "admin-access-must-be-revoked",
+      collection: "users",
+    });
+  }
+  if (target.role === "businessOwner") {
+    blockers.push({
+      code: "ownership-transfer-required",
+      collection: "businesses",
+      businessId: String(target.businessId || ""),
+    });
+  } else if (target.role === "staff") {
+    blockers.push({
+      code: "business-membership-must-be-removed",
+      collection: "users",
+      businessId: String(target.businessId || ""),
+    });
+  }
+
+  const db = admin.firestore();
+  for (const [collectionName, fields] of USER_DELETION_DEPENDENCIES) {
+    for (const field of fields) {
+      const snapshot = await db.collection(collectionName)
+          .where(field, "==", userId)
+          .limit(1)
+          .get();
+      if (!snapshot.empty) {
+        blockers.push({
+          code: "retained-records-require-review",
+          collection: collectionName,
+        });
+        break;
+      }
+    }
+  }
+  const wallet = await db.collection("wallets").doc(userId).get();
+  if (wallet.exists) {
+    const data = wallet.data() || {};
+    const balance = Number(
+        data.balance ?? data.availableBalance ?? data.amount ?? 0,
+    );
+    if (!Number.isFinite(balance) || balance !== 0) {
+      blockers.push({
+        code: "wallet-balance-must-be-resolved",
+        collection: "wallets",
+      });
+    }
+  }
+  return {
+    eligible: blockers.length === 0,
+    blockers,
+    role: String(target.role || "customer"),
+    accountStatus: String(target.accountStatus || "active"),
+  };
+}
+
+async function reviewAccountDeletionHandler(request) {
+  const callerUid = requireAuth(request);
+  const caller = await getUserProfile(callerUid);
+  requirePeopleAccess(caller, "manage");
+  const userId = cleanText(request.data?.userId, 160);
+  if (!userId) {
+    throw userManagementError(
+        "invalid-argument",
+        "user-id-required",
+        "User ID is required",
+    );
+  }
+  if (userId === callerUid) {
+    throw userManagementError(
+        "failed-precondition",
+        "self-deletion-not-allowed",
+        "Use the in-app account deletion request for your own account",
+    );
+  }
+  const target = await getStoredUserProfile(userId);
+  if (target.role === "admin" || target.platformAdmin === true) {
+    requireSuperAdmin(
+        caller,
+        "Only super admins can review administrator deletion",
+    );
+  }
+  return {
+    success: true,
+    userId,
+    review: await userDeletionReview(userId, target),
+  };
+}
+
+async function finalizeAccountDeletionHandler(request, compatibility = false) {
+  const callerUid = requireAuth(request);
+  const caller = await getUserProfile(callerUid);
+  requireSuperAdmin(caller, "Only super admins can finalize account deletion");
+  const userId = cleanText(request.data?.userId, 160);
+  const reason = cleanText(request.data?.reason, 500);
+  const confirmation = cleanText(request.data?.confirmation, 160);
+  if (!userId) {
+    throw userManagementError(
+        "invalid-argument",
+        "user-id-required",
+        "User ID is required",
+    );
+  }
+  if (!compatibility && confirmation !== userId) {
+    throw userManagementError(
+        "failed-precondition",
+        "deletion-confirmation-required",
+        "Confirm the exact user ID before finalizing deletion",
+    );
+  }
+  if (userId === callerUid) {
+    throw userManagementError(
+        "failed-precondition",
+        "self-deletion-not-allowed",
+        "You cannot delete your own administrator account",
+    );
+  }
+
+  const db = admin.firestore();
+  const userRef = db.collection("users").doc(userId);
+  const userDoc = await userRef.get();
+  if (!userDoc.exists) {
+    throw userManagementError(
+        "not-found",
+        "user-profile-required",
+        "User profile not found",
+    );
+  }
+  const target = userDoc.data() || {};
+  const review = await userDeletionReview(userId, target);
+  if (!review.eligible) {
+    throw userManagementError(
+        "failed-precondition",
+        "account-deletion-blocked",
+        "Resolve account dependencies before deletion",
+        {blockers: review.blockers},
+    );
+  }
+
+  const deletionRef = db.collection("accountDeletionRequests").doc(userId);
+  const startBatch = db.batch();
+  startBatch.set(userRef, {
+    accountStatus: "deleting",
+    deletionStartedAt: FirestoreFieldValue.serverTimestamp(),
+    deletionStartedBy: callerUid,
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+    updatedBy: callerUid,
+  }, {merge: true});
+  startBatch.set(deletionRef, {
+    userId,
+    status: "processing",
+    source: "admin",
+    requestedAt: target.accountDeletionRequestedAt ||
+      FirestoreFieldValue.serverTimestamp(),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+    processingBy: callerUid,
+    reason,
+  }, {merge: true});
+  setAdminAuditLog(startBatch, {
+    action: "user_deletion_started",
+    actorUid: callerUid,
+    actorRole: platformAdminRole(caller),
+    targetCollection: "users",
+    targetId: userId,
+    targetLabel: target.email || target.fullName || userId,
+    previousValue: target.accountStatus || "active",
+    nextValue: "deleting",
+    reason,
+  });
+  await startBatch.commit();
+
+  try {
+    await admin.auth().updateUser(userId, {disabled: true});
+    await admin.auth().revokeRefreshTokens(userId);
+    await admin.auth().deleteUser(userId);
+  } catch (error) {
+    if (error.code !== "auth/user-not-found") throw error;
+  }
+
+  const finishBatch = db.batch();
+  finishBatch.set(db.collection("deletedUserTombstones").doc(userId), {
+    userId,
+    formerRole: String(target.role || "customer"),
+    formerBusinessId: String(target.businessId || ""),
+    deletedAt: FirestoreFieldValue.serverTimestamp(),
+    deletedBy: callerUid,
+    reason,
+    retainedRecordsPolicy: "references-retained",
+  });
+  finishBatch.delete(userRef);
+  finishBatch.set(deletionRef, {
+    status: "completed",
+    completedAt: FirestoreFieldValue.serverTimestamp(),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+    completedBy: callerUid,
+  }, {merge: true});
+  setAdminAuditLog(finishBatch, {
+    action: "user_deletion_finalized",
+    actorUid: callerUid,
+    actorRole: platformAdminRole(caller),
+    targetCollection: "users",
+    targetId: userId,
+    targetLabel: target.email || target.fullName || userId,
+    previousValue: "deleting",
+    nextValue: "deleted",
+    reason,
+  });
+  await finishBatch.commit();
+  return {success: true, userId, status: "completed", deleted: true};
+}
+
+exports.reviewAccountDeletion = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    reviewAccountDeletionHandler,
+);
+
+exports.finalizeAccountDeletion = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    finalizeAccountDeletionHandler,
+);
+
+// Compatibility for existing clients. The server still performs the complete
+// dependency review and only finalizes a non-privileged, dependency-free user.
 exports.deleteUser = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
     },
-    async (request) => {
-      logger.info("deleteUser called", {uid: request.auth?.uid});
-
-      // Verify that the request is authenticated
-      if (!request.auth) {
-        throw new HttpsError(
-            "unauthenticated",
-            "Authentication required to delete users",
-        );
-      }
-
-      const callerUid = request.auth.uid;
-
-      try {
-      // Get the caller's user document to check if they're an admin
-        const callerDoc = await admin
-            .firestore()
-            .collection("users")
-            .doc(callerUid)
-            .get();
-
-        if (!callerDoc.exists) {
-          throw new HttpsError("permission-denied", "User profile not found");
-        }
-
-        const callerData = callerDoc.data();
-        requireSuperAdmin(
-            callerData,
-            "Only super admins can delete users",
-        );
-
-        // Extract user ID from the request
-        const {userId} = request.data;
-
-        // Validate input
-        if (!userId) {
-          throw new HttpsError("invalid-argument", "User ID is required");
-        }
-
-        // Prevent admin from deleting themselves
-        if (userId === callerUid) {
-          throw new HttpsError(
-              "invalid-argument",
-              "You cannot delete your own account",
-          );
-        }
-
-        const db = admin.firestore();
-        const userRef = db.collection("users").doc(userId);
-        const userDoc = await userRef.get();
-        const target = userDoc.data() || {};
-
-        // Delete from Firebase Auth
-        await admin.auth().deleteUser(userId);
-
-        logger.info("User deleted from Firebase Auth", {userId: userId});
-
-        const batch = db.batch();
-        batch.delete(userRef);
-        setAdminAuditLog(batch, {
-          action: "user_deleted",
-          actorUid: callerUid,
-          targetCollection: "users",
-          targetId: userId,
-          targetLabel: target.email || target.fullName || userId,
-        });
-        await batch.commit();
-
-        logger.info("User document deleted from Firestore", {userId: userId});
-
-        return {
-          success: true,
-          userId: userId,
-          message: "User deleted successfully",
-        };
-      } catch (error) {
-        logger.error("Error deleting user", error);
-
-        if (error.code === "auth/user-not-found") {
-          throw new HttpsError("not-found", "User not found");
-        }
-
-        // Re-throw HttpsError instances
-        if (error instanceof HttpsError) {
-          throw error;
-        }
-
-        // Generic error
-        throw new HttpsError(
-            "internal",
-            "An error occurred while deleting the user",
-        );
-      }
-    },
+    (request) => finalizeAccountDeletionHandler(request, true),
 );
 
 exports.seedDestinationCountries = onCall(

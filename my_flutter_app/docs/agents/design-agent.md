@@ -173,3 +173,10 @@ Return:
 - Admin Today overviews prioritize actionable queues first, operational
   summaries second, and compact analytics last. Returning to Today must reset
   stale document scroll so the sticky header never obscures the KPI row.
+- Admin People management is one dense, searchable master-detail directory
+  across platform admins, business owners/staff, customers, invitations,
+  missing profiles, suspensions, and deletion requests. Keep business-specific
+  workspaces, but never hide business people from the global directory.
+  Invitations are email-based and never collect an admin-created password;
+  self-access, last-owner, last-super-admin, and irreversible deletion actions
+  stay capability-gated and explicitly confirmed.

@@ -7,10 +7,10 @@ import 'package:provider/provider.dart';
 import '../models/barrel_shipment.dart';
 import '../models/business_profile.dart';
 import '../models/business_service.dart';
+import '../models/platform_access.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
-import '../utils/phone_number_validator.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
@@ -28,15 +28,29 @@ class PlatformAdminDashboardScreen extends StatelessWidget {
     return snapshot.count ?? 0;
   }
 
-  Future<_AdminMetrics> _metrics() async {
+  Future<_AdminMetrics> _metrics(PlatformAccess access) async {
     final values = await Future.wait<int>([
-      _count('businesses', field: 'status', value: 'pending'),
-      _count('businesses', field: 'status', value: 'approved'),
-      _count('users', field: 'role', value: 'customer'),
-      _count('barrelShipments', field: 'status', value: 'pending'),
-      _count('cars', field: 'status', value: 'active'),
-      _count('carPurchases', field: 'purchaseStatus', value: 'pending'),
-      _count('walletRefundRequests', field: 'status', value: 'pending'),
+      access.canView(PlatformSection.businesses)
+          ? _count('businesses', field: 'status', value: 'pending')
+          : Future.value(0),
+      access.canView(PlatformSection.businesses)
+          ? _count('businesses', field: 'status', value: 'approved')
+          : Future.value(0),
+      access.canView(PlatformSection.people)
+          ? _count('users', field: 'role', value: 'customer')
+          : Future.value(0),
+      access.canView(PlatformSection.operations)
+          ? _count('barrelShipments', field: 'status', value: 'pending')
+          : Future.value(0),
+      access.canView(PlatformSection.marketplace)
+          ? _count('cars', field: 'status', value: 'active')
+          : Future.value(0),
+      access.canView(PlatformSection.marketplace)
+          ? _count('carPurchases', field: 'purchaseStatus', value: 'pending')
+          : Future.value(0),
+      access.canView(PlatformSection.finance)
+          ? _count('walletRefundRequests', field: 'status', value: 'pending')
+          : Future.value(0),
     ]);
     return _AdminMetrics(
       pendingBusinesses: values[0],
@@ -51,6 +65,10 @@ class PlatformAdminDashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final access = context.watch<AuthProvider>().platformAccess;
+    final canViewBusinesses = access.canView(PlatformSection.businesses);
+    final canViewFinance = access.canView(PlatformSection.finance);
+    final canViewOperations = access.canView(PlatformSection.operations);
     return Scaffold(
       backgroundColor: AppColors.lightBg,
       body: SafeArea(
@@ -59,7 +77,9 @@ class PlatformAdminDashboardScreen extends StatelessWidget {
             final wide = constraints.maxWidth >= 980;
             return CustomScrollView(
               slivers: [
-                SliverToBoxAdapter(child: _DashboardHeader(wide: wide)),
+                SliverToBoxAdapter(
+                  child: _DashboardHeader(wide: wide, access: access),
+                ),
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(
                     wide ? 28 : 16,
@@ -74,17 +94,18 @@ class PlatformAdminDashboardScreen extends StatelessWidget {
                         child: Column(
                           children: [
                             FutureBuilder<_AdminMetrics>(
-                              future: _metrics(),
+                              future: _metrics(access),
                               builder: (context, snapshot) {
                                 return _MetricsGrid(
                                   metrics:
                                       snapshot.data ?? _AdminMetrics.empty(),
                                   isLoading: !snapshot.hasData,
+                                  access: access,
                                 );
                               },
                             ),
                             const SizedBox(height: 16),
-                            if (wide)
+                            if (wide && canViewBusinesses && canViewFinance)
                               const Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -94,12 +115,13 @@ class PlatformAdminDashboardScreen extends StatelessWidget {
                                 ],
                               )
                             else ...[
-                              const _ActionQueuePanel(),
-                              const SizedBox(height: 16),
-                              const _FinancePanel(),
+                              if (canViewBusinesses) const _ActionQueuePanel(),
+                              if (canViewBusinesses && canViewFinance)
+                                const SizedBox(height: 16),
+                              if (canViewFinance) const _FinancePanel(),
                             ],
                             const SizedBox(height: 16),
-                            if (wide)
+                            if (wide && canViewBusinesses && canViewOperations)
                               const Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -109,9 +131,11 @@ class PlatformAdminDashboardScreen extends StatelessWidget {
                                 ],
                               )
                             else ...[
-                              const _BusinessControlPanel(),
-                              const SizedBox(height: 16),
-                              const _OperationsPanel(),
+                              if (canViewBusinesses)
+                                const _BusinessControlPanel(),
+                              if (canViewBusinesses && canViewOperations)
+                                const SizedBox(height: 16),
+                              if (canViewOperations) const _OperationsPanel(),
                             ],
                           ],
                         ),
@@ -129,9 +153,10 @@ class PlatformAdminDashboardScreen extends StatelessWidget {
 }
 
 class _DashboardHeader extends StatelessWidget {
-  const _DashboardHeader({required this.wide});
+  const _DashboardHeader({required this.wide, required this.access});
 
   final bool wide;
+  final PlatformAccess access;
 
   @override
   Widget build(BuildContext context) {
@@ -150,9 +175,15 @@ class _DashboardHeader extends StatelessWidget {
       ),
     );
     final actions = _DashboardHeaderActions(
-      onAddManager: () => showAddPlatformManagerDialog(context),
-      onBusinesses: () => Navigator.pushNamed(context, '/businesses'),
-      onUsers: () => Navigator.pushNamed(context, '/user-management'),
+      onAddManager: access.canManage(PlatformSection.people)
+          ? () => showAddPlatformManagerDialog(context)
+          : null,
+      onBusinesses: access.canView(PlatformSection.businesses)
+          ? () => Navigator.pushNamed(context, '/businesses')
+          : null,
+      onUsers: access.canView(PlatformSection.people)
+          ? () => Navigator.pushNamed(context, '/user-management')
+          : null,
     );
     return Container(
       padding: EdgeInsets.fromLTRB(wide ? 28 : 16, 16, wide ? 28 : 16, 20),
@@ -228,9 +259,9 @@ class _DashboardHeaderActions extends StatelessWidget {
     required this.onUsers,
   });
 
-  final VoidCallback onAddManager;
-  final VoidCallback onBusinesses;
-  final VoidCallback onUsers;
+  final VoidCallback? onAddManager;
+  final VoidCallback? onBusinesses;
+  final VoidCallback? onUsers;
 
   @override
   Widget build(BuildContext context) {
@@ -240,21 +271,24 @@ class _DashboardHeaderActions extends StatelessWidget {
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        _HeaderIconButton(
-          tooltip: l10n.addPlatformManager,
-          icon: Icons.admin_panel_settings,
-          onPressed: onAddManager,
-        ),
-        _HeaderIconButton(
-          tooltip: l10n.businesses,
-          icon: Icons.storefront_outlined,
-          onPressed: onBusinesses,
-        ),
-        _HeaderIconButton(
-          tooltip: l10n.users,
-          icon: Icons.people_outline,
-          onPressed: onUsers,
-        ),
+        if (onAddManager != null)
+          _HeaderIconButton(
+            tooltip: l10n.addPlatformManager,
+            icon: Icons.admin_panel_settings,
+            onPressed: onAddManager!,
+          ),
+        if (onBusinesses != null)
+          _HeaderIconButton(
+            tooltip: l10n.businesses,
+            icon: Icons.storefront_outlined,
+            onPressed: onBusinesses!,
+          ),
+        if (onUsers != null)
+          _HeaderIconButton(
+            tooltip: l10n.users,
+            icon: Icons.people_outline,
+            onPressed: onUsers!,
+          ),
         const LanguageToggle(),
       ],
     );
@@ -288,57 +322,69 @@ class _HeaderIconButton extends StatelessWidget {
 }
 
 class _MetricsGrid extends StatelessWidget {
-  const _MetricsGrid({required this.metrics, required this.isLoading});
+  const _MetricsGrid({
+    required this.metrics,
+    required this.isLoading,
+    required this.access,
+  });
 
   final _AdminMetrics metrics;
   final bool isLoading;
+  final PlatformAccess access;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final items = [
-      _MetricData(
-        l10n.pendingBusinesses,
-        metrics.pendingBusinesses,
-        Icons.hourglass_top,
-        _DashboardShortcut.pendingBusinesses,
-      ),
-      _MetricData(
-        l10n.approvedBusinesses,
-        metrics.approvedBusinesses,
-        Icons.verified_outlined,
-        _DashboardShortcut.approvedBusinesses,
-      ),
-      _MetricData(
-        l10n.customers,
-        metrics.customers,
-        Icons.person_outline,
-        _DashboardShortcut.customers,
-      ),
-      _MetricData(
-        l10n.openShipments,
-        metrics.openShipments,
-        Icons.inventory_2_outlined,
-        _DashboardShortcut.openShipments,
-      ),
-      _MetricData(
-        l10n.activeCars,
-        metrics.activeCars,
-        Icons.directions_car_outlined,
-        _DashboardShortcut.activeCars,
-      ),
-      _MetricData(
-        l10n.pendingPurchases,
-        metrics.pendingPurchases,
-        Icons.receipt_long,
-        _DashboardShortcut.pendingPurchases,
-      ),
-      _MetricData(
-        l10n.refundRequests,
-        metrics.refundRequests,
-        Icons.account_balance_wallet_outlined,
-        _DashboardShortcut.refundRequests,
-      ),
+      if (access.canView(PlatformSection.businesses))
+        _MetricData(
+          l10n.pendingBusinesses,
+          metrics.pendingBusinesses,
+          Icons.hourglass_top,
+          _DashboardShortcut.pendingBusinesses,
+        ),
+      if (access.canView(PlatformSection.businesses))
+        _MetricData(
+          l10n.approvedBusinesses,
+          metrics.approvedBusinesses,
+          Icons.verified_outlined,
+          _DashboardShortcut.approvedBusinesses,
+        ),
+      if (access.canView(PlatformSection.people))
+        _MetricData(
+          l10n.customers,
+          metrics.customers,
+          Icons.person_outline,
+          _DashboardShortcut.customers,
+        ),
+      if (access.canView(PlatformSection.operations))
+        _MetricData(
+          l10n.openShipments,
+          metrics.openShipments,
+          Icons.inventory_2_outlined,
+          _DashboardShortcut.openShipments,
+        ),
+      if (access.canView(PlatformSection.marketplace))
+        _MetricData(
+          l10n.activeCars,
+          metrics.activeCars,
+          Icons.directions_car_outlined,
+          _DashboardShortcut.activeCars,
+        ),
+      if (access.canView(PlatformSection.marketplace))
+        _MetricData(
+          l10n.pendingPurchases,
+          metrics.pendingPurchases,
+          Icons.receipt_long,
+          _DashboardShortcut.pendingPurchases,
+        ),
+      if (access.canView(PlatformSection.finance))
+        _MetricData(
+          l10n.refundRequests,
+          metrics.refundRequests,
+          Icons.account_balance_wallet_outlined,
+          _DashboardShortcut.refundRequests,
+        ),
     ];
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -714,8 +760,7 @@ Future<void> showAddPlatformManagerDialog(BuildContext context) async {
   final formKey = GlobalKey<FormState>();
   final nameController = TextEditingController();
   final emailController = TextEditingController();
-  final phoneController = TextEditingController();
-  final passwordController = TextEditingController();
+  String adminRole = 'operationsManager';
   bool saving = false;
 
   await showDialog<void>(
@@ -727,17 +772,17 @@ Future<void> showAddPlatformManagerDialog(BuildContext context) async {
             if (!formKey.currentState!.validate()) return;
             setDialogState(() => saving = true);
             try {
-              await authProvider.addPlatformManager(
+              await authProvider.invitePlatformAdmin(
                 fullName: nameController.text,
                 email: emailController.text,
-                phone: phoneController.text,
-                password: passwordController.text,
+                adminRole: adminRole,
+                locale: Localizations.localeOf(context).languageCode,
               );
               if (!dialogContext.mounted) return;
               Navigator.pop(dialogContext);
               messenger.showSnackBar(
                 SnackBar(
-                  content: Text(l10n.platformManagerCreated),
+                  content: Text(l10n.invitationSent),
                   backgroundColor: const Color(0xFF16A34A),
                   behavior: SnackBarBehavior.floating,
                 ),
@@ -759,7 +804,7 @@ Future<void> showAddPlatformManagerDialog(BuildContext context) async {
           }
 
           return AlertDialog(
-            title: Text(l10n.addPlatformManager),
+            title: Text(l10n.invitePlatformAdministrator),
             content: Form(
               key: formKey,
               child: SingleChildScrollView(
@@ -798,34 +843,34 @@ Future<void> showAddPlatformManagerDialog(BuildContext context) async {
                       },
                     ),
                     const SizedBox(height: 10),
-                    CountryPhoneField(
-                      controller: phoneController,
-                      labelText: l10n.phone,
-                      validator: (value) {
-                        final trimmed = value?.trim() ?? '';
-                        if (trimmed.isEmpty) return null;
-                        return PhoneNumberValidator.validate(
-                          trimmed,
-                          requiredMessage: l10n.phoneRequired,
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: passwordController,
-                      obscureText: true,
+                    DropdownButtonFormField<String>(
+                      initialValue: adminRole,
                       decoration: InputDecoration(
-                        labelText: l10n.temporaryPassword,
-                        prefixIcon: const Icon(Icons.lock_outline),
+                        labelText: l10n.adminRole,
+                        prefixIcon: const Icon(Icons.security_outlined),
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return l10n.passwordRequired;
-                        }
-                        if (value.length < 6) {
-                          return l10n.passwordMinLength;
-                        }
-                        return null;
+                      items: [
+                        DropdownMenuItem(
+                          value: 'operationsManager',
+                          child: Text(l10n.operationsManager),
+                        ),
+                        DropdownMenuItem(
+                          value: 'financeManager',
+                          child: Text(l10n.financeManager),
+                        ),
+                        DropdownMenuItem(
+                          value: 'supportAdmin',
+                          child: Text(l10n.supportAdministrator),
+                        ),
+                        DropdownMenuItem(
+                          value: 'contentManager',
+                          child: Text(l10n.contentManager),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setDialogState(
+                          () => adminRole = value ?? 'operationsManager',
+                        );
                       },
                     ),
                   ],
@@ -846,7 +891,7 @@ Future<void> showAddPlatformManagerDialog(BuildContext context) async {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.person_add_alt_1),
-                label: Text(saving ? l10n.creating : l10n.createManager),
+                label: Text(saving ? l10n.creating : l10n.sendInvitation),
               ),
             ],
           );

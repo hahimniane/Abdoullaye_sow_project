@@ -122,8 +122,6 @@ type SupportDraft = {
 type StaffDraft = {
   fullName: string;
   email: string;
-  phone: string;
-  password: string;
   businessPermissions: string[];
 };
 
@@ -204,9 +202,7 @@ const emptySupportDraft: SupportDraft = {
 const emptyStaffDraft: StaffDraft = {
   fullName: "",
   email: "",
-  phone: "",
-  password: "",
-  businessPermissions: businessPermissionOptions.map((option) => option.id),
+  businessPermissions: ["profile", "people"],
 };
 
 export function BusinessProfilePanel({
@@ -1427,29 +1423,27 @@ export function BusinessPeoplePanel({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await run(
-      "Business staff created",
+      "Business staff invitation sent",
       async () => {
         if (!businessId) throw new Error("Business account is not configured.");
         if (!draft.fullName.trim()) throw new Error("Enter a staff name.");
         if (!draft.email.trim()) throw new Error("Enter a staff email.");
-        if (draft.password.length < 6) throw new Error("Password must be at least 6 characters.");
 
-        await httpsCallable(functions, "createStaffUser")({
+        await httpsCallable(functions, "inviteBusinessMember")({
           businessId,
           fullName: draft.fullName.trim(),
           email: draft.email.trim().toLowerCase(),
-          phone: draft.phone.trim(),
-          password: draft.password,
           businessPermissions: draft.businessPermissions,
+          locale: document.documentElement.lang.startsWith("fr") ? "fr" : "en",
         });
         setDraft(emptyStaffDraft);
         setFormOpen(false);
       },
       {
         confirm:
-          "Create this staff account with the selected permissions?",
+          "Send this staff invitation with the selected permissions?",
         confirmFr:
-          "Créer ce compte employé avec les autorisations sélectionnées ?",
+          "Envoyer cette invitation d’employé avec les autorisations sélectionnées ?",
       },
     );
   }
@@ -1524,19 +1518,13 @@ export function BusinessPeoplePanel({
             </header>
             <form id="business-people-form" onSubmit={submit}>
               <div className="lst-modal-body">
-                <div className="info-band" style={{ marginBottom: 14 }}>New staff accounts are linked to {businessName}. Share the temporary password with them to sign in.</div>
+                <div className="info-band" style={{ marginBottom: 14 }}>This person will set their own password from an expiring email invitation for {businessName}.</div>
                 <div className="lst-form-grid">
                   <label className="lst-field"><span>Full name</span>
                     <input autoComplete="name" required value={draft.fullName} onChange={(event) => update({ fullName: event.target.value })} />
                   </label>
                   <label className="lst-field"><span>Email</span>
                     <input autoComplete="username" inputMode="email" required type="email" value={draft.email} onChange={(event) => update({ email: event.target.value })} />
-                  </label>
-                  <label className="lst-field"><span>Phone</span>
-                    <input autoComplete="tel" inputMode="tel" value={draft.phone} onChange={(event) => update({ phone: event.target.value })} />
-                  </label>
-                  <label className="lst-field"><span>Temporary password</span>
-                    <input autoComplete="new-password" minLength={6} required type="password" value={draft.password} onChange={(event) => update({ password: event.target.value })} />
                   </label>
                   <div className="lst-form-section">Permissions — what this staff member can manage</div>
                   <div className="lst-chips wide">
@@ -1555,7 +1543,7 @@ export function BusinessPeoplePanel({
                 <button className="lst-btn ghost" type="button" onClick={() => setFormOpen(false)}>Cancel</button>
                 <button className="lst-add" type="submit" disabled={busy || !businessId}>
                   {busy ? <RefreshCw className="spin" size={16} /> : <UserPlus size={16} />}
-                  {busy ? "Creating..." : "Create staff"}
+                  {busy ? "Sending..." : "Send invitation"}
                 </button>
               </footer>
             </form>

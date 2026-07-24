@@ -2560,7 +2560,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Support message emails": "Emails de messages d’assistance",
   "Support request": "Demande d’assistance",
   "Support request sent": "Demande d’assistance envoyée",
-  Suspended: "Suspendu",
   System: "Système",
   Tagline: "Slogan",
   Team: "Équipe",
@@ -2903,6 +2902,153 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Verified balance due": "Solde confirmé dû",
   "This amount was calculated by the provider after the barrel was sealed.":
     "Ce montant a été calculé par le prestataire après la fermeture du baril.",
+  "Search every account, business membership, invitation, and deletion request from one directory.":
+    "Recherchez chaque compte, adhésion d’entreprise, invitation et demande de suppression dans un même répertoire.",
+  "Search people, email, phone, or business":
+    "Rechercher une personne, un courriel, un téléphone ou une entreprise",
+  "Person type": "Type de personne",
+  "Filter by person type": "Filtrer par type de personne",
+  "All people": "Toutes les personnes",
+  "Platform administrators": "Administrateurs de plateforme",
+  "Business owners": "Propriétaires d’entreprise",
+  "Business staff": "Personnel d’entreprise",
+  "Pending invitations": "Invitations en attente",
+  "Missing profiles": "Profils manquants",
+  "Account status": "Statut du compte",
+  "Filter by account status": "Filtrer par statut du compte",
+  Unverified: "Non vérifié",
+  Suspended: "Suspendu",
+  Invited: "Invité",
+  "Pending deletion": "Suppression en attente",
+  "Reference only": "Référence uniquement",
+  "You have view access to people. Managing invitations, roles, account security, and deletion requests requires the Super admin or User-management privilege.":
+    "Vous disposez d’un accès en consultation aux personnes. La gestion des invitations, des rôles, de la sécurité des comptes et des demandes de suppression nécessite le privilège Super administrateur ou Gestion des utilisateurs.",
+  "People could not be loaded.":
+    "Impossible de charger les personnes.",
+  "People are taking too long to load. Refresh and try again.":
+    "Le chargement des personnes prend trop de temps. Actualisez la page et réessayez.",
+  "People directory": "Répertoire des personnes",
+  Directory: "Répertoire",
+  "All account types": "Tous les types de comptes",
+  "Loading people and access...":
+    "Chargement des personnes et des accès...",
+  "Loading complete person details...":
+    "Chargement des renseignements complets de la personne...",
+  "Person details could not be loaded.":
+    "Impossible de charger les renseignements de la personne.",
+  "Person details are taking too long to load. Try again.":
+    "Le chargement des renseignements de la personne prend trop de temps. Réessayez.",
+  "No people match these filters":
+    "Aucune personne ne correspond à ces filtres",
+  "Clear a filter or search for another email or phone.":
+    "Effacez un filtre ou recherchez un autre courriel ou numéro de téléphone.",
+  "No contact information": "Aucune coordonnée",
+  "Platform admin": "Administrateur de plateforme",
+  "Business person": "Membre d’entreprise",
+  Invitation: "Invitation",
+  "Contact reference": "Référence de contact",
+  "Select a person": "Sélectionner une personne",
+  "Identity, access, security, and activity will appear here.":
+    "L’identité, les accès, la sécurité et l’activité apparaîtront ici.",
+  "Identity & security": "Identité et sécurité",
+  "Authentication and verification state":
+    "État de l’authentification et de la vérification",
+  "Email verification": "Vérification du courriel",
+  Authentication: "Authentification",
+  "Firebase Auth": "Authentification Firebase",
+  "Not reported": "Non renseigné",
+  "Last sign-in": "Dernière connexion",
+  "Send password reset": "Envoyer la réinitialisation du mot de passe",
+  "Password reset sent": "Réinitialisation du mot de passe envoyée",
+  "Roles & memberships": "Rôles et adhésions",
+  "Platform and business access": "Accès à la plateforme et aux entreprises",
+  "Platform admin role": "Rôle d’administrateur de plateforme",
+  "Your own admin role cannot be changed here.":
+    "Votre propre rôle administrateur ne peut pas être modifié ici.",
+  "The last super admin cannot be suspended or demoted.":
+    "Le dernier super administrateur ne peut pas être suspendu ni rétrogradé.",
+  "Account role": "Rôle du compte",
+  "Business membership": "Adhésion à l’entreprise",
+  "Business membership role": "Rôle d’adhésion à l’entreprise",
+  "Business owner": "Propriétaire d’entreprise",
+  "Business ownership": "Propriété de l’entreprise",
+  "This makes the selected person the business owner and moves the current owner to staff. A last business owner cannot be removed without a transfer.":
+    "Cette action désigne la personne sélectionnée comme propriétaire et fait passer le propriétaire actuel au rôle de personnel. Le dernier propriétaire ne peut pas être retiré sans transfert.",
+  "Transfer ownership": "Transférer la propriété",
+  "No platform or business access is assigned.":
+    "Aucun accès à la plateforme ou à une entreprise n’est attribué.",
+  "Invitation awaiting acceptance":
+    "Invitation en attente d’acceptation",
+  "Access starts only after the recipient accepts the invitation.":
+    "L’accès commence uniquement après l’acceptation de l’invitation par le destinataire.",
+  "Marketplace activity": "Activité de la place de marché",
+  "Linked orders, requests, and support records":
+    "Commandes, demandes et dossiers d’assistance liés",
+  "Marketplace record": "Dossier de la place de marché",
+  "Service record": "Dossier de service",
+  "No marketplace activity is linked to this person.":
+    "Aucune activité de la place de marché n’est liée à cette personne.",
+  "Deletion requested": "Suppression demandée",
+  "Date not reported": "Date non renseignée",
+  "Deletion request needs review":
+    "La demande de suppression doit être examinée",
+  "Confirm any required record retention before completing this request.":
+    "Confirmez toute conservation obligatoire des dossiers avant de terminer cette demande.",
+  "Review deletion request": "Examiner la demande de suppression",
+  "Deletion request reviewed": "Demande de suppression examinée",
+  "Finalize account deletion": "Finaliser la suppression du compte",
+  "Account deletion finalized": "Suppression du compte finalisée",
+  "Account access is suspended": "L’accès au compte est suspendu",
+  "The person cannot sign in until an authorized admin restores access.":
+    "La personne ne peut pas se connecter tant qu’un administrateur autorisé n’a pas rétabli l’accès.",
+  "Suspend account": "Suspendre le compte",
+  "Restore account": "Rétablir le compte",
+  "Revoke sessions": "Révoquer les sessions",
+  "Sessions revoked": "Sessions révoquées",
+  "A matching Auth account is required before access can be assigned.":
+    "Un compte d’authentification correspondant est requis avant d’attribuer un accès.",
+  "Resend invitation": "Renvoyer l’invitation",
+  "Cancel invitation": "Annuler l’invitation",
+  "Invitation resent": "Invitation renvoyée",
+  "Invitation revoked": "Invitation révoquée",
+  "Sign in as another authorized admin to change your own access.":
+    "Connectez-vous avec un autre compte administrateur autorisé pour modifier votre propre accès.",
+  "Invite person": "Inviter une personne",
+  "Close invitation": "Fermer l’invitation",
+  "Invite a person": "Inviter une personne",
+  "They will create their own password after accepting the email invitation.":
+    "Cette personne créera son propre mot de passe après avoir accepté l’invitation par courriel.",
+  "Access type": "Type d’accès",
+  "Access to authorized admin console sections":
+    "Accès aux sections autorisées de la console d’administration",
+  "Staff access for one business":
+    "Accès du personnel pour une entreprise",
+  people: "personnes",
+  "Email address": "Adresse courriel",
+  "Phone number (optional)": "Numéro de téléphone (facultatif)",
+  "Select a business": "Sélectionner une entreprise",
+  "Ownership can be transferred after the invitation is accepted.":
+    "La propriété peut être transférée après l’acceptation de l’invitation.",
+  "Business permissions": "Autorisations de l’entreprise",
+  "Grant only the tools this person needs. Access can be adjusted later.":
+    "Accordez uniquement les outils nécessaires. L’accès pourra être modifié ultérieurement.",
+  "Invite staff to": "Inviter du personnel à",
+  "Business staff invitation sent":
+    "Invitation du personnel d’entreprise envoyée",
+  "This person will set their own password from an expiring email invitation for":
+    "Cette personne créera son propre mot de passe à partir d’une invitation par courriel à durée limitée pour",
+  "No password is collected. The person will set one from the expiring email invitation.":
+    "Aucun mot de passe n’est recueilli. La personne en créera un à partir de l’invitation par courriel à durée limitée.",
+  "No password is collected here. The invitation expires and access remains inactive until it is accepted.":
+    "Aucun mot de passe n’est recueilli ici. L’invitation expire et l’accès reste inactif jusqu’à son acceptation.",
+  "Send invitation": "Envoyer l’invitation",
+  "Invitation sent": "Invitation envoyée",
+  "Loading more...": "Chargement en cours…",
+  "Load more people": "Afficher plus de personnes",
+  "More people could not be loaded. Try again.":
+    "Impossible de charger davantage de personnes. Réessayez.",
+  "Marketplace-wide people search could not be completed.":
+    "La recherche de personnes dans toute la place de marché n’a pas pu être effectuée.",
 };
 
 const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {

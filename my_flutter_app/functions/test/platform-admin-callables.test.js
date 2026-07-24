@@ -9,6 +9,13 @@ const db = admin.firestore();
 const SUPER_ADMIN_UID = "platform-admin-callables-super";
 const LEGACY_ADMIN_UID = "platform-admin-callables-legacy";
 const DEMOTE_ADMIN_UID = "platform-admin-callables-demote";
+const CUSTOMER_UID = "platform-admin-callables-customer";
+const OWNER_A_UID = "platform-admin-callables-owner-a";
+const OWNER_B_UID = "platform-admin-callables-owner-b";
+const AUTO_INVITE_UID = "platform-admin-callables-auto-invite";
+const EXPLICIT_INVITE_UID = "platform-admin-callables-explicit-invite";
+const AMBIGUOUS_INVITE_UID = "platform-admin-callables-ambiguous-invite";
+const BUSINESS_ID = "platform-admin-callables-business";
 
 before(async () => {
   await Promise.all([
@@ -28,6 +35,42 @@ before(async () => {
       uid: DEMOTE_ADMIN_UID,
       email: "platform-admin-demote@example.test",
       password: "PlatformDemote-2026!",
+      emailVerified: true,
+    }),
+    auth.createUser({
+      uid: CUSTOMER_UID,
+      email: "platform-admin-customer@example.test",
+      password: "PlatformCustomer-2026!",
+      emailVerified: true,
+    }),
+    auth.createUser({
+      uid: OWNER_A_UID,
+      email: "platform-owner-a@example.test",
+      password: "PlatformOwnerA-2026!",
+      emailVerified: true,
+    }),
+    auth.createUser({
+      uid: OWNER_B_UID,
+      email: "platform-owner-b@example.test",
+      password: "PlatformOwnerB-2026!",
+      emailVerified: true,
+    }),
+    auth.createUser({
+      uid: AUTO_INVITE_UID,
+      email: "platform-auto-invite@example.test",
+      password: "PlatformAutoInvite-2026!",
+      emailVerified: true,
+    }),
+    auth.createUser({
+      uid: EXPLICIT_INVITE_UID,
+      email: "platform-explicit-invite@example.test",
+      password: "PlatformExplicitInvite-2026!",
+      emailVerified: true,
+    }),
+    auth.createUser({
+      uid: AMBIGUOUS_INVITE_UID,
+      email: "platform-ambiguous-invite@example.test",
+      password: "PlatformAmbiguousInvite-2026!",
       emailVerified: true,
     }),
     db.collection("users").doc(SUPER_ADMIN_UID).set({
@@ -53,6 +96,29 @@ before(async () => {
       businessServices: ["freight"],
       fullName: "Platform Admin Test Demotion",
       email: "platform-admin-demote@example.test",
+    }),
+    db.collection("users").doc(CUSTOMER_UID).set({
+      role: "customer",
+      fullName: "Platform Customer",
+      email: "platform-admin-customer@example.test",
+    }),
+    db.collection("users").doc(OWNER_A_UID).set({
+      role: "businessOwner",
+      businessId: BUSINESS_ID,
+      businessName: "Platform Ownership Test",
+      fullName: "Platform Owner A",
+      email: "platform-owner-a@example.test",
+    }),
+    db.collection("users").doc(OWNER_B_UID).set({
+      role: "customer",
+      fullName: "Platform Owner B",
+      email: "platform-owner-b@example.test",
+    }),
+    db.collection("businesses").doc(BUSINESS_ID).set({
+      name: "Platform Ownership Test",
+      ownerUid: OWNER_A_UID,
+      enabledServices: ["freight"],
+      status: "approved",
     }),
   ]);
 });
@@ -181,3 +247,175 @@ test("demotion preserves the account, removes access, and records an audit",
           .doc(DEMOTE_ADMIN_UID).get();
       assert.equal(unchanged.get("role"), "customer");
     });
+
+test("people lifecycle is verified, redacted, and reversible", async () => {
+  const suspended = await functions.setMarketplaceUserStatus.run({
+    auth: {uid: SUPER_ADMIN_UID},
+    data: {
+      userId: CUSTOMER_UID,
+      action: "suspend",
+      reason: "Security review",
+    },
+  });
+  assert.equal(suspended.accountStatus, "suspended");
+  assert.equal((await auth.getUser(CUSTOMER_UID)).disabled, true);
+
+  const directory = await functions.listMarketplacePeople.run({
+    auth: {uid: SUPER_ADMIN_UID},
+    data: {search: "platform-admin-customer@example.test"},
+  });
+  assert.equal(directory.people.length, 1);
+  assert.equal(directory.people[0].category, "customer");
+  assert.equal(directory.people[0].accountStatus, "suspended");
+  assert.equal("notificationPreferences" in directory.people[0], false);
+
+  const restored = await functions.setMarketplaceUserStatus.run({
+    auth: {uid: SUPER_ADMIN_UID},
+    data: {
+      userId: CUSTOMER_UID,
+      action: "restore",
+      reason: "Review complete",
+    },
+  });
+  assert.equal(restored.accountStatus, "active");
+  assert.equal((await auth.getUser(CUSTOMER_UID)).disabled, false);
+});
+
+test("missing profile repair refuses to overwrite an existing profile",
+    async () => {
+      await assert.rejects(
+          () => functions.createMissingUserProfile.run({
+            auth: {uid: SUPER_ADMIN_UID},
+            data: {userId: CUSTOMER_UID},
+          }),
+          /already exists/i,
+      );
+      const profile = await db.collection("users").doc(CUSTOMER_UID).get();
+      assert.equal(profile.get("role"), "customer");
+      assert.equal(profile.get("fullName"), "Platform Customer");
+    });
+
+test("ownership transfer updates the owner pointer and both role projections",
+    async () => {
+      const result = await functions.transferBusinessOwnership.run({
+        auth: {uid: SUPER_ADMIN_UID},
+        data: {
+          userId: OWNER_B_UID,
+          businessId: BUSINESS_ID,
+        },
+      });
+      assert.equal(result.role, "businessOwner");
+
+      const [business, oldOwner, newOwner] = await Promise.all([
+        db.collection("businesses").doc(BUSINESS_ID).get(),
+        db.collection("users").doc(OWNER_A_UID).get(),
+        db.collection("users").doc(OWNER_B_UID).get(),
+      ]);
+      assert.equal(business.get("ownerUid"), OWNER_B_UID);
+      assert.equal(oldOwner.get("role"), "staff");
+      assert.ok(oldOwner.get("businessPermissions").includes("people"));
+      assert.equal(newOwner.get("role"), "businessOwner");
+      assert.equal(newOwner.get("businessId"), BUSINESS_ID);
+      assert.equal(newOwner.get("businessPermissions"), undefined);
+    });
+
+test("accepts the single active invitation without an invitation ID",
+    async () => {
+      const invitationId = "platform-auto-resolved-invitation";
+      await db.collection("accessInvitations").doc(invitationId).set({
+        kind: "business",
+        targetUid: AUTO_INVITE_UID,
+        email: "platform-auto-invite@example.test",
+        fullName: "Auto Invite",
+        status: "pending",
+        businessId: BUSINESS_ID,
+        businessName: "Platform Ownership Test",
+        businessPermissions: ["freight"],
+        expiresAt: admin.firestore.Timestamp.fromMillis(
+            Date.now() + 60 * 60 * 1000,
+        ),
+      });
+
+      const result = await functions.acceptAccessInvitation.run({
+        auth: {uid: AUTO_INVITE_UID},
+        data: {},
+      });
+      assert.equal(result.invitationId, invitationId);
+      assert.equal(result.status, "accepted");
+
+      const [profile, invitation] = await Promise.all([
+        db.collection("users").doc(AUTO_INVITE_UID).get(),
+        db.collection("accessInvitations").doc(invitationId).get(),
+      ]);
+      assert.equal(profile.get("role"), "staff");
+      assert.equal(profile.get("businessId"), BUSINESS_ID);
+      assert.deepEqual(profile.get("businessPermissions"), ["freight"]);
+      assert.equal(invitation.get("status"), "accepted");
+    });
+
+test("preserves explicit invitation ID acceptance", async () => {
+  const invitationId = "platform-explicit-id-invitation";
+  await db.collection("accessInvitations").doc(invitationId).set({
+    kind: "platform",
+    targetUid: EXPLICIT_INVITE_UID,
+    email: "platform-explicit-invite@example.test",
+    fullName: "Explicit Invite",
+    status: "pending",
+    adminRole: "supportAdmin",
+    expiresAt: admin.firestore.Timestamp.fromMillis(
+        Date.now() + 60 * 60 * 1000,
+    ),
+  });
+
+  const result = await functions.acceptAccessInvitation.run({
+    auth: {uid: EXPLICIT_INVITE_UID},
+    data: {invitationId},
+  });
+  assert.equal(result.invitationId, invitationId);
+  const profile = await db.collection("users").doc(EXPLICIT_INVITE_UID).get();
+  assert.equal(profile.get("role"), "admin");
+  assert.equal(profile.get("adminRole"), "supportAdmin");
+});
+
+test("rejects ambiguous implicit invitation acceptance", async () => {
+  const expiresAt = admin.firestore.Timestamp.fromMillis(
+      Date.now() + 60 * 60 * 1000,
+  );
+  await Promise.all([
+    db.collection("accessInvitations").doc("platform-ambiguous-business").set({
+      kind: "business",
+      targetUid: AMBIGUOUS_INVITE_UID,
+      email: "platform-ambiguous-invite@example.test",
+      status: "pending",
+      businessId: BUSINESS_ID,
+      businessPermissions: ["freight"],
+      expiresAt,
+    }),
+    db.collection("accessInvitations").doc("platform-ambiguous-admin").set({
+      kind: "platform",
+      targetUid: AMBIGUOUS_INVITE_UID,
+      email: "platform-ambiguous-invite@example.test",
+      status: "pending",
+      adminRole: "supportAdmin",
+      expiresAt,
+    }),
+  ]);
+
+  await assert.rejects(
+      () => functions.acceptAccessInvitation.run({
+        auth: {uid: AMBIGUOUS_INVITE_UID},
+        data: {},
+      }),
+      (error) => {
+        assert.equal(
+            error.details?.reason,
+            "invitation-selection-required",
+        );
+        return true;
+      },
+  );
+  assert.equal(
+      (await db.collection("users").doc(AMBIGUOUS_INVITE_UID).get()).exists,
+      false,
+  );
+});

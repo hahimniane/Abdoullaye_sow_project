@@ -40,13 +40,13 @@ test("non-current administrators can lose admin access without account deletion"
     "src/components/admin-console.tsx",
     "utf8",
   );
-  const start = source.indexOf('title="Platform admins"');
-  const end = source.indexOf('title="Customer accounts"', start);
+  const start = source.indexOf("function PersonDetailWorkspace");
+  const end = source.indexOf("function buildRolesDraft", start);
   const section = source.slice(start, end);
 
   assert.ok(start >= 0 && end > start);
-  assert.match(section, /canManage && !isCurrentUser/);
-  assert.match(section, /updateRole\(user\.id,\s*"customer"\)/);
+  assert.match(section, /kind === "admin" && !isCurrentUser/);
+  assert.match(section, /updateRole\(userId,\s*"customer"\)/);
   assert.match(section, /Remove admin access/);
   assert.match(section, /confirmFr:/);
 });

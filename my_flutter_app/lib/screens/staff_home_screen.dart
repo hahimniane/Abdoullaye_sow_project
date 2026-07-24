@@ -7,6 +7,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_bottom_nav.dart';
 import '../models/business_profile.dart';
 import '../models/business_service.dart';
+import '../models/platform_access.dart';
 import '../utils/business_permissions.dart';
 import 'business_profile_screen.dart';
 import 'home_menu.dart';
@@ -41,6 +42,8 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
     required bool canManagePurchases,
     required bool canManageProfile,
     required bool canManageSupport,
+    required bool canViewPeople,
+    required bool canViewPlatformSupport,
   }) {
     final hasCarSales = hasBusinessService(
       services,
@@ -52,8 +55,8 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
       if (hasCarSales && canManagePurchases)
         const StaffPurchaseManagementScreen(),
       if (!isAdmin && canManageProfile) const BusinessProfileScreen(),
-      if (isAdmin) const UserManagementScreen(),
-      if (isAdmin)
+      if (isAdmin && canViewPeople) const UserManagementScreen(),
+      if (isAdmin && canViewPlatformSupport)
         const SupportInboxScreen.admin()
       else if (canManageSupport)
         const SupportInboxScreen.business(),
@@ -69,6 +72,8 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
     required bool canManagePurchases,
     required bool canManageProfile,
     required bool canManageSupport,
+    required bool canViewPeople,
+    required bool canViewPlatformSupport,
   }) {
     final hasCarSales = hasBusinessService(
       services,
@@ -98,13 +103,13 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
           selectedIcon: Icons.storefront,
           label: l10n.business,
         ),
-      if (isAdmin)
+      if (isAdmin && canViewPeople)
         AppBottomNavItem(
           icon: Icons.people_outline,
           selectedIcon: Icons.people,
           label: l10n.users,
         ),
-      if (isAdmin || canManageSupport)
+      if ((isAdmin && canViewPlatformSupport) || (!isAdmin && canManageSupport))
         AppBottomNavItem(
           icon: Icons.support_agent_outlined,
           selectedIcon: Icons.support_agent,
@@ -135,6 +140,12 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
     final canManageSupport = authProvider.hasBusinessPermission(
       BusinessPermission.support,
     );
+    final canViewPeople = authProvider.canViewPlatformSection(
+      PlatformSection.people,
+    );
+    final canViewPlatformSupport = authProvider.canViewPlatformSection(
+      PlatformSection.support,
+    );
     if (isAdmin || (authProvider.businessId ?? '').isEmpty) {
       final services = defaultBusinessServiceValues;
       final screens = _buildScreens(
@@ -144,6 +155,8 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
         canManagePurchases: canManagePurchases,
         canManageProfile: canManageProfile,
         canManageSupport: canManageSupport,
+        canViewPeople: canViewPeople,
+        canViewPlatformSupport: canViewPlatformSupport,
       );
       final items = _buildItems(
         l10n,
@@ -153,6 +166,8 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
         canManagePurchases: canManagePurchases,
         canManageProfile: canManageProfile,
         canManageSupport: canManageSupport,
+        canViewPeople: canViewPeople,
+        canViewPlatformSupport: canViewPlatformSupport,
       );
       final currentIndex = _safeIndex(screens.length);
       return _StaffScaffold(
@@ -184,6 +199,8 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
           canManagePurchases: canManagePurchases,
           canManageProfile: canManageProfile,
           canManageSupport: canManageSupport,
+          canViewPeople: canViewPeople,
+          canViewPlatformSupport: canViewPlatformSupport,
         );
         final items = _buildItems(
           l10n,
@@ -193,6 +210,8 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
           canManagePurchases: canManagePurchases,
           canManageProfile: canManageProfile,
           canManageSupport: canManageSupport,
+          canViewPeople: canViewPeople,
+          canViewPlatformSupport: canViewPlatformSupport,
         );
         final currentIndex = _safeIndex(screens.length);
         return _StaffScaffold(

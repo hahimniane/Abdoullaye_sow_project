@@ -2336,7 +2336,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get peopleAndAccessSubtitle =>
-      'Gérez les responsables de plateforme, les équipes d’entreprise et les comptes clients.';
+      'Gérez les identités, les invitations et la sécurité des comptes de la place de marché.';
 
   @override
   String get platformManagers => 'Responsables de plateforme';
@@ -2366,7 +2366,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get platformManager => 'Responsable de plateforme';
 
   @override
-  String get businessOwner => 'Propriétaire d’entreprise';
+  String get businessOwner => 'Propriétaire de l’entreprise';
 
   @override
   String get unassignedBusiness => 'Entreprise non attribuée';
@@ -5436,4 +5436,269 @@ class AppLocalizationsFr extends AppLocalizations {
   String regularDepartureDays(String days) {
     return 'Départs habituels : $days';
   }
+
+  @override
+  String get allPeople => 'Toutes les personnes';
+
+  @override
+  String get platformAdministrators => 'Administrateurs de la plateforme';
+
+  @override
+  String get businessOwners => 'Propriétaires d’entreprise';
+
+  @override
+  String get pendingInvitations => 'Invitations en attente';
+
+  @override
+  String get missingProfiles => 'Profils manquants';
+
+  @override
+  String get suspendedAccounts => 'Comptes suspendus';
+
+  @override
+  String get people => 'Personnes';
+
+  @override
+  String get invitePerson => 'Inviter une personne';
+
+  @override
+  String get searchPeopleHint =>
+      'Rechercher un e-mail, téléphone ou identifiant exact';
+
+  @override
+  String get clearSearch => 'Effacer la recherche';
+
+  @override
+  String get loadMorePeople => 'Afficher plus de personnes';
+
+  @override
+  String get peopleCouldNotLoad => 'Impossible de charger les personnes';
+
+  @override
+  String get tryAgain => 'Réessayer';
+
+  @override
+  String get notProvided => 'Non renseigné';
+
+  @override
+  String get noPeopleFound => 'Aucune personne trouvée';
+
+  @override
+  String get noPeopleFoundHelp =>
+      'Essayez un autre filtre ou recherchez une adresse e-mail, un numéro de téléphone ou un identifiant exact.';
+
+  @override
+  String get peopleAccessRestricted => 'L’accès aux personnes est limité';
+
+  @override
+  String get peopleAccessRestrictedHelp =>
+      'Votre rôle d’administrateur ne permet pas de consulter les personnes de la place de marché.';
+
+  @override
+  String get you => 'Vous';
+
+  @override
+  String get platformAdministrator => 'Administrateur de la plateforme';
+
+  @override
+  String get businessStaffMember => 'Membre du personnel de l’entreprise';
+
+  @override
+  String get pendingInvitation => 'Invitation en attente';
+
+  @override
+  String get missingProfile => 'Profil manquant';
+
+  @override
+  String get invitationPending => 'Invitation en attente';
+
+  @override
+  String get deletionPending => 'Suppression en attente';
+
+  @override
+  String get authenticationMissing => 'Authentification manquante';
+
+  @override
+  String get identityAndAccess => 'Identité et accès';
+
+  @override
+  String get emailVerification => 'Vérification de l’e-mail';
+
+  @override
+  String get verified => 'Vérifié';
+
+  @override
+  String get notVerified => 'Non vérifié';
+
+  @override
+  String get businessAccess => 'Accès à l’entreprise';
+
+  @override
+  String get businessPermissions => 'Autorisations de l’entreprise';
+
+  @override
+  String get businessPermissionsHelp =>
+      'Accordez uniquement les outils nécessaires. Vous pourrez modifier l’accès ultérieurement.';
+
+  @override
+  String get noAssignedPermissions => 'Aucune autorisation attribuée';
+
+  @override
+  String get cannotChangeOwnAccess =>
+      'Pour votre sécurité, vous ne pouvez pas modifier votre propre accès depuis cet écran.';
+
+  @override
+  String get accountActions => 'Actions sur le compte';
+
+  @override
+  String get suspendAccount => 'Suspendre le compte';
+
+  @override
+  String get suspendAccountConfirm =>
+      'Cette personne perdra immédiatement l’accès et toutes ses sessions actives seront révoquées.';
+
+  @override
+  String get restoreAccount => 'Rétablir le compte';
+
+  @override
+  String get restoreAccountConfirm =>
+      'Cette personne pourra de nouveau se connecter.';
+
+  @override
+  String get accountSuspended => 'Compte suspendu';
+
+  @override
+  String get accountRestored => 'Compte rétabli';
+
+  @override
+  String get revokeSessions => 'Révoquer les sessions actives';
+
+  @override
+  String get sessionsRevoked => 'Sessions actives révoquées';
+
+  @override
+  String get sendPasswordReset => 'Envoyer la réinitialisation du mot de passe';
+
+  @override
+  String get passwordResetSent => 'Réinitialisation du mot de passe demandée';
+
+  @override
+  String get sendVerificationEmail => 'Envoyer l’e-mail de vérification';
+
+  @override
+  String get verificationEmailSent => 'E-mail de vérification demandé';
+
+  @override
+  String get transferOwnership => 'Transférer la propriété de l’entreprise';
+
+  @override
+  String get transferOwnershipConfirm =>
+      'Ce membre du personnel deviendra propriétaire et le propriétaire actuel deviendra membre du personnel.';
+
+  @override
+  String get ownershipTransferred => 'Propriété de l’entreprise transférée';
+
+  @override
+  String get resendInvitation => 'Renvoyer l’invitation';
+
+  @override
+  String get invitationResent => 'Invitation renvoyée';
+
+  @override
+  String get cancelInvitation => 'Annuler l’invitation';
+
+  @override
+  String get cancelInvitationConfirm =>
+      'Cette invitation ne pourra plus être utilisée.';
+
+  @override
+  String get invitationCancelled => 'Invitation annulée';
+
+  @override
+  String get reviewDeletionRequest => 'Examiner la suppression du compte';
+
+  @override
+  String get deletionBlocked => 'La suppression est bloquée';
+
+  @override
+  String deletionBlockedByRecords(int count) {
+    return '$count dossier(s) actif(s) ou conservé(s) légalement doivent être résolus avant la suppression de ce compte.';
+  }
+
+  @override
+  String get finalizeAccountDeletion => 'Finaliser la suppression du compte';
+
+  @override
+  String get finalizeAccountDeletionConfirm =>
+      'Cette action supprime définitivement l’accès après confirmation par le serveur qu’aucun dossier ne bloque la suppression. Elle est irréversible.';
+
+  @override
+  String get accountDeletionFinalized => 'Suppression du compte finalisée';
+
+  @override
+  String get adminApprovedDeletion =>
+      'Suppression examinée et approuvée par un administrateur de la plateforme.';
+
+  @override
+  String get invitePlatformAdministrator =>
+      'Inviter un administrateur de la plateforme';
+
+  @override
+  String get invitePlatformAdministratorHelp =>
+      'Choisissez un rôle d’administrateur limité. L’accès super administrateur n’est jamais accordé par invitation.';
+
+  @override
+  String get inviteBusinessPersonnel => 'Inviter du personnel d’entreprise';
+
+  @override
+  String get inviteBusinessPersonnelHelp =>
+      'Sélectionnez l’entreprise et les outils précis que cette personne peut utiliser.';
+
+  @override
+  String get sendInvitation => 'Envoyer l’invitation';
+
+  @override
+  String get invitationSent => 'Invitation envoyée';
+
+  @override
+  String get adminRole => 'Rôle d’administrateur';
+
+  @override
+  String get superAdministrator => 'Super administrateur';
+
+  @override
+  String get operationsManager => 'Responsable des opérations';
+
+  @override
+  String get financeManager => 'Responsable financier';
+
+  @override
+  String get supportAdministrator => 'Administrateur du support';
+
+  @override
+  String get contentManager => 'Responsable du contenu';
+
+  @override
+  String get profile => 'Profil';
+
+  @override
+  String get listings => 'Annonces';
+
+  @override
+  String get barrels => 'Barils';
+
+  @override
+  String get freight => 'Fret';
+
+  @override
+  String get transport => 'Transport';
+
+  @override
+  String get parking => 'Stationnement';
+
+  @override
+  String get destinations => 'Destinations';
+
+  @override
+  String get growth => 'Croissance';
 }

@@ -157,6 +157,16 @@
         {"fieldPath": "status", "order": "ASCENDING"},
         {"fieldPath": "amountCents", "order": "ASCENDING"}
       ]
+    },
+    {
+      "collectionGroup": "accessInvitations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "targetUid", "order": "ASCENDING"},
+        {"fieldPath": "email", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "expiresAt", "order": "DESCENDING"}
+      ]
     }
   ],
   "fieldOverrides": [

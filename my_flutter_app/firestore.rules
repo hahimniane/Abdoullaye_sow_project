@@ -8,7 +8,8 @@ service cloud.firestore {
              request.auth.uid == userId &&
              request.auth.token.email_verified == true &&
              exists(/databases/$(database)/documents/users/$(userId)) &&
-             get(/databases/$(database)/documents/users/$(userId)).data.role == 'admin';
+             get(/databases/$(database)/documents/users/$(userId)).data.role == 'admin' &&
+             userAccessAllowed(userId);
     }
 
     function isSuperAdmin(userId) {
@@ -35,6 +36,24 @@ service cloud.firestore {
         "";
     }
 
+    function userAccessAllowed(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId)) &&
+        !(
+          get(/databases/$(database)/documents/users/$(userId))
+            .data.get('accountStatus', 'active') in [
+              'suspended',
+              'deleting',
+              'deleted'
+            ]
+        );
+    }
+
+    function hasConfiguredAdminRole(userId) {
+      return exists(/databases/$(database)/documents/platformConfig/permissions) &&
+        userAdminRole(userId) in get(/databases/$(database)/documents/platformConfig/permissions)
+          .data.get('roles', {});
+    }
+
     function hasDynamicAdminCapability(userId, section) {
       return exists(/databases/$(database)/documents/platformConfig/permissions) &&
         userAdminRole(userId) in get(/databases/$(database)/documents/platformConfig/permissions)
@@ -50,21 +69,89 @@ service cloud.firestore {
     function hasBuiltInAdminCapability(userId, section) {
       return isSuperAdmin(userId) ||
         (
+          !hasConfiguredAdminRole(userId) &&
           userAdminRole(userId) == 'operationsManager' &&
           section in ['businesses', 'marketplace', 'operations', 'support', 'website']
         ) ||
         (
+          !hasConfiguredAdminRole(userId) &&
           userAdminRole(userId) == 'financeManager' &&
           section in ['finance', 'support']
         ) ||
-        (userAdminRole(userId) == 'supportAdmin' && section == 'support') ||
-        (userAdminRole(userId) == 'contentManager' && section == 'website');
+        (
+          !hasConfiguredAdminRole(userId) &&
+          userAdminRole(userId) == 'supportAdmin' &&
+          section == 'support'
+        ) ||
+        (
+          !hasConfiguredAdminRole(userId) &&
+          userAdminRole(userId) == 'contentManager' &&
+          section == 'website'
+        );
     }
 
     function hasAdminCapability(userId, section) {
       return isAdmin(userId) &&
         (hasBuiltInAdminCapability(userId, section) ||
          hasDynamicAdminCapability(userId, section));
+    }
+
+    function hasDynamicAdminSectionAccess(userId, section) {
+      return hasConfiguredAdminRole(userId) &&
+        get(/databases/$(database)/documents/platformConfig/permissions)
+          .data.roles[userAdminRole(userId)].sections is map &&
+        section in get(/databases/$(database)/documents/platformConfig/permissions)
+          .data.roles[userAdminRole(userId)].sections &&
+        get(/databases/$(database)/documents/platformConfig/permissions)
+          .data.roles[userAdminRole(userId)].sections[section] in [
+            'view',
+            'manage'
+          ];
+    }
+
+    function hasBuiltInAdminSectionAccess(userId, section) {
+      return isSuperAdmin(userId) ||
+        (
+          !hasConfiguredAdminRole(userId) &&
+          userAdminRole(userId) == 'operationsManager' &&
+          section in [
+            'people',
+            'businesses',
+            'marketplace',
+            'operations',
+            'support',
+            'website'
+          ]
+        ) ||
+        (
+          !hasConfiguredAdminRole(userId) &&
+          userAdminRole(userId) == 'financeManager' &&
+          section in ['people', 'operations', 'finance', 'support']
+        ) ||
+        (
+          !hasConfiguredAdminRole(userId) &&
+          userAdminRole(userId) == 'supportAdmin' &&
+          section in [
+            'people',
+            'businesses',
+            'marketplace',
+            'operations',
+            'support'
+          ]
+        ) ||
+        (
+          !hasConfiguredAdminRole(userId) &&
+          userAdminRole(userId) == 'contentManager' &&
+          section in ['people', 'businesses', 'website']
+        );
+    }
+
+    function hasAdminSectionAccess(userId, section) {
+      return isAdmin(userId) &&
+        (
+          hasDynamicAdminSectionAccess(userId, section) ||
+          hasBuiltInAdminSectionAccess(userId, section)
+        );
     }
 
     function canManageWebsite(userId) {
@@ -78,6 +165,7 @@ service cloud.firestore {
     // Helper function to check if a user is staff, business owner, or admin
     function isStaffOrAdmin(userId) {
       return exists(/databases/$(database)/documents/users/$(userId)) &&
+             userAccessAllowed(userId) &&
              (userRole(userId) == 'staff' ||
               userRole(userId) == 'businessOwner' ||
               isSuperAdmin(userId));
@@ -86,6 +174,7 @@ service cloud.firestore {
     function canManageBusiness(userId, businessId) {
       return isSuperAdmin(userId) ||
              (exists(/databases/$(database)/documents/users/$(userId)) &&
+              userAccessAllowed(userId) &&
               (userRole(userId) == 'staff' ||
                userRole(userId) == 'businessOwner') &&
               userBusinessId(userId) == businessId);
@@ -95,6 +184,7 @@ service cloud.firestore {
       return isSuperAdmin(userId) ||
              (
                exists(/databases/$(database)/documents/users/$(userId)) &&
+               userAccessAllowed(userId) &&
                userBusinessId(userId) == businessId &&
                (
                  userRole(userId) == 'businessOwner' ||
@@ -339,17 +429,17 @@ service cloud.firestore {
       allow create: if request.auth != null && request.auth.uid == userId &&
                       validNewCustomerProfile(request.resource.data);
 
-      // Allow admins to read any user's data
-      allow read: if request.auth != null && isAdmin(request.auth.uid);
+      // People directory access is capability-scoped. Clients that only need
+      // a redacted cross-platform directory should use listMarketplacePeople.
+      allow read: if request.auth != null &&
+        hasAdminSectionAccess(request.auth.uid, 'people');
       allow read: if request.auth != null &&
         resource.data.businessId is string &&
-        canManageBusiness(request.auth.uid, resource.data.businessId);
-      
-      // Allow admins to update any user's role
-      allow update: if request.auth != null && isSuperAdmin(request.auth.uid) &&
-                      'role' in request.resource.data &&
-                      request.resource.data.role in ['customer', 'staff', 'businessOwner', 'admin'] &&
-                      validUserRoleState(request.resource.data);
+        canManageBusinessSection(
+          request.auth.uid,
+          resource.data.businessId,
+          'people'
+        );
 
       // Prevent users from updating their own role directly
       allow update: if request.auth != null && request.auth.uid == userId &&
@@ -783,8 +873,16 @@ service cloud.firestore {
     }
 
     match /adminAuditLogs/{logId} {
-      allow read: if request.auth != null && isAdmin(request.auth.uid);
+      allow read: if request.auth != null && isSuperAdmin(request.auth.uid);
       allow create, update, delete: if false;
+    }
+
+    match /accessInvitations/{invitationId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /deletedUserTombstones/{userId} {
+      allow read, create, update, delete: if false;
     }
 
     match /shipmentPricing/{pricingId} {

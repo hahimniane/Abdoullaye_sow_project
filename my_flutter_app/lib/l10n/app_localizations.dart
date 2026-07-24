@@ -4223,13 +4223,13 @@ abstract class AppLocalizations {
   /// No description provided for @peopleAndAccess.
   ///
   /// In en, this message translates to:
-  /// **'People and access'**
+  /// **'People & access'**
   String get peopleAndAccess;
 
   /// No description provided for @peopleAndAccessSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Manage platform managers, business teams, and customer accounts.'**
+  /// **'Manage marketplace identities, invitations, and account security.'**
   String get peopleAndAccessSubtitle;
 
   /// No description provided for @platformManagers.
@@ -9599,6 +9599,504 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Regular departures: {days}'**
   String regularDepartureDays(String days);
+
+  /// No description provided for @allPeople.
+  ///
+  /// In en, this message translates to:
+  /// **'All people'**
+  String get allPeople;
+
+  /// No description provided for @platformAdministrators.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform administrators'**
+  String get platformAdministrators;
+
+  /// No description provided for @businessOwners.
+  ///
+  /// In en, this message translates to:
+  /// **'Business owners'**
+  String get businessOwners;
+
+  /// No description provided for @pendingInvitations.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending invitations'**
+  String get pendingInvitations;
+
+  /// No description provided for @missingProfiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing profiles'**
+  String get missingProfiles;
+
+  /// No description provided for @suspendedAccounts.
+  ///
+  /// In en, this message translates to:
+  /// **'Suspended accounts'**
+  String get suspendedAccounts;
+
+  /// No description provided for @people.
+  ///
+  /// In en, this message translates to:
+  /// **'People'**
+  String get people;
+
+  /// No description provided for @invitePerson.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite person'**
+  String get invitePerson;
+
+  /// No description provided for @searchPeopleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search exact email, phone, or user ID'**
+  String get searchPeopleHint;
+
+  /// No description provided for @clearSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear search'**
+  String get clearSearch;
+
+  /// No description provided for @loadMorePeople.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more people'**
+  String get loadMorePeople;
+
+  /// No description provided for @peopleCouldNotLoad.
+  ///
+  /// In en, this message translates to:
+  /// **'People could not be loaded'**
+  String get peopleCouldNotLoad;
+
+  /// No description provided for @tryAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get tryAgain;
+
+  /// No description provided for @notProvided.
+  ///
+  /// In en, this message translates to:
+  /// **'Not provided'**
+  String get notProvided;
+
+  /// No description provided for @noPeopleFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No people found'**
+  String get noPeopleFound;
+
+  /// No description provided for @noPeopleFoundHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Try another filter or search for an exact email, phone number, or user ID.'**
+  String get noPeopleFoundHelp;
+
+  /// No description provided for @peopleAccessRestricted.
+  ///
+  /// In en, this message translates to:
+  /// **'People access is restricted'**
+  String get peopleAccessRestricted;
+
+  /// No description provided for @peopleAccessRestrictedHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Your administrator role does not include permission to view marketplace people.'**
+  String get peopleAccessRestrictedHelp;
+
+  /// No description provided for @you.
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get you;
+
+  /// No description provided for @platformAdministrator.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform administrator'**
+  String get platformAdministrator;
+
+  /// No description provided for @businessStaffMember.
+  ///
+  /// In en, this message translates to:
+  /// **'Business staff member'**
+  String get businessStaffMember;
+
+  /// No description provided for @pendingInvitation.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending invitation'**
+  String get pendingInvitation;
+
+  /// No description provided for @missingProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing profile'**
+  String get missingProfile;
+
+  /// No description provided for @invitationPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Invitation pending'**
+  String get invitationPending;
+
+  /// No description provided for @deletionPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Deletion pending'**
+  String get deletionPending;
+
+  /// No description provided for @authenticationMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Authentication missing'**
+  String get authenticationMissing;
+
+  /// No description provided for @identityAndAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Identity & access'**
+  String get identityAndAccess;
+
+  /// No description provided for @emailVerification.
+  ///
+  /// In en, this message translates to:
+  /// **'Email verification'**
+  String get emailVerification;
+
+  /// No description provided for @verified.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified'**
+  String get verified;
+
+  /// No description provided for @notVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Not verified'**
+  String get notVerified;
+
+  /// No description provided for @businessAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Business access'**
+  String get businessAccess;
+
+  /// No description provided for @businessPermissions.
+  ///
+  /// In en, this message translates to:
+  /// **'Business permissions'**
+  String get businessPermissions;
+
+  /// No description provided for @businessPermissionsHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Grant only the tools this person needs. You can adjust access later.'**
+  String get businessPermissionsHelp;
+
+  /// No description provided for @noAssignedPermissions.
+  ///
+  /// In en, this message translates to:
+  /// **'No assigned permissions'**
+  String get noAssignedPermissions;
+
+  /// No description provided for @cannotChangeOwnAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'For safety, you cannot change your own access from this screen.'**
+  String get cannotChangeOwnAccess;
+
+  /// No description provided for @accountActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Account actions'**
+  String get accountActions;
+
+  /// No description provided for @suspendAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Suspend account'**
+  String get suspendAccount;
+
+  /// No description provided for @suspendAccountConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'This person will immediately lose access and all active sessions will be revoked.'**
+  String get suspendAccountConfirm;
+
+  /// No description provided for @restoreAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore account'**
+  String get restoreAccount;
+
+  /// No description provided for @restoreAccountConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'This person will be allowed to sign in again.'**
+  String get restoreAccountConfirm;
+
+  /// No description provided for @accountSuspended.
+  ///
+  /// In en, this message translates to:
+  /// **'Account suspended'**
+  String get accountSuspended;
+
+  /// No description provided for @accountRestored.
+  ///
+  /// In en, this message translates to:
+  /// **'Account restored'**
+  String get accountRestored;
+
+  /// No description provided for @revokeSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke active sessions'**
+  String get revokeSessions;
+
+  /// No description provided for @sessionsRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'Active sessions revoked'**
+  String get sessionsRevoked;
+
+  /// No description provided for @sendPasswordReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Send password reset'**
+  String get sendPasswordReset;
+
+  /// No description provided for @passwordResetSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Password reset requested'**
+  String get passwordResetSent;
+
+  /// No description provided for @sendVerificationEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Send verification email'**
+  String get sendVerificationEmail;
+
+  /// No description provided for @verificationEmailSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification email requested'**
+  String get verificationEmailSent;
+
+  /// No description provided for @transferOwnership.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer business ownership'**
+  String get transferOwnership;
+
+  /// No description provided for @transferOwnershipConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'This staff member will become the business owner and the current owner will become staff.'**
+  String get transferOwnershipConfirm;
+
+  /// No description provided for @ownershipTransferred.
+  ///
+  /// In en, this message translates to:
+  /// **'Business ownership transferred'**
+  String get ownershipTransferred;
+
+  /// No description provided for @resendInvitation.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend invitation'**
+  String get resendInvitation;
+
+  /// No description provided for @invitationResent.
+  ///
+  /// In en, this message translates to:
+  /// **'Invitation resent'**
+  String get invitationResent;
+
+  /// No description provided for @cancelInvitation.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel invitation'**
+  String get cancelInvitation;
+
+  /// No description provided for @cancelInvitationConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'This invitation will no longer be usable.'**
+  String get cancelInvitationConfirm;
+
+  /// No description provided for @invitationCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Invitation cancelled'**
+  String get invitationCancelled;
+
+  /// No description provided for @reviewDeletionRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Review account deletion'**
+  String get reviewDeletionRequest;
+
+  /// No description provided for @deletionBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Deletion is blocked'**
+  String get deletionBlocked;
+
+  /// No description provided for @deletionBlockedByRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} active or legally retained record(s) must be resolved before this account can be deleted.'**
+  String deletionBlockedByRecords(int count);
+
+  /// No description provided for @finalizeAccountDeletion.
+  ///
+  /// In en, this message translates to:
+  /// **'Finalize account deletion'**
+  String get finalizeAccountDeletion;
+
+  /// No description provided for @finalizeAccountDeletionConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'This permanently removes access after the server confirms there are no blocking records. This cannot be undone.'**
+  String get finalizeAccountDeletionConfirm;
+
+  /// No description provided for @accountDeletionFinalized.
+  ///
+  /// In en, this message translates to:
+  /// **'Account deletion finalized'**
+  String get accountDeletionFinalized;
+
+  /// No description provided for @adminApprovedDeletion.
+  ///
+  /// In en, this message translates to:
+  /// **'Deletion reviewed and approved by a platform administrator.'**
+  String get adminApprovedDeletion;
+
+  /// No description provided for @invitePlatformAdministrator.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite platform administrator'**
+  String get invitePlatformAdministrator;
+
+  /// No description provided for @invitePlatformAdministratorHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a limited administrator role. Super-admin access is never granted by invitation.'**
+  String get invitePlatformAdministratorHelp;
+
+  /// No description provided for @inviteBusinessPersonnel.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite business personnel'**
+  String get inviteBusinessPersonnel;
+
+  /// No description provided for @inviteBusinessPersonnelHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Select the business and the exact tools this person can use.'**
+  String get inviteBusinessPersonnelHelp;
+
+  /// No description provided for @sendInvitation.
+  ///
+  /// In en, this message translates to:
+  /// **'Send invitation'**
+  String get sendInvitation;
+
+  /// No description provided for @invitationSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Invitation sent'**
+  String get invitationSent;
+
+  /// No description provided for @adminRole.
+  ///
+  /// In en, this message translates to:
+  /// **'Administrator role'**
+  String get adminRole;
+
+  /// No description provided for @superAdministrator.
+  ///
+  /// In en, this message translates to:
+  /// **'Super administrator'**
+  String get superAdministrator;
+
+  /// No description provided for @operationsManager.
+  ///
+  /// In en, this message translates to:
+  /// **'Operations manager'**
+  String get operationsManager;
+
+  /// No description provided for @financeManager.
+  ///
+  /// In en, this message translates to:
+  /// **'Finance manager'**
+  String get financeManager;
+
+  /// No description provided for @supportAdministrator.
+  ///
+  /// In en, this message translates to:
+  /// **'Support administrator'**
+  String get supportAdministrator;
+
+  /// No description provided for @contentManager.
+  ///
+  /// In en, this message translates to:
+  /// **'Content manager'**
+  String get contentManager;
+
+  /// No description provided for @profile.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile'**
+  String get profile;
+
+  /// No description provided for @listings.
+  ///
+  /// In en, this message translates to:
+  /// **'Listings'**
+  String get listings;
+
+  /// No description provided for @barrels.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrels'**
+  String get barrels;
+
+  /// No description provided for @freight.
+  ///
+  /// In en, this message translates to:
+  /// **'Freight'**
+  String get freight;
+
+  /// No description provided for @transport.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport'**
+  String get transport;
+
+  /// No description provided for @parking.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking'**
+  String get parking;
+
+  /// No description provided for @destinations.
+  ///
+  /// In en, this message translates to:
+  /// **'Destinations'**
+  String get destinations;
+
+  /// No description provided for @growth.
+  ///
+  /// In en, this message translates to:
+  /// **'Growth'**
+  String get growth;
 }
 
 class _AppLocalizationsDelegate

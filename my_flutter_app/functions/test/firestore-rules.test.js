@@ -121,7 +121,12 @@ async function seedFirestore() {
       "platformConfig/permissions": {
         roles: {
           contentManager: {sections: {website: "manage"}},
-          financeManager: {sections: {website: "view"}},
+          financeManager: {
+            sections: {
+              website: "view",
+              finance: "manage",
+            },
+          },
         },
       },
       "users/super-admin": {

@@ -216,3 +216,15 @@ Add future project conventions and repeated architectural decisions here.
   freight only; generic activity must never infer car transport. Preserve
   optional delivery min/max days and normalized air/sea departure weekday
   arrays, and snapshot the chosen freight schedule on booking.
+- Marketplace personnel administration has one server-owned access model across
+  Flutter and web. Platform sections resolve from the configured admin role and
+  fail closed; `role == admin` is never blanket authorization. Personnel reads
+  use the redacted, paginated `listMarketplacePeople` /
+  `getMarketplacePerson` callables instead of direct `users` collection
+  listeners. Create access with expiring invitations only—administrators and
+  business owners must never choose or share another person's password.
+- Invitation acceptance may omit an invitation ID only when the server can
+  resolve exactly one unexpired pending invitation for the verified caller UID
+  or email. Zero or ambiguous matches fail closed. Preserve last-super-admin and
+  last-business-owner protections across suspension, demotion, ownership
+  transfer, and account-deletion workflows.

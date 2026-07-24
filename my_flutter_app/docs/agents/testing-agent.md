@@ -285,3 +285,10 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   windows, and ordered weekday-only air/sea departure schedules. Verify those
   logistics fields reach customer comparison UI and the booked freight record
   in both English and French.
+- Personnel-management regressions must inventory every admin and business
+  entry point and reject legacy create-with-password callables. Cover paginated
+  redacted directory reads, exact server search, role/capability fail-closed
+  behavior, invitation expiry/resend/cancel/accept (including the safe no-ID
+  acceptance path), self-action guards, last-super-admin/last-owner
+  protections, ownership transfer, session revocation, and dependency-aware
+  deletion/tombstoning. Verify both English and French in a running browser.

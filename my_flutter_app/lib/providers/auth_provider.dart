@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 import '../models/notification_preferences.dart';
+import '../models/platform_access.dart';
 import '../services/push_notification_service.dart';
 import '../utils/phone_number_validator.dart';
 import '../utils/business_permissions.dart';
@@ -75,6 +76,8 @@ class AuthProvider extends ChangeNotifier {
   bool _isAdmin = false;
   bool _isBusinessOwner = false;
   String? _role;
+  String? _adminRole;
+  PlatformAccess _platformAccess = const PlatformAccess.none();
   String? _businessId;
   String? _businessName;
   List<String> _businessServices = const [];
@@ -98,6 +101,12 @@ class AuthProvider extends ChangeNotifier {
   bool get hasBusinessDashboardAccess =>
       _isStaff || _isBusinessOwner || _isAdmin;
   String? get role => _role;
+  String? get adminRole => _adminRole;
+  PlatformAccess get platformAccess => _platformAccess;
+  bool canViewPlatformSection(String section) =>
+      _isAdmin && _platformAccess.canView(section);
+  bool canManagePlatformSection(String section) =>
+      _isAdmin && _platformAccess.canManage(section);
   String? get businessId => _businessId;
   String? get businessName => _businessName;
   List<String> get businessServices => List.unmodifiable(_businessServices);
@@ -165,11 +174,29 @@ class AuthProvider extends ChangeNotifier {
     if (_user != null) {
       try {
         debugPrint('🔍 Fetching user document from Firestore...');
-        final userDoc = await _firestore
+        var userDoc = await _firestore
             .collection('users')
             .doc(_user!.uid)
             .get()
             .timeout(const Duration(seconds: 15));
+        if (!userDoc.exists) {
+          try {
+            await _functions
+                .httpsCallable('acceptAccessInvitation')
+                .call(<String, dynamic>{});
+            userDoc = await _firestore
+                .collection('users')
+                .doc(_user!.uid)
+                .get()
+                .timeout(const Duration(seconds: 15));
+          } on FirebaseFunctionsException catch (error) {
+            // A normal customer may have no invitation. Keep the existing
+            // missing-profile recovery state unless an invitation was accepted.
+            debugPrint(
+              'ℹ️ No pending access invitation was activated: ${error.code}',
+            );
+          }
+        }
         if (userDoc.exists) {
           final data = userDoc.data();
           final role = data?['role'] as String?;
@@ -177,6 +204,7 @@ class AuthProvider extends ChangeNotifier {
           _isBusinessOwner = role == 'businessOwner';
           _isStaff = role == 'staff';
           _isAdmin = role == 'admin';
+          _adminRole = data?['adminRole'] as String?;
           _businessId = data?['businessId'] as String?;
           _businessName = data?['businessName'] as String?;
           _businessServices = _stringList(data?['businessServices']);
@@ -191,6 +219,25 @@ class AuthProvider extends ChangeNotifier {
                 ? data!['notificationPreferences'] as Map<String, dynamic>
                 : null,
           );
+          if (_isAdmin) {
+            Map<String, dynamic>? permissionsConfig;
+            try {
+              final permissions = await _firestore
+                  .collection('platformConfig')
+                  .doc('permissions')
+                  .get()
+                  .timeout(const Duration(seconds: 10));
+              permissionsConfig = permissions.data();
+            } catch (error) {
+              // Built-in roles remain available when the optional override
+              // document is temporarily unavailable. Unknown roles fail closed.
+              debugPrint('⚠️ Platform permissions config unavailable: $error');
+            }
+            _platformAccess = PlatformAccess.resolve(
+              role: _adminRole,
+              permissionsConfig: permissionsConfig,
+            );
+          }
           _initializationIssue = null;
           debugPrint(
             '👥 User role: ${_isAdmin
@@ -220,6 +267,8 @@ class AuthProvider extends ChangeNotifier {
     _isAdmin = false;
     _isBusinessOwner = false;
     _role = null;
+    _adminRole = null;
+    _platformAccess = const PlatformAccess.none();
     _businessId = null;
     _businessName = null;
     _businessServices = const [];
@@ -822,230 +871,142 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // Method to promote a user to staff (for admin use)
-  Future<void> promoteToStaff(String userId) async {
-    try {
-      await _firestore.collection('users').doc(userId).update({
-        'role': 'staff',
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      // If it's the current user, update the local state
-      if (_user?.uid == userId) {
-        _isStaff = true;
-        _isAdmin = false; // A user promoted to staff is not an admin by default
-        _isBusinessOwner = false;
-        _role = 'staff';
-        notifyListeners();
-      }
-    } catch (e) {
-      debugPrint('Error promoting user to staff: $e');
-      throw 'Failed to promote user to staff';
-    }
+  Future<Map<String, dynamic>> listMarketplacePeople({
+    String search = '',
+    int pageSize = 100,
+    String pageToken = '',
+    bool includeInvitations = true,
+  }) {
+    return _callMarketplacePeople('listMarketplacePeople', {
+      if (search.trim().isNotEmpty) 'search': search.trim(),
+      'pageSize': pageSize,
+      if (pageToken.isNotEmpty) 'pageToken': pageToken,
+      'includeInvitations': includeInvitations,
+    });
   }
 
-  // Method to update any user's role (for admin use)
-  Future<void> updateUserRole(String userId, String newRole) async {
-    // Ensure the new role is valid
-    if (!['customer', 'staff', 'businessOwner', 'admin'].contains(newRole)) {
-      throw 'Invalid role specified';
-    }
-
-    try {
-      debugPrint('📡 Calling Cloud Function to update user role...');
-
-      // Call the Cloud Function to update the user role
-      final HttpsCallable callable = _functions.httpsCallable('updateUserRole');
-      final result = await callable.call({
-        'userId': userId,
-        'newRole': newRole,
-      });
-
-      // Log the result
-      debugPrint('✅ Cloud Function response: ${result.data}');
-
-      if (result.data['success'] == true) {
-        debugPrint(
-          '🎉 User role updated successfully to: ${result.data['newRole']}',
-        );
-
-        // If it's the current user, update the local state
-        if (_user?.uid == userId) {
-          final role = newRole;
-          _role = role;
-          _isBusinessOwner = role == 'businessOwner';
-          _isStaff = role == 'staff';
-          _isAdmin = role == 'admin';
-          notifyListeners();
-        }
-      } else {
-        throw 'Failed to update user role: ${result.data['message'] ?? 'Unknown error'}';
-      }
-    } on FirebaseFunctionsException catch (e) {
-      debugPrint('❌ Firebase Functions Exception: ${e.code} - ${e.message}');
-
-      // Handle specific Firebase Functions errors
-      switch (e.code) {
-        case 'unauthenticated':
-          throw 'You must be authenticated to update user roles.';
-        case 'permission-denied':
-          throw 'Only admins can update user roles.';
-        case 'invalid-argument':
-          throw e.message ?? 'Invalid input provided.';
-        case 'not-found':
-          throw 'User not found.';
-        case 'internal':
-          throw 'An internal error occurred. Please try again.';
-        default:
-          throw e.message ?? 'Failed to update user role: ${e.code}';
-      }
-    } catch (e) {
-      debugPrint('❌ Unexpected error calling Cloud Function: $e');
-      throw 'Failed to update user role';
-    }
+  Future<Map<String, dynamic>> getMarketplacePerson(String userId) {
+    return _callMarketplacePeople('getMarketplacePerson', {'userId': userId});
   }
 
-  // Method to add a new staff user under a business.
-  Future<void> addStaffUser({
+  Future<Map<String, dynamic>> setMarketplaceUserStatus({
+    required String userId,
+    required String action,
+    String reason = '',
+  }) {
+    return _callMarketplacePeople('setMarketplaceUserStatus', {
+      'userId': userId,
+      'action': action,
+      if (reason.trim().isNotEmpty) 'reason': reason.trim(),
+    });
+  }
+
+  Future<Map<String, dynamic>> revokeUserSessions({
+    required String userId,
+    String reason = '',
+  }) {
+    return _callMarketplacePeople('revokeUserSessions', {
+      'userId': userId,
+      if (reason.trim().isNotEmpty) 'reason': reason.trim(),
+    });
+  }
+
+  Future<Map<String, dynamic>> sendUserRecoveryEmail({
+    required String userId,
+    required String action,
+    required String locale,
+  }) {
+    return _callMarketplacePeople('sendUserRecoveryEmail', {
+      'userId': userId,
+      'action': action,
+      'locale': locale,
+    });
+  }
+
+  Future<Map<String, dynamic>> invitePlatformAdmin({
     required String email,
-    required String password,
-    String fullName = '',
-    String phone = '',
-    String? businessId,
-    String? profileImageUrl,
-    String? profileImagePath,
-  }) async {
-    try {
-      debugPrint('📡 Calling Cloud Function to create staff user...');
-
-      // Call the Cloud Function to create the user
-      final HttpsCallable callable = _functions.httpsCallable(
-        'createStaffUser',
-      );
-      final result = await callable.call({
-        'email': email,
-        'password': password,
-        'fullName': fullName.trim(),
-        'phone': phone.trim(),
-        if (businessId != null && businessId.trim().isNotEmpty)
-          'businessId': businessId.trim(),
-        'profileImageUrl': ?profileImageUrl,
-        'profileImagePath': ?profileImagePath,
-      });
-
-      // Log the result
-      debugPrint('✅ Cloud Function response: ${result.data}');
-
-      if (result.data['success'] == true) {
-        debugPrint(
-          '🎉 Staff user created successfully: ${result.data['email']}',
-        );
-      } else {
-        throw 'Failed to create staff user: ${result.data['message'] ?? 'Unknown error'}';
-      }
-    } on FirebaseFunctionsException catch (e) {
-      debugPrint('❌ Firebase Functions Exception: ${e.code} - ${e.message}');
-
-      // Handle specific Firebase Functions errors
-      switch (e.code) {
-        case 'unauthenticated':
-          throw 'You must be authenticated to create users.';
-        case 'permission-denied':
-          throw 'Only platform admins or business admins can create staff users.';
-        case 'invalid-argument':
-          throw e.message ?? 'Invalid input provided.';
-        case 'already-exists':
-          throw 'A user with this email already exists.';
-        case 'not-found':
-          throw 'The requested resource was not found.';
-        case 'internal':
-          throw 'An internal error occurred. Please try again.';
-        default:
-          throw e.message ?? 'Failed to create user: ${e.code}';
-      }
-    } catch (e) {
-      debugPrint('❌ Unexpected error calling Cloud Function: $e');
-      throw 'An unexpected error occurred while adding the staff user.';
-    }
-  }
-
-  // Method to delete a user (for admin use)
-  Future<void> addPlatformManager({
-    required String email,
-    required String password,
     required String fullName,
-    String phone = '',
-  }) async {
-    try {
-      debugPrint('📡 Calling Cloud Function to create platform manager...');
-      final callable = _functions.httpsCallable('createPlatformManager');
-      final result = await callable.call({
-        'email': email.trim(),
-        'password': password.trim(),
-        'fullName': fullName.trim(),
-        'phone': phone.trim(),
-      });
-      if (result.data['success'] != true) {
-        throw 'Failed to create platform manager.';
-      }
-    } on FirebaseFunctionsException catch (e) {
-      debugPrint('❌ Firebase Functions Exception: ${e.code} - ${e.message}');
-      switch (e.code) {
-        case 'unauthenticated':
-          throw 'You must be authenticated to create platform managers.';
-        case 'permission-denied':
-          throw 'Only platform admins can create platform managers.';
-        case 'already-exists':
-          throw 'A user with this email already exists.';
-        case 'invalid-argument':
-          throw e.message ?? 'Invalid input provided.';
-        default:
-          throw e.message ?? 'Failed to create platform manager: ${e.code}';
-      }
-    } catch (e) {
-      debugPrint('❌ Unexpected error creating platform manager: $e');
-      throw 'An unexpected error occurred while creating the platform manager.';
-    }
+    required String adminRole,
+    required String locale,
+  }) {
+    return _callMarketplacePeople('invitePlatformAdmin', {
+      'email': email.trim(),
+      'fullName': fullName.trim(),
+      'adminRole': adminRole,
+      'locale': locale,
+    });
   }
 
-  // Method to delete a user (for admin use)
-  Future<void> deleteUser(String userId) async {
-    try {
-      debugPrint('📡 Calling Cloud Function to delete user...');
+  Future<Map<String, dynamic>> inviteBusinessMember({
+    required String email,
+    required String fullName,
+    required String businessId,
+    required List<String> businessPermissions,
+    required String locale,
+  }) {
+    return _callMarketplacePeople('inviteBusinessMember', {
+      'email': email.trim(),
+      'fullName': fullName.trim(),
+      'businessId': businessId,
+      'businessPermissions': businessPermissions,
+      'locale': locale,
+    });
+  }
 
-      // Call the Cloud Function to delete the user
-      final HttpsCallable callable = _functions.httpsCallable('deleteUser');
-      final result = await callable.call({'userId': userId});
+  Future<Map<String, dynamic>> resendAccessInvitation(String invitationId) {
+    return _callMarketplacePeople('resendAccessInvitation', {
+      'invitationId': invitationId,
+    });
+  }
 
-      // Log the result
-      debugPrint('✅ Cloud Function response: ${result.data}');
+  Future<Map<String, dynamic>> cancelAccessInvitation(String invitationId) {
+    return _callMarketplacePeople('cancelAccessInvitation', {
+      'invitationId': invitationId,
+    });
+  }
 
-      if (result.data['success'] == true) {
-        debugPrint('🎉 User deleted successfully: ${result.data['userId']}');
-      } else {
-        throw 'Failed to delete user: ${result.data['message'] ?? 'Unknown error'}';
-      }
-    } on FirebaseFunctionsException catch (e) {
-      debugPrint('❌ Firebase Functions Exception: ${e.code} - ${e.message}');
+  Future<Map<String, dynamic>> acceptAccessInvitation({
+    String invitationId = '',
+  }) {
+    return _callMarketplacePeople('acceptAccessInvitation', {
+      if (invitationId.isNotEmpty) 'invitationId': invitationId,
+    });
+  }
 
-      // Handle specific Firebase Functions errors
-      switch (e.code) {
-        case 'unauthenticated':
-          throw 'You must be authenticated to delete users.';
-        case 'permission-denied':
-          throw 'Only admins can delete users.';
-        case 'invalid-argument':
-          throw e.message ?? 'Invalid input provided.';
-        case 'not-found':
-          throw 'User not found.';
-        case 'internal':
-          throw 'An internal error occurred. Please try again.';
-        default:
-          throw e.message ?? 'Failed to delete user: ${e.code}';
-      }
-    } catch (e) {
-      debugPrint('❌ Unexpected error calling Cloud Function: $e');
-      throw 'An unexpected error occurred while deleting the user.';
+  Future<Map<String, dynamic>> transferBusinessOwnership({
+    required String userId,
+    required String businessId,
+  }) {
+    return _callMarketplacePeople('transferBusinessOwnership', {
+      'userId': userId,
+      'businessId': businessId,
+    });
+  }
+
+  Future<Map<String, dynamic>> reviewAccountDeletion(String userId) {
+    return _callMarketplacePeople('reviewAccountDeletion', {'userId': userId});
+  }
+
+  Future<Map<String, dynamic>> finalizeAccountDeletion({
+    required String userId,
+    required String reason,
+  }) {
+    return _callMarketplacePeople('finalizeAccountDeletion', {
+      'userId': userId,
+      'confirmation': userId,
+      if (reason.trim().isNotEmpty) 'reason': reason.trim(),
+    });
+  }
+
+  Future<Map<String, dynamic>> _callMarketplacePeople(
+    String callableName,
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _functions.httpsCallable(callableName).call(payload);
+    final data = response.data;
+    if (data is Map) {
+      return Map<String, dynamic>.from(data);
     }
+    throw StateError('Invalid marketplace people response.');
   }
 }

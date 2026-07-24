@@ -2279,11 +2279,11 @@ class AppLocalizationsEn extends AppLocalizations {
       '• This receipt serves as proof of parking\n• Vehicle will be stored securely\n• Contact us for any inquiries\n• Valid until vehicle is retrieved';
 
   @override
-  String get peopleAndAccess => 'People and access';
+  String get peopleAndAccess => 'People & access';
 
   @override
   String get peopleAndAccessSubtitle =>
-      'Manage platform managers, business teams, and customer accounts.';
+      'Manage marketplace identities, invitations, and account security.';
 
   @override
   String get platformManagers => 'Platform managers';
@@ -5344,4 +5344,267 @@ class AppLocalizationsEn extends AppLocalizations {
   String regularDepartureDays(String days) {
     return 'Regular departures: $days';
   }
+
+  @override
+  String get allPeople => 'All people';
+
+  @override
+  String get platformAdministrators => 'Platform administrators';
+
+  @override
+  String get businessOwners => 'Business owners';
+
+  @override
+  String get pendingInvitations => 'Pending invitations';
+
+  @override
+  String get missingProfiles => 'Missing profiles';
+
+  @override
+  String get suspendedAccounts => 'Suspended accounts';
+
+  @override
+  String get people => 'People';
+
+  @override
+  String get invitePerson => 'Invite person';
+
+  @override
+  String get searchPeopleHint => 'Search exact email, phone, or user ID';
+
+  @override
+  String get clearSearch => 'Clear search';
+
+  @override
+  String get loadMorePeople => 'Load more people';
+
+  @override
+  String get peopleCouldNotLoad => 'People could not be loaded';
+
+  @override
+  String get tryAgain => 'Try again';
+
+  @override
+  String get notProvided => 'Not provided';
+
+  @override
+  String get noPeopleFound => 'No people found';
+
+  @override
+  String get noPeopleFoundHelp =>
+      'Try another filter or search for an exact email, phone number, or user ID.';
+
+  @override
+  String get peopleAccessRestricted => 'People access is restricted';
+
+  @override
+  String get peopleAccessRestrictedHelp =>
+      'Your administrator role does not include permission to view marketplace people.';
+
+  @override
+  String get you => 'You';
+
+  @override
+  String get platformAdministrator => 'Platform administrator';
+
+  @override
+  String get businessStaffMember => 'Business staff member';
+
+  @override
+  String get pendingInvitation => 'Pending invitation';
+
+  @override
+  String get missingProfile => 'Missing profile';
+
+  @override
+  String get invitationPending => 'Invitation pending';
+
+  @override
+  String get deletionPending => 'Deletion pending';
+
+  @override
+  String get authenticationMissing => 'Authentication missing';
+
+  @override
+  String get identityAndAccess => 'Identity & access';
+
+  @override
+  String get emailVerification => 'Email verification';
+
+  @override
+  String get verified => 'Verified';
+
+  @override
+  String get notVerified => 'Not verified';
+
+  @override
+  String get businessAccess => 'Business access';
+
+  @override
+  String get businessPermissions => 'Business permissions';
+
+  @override
+  String get businessPermissionsHelp =>
+      'Grant only the tools this person needs. You can adjust access later.';
+
+  @override
+  String get noAssignedPermissions => 'No assigned permissions';
+
+  @override
+  String get cannotChangeOwnAccess =>
+      'For safety, you cannot change your own access from this screen.';
+
+  @override
+  String get accountActions => 'Account actions';
+
+  @override
+  String get suspendAccount => 'Suspend account';
+
+  @override
+  String get suspendAccountConfirm =>
+      'This person will immediately lose access and all active sessions will be revoked.';
+
+  @override
+  String get restoreAccount => 'Restore account';
+
+  @override
+  String get restoreAccountConfirm =>
+      'This person will be allowed to sign in again.';
+
+  @override
+  String get accountSuspended => 'Account suspended';
+
+  @override
+  String get accountRestored => 'Account restored';
+
+  @override
+  String get revokeSessions => 'Revoke active sessions';
+
+  @override
+  String get sessionsRevoked => 'Active sessions revoked';
+
+  @override
+  String get sendPasswordReset => 'Send password reset';
+
+  @override
+  String get passwordResetSent => 'Password reset requested';
+
+  @override
+  String get sendVerificationEmail => 'Send verification email';
+
+  @override
+  String get verificationEmailSent => 'Verification email requested';
+
+  @override
+  String get transferOwnership => 'Transfer business ownership';
+
+  @override
+  String get transferOwnershipConfirm =>
+      'This staff member will become the business owner and the current owner will become staff.';
+
+  @override
+  String get ownershipTransferred => 'Business ownership transferred';
+
+  @override
+  String get resendInvitation => 'Resend invitation';
+
+  @override
+  String get invitationResent => 'Invitation resent';
+
+  @override
+  String get cancelInvitation => 'Cancel invitation';
+
+  @override
+  String get cancelInvitationConfirm =>
+      'This invitation will no longer be usable.';
+
+  @override
+  String get invitationCancelled => 'Invitation cancelled';
+
+  @override
+  String get reviewDeletionRequest => 'Review account deletion';
+
+  @override
+  String get deletionBlocked => 'Deletion is blocked';
+
+  @override
+  String deletionBlockedByRecords(int count) {
+    return '$count active or legally retained record(s) must be resolved before this account can be deleted.';
+  }
+
+  @override
+  String get finalizeAccountDeletion => 'Finalize account deletion';
+
+  @override
+  String get finalizeAccountDeletionConfirm =>
+      'This permanently removes access after the server confirms there are no blocking records. This cannot be undone.';
+
+  @override
+  String get accountDeletionFinalized => 'Account deletion finalized';
+
+  @override
+  String get adminApprovedDeletion =>
+      'Deletion reviewed and approved by a platform administrator.';
+
+  @override
+  String get invitePlatformAdministrator => 'Invite platform administrator';
+
+  @override
+  String get invitePlatformAdministratorHelp =>
+      'Choose a limited administrator role. Super-admin access is never granted by invitation.';
+
+  @override
+  String get inviteBusinessPersonnel => 'Invite business personnel';
+
+  @override
+  String get inviteBusinessPersonnelHelp =>
+      'Select the business and the exact tools this person can use.';
+
+  @override
+  String get sendInvitation => 'Send invitation';
+
+  @override
+  String get invitationSent => 'Invitation sent';
+
+  @override
+  String get adminRole => 'Administrator role';
+
+  @override
+  String get superAdministrator => 'Super administrator';
+
+  @override
+  String get operationsManager => 'Operations manager';
+
+  @override
+  String get financeManager => 'Finance manager';
+
+  @override
+  String get supportAdministrator => 'Support administrator';
+
+  @override
+  String get contentManager => 'Content manager';
+
+  @override
+  String get profile => 'Profile';
+
+  @override
+  String get listings => 'Listings';
+
+  @override
+  String get barrels => 'Barrels';
+
+  @override
+  String get freight => 'Freight';
+
+  @override
+  String get transport => 'Transport';
+
+  @override
+  String get parking => 'Parking';
+
+  @override
+  String get destinations => 'Destinations';
+
+  @override
+  String get growth => 'Growth';
 }
