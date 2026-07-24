@@ -261,6 +261,16 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   resolved environment to the real Firebase deploy command; otherwise Firebase
   predeploy hooks can fail after a green preflight because macOS cannot locate
   Java from the raw shell environment.
+- Firebase Gen 2 can partially deploy a large function catalog and then fail on
+  regional Cloud Run CPU or mutation quota. Let the aggregate command settle,
+  inspect `firebase functions:list --json`, and retry only `FAILED` or missing
+  endpoints one at a time or in pairs with the normal predeploy hooks still
+  enabled. Do not retry the full catalog or bypass lint/tests. Disable local
+  Firebase CLI usage reporting only when its five-second Analytics timeout is
+  converting otherwise successful commands into false failures, then confirm
+  every intended endpoint is `ACTIVE` and run `deploy`'s backend smoke suite.
+  The full recovery procedure and Java 21 environment are documented in
+  `docs/ENGINEERING_GUARDRAILS.md`.
 - Hosted Checkout release checks must cover the configured Stripe webhook, not
   only whether the Cloud Function URL responds. Regression coverage should
   prove a paid return Session can self-heal a delayed or missing webhook, cannot

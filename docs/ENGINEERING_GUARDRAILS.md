@@ -69,6 +69,60 @@ under construction. The authorization expires automatically at
 project again requires `DEPLOY_ENV=production` with an `sk_live_` key.
 Simulation remains prohibited and no other production check is relaxed.
 
+### Firebase Gen 2 deployment recovery
+
+Firebase Functions Gen 2 deployments can fail even after a green preflight when
+the CLI tries to update the entire function catalog concurrently and Cloud Run
+exhausts its temporary regional CPU or mutation quota. Treat this as a partial
+rollout, not permission to bypass the deployment gate:
+
+1. Let the original deploy command finish. Do not interrupt in-flight Cloud Run
+   operations or immediately retry the full catalog.
+2. On macOS, export the verified Java 21 runtime into the real deploy process,
+   not only the preflight:
+
+   ```bash
+   export JAVA_HOME="/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"
+   export PATH="/opt/homebrew/opt/node@22/bin:$JAVA_HOME/bin:$PATH"
+   ```
+
+3. If successful Firebase commands incorrectly exit after a five-second
+   Analytics request timeout, disable Firebase CLI usage reporting locally:
+
+   ```bash
+   node -e 'const c=require("/opt/homebrew/lib/node_modules/firebase-tools/lib/configstore.js").configstore;c.set("usage",false)'
+   ```
+
+   This changes only local CLI telemetry. It does not disable App Check,
+   authentication, tests, CI, IAM checks, or any deployed monitoring.
+4. Inspect the live state before retrying. Use
+   `firebase functions:list --project car-selling-flutter-app --json` and
+   compare the intended endpoints with their `ACTIVE`/`FAILED` state. Never
+   redeploy healthy unrelated functions merely because the original aggregate
+   command returned non-zero.
+5. After the guarded preflight has passed for the exact clean, green commit,
+   redeploy only the incomplete functions with the normal `firebase deploy`
+   command and its normal predeploy hooks. Use one function at a time or a pair:
+
+   ```bash
+   DEPLOY_ENV=development FIREBASE_PROJECT=car-selling-flutter-app \
+     firebase deploy \
+     --only functions:firstIncompleteFunction,functions:secondIncompleteFunction \
+     --project car-selling-flutter-app
+   ```
+
+   Do not strip or skip the configured lint/tests to make these retries faster.
+   If Cloud Run reports `Quota exceeded for total allowable CPU per project per
+   region`, reduce the batch to one function and wait for it to become `ACTIVE`
+   before starting the next.
+6. Run `cd deploy && FIREBASE_PROJECT=car-selling-flutter-app npm run
+   smoke:backend` after every recovery rollout. A function is not recovered
+   until the deployed endpoint is `ACTIVE` and smoke checks pass.
+
+When the CLI asks to delete deployed Firestore indexes that are absent from the
+local manifest, answer **no** unless the index deletion has been independently
+reviewed and is part of the requested change.
+
 ## 3. Design patterns that prevent the incident class
 
 These are the specific lessons from the freeze. They generalize — apply the
