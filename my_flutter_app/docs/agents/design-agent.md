@@ -157,3 +157,7 @@ Return:
   air freight, sea freight, and quote-based car transport. Use an operational
   list plus a focused drawer, and surface delivery windows and freight
   departure days on customer provider cards before selection.
+- Laawol web surfaces own their English/French localization. Keep the selected
+  document `lang` accurate, but opt every console, marketing page, and legal
+  page out of browser auto-translation so Chrome does not repeatedly offer to
+  translate already-localized content.

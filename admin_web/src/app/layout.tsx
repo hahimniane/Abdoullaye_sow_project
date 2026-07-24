@@ -4,6 +4,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Administration Laawol Digital",
   description: "Laawol Digital operations console",
+  other: {
+    google: "notranslate",
+  },
   icons: {
     icon: "/logo.png",
     shortcut: "/logo.png",
@@ -16,7 +19,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html className="notranslate" lang="en" translate="no">
       <body>{children}</body>
     </html>
   );
