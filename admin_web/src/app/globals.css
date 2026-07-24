@@ -3832,6 +3832,184 @@ button[data-loading="true"]::before {
 .bar-row b { font-size: 15px; font-weight: 850; }
 @media (max-width: 1080px) { .chart-grid { grid-template-columns: minmax(0, 1fr); } }
 
+/* Today overview — compact operational hierarchy, isolated from other consoles. */
+.today-dashboard {
+  gap: 12px;
+}
+.today-dashboard .page-hero {
+  align-items: center;
+}
+.today-dashboard .page-hero h2 {
+  font-size: 22px;
+}
+.today-dashboard .page-hero p {
+  font-size: 14px;
+  margin-top: 3px;
+}
+.today-dashboard .page-hero-stats {
+  gap: 7px;
+}
+.today-dashboard .page-hero-stats span {
+  border-radius: 8px;
+  box-shadow: none;
+  padding: 7px 10px;
+}
+.today-dashboard .page-hero-stats span b {
+  font-size: 16px;
+}
+.today-dashboard .kpi-grid {
+  gap: 10px;
+}
+.today-dashboard .kpi {
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  gap: 2px;
+  min-height: 84px;
+  padding: 12px 14px 11px;
+}
+.today-dashboard .kpi:hover {
+  box-shadow: 0 8px 20px rgba(11, 59, 56, 0.1);
+  transform: translateY(-1px);
+}
+.today-dashboard .kpi strong {
+  font-size: 28px;
+}
+.today-dashboard .kpi-label {
+  font-size: 12.5px;
+}
+.today-dashboard .kpi small {
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+.today-dashboard .kpi-go {
+  right: 12px;
+  top: 12px;
+}
+.today-dashboard .today-layout {
+  align-items: stretch;
+  display: grid;
+  gap: 12px;
+  grid-template-areas:
+    "attention attention attention"
+    "health service status";
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.today-attention { grid-area: attention; }
+.today-health { grid-area: health; }
+.today-service { grid-area: service; }
+.today-status { grid-area: status; }
+.today-dashboard .today-layout > div,
+.today-dashboard .today-layout > div > .panel {
+  min-width: 0;
+}
+.today-dashboard .today-layout > div > .panel {
+  height: 100%;
+}
+.today-dashboard .panel {
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+.today-dashboard .panel-header {
+  min-height: 46px;
+  padding: 0 14px;
+}
+.today-dashboard .panel-header h2 {
+  font-size: 12.5px;
+}
+.today-dashboard .insight-grid {
+  gap: 8px;
+  padding: 12px;
+}
+.today-dashboard .insight {
+  border-radius: 7px;
+  min-height: 58px;
+  padding: 9px 10px;
+}
+.today-dashboard .status-strip {
+  padding: 0 12px 12px;
+}
+.today-dashboard .meter-row {
+  padding: 10px 14px;
+}
+.today-dashboard .distribution-grid {
+  gap: 10px;
+  padding: 12px 14px 14px;
+}
+.today-dashboard .chart-grid {
+  gap: 10px;
+}
+.today-dashboard .chart-card {
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 13px 14px;
+}
+.today-dashboard .chart-head {
+  margin-bottom: 9px;
+}
+.today-dashboard .chart-head h3 {
+  font-size: 12px;
+}
+.today-dashboard .chart-total {
+  font-size: 19px;
+}
+.today-dashboard .donut-wrap {
+  gap: 12px;
+}
+.today-dashboard .donut {
+  height: 84px;
+  width: 84px;
+}
+.today-dashboard .chart-legend {
+  gap: 5px;
+}
+.today-dashboard .chart-legend li,
+.today-dashboard .bar-label {
+  font-size: 12px;
+}
+.today-dashboard .bar-rows {
+  gap: 8px;
+}
+.today-dashboard .bar-row {
+  gap: 9px;
+  grid-template-columns: 74px minmax(0, 1fr) auto;
+}
+.today-dashboard .bar-track {
+  height: 8px;
+}
+
+@media (max-width: 1080px) {
+  .today-dashboard .today-layout {
+    grid-template-areas:
+      "attention attention"
+      "health service"
+      "status status";
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .today-dashboard .chart-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .today-dashboard .page-hero {
+    align-items: stretch;
+  }
+  .today-dashboard .page-hero-stats span {
+    flex: 1 1 145px;
+  }
+  .today-dashboard .today-layout {
+    grid-template-areas:
+      "attention"
+      "health"
+      "service"
+      "status";
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .today-dashboard .chart-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Account settings */
 .admin-chip {
   appearance: none;

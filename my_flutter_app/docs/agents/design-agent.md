@@ -170,3 +170,6 @@ Return:
   document `lang` accurate, but opt every console, marketing page, and legal
   page out of browser auto-translation so Chrome does not repeatedly offer to
   translate already-localized content.
+- Admin Today overviews prioritize actionable queues first, operational
+  summaries second, and compact analytics last. Returning to Today must reset
+  stale document scroll so the sticky header never obscures the KPI row.

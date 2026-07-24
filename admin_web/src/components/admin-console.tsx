@@ -2462,6 +2462,10 @@ function Today(props: {
   applications: FirestoreRow[];
   navigate: (tab: Tab) => void;
 }) {
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, []);
+
   const pendingBusinesses = countWhere(
     props.businesses,
     (item) => rowStatus(item) === "pending",
@@ -2695,7 +2699,7 @@ function Today(props: {
   ];
 
   return (
-    <div className="stack">
+    <div className="stack today-dashboard">
       <section className="page-hero">
         <div>
           <h2>What needs you now</h2>
@@ -2736,61 +2740,49 @@ function Today(props: {
         ))}
       </section>
 
-      <section className="chart-grid">
-        <DonutChart
-          title="Businesses"
-          total={props.businesses.length}
-          segments={businessSegments}
-        />
-        <BarChart title="Accounts by role" bars={accountBars} />
-        <DonutChart
-          title="Listings"
-          total={props.cars.length}
-          segments={listingSegments}
-        />
-      </section>
-
       <div className="today-layout">
-        <Panel
-          title="Needs your attention"
-          icon={<ClipboardList size={18} />}
-          action={<span className="panel-count">{totalOpen}</span>}
-        >
-          {visibleQueue.length ? (
-            <div className="worklist">
-              {visibleQueue.map((item) => (
-                <article
-                  className={`worklist-row ${item.kind}`}
-                  key={`${item.kind}-${item.id}`}
-                >
-                  <span className={`work-tag ${item.kind}`}>{item.kind}</span>
-                  <div className="worklist-main">
-                    <strong>{item.label}</strong>
-                    <small>{item.meta}</small>
-                  </div>
-                  <button
-                    className="link-button"
-                    onClick={() => props.navigate(item.target)}
-                    type="button"
+        <div className="today-attention">
+          <Panel
+            title="Needs your attention"
+            icon={<ClipboardList size={18} />}
+            action={<span className="panel-count">{totalOpen}</span>}
+          >
+            {visibleQueue.length ? (
+              <div className="worklist">
+                {visibleQueue.map((item) => (
+                  <article
+                    className={`worklist-row ${item.kind}`}
+                    key={`${item.kind}-${item.id}`}
                   >
-                    {item.cta}
-                    <ArrowUpRight size={15} />
-                  </button>
-                </article>
-              ))}
-              {totalOpen > visibleQueue.length && (
-                <div className="worklist-more">
-                  {totalOpen - visibleQueue.length} more open items across the
-                  queues.
-                </div>
-              )}
-            </div>
-          ) : (
-            <EmptyState text="No open approvals, shipments, purchases, or refunds are currently loaded." />
-          )}
-        </Panel>
+                    <span className={`work-tag ${item.kind}`}>{item.kind}</span>
+                    <div className="worklist-main">
+                      <strong>{item.label}</strong>
+                      <small>{item.meta}</small>
+                    </div>
+                    <button
+                      className="link-button"
+                      onClick={() => props.navigate(item.target)}
+                      type="button"
+                    >
+                      {item.cta}
+                      <ArrowUpRight size={15} />
+                    </button>
+                  </article>
+                ))}
+                {totalOpen > visibleQueue.length && (
+                  <div className="worklist-more">
+                    {totalOpen - visibleQueue.length} more open items across the
+                    queues.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <EmptyState text="No open approvals, shipments, purchases, or refunds are currently loaded." />
+            )}
+          </Panel>
+        </div>
 
-        <div className="today-side">
+        <div className="today-health">
           <Panel title="Network health" icon={<Users size={18} />}>
             <div className="insight-grid">
               <Insight label="Admins" value={roleCounts.admin ?? 0} />
@@ -2815,7 +2807,9 @@ function Today(props: {
               </span>
             </div>
           </Panel>
+        </div>
 
+        <div className="today-service">
           <Panel title="Service load" icon={<Activity size={18} />}>
             <div className="meter-list">
               {serviceLoads.map((item) => (
@@ -2823,7 +2817,9 @@ function Today(props: {
               ))}
             </div>
           </Panel>
+        </div>
 
+        <div className="today-status">
           <Panel title="Open by status" icon={<DatabaseZap size={18} />}>
             <div className="distribution-grid">
               <Distribution title="Shipments" counts={shipmentStatuses} />
@@ -2832,6 +2828,20 @@ function Today(props: {
           </Panel>
         </div>
       </div>
+
+      <section className="chart-grid" aria-label="Analytics">
+        <DonutChart
+          title="Businesses"
+          total={props.businesses.length}
+          segments={businessSegments}
+        />
+        <BarChart title="Accounts by role" bars={accountBars} />
+        <DonutChart
+          title="Listings"
+          total={props.cars.length}
+          segments={listingSegments}
+        />
+      </section>
     </div>
   );
 }
