@@ -2306,4 +2306,11 @@
   ,"parking": "Parking"
   ,"destinations": "Destinations"
   ,"growth": "Growth"
+  ,"invitationProfileSetupTitle": "Finish setting up your invited access"
+  ,"invitationProfileSetupHelp": "Verify this email address, then return here to activate the role you were invited to."
+  ,"verifyInvitedEmail": "Send verification email"
+  ,"sendingVerificationEmail": "Sending verification email…"
+  ,"iVerifiedContinue": "I verified — continue"
+  ,"invitationVerificationEmailSent": "Verification email sent. Check your inbox, then return here."
+  ,"invitationVerificationEmailFailed": "The verification email could not be sent. Please try again."
 }

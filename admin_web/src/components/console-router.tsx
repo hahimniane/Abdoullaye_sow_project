@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   User,
   onAuthStateChanged,
@@ -11,7 +11,7 @@ import {
 } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
 import { doc, getDoc } from "firebase/firestore";
-import { RefreshCw } from "lucide-react";
+import { MailCheck, RefreshCw, Send, ShieldCheck } from "lucide-react";
 
 import { AdminConsole } from "@/components/admin-console";
 import { BusinessConsole } from "@/components/business-console";
@@ -185,6 +185,7 @@ export function ConsoleRouter() {
   useFrenchDomTranslation();
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileMissing, setProfileMissing] = useState(false);
   const [booting, setBooting] = useState(true);
   const [authError, setAuthError] = useState("");
   const [previewMode, setPreviewMode] = useState(false);
@@ -217,6 +218,7 @@ export function ConsoleRouter() {
       if (!active) return;
       setFirebaseUser(user);
       setProfile(null);
+      setProfileMissing(false);
       setAuthError("");
       if (!user) {
         setBooting(false);
@@ -227,9 +229,10 @@ export function ConsoleRouter() {
         const snap = await loadProfile(user.uid);
         if (!active) return;
         if (!snap.exists()) {
-          setAuthError("Your account profile is missing. Contact Laawol support.");
+          setProfileMissing(true);
           return;
         }
+        setProfileMissing(false);
         setProfile({id: snap.id, ...snap.data()} as UserProfile);
       } catch {
         if (!active) return;
@@ -299,6 +302,15 @@ export function ConsoleRouter() {
   }
 
   if (!firebaseUser || !profile) {
+    if (firebaseUser && profileMissing) {
+      return (
+        <AccessInvitationSetup
+          firebaseUser={firebaseUser}
+          onActivated={() => setProfileRetry((value) => value + 1)}
+          onSignOut={() => signOut(auth)}
+        />
+      );
+    }
     if (firebaseUser && authError) {
       return (
         <ConsoleLoadError
@@ -340,6 +352,227 @@ export function ConsoleRouter() {
   return (
     <div className="app-shell">
       <RoleSignInCard authError="This account role is not supported. Contact Laawol support." />
+    </div>
+  );
+}
+
+function accessActivationError(error: unknown) {
+  const record =
+    error && typeof error === "object"
+      ? (error as {
+          code?: unknown;
+          details?: {reason?: unknown};
+        })
+      : {};
+  const value = String(record.code ?? "");
+  const reason = String(record.details?.reason ?? "");
+  if (value === "auth/too-many-requests") {
+    return "Too many verification emails were requested. Wait a few minutes and try again.";
+  }
+  if (value === "auth/network-request-failed" || value === "functions/unavailable") {
+    return "The access service could not be reached. Check your connection and try again.";
+  }
+  if (
+    value === "functions/not-found" ||
+    reason === "active-invitation-not-found"
+  ) {
+    return "No active invitation was found for this account. Ask the sender to resend it.";
+  }
+  if (reason === "invitation-selection-required") {
+    return "More than one active invitation was found. Ask Laawol support to choose the correct access.";
+  }
+  if (
+    reason === "invitation-expired" ||
+    reason === "invitation-not-pending"
+  ) {
+    return "This invitation has expired or was cancelled. Ask the sender to resend it.";
+  }
+  if (
+    value === "functions/failed-precondition" ||
+    reason === "verified-email-required"
+  ) {
+    return "This invitation cannot be activated yet. Ask the sender to resend it.";
+  }
+  return "We could not activate this invitation. Try again or ask the sender to resend it.";
+}
+
+function AccessInvitationSetup({
+  firebaseUser,
+  onActivated,
+  onSignOut,
+}: {
+  firebaseUser: User;
+  onActivated: () => void;
+  onSignOut: () => void;
+}) {
+  const [emailVerified, setEmailVerified] = useState(
+    firebaseUser.emailVerified,
+  );
+  const [busy, setBusy] = useState<"" | "sending" | "activating">("");
+  const [verificationCooldown, setVerificationCooldown] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const activationInFlight = useRef(false);
+
+  useEffect(() => {
+    if (!verificationCooldown) return undefined;
+    const timer = window.setTimeout(
+      () => setVerificationCooldown(false),
+      60_000,
+    );
+    return () => window.clearTimeout(timer);
+  }, [verificationCooldown]);
+
+  async function sendVerification() {
+    if (busy || verificationCooldown) return;
+    setBusy("sending");
+    setNotice("");
+    setError("");
+    try {
+      auth.languageCode = document.documentElement.lang.startsWith("fr")
+        ? "fr"
+        : "en";
+      await sendEmailVerification(auth.currentUser ?? firebaseUser);
+      setVerificationCooldown(true);
+      setNotice(
+        "Verification email sent. Open the link, then return here to continue.",
+      );
+    } catch (sendError) {
+      setError(accessActivationError(sendError));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function activateInvitation() {
+    if (busy || activationInFlight.current) return;
+    activationInFlight.current = true;
+    setBusy("activating");
+    setNotice("");
+    setError("");
+    try {
+      const currentUser = auth.currentUser ?? firebaseUser;
+      await currentUser.reload();
+      const refreshedUser = auth.currentUser ?? currentUser;
+      if (refreshedUser.uid !== firebaseUser.uid) {
+        throw new Error("invitation-auth-user-changed");
+      }
+      const verified = refreshedUser.emailVerified === true;
+      setEmailVerified(verified);
+      if (!verified) {
+        setNotice(
+          "Firebase has not confirmed the email yet. Open the verification link, then try again.",
+        );
+        return;
+      }
+      await refreshedUser.getIdToken(true);
+      await httpsCallable(functions, "acceptAccessInvitation")({});
+      onActivated();
+    } catch (activationError) {
+      try {
+        const recoveredProfile = await loadProfile(firebaseUser.uid);
+        if (recoveredProfile.exists()) {
+          onActivated();
+          return;
+        }
+      } catch {
+        // Preserve the original activation error when recovery cannot confirm
+        // that a concurrent attempt already created the profile.
+      }
+      setError(accessActivationError(activationError));
+    } finally {
+      activationInFlight.current = false;
+      setBusy("");
+    }
+  }
+
+  return (
+    <div className="app-shell">
+      <main className="access-activation-screen">
+        <section
+          aria-labelledby="access-activation-title"
+          className="access-activation-card"
+        >
+          <div className="access-activation-mark" aria-hidden="true">
+            {emailVerified ? <ShieldCheck size={28} /> : <MailCheck size={28} />}
+          </div>
+          <div className="access-activation-copy">
+            <span>Invitation security</span>
+            <h1 id="access-activation-title">Finish setting up your access</h1>
+            <p>
+              Your password is ready. Verify the invited email, then Laawol
+              will activate the platform or business role assigned to you.
+            </p>
+            <strong>{firebaseUser.email}</strong>
+          </div>
+          <ol className="access-activation-steps">
+            <li className="complete">
+              <span>1</span>
+              <div>
+                <strong>Password created</strong>
+                <small>Your password is never shared with the inviter.</small>
+              </div>
+            </li>
+            <li className={emailVerified ? "complete" : ""}>
+              <span>2</span>
+              <div>
+                <strong>Verify invited email</strong>
+                <small>
+                  This confirms the invitation belongs to the signed-in person.
+                </small>
+              </div>
+            </li>
+            <li>
+              <span>3</span>
+              <div>
+                <strong>Activate assigned access</strong>
+                <small>Laawol opens the correct workspace and permissions.</small>
+              </div>
+            </li>
+          </ol>
+          {notice && <div className="info-band" role="status">{notice}</div>}
+          {error && <div className="error-box" role="alert">{error}</div>}
+          <div className="access-activation-actions">
+            {!emailVerified && (
+              <button
+                className="secondary-button"
+                disabled={Boolean(busy) || verificationCooldown}
+                onClick={sendVerification}
+                type="button"
+              >
+                {busy === "sending" ? (
+                  <RefreshCw className="spin" size={16} />
+                ) : (
+                  <Send size={16} />
+                )}
+                {busy === "sending"
+                  ? "Sending verification email..."
+                  : verificationCooldown
+                    ? "Verification email sent"
+                    : "Send verification email"}
+              </button>
+            )}
+            <button
+              className="primary-button"
+              disabled={Boolean(busy)}
+              onClick={activateInvitation}
+              type="button"
+            >
+              {busy === "activating" && (
+                <RefreshCw className="spin" size={16} />
+              )}
+              {busy === "activating"
+                ? "Activating access..."
+                : emailVerified
+                  ? "Activate my access"
+                  : "I verified — continue"}
+            </button>
+          </div>
+          <button className="text-button" onClick={onSignOut} type="button">
+            Sign out and use another account
+          </button>
+        </section>
+      </main>
     </div>
   );
 }

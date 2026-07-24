@@ -106,6 +106,14 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   Auth and Firestore emulators and seed an `emailVerified: true` Auth user. The
   support suite's canonical command is `npm run test:support`; do not bypass the
   production admin email-verification lookup in tests.
+- A Gen 2 callable can report `ACTIVE` while Cloud Run still lacks the
+  `allUsers` `roles/run.invoker` transport binding. The resulting browser CORS
+  `OPTIONS` request returns 403 before App Check or Auth reaches the handler.
+  Browser-facing access callables must use the shared options object containing
+  `invoker: "public"`, `cors: true`, and App Check enforcement, and backend
+  post-deploy smoke must require a 2xx browser-like preflight for each callable.
+  This does not relax handler authentication, verified-email, or capability
+  checks.
 - Business dashboard listing queries must remain uncapped for `cars` while still
   scoped by `businessId`; if a business cannot see older posted cars, first
   check whether those legacy car documents are missing the matching

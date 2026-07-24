@@ -92,7 +92,9 @@ class AuthProvider extends ChangeNotifier {
       NotificationPreferences.defaults;
   bool _isLoading = false;
   bool _isInitializing = true;
+  bool _isEmailVerificationSending = false;
   AuthInitializationIssue? _initializationIssue;
+  Future<void>? _roleCheckInFlight;
 
   User? get user => _user;
   bool get isStaff => _isStaff;
@@ -135,8 +137,10 @@ class AuthProvider extends ChangeNotifier {
       _notificationPreferences;
   bool get isLoading => _isLoading;
   bool get isInitializing => _isInitializing;
+  bool get isEmailVerificationSending => _isEmailVerificationSending;
   AuthInitializationIssue? get initializationIssue => _initializationIssue;
   bool get isAuthenticated => _user != null;
+  bool get emailVerified => _user?.emailVerified == true;
 
   String get buyerName {
     final profileName = _customerName?.trim();
@@ -170,31 +174,58 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _checkUserRole() async {
-    if (_user != null) {
+  Future<void> _checkUserRole() {
+    final inFlight = _roleCheckInFlight;
+    if (inFlight != null) return inFlight;
+
+    late final Future<void> check;
+    check = _checkUserRoleOnce().whenComplete(() {
+      if (identical(_roleCheckInFlight, check)) {
+        _roleCheckInFlight = null;
+      }
+    });
+    _roleCheckInFlight = check;
+    return check;
+  }
+
+  Future<void> _checkUserRoleOnce() async {
+    final signedInUser = _auth.currentUser;
+    if (signedInUser != null) {
       try {
         debugPrint('🔍 Fetching user document from Firestore...');
         var userDoc = await _firestore
             .collection('users')
-            .doc(_user!.uid)
+            .doc(signedInUser.uid)
             .get()
             .timeout(const Duration(seconds: 15));
         if (!userDoc.exists) {
-          try {
-            await _functions
-                .httpsCallable('acceptAccessInvitation')
-                .call(<String, dynamic>{});
+          await signedInUser.reload();
+          final refreshedUser = _auth.currentUser;
+          if (refreshedUser == null || refreshedUser.uid != signedInUser.uid) {
+            return;
+          }
+          _user = refreshedUser;
+          _userEmail = refreshedUser.email;
+
+          if (refreshedUser.emailVerified) {
+            try {
+              await refreshedUser.getIdToken(true);
+              await _functions
+                  .httpsCallable('acceptAccessInvitation')
+                  .call(<String, dynamic>{});
+            } on FirebaseFunctionsException catch (error) {
+              // Re-read the profile even when the callable response is lost:
+              // the invitation may already have been activated server-side.
+              debugPrint(
+                'ℹ️ Access invitation activation returned ${error.code}.',
+              );
+            }
+
             userDoc = await _firestore
                 .collection('users')
-                .doc(_user!.uid)
+                .doc(refreshedUser.uid)
                 .get()
                 .timeout(const Duration(seconds: 15));
-          } on FirebaseFunctionsException catch (error) {
-            // A normal customer may have no invitation. Keep the existing
-            // missing-profile recovery state unless an invitation was accepted.
-            debugPrint(
-              'ℹ️ No pending access invitation was activated: ${error.code}',
-            );
           }
         }
         if (userDoc.exists) {
@@ -259,6 +290,21 @@ class AuthProvider extends ChangeNotifier {
         _clearProfileState();
         _initializationIssue = AuthInitializationIssue.profileUnavailable;
       }
+    }
+  }
+
+  Future<void> sendCurrentUserEmailVerification() async {
+    if (_isEmailVerificationSending) return;
+    final currentUser = _auth.currentUser;
+    if (currentUser == null || currentUser.emailVerified) return;
+
+    _isEmailVerificationSending = true;
+    notifyListeners();
+    try {
+      await currentUser.sendEmailVerification();
+    } finally {
+      _isEmailVerificationSending = false;
+      notifyListeners();
     }
   }
 

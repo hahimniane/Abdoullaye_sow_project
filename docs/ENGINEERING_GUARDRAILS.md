@@ -119,6 +119,18 @@ rollout, not permission to bypass the deployment gate:
    smoke:backend` after every recovery rollout. A function is not recovered
    until the deployed endpoint is `ACTIVE` and smoke checks pass.
 
+An `ACTIVE` Gen 2 callable is not necessarily reachable from a browser.
+Cloud Run can finish the function rollout without the `allUsers`
+`roles/run.invoker` binding, which makes the browser's unauthenticated CORS
+`OPTIONS` request fail with HTTP 403 before Firebase can deliver App Check and
+Auth tokens to the callable handler. Browser-facing callable exports must use
+an explicit shared options object with `invoker: "public"`, `cors: true`, and
+`enforceAppCheck: ENFORCE_APP_CHECK`. Public invoker access opens only the HTTP
+transport; authentication, verified-email, role, and capability enforcement
+remain mandatory inside each handler. The backend smoke suite must send a
+browser-like `OPTIONS` request to every access-management callable and treat
+any non-2xx response as a failed deployment.
+
 When the CLI asks to delete deployed Firestore indexes that are absent from the
 local manifest, answer **no** unless the index deletion has been independently
 reviewed and is part of the requested change.

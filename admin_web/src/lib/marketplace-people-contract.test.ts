@@ -33,6 +33,34 @@ test("web people directory uses the sanitized paginated callable", () => {
   );
 });
 
+test("unverified administrators get a bilingual recovery gate before people data or invitations", () => {
+  assert.match(source, /sendEmailVerification/);
+  assert.match(source, /user\.reload\(\)/);
+  assert.match(source, /getIdToken\(true\)/);
+  assert.match(
+    source,
+    /useAdminAuthUsers\(\s*tabNeeds\("people"\) && adminEmailVerified,\s*\)/,
+  );
+  assert.match(source, /if \(!adminEmailVerified\)/);
+  assert.match(source, /verificationBusy === "sending"/);
+  assert.match(source, /verificationBusy === "checking"/);
+
+  for (const label of [
+    "Security check required",
+    "Verify your admin email to manage people",
+    "Send verification email",
+    "I verified — check again",
+    "People management is locked",
+    "Roles & security",
+  ]) {
+    assert.notEqual(
+      translateValue(label, "fr"),
+      label,
+      `missing French translation for "${label}"`,
+    );
+  }
+});
+
 test("web exposes unified categories and guarded lifecycle actions", () => {
   for (const category of [
     "Platform administrators",
@@ -109,6 +137,8 @@ test("every web personnel entry point uses invitations, never shared passwords",
   );
   assert.match(businessPeopleSource, /businessPermissions/);
   assert.match(source, /people-permission-picker/);
+  assert.match(source, /locale:\s*currentInterfaceLocale\(\)/);
+  assert.match(source, /await refreshPeople\(\)/);
 });
 
 test("the preview administrator reports one consistent super-admin role", () => {

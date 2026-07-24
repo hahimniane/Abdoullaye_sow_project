@@ -650,6 +650,42 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
 };
 
 export const TEXT_TRANSLATIONS: Record<string, string> = {
+  "Invitation security": "Sécurité de l’invitation",
+  "Finish setting up your access": "Terminez la configuration de votre accès",
+  "Your password is ready. Verify the invited email, then Laawol will activate the platform or business role assigned to you.":
+    "Votre mot de passe est prêt. Vérifiez le courriel invité, puis Laawol activera le rôle de plateforme ou d’entreprise qui vous a été attribué.",
+  "Password created": "Mot de passe créé",
+  "Your password is never shared with the inviter.":
+    "Votre mot de passe n’est jamais partagé avec la personne qui vous invite.",
+  "Verify invited email": "Vérifier le courriel invité",
+  "This confirms the invitation belongs to the signed-in person.":
+    "Cela confirme que l’invitation appartient à la personne connectée.",
+  "Activate assigned access": "Activer l’accès attribué",
+  "Laawol opens the correct workspace and permissions.":
+    "Laawol ouvre l’espace de travail et les autorisations appropriés.",
+  "Verification email sent. Open the link, then return here to continue.":
+    "Courriel de vérification envoyé. Ouvrez le lien, puis revenez ici pour continuer.",
+  "Firebase has not confirmed the email yet. Open the verification link, then try again.":
+    "Firebase n’a pas encore confirmé le courriel. Ouvrez le lien de vérification, puis réessayez.",
+  "Activating access...": "Activation de l’accès...",
+  "Activate my access": "Activer mon accès",
+  "I verified — continue": "J’ai vérifié — continuer",
+  "Sign out and use another account":
+    "Se déconnecter et utiliser un autre compte",
+  "Too many verification emails were requested. Wait a few minutes and try again.":
+    "Trop de courriels de vérification ont été demandés. Attendez quelques minutes, puis réessayez.",
+  "The access service could not be reached. Check your connection and try again.":
+    "Le service d’accès n’a pas pu être joint. Vérifiez votre connexion et réessayez.",
+  "No active invitation was found for this account. Ask the sender to resend it.":
+    "Aucune invitation active n’a été trouvée pour ce compte. Demandez à l’expéditeur de la renvoyer.",
+  "More than one active invitation was found. Ask Laawol support to choose the correct access.":
+    "Plusieurs invitations actives ont été trouvées. Demandez à l’assistance Laawol de choisir l’accès approprié.",
+  "This invitation has expired or was cancelled. Ask the sender to resend it.":
+    "Cette invitation a expiré ou a été annulée. Demandez à l’expéditeur de la renvoyer.",
+  "This invitation cannot be activated yet. Ask the sender to resend it.":
+    "Cette invitation ne peut pas encore être activée. Demandez à l’expéditeur de la renvoyer.",
+  "We could not activate this invitation. Try again or ask the sender to resend it.":
+    "Nous n’avons pas pu activer cette invitation. Réessayez ou demandez à l’expéditeur de la renvoyer.",
   ...CUSTOMER_SHIPPING_TRANSLATIONS,
   "Quote on eligible customer requests, then manage accepted jobs separately.":
     "Répondez aux demandes admissibles des clients, puis gérez séparément les transports acceptés.",
@@ -2904,6 +2940,36 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Ce montant a été calculé par le prestataire après la fermeture du baril.",
   "Search every account, business membership, invitation, and deletion request from one directory.":
     "Recherchez chaque compte, adhésion d’entreprise, invitation et demande de suppression dans un même répertoire.",
+  "Security check required": "Contrôle de sécurité requis",
+  "Verify your admin email to manage people":
+    "Vérifiez votre courriel d’administrateur pour gérer les personnes",
+  "The directory, invitations, roles, and account security stay locked until Firebase confirms the email for this signed-in administrator.":
+    "Le répertoire, les invitations, les rôles et la sécurité des comptes restent verrouillés jusqu’à ce que Firebase confirme le courriel de cet administrateur connecté.",
+  "Admin email verification actions":
+    "Actions de vérification du courriel administrateur",
+  "Sending verification email...":
+    "Envoi du courriel de vérification...",
+  "Verification email sent": "Courriel de vérification envoyé",
+  "Checking verification...": "Vérification en cours...",
+  "I verified — check again": "J’ai vérifié — contrôler à nouveau",
+  "Verification email sent. Open the link, then check again here.":
+    "Courriel de vérification envoyé. Ouvrez le lien, puis vérifiez à nouveau ici.",
+  "Email verified. People & access is now unlocked.":
+    "Courriel vérifié. La gestion des personnes et des accès est maintenant déverrouillée.",
+  "We still can’t confirm verification. Open the email link, then try again.":
+    "Nous ne pouvons pas encore confirmer la vérification. Ouvrez le lien du courriel, puis réessayez.",
+  "Too many verification requests were sent. Wait a few minutes, then try again.":
+    "Trop de demandes de vérification ont été envoyées. Attendez quelques minutes, puis réessayez.",
+  "The verification request could not reach Firebase. Check your connection and try again.":
+    "La demande de vérification n’a pas pu joindre Firebase. Vérifiez votre connexion et réessayez.",
+  "Email verification could not be completed right now. Try again.":
+    "La vérification du courriel n’a pas pu être effectuée pour le moment. Réessayez.",
+  "People management is locked": "La gestion des personnes est verrouillée",
+  "Verify once to safely open the directory and all access controls.":
+    "Effectuez la vérification une fois pour ouvrir en toute sécurité le répertoire et tous les contrôles d’accès.",
+  Invitations: "Invitations",
+  "Roles & security": "Rôles et sécurité",
+  Locked: "Verrouillé",
   "Search people, email, phone, or business":
     "Rechercher une personne, un courriel, un téléphone ou une entreprise",
   "Person type": "Type de personne",

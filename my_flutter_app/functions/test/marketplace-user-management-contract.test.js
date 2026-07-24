@@ -34,6 +34,45 @@ function sourceBetween(startMarker, endMarker) {
 }
 
 describe("marketplace people backend contract", () => {
+  it("uses shared public transport options for every access callable", () => {
+    const options = sourceBetween(
+        "const MARKETPLACE_PEOPLE_CALLABLE_OPTIONS",
+        "const DEFAULT_BUSINESS_ID",
+    );
+    assert.match(options, /invoker:\s*"public"/);
+    assert.match(options, /enforceAppCheck:\s*ENFORCE_APP_CHECK/);
+    assert.match(options, /cors:\s*true/);
+
+    for (const name of [
+      "listMarketplacePeople",
+      "getMarketplacePerson",
+      "setMarketplaceUserStatus",
+      "revokeUserSessions",
+      "sendUserRecoveryEmail",
+      "invitePlatformAdmin",
+      "inviteBusinessMember",
+      "resendAccessInvitation",
+      "cancelAccessInvitation",
+      "acceptAccessInvitation",
+      "transferBusinessOwnership",
+      "reviewAccountDeletion",
+      "finalizeAccountDeletion",
+      "listPlatformUsers",
+      "createMissingUserProfile",
+      "updateBusinessMembership",
+      "updateUserRole",
+      "setPlatformAdminRole",
+      "deleteUser",
+    ]) {
+      const callable = exportedCallable(name);
+      assert.match(
+          callable.slice(0, 220),
+          /onCall\(\s*MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,/,
+          `${name} must allow public HTTP transport through shared options`,
+      );
+    }
+  });
+
   it("exports every independent lifecycle operation", () => {
     for (const name of [
       "listMarketplacePeople",
@@ -137,6 +176,29 @@ describe("marketplace people backend contract", () => {
     assert.match(invitationLifecycle, /cancelled/);
     assert.match(invitationLifecycle, /accepted/);
     assert.match(invitationLifecycle, /expired/);
+  });
+
+  it("fails closed unless an invitation email is queued or sent", () => {
+    const delivery = sourceBetween(
+        "async function queueAccessEmail",
+        "async function sendUserRecoveryEmailHandler",
+    );
+    assert.match(delivery, /sendFirebasePasswordSetupEmail/);
+    assert.match(delivery, /deliveryStatus = "sent"/);
+    assert.match(delivery, /deliveryStatus = "failed"/);
+    assert.match(delivery, /if \(fallbackError\)/);
+    assert.match(delivery, /invitation-email-delivery-failed/);
+    assert.match(
+        delivery,
+        /emailSent:\s*deliveryStatus === "queued" \|\|[\s\S]*"sent"/,
+    );
+
+    const invitation = sourceBetween(
+        "async function createAccessInvitation",
+        "async function invitationForManagement",
+    );
+    assert.match(invitation, /const delivery = await queueAccessEmail/);
+    assert.match(invitation, /\.\.\.delivery/);
   });
 
   it("auto-resolves one active invitation and rejects ambiguity", () => {

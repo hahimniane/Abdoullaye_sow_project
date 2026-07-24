@@ -5701,4 +5701,29 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get growth => 'Croissance';
+
+  @override
+  String get invitationProfileSetupTitle =>
+      'Terminez la configuration de votre accès invité';
+
+  @override
+  String get invitationProfileSetupHelp =>
+      'Vérifiez cette adresse e-mail, puis revenez ici pour activer le rôle auquel vous avez été invité.';
+
+  @override
+  String get verifyInvitedEmail => 'Envoyer l’e-mail de vérification';
+
+  @override
+  String get sendingVerificationEmail => 'Envoi de l’e-mail de vérification…';
+
+  @override
+  String get iVerifiedContinue => 'J’ai vérifié — continuer';
+
+  @override
+  String get invitationVerificationEmailSent =>
+      'E-mail de vérification envoyé. Consultez votre boîte de réception, puis revenez ici.';
+
+  @override
+  String get invitationVerificationEmailFailed =>
+      'Impossible d’envoyer l’e-mail de vérification. Veuillez réessayer.';
 }

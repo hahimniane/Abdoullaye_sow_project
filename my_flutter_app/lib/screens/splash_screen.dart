@@ -16,6 +16,24 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen> {
   bool _hasNavigated = false;
 
+  Future<void> _sendVerificationEmail(
+    AuthProvider authProvider,
+    AppLocalizations l10n,
+  ) async {
+    try {
+      await authProvider.sendCurrentUserEmailVerification();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.invitationVerificationEmailSent)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.invitationVerificationEmailFailed)),
+      );
+    }
+  }
+
   void _maybeNavigate(AuthProvider authProvider) {
     if (_hasNavigated ||
         !mounted ||
@@ -98,50 +116,11 @@ class _SplashScreenState extends State<SplashScreen> {
                         ),
                         if (authProvider.initializationIssue != null) ...[
                           const SizedBox(height: 24),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(AppSpacing.lg),
-                            decoration: BoxDecoration(
-                              color: AppColors.paper,
-                              border: Border.all(color: AppColors.lightOutline),
-                              borderRadius: BorderRadius.circular(
-                                AppSpacing.radiusLg,
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  authProvider.initializationIssue ==
-                                          AuthInitializationIssue.profileMissing
-                                      ? l10n.accountProfileMissing
-                                      : l10n.accountProfileUnavailable,
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(fontWeight: FontWeight.w700),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  l10n.accountProfileRetryHelp,
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(color: AppColors.muted),
-                                ),
-                                const SizedBox(height: 14),
-                                FilledButton.icon(
-                                  onPressed: authProvider.isInitializing
-                                      ? null
-                                      : authProvider.retryInitialization,
-                                  icon: authProvider.isInitializing
-                                      ? const SizedBox.square(
-                                          dimension: 16,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : const Icon(Icons.refresh),
-                                  label: Text(l10n.retry),
-                                ),
-                              ],
-                            ),
+                          _InitializationIssueCard(
+                            authProvider: authProvider,
+                            l10n: l10n,
+                            onSendVerification: () =>
+                                _sendVerificationEmail(authProvider, l10n),
                           ),
                         ],
                       ],
@@ -177,6 +156,137 @@ class _SplashScreenState extends State<SplashScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _InitializationIssueCard extends StatelessWidget {
+  const _InitializationIssueCard({
+    required this.authProvider,
+    required this.l10n,
+    required this.onSendVerification,
+  });
+
+  final AuthProvider authProvider;
+  final AppLocalizations l10n;
+  final VoidCallback onSendVerification;
+
+  @override
+  Widget build(BuildContext context) {
+    final isInvitationSetup =
+        authProvider.initializationIssue ==
+            AuthInitializationIssue.profileMissing &&
+        authProvider.isAuthenticated &&
+        !authProvider.emailVerified;
+    final email = authProvider.userEmail?.trim();
+
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(maxWidth: 640),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.paper,
+        border: Border.all(color: AppColors.lightOutline),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                isInvitationSetup
+                    ? Icons.mark_email_unread_outlined
+                    : Icons.cloud_off_outlined,
+                color: AppColors.oxblood,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isInvitationSetup
+                          ? l10n.invitationProfileSetupTitle
+                          : authProvider.initializationIssue ==
+                                AuthInitializationIssue.profileMissing
+                          ? l10n.accountProfileMissing
+                          : l10n.accountProfileUnavailable,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      isInvitationSetup
+                          ? l10n.invitationProfileSetupHelp
+                          : l10n.accountProfileRetryHelp,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.muted,
+                        height: 1.4,
+                      ),
+                    ),
+                    if (isInvitationSetup &&
+                        email != null &&
+                        email.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        email,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              if (isInvitationSetup)
+                OutlinedButton.icon(
+                  onPressed: authProvider.isEmailVerificationSending
+                      ? null
+                      : onSendVerification,
+                  icon: authProvider.isEmailVerificationSending
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.outgoing_mail),
+                  label: Text(
+                    authProvider.isEmailVerificationSending
+                        ? l10n.sendingVerificationEmail
+                        : l10n.verifyInvitedEmail,
+                  ),
+                ),
+              FilledButton.icon(
+                onPressed: authProvider.isInitializing
+                    ? null
+                    : authProvider.retryInitialization,
+                icon: authProvider.isInitializing
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        isInvitationSetup
+                            ? Icons.verified_outlined
+                            : Icons.refresh,
+                      ),
+                label: Text(
+                  isInvitationSetup ? l10n.iVerifiedContinue : l10n.retry,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

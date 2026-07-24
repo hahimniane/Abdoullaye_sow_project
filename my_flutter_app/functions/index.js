@@ -101,6 +101,9 @@ const {
   publicOpenBarrelOption,
   publicParkingOption,
 } = require("./public_service_options");
+const {
+  sendFirebasePasswordSetupEmail,
+} = require("./firebase_auth_email");
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
@@ -119,6 +122,21 @@ const SIMULATE_PAYMENTS = runtimePaymentSimulationEnabled(process.env);
 // callable requires an attested first-party client; local emulator suites keep
 // enforcement off so they can exercise the same handlers deterministically.
 const ENFORCE_APP_CHECK = process.env.FUNCTIONS_EMULATOR !== "true";
+// Public Firebase web API keys identify a Firebase project; they are not
+// secrets. Keep this fallback aligned with admin_web/src/lib/firebase.ts.
+const FIREBASE_WEB_API_KEY =
+  process.env.FIREBASE_WEB_API_KEY ||
+  "AIzaSyBrRDTd5w2iWxTIfvsn7ra0xjW7M-iuPN8";
+// Firebase callable endpoints must accept an unauthenticated HTTP/CORS
+// transport request so the Firebase SDK can deliver App Check and Auth tokens
+// to the callable handler. `public` does not bypass application security:
+// every marketplace-people handler still enforces App Check, authentication,
+// verified administrator email, and capability checks inside the function.
+const MARKETPLACE_PEOPLE_CALLABLE_OPTIONS = Object.freeze({
+  enforceAppCheck: ENFORCE_APP_CHECK,
+  cors: true,
+  invoker: "public",
+});
 const DEFAULT_BUSINESS_ID = "keren_auto_sales";
 const DEFAULT_BUSINESS_NAME = "Keren";
 const MAX_BARREL_QUANTITY = 20;
@@ -8865,10 +8883,7 @@ async function revokeUserSessionsHandler(request) {
 }
 
 exports.setPlatformAdminRole = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
+    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     async (request) => {
       const callerUid = requireAuth(request);
       const caller = await getUserProfile(callerUid);
@@ -8929,44 +8944,29 @@ exports.setPlatformAdminRole = onCall(
 );
 
 exports.listMarketplacePeople = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
+    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     listMarketplacePeopleHandler,
 );
 
 // Compatibility for the existing admin web while it migrates to the canonical
 // marketplace people contract.
 exports.listPlatformUsers = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
+    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     listMarketplacePeopleHandler,
 );
 
 exports.getMarketplacePerson = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
+    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     getMarketplacePersonHandler,
 );
 
 exports.setMarketplaceUserStatus = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
+    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     setMarketplaceUserStatusHandler,
 );
 
 exports.revokeUserSessions = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
+    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     revokeUserSessionsHandler,
 );
 
@@ -9039,23 +9039,56 @@ async function queueAccessEmail({
   const copy = accessEmailCopy(locale, kind, links);
   const deliveryRef = db.collection("notificationDeliveries").doc();
   const now = FirestoreFieldValue.serverTimestamp();
-  const configured = settings.emailProvider === "firebaseTriggerEmail";
+  const triggerEmailConfigured =
+    settings.emailProvider === "firebaseTriggerEmail";
+  let provider = settings.emailProvider;
+  let deliveryStatus = triggerEmailConfigured ?
+    "queued" :
+    "provider_not_configured";
+  let deliveryError = "";
+  let fallbackError = null;
+
+  // Invitations create a Firebase Auth user without a shared password. When a
+  // custom SMTP/Trigger Email provider is not connected, Firebase
+  // Authentication can still send its secure password-reset template so the
+  // invited person can choose their own password. Email verification is sent
+  // after first sign-in because Firebase requires the target user's ID token.
+  if (!triggerEmailConfigured &&
+      ["invitation", "password_reset"].includes(kind)) {
+    provider = "firebaseAuth";
+    try {
+      await sendFirebasePasswordSetupEmail({
+        apiKey: FIREBASE_WEB_API_KEY,
+        email,
+        locale,
+      });
+      deliveryStatus = "sent";
+    } catch (error) {
+      fallbackError = error;
+      deliveryStatus = "failed";
+      deliveryError =
+        error instanceof Error ? error.message : String(error);
+    }
+  } else if (!triggerEmailConfigured) {
+    deliveryError = "Email sender provider is not connected.";
+  }
+
   const batch = db.batch();
   batch.set(deliveryRef, {
     channel: "email",
-    provider: settings.emailProvider,
-    status: configured ? "queued" : "provider_not_configured",
+    provider,
+    status: deliveryStatus,
     to: email,
     recipientUid: uid,
     preferenceKey: "securityActivity",
     title: copy.title,
     body: "A secure account action email was requested.",
     data: {type: kind},
-    lastError: configured ? "" : "Email sender provider is not connected.",
+    lastError: deliveryError,
     createdAt: now,
     updatedAt: now,
   });
-  if (configured) {
+  if (triggerEmailConfigured) {
     batch.set(db.collection("mail").doc(deliveryRef.id), {
       to: [email],
       message: {
@@ -9070,9 +9103,23 @@ async function queueAccessEmail({
   }
   if (audit) setAdminAuditLog(batch, audit);
   await batch.commit();
+  if (fallbackError) {
+    throw userManagementError(
+        "unavailable",
+        "invitation-email-delivery-failed",
+        "The invitation was created, but its email could not be sent. " +
+          "Refresh the directory and use Resend invitation.",
+        {
+          deliveryId: deliveryRef.id,
+          provider,
+          providerCode: String(fallbackError.code || ""),
+        },
+    );
+  }
   return {
     deliveryId: deliveryRef.id,
-    deliveryStatus: configured ? "queued" : "provider_not_configured",
+    deliveryStatus,
+    emailSent: deliveryStatus === "queued" || deliveryStatus === "sent",
   };
 }
 
@@ -9619,58 +9666,37 @@ async function acceptAccessInvitationHandler(request) {
 }
 
 exports.sendUserRecoveryEmail = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
+    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     sendUserRecoveryEmailHandler,
 );
 
 exports.invitePlatformAdmin = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
+    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     (request) => createAccessInvitation(request, "platform"),
 );
 
 exports.inviteBusinessMember = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
+    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     (request) => createAccessInvitation(request, "business"),
 );
 
 exports.resendAccessInvitation = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
+    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     resendAccessInvitationHandler,
 );
 
 exports.cancelAccessInvitation = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
+    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     cancelAccessInvitationHandler,
 );
 
 exports.acceptAccessInvitation = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
+    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     acceptAccessInvitationHandler,
 );
 
 exports.createMissingUserProfile = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
+    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     async (request) => {
       const callerUid = requireAuth(request);
       const caller = await getUserProfile(callerUid);
@@ -9944,18 +9970,12 @@ async function updateBusinessMembershipHandler(request, forcedRole = "") {
 }
 
 exports.updateBusinessMembership = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
+    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     (request) => updateBusinessMembershipHandler(request),
 );
 
 exports.transferBusinessOwnership = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
+    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     (request) => updateBusinessMembershipHandler(request, "businessOwner"),
 );
 
@@ -9964,10 +9984,7 @@ exports.transferBusinessOwnership = onCall(
  * This allows admins to change user roles
  */
 exports.updateUserRole = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
+    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     async (request) => {
       logger.info("updateUserRole called", {uid: request.auth?.uid});
 
@@ -10463,28 +10480,19 @@ async function finalizeAccountDeletionHandler(request, compatibility = false) {
 }
 
 exports.reviewAccountDeletion = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
+    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     reviewAccountDeletionHandler,
 );
 
 exports.finalizeAccountDeletion = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
+    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     finalizeAccountDeletionHandler,
 );
 
 // Compatibility for existing clients. The server still performs the complete
 // dependency review and only finalizes a non-privileged, dependency-free user.
 exports.deleteUser = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
+    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     (request) => finalizeAccountDeletionHandler(request, true),
 );
 

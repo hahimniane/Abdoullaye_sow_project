@@ -10097,6 +10097,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Growth'**
   String get growth;
+
+  /// No description provided for @invitationProfileSetupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish setting up your invited access'**
+  String get invitationProfileSetupTitle;
+
+  /// No description provided for @invitationProfileSetupHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify this email address, then return here to activate the role you were invited to.'**
+  String get invitationProfileSetupHelp;
+
+  /// No description provided for @verifyInvitedEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Send verification email'**
+  String get verifyInvitedEmail;
+
+  /// No description provided for @sendingVerificationEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending verification email…'**
+  String get sendingVerificationEmail;
+
+  /// No description provided for @iVerifiedContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'I verified — continue'**
+  String get iVerifiedContinue;
+
+  /// No description provided for @invitationVerificationEmailSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification email sent. Check your inbox, then return here.'**
+  String get invitationVerificationEmailSent;
+
+  /// No description provided for @invitationVerificationEmailFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The verification email could not be sent. Please try again.'**
+  String get invitationVerificationEmailFailed;
 }
 
 class _AppLocalizationsDelegate

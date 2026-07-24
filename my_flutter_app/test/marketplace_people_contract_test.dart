@@ -10,6 +10,7 @@ void main() {
   final staffInvite = File(
     'lib/screens/add_staff_screen.dart',
   ).readAsStringSync();
+  final splash = File('lib/screens/splash_screen.dart').readAsStringSync();
   final english = File('lib/l10n/app_en.arb').readAsStringSync();
   final french = File('lib/l10n/app_fr.arb').readAsStringSync();
 
@@ -92,4 +93,35 @@ void main() {
       expect(staffInvite, isNot(contains('Temporary password')));
     },
   );
+
+  test('invited mobile users verify before activating access exactly once', () {
+    expect(provider, contains('_roleCheckInFlight'));
+    expect(provider, contains('signedInUser.reload()'));
+    expect(provider, contains('refreshedUser.emailVerified'));
+    expect(provider, contains('getIdToken(true)'));
+    expect(provider, contains("'acceptAccessInvitation'"));
+    expect(provider, contains('sendCurrentUserEmailVerification'));
+    expect(
+      provider,
+      contains('the invitation may already have been activated server-side'),
+    );
+    expect(splash, contains('invitationProfileSetupTitle'));
+    expect(splash, contains('verifyInvitedEmail'));
+    expect(splash, contains('iVerifiedContinue'));
+  });
+
+  test('invitation activation copy exists in both ARB catalogs', () {
+    for (final key in <String>[
+      'invitationProfileSetupTitle',
+      'invitationProfileSetupHelp',
+      'verifyInvitedEmail',
+      'sendingVerificationEmail',
+      'iVerifiedContinue',
+      'invitationVerificationEmailSent',
+      'invitationVerificationEmailFailed',
+    ]) {
+      expect(english, contains('"$key"'));
+      expect(french, contains('"$key"'));
+    }
+  });
 }

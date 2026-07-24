@@ -29,7 +29,23 @@ test("deployed callables enforce App Check", () => {
   const appCheckCount = (
     indexSource.match(/enforceAppCheck:\s*ENFORCE_APP_CHECK/g) || []
   ).length;
-  assert.equal(appCheckCount, callableCount);
+  const sharedPeopleOptionUses = (
+    indexSource.match(
+        /onCall\(\s*MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,/g,
+    ) || []
+  ).length;
+  const sharedPeopleOptionsPattern =
+    /const MARKETPLACE_PEOPLE_CALLABLE_OPTIONS[\s\S]*?enforceAppCheck:\s*/;
+  assert.match(
+      indexSource,
+      new RegExp(
+          `${sharedPeopleOptionsPattern.source}ENFORCE_APP_CHECK`,
+      ),
+  );
+  assert.equal(
+      appCheckCount - 1 + sharedPeopleOptionUses,
+      callableCount,
+  );
 });
 
 test("administrator and staff permissions fail closed", () => {

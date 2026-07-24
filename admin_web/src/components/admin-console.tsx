@@ -14,6 +14,7 @@ import {
   RecaptchaVerifier,
   User,
   onAuthStateChanged,
+  sendEmailVerification,
   signInWithEmailAndPassword,
   signOut,
   updatePhoneNumber,
@@ -1586,6 +1587,13 @@ async function cancelMarketplaceInvitation(
   return httpsCallable(functions, "cancelAccessInvitation")(payload);
 }
 
+function currentInterfaceLocale() {
+  if (typeof document === "undefined") return "en";
+  return document.documentElement.lang.toLowerCase().startsWith("fr")
+    ? "fr"
+    : "en";
+}
+
 async function updateMarketplaceMembership(
   payload: Record<string, unknown>,
 ) {
@@ -2127,9 +2135,41 @@ function useAdminDestinationCoverage(enabled: boolean) {
   return {rows, loading, error, refresh};
 }
 
+function adminVerificationErrorMessage(error: unknown) {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? text((error as {code?: unknown}).code, "")
+      : "";
+  if (code === "auth/too-many-requests") {
+    return "Too many verification requests were sent. Wait a few minutes, then try again.";
+  }
+  if (code === "auth/network-request-failed") {
+    return "The verification request could not reach Firebase. Check your connection and try again.";
+  }
+  return "Email verification could not be completed right now. Try again.";
+}
+
+async function withAdminVerificationTimeout<T>(task: Promise<T>) {
+  let timeoutId: number | undefined;
+  try {
+    return await Promise.race([
+      task,
+      new Promise<T>((_, reject) => {
+        timeoutId = window.setTimeout(
+          () => reject(new Error("admin-email-verification-timeout")),
+          12000,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+  }
+}
+
 export function AdminConsole() {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [adminEmailVerified, setAdminEmailVerified] = useState(false);
   const [booting, setBooting] = useState(true);
   const [authError, setAuthError] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("today");
@@ -2167,13 +2207,13 @@ export function AdminConsole() {
     tabNeeds(
       "today",
       "businesses",
-      "people",
       "marketplace",
       "operations",
       "finance",
       "support",
       "website",
-    ),
+    ) ||
+      (enabled && activeTab === "people" && adminEmailVerified),
     500,
   );
   const cars = useAdminCollection(
@@ -2259,7 +2299,9 @@ export function AdminConsole() {
     enabled && perms.tabs.includes("website"),
     200,
   );
-  const authUsers = useAdminAuthUsers(tabNeeds("people"));
+  const authUsers = useAdminAuthUsers(
+    tabNeeds("people") && adminEmailVerified,
+  );
   const carRows = previewMode ? previewData.cars : cars.rows;
   const shipmentRows = previewMode
     ? previewData.barrelShipments
@@ -2375,11 +2417,15 @@ export function AdminConsole() {
       ["localhost", "127.0.0.1"].includes(window.location.hostname);
     setPreviewMode(localPreview);
     if (localPreview) {
+      setAdminEmailVerified(
+        url.searchParams.get("unverifiedAdmin") !== "1",
+      );
       setBooting(false);
       return undefined;
     }
     return onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user);
+      setAdminEmailVerified(user?.emailVerified === true);
       setProfile(null);
       setAuthError("");
       if (!user) {
@@ -2408,6 +2454,31 @@ export function AdminConsole() {
       }
     });
   }, []);
+
+  const sendAdminVerification = useCallback(async () => {
+    if (previewMode) {
+      await new Promise((resolve) => window.setTimeout(resolve, 700));
+      return;
+    }
+    const user = auth.currentUser ?? firebaseUser;
+    if (!user) throw new Error("admin-email-verification-signed-out");
+    await sendEmailVerification(user);
+  }, [firebaseUser, previewMode]);
+
+  const reloadAdminVerification = useCallback(async () => {
+    if (previewMode) {
+      await new Promise((resolve) => window.setTimeout(resolve, 700));
+      return adminEmailVerified;
+    }
+    const user = auth.currentUser ?? firebaseUser;
+    if (!user) throw new Error("admin-email-verification-signed-out");
+    await user.reload();
+    const refreshedUser = auth.currentUser ?? user;
+    const verified = refreshedUser.emailVerified === true;
+    if (verified) await refreshedUser.getIdToken(true);
+    setAdminEmailVerified(verified);
+    return verified;
+  }, [adminEmailVerified, firebaseUser, previewMode]);
 
   // Safety net: never let the console hang on the boot spinner. If auth/profile
   // resolution stalls for any reason, stop booting so the user sees either the
@@ -2611,6 +2682,11 @@ export function AdminConsole() {
           )}
           {activeTab === "people" && (
             <UsersView
+              adminEmail={text(
+                firebaseUser?.email ?? profile?.email,
+                previewMode ? "preview.admin@laawoldigital.com" : "",
+              )}
+              adminEmailVerified={adminEmailVerified}
               users={userRows}
               loading={userProfiles.loading || authUsers.loading}
               loadingMore={authUsers.loadingMore}
@@ -2631,6 +2707,8 @@ export function AdminConsole() {
               }
               permsConfig={rolePermsConfig}
               businesses={businessRows}
+              reloadAdminVerification={reloadAdminVerification}
+              sendAdminVerification={sendAdminVerification}
             />
           )}
           {activeTab === "businesses" && (
@@ -3474,6 +3552,8 @@ function SectionIntro({
 }
 
 function UsersView({
+  adminEmail,
+  adminEmailVerified,
   users,
   businesses,
   loading,
@@ -3489,7 +3569,11 @@ function UsersView({
   canManageBusinesses,
   isSuperAdmin,
   permsConfig,
+  reloadAdminVerification,
+  sendAdminVerification,
 }: {
+  adminEmail: string;
+  adminEmailVerified: boolean;
   users: FirestoreRow[];
   businesses: FirestoreRow[];
   loading: boolean;
@@ -3505,6 +3589,8 @@ function UsersView({
   canManageBusinesses: boolean;
   isSuperAdmin: boolean;
   permsConfig: PermissionsConfig | null;
+  reloadAdminVerification: () => Promise<boolean>;
+  sendAdminVerification: () => Promise<void>;
 }) {
   const roleOptions = roleOptionList(permsConfig);
   const [search, setSearch] = useState("");
@@ -3514,6 +3600,13 @@ function UsersView({
   const [personDetail, setPersonDetail] = useState<FirestoreRow | null>(null);
   const [personDetailLoading, setPersonDetailLoading] = useState(false);
   const [personDetailError, setPersonDetailError] = useState("");
+  const [verificationBusy, setVerificationBusy] = useState<
+    "" | "sending" | "checking"
+  >("");
+  const [verificationFeedback, setVerificationFeedback] = useState<{
+    type: "success" | "error" | "info";
+    message: string;
+  } | null>(null);
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return users.filter((item) => {
@@ -3569,6 +3662,7 @@ function UsersView({
 
   useEffect(() => {
     if (
+      !adminEmailVerified ||
       !selectedPersonKey ||
       peoplePersonKind(selectedPerson as FirestoreRow) === "invitation"
     ) {
@@ -3613,7 +3707,12 @@ function UsersView({
       active = false;
       window.clearTimeout(safetyTimeout);
     };
-  }, [selectedPerson, selectedPersonKey, selectedPersonUserId]);
+  }, [
+    adminEmailVerified,
+    selectedPerson,
+    selectedPersonKey,
+    selectedPersonUserId,
+  ]);
 
   async function updateRole(userId: string, newRole: Role) {
     await httpsCallable(functions, "updateUserRole")({ userId, newRole });
@@ -3630,18 +3729,191 @@ function UsersView({
     )({ userId, adminRole });
   }
 
+  async function sendVerification() {
+    if (verificationBusy) return;
+    setVerificationBusy("sending");
+    setVerificationFeedback(null);
+    try {
+      await withAdminVerificationTimeout(sendAdminVerification());
+      setVerificationFeedback({
+        type: "success",
+        message:
+          "Verification email sent. Open the link, then check again here.",
+      });
+    } catch (verificationError) {
+      setVerificationFeedback({
+        type: "error",
+        message: adminVerificationErrorMessage(verificationError),
+      });
+    } finally {
+      setVerificationBusy("");
+    }
+  }
+
+  async function checkVerification() {
+    if (verificationBusy) return;
+    setVerificationBusy("checking");
+    setVerificationFeedback(null);
+    try {
+      const verified = await withAdminVerificationTimeout(
+        reloadAdminVerification(),
+      );
+      setVerificationFeedback(
+        verified
+          ? {
+              type: "success",
+              message: "Email verified. People & access is now unlocked.",
+            }
+          : {
+              type: "info",
+              message:
+                "We still can’t confirm verification. Open the email link, then try again.",
+            },
+      );
+    } catch (verificationError) {
+      setVerificationFeedback({
+        type: "error",
+        message: adminVerificationErrorMessage(verificationError),
+      });
+    } finally {
+      setVerificationBusy("");
+    }
+  }
+
+  const sectionStats: Array<[string, string]> = adminEmailVerified
+    ? [
+        ["Admins", String(countWhere(users, isPlatformAdmin))],
+        ["Business people", String(countWhere(users, isBusinessMember))],
+        ["Customers", String(countWhere(users, isCustomerAccount))],
+        ["Needs attention", String(attentionCount)],
+      ]
+    : [
+        ["Directory", "Locked"],
+        ["Invitations", "Locked"],
+        ["Roles & security", "Locked"],
+      ];
+  const sectionIntro = (
+    <SectionIntro
+      title="People & access"
+      description="Search every account, business membership, invitation, and deletion request from one directory."
+      stats={sectionStats}
+    />
+  );
+
+  if (!adminEmailVerified) {
+    const busy = verificationBusy.length > 0;
+    return (
+      <div className="stack people-directory">
+        {sectionIntro}
+        <section
+          aria-labelledby="people-verification-title"
+          className="people-verification-gate"
+        >
+          <div className="people-verification-banner">
+            <span className="people-verification-icon" aria-hidden="true">
+              <ShieldOff size={22} />
+            </span>
+            <div className="people-verification-copy">
+              <span className="eyebrow">Security check required</span>
+              <h3 id="people-verification-title">
+                Verify your admin email to manage people
+              </h3>
+              <p>
+                The directory, invitations, roles, and account security stay
+                locked until Firebase confirms the email for this signed-in
+                administrator.
+              </p>
+              {adminEmail && (
+                <span className="people-verification-email">{adminEmail}</span>
+              )}
+            </div>
+            <div
+              aria-busy={busy}
+              aria-label="Admin email verification actions"
+              className="people-verification-actions"
+            >
+              <button
+                className="primary-button"
+                disabled={busy}
+                onClick={sendVerification}
+                type="button"
+              >
+                {verificationBusy === "sending" ? (
+                  <RefreshCw className="spin" size={16} />
+                ) : (
+                  <Send size={16} />
+                )}
+                {verificationBusy === "sending"
+                  ? "Sending verification email..."
+                  : "Send verification email"}
+              </button>
+              <button
+                className="secondary-button"
+                disabled={busy}
+                onClick={checkVerification}
+                type="button"
+              >
+                <RefreshCw
+                  className={verificationBusy === "checking" ? "spin" : ""}
+                  size={16}
+                />
+                {verificationBusy === "checking"
+                  ? "Checking verification..."
+                  : "I verified — check again"}
+              </button>
+            </div>
+          </div>
+          {verificationFeedback && (
+            <div
+              className={`people-verification-feedback ${verificationFeedback.type}`}
+              role={
+                verificationFeedback.type === "error" ? "alert" : "status"
+              }
+            >
+              {verificationFeedback.message}
+            </div>
+          )}
+          <div className="people-verification-locked">
+            <div className="people-verification-locked-copy">
+              <span className="people-verification-icon muted" aria-hidden="true">
+                <Users size={21} />
+              </span>
+              <div>
+                <strong>People management is locked</strong>
+                <span>
+                  Verify once to safely open the directory and all access
+                  controls.
+                </span>
+              </div>
+            </div>
+            <div className="people-verification-features">
+              <span>
+                <Users size={16} />
+                Directory
+              </span>
+              <span>
+                <Send size={16} />
+                Invitations
+              </span>
+              <span>
+                <UserCog size={16} />
+                Roles & security
+              </span>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="stack people-directory">
-      <SectionIntro
-        title="People & access"
-        description="Search every account, business membership, invitation, and deletion request from one directory."
-        stats={[
-          ["Admins", String(countWhere(users, isPlatformAdmin))],
-          ["Business people", String(countWhere(users, isBusinessMember))],
-          ["Customers", String(countWhere(users, isCustomerAccount))],
-          ["Needs attention", String(attentionCount)],
-        ]}
-      />
+      {sectionIntro}
+      {verificationFeedback?.type === "success" && (
+        <div className="people-verification-feedback success" role="status">
+          {verificationFeedback.message}
+        </div>
+      )}
       <div className="people-toolbar">
         <SearchBox
           value={search}
@@ -3695,6 +3967,7 @@ function UsersView({
             businesses={businesses}
             canInviteAdmins={isSuperAdmin}
             canInviteBusiness={canManageBusinesses}
+            refreshPeople={refreshUsers}
             runAction={runAction}
             roleOptions={roleOptions.filter(
               (option) => option.key !== "superAdmin",
@@ -7343,12 +7616,14 @@ function CreatePersonForms({
   businesses,
   canInviteAdmins,
   canInviteBusiness,
+  refreshPeople,
 }: {
   runAction: ActionRunner;
   roleOptions: Array<{ key: string; label: string }>;
   businesses: FirestoreRow[];
   canInviteAdmins: boolean;
   canInviteBusiness: boolean;
+  refreshPeople: () => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [personType, setPersonType] = useState<"platformAdmin" | "businessPerson">(
@@ -7385,12 +7660,14 @@ function CreatePersonForms({
         personType === "businessPerson"
           ? businessPermissions
           : undefined,
+      locale: currentInterfaceLocale(),
     };
     if (personType === "platformAdmin") {
       await inviteMarketplaceAdmin(payload);
     } else {
       await inviteMarketplaceBusinessMember(payload);
     }
+    await refreshPeople();
     reset();
     setOpen(false);
   }
@@ -8061,6 +8338,7 @@ function CreateBusinessStaffForm({
       email: email.trim().toLowerCase(),
       businessId: business.id,
       businessPermissions,
+      locale: currentInterfaceLocale(),
     });
     reset();
   }

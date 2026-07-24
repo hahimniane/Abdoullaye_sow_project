@@ -2307,4 +2307,11 @@
   ,"parking": "Stationnement"
   ,"destinations": "Destinations"
   ,"growth": "Croissance"
+  ,"invitationProfileSetupTitle": "Terminez la configuration de votre accès invité"
+  ,"invitationProfileSetupHelp": "Vérifiez cette adresse e-mail, puis revenez ici pour activer le rôle auquel vous avez été invité."
+  ,"verifyInvitedEmail": "Envoyer l’e-mail de vérification"
+  ,"sendingVerificationEmail": "Envoi de l’e-mail de vérification…"
+  ,"iVerifiedContinue": "J’ai vérifié — continuer"
+  ,"invitationVerificationEmailSent": "E-mail de vérification envoyé. Consultez votre boîte de réception, puis revenez ici."
+  ,"invitationVerificationEmailFailed": "Impossible d’envoyer l’e-mail de vérification. Veuillez réessayer."
 }

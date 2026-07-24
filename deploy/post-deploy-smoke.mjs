@@ -10,6 +10,9 @@ import {
   assessPaymentFunctionDeployment,
   discoverStripeBoundFunctionNames,
 } from "./payment-functions-lib.mjs";
+import {
+  smokeMarketplacePeopleCallableCors,
+} from "./callable-cors-smoke-lib.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -196,6 +199,22 @@ if (scope === "backend" || scope === "all") {
     console.error("FAIL Could not read the deployed Cloud Functions manifest.");
     ok = false;
   }
+
+  const callableCors = await smokeMarketplacePeopleCallableCors({
+    projectId,
+    region,
+    request: fetchWithTimeout,
+  });
+  for (const check of callableCors.checks) {
+    console.log(
+        `${check.ok ? "OK" : "FAIL"} callable CORS preflight ` +
+        `${check.functionName} - ${check.detail}`,
+    );
+  }
+  if (!callableCors.ok) {
+    console.error(`FAIL Marketplace callable transport - ${callableCors.detail}`);
+  }
+  ok = callableCors.ok && ok;
 
   const webhookUrl = process.env.STRIPE_WEBHOOK_URL ||
     `https://${region}-${projectId}.cloudfunctions.net/` +
