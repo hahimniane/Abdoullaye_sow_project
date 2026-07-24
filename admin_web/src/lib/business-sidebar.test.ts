@@ -8,14 +8,20 @@ import {
 } from "./business-sidebar.ts";
 
 describe("business sidebar navigation", () => {
-  it("groups destinations under transport and shipping", () => {
+  it("groups service configuration with business setup", () => {
     const groups = buildBusinessSidebarGroups(businessSidebarTabs, [], "");
+    const business = groups.find((group) => group.id === "business");
     const transport = groups.find((group) => group.id === "transport");
 
+    assert.equal(business?.label, "Business setup");
+    assert.deepEqual(
+      business?.tabs.map((tab) => tab.id),
+      ["profile", "destinations", "people"],
+    );
     assert.equal(transport?.label, "Transport & shipping");
     assert.deepEqual(
       transport?.tabs.map((tab) => tab.id),
-      ["barrels", "freight", "transport", "destinations", "parking"],
+      ["barrels", "freight", "transport", "parking"],
     );
   });
 
@@ -25,7 +31,7 @@ describe("business sidebar navigation", () => {
     assert.equal(groups[0]?.id, "pinned");
     assert.deepEqual(groups[0]?.tabs.map((tab) => tab.id), ["destinations"]);
     assert.equal(
-      groups.find((group) => group.id === "transport")?.tabs.some((tab) => tab.id === "destinations"),
+      groups.find((group) => group.id === "business")?.tabs.some((tab) => tab.id === "destinations"),
       false,
     );
   });

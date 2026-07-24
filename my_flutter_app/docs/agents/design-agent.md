@@ -84,6 +84,12 @@ Return:
   hierarchy, not flat service lists. Keep Destinations under transport/shipping,
   and preserve search/pin affordances so businesses with many services can
   quickly find or prioritize the sections they use most.
+- Business setup must group related controls in one service workspace. Keep
+  service availability, pickup rules, service-specific pricing/facility details,
+  and country coverage together under `Services & coverage`; keep the general
+  Business profile focused on identity, branding, customer-facing details, and
+  verification. This supersedes the earlier placement of Destinations under a
+  separate transport/shipping group.
 - Freight UI must show estimated weight/total and confirmed weight/final total
   as separate concepts. Use settlement labels for money state and operational
   labels for fulfillment state; when a balance is due, keep the amount and

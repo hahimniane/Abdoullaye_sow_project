@@ -37,6 +37,7 @@ import {
 import {
   BusinessPeoplePanel,
   BusinessProfilePanel,
+  BusinessServicesPanel,
 } from "@/components/business/profile-support-people";
 import { SupportCasesPanel } from "@/components/support/support-cases-panel";
 import { useBusinessCollection, useBusinessStaff } from "@/lib/business-data";
@@ -148,16 +149,10 @@ export function BusinessConsole({
 
   const visibleTabs = useMemo(() => {
     return businessSidebarTabs.filter((tab) => {
-      const destinationAllowed =
-        tab.id !== "destinations" ||
-        services.has("barrelShipping") ||
-        services.has("freight") ||
-        services.has("carTransport");
       const serviceAllowed =
-        destinationAllowed &&
-        (!tab.service ||
+        !tab.service ||
         services.has(tab.service) ||
-          (tab.id === "listings" && cars.rows.length > 0));
+        (tab.id === "listings" && cars.rows.length > 0);
       const permissionAllowed =
         !tab.permission || hasBusinessPermission(profile, tab.permission);
       return serviceAllowed && permissionAllowed;
@@ -446,13 +441,29 @@ export function BusinessConsole({
             />
           )}
           {activeTab === "destinations" && (
-            <DestinationsPanel
-              businessId={businessId}
-              previewMode={previewMode}
-              enabledServices={Array.from(services)}
-              onManageServices={() => setActiveTab("profile")}
-              openNewToken={destinationSetupRequest}
-            />
+            <div className="business-service-workspace">
+              <BusinessServicesPanel
+                businessId={businessId}
+                business={business}
+                canManage={profile.role === "businessOwner" && !previewMode}
+              />
+              <div className="service-settings-summary coverage-summary">
+                <div>
+                  <strong>Country coverage &amp; route pricing</strong>
+                  <span>
+                    Choose countries, customer rates, departure days, and
+                    delivery estimates.
+                  </span>
+                </div>
+                <span className="service-settings-step">3 · Coverage</span>
+              </div>
+              <DestinationsPanel
+                businessId={businessId}
+                previewMode={previewMode}
+                enabledServices={Array.from(services)}
+                openNewToken={destinationSetupRequest}
+              />
+            </div>
           )}
           {activeTab === "people" && (
             <BusinessPeoplePanel

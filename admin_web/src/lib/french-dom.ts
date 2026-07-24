@@ -7,6 +7,101 @@ import { LANGUAGE_STORAGE_KEY, currentWebLanguage } from "./language.ts";
 export { resolveLang } from "./language.ts";
 
 const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
+  "Services & coverage": "Services et couverture",
+  "Identity and verification": "Identité et vérification",
+  "Availability, pickup, rates, and routes":
+    "Disponibilité, collecte, tarifs et itinéraires",
+  "Identity, branding, customer-facing details, and verification.":
+    "Identité, image de marque, informations destinées aux clients et vérification.",
+  "Manage what you offer, how customers are served, and where each service is available.":
+    "Gérez vos services, la façon dont les clients sont servis et les zones où chaque service est disponible.",
+  "Saving settings...": "Enregistrement des paramètres...",
+  "Save service settings": "Enregistrer les paramètres des services",
+  "You can review these settings. Only the business owner can change service availability and pricing.":
+    "Vous pouvez consulter ces paramètres. Seul le propriétaire de l’entreprise peut modifier la disponibilité et les tarifs des services.",
+  "0 of 6 services active": "0 service actif sur 6",
+  "1 of 6 services active": "1 service actif sur 6",
+  "2 of 6 services active": "2 services actifs sur 6",
+  "3 of 6 services active": "3 services actifs sur 6",
+  "4 of 6 services active": "4 services actifs sur 6",
+  "5 of 6 services active": "5 services actifs sur 6",
+  "6 of 6 services active": "6 services actifs sur 6",
+  "Select a service to reveal only the settings it needs.":
+    "Sélectionnez un service pour afficher uniquement les paramètres dont il a besoin.",
+  "1 · Services": "1 · Services",
+  "Country routes, barrel prices, and delivery estimates.":
+    "Itinéraires par pays, tarifs des barils et délais de livraison.",
+  "Open shared loads on your active barrel routes.":
+    "Ouvrez des chargements partagés sur vos itinéraires de barils actifs.",
+  "Air and sea rates, departure days, and pickup.":
+    "Tarifs aériens et maritimes, jours de départ et collecte.",
+  "Vehicle listings, customer holds, and purchases.":
+    "Annonces de véhicules, blocages clients et achats.",
+  "Country coverage and customer quote requests.":
+    "Couverture par pays et demandes de devis clients.",
+  "Facility capacity, rates, and vehicle pickup.":
+    "Capacité du site, tarifs et collecte de véhicules.",
+  Active: "Actif",
+  "Not offered": "Non proposé",
+  "Service rules": "Règles des services",
+  "Pricing, pickup, and facility details stay with the service they control.":
+    "Les tarifs, la collecte et les informations du site restent associés au service qu’ils contrôlent.",
+  "2 · Rules": "2 · Règles",
+  "Car sales · paid holds": "Vente de voitures · blocages payants",
+  "Set how customers pay to reserve a vehicle temporarily.":
+    "Définissez comment les clients paient pour réserver temporairement un véhicule.",
+  "Maximum hold days": "Nombre maximal de jours de blocage",
+  "Freight · customer pickup": "Fret · collecte chez le client",
+  "Offer collection from a customer address and calculate the fee consistently.":
+    "Proposez la collecte à l’adresse du client et calculez les frais de manière cohérente.",
+  "Pickup on": "Collecte activée",
+  "Pickup off": "Collecte désactivée",
+  "Set one flat pickup fee for every borough you serve.":
+    "Définissez un tarif de collecte fixe pour chaque arrondissement desservi.",
+  "Fee = base fee + per-kilometre rate × driving distance. Zero rates mean free pickup.":
+    "Frais = frais de base + tarif au kilomètre × distance routière. Des tarifs à zéro signifient une collecte gratuite.",
+  "Maximum distance (km)": "Distance maximale (km)",
+  "Customers bring freight to your business. Turn pickup on to configure collection pricing.":
+    "Les clients apportent le fret à votre entreprise. Activez la collecte pour configurer sa tarification.",
+  "Car parking · facility": "Stationnement · site",
+  "Keep capacity, customer rates, location, and pickup together.":
+    "Regroupez la capacité, les tarifs clients, l’emplacement et la collecte.",
+  "Vehicle pickup on": "Collecte de véhicule activée",
+  "Vehicle pickup off": "Collecte de véhicule désactivée",
+  "Parking address": "Adresse du stationnement",
+  "Parking country": "Pays du stationnement",
+  "Parking country options": "Options de pays du stationnement",
+  "Parking state": "État du stationnement",
+  "Parking state options": "Options d’État du stationnement",
+  "State or region": "État ou région",
+  "Parking city": "Ville du stationnement",
+  "Parking city options": "Options de ville du stationnement",
+  "No states match your search.": "Aucun État ne correspond à votre recherche.",
+  "No cities match your search.": "Aucune ville ne correspond à votre recherche.",
+  "Search or choose a state": "Rechercher ou choisir un État",
+  "Search or choose a city": "Rechercher ou choisir une ville",
+  "Total parking spaces": "Nombre total de places",
+  "Blocked spaces": "Places bloquées",
+  "Daily rate (USD)": "Tarif journalier (USD)",
+  "Minimum stay (days)": "Durée minimale (jours)",
+  "Weekly rate (USD, optional)": "Tarif hebdomadaire (USD, facultatif)",
+  "Monthly rate (USD, optional)": "Tarif mensuel (USD, facultatif)",
+  "Vehicle pickup fee (USD)": "Frais de collecte du véhicule (USD)",
+  "Parking instructions": "Instructions de stationnement",
+  "Entry instructions, hours, or customer notes":
+    "Instructions d’accès, horaires ou notes pour les clients",
+  "Country coverage & route pricing":
+    "Couverture par pays et tarification des itinéraires",
+  "Choose countries, customer rates, departure days, and delivery estimates.":
+    "Choisissez les pays, les tarifs clients, les jours de départ et les délais de livraison.",
+  "3 · Coverage": "3 · Couverture",
+  "Service settings saved": "Paramètres des services enregistrés",
+  "Business profile is still loading.":
+    "Le profil de l’entreprise est encore en cours de chargement.",
+  "Only the business owner can change service settings.":
+    "Seul le propriétaire de l’entreprise peut modifier les paramètres des services.",
+  "Complete the parking location, capacity, and pricing.":
+    "Complétez l’emplacement, la capacité et les tarifs du stationnement.",
   "Service coverage by country": "Couverture des services par pays",
   "Choose which services customers can request in each country.":
     "Choisissez les services que les clients peuvent demander dans chaque pays.",
