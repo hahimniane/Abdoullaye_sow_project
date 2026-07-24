@@ -101,6 +101,9 @@ Return:
   Show it in seller edit/review, customer cards/details, and admin review in
   English and French. Missing legacy values must say Not provided/Unknown and
   must never be presented as No or “clean title.”
+- Vehicle listing photos must stay inside a consistent, clipped aspect-ratio
+  frame regardless of the source image orientation. Use a centered cover crop
+  for inventory scanability; portrait photos must never expand the card height.
 - Public marketing visuals that present the product UI must use genuine captures
   from the running app, not recreated HTML mockups. Capture a privacy-safe,
   fully rendered state in both English and French whenever the image contains
