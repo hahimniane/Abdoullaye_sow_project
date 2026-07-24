@@ -255,6 +255,10 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "Ce mode de fret est temporairement indisponible",
   "No approved businesses currently have a rate for this freight mode.":
     "Aucune entreprise approuvée ne propose actuellement de tarif pour ce mode de fret.",
+  "That destination is not available for this freight mode. Choose another destination.":
+    "Cette destination n’est pas disponible pour ce mode de fret. Choisissez une autre destination.",
+  "That business is not available for this freight mode. Choose another business.":
+    "Cette entreprise n’est pas disponible pour ce mode de fret. Choisissez une autre entreprise.",
   "The freight shipment could not be started. Check the details and try again.":
     "L’expédition de fret n’a pas pu être lancée. Vérifiez les détails et réessayez.",
   "The pickup quote could not be calculated. Check the address and try again.":
@@ -293,6 +297,10 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "Le transport de voitures est temporairement indisponible",
   "No approved car transport businesses are available right now.":
     "Aucune entreprise approuvée de transport de voitures n’est disponible actuellement.",
+  "No approved shared-barrel destinations are available right now.":
+    "Aucune destination approuvée pour les barils partagés n’est disponible actuellement.",
+  "That car listing is no longer available. Choose another listing.":
+    "Cette annonce automobile n’est plus disponible. Choisissez une autre annonce.",
   "Request received": "Demande reçue",
   "Your car transport quote is underway":
     "Votre devis de transport de voiture est en préparation",

@@ -1080,3 +1080,60 @@ test("barrel UI reveals personal details only after country and provider selecti
   assert.match(source, /initialCountryCode=\{selectedCountry\?\.code \|\| "US"\}/);
   assert.match(source, /This receiver uses a WhatsApp number from another country/);
 });
+
+test("freight keeps mode recovery visible and reconciles destination and provider separately", () => {
+  const source = readFileSync(
+    new URL("../components/customer-shipping-services.tsx", import.meta.url),
+    "utf8",
+  );
+  const freightStart = source.indexOf("function FreightShipmentForm");
+  const freightEnd = source.indexOf("function FreightSettlements", freightStart);
+  const freightSource = source.slice(freightStart, freightEnd);
+
+  assert.match(
+    freightSource,
+    /<fieldset className="customer-segmented">[\s\S]*\{availableOptions\.length === 0 \?/,
+  );
+  assert.match(
+    freightSource,
+    /!countries\.some\(\(country\) => country\.id === destinationCountryId\)/,
+  );
+  assert.match(
+    freightSource,
+    /!providerOptions\.some\(\(option\) => option\.id === destinationOptionId\)/,
+  );
+  assert.match(
+    freightSource,
+    /That destination is not available for this freight mode\. Choose another destination\./,
+  );
+  assert.match(
+    freightSource,
+    /That business is not available for this freight mode\. Choose another business\./,
+  );
+  assert.equal(
+    translateValue(
+      "That destination is not available for this freight mode. Choose another destination.",
+      "fr",
+    ),
+    "Cette destination n’est pas disponible pour ce mode de fret. Choisissez une autre destination.",
+  );
+});
+
+test("freight places the different-country WhatsApp choice directly after the phone field", () => {
+  const source = readFileSync(
+    new URL("../components/customer-shipping-services.tsx", import.meta.url),
+    "utf8",
+  );
+  const freightStart = source.indexOf("function FreightShipmentForm");
+  const freightEnd = source.indexOf("function FreightSettlements", freightStart);
+  const freightSource = source.slice(freightStart, freightEnd);
+  const phone = freightSource.indexOf('id="freight-receiver-phone"');
+  const whatsapp = freightSource.indexOf(
+    "This receiver uses a WhatsApp number from another country",
+  );
+  const weight = freightSource.indexOf("Estimated weight (kg)");
+
+  assert.ok(phone > 0);
+  assert.ok(whatsapp > phone);
+  assert.ok(weight > whatsapp);
+});

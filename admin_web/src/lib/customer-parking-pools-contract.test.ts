@@ -44,6 +44,14 @@ test("shared barrels use customer-scoped membership and public open-pool reads",
     source,
     /enabledServices\.includes\("barrelShipping"\)[\s\S]*enabledServices\.includes\("sharedBarrels"\)/,
   );
+  assert.match(
+    source,
+    /No approved shared-barrel destinations are available right now\./,
+  );
+  assert.match(
+    source,
+    /disabled=\{destinationLoading \|\| destinations\.length === 0\}/,
+  );
 });
 
 test("shared barrel actions use exact callables and checkout order types", () => {

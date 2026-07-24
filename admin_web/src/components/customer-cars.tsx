@@ -80,6 +80,19 @@ export function CustomerCars({
     );
   }, [search, state.rows]);
 
+  useEffect(() => {
+    if (
+      selectedCar &&
+      !state.rows.some((car) => car.id === selectedCar.id)
+    ) {
+      setSelectedCar(null);
+      setAction(null);
+      setError(
+        "That car listing is no longer available. Choose another listing.",
+      );
+    }
+  }, [selectedCar, state.rows]);
+
   async function toggleFavorite(car: FirestoreRow) {
     if (favoritePending) return;
     if (!firebaseUser || !authenticated) {

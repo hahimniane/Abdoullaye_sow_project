@@ -1933,6 +1933,7 @@ function FreightShipmentForm({
   const [accepted, setAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [selectionNotice, setSelectionNotice] = useState("");
   const countries = useMemo(
     () => destinationCountries(availableOptions),
     [availableOptions],
@@ -1980,14 +1981,33 @@ function FreightShipmentForm({
 
   useEffect(() => {
     if (
-      destinationOptionId &&
-      !availableOptions.some((option) => option.id === destinationOptionId)
+      destinationCountryId &&
+      !countries.some((country) => country.id === destinationCountryId)
     ) {
       setDestinationOptionId("");
       setDestinationCountryId("");
       setQuote(null);
+      setSelectionNotice(
+        "That destination is not available for this freight mode. Choose another destination.",
+      );
+      return;
     }
-  }, [availableOptions, destinationOptionId]);
+    if (
+      destinationOptionId &&
+      !providerOptions.some((option) => option.id === destinationOptionId)
+    ) {
+      setDestinationOptionId("");
+      setQuote(null);
+      setSelectionNotice(
+        "That business is not available for this freight mode. Choose another business.",
+      );
+    }
+  }, [
+    countries,
+    destinationCountryId,
+    destinationOptionId,
+    providerOptions,
+  ]);
 
   const pickupAllowed = destination?.freightPickupAvailable !== false;
   const pickupUsesBoroughPricing =
@@ -2095,6 +2115,33 @@ function FreightShipmentForm({
 
   return (
     <div className="customer-shipping-stack">
+      <fieldset className="customer-segmented">
+        <legend>Shipping method</legend>
+        <button
+          aria-pressed={mode === "air"}
+          className={mode === "air" ? "active" : ""}
+          onClick={() => {
+            setMode("air");
+            setQuote(null);
+            setSelectionNotice("");
+          }}
+          type="button"
+        >
+          <Plane size={17} /> Air freight
+        </button>
+        <button
+          aria-pressed={mode === "sea"}
+          className={mode === "sea" ? "active" : ""}
+          onClick={() => {
+            setMode("sea");
+            setQuote(null);
+            setSelectionNotice("");
+          }}
+          type="button"
+        >
+          <Ship size={17} /> Sea freight
+        </button>
+      </fieldset>
       {availableOptions.length === 0 ? (
         <ServiceUnavailable
           message="No approved businesses currently have a rate for this freight mode."
@@ -2174,31 +2221,14 @@ function FreightShipmentForm({
           title="Send freight"
         >
           <div className="customer-form-grid customer-shipping-form-grid">
-            <fieldset className="customer-segmented customer-form-span">
-              <legend>Shipping method</legend>
-              <button
-                aria-pressed={mode === "air"}
-                className={mode === "air" ? "active" : ""}
-                onClick={() => {
-                  setMode("air");
-                  setQuote(null);
-                }}
-                type="button"
+            {selectionNotice && (
+              <div
+                aria-live="polite"
+                className="customer-inline-note customer-form-span"
               >
-                <Plane size={17} /> Air freight
-              </button>
-              <button
-                aria-pressed={mode === "sea"}
-                className={mode === "sea" ? "active" : ""}
-                onClick={() => {
-                  setMode("sea");
-                  setQuote(null);
-                }}
-                type="button"
-              >
-                <Ship size={17} /> Sea freight
-              </button>
-            </fieldset>
+                {selectionNotice}
+              </div>
+            )}
             <label>
               Sender name
               <input
@@ -2208,6 +2238,41 @@ function FreightShipmentForm({
                 value={senderName}
               />
             </label>
+            <SearchableSelect
+              className="customer-form-span"
+              emptyMessage="No destination countries match your search."
+              label="Destination country"
+              listLabel="Destination country options"
+              onChange={(value) => {
+                setDestinationCountryId(value);
+                setDestinationOptionId("");
+                setReceiverPhoneIsWhatsappOnly(false);
+                setReceiverPhoneTouched(false);
+                setQuote(null);
+                setSelectionNotice("");
+              }}
+              options={countries.map((country) => ({
+                label: shippingCountryDisplayName(country, language),
+                keywords: `${country.code || ""} ${country.name}`,
+                value: country.id,
+              }))}
+              placeholder="Search or choose a country"
+              value={destinationCountryId}
+            />
+            {destinationCountryId && (
+              <DestinationPicker
+                label="Choose a shipping business"
+                onChange={(value) => {
+                  setDestinationOptionId(value);
+                  setQuote(null);
+                  setSelectionNotice("");
+                }}
+                mode={mode}
+                options={providerOptions}
+                service="freight"
+                value={destinationOptionId}
+              />
+            )}
             <label>
               Receiver name
               <input
@@ -2236,39 +2301,6 @@ function FreightShipmentForm({
               required
               value={receiverPhone}
             />
-            <SearchableSelect
-              className="customer-form-span"
-              emptyMessage="No destination countries match your search."
-              label="Destination country"
-              listLabel="Destination country options"
-              onChange={(value) => {
-                setDestinationCountryId(value);
-                setDestinationOptionId("");
-                setReceiverPhoneIsWhatsappOnly(false);
-                setReceiverPhoneTouched(false);
-                setQuote(null);
-              }}
-              options={countries.map((country) => ({
-                label: shippingCountryDisplayName(country, language),
-                keywords: `${country.code || ""} ${country.name}`,
-                value: country.id,
-              }))}
-              placeholder="Search or choose a country"
-              value={destinationCountryId}
-            />
-            {destinationCountryId && (
-              <DestinationPicker
-                label="Choose a shipping business"
-                onChange={(value) => {
-                  setDestinationOptionId(value);
-                  setQuote(null);
-                }}
-                mode={mode}
-                options={providerOptions}
-                service="freight"
-                value={destinationOptionId}
-              />
-            )}
             {showWhatsappOption && (
               <label className="customer-choice-row customer-form-span">
                 <input
@@ -2820,6 +2852,11 @@ function DestinationPicker({
         Choose an approved provider. Each rate comes directly from that
         business.
       </p>
+      {options.length === 0 && (
+        <div aria-live="polite" className="customer-inline-note">
+          No approved businesses currently have a rate for this freight mode.
+        </div>
+      )}
       <div
         aria-label={label}
         className="customer-destination-grid"

@@ -1192,10 +1192,21 @@ function PoolRequestForm({
       title={creating ? "Post a shared barrel" : "Request a share"}
     >
       <div className="customer-form-grid customer-form-grid-two">
+        {creating &&
+          !destinationLoading &&
+          !destinationError &&
+          destinations.length === 0 && (
+            <div
+              aria-live="polite"
+              className="empty-state customer-form-span"
+            >
+              No approved shared-barrel destinations are available right now.
+            </div>
+          )}
         {creating && (
           <SearchableSelect
             className="customer-form-span"
-            disabled={destinationLoading}
+            disabled={destinationLoading || destinations.length === 0}
             emptyMessage="No destinations match your search."
             label="Destination & provider"
             listLabel="Destination & provider options"
