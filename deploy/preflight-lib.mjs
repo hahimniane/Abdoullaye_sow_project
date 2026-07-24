@@ -19,6 +19,22 @@ export const PRODUCTION_STATIC_HOSTS = [
 ];
 export const FIREBASE_RULES_FIRESTORE_SERVICE_AGENT_ROLE =
   "roles/firebaserules.firestoreServiceAgent";
+export const DEPLOYMENT_SECRET_ENV_KEYS = [
+  "ANTHROPIC_API_KEY",
+  "BUSINESS_PRO_PRICE_ID",
+  "FTP_PASS",
+  "GOOGLE_MAPS_API_KEY",
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+];
+
+export function deploymentChildEnvironment(environment = {}) {
+  const childEnvironment = {...environment};
+  for (const key of DEPLOYMENT_SECRET_ENV_KEYS) {
+    delete childEnvironment[key];
+  }
+  return childEnvironment;
+}
 
 export function assessStorageRulesFirestoreIam({
   rulesSource,

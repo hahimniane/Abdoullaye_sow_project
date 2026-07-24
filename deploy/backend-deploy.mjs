@@ -8,19 +8,24 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { deploymentJavaEnvironment } from "./preflight-lib.mjs";
+import {
+  deploymentChildEnvironment,
+  deploymentJavaEnvironment,
+} from "./preflight-lib.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const PROJECT_ID = process.env.FIREBASE_PROJECT || "car-selling-flutter-app";
 const APP_DIR = path.join(ROOT, "my_flutter_app");
-const commandEnvironment = deploymentJavaEnvironment({
-  environment: process.env,
-  candidateHomes: [
-    "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
-    "/usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
-  ],
-});
+const commandEnvironment = deploymentChildEnvironment(
+    deploymentJavaEnvironment({
+      environment: process.env,
+      candidateHomes: [
+        "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
+        "/usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
+      ],
+    }),
+);
 
 function run(command, args, options = {}) {
   execFileSync(command, args, {

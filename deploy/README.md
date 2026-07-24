@@ -42,6 +42,10 @@ the admin static build, Hostinger FTP env vars, Firebase login/project access,
 the Stripe secret shape, the shared barrel Firestore indexes, and a Firebase
 Functions dry-run so project API blockers are visible before the real deploy.
 It does not print secret values and it does not deploy.
+Application secrets are removed from every lint, test, build, emulator,
+dry-run, and deploy child environment after their release-mode checks. Firebase
+Functions receive deployed secrets from Secret Manager at runtime; they are
+never forwarded through the local process environment.
 
 Backend preflight also runs Functions lint plus the complete
 unit/callable/Firestore/Storage emulator suite. Java 21 or newer and Firebase

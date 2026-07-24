@@ -276,3 +276,6 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   provider permission checks, expiry, withdrawal, customer-only transactional
   one-winner selection, cancellation, selected-provider-only fulfillment
   transitions, and continued `flowVersion: 1` compatibility.
+- Deployment tests must prove application secrets are stripped from every
+  child process environment; Firebase emulator debug logging can print its
+  complete inherited environment.

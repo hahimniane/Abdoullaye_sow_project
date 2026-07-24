@@ -14,6 +14,7 @@ import {
   assessStorageRulesFirestoreIam,
   assessStaticDnsHost,
   appCheckWebConfig,
+  deploymentChildEnvironment,
   deploymentJavaEnvironment,
   deploymentMode,
   firebaseDryRunConfig,
@@ -36,13 +37,15 @@ const PRODUCTION_PROJECT_ID = process.env.PRODUCTION_FIREBASE_PROJECT ||
 const SCOPE = process.env.PREFLIGHT_SCOPE || "full";
 const VALID_SCOPES = new Set(["backend", "full", "static"]);
 const STATIC_TRANSPORT = process.env.STATIC_TRANSPORT || "ftp";
-const commandEnvironment = deploymentJavaEnvironment({
-  environment: process.env,
-  candidateHomes: [
-    "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
-    "/usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
-  ],
-});
+const commandEnvironment = deploymentChildEnvironment(
+    deploymentJavaEnvironment({
+      environment: process.env,
+      candidateHomes: [
+        "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
+        "/usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
+      ],
+    }),
+);
 
 if (!VALID_SCOPES.has(SCOPE)) {
   console.error("PREFLIGHT_SCOPE must be 'static', 'backend', or 'full'.");

@@ -39,6 +39,10 @@ Production deploys go through the preflight, which now enforces:
 2. **Unit tests pass** (`admin_web` regression suite).
 3. **Build from source** — the deployed bundle is always rebuilt from the
    committed source. Never hand-edit or deploy a stale `admin_web/out/`.
+4. **Secret-isolated child processes** — deploy credentials are validated by
+   the preflight but removed from lint, test, build, emulator, dry-run, and
+   Firebase deploy child environments. Tooling must never expose a secret while
+   printing a child process environment.
 
 Commands:
 

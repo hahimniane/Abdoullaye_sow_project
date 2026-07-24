@@ -10,6 +10,7 @@ import {
   assessStorageRulesFirestoreIam,
   assessStaticDnsHost,
   appCheckWebConfig,
+  deploymentChildEnvironment,
   deploymentJavaEnvironment,
   deploymentMode,
   firebaseDryRunConfig,
@@ -365,6 +366,26 @@ test("deployment commands prefer a compatible Java home on the command path", ()
   assert.equal(result.PATH.split(":")[0], path.join(compatibleHome, "bin"));
 });
 
+test("deployment child processes never inherit application secrets", () => {
+  const result = deploymentChildEnvironment({
+    PATH: "/usr/bin",
+    DEPLOY_ENV: "development",
+    FIREBASE_PROJECT: "car-selling-flutter-app",
+    STRIPE_SECRET_KEY: "sk_test_redacted",
+    STRIPE_WEBHOOK_SECRET: "whsec_redacted",
+    ANTHROPIC_API_KEY: "anthropic-redacted",
+    GOOGLE_MAPS_API_KEY: "maps-redacted",
+    BUSINESS_PRO_PRICE_ID: "price_redacted",
+    FTP_PASS: "ftp-redacted",
+  });
+
+  assert.deepEqual(result, {
+    PATH: "/usr/bin",
+    DEPLOY_ENV: "development",
+    FIREBASE_PROJECT: "car-selling-flutter-app",
+  });
+});
+
 test("backend deploy shares its Java-compatible environment with Firebase", () => {
   const source = fs.readFileSync(
       new URL("../backend-deploy.mjs", import.meta.url),
@@ -373,11 +394,11 @@ test("backend deploy shares its Java-compatible environment with Firebase", () =
 
   assert.match(
       source,
-      /import\s+\{\s*deploymentJavaEnvironment\s*\}\s+from\s+["']\.\/preflight-lib\.mjs["']/,
+      /deploymentChildEnvironment[\s\S]*deploymentJavaEnvironment/,
   );
   assert.match(
       source,
-      /const\s+commandEnvironment\s*=\s*deploymentJavaEnvironment\(/,
+      /const\s+commandEnvironment\s*=\s*deploymentChildEnvironment\([\s\S]*deploymentJavaEnvironment\(/,
   );
   assert.match(
       source,
