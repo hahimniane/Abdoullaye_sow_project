@@ -3686,6 +3686,12 @@ abstract class AppLocalizations {
   /// **'Turn on only what this business offers for this country.'**
   String get servicesForDestinationHelp;
 
+  /// No description provided for @enableBusinessServiceBeforeDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable barrel shipping, freight, or car transport on the business profile before configuring destination coverage.'**
+  String get enableBusinessServiceBeforeDestination;
+
   /// No description provided for @destinationServiceCoverageTitle.
   ///
   /// In en, this message translates to:
@@ -9527,6 +9533,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Free pickup'**
   String get freightPickupFreeLabel;
+
+  /// No description provided for @freightAirDepartureDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Air freight departure days'**
+  String get freightAirDepartureDays;
+
+  /// No description provided for @freightSeaDepartureDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Sea freight departure days'**
+  String get freightSeaDepartureDays;
+
+  /// No description provided for @freightDepartureDaysHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional. Choose the regular days this service departs.'**
+  String get freightDepartureDaysHelper;
+
+  /// No description provided for @mondayShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Mon'**
+  String get mondayShort;
+
+  /// No description provided for @tuesdayShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Tue'**
+  String get tuesdayShort;
+
+  /// No description provided for @wednesdayShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Wed'**
+  String get wednesdayShort;
+
+  /// No description provided for @thursdayShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Thu'**
+  String get thursdayShort;
+
+  /// No description provided for @fridayShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Fri'**
+  String get fridayShort;
+
+  /// No description provided for @saturdayShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Sat'**
+  String get saturdayShort;
+
+  /// No description provided for @sundayShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Sun'**
+  String get sundayShort;
+
+  /// No description provided for @regularDepartureDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Regular departures: {days}'**
+  String regularDepartureDays(String days);
 }
 
 class _AppLocalizationsDelegate

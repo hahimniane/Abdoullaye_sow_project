@@ -151,7 +151,8 @@ export function BusinessConsole({
       const destinationAllowed =
         tab.id !== "destinations" ||
         services.has("barrelShipping") ||
-        services.has("freight");
+        services.has("freight") ||
+        services.has("carTransport");
       const serviceAllowed =
         destinationAllowed &&
         (!tab.service ||
@@ -449,6 +450,7 @@ export function BusinessConsole({
               businessId={businessId}
               previewMode={previewMode}
               enabledServices={Array.from(services)}
+              onManageServices={() => setActiveTab("profile")}
               openNewToken={destinationSetupRequest}
             />
           )}

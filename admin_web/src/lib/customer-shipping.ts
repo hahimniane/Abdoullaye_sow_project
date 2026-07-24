@@ -111,6 +111,10 @@ export type ShippingPricingCountry = {
   barrelShippingPrice?: unknown;
   freightAirPricePerKg?: unknown;
   freightSeaPricePerKg?: unknown;
+  deliveryEstimateMinDays?: unknown;
+  deliveryEstimateMaxDays?: unknown;
+  freightAirDepartureDays?: unknown;
+  freightSeaDepartureDays?: unknown;
   serviceAvailability?: {
     barrelShipping?: boolean;
     freightAir?: boolean;

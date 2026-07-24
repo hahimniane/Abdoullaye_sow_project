@@ -122,15 +122,30 @@ service cloud.firestore {
 
     function validDeliveryEstimate(data) {
       return (
-          data.deliveryEstimateMinDays == null &&
-          data.deliveryEstimateMaxDays == null
+          data.get('deliveryEstimateMinDays', null) == null &&
+          data.get('deliveryEstimateMaxDays', null) == null
         ) ||
         (
-          data.deliveryEstimateMinDays is int &&
-          data.deliveryEstimateMaxDays is int &&
+          data.get('deliveryEstimateMinDays', null) is int &&
+          data.get('deliveryEstimateMaxDays', null) is int &&
           data.deliveryEstimateMinDays > 0 &&
           data.deliveryEstimateMaxDays >= data.deliveryEstimateMinDays
         );
+    }
+
+    function validDepartureDays(data, key) {
+      let days = data.get(key, []);
+      return days is list &&
+        days.size() <= 7 &&
+        days.hasOnly([
+          'monday',
+          'tuesday',
+          'wednesday',
+          'thursday',
+          'friday',
+          'saturday',
+          'sunday'
+        ]);
     }
 
     function hasDestinationServiceMap(data) {
@@ -140,6 +155,60 @@ service cloud.firestore {
     function destinationServiceEnabled(data, key) {
       return hasDestinationServiceMap(data) &&
         data.get('serviceAvailability', {}).get(key, false) == true;
+    }
+
+    function hasCanonicalDestinationServiceMap(data) {
+      return hasDestinationServiceMap(data) &&
+        data.serviceAvailability.keys().hasAll([
+          'barrelShipping',
+          'freightAir',
+          'freightSea',
+          'carTransport'
+        ]) &&
+        data.serviceAvailability.keys().hasOnly([
+          'barrelShipping',
+          'freightAir',
+          'freightSea',
+          'carTransport'
+        ]) &&
+        data.serviceAvailability.barrelShipping is bool &&
+        data.serviceAvailability.freightAir is bool &&
+        data.serviceAvailability.freightSea is bool &&
+        data.serviceAvailability.carTransport is bool;
+    }
+
+    function businessOffersDestinationService(businessId, serviceKey) {
+      let services = get(
+        /databases/$(database)/documents/businesses/$(businessId)
+      ).data.get('enabledServices', []);
+      return services is list && (
+        (serviceKey == 'barrelShipping' && 'barrelShipping' in services) ||
+        (
+          (serviceKey == 'freightAir' || serviceKey == 'freightSea') &&
+          'freight' in services
+        ) ||
+        (serviceKey == 'carTransport' && 'carTransport' in services)
+      );
+    }
+
+    function destinationServicesMatchBusiness(data, businessId) {
+      return
+        (
+          !destinationServiceEnabled(data, 'barrelShipping') ||
+          businessOffersDestinationService(businessId, 'barrelShipping')
+        ) &&
+        (
+          !destinationServiceEnabled(data, 'freightAir') ||
+          businessOffersDestinationService(businessId, 'freightAir')
+        ) &&
+        (
+          !destinationServiceEnabled(data, 'freightSea') ||
+          businessOffersDestinationService(businessId, 'freightSea')
+        ) &&
+        (
+          !destinationServiceEnabled(data, 'carTransport') ||
+          businessOffersDestinationService(businessId, 'carTransport')
+        );
     }
 
     function validDestinationServiceRates(data) {
@@ -165,21 +234,18 @@ service cloud.firestore {
     }
 
     function validDestinationServiceCoverage(data) {
-      return data.isActive != true ||
-        (
-          hasDestinationServiceMap(data) &&
-          (
-            destinationServiceEnabled(data, 'barrelShipping') ||
-            destinationServiceEnabled(data, 'freightAir') ||
-            destinationServiceEnabled(data, 'freightSea') ||
-            destinationServiceEnabled(data, 'carTransport')
-          )
-        ) ||
-        (
-          !hasDestinationServiceMap(data) &&
-          data.get('barrelShippingPrice', 0) is number &&
-          data.get('barrelShippingPrice', 0) > 0
-        );
+      let hasService =
+        destinationServiceEnabled(data, 'barrelShipping') ||
+        destinationServiceEnabled(data, 'freightAir') ||
+        destinationServiceEnabled(data, 'freightSea') ||
+        destinationServiceEnabled(data, 'carTransport');
+      return
+        data.get('destinationCoverageVersion', 0) == 2 &&
+        hasCanonicalDestinationServiceMap(data) &&
+        data.isActive is bool &&
+        data.isActive == hasService &&
+        data.get('carTransportAvailable', false) ==
+          destinationServiceEnabled(data, 'carTransport');
     }
 
     function validUserRoleState(data) {
@@ -601,14 +667,19 @@ service cloud.firestore {
         isSuperAdmin(request.auth.uid);
 
       match /destinationCountries/{countryId} {
-        allow read: if resource.data.businessStatus == 'approved' ||
-          get(/databases/$(database)/documents/businesses/$(businessId)).data.status == 'approved' ||
+        allow read: if get(/databases/$(database)/documents/businesses/$(businessId)).data.status == 'approved' ||
           (request.auth != null && canManageBusiness(request.auth.uid, businessId));
-        allow write: if request.auth != null &&
+        allow create, update: if request.auth != null &&
           canManageBusinessSection(request.auth.uid, businessId, 'destinations') &&
+          request.resource.data.businessId == businessId &&
+          request.resource.data.get('countryId', countryId) == countryId &&
           validDestinationServiceRates(request.resource.data) &&
           validDestinationServiceCoverage(request.resource.data) &&
-          validDeliveryEstimate(request.resource.data);
+          destinationServicesMatchBusiness(request.resource.data, businessId) &&
+          validDeliveryEstimate(request.resource.data) &&
+          validDepartureDays(request.resource.data, 'freightAirDepartureDays') &&
+          validDepartureDays(request.resource.data, 'freightSeaDepartureDays');
+        allow delete: if false;
       }
     }
 

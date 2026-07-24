@@ -508,6 +508,14 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     final l10n = AppLocalizations.of(context)!;
     final air = o.country.freightAvailable('air');
     final sea = o.country.freightAvailable('sea');
+    final airDepartureDays = _localizedDepartureDays(
+      l10n,
+      o.country.freightAirDepartureDays,
+    );
+    final seaDepartureDays = _localizedDepartureDays(
+      l10n,
+      o.country.freightSeaDepartureDays,
+    );
     return Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
@@ -571,6 +579,18 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                               o.country.deliveryEstimateMaxDays!,
                             ),
                           ),
+                        if (air && airDepartureDays.isNotEmpty)
+                          _ratePill(
+                            theme,
+                            Icons.flight_takeoff_outlined,
+                            l10n.regularDepartureDays(airDepartureDays),
+                          ),
+                        if (sea && seaDepartureDays.isNotEmpty)
+                          _ratePill(
+                            theme,
+                            Icons.directions_boat_outlined,
+                            l10n.regularDepartureDays(seaDepartureDays),
+                          ),
                       ],
                     ),
                   ],
@@ -582,6 +602,20 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         ),
       ),
     );
+  }
+
+  String _localizedDepartureDays(AppLocalizations l10n, List<String> days) {
+    String label(String day) => switch (day) {
+      'monday' => l10n.mondayShort,
+      'tuesday' => l10n.tuesdayShort,
+      'wednesday' => l10n.wednesdayShort,
+      'thursday' => l10n.thursdayShort,
+      'friday' => l10n.fridayShort,
+      'saturday' => l10n.saturdayShort,
+      'sunday' => l10n.sundayShort,
+      _ => day,
+    };
+    return days.map(label).join(', ');
   }
 
   Widget _ratePill(ThemeData theme, IconData icon, String label) {
@@ -689,10 +723,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
           const SizedBox(width: 8),
-          Text(
-            l10n.freightPickupCalculating,
-            style: theme.textTheme.bodySmall,
-          ),
+          Text(l10n.freightPickupCalculating, style: theme.textTheme.bodySmall),
         ],
       );
     }

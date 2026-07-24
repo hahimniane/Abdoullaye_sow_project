@@ -127,6 +127,12 @@ class BusinessDestinationOption {
             (country['freightAirPricePerKg'] as num?)?.toDouble() ?? 0,
         freightSeaPricePerKg:
             (country['freightSeaPricePerKg'] as num?)?.toDouble() ?? 0,
+        freightAirDepartureDays: _departureDays(
+          country['freightAirDepartureDays'],
+        ),
+        freightSeaDepartureDays: _departureDays(
+          country['freightSeaDepartureDays'],
+        ),
         carTransportAvailable: _legacyCarTransportAvailable(country),
         deliveryEstimateMinDays: (country['deliveryEstimateMinDays'] as num?)
             ?.toInt(),
@@ -235,6 +241,12 @@ class BusinessDestinationOption {
             (data['freightAirPricePerKg'] as num?)?.toDouble() ?? 0,
         freightSeaPricePerKg:
             (data['freightSeaPricePerKg'] as num?)?.toDouble() ?? 0,
+        freightAirDepartureDays: _departureDays(
+          data['freightAirDepartureDays'],
+        ),
+        freightSeaDepartureDays: _departureDays(
+          data['freightSeaDepartureDays'],
+        ),
         carTransportAvailable: _legacyCarTransportAvailable(data),
         deliveryEstimateMinDays: (data['deliveryEstimateMinDays'] as num?)
             ?.toInt(),
@@ -282,6 +294,21 @@ class BusinessDestinationOption {
     if (availability is Map && availability['carTransport'] is bool) {
       return availability['carTransport'] as bool;
     }
-    return data['isActive'] == true;
+    return data['isActive'] == true && data['carTransportAvailable'] == true;
+  }
+
+  static List<String> _departureDays(dynamic value) {
+    const validDays = [
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sunday',
+    ];
+    if (value is! List) return const [];
+    final requested = value.whereType<String>().toSet();
+    return validDays.where(requested.contains).toList(growable: false);
   }
 }

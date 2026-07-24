@@ -7,6 +7,8 @@ Map<String, dynamic> optionData({
   double barrelRate = 0,
   double airRate = 0,
   double seaRate = 0,
+  List<String>? airDepartureDays,
+  List<String>? seaDepartureDays,
   Map<String, bool>? serviceAvailability,
 }) {
   final country = <String, dynamic>{
@@ -16,6 +18,8 @@ Map<String, dynamic> optionData({
     'barrelShippingPrice': barrelRate,
     'freightAirPricePerKg': airRate,
     'freightSeaPricePerKg': seaRate,
+    'freightAirDepartureDays': airDepartureDays ?? const <String>[],
+    'freightSeaDepartureDays': seaDepartureDays ?? const <String>[],
   };
   if (serviceAvailability != null) {
     country['serviceAvailability'] = serviceAvailability;
@@ -44,7 +48,15 @@ void main() {
     'transport destinations require approval and service, not barrel price',
     () {
       final option = BusinessDestinationOption.fromFunctionData(
-        optionData(services: ['carTransport']),
+        optionData(
+          services: ['carTransport'],
+          serviceAvailability: {
+            'barrelShipping': false,
+            'freightAir': false,
+            'freightSea': false,
+            'carTransport': true,
+          },
+        ),
       );
       expect(option.isAvailableFor(BusinessServiceKey.carTransport), isTrue);
       expect(option.isAvailable, isFalse);
@@ -116,5 +128,46 @@ void main() {
       isFalse,
     );
     expect(available.isAvailableFor(BusinessServiceKey.carTransport), isTrue);
+  });
+
+  test('a global service disable overrides stale country coverage', () {
+    final option = BusinessDestinationOption.fromFunctionData(
+      optionData(
+        services: ['freight'],
+        barrelRate: 225,
+        serviceAvailability: {
+          'barrelShipping': true,
+          'freightAir': false,
+          'freightSea': false,
+          'carTransport': true,
+        },
+      ),
+    );
+
+    expect(option.isAvailableFor(BusinessServiceKey.barrelShipping), isFalse);
+    expect(option.isAvailableFor(BusinessServiceKey.carTransport), isFalse);
+  });
+
+  test('legacy active rows do not imply car transport coverage', () {
+    final option = BusinessDestinationOption.fromFunctionData(
+      optionData(services: ['carTransport'], barrelRate: 225),
+    );
+
+    expect(option.country.carTransportAvailable, isFalse);
+    expect(option.isAvailableFor(BusinessServiceKey.carTransport), isFalse);
+  });
+
+  test('freight departure days are normalized in calendar order', () {
+    final option = BusinessDestinationOption.fromFunctionData(
+      optionData(
+        services: ['freight'],
+        airRate: 12,
+        airDepartureDays: ['thursday', 'monday', 'funday', 'thursday'],
+        seaDepartureDays: ['saturday'],
+      ),
+    );
+
+    expect(option.country.freightAirDepartureDays, ['monday', 'thursday']);
+    expect(option.country.freightSeaDepartureDays, ['saturday']);
   });
 }

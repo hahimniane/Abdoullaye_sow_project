@@ -814,6 +814,7 @@
   "manageDestinationsFees": "Manage destinations and services",
   "servicesForDestination": "Services for this destination",
   "servicesForDestinationHelp": "Turn on only what this business offers for this country.",
+  "enableBusinessServiceBeforeDestination": "Enable barrel shipping, freight, or car transport on the business profile before configuring destination coverage.",
   "destinationServiceCoverageTitle": "Destination services",
   "destinationServiceCoverageSubtitle": "Set which services are available for this country and add rates where needed.",
   "offerBarrelShipping": "Barrel shipping",
@@ -2206,4 +2207,16 @@
   ,"freightPickupDistanceAway": "{distanceKm} km away"
   ,"@freightPickupDistanceAway": { "placeholders": { "distanceKm": { "type": "String" } } }
   ,"freightPickupFreeLabel": "Free pickup"
+  ,"freightAirDepartureDays": "Air freight departure days"
+  ,"freightSeaDepartureDays": "Sea freight departure days"
+  ,"freightDepartureDaysHelper": "Optional. Choose the regular days this service departs."
+  ,"mondayShort": "Mon"
+  ,"tuesdayShort": "Tue"
+  ,"wednesdayShort": "Wed"
+  ,"thursdayShort": "Thu"
+  ,"fridayShort": "Fri"
+  ,"saturdayShort": "Sat"
+  ,"sundayShort": "Sun"
+  ,"regularDepartureDays": "Regular departures: {days}"
+  ,"@regularDepartureDays": { "placeholders": { "days": { "type": "String" } } }
 }

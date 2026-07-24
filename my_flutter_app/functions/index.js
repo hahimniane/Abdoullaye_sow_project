@@ -1294,6 +1294,24 @@ function deliveryEstimateFromCountry(country) {
   };
 }
 
+const DESTINATION_DEPARTURE_DAYS = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
+
+function normalizedDestinationDepartureDays(value) {
+  if (!Array.isArray(value)) return [];
+  const requested = new Set(value.filter((day) =>
+    typeof day === "string" && DESTINATION_DEPARTURE_DAYS.includes(day),
+  ));
+  return DESTINATION_DEPARTURE_DAYS.filter((day) => requested.has(day));
+}
+
 function compareDestinationOptions(a, b) {
   const country = a.country.name.localeCompare(b.country.name);
   if (country !== 0) return country;
@@ -1355,7 +1373,7 @@ function destinationServiceEnabled(country, serviceKey) {
     return isActive && Number(country?.freightSeaPricePerKg || 0) > 0;
   }
   if (serviceKey === "carTransport") {
-    return isActive;
+    return isActive && country?.carTransportAvailable === true;
   }
   return false;
 }
@@ -1412,8 +1430,22 @@ function normalizedDestinationServiceAvailability(data) {
     freightSea:
       active && Number(data?.freightSeaPricePerKg || 0) > 0,
     carTransport:
-      data?.carTransportAvailable === true || active,
+      active && data?.carTransportAvailable === true,
   };
+}
+
+function destinationAvailabilityMatchesBusinessServices(
+    availability,
+    enabledServices,
+) {
+  const services = normalizeBusinessServices(enabledServices);
+  return (
+    (!availability.barrelShipping ||
+      services.includes("barrelShipping")) &&
+    (!availability.freightAir || services.includes("freight")) &&
+    (!availability.freightSea || services.includes("freight")) &&
+    (!availability.carTransport || services.includes("carTransport"))
+  );
 }
 
 function intOrFallback(value, fallback) {
@@ -1748,6 +1780,14 @@ exports.listActiveBarrelDestinationOptions = onCall(
                 Number.isFinite(freightSeaPricePerKg) ?
                   freightSeaPricePerKg : 0,
               carTransportAvailable: availability.carTransport,
+              freightAirDepartureDays:
+                normalizedDestinationDepartureDays(
+                    country.freightAirDepartureDays,
+                ),
+              freightSeaDepartureDays:
+                normalizedDestinationDepartureDays(
+                    country.freightSeaDepartureDays,
+                ),
               destinationNote: country.destinationNote || "",
               ...deliveryEstimateFromCountry(country),
             },
@@ -1816,6 +1856,14 @@ exports.listTransportBusinessOptions = onCall(
               freightAirPricePerKg: Number(country.freightAirPricePerKg || 0),
               freightSeaPricePerKg: Number(country.freightSeaPricePerKg || 0),
               carTransportAvailable: availability.carTransport,
+              freightAirDepartureDays:
+                normalizedDestinationDepartureDays(
+                    country.freightAirDepartureDays,
+                ),
+              freightSeaDepartureDays:
+                normalizedDestinationDepartureDays(
+                    country.freightSeaDepartureDays,
+                ),
               destinationNote: country.destinationNote || "",
               ...deliveryEstimateFromCountry(country),
             },
@@ -9008,6 +9056,8 @@ exports.seedDestinationCountries = onCall(
         batch.set(
             refs[index],
             {
+              id: country.id,
+              countryId: country.id,
               name: country.name,
               code: country.code,
               businessId,
@@ -9121,6 +9171,14 @@ exports.updateDestinationCoverage = onCall(
         Number(request.data?.freightAirPricePerKg || 0);
       const freightSeaPricePerKg =
         Number(request.data?.freightSeaPricePerKg || 0);
+      const freightAirDepartureDays =
+        normalizedDestinationDepartureDays(
+            request.data?.freightAirDepartureDays,
+        );
+      const freightSeaDepartureDays =
+        normalizedDestinationDepartureDays(
+            request.data?.freightSeaDepartureDays,
+        );
       const hasAvailabilityMap =
         request.data?.serviceAvailability &&
         typeof request.data.serviceAvailability === "object";
@@ -9212,6 +9270,15 @@ exports.updateDestinationCoverage = onCall(
         throw new HttpsError("not-found", "Business not found");
       }
       const business = businessDoc.data() || {};
+      if (!destinationAvailabilityMatchesBusinessServices(
+          availability,
+          business.enabledServices,
+      )) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Destination services must also be enabled on the business profile",
+        );
+      }
       const destinationRef = businessRef
           .collection("destinationCountries")
           .doc(countryId);
@@ -9230,6 +9297,10 @@ exports.updateDestinationCoverage = onCall(
         barrelShippingPrice: price,
         freightAirPricePerKg,
         freightSeaPricePerKg,
+        freightAirDepartureDays: availability.freightAir ?
+          freightAirDepartureDays : [],
+        freightSeaDepartureDays: availability.freightSea ?
+          freightSeaDepartureDays : [],
         carTransportAvailable: availability.carTransport,
         isActive: nextIsActive,
         destinationNote: destinationNote ||
@@ -14747,6 +14818,11 @@ async function getApprovedFreightDestination({businessId, countryId, mode}) {
     country,
     pricePerKg,
     deliveryEstimate: deliveryEstimateFromCountry(country),
+    departureDays: normalizedDestinationDepartureDays(
+        mode === "air" ?
+          country.freightAirDepartureDays :
+          country.freightSeaDepartureDays,
+    ),
   };
 }
 
@@ -14823,7 +14899,13 @@ exports.createFreightShipmentPaymentIntent = onCall(
         pricingRef.get(),
         admin.auth().getUser(customerUid),
       ]);
-      const {business, country, pricePerKg, deliveryEstimate} =
+      const {
+        business,
+        country,
+        pricePerKg,
+        deliveryEstimate,
+        departureDays,
+      } =
         freightDestination;
 
       const platformFeePct = servicePlatformFeePctForBusiness(
@@ -14896,6 +14978,7 @@ exports.createFreightShipmentPaymentIntent = onCall(
           businessId: freightDestination.businessId,
           businessName: business.name || DEFAULT_BUSINESS_NAME,
           ...deliveryEstimate,
+          freightDepartureDays: departureDays,
           mode: freightMode,
           freightPricingVersion: 2,
           settlementVersion: 1,

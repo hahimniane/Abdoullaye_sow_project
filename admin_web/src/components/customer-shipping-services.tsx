@@ -82,6 +82,11 @@ type DestinationCountry = {
   barrelShippingPrice?: number;
   freightAirPricePerKg?: number;
   freightSeaPricePerKg?: number;
+  deliveryEstimateMinDays?: number;
+  deliveryEstimateMaxDays?: number;
+  freightAirDepartureDays?: string[];
+  freightSeaDepartureDays?: string[];
+  destinationNote?: string;
   serviceAvailability?: {
     barrelShipping?: boolean;
     freightAir?: boolean;
@@ -99,6 +104,13 @@ type DestinationOption = {
   freightPickupAvailable?: boolean;
   freightPickupModel?: "borough" | "distance";
   country: DestinationCountry;
+};
+
+type DestinationLogisticsCountry = {
+  deliveryEstimateMinDays?: unknown;
+  deliveryEstimateMaxDays?: unknown;
+  freightAirDepartureDays?: unknown;
+  freightSeaDepartureDays?: unknown;
 };
 
 type AddressSuggestion = {
@@ -156,6 +168,95 @@ async function callFunction<TResult>(
 
 function optionLabel(option: DestinationOption) {
   return `${option.country.name} · ${option.businessName}`;
+}
+
+const departureDayLabels: Record<string, string> = {
+  monday: "Monday",
+  tuesday: "Tuesday",
+  wednesday: "Wednesday",
+  thursday: "Thursday",
+  friday: "Friday",
+  saturday: "Saturday",
+  sunday: "Sunday",
+};
+
+function deliveryWindow(country: DestinationLogisticsCountry) {
+  const minimum = Number(country.deliveryEstimateMinDays);
+  const maximum = Number(country.deliveryEstimateMaxDays);
+  if (
+    !Number.isInteger(minimum) ||
+    !Number.isInteger(maximum) ||
+    minimum <= 0 ||
+    maximum < minimum
+  ) {
+    return null;
+  }
+  return { minimum, maximum };
+}
+
+function departureDays(
+  country: DestinationLogisticsCountry,
+  mode: "air" | "sea",
+) {
+  const value =
+    mode === "air"
+      ? country.freightAirDepartureDays
+      : country.freightSeaDepartureDays;
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (day): day is string =>
+      typeof day === "string" && Boolean(departureDayLabels[day]),
+  );
+}
+
+function DeliveryWindow({
+  country,
+}: {
+  country: DestinationLogisticsCountry;
+}) {
+  const window = deliveryWindow(country);
+  if (!window) return null;
+  return (
+    <span className="customer-provider-logistics">
+      <Clock3 aria-hidden="true" size={14} />
+      <span>
+        <small>Typical delivery</small>
+        <strong>
+          {window.minimum === window.maximum
+            ? window.minimum
+            : `${window.minimum}–${window.maximum}`}{" "}
+          <span>days</span>
+        </strong>
+      </span>
+    </span>
+  );
+}
+
+function FreightDepartureSchedule({
+  country,
+  mode,
+}: {
+  country: DestinationLogisticsCountry;
+  mode: "air" | "sea";
+}) {
+  const days = departureDays(country, mode);
+  if (days.length === 0) return null;
+  return (
+    <span className="customer-provider-logistics">
+      <CalendarClock aria-hidden="true" size={14} />
+      <span>
+        <small>Regular departure days</small>
+        <strong>
+          {days.map((day, index) => (
+            <span key={day}>
+              {index > 0 && ", "}
+              <span>{departureDayLabels[day]}</span>
+            </span>
+          ))}
+        </strong>
+      </span>
+    </span>
+  );
 }
 
 function destinationCountries(options: readonly DestinationOption[]) {
@@ -728,6 +829,7 @@ function BarrelShipmentForm({
                     <span className="customer-barrel-provider-name">
                       <strong>{option.businessName}</strong>
                       <small>Approved business</small>
+                      <DeliveryWindow country={option.country} />
                     </span>
                     <span className="customer-barrel-provider-price">
                       <strong>{rate ? formatMoney(rate) : "Rate unavailable"}</strong>
@@ -1538,6 +1640,7 @@ function BarrelOrderForm({
                       <span className="customer-barrel-provider-name">
                         <strong>{option.businessName}</strong>
                         <small>Approved business</small>
+                        <DeliveryWindow country={option.country} />
                       </span>
                       <span className="customer-barrel-provider-price">
                         <strong>
@@ -3585,6 +3688,17 @@ function DestinationPicker({
                       <small>Sea freight</small>
                       <strong>{formatMoney(seaRate)} / kg</strong>
                     </span>
+                  )}
+                </span>
+              )}
+              {service !== "transport" && (
+                <span className="customer-destination-logistics">
+                  <DeliveryWindow country={option.country} />
+                  {service === "freight" && (
+                    <FreightDepartureSchedule
+                      country={option.country}
+                      mode={mode}
+                    />
                   )}
                 </span>
               )}

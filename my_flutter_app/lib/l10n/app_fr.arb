@@ -815,6 +815,7 @@
   "manageDestinationsFees": "Gérer les destinations et services",
   "servicesForDestination": "Services pour cette destination",
   "servicesForDestinationHelp": "Activez uniquement ce que cette entreprise propose pour ce pays.",
+  "enableBusinessServiceBeforeDestination": "Activez l’expédition de barils, le fret ou le transport de véhicules dans le profil de l’entreprise avant de configurer la couverture des destinations.",
   "destinationServiceCoverageTitle": "Services de destination",
   "destinationServiceCoverageSubtitle": "Définissez les services disponibles pour ce pays et ajoutez les tarifs nécessaires.",
   "offerBarrelShipping": "Expédition de barils",
@@ -2207,4 +2208,16 @@
   ,"freightPickupDistanceAway": "à {distanceKm} km"
   ,"@freightPickupDistanceAway": { "placeholders": { "distanceKm": { "type": "String" } } }
   ,"freightPickupFreeLabel": "Enlèvement gratuit"
+  ,"freightAirDepartureDays": "Jours de départ du fret aérien"
+  ,"freightSeaDepartureDays": "Jours de départ du fret maritime"
+  ,"freightDepartureDaysHelper": "Facultatif. Choisissez les jours de départ habituels de ce service."
+  ,"mondayShort": "Lun"
+  ,"tuesdayShort": "Mar"
+  ,"wednesdayShort": "Mer"
+  ,"thursdayShort": "Jeu"
+  ,"fridayShort": "Ven"
+  ,"saturdayShort": "Sam"
+  ,"sundayShort": "Dim"
+  ,"regularDepartureDays": "Départs habituels : {days}"
+  ,"@regularDepartureDays": { "placeholders": { "days": { "type": "String" } } }
 }

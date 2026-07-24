@@ -279,3 +279,9 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
 - Deployment tests must prove application secrets are stripped from every
   child process environment; Firebase emulator debug logging can print its
   complete inherited environment.
+- Destination coverage tests must cover the exact v2 service map, parent
+  capability gates, legacy car fail-closed behavior, positive rates only for
+  enabled paid services, quote-only car routes, valid optional delivery
+  windows, and ordered weekday-only air/sea departure schedules. Verify those
+  logistics fields reach customer comparison UI and the booked freight record
+  in both English and French.

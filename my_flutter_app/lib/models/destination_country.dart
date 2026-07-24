@@ -8,13 +8,15 @@ class DestinationCountry {
     this.isActive = false,
     this.sortOrder = 0,
     this.destinationCoverageVersion = 1,
-    this.barrelShippingAvailable = true,
-    this.freightAirAvailable = true,
-    this.freightSeaAvailable = true,
+    this.barrelShippingAvailable = false,
+    this.freightAirAvailable = false,
+    this.freightSeaAvailable = false,
     this.barrelShippingPrice = 0,
     this.freightAirPricePerKg = 0,
     this.freightSeaPricePerKg = 0,
-    this.carTransportAvailable = true,
+    this.freightAirDepartureDays = const [],
+    this.freightSeaDepartureDays = const [],
+    this.carTransportAvailable = false,
     this.deliveryEstimateMinDays,
     this.deliveryEstimateMaxDays,
     this.destinationNote,
@@ -40,6 +42,8 @@ class DestinationCountry {
   final double barrelShippingPrice;
   final double freightAirPricePerKg;
   final double freightSeaPricePerKg;
+  final List<String> freightAirDepartureDays;
+  final List<String> freightSeaDepartureDays;
   final bool carTransportAvailable;
   final int? deliveryEstimateMinDays;
   final int? deliveryEstimateMaxDays;
@@ -137,6 +141,8 @@ class DestinationCountry {
           (data['freightAirPricePerKg'] as num?)?.toDouble() ?? 0,
       freightSeaPricePerKg:
           (data['freightSeaPricePerKg'] as num?)?.toDouble() ?? 0,
+      freightAirDepartureDays: _departureDays(data['freightAirDepartureDays']),
+      freightSeaDepartureDays: _departureDays(data['freightSeaDepartureDays']),
       carTransportAvailable: _legacyCarTransportAvailable(data),
       deliveryEstimateMinDays: (data['deliveryEstimateMinDays'] as num?)
           ?.toInt(),
@@ -157,6 +163,8 @@ class DestinationCountry {
       'barrelShippingPrice': barrelShippingPrice,
       'freightAirPricePerKg': freightAirPricePerKg,
       'freightSeaPricePerKg': freightSeaPricePerKg,
+      'freightAirDepartureDays': freightAirDepartureDays,
+      'freightSeaDepartureDays': freightSeaDepartureDays,
       'carTransportAvailable': carTransportAvailable,
       if (deliveryEstimateMinDays != null)
         'deliveryEstimateMinDays': deliveryEstimateMinDays,
@@ -185,6 +193,21 @@ class DestinationCountry {
     if (availability is Map && availability['carTransport'] is bool) {
       return availability['carTransport'] as bool;
     }
-    return data['isActive'] == true;
+    return data['isActive'] == true && data['carTransportAvailable'] == true;
+  }
+
+  static List<String> _departureDays(dynamic value) {
+    const validDays = [
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sunday',
+    ];
+    if (value is! List) return const [];
+    final requested = value.whereType<String>().toSet();
+    return validDays.where(requested.contains).toList(growable: false);
   }
 }

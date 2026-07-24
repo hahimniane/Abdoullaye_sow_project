@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  canonicalDestinationServiceAvailability,
   destinationCanActivate,
+  destinationDepartureDays,
   destinationRateError,
+  destinationServiceAvailability,
+  EMPTY_DESTINATION_SERVICE_AVAILABILITY,
 } from "./destination-pricing.ts";
 
 const noRates = {
@@ -13,53 +17,119 @@ const noRates = {
 };
 
 describe("destination pricing gates", () => {
-  it("requires a barrel rate only for businesses offering barrels", () => {
+  it("requires a rate only for a selected paid service", () => {
     assert.match(
-      destinationRateError(["barrelShipping"], noRates),
+      destinationRateError(
+        ["barrelShipping"],
+        { ...EMPTY_DESTINATION_SERVICE_AVAILABILITY, barrelShipping: true },
+        noRates,
+      ),
       /barrel shipping price/,
     );
     assert.equal(
-      destinationCanActivate(["barrelShipping"], {
-        ...noRates,
-        barrelShippingPrice: 225,
-      }),
+      destinationCanActivate(
+        ["barrelShipping"],
+        { ...EMPTY_DESTINATION_SERVICE_AVAILABILITY, barrelShipping: true },
+        {
+          ...noRates,
+          barrelShippingPrice: 225,
+        },
+      ),
       true,
     );
   });
 
-  it("accepts either an air or sea rate for a freight-only business", () => {
-    assert.match(destinationRateError(["freight"], noRates), /air or sea/);
-    assert.equal(
-      destinationCanActivate(["freight"], {
-        ...noRates,
-        freightSeaPricePerKg: 5,
-      }),
-      true,
+  it("validates air and sea freight independently", () => {
+    assert.match(
+      destinationRateError(
+        ["freight"],
+        { ...EMPTY_DESTINATION_SERVICE_AVAILABILITY, freightAir: true },
+        noRates,
+      ),
+      /air freight/,
     );
     assert.equal(
-      destinationCanActivate(["freight"], {
-        ...noRates,
-        freightAirPricePerKg: 12.5,
-      }),
+      destinationCanActivate(
+        ["freight"],
+        { ...EMPTY_DESTINATION_SERVICE_AVAILABILITY, freightSea: true },
+        { ...noRates, freightSeaPricePerKg: 5 },
+      ),
       true,
     );
   });
 
-  it("requires both service configurations when both are offered", () => {
+  it("allows quote-based car transport without a fixed rate", () => {
     assert.equal(
-      destinationCanActivate(["barrelShipping", "freight"], {
-        ...noRates,
-        barrelShippingPrice: 225,
-        freightAirPricePerKg: 12.5,
-      }),
+      destinationCanActivate(
+        ["carTransport"],
+        { ...EMPTY_DESTINATION_SERVICE_AVAILABILITY, carTransport: true },
+        noRates,
+      ),
       true,
     );
-    assert.match(
-      destinationRateError(["barrelShipping", "freight"], {
-        ...noRates,
-        freightAirPricePerKg: 12.5,
-      }),
-      /barrel shipping price/,
+  });
+
+  it("masks country coverage that the business does not offer globally", () => {
+    assert.deepEqual(
+      canonicalDestinationServiceAvailability(
+        ["freight"],
+        {
+          barrelShipping: true,
+          freightAir: true,
+          freightSea: false,
+          carTransport: true,
+        },
+      ),
+      {
+        barrelShipping: false,
+        freightAir: true,
+        freightSea: false,
+        carTransport: false,
+      },
     );
+  });
+
+  it("never infers legacy car transport from a generic active flag", () => {
+    assert.deepEqual(
+      destinationServiceAvailability({
+        isActive: true,
+        barrelShippingPrice: 225,
+      }),
+      {
+        barrelShipping: true,
+        freightAir: false,
+        freightSea: false,
+        carTransport: false,
+      },
+    );
+  });
+
+  it("treats missing keys in a v2 map as disabled", () => {
+    assert.deepEqual(
+      destinationServiceAvailability({
+        isActive: true,
+        barrelShippingPrice: 225,
+        serviceAvailability: { freightAir: true },
+      }),
+      {
+        barrelShipping: false,
+        freightAir: true,
+        freightSea: false,
+        carTransport: false,
+      },
+    );
+  });
+
+  it("normalizes freight departure days into calendar order", () => {
+    assert.deepEqual(
+      destinationDepartureDays([
+        "thursday",
+        "monday",
+        "thursday",
+        "funday",
+      ]),
+      ["monday", "thursday"],
+    );
+    assert.deepEqual(destinationDepartureDays("monday"), []);
   });
 });

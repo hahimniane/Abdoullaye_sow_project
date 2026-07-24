@@ -90,6 +90,13 @@ import {
   optionalText,
   text,
 } from "@/lib/format";
+import {
+  canonicalDestinationServiceAvailability,
+  destinationDepartureDays,
+  destinationRateError,
+  destinationServiceAvailability,
+  type DestinationServiceAvailability,
+} from "@/lib/destination-pricing";
 import type { FirestoreRow, Role, UserProfile } from "@/types/admin";
 import { SupportCasesPanel } from "@/components/support/support-cases-panel";
 import {
@@ -8216,6 +8223,7 @@ function BusinessDestinationsPanel({
           <DestinationCoverageRow
             key={text(destination._path, `${business.id}-${destination.id}`)}
             destination={destination}
+            enabledServices={businessServicesFromRow(business)}
             runAction={runAction}
           />
         ))}
@@ -9104,6 +9112,11 @@ function MarketplaceView({
               <DestinationCoverageRow
                 key={text(item._path, item.id)}
                 destination={item}
+                enabledServices={
+                  Array.isArray(item.enabledServices)
+                    ? item.enabledServices.map(String)
+                    : []
+                }
                 runAction={runAction}
               />
             ))}
@@ -9294,13 +9307,21 @@ function MarketplaceListingRow({
 
 function DestinationCoverageRow({
   destination,
+  enabledServices,
   runAction,
 }: {
   destination: FirestoreRow;
+  enabledServices: string[];
   runAction: ActionRunner;
 }) {
   const [price, setPrice] = useState(
     String(destination.barrelShippingPrice ?? ""),
+  );
+  const [freightAirPrice, setFreightAirPrice] = useState(
+    String(destination.freightAirPricePerKg ?? ""),
+  );
+  const [freightSeaPrice, setFreightSeaPrice] = useState(
+    String(destination.freightSeaPricePerKg ?? ""),
   );
   const [minDays, setMinDays] = useState(
     String(destination.deliveryEstimateMinDays ?? ""),
@@ -9311,28 +9332,43 @@ function DestinationCoverageRow({
   const [destinationNote, setDestinationNote] = useState(
     text(destination.destinationNote ?? destination.details, ""),
   );
-  const [active, setActive] = useState(destination.isActive === true);
+  const [availability, setAvailability] =
+    useState<DestinationServiceAvailability>(
+      destinationServiceAvailability(destination),
+    );
 
   useEffect(() => {
     setPrice(String(destination.barrelShippingPrice ?? ""));
+    setFreightAirPrice(String(destination.freightAirPricePerKg ?? ""));
+    setFreightSeaPrice(String(destination.freightSeaPricePerKg ?? ""));
     setMinDays(String(destination.deliveryEstimateMinDays ?? ""));
     setMaxDays(String(destination.deliveryEstimateMaxDays ?? ""));
     setDestinationNote(
       text(destination.destinationNote ?? destination.details, ""),
     );
-    setActive(destination.isActive === true);
+    setAvailability(destinationServiceAvailability(destination));
   }, [destination]);
 
   async function save() {
     const nextPrice = Number(price);
-    if (!Number.isFinite(nextPrice) || nextPrice < 0) {
-      throw new Error("Barrel shipping price must be zero or more.");
-    }
-    if (active && nextPrice <= 0) {
-      throw new Error(
-        "Active destinations need a barrel shipping fee greater than 0.",
-      );
-    }
+    const nextAirPrice = Number(freightAirPrice);
+    const nextSeaPrice = Number(freightSeaPrice);
+    const canonicalAvailability =
+      canonicalDestinationServiceAvailability(enabledServices, availability);
+    const rates = {
+      barrelShippingPrice:
+        canonicalAvailability.barrelShipping ? nextPrice : 0,
+      freightAirPricePerKg:
+        canonicalAvailability.freightAir ? nextAirPrice : 0,
+      freightSeaPricePerKg:
+        canonicalAvailability.freightSea ? nextSeaPrice : 0,
+    };
+    const rateError = destinationRateError(
+      enabledServices,
+      canonicalAvailability,
+      rates,
+    );
+    if (rateError) throw new Error(rateError);
 
     const hasMin = minDays.trim() !== "";
     const hasMax = maxDays.trim() !== "";
@@ -9366,12 +9402,29 @@ function DestinationCoverageRow({
     )({
       businessId,
       countryId,
-      barrelShippingPrice: nextPrice,
+      barrelShippingPrice: rates.barrelShippingPrice,
+      freightAirPricePerKg: rates.freightAirPricePerKg,
+      freightSeaPricePerKg: rates.freightSeaPricePerKg,
+      freightAirDepartureDays: destinationDepartureDays(
+        destination.freightAirDepartureDays,
+      ),
+      freightSeaDepartureDays: destinationDepartureDays(
+        destination.freightSeaDepartureDays,
+      ),
+      serviceAvailability: canonicalAvailability,
+      carTransportAvailable: canonicalAvailability.carTransport,
       deliveryEstimateMinDays: hasMin ? nextMin : undefined,
       deliveryEstimateMaxDays: hasMax ? nextMax : undefined,
       destinationNote: destinationNote.trim(),
-      isActive: active,
+      isActive: Object.values(canonicalAvailability).some(Boolean),
     });
+  }
+
+  function toggleService(
+    service: keyof DestinationServiceAvailability,
+    checked: boolean,
+  ) {
+    setAvailability((current) => ({...current, [service]: checked}));
   }
 
   return (
@@ -9392,27 +9445,95 @@ function DestinationCoverageRow({
         </small>
       </div>
       <div className="destination-controls">
-        <label className="switch-line destination-active">
-          <input
-            checked={active}
-            onChange={(event) => setActive(event.target.checked)}
-            type="checkbox"
-          />
-          Active
-        </label>
-        <label className="destination-control">
-          <span>Fee</span>
-          <input
-            aria-label={`${text(destination.name, destination.id)} barrel shipping fee`}
-            className="small-input"
-            inputMode="decimal"
-            min="0"
-            onChange={(event) => setPrice(event.target.value)}
-            placeholder="Fee"
-            type="number"
-            value={price}
-          />
-        </label>
+        {enabledServices.includes("barrelShipping") && (
+          <>
+            <label className="switch-line destination-active">
+              <input
+                checked={availability.barrelShipping}
+                onChange={(event) =>
+                  toggleService("barrelShipping", event.target.checked)
+                }
+                type="checkbox"
+              />
+              Barrel
+            </label>
+            {availability.barrelShipping && (
+              <label className="destination-control">
+                <span>Barrel fee</span>
+                <input
+                  aria-label={`${text(destination.name, destination.id)} barrel shipping fee`}
+                  className="small-input"
+                  inputMode="decimal"
+                  min="0"
+                  onChange={(event) => setPrice(event.target.value)}
+                  placeholder="Fee"
+                  type="number"
+                  value={price}
+                />
+              </label>
+            )}
+          </>
+        )}
+        {enabledServices.includes("freight") && (
+          <>
+            <label className="switch-line destination-active">
+              <input
+                checked={availability.freightAir}
+                onChange={(event) =>
+                  toggleService("freightAir", event.target.checked)
+                }
+                type="checkbox"
+              />
+              Air
+            </label>
+            {availability.freightAir && (
+              <label className="destination-control">
+                <span>Air / kg</span>
+                <input
+                  className="small-input"
+                  min="0"
+                  onChange={(event) => setFreightAirPrice(event.target.value)}
+                  type="number"
+                  value={freightAirPrice}
+                />
+              </label>
+            )}
+            <label className="switch-line destination-active">
+              <input
+                checked={availability.freightSea}
+                onChange={(event) =>
+                  toggleService("freightSea", event.target.checked)
+                }
+                type="checkbox"
+              />
+              Sea
+            </label>
+            {availability.freightSea && (
+              <label className="destination-control">
+                <span>Sea / kg</span>
+                <input
+                  className="small-input"
+                  min="0"
+                  onChange={(event) => setFreightSeaPrice(event.target.value)}
+                  type="number"
+                  value={freightSeaPrice}
+                />
+              </label>
+            )}
+          </>
+        )}
+        {enabledServices.includes("carTransport") && (
+          <label className="switch-line destination-active">
+            <input
+              checked={availability.carTransport}
+              onChange={(event) =>
+                toggleService("carTransport", event.target.checked)
+              }
+              type="checkbox"
+            />
+            Car quotes
+          </label>
+        )}
         <label className="destination-control">
           <span>Min</span>
           <input

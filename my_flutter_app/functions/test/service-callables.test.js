@@ -88,6 +88,8 @@ async function seedBusiness(id, {
       freightAirPricePerKg: airRate,
       freightSeaPricePerKg: seaRate,
       carTransportAvailable: availability.carTransport,
+      freightAirDepartureDays: ["monday", "thursday"],
+      freightSeaDepartureDays: ["saturday"],
       deliveryEstimateMinDays: 10,
       deliveryEstimateMaxDays: 20,
     }),
@@ -329,6 +331,14 @@ describe("freight service callable lifecycle", () => {
         assert.equal(option.country.barrelShippingPrice, 0);
         assert.equal(option.country.freightAirPricePerKg, 12.5);
         assert.equal(option.country.freightSeaPricePerKg, 5);
+        assert.deepEqual(
+            option.country.freightAirDepartureDays,
+            ["monday", "thursday"],
+        );
+        assert.deepEqual(
+            option.country.freightSeaDepartureDays,
+            ["saturday"],
+        );
         assert.equal(option.businessAddress, "100 Test Avenue, Bronx");
       });
 
@@ -387,6 +397,10 @@ describe("freight service callable lifecycle", () => {
         assert.equal(airShipment.destinationCountryName, "Guinea");
         assert.equal(airShipment.deliveryEstimateMinDays, 10);
         assert.equal(airShipment.deliveryEstimateMaxDays, 20);
+        assert.deepEqual(
+            airShipment.freightDepartureDays,
+            ["monday", "thursday"],
+        );
 
         const sea = await functions.createFreightShipmentPaymentIntent.run({
           auth: {uid: CUSTOMER_UID},
@@ -396,6 +410,7 @@ describe("freight service callable lifecycle", () => {
         assert.equal(seaShipment.mode, "sea");
         assert.equal(seaShipment.shippingFee, 37.5);
         assert.equal(seaShipment.cardChargeAmountCents, 3750);
+        assert.deepEqual(seaShipment.freightDepartureDays, ["saturday"]);
       });
 
   it("prices a NY borough pickup and records its appointment", async () => {
@@ -847,9 +862,97 @@ describe("destination coverage admin callable", () => {
         /Air freight destinations need a rate/,
     );
   });
+
+  it("rejects country coverage for services disabled on the business profile",
+      async () => {
+        const cases = [
+          {
+            suffix: "barrel",
+            services: ["freight"],
+            availability: {
+              barrelShipping: true,
+              freightAir: false,
+              freightSea: false,
+              carTransport: false,
+            },
+            barrelShippingPrice: 200,
+          },
+          {
+            suffix: "freight",
+            services: ["barrelShipping"],
+            availability: {
+              barrelShipping: false,
+              freightAir: true,
+              freightSea: false,
+              carTransport: false,
+            },
+            freightAirPricePerKg: 12,
+          },
+          {
+            suffix: "transport",
+            services: ["freight"],
+            availability: {
+              barrelShipping: false,
+              freightAir: false,
+              freightSea: false,
+              carTransport: true,
+            },
+          },
+        ];
+
+        for (const testCase of cases) {
+          const businessId = `destination-global-gate-${testCase.suffix}`;
+          await seedBusiness(businessId, {services: testCase.services});
+          await assert.rejects(
+              () => functions.updateDestinationCoverage.run({
+                auth: {uid: DELETE_ADMIN_UID},
+                data: {
+                  businessId,
+                  countryId: COUNTRY_ID,
+                  isActive: true,
+                  barrelShippingPrice:
+                    testCase.barrelShippingPrice || 0,
+                  freightAirPricePerKg:
+                    testCase.freightAirPricePerKg || 0,
+                  freightSeaPricePerKg: 0,
+                  serviceAvailability: testCase.availability,
+                },
+              }),
+              /must also be enabled on the business profile/,
+          );
+        }
+      });
 });
 
 describe("car transport service callable lifecycle", () => {
+  it("does not infer legacy car transport from a generic active destination",
+      async () => {
+        const businessId = "transport-legacy-active-is-not-car";
+        const destinationId = "legacy-active-barrel-country";
+        const businessRef = await seedBusiness(businessId, {
+          services: ["carTransport"],
+          destinationId,
+        });
+        await businessRef.collection("destinationCountries")
+            .doc(destinationId).set({
+              countryId: destinationId,
+              name: "Legacy Barrel Country",
+              code: "LB",
+              isActive: true,
+              barrelShippingPrice: 225,
+            });
+
+        await assert.rejects(
+            () => functions.createTransportRequest.run({
+              auth: {uid: CUSTOMER_UID},
+              data: transportRequestInput({
+                destinationCountryId: destinationId,
+              }),
+            }),
+            /No approved businesses currently serve this destination/,
+        );
+      });
+
   it("creates one unassigned v2 request from server-derived eligibility",
       async () => {
         const eligibleA = "transport-market-a";

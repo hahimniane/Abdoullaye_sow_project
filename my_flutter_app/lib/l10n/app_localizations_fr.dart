@@ -2016,6 +2016,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Activez uniquement ce que cette entreprise propose pour ce pays.';
 
   @override
+  String get enableBusinessServiceBeforeDestination =>
+      'Activez l’expédition de barils, le fret ou le transport de véhicules dans le profil de l’entreprise avant de configurer la couverture des destinations.';
+
+  @override
   String get destinationServiceCoverageTitle => 'Services de destination';
 
   @override
@@ -5396,4 +5400,40 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get freightPickupFreeLabel => 'Enlèvement gratuit';
+
+  @override
+  String get freightAirDepartureDays => 'Jours de départ du fret aérien';
+
+  @override
+  String get freightSeaDepartureDays => 'Jours de départ du fret maritime';
+
+  @override
+  String get freightDepartureDaysHelper =>
+      'Facultatif. Choisissez les jours de départ habituels de ce service.';
+
+  @override
+  String get mondayShort => 'Lun';
+
+  @override
+  String get tuesdayShort => 'Mar';
+
+  @override
+  String get wednesdayShort => 'Mer';
+
+  @override
+  String get thursdayShort => 'Jeu';
+
+  @override
+  String get fridayShort => 'Ven';
+
+  @override
+  String get saturdayShort => 'Sam';
+
+  @override
+  String get sundayShort => 'Dim';
+
+  @override
+  String regularDepartureDays(String days) {
+    return 'Départs habituels : $days';
+  }
 }

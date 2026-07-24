@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
+  deleteField,
   doc,
   limit,
   onSnapshot,
@@ -30,10 +31,12 @@ import {
   Package,
   ParkingCircle,
   Pencil,
+  Plane,
   Plus,
   RefreshCw,
   RotateCcw,
   Save,
+  Ship,
   Star,
   Truck,
   X,
@@ -57,7 +60,17 @@ import {
   type SharedBarrelPoolField,
   validateSharedBarrelPoolDraft,
 } from "@/lib/shared-barrel-pool";
-import { destinationRateError } from "@/lib/destination-pricing";
+import {
+  canonicalDestinationServiceAvailability,
+  DESTINATION_DEPARTURE_DAYS,
+  DESTINATION_DEPARTURE_DAY_LABELS,
+  destinationDepartureDays,
+  destinationRateError,
+  destinationServiceAvailability,
+  globallyAvailableDestinationServices,
+  type DestinationDepartureDay,
+  type DestinationServiceAvailability,
+} from "@/lib/destination-pricing";
 import { currentLanguage, formatDate, formatMoney, text } from "@/lib/format";
 import { US_STATE_OPTIONS, citiesForState, withSelected } from "@/lib/us-locations";
 import type { FirestoreRow } from "@/types/admin";
@@ -70,6 +83,7 @@ type PanelProps = {
   businessProfileImageUrl?: string;
   enabledServices?: string[];
   onOpenDestinations?: () => void;
+  onManageServices?: () => void;
   openNewToken?: number;
 };
 
@@ -80,8 +94,13 @@ type DestinationDraft = {
   freightSeaPrice: string;
   minDays: string;
   maxDays: string;
+  freightAirDepartureDays: DestinationDepartureDay[];
+  freightSeaDepartureDays: DestinationDepartureDay[];
   note: string;
-  isActive: boolean;
+  barrelShipping: boolean;
+  freightAir: boolean;
+  freightSea: boolean;
+  carTransport: boolean;
 };
 
 type ListingDraft = {
@@ -280,9 +299,25 @@ const emptyDestinationDraft: DestinationDraft = {
   freightSeaPrice: "",
   minDays: "",
   maxDays: "",
+  freightAirDepartureDays: [],
+  freightSeaDepartureDays: [],
   note: "",
-  isActive: true,
+  barrelShipping: false,
+  freightAir: false,
+  freightSea: false,
+  carTransport: false,
 };
+
+function destinationDraftAvailability(
+  draft: DestinationDraft,
+): DestinationServiceAvailability {
+  return {
+    barrelShipping: draft.barrelShipping,
+    freightAir: draft.freightAir,
+    freightSea: draft.freightSea,
+    carTransport: draft.carTransport,
+  };
+}
 
 const emptyListingDraft: ListingDraft = {
   id: "",
@@ -376,12 +411,18 @@ function defaultPoolRolloverDraft(row?: FirestoreRow | null): PoolRolloverDraft 
   };
 }
 
-export function DestinationsPanel({ businessId, previewMode = false, enabledServices = [], openNewToken = 0 }: PanelProps) {
+export function DestinationsPanel({
+  businessId,
+  previewMode = false,
+  enabledServices = [],
+  onManageServices,
+  openNewToken = 0,
+}: PanelProps) {
   const destinations = useBusinessSubcollectionRows(
     "destinationCountries",
     businessId,
     Boolean(businessId && !previewMode),
-    100,
+    countries.length,
   );
   const [draft, setDraft] = useState<DestinationDraft>(emptyDestinationDraft);
   const [editingId, setEditingId] = useState("");
@@ -402,7 +443,19 @@ export function DestinationsPanel({ businessId, previewMode = false, enabledServ
     () => filterRows(rows, search, ["name", "destinationCountryName", "code", "countryCode", "barrelShippingPrice", "freightAirPricePerKg", "freightSeaPricePerKg"]),
     [rows, search],
   );
-  const activeCount = rows.filter((row) => row.isActive !== false).length;
+  const globalAvailability = useMemo(
+    () => globallyAvailableDestinationServices(enabledServices),
+    [enabledServices],
+  );
+  const hasDestinationServices =
+    Object.values(globalAvailability).some(Boolean);
+  const activeCount = rows.filter((row) => {
+    const availability = canonicalDestinationServiceAvailability(
+      enabledServices,
+      destinationServiceAvailability(row),
+    );
+    return row.isActive === true && Object.values(availability).some(Boolean);
+  }).length;
   // Countries already configured can still be edited; new ones pick from the rest.
   const availableCountries = useMemo(
     () => countries.filter((country) => editingId === country.id || !rows.some((row) => row.id === country.id)),
@@ -432,6 +485,7 @@ export function DestinationsPanel({ businessId, previewMode = false, enabledServ
     setFormOpen(false);
   }
   function editDestination(row: FirestoreRow) {
+    const availability = destinationServiceAvailability(row);
     setEditingId(row.id);
     setDraft({
       countryId: row.id,
@@ -440,8 +494,17 @@ export function DestinationsPanel({ businessId, previewMode = false, enabledServ
       freightSeaPrice: numberString(row.freightSeaPricePerKg),
       minDays: numberString(row.deliveryEstimateMinDays),
       maxDays: numberString(row.deliveryEstimateMaxDays),
+      freightAirDepartureDays: destinationDepartureDays(
+        row.freightAirDepartureDays,
+      ),
+      freightSeaDepartureDays: destinationDepartureDays(
+        row.freightSeaDepartureDays,
+      ),
       note: text(row.destinationNote, ""),
-      isActive: row.isActive !== false,
+      barrelShipping: availability.barrelShipping,
+      freightAir: availability.freightAir,
+      freightSea: availability.freightSea,
+      carTransport: availability.carTransport,
     });
     setMessage("");
     setFormOpen(true);
@@ -466,15 +529,44 @@ export function DestinationsPanel({ businessId, previewMode = false, enabledServ
     const price = Number(draft.price);
     const freightAirPrice = Number(draft.freightAirPrice || 0);
     const freightSeaPrice = Number(draft.freightSeaPrice || 0);
-    const minDays = Number(draft.minDays);
-    const maxDays = Number(draft.maxDays);
-    const rateError = destinationRateError(enabledServices, {
-      barrelShippingPrice: Number.isFinite(price) ? price : 0,
-      freightAirPricePerKg: Number.isFinite(freightAirPrice) ? freightAirPrice : 0,
-      freightSeaPricePerKg: Number.isFinite(freightSeaPrice) ? freightSeaPrice : 0,
-    });
+    const availability = canonicalDestinationServiceAvailability(
+      enabledServices,
+      destinationDraftAvailability(draft),
+    );
+    const rates = {
+      barrelShippingPrice:
+        availability.barrelShipping && Number.isFinite(price) ? price : 0,
+      freightAirPricePerKg:
+        availability.freightAir && Number.isFinite(freightAirPrice)
+          ? freightAirPrice
+          : 0,
+      freightSeaPricePerKg:
+        availability.freightSea && Number.isFinite(freightSeaPrice)
+          ? freightSeaPrice
+          : 0,
+    };
+    const minText = draft.minDays.trim();
+    const maxText = draft.maxDays.trim();
+    const hasEstimate = minText !== "" || maxText !== "";
+    const minDays = Number(minText);
+    const maxDays = Number(maxText);
+    const rateError = destinationRateError(
+      enabledServices,
+      availability,
+      rates,
+    );
     if (rateError) throw new Error(rateError);
-    if (!Number.isInteger(minDays) || !Number.isInteger(maxDays) || minDays <= 0 || maxDays < minDays) {
+    if (
+      hasEstimate &&
+      (
+        minText === "" ||
+        maxText === "" ||
+        !Number.isInteger(minDays) ||
+        !Number.isInteger(maxDays) ||
+        minDays <= 0 ||
+        maxDays < minDays
+      )
+    ) {
       throw new Error("Enter a valid min/max delivery day range.");
     }
     await setDoc(
@@ -482,17 +574,27 @@ export function DestinationsPanel({ businessId, previewMode = false, enabledServ
       {
         businessId,
         id: country.id,
+        countryId: country.id,
         name: country.name,
         destinationCountryName: country.name,
         countryCode: country.code,
         code: country.code,
-        barrelShippingPrice: Number.isFinite(price) && price > 0 ? price : 0,
-        freightAirPricePerKg: Number.isFinite(freightAirPrice) && freightAirPrice > 0 ? freightAirPrice : 0,
-        freightSeaPricePerKg: Number.isFinite(freightSeaPrice) && freightSeaPrice > 0 ? freightSeaPrice : 0,
-        deliveryEstimateMinDays: minDays,
-        deliveryEstimateMaxDays: maxDays,
+        destinationCoverageVersion: 2,
+        serviceAvailability: availability,
+        barrelShippingPrice: rates.barrelShippingPrice,
+        freightAirPricePerKg: rates.freightAirPricePerKg,
+        freightSeaPricePerKg: rates.freightSeaPricePerKg,
+        freightAirDepartureDays: availability.freightAir
+          ? draft.freightAirDepartureDays
+          : [],
+        freightSeaDepartureDays: availability.freightSea
+          ? draft.freightSeaDepartureDays
+          : [],
+        carTransportAvailable: availability.carTransport,
+        deliveryEstimateMinDays: hasEstimate ? minDays : deleteField(),
+        deliveryEstimateMaxDays: hasEstimate ? maxDays : deleteField(),
         destinationNote: draft.note.trim(),
-        isActive: draft.isActive,
+        isActive: Object.values(availability).some(Boolean),
         updatedAt: serverTimestamp(),
       },
       { merge: true },
@@ -500,99 +602,221 @@ export function DestinationsPanel({ businessId, previewMode = false, enabledServ
     setEditingId("");
     setDraft(emptyDestinationDraft);
     setFormOpen(false);
-    setMessage("Destination saved.");
+    setMessage(`${country.name} configuration saved.`);
   }
 
-  async function setActive(row: FirestoreRow, isActive: boolean) {
-    const rateError = destinationRateError(enabledServices, {
-      barrelShippingPrice: Number(row.barrelShippingPrice ?? 0),
-      freightAirPricePerKg: Number(row.freightAirPricePerKg ?? 0),
-      freightSeaPricePerKg: Number(row.freightSeaPricePerKg ?? 0),
-    });
-    if (isActive && rateError) throw new Error(rateError);
+  async function pauseAllServices(row: FirestoreRow) {
     await setDoc(
       doc(db, "businesses", businessId, "destinationCountries", row.id),
-      { businessId, isActive, updatedAt: serverTimestamp() },
+      {
+        businessId,
+        destinationCoverageVersion: 2,
+        serviceAvailability: {
+          barrelShipping: false,
+          freightAir: false,
+          freightSea: false,
+          carTransport: false,
+        },
+        carTransportAvailable: false,
+        isActive: false,
+        updatedAt: serverTimestamp(),
+      },
       { merge: true },
     );
   }
 
+  const visibleServiceCount = Object.values(
+    canonicalDestinationServiceAvailability(
+      enabledServices,
+      destinationDraftAvailability(draft),
+    ),
+  ).filter(Boolean).length;
+
   return (
-    <section className="lst">
+    <section className="lst destination-coverage">
       <header className="lst-head">
         <div className="lst-head-text">
-          <h2>Shipping destinations</h2>
-          <p>{rows.length === 0 ? "Set barrel and freight prices for each country you serve." : `${rows.length} destination${rows.length === 1 ? "" : "s"} · ${activeCount} active`}</p>
+          <h2>Service coverage by country</h2>
+          <p>
+            {rows.length === 0
+              ? "Choose which services customers can request in each country."
+              : `${rows.length} destination${rows.length === 1 ? "" : "s"} · ${activeCount} serving customers`}
+          </p>
         </div>
         <div className="lst-head-actions">
           <StatusText busy={busy} message={message} />
-          <button className="lst-add" type="button" onClick={openNew} disabled={availableCountries.length === 0}>
-            <Plus size={17} /> New destination
+          <button
+            className="lst-add"
+            type="button"
+            onClick={openNew}
+            disabled={!hasDestinationServices || availableCountries.length === 0}
+          >
+            <Plus size={17} /> Add country
           </button>
         </div>
       </header>
 
       {destinations.error && <div className="error-box">{destinations.error}</div>}
 
-      <div className="lst-toolbar">
-        <div className="lst-search">
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search destinations…" />
+      <div className="destination-capabilities">
+        <div>
+          <strong>Services your business offers</strong>
+          <span>Country coverage is configured separately below.</span>
         </div>
-        <button className="lst-btn ghost" type="button" disabled={filteredRows.length === 0} onClick={() => downloadCsv("destinations.csv", filteredRows, ["name", "code", "barrelShippingPrice", "freightAirPricePerKg", "freightSeaPricePerKg", "deliveryEstimateMinDays", "deliveryEstimateMaxDays", "isActive", "updatedAt"])}>
-          <Download size={15} /> Export CSV
-        </button>
+        <div className="destination-capability-chips">
+          {globalAvailability.barrelShipping && <span><Package size={14} /> Barrel shipping</span>}
+          {globalAvailability.freightAir && <span><Plane size={14} /> Freight — Air</span>}
+          {globalAvailability.freightSea && <span><Ship size={14} /> Freight — Sea</span>}
+          {globalAvailability.carTransport && <span><Truck size={14} /> Car transport</span>}
+          {!hasDestinationServices && <span className="muted">No shipping or transport services enabled</span>}
+        </div>
+        {onManageServices && (
+          <button className="lst-btn ghost" type="button" onClick={onManageServices}>
+            Manage services
+          </button>
+        )}
       </div>
 
-      {destinations.loading && <LoadingState />}
-      {!destinations.loading && rows.length === 0 && (
-        <div className="lst-empty">
-          <div className="lst-empty-icon"><MapPinned size={30} /></div>
-          <h3>No destinations yet</h3>
-          <p>Add the countries you ship to and set barrel or freight prices.</p>
-          <button className="lst-add" type="button" onClick={openNew}><Plus size={17} /> Add your first destination</button>
+      {hasDestinationServices && (
+        <div className="lst-toolbar">
+          <div className="lst-search">
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search countries or services…"
+              aria-label="Search countries or services"
+            />
+          </div>
+          <button
+            className="lst-btn ghost"
+            type="button"
+            disabled={filteredRows.length === 0}
+            onClick={() =>
+              downloadCsv(
+                "destination-service-coverage.csv",
+                filteredRows,
+                [
+                  "name",
+                  "code",
+                  "serviceAvailability",
+                  "barrelShippingPrice",
+                  "freightAirPricePerKg",
+                  "freightSeaPricePerKg",
+                  "deliveryEstimateMinDays",
+                  "deliveryEstimateMaxDays",
+                  "isActive",
+                  "updatedAt",
+                ],
+              )
+            }
+          >
+            <Download size={15} /> Export CSV
+          </button>
         </div>
       )}
-      {!destinations.loading && rows.length > 0 && filteredRows.length === 0 && (
-        <EmptyState text="No destinations match your search." />
+
+      {destinations.loading && <LoadingState />}
+      {!destinations.loading && !hasDestinationServices && (
+        <div className="lst-empty">
+          <div className="lst-empty-icon"><Package size={30} /></div>
+          <h3>Choose your business services first</h3>
+          <p>Enable barrel shipping, freight, or car transport before configuring country coverage.</p>
+          {onManageServices && (
+            <button className="lst-add" type="button" onClick={onManageServices}>
+              Manage business services
+            </button>
+          )}
+        </div>
+      )}
+      {!destinations.loading && hasDestinationServices && rows.length === 0 && (
+        <div className="lst-empty">
+          <div className="lst-empty-icon"><MapPinned size={30} /></div>
+          <h3>No country coverage yet</h3>
+          <p>Add a country, then choose exactly which services customers can request there.</p>
+          <button className="lst-add" type="button" onClick={openNew}><Plus size={17} /> Add your first country</button>
+        </div>
+      )}
+      {!destinations.loading && hasDestinationServices && rows.length > 0 && filteredRows.length === 0 && (
+        <div className="lst-empty compact">
+          <h3>No countries match your search</h3>
+          <p>Try another country or service name.</p>
+          <button className="lst-btn ghost" type="button" onClick={() => setSearch("")}>Clear search</button>
+        </div>
       )}
 
-        <div className="lst-grid">
+      {hasDestinationServices && filteredRows.length > 0 && (
+        <div className="destination-coverage-list">
+          <div className="destination-coverage-columns" aria-hidden="true">
+            <span>Country</span>
+            <span>Coverage and customer rates</span>
+            <span>Delivery</span>
+            <span>Status</span>
+            <span>Action</span>
+          </div>
         {filteredRows.map((row) => {
-          const active = row.isActive !== false;
+          const availability = canonicalDestinationServiceAvailability(
+            enabledServices,
+            destinationServiceAvailability(row),
+          );
+          const active = row.isActive === true && Object.values(availability).some(Boolean);
           const country = destinationCountryOptionForRow(row);
+          const serviceCount = Object.values(availability).filter(Boolean).length;
           return (
-            <article className={`dst-card ${active ? "" : "off"}`} key={row.id}>
-              <div className="dst-head">
+            <article className={`destination-coverage-row ${active ? "" : "off"}`} key={row.id}>
+              <div className="destination-country-cell">
                 <span className="dst-flag">{countryFlag(text(row.code ?? row.countryCode ?? country?.code, ""))}</span>
                 <div className="dst-name">
                   <strong>{destinationRowCountryName(row)}</strong>
-                  <span>{deliveryWindow(row) || "No delivery estimate"}</span>
+                  <span>{text(row.code ?? row.countryCode, "")}</span>
                 </div>
-                <span className={`lst-badge ${active ? "ok" : "muted"}`}>{active ? "Active" : "Inactive"}</span>
               </div>
-              {enabledServices.includes("barrelShipping") && <div className="dst-price">{formatMoney(row.barrelShippingPrice)} <small>/ barrel</small></div>}
-              {enabledServices.includes("freight") && <div className="dst-note">Air freight: {formatMoney(row.freightAirPricePerKg)} / kg · Sea freight: {formatMoney(row.freightSeaPricePerKg)} / kg</div>}
-              {Boolean(text(row.destinationNote, "")) && <div className="dst-note">{text(row.destinationNote, "")}</div>}
-              <div className="dst-foot">
-                <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => editDestination(row)}><Pencil size={14} /> Edit</button>
-                {active ? (
-                  <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => runPanelAction(setBusy, setMessage, "Destination deactivated.", () => setActive(row, false))}>Deactivate</button>
-                ) : (
-                  <button className="lst-btn" type="button" disabled={busy} onClick={() => runPanelAction(setBusy, setMessage, "Destination activated.", () => setActive(row, true))}>Activate</button>
+              <div className="destination-service-cell">
+                {serviceCount === 0 && <span className="destination-service-empty">No services configured</span>}
+                {availability.barrelShipping && (
+                  <span className="destination-service-chip"><Package size={14} /> Barrel <b>{formatMoney(row.barrelShippingPrice)}/barrel</b></span>
                 )}
+                {availability.freightAir && (
+                  <span className="destination-service-chip"><Plane size={14} /> Air <b>{formatMoney(row.freightAirPricePerKg)}/kg</b></span>
+                )}
+                {availability.freightSea && (
+                  <span className="destination-service-chip"><Ship size={14} /> Sea <b>{formatMoney(row.freightSeaPricePerKg)}/kg</b></span>
+                )}
+                {availability.carTransport && (
+                  <span className="destination-service-chip"><Truck size={14} /> Car transport <b>Quotes</b></span>
+                )}
+                {Boolean(text(row.destinationNote, "")) && <small>{text(row.destinationNote, "")}</small>}
+              </div>
+              <div className="destination-delivery-cell">
+                <strong>{deliveryWindow(row) || "Not set"}</strong>
+                <span>Shared country estimate</span>
+              </div>
+              <div>
+                <span className={`destination-status ${active ? "active" : "paused"}`}>
+                  {active ? `${serviceCount} active` : "Paused"}
+                </span>
+              </div>
+              <div className="destination-row-actions">
+                <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => editDestination(row)}><Pencil size={14} /> Configure</button>
+                {active ? (
+                  <button className="destination-pause" type="button" disabled={busy} onClick={() => runPanelAction(setBusy, setMessage, "All services paused for this country.", () => pauseAllServices(row))}>Pause all</button>
+                ) : null}
               </div>
             </article>
           );
         })}
-      </div>
+        </div>
+      )}
 
       {formOpen && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={() => {
+        <div className="lst-modal-overlay destination-drawer-overlay" role="dialog" aria-modal="true" onClick={() => {
           if (!busy) closeForm();
         }}>
-          <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(event) => event.stopPropagation()}>
+          <div className="lst-modal destination-drawer" onClick={(event) => event.stopPropagation()}>
             <header className="lst-modal-head">
-              <h3>{editingId ? `Edit ${selectedCountry ? countryName(selectedCountry.id) : countryName(editingId)}` : "New destination"}</h3>
+              <div>
+                <h3>{editingId ? "Configure country" : "Add country coverage"}</h3>
+                <p>{editingId ? selectedCountry ? countryName(selectedCountry.id) : countryName(editingId) : "Choose a country and the services available there."}</p>
+              </div>
               <button className="lst-icon-btn" type="button" disabled={busy} onClick={closeForm} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">
@@ -615,42 +839,215 @@ export function DestinationsPanel({ businessId, previewMode = false, enabledServ
                   placeholder="Search or choose a country"
                   value={draft.countryId}
                 />
-                {enabledServices.includes("barrelShipping") && <label className="lst-field"><span>Price per barrel (USD)</span>
-                  <input inputMode="decimal" value={draft.price} onChange={(event) => setDraft((value) => ({ ...value, price: event.target.value }))} placeholder="250" />
-                </label>}
-                {enabledServices.includes("freight") && <label className="lst-field"><span>Air freight per kg (USD)</span>
-                  <input inputMode="decimal" value={draft.freightAirPrice} onChange={(event) => setDraft((value) => ({ ...value, freightAirPrice: event.target.value }))} placeholder="8" />
-                </label>}
-                {enabledServices.includes("freight") && <label className="lst-field"><span>Sea freight per kg (USD)</span>
-                  <input inputMode="decimal" value={draft.freightSeaPrice} onChange={(event) => setDraft((value) => ({ ...value, freightSeaPrice: event.target.value }))} placeholder="4" />
-                </label>}
-                <label className="lst-field"><span>&nbsp;</span>
-                  <label className="lst-check" style={{ padding: "10px 0 0" }}>
-                    <input type="checkbox" checked={draft.isActive} onChange={(event) => setDraft((value) => ({ ...value, isActive: event.target.checked }))} />
-                    <span>Active (visible to customers)</span>
-                  </label>
+                <div className="destination-form-intro wide">
+                  <strong>Available in this country</strong>
+                  <span>Turn on only the services customers can request for this route.</span>
+                </div>
+                <div className="destination-service-controls wide">
+                  {globalAvailability.barrelShipping && (
+                    <DestinationServiceControl
+                      icon={<Package size={20} />}
+                      title="Barrel shipping"
+                      subtitle="Set the customer price for each barrel."
+                      checked={draft.barrelShipping}
+                      onChange={(checked) => setDraft((value) => ({ ...value, barrelShipping: checked }))}
+                    >
+                      <label className="lst-field">
+                        <span>Price per barrel (USD)</span>
+                        <input
+                          inputMode="decimal"
+                          min="0"
+                          type="number"
+                          value={draft.price}
+                          onChange={(event) => setDraft((value) => ({ ...value, price: event.target.value }))}
+                          placeholder="250"
+                        />
+                      </label>
+                    </DestinationServiceControl>
+                  )}
+                  {globalAvailability.freightAir && (
+                    <DestinationServiceControl
+                      icon={<Plane size={20} />}
+                      title="Freight — Air"
+                      subtitle="Set the customer rate per kilogram for air freight."
+                      checked={draft.freightAir}
+                      onChange={(checked) => setDraft((value) => ({ ...value, freightAir: checked }))}
+                    >
+                      <>
+                        <label className="lst-field">
+                          <span>Air freight per kg (USD)</span>
+                          <input
+                            inputMode="decimal"
+                            min="0"
+                            type="number"
+                            value={draft.freightAirPrice}
+                            onChange={(event) => setDraft((value) => ({ ...value, freightAirPrice: event.target.value }))}
+                            placeholder="8"
+                          />
+                        </label>
+                        <DepartureDayPicker
+                          label="Air freight departure days"
+                          value={draft.freightAirDepartureDays}
+                          onChange={(freightAirDepartureDays) =>
+                            setDraft((current) => ({
+                              ...current,
+                              freightAirDepartureDays,
+                            }))
+                          }
+                        />
+                      </>
+                    </DestinationServiceControl>
+                  )}
+                  {globalAvailability.freightSea && (
+                    <DestinationServiceControl
+                      icon={<Ship size={20} />}
+                      title="Freight — Sea"
+                      subtitle="Set the customer rate per kilogram for sea freight."
+                      checked={draft.freightSea}
+                      onChange={(checked) => setDraft((value) => ({ ...value, freightSea: checked }))}
+                    >
+                      <>
+                        <label className="lst-field">
+                          <span>Sea freight per kg (USD)</span>
+                          <input
+                            inputMode="decimal"
+                            min="0"
+                            type="number"
+                            value={draft.freightSeaPrice}
+                            onChange={(event) => setDraft((value) => ({ ...value, freightSeaPrice: event.target.value }))}
+                            placeholder="4"
+                          />
+                        </label>
+                        <DepartureDayPicker
+                          label="Sea freight departure days"
+                          value={draft.freightSeaDepartureDays}
+                          onChange={(freightSeaDepartureDays) =>
+                            setDraft((current) => ({
+                              ...current,
+                              freightSeaDepartureDays,
+                            }))
+                          }
+                        />
+                      </>
+                    </DestinationServiceControl>
+                  )}
+                  {globalAvailability.carTransport && (
+                    <DestinationServiceControl
+                      icon={<Truck size={20} />}
+                      title="Car transport quotes"
+                      subtitle="Customers can request a quote. You set the route price when responding."
+                      checked={draft.carTransport}
+                      onChange={(checked) => setDraft((value) => ({ ...value, carTransport: checked }))}
+                    />
+                  )}
+                </div>
+                <div className="destination-form-intro wide">
+                  <strong>Estimated delivery for this country</strong>
+                  <span>Optional. This estimate applies to every active service configured above.</span>
+                </div>
+                <label className="lst-field"><span>Minimum days</span>
+                  <input inputMode="numeric" min="1" type="number" value={draft.minDays} onChange={(event) => setDraft((value) => ({ ...value, minDays: event.target.value }))} placeholder="14" />
                 </label>
-                <label className="lst-field"><span>Delivery min (days)</span>
-                  <input inputMode="numeric" value={draft.minDays} onChange={(event) => setDraft((value) => ({ ...value, minDays: event.target.value }))} placeholder="14" />
+                <label className="lst-field"><span>Maximum days</span>
+                  <input inputMode="numeric" min="1" type="number" value={draft.maxDays} onChange={(event) => setDraft((value) => ({ ...value, maxDays: event.target.value }))} placeholder="30" />
                 </label>
-                <label className="lst-field"><span>Delivery max (days)</span>
-                  <input inputMode="numeric" value={draft.maxDays} onChange={(event) => setDraft((value) => ({ ...value, maxDays: event.target.value }))} placeholder="30" />
-                </label>
-                <label className="lst-field wide"><span>Note for customers (optional)</span>
+                <label className="lst-field wide"><span>Customer route note (optional)</span>
                   <textarea rows={2} value={draft.note} onChange={(event) => setDraft((value) => ({ ...value, note: event.target.value }))} placeholder="e.g. Door-to-door delivery in Conakry included" />
                 </label>
               </div>
             </div>
             <footer className="lst-modal-foot">
+              <span className="destination-save-summary">
+                {visibleServiceCount} {visibleServiceCount === 1
+                  ? "service visible to customers"
+                  : "services visible to customers"}
+              </span>
               <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeForm}>Cancel</button>
-              <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => runPanelAction(setBusy, setMessage, "Destination saved.", saveDestination)}>
+              <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => runPanelAction(setBusy, setMessage, "Configuration saved.", saveDestination)}>
                 {busy ? <RefreshCw className="spin" size={16} /> : <Save size={16} />}
-                {busy ? "Saving..." : editingId ? "Save changes" : "Create destination"}
+                {busy ? "Saving configuration..." : "Save configuration"}
               </button>
             </footer>
           </div>
         </div>
       )}
+    </section>
+  );
+}
+
+function DepartureDayPicker({
+  label,
+  onChange,
+  value,
+}: {
+  label: string;
+  onChange: (days: DestinationDepartureDay[]) => void;
+  value: DestinationDepartureDay[];
+}) {
+  return (
+    <fieldset className="destination-departure-days">
+      <legend>{label}</legend>
+      <p>Optional. Choose the regular days this service departs.</p>
+      <div>
+        {DESTINATION_DEPARTURE_DAYS.map((day) => {
+          const selected = value.includes(day);
+          const dayLabel = DESTINATION_DEPARTURE_DAY_LABELS[day];
+          return (
+            <label className={selected ? "selected" : ""} key={day}>
+              <input
+                checked={selected}
+                onChange={(event) =>
+                  onChange(
+                    event.target.checked
+                      ? destinationDepartureDays([...value, day])
+                      : value.filter((item) => item !== day),
+                  )
+                }
+                type="checkbox"
+              />
+              <span aria-label={dayLabel}>{dayLabel.slice(0, 3)}</span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
+function DestinationServiceControl({
+  icon,
+  title,
+  subtitle,
+  checked,
+  onChange,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  children?: React.ReactNode;
+}) {
+  return (
+    <section className={`destination-service-control ${checked ? "selected" : ""}`}>
+      <div className="destination-service-control-head">
+        <span className="destination-service-control-icon">{icon}</span>
+        <div>
+          <strong>{title}</strong>
+          <span>{subtitle}</span>
+        </div>
+        <label className="destination-switch">
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={(event) => onChange(event.target.checked)}
+            aria-label={`${title} available in this country`}
+          />
+          <span aria-hidden="true" />
+        </label>
+      </div>
+      {checked && children && <div className="destination-service-control-body">{children}</div>}
     </section>
   );
 }

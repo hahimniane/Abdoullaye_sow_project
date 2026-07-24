@@ -7,6 +7,114 @@ import { LANGUAGE_STORAGE_KEY, currentWebLanguage } from "./language.ts";
 export { resolveLang } from "./language.ts";
 
 const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
+  "Service coverage by country": "Couverture des services par pays",
+  "Choose which services customers can request in each country.":
+    "Choisissez les services que les clients peuvent demander dans chaque pays.",
+  "serving customers": "desservant les clients",
+  "Add country": "Ajouter un pays",
+  "Services your business offers": "Services proposés par votre entreprise",
+  "Country coverage is configured separately below.":
+    "La couverture par pays est configurée séparément ci-dessous.",
+  "Freight — Air": "Fret — Aérien",
+  "Freight — Sea": "Fret — Maritime",
+  "No shipping or transport services enabled":
+    "Aucun service d’expédition ou de transport activé",
+  "Manage services": "Gérer les services",
+  "Search countries or services…": "Rechercher des pays ou des services…",
+  "Search countries or services": "Rechercher des pays ou des services",
+  "Choose your business services first":
+    "Choisissez d’abord les services de votre entreprise",
+  "Enable barrel shipping, freight, or car transport before configuring country coverage.":
+    "Activez l’expédition de barils, le fret ou le transport de véhicules avant de configurer la couverture par pays.",
+  "Manage business services": "Gérer les services de l’entreprise",
+  "No country coverage yet": "Aucune couverture par pays pour le moment",
+  "Add a country, then choose exactly which services customers can request there.":
+    "Ajoutez un pays, puis choisissez précisément les services que les clients peuvent y demander.",
+  "Add your first country": "Ajouter votre premier pays",
+  "No countries match your search":
+    "Aucun pays ne correspond à votre recherche",
+  "Try another country or service name.":
+    "Essayez un autre pays ou un autre nom de service.",
+  "Clear search": "Effacer la recherche",
+  "Coverage and customer rates": "Couverture et tarifs clients",
+  Delivery: "Livraison",
+  Status: "Statut",
+  Action: "Action",
+  "No services configured": "Aucun service configuré",
+  Barrel: "Baril",
+  Air: "Aérien",
+  Sea: "Maritime",
+  Quotes: "Devis",
+  "Not set": "Non défini",
+  "Shared country estimate": "Estimation commune au pays",
+  Paused: "Suspendu",
+  Configure: "Configurer",
+  "Pause all": "Tout suspendre",
+  "All services paused for this country.":
+    "Tous les services sont suspendus pour ce pays.",
+  "Configure country": "Configurer le pays",
+  "Add country coverage": "Ajouter une couverture pays",
+  "Choose a country and the services available there.":
+    "Choisissez un pays et les services qui y sont disponibles.",
+  "Available in this country": "Disponible dans ce pays",
+  "available in this country": "disponible dans ce pays",
+  "Turn on only the services customers can request for this route.":
+    "Activez uniquement les services que les clients peuvent demander pour cet itinéraire.",
+  "Set the customer price for each barrel.":
+    "Définissez le prix client pour chaque baril.",
+  "Set the customer rate per kilogram for air freight.":
+    "Définissez le tarif client par kilogramme pour le fret aérien.",
+  "Set the customer rate per kilogram for sea freight.":
+    "Définissez le tarif client par kilogramme pour le fret maritime.",
+  "Air freight departure days": "Jours de départ du fret aérien",
+  "Sea freight departure days": "Jours de départ du fret maritime",
+  "Optional. Choose the regular days this service departs.":
+    "Facultatif. Choisissez les jours de départ habituels de ce service.",
+  Monday: "Lundi",
+  Tuesday: "Mardi",
+  Wednesday: "Mercredi",
+  Thursday: "Jeudi",
+  Friday: "Vendredi",
+  Saturday: "Samedi",
+  Sunday: "Dimanche",
+  Mon: "Lun",
+  Tue: "Mar",
+  Wed: "Mer",
+  Thu: "Jeu",
+  Fri: "Ven",
+  Sat: "Sam",
+  Sun: "Dim",
+  "Typical delivery": "Livraison habituelle",
+  days: "jours",
+  "Regular departure days": "Jours de départ habituels",
+  "Car transport quotes": "Devis de transport de véhicules",
+  "Customers can request a quote. You set the route price when responding.":
+    "Les clients peuvent demander un devis. Vous fixez le prix de l’itinéraire lors de votre réponse.",
+  "Estimated delivery for this country":
+    "Livraison estimée pour ce pays",
+  "Optional. This estimate applies to every active service configured above.":
+    "Facultatif. Cette estimation s’applique à tous les services actifs configurés ci-dessus.",
+  "Minimum days": "Jours minimum",
+  "Maximum days": "Jours maximum",
+  "Customer route note (optional)":
+    "Note d’itinéraire pour les clients (facultatif)",
+  "e.g. Door-to-door delivery in Conakry included":
+    "p. ex. Livraison porte-à-porte à Conakry incluse",
+  "service visible to customers": "service visible pour les clients",
+  "services visible to customers": "services visibles pour les clients",
+  "Configuration saved.": "Configuration enregistrée.",
+  "Saving configuration...": "Enregistrement de la configuration...",
+  "Save configuration": "Enregistrer la configuration",
+  "Barrel fee": "Tarif par baril",
+  "Air / kg": "Aérien / kg",
+  "Sea / kg": "Maritime / kg",
+  "Car quotes": "Devis de transport",
+  "Choose at least one service for this country.":
+    "Choisissez au moins un service pour ce pays.",
+  "Enter an air freight price per kilogram greater than zero.":
+    "Saisissez un tarif de fret aérien par kilogramme supérieur à zéro.",
+  "Enter a sea freight price per kilogram greater than zero.":
+    "Saisissez un tarif de fret maritime par kilogramme supérieur à zéro.",
   "Add a destination": "Ajouter une destination",
   "Add another destination": "Ajouter une autre destination",
   "Add each destination, business, receiver, and barrel quantity to one order.":
@@ -317,7 +425,6 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "Votre demande est ouverte aux devis",
   "Eligible approved businesses serving this route can now review the vehicle and send you a quote.":
     "Les entreprises approuvées admissibles qui desservent cet itinéraire peuvent maintenant examiner le véhicule et vous envoyer un devis.",
-  "Car transport quotes": "Devis de transport de véhicule",
   "Tell us about the route and vehicle":
     "Décrivez-nous l’itinéraire et le véhicule",
   "Complete one request. Eligible approved businesses will send prices and timing for you to compare.":

@@ -199,6 +199,12 @@ async function seedFirestore() {
         businessName: "Business A",
         businessPermissions: ["transport"],
       },
+      "users/staff-destinations-a": {
+        role: "staff",
+        businessId: "biz_a",
+        businessName: "Business A",
+        businessPermissions: ["destinations"],
+      },
       "users/staff-transport-b": {
         role: "staff",
         businessId: "biz_b",
@@ -251,10 +257,16 @@ async function seedFirestore() {
       "businesses/biz_a": {
         name: "Business A",
         status: "approved",
+        enabledServices: [
+          "barrelShipping",
+          "freight",
+          "carTransport",
+        ],
       },
       "businesses/biz_b": {
         name: "Business B",
         status: "approved",
+        enabledServices: ["carTransport"],
       },
       "businesses/biz_doc_owner": {
         name: "Business Doc Owner",
@@ -758,6 +770,7 @@ describe("business dashboard Firestore rules", () => {
                     freightSea: false,
                     carTransport: true,
                   },
+                  carTransportAvailable: true,
                 }),
             ),
         );
@@ -799,6 +812,123 @@ describe("business dashboard Firestore rules", () => {
                   },
                   barrelShippingPrice: 0,
                 })),
+        );
+      });
+
+  it("enforces complete maps, parent service gates, and non-destructive writes",
+      async () => {
+        const ownerA = firestoreFor("owner-a");
+        const ownerB = firestoreFor("owner-b");
+        const staffWithoutDestinationPermission =
+          firestoreFor("staff-listings-a");
+        const staffWithDestinationPermission =
+          firestoreFor("staff-destinations-a");
+        const validCarCoverage = destinationCoverage({
+          businessId: "biz_b",
+          countryId: "car_only",
+          name: "Car Only",
+          isActive: true,
+          serviceAvailability: {
+            barrelShipping: false,
+            freightAir: false,
+            freightSea: false,
+            carTransport: true,
+          },
+          carTransportAvailable: true,
+        });
+
+        await assertSucceeds(
+            ownerB.doc(
+                "businesses/biz_b/destinationCountries/car_only",
+            ).set(validCarCoverage),
+        );
+        const optionalEstimateCoverage = {
+          ...validCarCoverage,
+          countryId: "car_optional_estimate",
+          name: "Car Optional Estimate",
+        };
+        delete optionalEstimateCoverage.deliveryEstimateMinDays;
+        delete optionalEstimateCoverage.deliveryEstimateMaxDays;
+        await assertSucceeds(
+            ownerB.doc(
+                "businesses/biz_b/destinationCountries/car_optional_estimate",
+            ).set(optionalEstimateCoverage),
+        );
+        await assertSucceeds(
+            ownerA.doc(
+                "businesses/biz_a/destinationCountries/scheduled_freight",
+            ).set(destinationCoverage({
+              countryId: "scheduled_freight",
+              name: "Scheduled Freight",
+              isActive: true,
+              serviceAvailability: {
+                barrelShipping: false,
+                freightAir: true,
+                freightSea: true,
+                carTransport: false,
+              },
+              freightAirPricePerKg: 8,
+              freightSeaPricePerKg: 4,
+              freightAirDepartureDays: ["monday", "thursday"],
+              freightSeaDepartureDays: ["saturday"],
+            })),
+        );
+        await assertFails(
+            ownerA.doc(
+                "businesses/biz_a/destinationCountries/invalid_schedule",
+            ).set(destinationCoverage({
+              countryId: "invalid_schedule",
+              name: "Invalid Schedule",
+              isActive: true,
+              serviceAvailability: {
+                barrelShipping: false,
+                freightAir: true,
+                freightSea: false,
+                carTransport: false,
+              },
+              freightAirPricePerKg: 8,
+              freightAirDepartureDays: ["funday"],
+            })),
+        );
+        await assertFails(
+            ownerB.doc(
+                "businesses/biz_b/destinationCountries/barrel_forbidden",
+            ).set(destinationCoverage({
+              businessId: "biz_b",
+              countryId: "barrel_forbidden",
+              name: "Forbidden Barrel",
+              isActive: true,
+              serviceAvailability: {
+                barrelShipping: true,
+                freightAir: false,
+                freightSea: false,
+                carTransport: false,
+              },
+              barrelShippingPrice: 200,
+            })),
+        );
+        await assertFails(
+            ownerA.doc(
+                "businesses/biz_a/destinationCountries/partial_map",
+            ).set(destinationCoverage({
+              countryId: "partial_map",
+              serviceAvailability: {barrelShipping: false},
+            })),
+        );
+        await assertFails(
+            staffWithoutDestinationPermission.doc(
+                "businesses/biz_a/destinationCountries/staff_denied",
+            ).set(destinationCoverage({countryId: "staff_denied"})),
+        );
+        await assertSucceeds(
+            staffWithDestinationPermission.doc(
+                "businesses/biz_a/destinationCountries/staff_allowed",
+            ).set(destinationCoverage({countryId: "staff_allowed"})),
+        );
+        await assertFails(
+            ownerB.doc(
+                "businesses/biz_b/destinationCountries/car_only",
+            ).delete(),
         );
       });
 

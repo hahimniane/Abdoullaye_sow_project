@@ -210,3 +210,9 @@ Add future project conventions and repeated architectural decisions here.
   notes remain private until the customer transactionally selects one quote.
   All v2 quote, cancellation, selection, and fulfillment mutations stay behind
   permission-checked callables. Preserve assigned `flowVersion: 1` records.
+- Destination coverage v2 uses an exact four-key `serviceAvailability` map
+  (`barrelShipping`, `freightAir`, `freightSea`, `carTransport`) gated by the
+  parent business services. Legacy active/rate fields may infer barrel or
+  freight only; generic activity must never infer car transport. Preserve
+  optional delivery min/max days and normalized air/sea departure weekday
+  arrays, and snapshot the chosen freight schedule on booking.

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../data/country_catalog.dart';
 import '../l10n/app_localizations.dart';
 import '../models/business_profile.dart';
+import '../models/business_service.dart';
 import '../models/destination_country.dart';
 import '../providers/auth_provider.dart';
 import '../services/barrel_pricing_service.dart';
@@ -144,6 +145,18 @@ class _DestinationCountriesScreenState
     final auth = context.read<AuthProvider>();
     final businessId = _currentBusinessId(auth);
     final l10n = AppLocalizations.of(context)!;
+    final businessSnapshot = await _businessDestinationSnapshot(businessId);
+    if (!context.mounted) return;
+    final enabledServices = normalizeBusinessServices(
+      businessSnapshot['enabledServices'],
+    );
+    final offersBarrelShipping = enabledServices.contains('barrelShipping');
+    final offersFreight = enabledServices.contains('freight');
+    final offersCarTransport = enabledServices.contains('carTransport');
+    if (!offersBarrelShipping && !offersFreight && !offersCarTransport) {
+      showErrorSnackBar(context, l10n.enableBusinessServiceBeforeDestination);
+      return;
+    }
     final nameController = TextEditingController(text: country?.name ?? '');
     final codeController = TextEditingController(text: country?.code ?? '');
     final barrelPriceController = TextEditingController(
@@ -167,10 +180,16 @@ class _DestinationCountriesScreenState
     final maxDaysController = TextEditingController(
       text: country?.deliveryEstimateMaxDays?.toString() ?? '',
     );
-    var barrelShippingEnabled = country?.barrelShippingAvailable ?? true;
-    var freightAirEnabled = country?.freightAirAvailable ?? false;
-    var freightSeaEnabled = country?.freightSeaAvailable ?? false;
-    var carTransportEnabled = country?.carTransportAvailable ?? false;
+    var barrelShippingEnabled =
+        offersBarrelShipping && (country?.barrelShippingAvailable ?? false);
+    var freightAirEnabled =
+        offersFreight && (country?.freightAirAvailable ?? false);
+    var freightSeaEnabled =
+        offersFreight && (country?.freightSeaAvailable ?? false);
+    var freightAirDepartureDays = {...?country?.freightAirDepartureDays};
+    var freightSeaDepartureDays = {...?country?.freightSeaDepartureDays};
+    var carTransportEnabled =
+        offersCarTransport && (country?.carTransportAvailable ?? false);
     final formKey = GlobalKey<FormState>();
     final result = await showModalBottomSheet<bool>(
       context: context,
@@ -268,93 +287,129 @@ class _DestinationCountriesScreenState
                                 ),
                               ),
                               const SizedBox(height: 10),
-                              _DestinationServiceToggle(
-                                icon: Icons.inventory_2_outlined,
-                                title: l10n.offerBarrelShipping,
-                                subtitle: l10n.barrelShippingDestinationHelper,
-                                value: barrelShippingEnabled,
-                                onChanged: (value) => updateService(
-                                  () => barrelShippingEnabled = value,
-                                ),
-                                child: TextFormField(
-                                  controller: barrelPriceController,
-                                  decoration: InputDecoration(
-                                    labelText: l10n.barrelShippingPrice,
-                                    prefixText: r'$',
+                              if (offersBarrelShipping)
+                                _DestinationServiceToggle(
+                                  icon: Icons.inventory_2_outlined,
+                                  title: l10n.offerBarrelShipping,
+                                  subtitle:
+                                      l10n.barrelShippingDestinationHelper,
+                                  value: barrelShippingEnabled,
+                                  onChanged: (value) => updateService(
+                                    () => barrelShippingEnabled = value,
                                   ),
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                        decimal: true,
+                                  child: TextFormField(
+                                    controller: barrelPriceController,
+                                    decoration: InputDecoration(
+                                      labelText: l10n.barrelShippingPrice,
+                                      prefixText: r'$',
+                                    ),
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    validator: (value) => _serviceRateError(
+                                      value: value ?? '',
+                                      isEnabled: barrelShippingEnabled,
+                                      serviceLabel:
+                                          l10n.destinationBarrelService,
+                                      l10n: l10n,
+                                    ),
+                                  ),
+                                ),
+                              if (offersFreight)
+                                _DestinationServiceToggle(
+                                  icon: Icons.flight_takeoff_outlined,
+                                  title: l10n.offerFreightAir,
+                                  subtitle: l10n.freightAirDestinationHelper,
+                                  value: freightAirEnabled,
+                                  onChanged: (value) => updateService(
+                                    () => freightAirEnabled = value,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      TextFormField(
+                                        controller: freightAirPriceController,
+                                        decoration: InputDecoration(
+                                          labelText: l10n.freightAirRatePerKg,
+                                          prefixText: r'$',
+                                        ),
+                                        keyboardType:
+                                            const TextInputType.numberWithOptions(
+                                              decimal: true,
+                                            ),
+                                        validator: (value) => _serviceRateError(
+                                          value: value ?? '',
+                                          isEnabled: freightAirEnabled,
+                                          serviceLabel:
+                                              l10n.destinationFreightAir,
+                                          l10n: l10n,
+                                        ),
                                       ),
-                                  validator: (value) => _serviceRateError(
-                                    value: value ?? '',
-                                    isEnabled: barrelShippingEnabled,
-                                    serviceLabel: l10n.destinationBarrelService,
-                                    l10n: l10n,
-                                  ),
-                                ),
-                              ),
-                              _DestinationServiceToggle(
-                                icon: Icons.flight_takeoff_outlined,
-                                title: l10n.offerFreightAir,
-                                subtitle: l10n.freightAirDestinationHelper,
-                                value: freightAirEnabled,
-                                onChanged: (value) => updateService(
-                                  () => freightAirEnabled = value,
-                                ),
-                                child: TextFormField(
-                                  controller: freightAirPriceController,
-                                  decoration: InputDecoration(
-                                    labelText: l10n.freightAirRatePerKg,
-                                    prefixText: r'$',
-                                  ),
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                        decimal: true,
+                                      const SizedBox(height: 12),
+                                      _DepartureDayPicker(
+                                        label: l10n.freightAirDepartureDays,
+                                        selectedDays: freightAirDepartureDays,
+                                        onChanged: (days) => setModalState(
+                                          () => freightAirDepartureDays = days,
+                                        ),
                                       ),
-                                  validator: (value) => _serviceRateError(
-                                    value: value ?? '',
-                                    isEnabled: freightAirEnabled,
-                                    serviceLabel: l10n.destinationFreightAir,
-                                    l10n: l10n,
+                                    ],
                                   ),
                                 ),
-                              ),
-                              _DestinationServiceToggle(
-                                icon: Icons.directions_boat_outlined,
-                                title: l10n.offerFreightSea,
-                                subtitle: l10n.freightSeaDestinationHelper,
-                                value: freightSeaEnabled,
-                                onChanged: (value) => updateService(
-                                  () => freightSeaEnabled = value,
-                                ),
-                                child: TextFormField(
-                                  controller: freightSeaPriceController,
-                                  decoration: InputDecoration(
-                                    labelText: l10n.freightSeaRatePerKg,
-                                    prefixText: r'$',
+                              if (offersFreight)
+                                _DestinationServiceToggle(
+                                  icon: Icons.directions_boat_outlined,
+                                  title: l10n.offerFreightSea,
+                                  subtitle: l10n.freightSeaDestinationHelper,
+                                  value: freightSeaEnabled,
+                                  onChanged: (value) => updateService(
+                                    () => freightSeaEnabled = value,
                                   ),
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                        decimal: true,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      TextFormField(
+                                        controller: freightSeaPriceController,
+                                        decoration: InputDecoration(
+                                          labelText: l10n.freightSeaRatePerKg,
+                                          prefixText: r'$',
+                                        ),
+                                        keyboardType:
+                                            const TextInputType.numberWithOptions(
+                                              decimal: true,
+                                            ),
+                                        validator: (value) => _serviceRateError(
+                                          value: value ?? '',
+                                          isEnabled: freightSeaEnabled,
+                                          serviceLabel:
+                                              l10n.destinationFreightSea,
+                                          l10n: l10n,
+                                        ),
                                       ),
-                                  validator: (value) => _serviceRateError(
-                                    value: value ?? '',
-                                    isEnabled: freightSeaEnabled,
-                                    serviceLabel: l10n.destinationFreightSea,
-                                    l10n: l10n,
+                                      const SizedBox(height: 12),
+                                      _DepartureDayPicker(
+                                        label: l10n.freightSeaDepartureDays,
+                                        selectedDays: freightSeaDepartureDays,
+                                        onChanged: (days) => setModalState(
+                                          () => freightSeaDepartureDays = days,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ),
-                              _DestinationServiceToggle(
-                                icon: Icons.car_rental_outlined,
-                                title: l10n.offerCarTransportDestination,
-                                subtitle: l10n.carTransportDestinationHelper,
-                                value: carTransportEnabled,
-                                onChanged: (value) => updateService(
-                                  () => carTransportEnabled = value,
+                              if (offersCarTransport)
+                                _DestinationServiceToggle(
+                                  icon: Icons.car_rental_outlined,
+                                  title: l10n.offerCarTransportDestination,
+                                  subtitle: l10n.carTransportDestinationHelper,
+                                  value: carTransportEnabled,
+                                  onChanged: (value) => updateService(
+                                    () => carTransportEnabled = value,
+                                  ),
                                 ),
-                              ),
                               if (hasError) ...[
                                 const SizedBox(height: 8),
                                 Text(
@@ -453,7 +508,6 @@ class _DestinationCountriesScreenState
               .toLowerCase()
               .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
               .replaceAll(RegExp(r'^-|-$'), '');
-      final businessSnapshot = await _businessDestinationSnapshot(businessId);
       final minDays = int.tryParse(minDaysController.text.trim());
       final maxDays = int.tryParse(maxDaysController.text.trim());
       final hasEstimate = minDays != null && maxDays != null;
@@ -463,6 +517,8 @@ class _DestinationCountriesScreenState
           .collection('destinationCountries')
           .doc(id)
           .set({
+            'id': id,
+            'countryId': id,
             'name': nameController.text.trim(),
             'code': codeController.text.trim().toUpperCase(),
             ...businessSnapshot,
@@ -477,6 +533,12 @@ class _DestinationCountriesScreenState
             'freightSeaPricePerKg': freightSeaEnabled
                 ? double.tryParse(freightSeaPriceController.text.trim()) ?? 0
                 : 0,
+            'freightAirDepartureDays': freightAirEnabled
+                ? _orderedDepartureDays(freightAirDepartureDays)
+                : const <String>[],
+            'freightSeaDepartureDays': freightSeaEnabled
+                ? _orderedDepartureDays(freightSeaDepartureDays)
+                : const <String>[],
             'carTransportAvailable': carTransportEnabled,
             'deliveryEstimateMinDays': hasEstimate
                 ? minDays
@@ -906,6 +968,92 @@ class _DestinationCountriesScreenState
             ),
         ],
       ),
+    );
+  }
+}
+
+const _destinationDepartureDays = [
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+  'sunday',
+];
+
+List<String> _orderedDepartureDays(Set<String> days) =>
+    _destinationDepartureDays.where(days.contains).toList(growable: false);
+
+String _departureDayLabel(AppLocalizations l10n, String day) => switch (day) {
+  'monday' => l10n.mondayShort,
+  'tuesday' => l10n.tuesdayShort,
+  'wednesday' => l10n.wednesdayShort,
+  'thursday' => l10n.thursdayShort,
+  'friday' => l10n.fridayShort,
+  'saturday' => l10n.saturdayShort,
+  'sunday' => l10n.sundayShort,
+  _ => day,
+};
+
+class _DepartureDayPicker extends StatelessWidget {
+  const _DepartureDayPicker({
+    required this.label,
+    required this.selectedDays,
+    required this.onChanged,
+  });
+
+  final String label;
+  final Set<String> selectedDays;
+  final ValueChanged<Set<String>> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.ink,
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          l10n.freightDepartureDaysHelper,
+          style: const TextStyle(
+            color: AppColors.muted,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 7,
+          runSpacing: 7,
+          children: _destinationDepartureDays
+              .map((day) {
+                final selected = selectedDays.contains(day);
+                return FilterChip(
+                  label: Text(_departureDayLabel(l10n, day)),
+                  selected: selected,
+                  onSelected: (nextSelected) {
+                    final next = {...selectedDays};
+                    if (nextSelected) {
+                      next.add(day);
+                    } else {
+                      next.remove(day);
+                    }
+                    onChanged(next);
+                  },
+                );
+              })
+              .toList(growable: false),
+        ),
+      ],
     );
   }
 }

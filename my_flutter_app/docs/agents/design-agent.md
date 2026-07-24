@@ -152,3 +152,8 @@ Return:
   a separate opportunity inbox; customers compare price, pickup/delivery
   timing, method, terms, and expiry before choosing. Never present `$0.00` as a
   transport price while quotes are pending.
+- Business destination management is a coverage matrix, not a barrel-price
+  catalog. Show global capabilities first, then per-country toggles for barrel,
+  air freight, sea freight, and quote-based car transport. Use an operational
+  list plus a focused drawer, and surface delivery windows and freight
+  departure days on customer provider cards before selection.

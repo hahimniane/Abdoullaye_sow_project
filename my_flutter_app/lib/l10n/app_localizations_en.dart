@@ -1973,6 +1973,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Turn on only what this business offers for this country.';
 
   @override
+  String get enableBusinessServiceBeforeDestination =>
+      'Enable barrel shipping, freight, or car transport on the business profile before configuring destination coverage.';
+
+  @override
   String get destinationServiceCoverageTitle => 'Destination services';
 
   @override
@@ -5304,4 +5308,40 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get freightPickupFreeLabel => 'Free pickup';
+
+  @override
+  String get freightAirDepartureDays => 'Air freight departure days';
+
+  @override
+  String get freightSeaDepartureDays => 'Sea freight departure days';
+
+  @override
+  String get freightDepartureDaysHelper =>
+      'Optional. Choose the regular days this service departs.';
+
+  @override
+  String get mondayShort => 'Mon';
+
+  @override
+  String get tuesdayShort => 'Tue';
+
+  @override
+  String get wednesdayShort => 'Wed';
+
+  @override
+  String get thursdayShort => 'Thu';
+
+  @override
+  String get fridayShort => 'Fri';
+
+  @override
+  String get saturdayShort => 'Sat';
+
+  @override
+  String get sundayShort => 'Sun';
+
+  @override
+  String regularDepartureDays(String days) {
+    return 'Regular departures: $days';
+  }
 }
