@@ -3563,6 +3563,149 @@ class AppLocalizationsEn extends AppLocalizations {
   String get requestCarTransport => 'Request car transport';
 
   @override
+  String get chooseTransportDestination => 'Choose a destination for the car.';
+
+  @override
+  String get whereIsTheCarGoing => 'Where is the car going?';
+
+  @override
+  String get searchDestinationCountry => 'Search destination country';
+
+  @override
+  String get noDestinationCountriesMatch =>
+      'No destination countries match your search.';
+
+  @override
+  String get transportBusinessesWillQuote =>
+      'Eligible verified businesses serving this destination will receive the vehicle details and send you quotes to compare.';
+
+  @override
+  String get vehicleCondition => 'Vehicle condition';
+
+  @override
+  String get vehicleRunsAndDrives => 'Runs and drives';
+
+  @override
+  String get vehicleInoperable => 'Inoperable';
+
+  @override
+  String get preferredTransportMethod => 'Preferred transport method';
+
+  @override
+  String get openTransport => 'Open carrier';
+
+  @override
+  String get enclosedTransport => 'Enclosed carrier';
+
+  @override
+  String get pickupArea => 'Pickup city, region, or postal code';
+
+  @override
+  String get pickupAreaHint => 'For example, Bronx, NY 10467';
+
+  @override
+  String get enterPickupArea =>
+      'Enter the pickup city, region, or postal code.';
+
+  @override
+  String get flexibleTransportDates => 'My dates are flexible';
+
+  @override
+  String get flexibleTransportDatesSubtitle =>
+      'Businesses may quote the best available pickup window.';
+
+  @override
+  String transportMarketplaceRequestSent(Object trackingCode) {
+    return 'Request $trackingCode sent to eligible businesses. You can compare their quotes in your orders.';
+  }
+
+  @override
+  String get transportQuotesTitle => 'Business quotes';
+
+  @override
+  String get transportQuotesIntro =>
+      'Compare the total price, timing, method, and terms before choosing a transporter.';
+
+  @override
+  String get waitingForTransportQuotes => 'Waiting for business quotes';
+
+  @override
+  String get waitingForTransportQuotesSubtitle =>
+      'Eligible verified businesses can review the route and vehicle now. We will keep this order updated as quotes arrive.';
+
+  @override
+  String get couldNotLoadTransportQuotes =>
+      'The business quotes could not be loaded. Try again.';
+
+  @override
+  String get estimatedPickup => 'Estimated pickup';
+
+  @override
+  String get estimatedDelivery => 'Estimated delivery';
+
+  @override
+  String get transportMethod => 'Transport method';
+
+  @override
+  String get selectTransportQuote => 'Choose this quote';
+
+  @override
+  String get selectingTransportQuote => 'Selecting quote...';
+
+  @override
+  String get confirmTransportQuoteTitle => 'Choose this transporter?';
+
+  @override
+  String confirmTransportQuoteMessage(Object businessName, Object price) {
+    return 'Choose $businessName for $price? This closes the request to other businesses.';
+  }
+
+  @override
+  String get keepComparing => 'Keep comparing';
+
+  @override
+  String get chooseThisBusiness => 'Choose this business';
+
+  @override
+  String get couldNotSelectTransportQuote =>
+      'This quote could not be selected. Check that it is still available and try again.';
+
+  @override
+  String get transportQuoteSelectedTitle => 'Transporter selected';
+
+  @override
+  String transportQuoteSelectedMessage(Object businessName, Object price) {
+    return '$businessName was selected for $price. Your private contact and pickup details are now available to this business.';
+  }
+
+  @override
+  String get transportRequestCancelled => 'Transport request cancelled';
+
+  @override
+  String get transportRequestCancelledSubtitle =>
+      'Businesses can no longer send or revise quotes for this request.';
+
+  @override
+  String get cancelTransportRequest => 'Cancel transport request';
+
+  @override
+  String get cancellingTransportRequest => 'Cancelling request...';
+
+  @override
+  String get confirmCancelTransportRequestTitle => 'Cancel this request?';
+
+  @override
+  String get confirmCancelTransportRequestMessage =>
+      'Businesses will no longer be able to send or revise quotes.';
+
+  @override
+  String get keepRequestOpen => 'Keep request open';
+
+  @override
+  String get couldNotCancelTransportRequest =>
+      'The transport request could not be cancelled. Try again.';
+
+  @override
   String get chooseBusinessAndDestination =>
       'Choose a business and destination.';
 
@@ -3617,7 +3760,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get transportQuoteNoPaymentNote =>
-      'No payment now — the business reviews your request and sends a price quote you can accept.';
+      'No payment now — eligible businesses send quotes and you choose which one to accept.';
 
   @override
   String get noTransportBusinessesYet =>

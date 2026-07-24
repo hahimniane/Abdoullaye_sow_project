@@ -271,3 +271,8 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   freight price and freight-only with a barrel price) and prove the web exposes
   only options the corresponding create callable will accept. A passing
   pricing-arithmetic test plus a separate backend rejection test is not enough.
+- Car transport marketplace coverage must prove server-derived invitations,
+  opportunity PII redaction, deterministic one-quote-per-business revision,
+  provider permission checks, expiry, withdrawal, customer-only transactional
+  one-winner selection, cancellation, selected-provider-only fulfillment
+  transitions, and continued `flowVersion: 1` compatibility.

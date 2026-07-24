@@ -33,6 +33,25 @@ void main() {
     expect(source, contains('crossAxisAlignment: CrossAxisAlignment.stretch'));
   });
 
+  test(
+    'car transport uses marketplace quotes instead of preassigning a business',
+    () {
+      final screen = File(
+        'lib/screens/request_transport_screen.dart',
+      ).readAsStringSync();
+      final service = File(
+        'lib/services/transport_service.dart',
+      ).readAsStringSync();
+
+      expect(screen, contains('SearchableDestinationCountryField'));
+      expect(screen, isNot(contains('_selectedOption')));
+      expect(service, isNot(contains("required String businessId")));
+      expect(service, contains("'selectTransportQuote'"));
+      expect(service, contains("'cancelTransportQuoteRequest'"));
+      expect(service, contains("collection('transportQuotes')"));
+    },
+  );
+
   testWidgets('shipping service hub renders its French service labels', (
     tester,
   ) async {

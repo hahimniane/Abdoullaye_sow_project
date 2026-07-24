@@ -159,6 +159,11 @@ async function seedFirestore() {
         businessId: "biz_a",
         businessName: "Business A",
       },
+      "users/owner-b": {
+        role: "businessOwner",
+        businessId: "biz_b",
+        businessName: "Business B",
+      },
       "users/owner-doconly": {
         role: "businessOwner",
         businessId: "legacy_business_id",
@@ -187,6 +192,18 @@ async function seedFirestore() {
         businessId: "biz_a",
         businessName: "Business A",
         businessPermissions: ["freight"],
+      },
+      "users/staff-transport-a": {
+        role: "staff",
+        businessId: "biz_a",
+        businessName: "Business A",
+        businessPermissions: ["transport"],
+      },
+      "users/staff-transport-b": {
+        role: "staff",
+        businessId: "biz_b",
+        businessName: "Business B",
+        businessPermissions: ["transport"],
       },
       "users/staff-support-a": {
         role: "staff",
@@ -313,6 +330,123 @@ async function seedFirestore() {
         businessId: "biz_a",
         customerUid: "customer-owner",
         priceSettlementStatus: "balance_due",
+      },
+      "transportRequests/transport_v1": {
+        customerUid: "customer-owner",
+        businessId: "biz_a",
+        businessName: "Business A",
+        trackingCode: "TR-V1",
+        price: 950,
+        status: "pending",
+        quoteStatus: "awaitingQuote",
+      },
+      "transportRequests/transport_v2": {
+        flowVersion: 2,
+        source: "customerMarketplace",
+        customerUid: "customer-owner",
+        trackingCode: "TR-V2",
+        businessId: "",
+        businessName: "",
+        price: 0,
+        amountCents: 0,
+        currency: "usd",
+        status: "quote_requested",
+        quoteStatus: "collecting",
+        eligibleBusinessIds: ["biz_a", "biz_b"],
+        eligibleBusinessCount: 2,
+        selectedQuoteId: "",
+        selectedBusinessId: "",
+        selectedBusinessName: "",
+        selectedAmountCents: 0,
+        customerPhone: "+15555550101",
+        pickupAddress: "100 Private Test Avenue",
+        pickupArea: "Bronx, NY 10458",
+        vehicleOperable: true,
+        requestedTransportMethod: "open",
+        flexibleDates: false,
+        notes: "Private request notes",
+        vinNumber: "PRIVATEVIN123",
+      },
+      "transportRequests/transport_v2_selected": {
+        flowVersion: 2,
+        source: "customerMarketplace",
+        customerUid: "customer-owner",
+        trackingCode: "TR-V2-SELECTED",
+        businessId: "biz_a",
+        businessName: "Business A",
+        price: 1000,
+        amountCents: 100000,
+        currency: "usd",
+        status: "pending",
+        quoteStatus: "selected",
+        eligibleBusinessIds: ["biz_a", "biz_b"],
+        eligibleBusinessCount: 2,
+        selectedQuoteId: "transport_v2_selected__biz_a",
+        selectedBusinessId: "biz_a",
+        selectedBusinessName: "Business A",
+        selectedAmountCents: 100000,
+        customerPhone: "+15555550101",
+        pickupAddress: "100 Private Test Avenue",
+      },
+      "transportOpportunities/transport_v2__biz_a": {
+        flowVersion: 2,
+        requestId: "transport_v2",
+        opportunityId: "transport_v2__biz_a",
+        trackingCode: "TR-V2",
+        businessId: "biz_a",
+        businessName: "Business A",
+        destinationCountryId: "guinea",
+        destinationCountryName: "Guinea",
+        carMake: "Toyota",
+        carModel: "Camry",
+        carYear: "2022",
+        pickupArea: "Bronx, NY 10458",
+        vehicleOperable: true,
+        requestedTransportMethod: "open",
+        flexibleDates: false,
+        status: "open",
+      },
+      "transportOpportunities/transport_v2__biz_b": {
+        flowVersion: 2,
+        requestId: "transport_v2",
+        opportunityId: "transport_v2__biz_b",
+        trackingCode: "TR-V2",
+        businessId: "biz_b",
+        businessName: "Business B",
+        destinationCountryId: "guinea",
+        destinationCountryName: "Guinea",
+        carMake: "Toyota",
+        carModel: "Camry",
+        carYear: "2022",
+        pickupArea: "Bronx, NY 10458",
+        vehicleOperable: true,
+        requestedTransportMethod: "open",
+        flexibleDates: false,
+        status: "open",
+      },
+      "transportQuotes/transport_v2__biz_a": {
+        flowVersion: 2,
+        requestId: "transport_v2",
+        opportunityId: "transport_v2__biz_a",
+        businessId: "biz_a",
+        businessName: "Business A",
+        amountCents: 100000,
+        currency: "usd",
+        transportMethod: "open",
+        status: "submitted",
+        revision: 1,
+      },
+      "transportQuotes/transport_v2__biz_b": {
+        flowVersion: 2,
+        requestId: "transport_v2",
+        opportunityId: "transport_v2__biz_b",
+        businessId: "biz_b",
+        businessName: "Business B",
+        amountCents: 120000,
+        currency: "usd",
+        transportMethod: "enclosed",
+        status: "submitted",
+        revision: 1,
       },
       "carPurchases/purchase_a": {
         businessId: "biz_a",
@@ -788,6 +922,243 @@ describe("business dashboard Firestore rules", () => {
     );
     await assertFails(staffDb.doc("businessSupportRequests/support_b").get());
   });
+});
+
+describe("car transport quote marketplace Firestore rules", () => {
+  it("keeps an unassigned v2 request private from invited businesses",
+      async () => {
+        const customerDb = firestoreFor("customer-owner");
+        const strangerDb = firestoreFor("customer-stranger");
+        const ownerDb = firestoreFor("owner-a");
+        const transportStaffDb = firestoreFor("staff-transport-a");
+        const adminDb = firestoreFor("operations-admin");
+
+        await assertSucceeds(
+            customerDb.doc("transportRequests/transport_v2").get(),
+        );
+        await assertSucceeds(
+            adminDb.doc("transportRequests/transport_v2").get(),
+        );
+        await assertFails(
+            strangerDb.doc("transportRequests/transport_v2").get(),
+        );
+        await assertFails(
+            ownerDb.doc("transportRequests/transport_v2").get(),
+        );
+        await assertFails(
+            transportStaffDb.doc("transportRequests/transport_v2").get(),
+        );
+        await assertSucceeds(
+            ownerDb.doc("transportRequests/transport_v2_selected").get(),
+        );
+        await assertSucceeds(
+            transportStaffDb
+                .doc("transportRequests/transport_v2_selected")
+                .get(),
+        );
+      });
+
+  it("shows each business only its sanitized opportunities", async () => {
+    const ownerDb = firestoreFor("owner-a");
+    const staffDb = firestoreFor("staff-transport-a");
+    const listingStaffDb = firestoreFor("staff-listings-a");
+    const noPermissionDb = firestoreFor("staff-missing-permissions-a");
+    const customerDb = firestoreFor("customer-owner");
+    const strangerDb = firestoreFor("customer-stranger");
+
+    const opportunity = await assertSucceeds(
+        ownerDb.doc("transportOpportunities/transport_v2__biz_a").get(),
+    );
+    assert.equal(opportunity.get("trackingCode"), "TR-V2");
+    assert.equal(opportunity.get("pickupArea"), "Bronx, NY 10458");
+    assert.equal(opportunity.get("vehicleOperable"), true);
+    assert.equal(opportunity.get("requestedTransportMethod"), "open");
+    assert.equal(opportunity.get("flexibleDates"), false);
+    for (const privateField of [
+      "customerUid",
+      "ownerName",
+      "customerPhone",
+      "pickupAddress",
+      "notes",
+      "vinNumber",
+    ]) {
+      assert.equal(
+          Object.prototype.hasOwnProperty.call(
+              opportunity.data() || {},
+              privateField,
+          ),
+          false,
+      );
+    }
+
+    await assertSucceeds(
+        staffDb.doc("transportOpportunities/transport_v2__biz_a").get(),
+    );
+    await assertFails(
+        ownerDb.doc("transportOpportunities/transport_v2__biz_b").get(),
+    );
+    await assertFails(
+        staffDb.doc("transportOpportunities/transport_v2__biz_b").get(),
+    );
+    await assertFails(
+        listingStaffDb
+            .doc("transportOpportunities/transport_v2__biz_a")
+            .get(),
+    );
+    await assertFails(
+        noPermissionDb
+            .doc("transportOpportunities/transport_v2__biz_a")
+            .get(),
+    );
+    await assertSucceeds(
+        customerDb.doc("transportOpportunities/transport_v2__biz_a").get(),
+    );
+    await assertSucceeds(
+        customerDb.doc("transportOpportunities/transport_v2__biz_b").get(),
+    );
+    await assertFails(
+        strangerDb.doc("transportOpportunities/transport_v2__biz_a").get(),
+    );
+
+    const scoped = await assertSucceeds(
+        staffDb.collection("transportOpportunities")
+            .where("businessId", "==", "biz_a")
+            .get(),
+    );
+    assert.equal(scoped.size, 1);
+  });
+
+  it("isolates competing quotes while the customer can compare all",
+      async () => {
+        const staffADb = firestoreFor("staff-transport-a");
+        const staffBDb = firestoreFor("staff-transport-b");
+        const customerDb = firestoreFor("customer-owner");
+        const strangerDb = firestoreFor("customer-stranger");
+
+        await assertSucceeds(
+            staffADb.doc("transportQuotes/transport_v2__biz_a").get(),
+        );
+        await assertFails(
+            staffADb.doc("transportQuotes/transport_v2__biz_b").get(),
+        );
+        await assertSucceeds(
+            staffBDb.doc("transportQuotes/transport_v2__biz_b").get(),
+        );
+        await assertFails(
+            staffBDb.doc("transportQuotes/transport_v2__biz_a").get(),
+        );
+        await assertSucceeds(
+            customerDb.doc("transportQuotes/transport_v2__biz_a").get(),
+        );
+        await assertSucceeds(
+            customerDb.doc("transportQuotes/transport_v2__biz_b").get(),
+        );
+        await assertFails(
+            strangerDb.doc("transportQuotes/transport_v2__biz_a").get(),
+        );
+
+        const businessQuotes = await assertSucceeds(
+            staffADb.collection("transportQuotes")
+                .where("businessId", "==", "biz_a")
+                .get(),
+        );
+        assert.equal(businessQuotes.size, 1);
+        const customerQuotes = await assertSucceeds(
+            customerDb.collection("transportQuotes")
+                .where("requestId", "==", "transport_v2")
+                .get(),
+        );
+        assert.equal(customerQuotes.size, 2);
+      });
+
+  it("denies every direct client write to v2 marketplace records",
+      async () => {
+        const customerDb = firestoreFor("customer-owner");
+        const ownerDb = firestoreFor("owner-a");
+        const adminDb = firestoreFor("operations-admin");
+
+        for (const clientDb of [customerDb, ownerDb, adminDb]) {
+          await assertFails(
+              clientDb.doc("transportRequests/transport_v2").set({
+                status: "cancelled",
+                quoteStatus: "cancelled",
+              }, {merge: true}),
+          );
+          await assertFails(
+              clientDb
+                  .doc("transportOpportunities/transport_v2__biz_a")
+                  .set({status: "selected"}, {merge: true}),
+          );
+          await assertFails(
+              clientDb.doc("transportQuotes/transport_v2__biz_a").set({
+                amountCents: 1,
+                status: "selected",
+              }, {merge: true}),
+          );
+        }
+
+        await assertFails(
+            ownerDb.doc("transportRequests/forged_v2").set({
+              flowVersion: 2,
+              customerUid: "customer-owner",
+              businessId: "biz_a",
+              status: "quote_requested",
+              quoteStatus: "collecting",
+            }),
+        );
+        await assertFails(
+            ownerDb.doc("transportRequests/transport_v1").set({
+              flowVersion: 2,
+            }, {merge: true}),
+        );
+      });
+
+  it("preserves the assigned v1 read, fulfillment, and cancellation rules",
+      async () => {
+        const customerDb = firestoreFor("customer-owner");
+        const strangerDb = firestoreFor("customer-stranger");
+        const ownerDb = firestoreFor("owner-a");
+        const transportStaffDb = firestoreFor("staff-transport-a");
+        const listingStaffDb = firestoreFor("staff-listings-a");
+
+        await assertSucceeds(
+            customerDb.doc("transportRequests/transport_v1").get(),
+        );
+        await assertFails(
+            strangerDb.doc("transportRequests/transport_v1").get(),
+        );
+        await assertSucceeds(
+            ownerDb.doc("transportRequests/transport_v1").get(),
+        );
+        await assertSucceeds(
+            transportStaffDb.doc("transportRequests/transport_v1").get(),
+        );
+        await assertSucceeds(
+            listingStaffDb.doc("transportRequests/transport_v1").get(),
+        );
+        await assertFails(
+            listingStaffDb.doc("transportRequests/transport_v1").set({
+              status: "in_transit",
+            }, {merge: true}),
+        );
+        await assertSucceeds(
+            transportStaffDb.doc("transportRequests/transport_v1").set({
+              status: "in_transit",
+            }, {merge: true}),
+        );
+
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+          await context.firestore()
+              .doc("transportRequests/transport_v1")
+              .update({status: "pending"});
+        });
+        await assertSucceeds(
+            customerDb.doc("transportRequests/transport_v1").set({
+              status: "cancelled",
+              updatedAt: new Date(),
+            }, {merge: true}),
+        );
+      });
 });
 
 describe("server-authoritative and granular admin Firestore rules", () => {

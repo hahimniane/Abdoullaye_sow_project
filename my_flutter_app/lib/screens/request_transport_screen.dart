@@ -6,16 +6,18 @@ import 'package:provider/provider.dart';
 import '../data/car_catalog.dart';
 import '../l10n/app_localizations.dart';
 import '../models/business_destination_option.dart';
+import '../models/destination_country.dart';
 import '../providers/auth_provider.dart';
 import '../services/transport_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
+import '../widgets/searchable_destination_country_field.dart';
 
-/// Customer-facing flow: request car transport through a business that offers
-/// the service. The business reviews the request and sends back a price quote —
-/// nothing is paid here.
+/// Customer-facing flow: publish one route-first car transport request to every
+/// eligible verified business. Businesses submit comparable quotes and the
+/// customer chooses one later; nothing is paid here.
 class RequestTransportScreen extends StatefulWidget {
   const RequestTransportScreen({super.key});
 
@@ -30,11 +32,12 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
   final _ownerController = TextEditingController();
   final _phoneController = TextEditingController();
   final _vinController = TextEditingController();
+  final _pickupAreaController = TextEditingController();
   final _pickupController = TextEditingController();
   final _notesController = TextEditingController();
 
   List<BusinessDestinationOption> _options = const [];
-  BusinessDestinationOption? _selectedOption;
+  DestinationCountry? _selectedDestination;
 
   String? _selectedMake;
   String? _selectedModel;
@@ -44,6 +47,9 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
   List<String> _yearOptions = const [];
 
   DateTime? _preferredDate;
+  bool _vehicleOperable = true;
+  String _requestedTransportMethod = 'open';
+  bool _flexibleDates = true;
   bool _loading = true;
   bool _submitting = false;
   String? _loadError;
@@ -59,6 +65,7 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
     _ownerController.dispose();
     _phoneController.dispose();
     _vinController.dispose();
+    _pickupAreaController.dispose();
     _pickupController.dispose();
     _notesController.dispose();
     super.dispose();
@@ -76,7 +83,6 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
       if (!mounted) return;
       setState(() {
         _options = options;
-        _selectedOption = options.isNotEmpty ? options.first : null;
         _loading = false;
       });
     } catch (error) {
@@ -88,8 +94,14 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
     }
   }
 
-  String _optionLabel(BusinessDestinationOption option) {
-    return '${option.businessName} · ${option.country.name}';
+  List<DestinationCountry> get _destinationCountries {
+    final byId = <String, DestinationCountry>{};
+    for (final option in _options) {
+      byId.putIfAbsent(option.country.id, () => option.country);
+    }
+    final countries = byId.values.toList();
+    countries.sort((a, b) => a.name.compareTo(b.name));
+    return countries;
   }
 
   Future<void> _pickDate() async {
@@ -111,9 +123,9 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
       Navigator.pushNamed(context, '/login');
       return;
     }
-    final option = _selectedOption;
-    if (option == null) {
-      showErrorSnackBar(context, l10n.chooseBusinessAndDestination);
+    final destination = _selectedDestination;
+    if (destination == null) {
+      showErrorSnackBar(context, l10n.chooseTransportDestination);
       return;
     }
     if (!_formKey.currentState!.validate()) return;
@@ -127,14 +139,17 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
     setState(() => _submitting = true);
     try {
       final result = await _service.createRequest(
-        businessId: option.businessId,
-        destinationCountryId: option.country.id,
-        destinationCountryName: option.country.name,
+        destinationCountryId: destination.id,
+        destinationCountryName: destination.name,
         ownerName: _ownerController.text.trim(),
         carMake: _selectedMake!,
         carModel: _selectedModel!,
         carYear: _selectedYear!,
         customerPhone: _phoneController.text.trim(),
+        pickupArea: _pickupAreaController.text.trim(),
+        vehicleOperable: _vehicleOperable,
+        requestedTransportMethod: _requestedTransportMethod,
+        flexibleDates: _flexibleDates,
         vinNumber: _vinController.text.trim(),
         pickupAddress: _pickupController.text.trim(),
         notes: _notesController.text.trim(),
@@ -143,10 +158,7 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
       if (!mounted) return;
       showSuccessSnackBar(
         context,
-        l10n.transportRequestSentToBusiness(
-          option.businessName,
-          result.trackingCode,
-        ),
+        l10n.transportMarketplaceRequestSent(result.trackingCode),
       );
       Navigator.of(context).pop();
     } catch (error) {
@@ -205,37 +217,22 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
         children: [
-          _SectionLabel(l10n.whoShouldHandleTransport),
+          _SectionLabel(l10n.whereIsTheCarGoing),
           _CardField(
-            child: DropdownButtonFormField<BusinessDestinationOption>(
-              initialValue: _selectedOption,
-              isExpanded: true,
-              decoration: InputDecoration(
-                border: InputBorder.none,
-                labelText: l10n.businessDestination,
-              ),
-              items: [
-                for (final option in _options)
-                  DropdownMenuItem(
-                    value: option,
-                    child: Text(
-                      _optionLabel(option),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-              ],
-              onChanged: (value) => setState(() => _selectedOption = value),
+            child: SearchableDestinationCountryField(
+              countries: _destinationCountries,
+              value: _selectedDestination,
+              label: l10n.destinationCountry,
+              requiredMessage: l10n.chooseTransportDestination,
+              onChanged: (value) =>
+                  setState(() => _selectedDestination = value),
             ),
           ),
-          if (_selectedOption?.serviceNote != null &&
-              _selectedOption!.serviceNote!.trim().isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 6, left: 4),
-              child: Text(
-                _selectedOption!.serviceNote!.trim(),
-                style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
-              ),
-            ),
+          const SizedBox(height: 8),
+          Text(
+            l10n.transportBusinessesWillQuote,
+            style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
+          ),
 
           _SectionLabel(l10n.theCar),
           _CardField(
@@ -320,6 +317,27 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
               ),
             ),
           ),
+          const SizedBox(height: 12),
+          _ChoicePanel<bool>(
+            label: l10n.vehicleCondition,
+            value: _vehicleOperable,
+            options: [
+              (value: true, label: l10n.vehicleRunsAndDrives),
+              (value: false, label: l10n.vehicleInoperable),
+            ],
+            onChanged: (value) => setState(() => _vehicleOperable = value),
+          ),
+          const SizedBox(height: 12),
+          _ChoicePanel<String>(
+            label: l10n.preferredTransportMethod,
+            value: _requestedTransportMethod,
+            options: [
+              (value: 'open', label: l10n.openTransport),
+              (value: 'enclosed', label: l10n.enclosedTransport),
+            ],
+            onChanged: (value) =>
+                setState(() => _requestedTransportMethod = value),
+          ),
 
           _SectionLabel(l10n.contactAndPickup),
           _CardField(
@@ -342,6 +360,20 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
               decoration: const InputDecoration(border: InputBorder.none),
               validator: (value) => (value == null || value.trim().isEmpty)
                   ? l10n.enterContactPhone
+                  : null,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _CardField(
+            child: TextFormField(
+              controller: _pickupAreaController,
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                labelText: l10n.pickupArea,
+                hintText: l10n.pickupAreaHint,
+              ),
+              validator: (value) => (value == null || value.trim().isEmpty)
+                  ? l10n.enterPickupArea
                   : null,
             ),
           ),
@@ -384,6 +416,13 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
               onTap: _pickDate,
             ),
           ),
+          SwitchListTile.adaptive(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            title: Text(l10n.flexibleTransportDates),
+            subtitle: Text(l10n.flexibleTransportDatesSubtitle),
+            value: _flexibleDates,
+            onChanged: (value) => setState(() => _flexibleDates = value),
+          ),
 
           const SizedBox(height: 22),
           SizedBox(
@@ -408,6 +447,61 @@ class _RequestTransportScreenState extends State<RequestTransportScreen> {
             l10n.transportQuoteNoPaymentNote,
             textAlign: TextAlign.center,
             style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChoicePanel<T> extends StatelessWidget {
+  const _ChoicePanel({
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  final String label;
+  final T value;
+  final List<({T value, String label})> options;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      decoration: BoxDecoration(
+        color: AppColors.paper,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.muted,
+              fontWeight: FontWeight.w700,
+              fontSize: 12.5,
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<T>(
+              segments: [
+                for (final option in options)
+                  ButtonSegment<T>(
+                    value: option.value,
+                    label: Text(option.label),
+                  ),
+              ],
+              selected: {value},
+              showSelectedIcon: false,
+              onSelectionChanged: (values) => onChanged(values.first),
+            ),
           ),
         ],
       ),

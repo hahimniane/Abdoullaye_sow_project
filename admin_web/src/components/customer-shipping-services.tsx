@@ -1,25 +1,38 @@
 "use client";
 
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  onSnapshot,
+  query,
+  where,
+} from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import {
   Box,
+  CalendarClock,
   CheckCircle2,
+  CircleDollarSign,
+  Clock3,
   MapPin,
   PackageCheck,
   Plane,
   RefreshCw,
   Scale,
+  ShieldCheck,
   Ship,
   Store,
   Truck,
+  XCircle,
 } from "lucide-react";
 
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
 import { ServiceRequestForm } from "@/components/service-request-form";
 import { SearchableSelect } from "@/components/searchable-select";
+import { confirmImportantAction } from "@/lib/action-confirmation";
 import {
   barrelDestinationCountries,
   barrelOrderTotals,
@@ -30,7 +43,6 @@ import {
   buildBarrelShipmentPayload,
   buildFreightSettlementPayload,
   buildFreightShipmentPayload,
-  buildTransportRequestPayload,
   freightProvidersForMode,
   freightShippingEstimate,
   freightSettlementIsPayable,
@@ -48,7 +60,7 @@ import {
 } from "@/lib/customer-shipping";
 import { marketplaceDisclosure } from "@/lib/disclosures";
 import { db, functions } from "@/lib/firebase";
-import { formatMoney, text } from "@/lib/format";
+import { formatDate, formatMoney, text } from "@/lib/format";
 import { currentWebLanguage } from "@/lib/language";
 import { isValidPhone } from "@/lib/phone";
 import {
@@ -292,7 +304,7 @@ export function CustomerShippingServices({
           active={service === "transport"}
           icon={<Truck size={20} />}
           label="Car transport"
-          note="Request a business quote"
+          note="Compare carrier quotes"
           onClick={() => setService("transport")}
         />
       </div>
@@ -2524,6 +2536,142 @@ function FreightSettlements({ shipments }: { shipments: FirestoreRow[] }) {
   );
 }
 
+type CustomerTransportRequest = FirestoreRow & {
+  trackingCode?: string;
+  status?: string;
+  quoteStatus?: string;
+  pickupArea?: string;
+  pickupAddress?: string;
+  destinationCountryName?: string;
+  carMake?: string;
+  carModel?: string;
+  carYear?: string;
+  requestedTransportMethod?: string;
+  selectedQuoteId?: string;
+  selectedBusinessName?: string;
+  selectedAmountCents?: number;
+};
+
+type TransportQuote = FirestoreRow & {
+  requestId?: string;
+  businessId?: string;
+  businessName?: string;
+  amountCents?: number;
+  currency?: string;
+  estimatedPickupDate?: unknown;
+  estimatedDeliveryDate?: unknown;
+  transportMethod?: string;
+  terms?: string;
+  expiresAt?: unknown;
+  status?: string;
+};
+
+function useCustomerTransportRequests(customerUid: string, enabled: boolean) {
+  const [rows, setRows] = useState<CustomerTransportRequest[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!enabled || !customerUid) {
+      setRows([]);
+      setLoading(false);
+      setError("");
+      return;
+    }
+    setLoading(true);
+    return onSnapshot(
+      query(
+        collection(db, "transportRequests"),
+        where("customerUid", "==", customerUid),
+      ),
+      (snapshot) => {
+        setRows(
+          snapshot.docs
+            .map(
+              (item): CustomerTransportRequest => ({
+                id: item.id,
+                ...item.data(),
+              }),
+            )
+            .sort(
+              (left, right) =>
+                transportTimestamp(right.updatedAt ?? right.createdAt) -
+                transportTimestamp(left.updatedAt ?? left.createdAt),
+            ),
+        );
+        setLoading(false);
+        setError("");
+      },
+      () => {
+        setRows([]);
+        setLoading(false);
+        setError("We couldn’t load your transport requests. Try again.");
+      },
+    );
+  }, [customerUid, enabled]);
+
+  return { rows, loading, error };
+}
+
+function useTransportQuotes(requestId: string, enabled: boolean) {
+  const [rows, setRows] = useState<TransportQuote[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!enabled || !requestId) {
+      setRows([]);
+      setLoading(false);
+      setError("");
+      return;
+    }
+    setLoading(true);
+    return onSnapshot(
+      query(
+        collection(db, "transportQuotes"),
+        where("requestId", "==", requestId),
+      ),
+      (snapshot) => {
+        setRows(
+          snapshot.docs
+            .map(
+              (item): TransportQuote => ({
+                id: item.id,
+                ...item.data(),
+              }),
+            )
+            .sort(
+              (left, right) =>
+                Number(left.amountCents ?? Number.MAX_SAFE_INTEGER) -
+                Number(right.amountCents ?? Number.MAX_SAFE_INTEGER),
+            ),
+        );
+        setLoading(false);
+        setError("");
+      },
+      () => {
+        setLoading(false);
+        setError("Some quotes could not be loaded. Try again.");
+      },
+    );
+  }, [enabled, requestId]);
+
+  return { rows, loading, error };
+}
+
+function transportTimestamp(value: unknown) {
+  if (
+    value &&
+    typeof value === "object" &&
+    "toMillis" in value &&
+    typeof value.toMillis === "function"
+  ) {
+    return value.toMillis();
+  }
+  const parsed = new Date(String(value ?? "")).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function TransportRequestForm({
   authenticated,
   onAuthenticationRequired,
@@ -2537,50 +2685,89 @@ function TransportRequestForm({
   options: DestinationOption[];
   profile: UserProfile;
 }) {
-  const [destinationOptionId, setDestinationOptionId] = useState("");
-  const [destinationCountryId, setDestinationCountryId] = useState("");
   const [ownerName, setOwnerName] = useState(text(profile.fullName, ""));
   const [customerPhone, setCustomerPhone] = useState(text(profile.phone, ""));
+  const [pickupArea, setPickupArea] = useState("");
+  const [pickupAddress, setPickupAddress] = useState("");
+  const [destinationCountryId, setDestinationCountryId] = useState("");
   const [carMake, setCarMake] = useState("");
   const [carModel, setCarModel] = useState("");
   const [carYear, setCarYear] = useState("");
   const [vinNumber, setVinNumber] = useState("");
-  const [pickupAddress, setPickupAddress] = useState("");
-  const [notes, setNotes] = useState("");
+  const [vehicleOperable, setVehicleOperable] = useState(true);
+  const [transportMethod, setTransportMethod] =
+    useState<"open" | "enclosed">("open");
   const [preferredDate, setPreferredDate] = useState("");
+  const [flexibleDates, setFlexibleDates] = useState(true);
+  const [notes, setNotes] = useState("");
+  const [step, setStep] = useState<"details" | "review">("details");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [created, setCreated] = useState<{
     id: string;
     trackingCode: string;
+    eligibleBusinessCount?: number;
   } | null>(null);
-  const countries = useMemo(() => destinationCountries(options), [options]);
-  const providerOptions = useMemo(
-    () =>
-      options.filter(
-        (option) => option.country.id === destinationCountryId,
-      ),
-    [destinationCountryId, options],
-  );
-  const destination = selectedOption(providerOptions, destinationOptionId);
-  const language = currentWebLanguage();
+  const [activeRequestId, setActiveRequestId] = useState("");
   const currentYear = new Date().getFullYear();
   const year = Number(carYear);
+  const countries = useMemo(() => destinationCountries(options), [options]);
+  const destinationCountry = countries.find(
+    (country) => country.id === destinationCountryId,
+  );
+  const language = currentWebLanguage();
+  const customerUid = authenticated ? text(profile.id, "") : "";
+  const requests = useCustomerTransportRequests(customerUid, authenticated);
+  const activeRequest =
+    requests.rows.find((request) => request.id === activeRequestId) ??
+    requests.rows[0] ??
+    null;
+  const quotes = useTransportQuotes(
+    activeRequest?.id ?? "",
+    authenticated && Boolean(activeRequest),
+  );
+  const availableBusinessCount = useMemo(
+    () => new Set(options.map((option) => option.businessId)).size,
+    [options],
+  );
   const valid =
-    Boolean(
-      destination &&
-        ownerName.trim() &&
-        carMake.trim() &&
-        carModel.trim() &&
-        carYear.trim(),
-    ) &&
+    pickupArea.trim().length >= 2 &&
+    Boolean(destinationCountry) &&
+    ownerName.trim().length > 0 &&
+    carMake.trim().length > 0 &&
+    carModel.trim().length > 0 &&
     Number.isInteger(year) &&
     year >= 1900 &&
     year <= currentYear + 1 &&
     isValidPhone(customerPhone);
 
+  useEffect(() => {
+    if (created?.id) {
+      setActiveRequestId(created.id);
+    } else if (!activeRequestId && requests.rows[0]) {
+      setActiveRequestId(requests.rows[0].id);
+    }
+  }, [activeRequestId, created?.id, requests.rows]);
+
+  function clearForm() {
+    setPickupArea("");
+    setPickupAddress("");
+    setDestinationCountryId("");
+    setCarMake("");
+    setCarModel("");
+    setCarYear("");
+    setVinNumber("");
+    setVehicleOperable(true);
+    setTransportMethod("open");
+    setPreferredDate("");
+    setFlexibleDates(true);
+    setNotes("");
+    setStep("details");
+    setError("");
+  }
+
   async function submit() {
-    if (!valid || submitting || !destination) return;
+    if (!valid || submitting) return;
     if (!authenticated) {
       onAuthenticationRequired?.();
       return;
@@ -2588,28 +2775,31 @@ function TransportRequestForm({
     setSubmitting(true);
     setError("");
     try {
-      const result = await callFunction<{ id: string; trackingCode: string }>(
-        "createTransportRequest",
-        buildTransportRequestPayload({
-          businessId: destination.businessId,
-          destinationCountryId: destination.country.id,
-          destinationCountryName: destination.country.name,
-          ownerName,
-          carMake,
-          carModel,
-          carYear,
-          customerPhone,
-          vinNumber,
-          pickupAddress,
-          notes,
-          ...(preferredDate && {
-            preferredDate: new Date(
-              `${preferredDate}T12:00:00`,
-            ).toISOString(),
-          }),
-        }),
-      );
+      const result = await callFunction<{
+        id: string;
+        trackingCode: string;
+        eligibleBusinessCount?: number;
+      }>("createTransportRequest", {
+        ownerName: ownerName.trim(),
+        customerPhone: customerPhone.trim(),
+        pickupArea: pickupArea.trim(),
+        pickupAddress: pickupAddress.trim(),
+        destinationCountryId: destinationCountry?.id ?? "",
+        destinationCountryName: destinationCountry?.name ?? "",
+        carMake: carMake.trim(),
+        carModel: carModel.trim(),
+        carYear: carYear.trim(),
+        vinNumber: vinNumber.trim().toUpperCase(),
+        vehicleOperable,
+        requestedTransportMethod: transportMethod,
+        preferredDate: preferredDate
+          ? new Date(`${preferredDate}T12:00:00`).toISOString()
+          : "",
+        flexibleDates,
+        notes: notes.trim(),
+      });
       setCreated(result);
+      setActiveRequestId(result.id);
       onCreated?.(result);
     } catch {
       setError(
@@ -2629,204 +2819,648 @@ function TransportRequestForm({
     );
   }
 
-  if (created) {
+  return (
+    <div className="customer-transport-marketplace">
+      {created && (
+        <section className="customer-transport-success" role="status">
+          <CheckCircle2 aria-hidden="true" size={34} />
+          <div>
+            <span className="customer-service-kicker">Request received</span>
+            <h3>Your request is open for quotes</h3>
+            <p>
+              Eligible approved businesses serving this route can now review the
+              vehicle and send you a quote.
+            </p>
+            <strong>Tracking code: {created.trackingCode}</strong>
+          </div>
+          <button
+            className="secondary-button"
+            onClick={() => {
+              setCreated(null);
+              clearForm();
+            }}
+            type="button"
+          >
+            Start another request
+          </button>
+        </section>
+      )}
+
+      {!created && (
+        <section className="customer-transport-layout">
+          <section className="panel customer-transport-request">
+            <header className="customer-transport-request-head">
+              <span className="customer-service-kicker">Car transport quotes</span>
+              <h2>Tell us about the route and vehicle</h2>
+              <p>
+                Complete one request. Eligible approved businesses will send
+                prices and timing for you to compare.
+              </p>
+            </header>
+            <ol className="customer-form-steps" aria-label="Request progress">
+              <li className={step === "details" ? "active" : "complete"}>
+                {step === "review" ? <CheckCircle2 size={14} /> : "1"} Details
+              </li>
+              <li className={step === "review" ? "active" : ""}>2 Review</li>
+            </ol>
+            {error && <div className="error-box" role="alert">{error}</div>}
+
+            {step === "details" ? (
+              <div className="customer-transport-sections">
+                <section className="customer-transport-section">
+                  <header>
+                    <span>1</span>
+                    <div>
+                      <h3>Route</h3>
+                      <p>Where is the vehicle now, and which country is it going to?</p>
+                    </div>
+                  </header>
+                  <div className="customer-form-grid customer-shipping-form-grid">
+                    <label>
+                      Pickup area
+                      <input
+                        onChange={(event) => setPickupArea(event.target.value)}
+                        placeholder="City, state or province, postal code"
+                        required
+                        value={pickupArea}
+                      />
+                      <small>Businesses see this general area when preparing quotes.</small>
+                    </label>
+                    <SearchableSelect
+                      emptyMessage="No destination countries match your search."
+                      label="Destination country"
+                      listLabel="Destination country options"
+                      onChange={setDestinationCountryId}
+                      options={countries.map((country) => ({
+                        label: shippingCountryDisplayName(country, language),
+                        keywords: `${country.code || ""} ${country.name}`,
+                        value: country.id,
+                      }))}
+                      placeholder="Search or choose a country"
+                      value={destinationCountryId}
+                    />
+                    <AddressAutocomplete
+                      id="customer-transport-pickup"
+                      label="Exact pickup address (optional)"
+                      onChange={setPickupAddress}
+                      onSelect={(suggestion) =>
+                        setPickupAddress(
+                          suggestion.formattedAddress || suggestion.description,
+                        )
+                      }
+                      required={false}
+                      suggestionsEnabled
+                      value={pickupAddress}
+                    />
+                  </div>
+                  {pickupArea.trim().length >= 2 &&
+                    destinationCountry && (
+                      <div className="customer-transport-match-note" role="status">
+                        <ShieldCheck aria-hidden="true" size={20} />
+                        <span>
+                          <strong>Ready for carrier matching</strong>
+                          <small>
+                            Your request will be shared only with eligible
+                            approved businesses serving this route.
+                          </small>
+                        </span>
+                      </div>
+                    )}
+                </section>
+
+                <section className="customer-transport-section">
+                  <header>
+                    <span>2</span>
+                    <div>
+                      <h3>Vehicle</h3>
+                      <p>These details help businesses prepare an accurate quote.</p>
+                    </div>
+                  </header>
+                  <div className="customer-form-grid customer-shipping-form-grid">
+                    <label>
+                      Car make
+                      <input
+                        onChange={(event) => setCarMake(event.target.value)}
+                        placeholder="For example, Toyota"
+                        required
+                        value={carMake}
+                      />
+                    </label>
+                    <label>
+                      Car model
+                      <input
+                        onChange={(event) => setCarModel(event.target.value)}
+                        placeholder="For example, RAV4"
+                        required
+                        value={carModel}
+                      />
+                    </label>
+                    <label>
+                      Car year
+                      <input
+                        max={currentYear + 1}
+                        min={1900}
+                        onChange={(event) => setCarYear(event.target.value)}
+                        required
+                        type="number"
+                        value={carYear}
+                      />
+                    </label>
+                    <label>
+                      VIN number (optional)
+                      <input
+                        maxLength={17}
+                        onChange={(event) =>
+                          setVinNumber(event.target.value.toUpperCase())
+                        }
+                        value={vinNumber}
+                      />
+                    </label>
+                    <fieldset className="customer-segmented customer-form-span">
+                      <legend>Can the vehicle be driven?</legend>
+                      <button
+                        aria-pressed={vehicleOperable}
+                        className={vehicleOperable ? "active" : ""}
+                        onClick={() => setVehicleOperable(true)}
+                        type="button"
+                      >
+                        Yes, it runs
+                      </button>
+                      <button
+                        aria-pressed={!vehicleOperable}
+                        className={!vehicleOperable ? "active" : ""}
+                        onClick={() => setVehicleOperable(false)}
+                        type="button"
+                      >
+                        No, it needs assistance
+                      </button>
+                    </fieldset>
+                  </div>
+                </section>
+
+                <section className="customer-transport-section">
+                  <header>
+                    <span>3</span>
+                    <div>
+                      <h3>Preferences and contact</h3>
+                      <p>Tell businesses when and how you would like to move it.</p>
+                    </div>
+                  </header>
+                  <div className="customer-form-grid customer-shipping-form-grid">
+                    <fieldset className="customer-segmented customer-form-span">
+                      <legend>Transport method</legend>
+                      <button
+                        aria-pressed={transportMethod === "open"}
+                        className={transportMethod === "open" ? "active" : ""}
+                        onClick={() => setTransportMethod("open")}
+                        type="button"
+                      >
+                        Open transport
+                      </button>
+                      <button
+                        aria-pressed={transportMethod === "enclosed"}
+                        className={transportMethod === "enclosed" ? "active" : ""}
+                        onClick={() => setTransportMethod("enclosed")}
+                        type="button"
+                      >
+                        Enclosed transport
+                      </button>
+                    </fieldset>
+                    <label>
+                      Preferred pickup date (optional)
+                      <input
+                        min={new Date().toISOString().slice(0, 10)}
+                        onChange={(event) => setPreferredDate(event.target.value)}
+                        type="date"
+                        value={preferredDate}
+                      />
+                    </label>
+                    <label className="customer-choice-row customer-transport-flexible">
+                      <input
+                        checked={flexibleDates}
+                        onChange={(event) => setFlexibleDates(event.target.checked)}
+                        type="checkbox"
+                      />
+                      <span>
+                        <strong>My dates are flexible</strong>
+                        <small>Businesses may suggest a nearby pickup date.</small>
+                      </span>
+                    </label>
+                    <label>
+                      Vehicle owner
+                      <input
+                        autoComplete="name"
+                        onChange={(event) => setOwnerName(event.target.value)}
+                        required
+                        value={ownerName}
+                      />
+                    </label>
+                    <CustomerPhoneField
+                      label="Contact phone"
+                      onChange={setCustomerPhone}
+                      required
+                      value={customerPhone}
+                    />
+                    <label className="customer-form-span">
+                      Notes for carriers (optional)
+                      <textarea
+                        maxLength={1000}
+                        onChange={(event) => setNotes(event.target.value)}
+                        placeholder="Share access details, vehicle condition, or timing needs"
+                        rows={4}
+                        value={notes}
+                      />
+                    </label>
+                  </div>
+                </section>
+              </div>
+            ) : (
+              <div className="customer-transport-review">
+                <div className="customer-transport-review-intro">
+                  <ShieldCheck aria-hidden="true" size={23} />
+                  <div>
+                    <h3>Review your quote request</h3>
+                    <p>No payment is due when you send this request.</p>
+                  </div>
+                </div>
+                <ReviewGrid>
+                  <ReviewDetail label="Pickup area" value={pickupArea} />
+                  <ReviewDetail
+                    label="Exact pickup address"
+                    value={pickupAddress || "Not provided"}
+                  />
+                  <ReviewDetail
+                    label="Destination country"
+                    value={shippingCountryDisplayName(destinationCountry!, language)}
+                  />
+                  <ReviewDetail
+                    label="Vehicle"
+                    value={`${carYear} ${carMake} ${carModel}`}
+                  />
+                  <ReviewDetail
+                    label="Vehicle condition"
+                    value={vehicleOperable ? "Runs and drives" : "Needs assistance"}
+                  />
+                  <ReviewDetail
+                    label="Transport method"
+                    value={
+                      transportMethod === "enclosed"
+                        ? "Enclosed transport"
+                        : "Open transport"
+                    }
+                  />
+                  <ReviewDetail
+                    label="Preferred pickup"
+                    value={
+                      preferredDate
+                        ? flexibleDates
+                          ? `${preferredDate} · Flexible`
+                          : preferredDate
+                        : "Flexible"
+                    }
+                  />
+                  <ReviewDetail label="Vehicle owner" value={ownerName} />
+                  <ReviewDetail label="Contact phone" value={customerPhone} />
+                </ReviewGrid>
+                <div className="customer-transport-review-note">
+                  <span>{availableBusinessCount}</span>
+                  <p>
+                    approved {availableBusinessCount === 1 ? "business is" : "businesses are"} currently
+                    available for car transport. Route eligibility is confirmed
+                    securely when you submit.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <footer className="customer-transport-actions">
+              <button
+                className="secondary-button"
+                disabled={submitting}
+                onClick={() =>
+                  step === "review" ? setStep("details") : clearForm()
+                }
+                type="button"
+              >
+                {step === "review" ? "Back" : "Clear"}
+              </button>
+              {step === "details" ? (
+                <button
+                  className="primary-button"
+                  disabled={!valid}
+                  onClick={() => setStep("review")}
+                  type="button"
+                >
+                  Review request
+                </button>
+              ) : (
+                <button
+                  aria-busy={submitting}
+                  className="primary-button"
+                  data-loading={submitting}
+                  disabled={submitting}
+                  onClick={() => void submit()}
+                  type="button"
+                >
+                  {submitting
+                    ? "Sending request..."
+                    : authenticated
+                      ? "Request quotes"
+                      : "Sign in to send request"}
+                </button>
+              )}
+            </footer>
+          </section>
+
+          <aside className="customer-transport-summary">
+            <span className="customer-service-kicker">How it works</span>
+            <ol>
+              <li><ShieldCheck size={18} /><span><strong>One secure request</strong><small>Your contact details stay private until a quote is selected.</small></span></li>
+              <li><CircleDollarSign size={18} /><span><strong>Compare real quotes</strong><small>Review total price, timing, method, and terms together.</small></span></li>
+              <li><Truck size={18} /><span><strong>Choose your carrier</strong><small>You decide which approved business should handle the vehicle.</small></span></li>
+            </ol>
+            <div>
+              <strong>No payment today</strong>
+              <span>Sending a request only starts the quote process.</span>
+            </div>
+          </aside>
+        </section>
+      )}
+
+      {authenticated && (
+        <CustomerTransportQuotes
+          activeRequest={activeRequest}
+          activeRequestId={activeRequestId}
+          error={requests.error}
+          loading={requests.loading}
+          onRequestChange={setActiveRequestId}
+          quotes={quotes}
+          requests={requests.rows}
+        />
+      )}
+    </div>
+  );
+}
+
+function CustomerTransportQuotes({
+  activeRequest,
+  activeRequestId,
+  error,
+  loading,
+  onRequestChange,
+  quotes,
+  requests,
+}: {
+  activeRequest: CustomerTransportRequest | null;
+  activeRequestId: string;
+  error: string;
+  loading: boolean;
+  onRequestChange: (requestId: string) => void;
+  quotes: { rows: TransportQuote[]; loading: boolean; error: string };
+  requests: CustomerTransportRequest[];
+}) {
+  const [busyAction, setBusyAction] = useState("");
+  const [actionError, setActionError] = useState("");
+  const activeQuotes = quotes.rows.filter((quote) => quote.status !== "withdrawn");
+  const selectedQuote =
+    quotes.rows.find((quote) => quote.id === activeRequest?.selectedQuoteId) ??
+    quotes.rows.find((quote) => quote.status === "selected");
+
+  async function selectQuote(quote: TransportQuote) {
+    if (!activeRequest || busyAction) return;
+    const confirmed = confirmImportantAction(
+      "Choose this carrier and quoted total?",
+      "Choisir ce transporteur et ce montant ?",
+    );
+    if (!confirmed) return;
+    setBusyAction(`select:${quote.id}`);
+    setActionError("");
+    try {
+      await callFunction("selectTransportQuote", {
+        requestId: activeRequest.id,
+        quoteId: quote.id,
+      });
+    } catch {
+      setActionError("The carrier could not be selected. Try again.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function cancelRequest() {
+    if (!activeRequest || busyAction) return;
+    const confirmed = confirmImportantAction(
+      "Cancel this quote request? Businesses will no longer be able to submit or revise quotes.",
+      "Annuler cette demande de devis ? Les entreprises ne pourront plus envoyer ni réviser de devis.",
+    );
+    if (!confirmed) return;
+    setBusyAction("cancel");
+    setActionError("");
+    try {
+      await callFunction("cancelTransportQuoteRequest", {
+        requestId: activeRequest.id,
+      });
+    } catch {
+      setActionError("The quote request could not be cancelled. Try again.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  if (loading) {
     return (
-      <section className="customer-transport-success" role="status">
-        <CheckCircle2 size={34} />
-        <div>
-          <span className="customer-service-kicker">Request received</span>
-          <h3>Your car transport quote is underway</h3>
-          <p>
-            The selected business will review the vehicle and destination before
-            setting a price.
-          </p>
-          <strong>Tracking code: {created.trackingCode}</strong>
+      <section className="customer-transport-quotes">
+        <div className="customer-transport-quote-skeleton" aria-live="polite">
+          <span className="loading-spinner" /> Loading your quote requests...
         </div>
-        <button
-          className="secondary-button"
-          onClick={() => {
-            setCreated(null);
-            setDestinationCountryId("");
-            setDestinationOptionId("");
-            setCarMake("");
-            setCarModel("");
-            setCarYear("");
-            setVinNumber("");
-            setPickupAddress("");
-            setNotes("");
-            setPreferredDate("");
-          }}
-          type="button"
-        >
-          Start another request
-        </button>
       </section>
     );
   }
+  if (error) {
+    return <div className="error-box" role="alert">{error}</div>;
+  }
+  if (!activeRequest || requests.length === 0) return null;
+
+  const requestCancelled =
+    activeRequest.quoteStatus === "cancelled" ||
+    activeRequest.status === "cancelled";
+  const requestSelected =
+    activeRequest.quoteStatus === "selected" || Boolean(selectedQuote);
 
   return (
-    <ServiceRequestForm
-      canReview={valid}
-      error={error}
-      intro="Send the vehicle details to an approved business. They will review your request and provide the price."
-      onCancel={() => {
-        setDestinationCountryId("");
-        setDestinationOptionId("");
-        setCarMake("");
-        setCarModel("");
-        setCarYear("");
-      }}
-      onSubmit={submit}
-      review={
-        <ReviewGrid>
-          <ReviewDetail
-            label="Destination"
-            value={destination ? optionLabel(destination) : ""}
-          />
-          <ReviewDetail label="Owner" value={ownerName} />
-          <ReviewDetail
-            label="Vehicle"
-            value={`${carYear} ${carMake} ${carModel}`}
-          />
-          <ReviewDetail label="Phone" value={customerPhone} />
-          <ReviewDetail
-            label="Preferred date"
-            value={preferredDate || "Flexible"}
-          />
-          <ReviewDetail
-            label="Pickup address"
-            value={pickupAddress || "Not provided"}
-          />
-        </ReviewGrid>
-      }
-      submitLabel={
-        authenticated
-          ? "Request business quote"
-          : "Sign in to save & continue"
-      }
-      submitting={submitting}
-      title="Request car transport"
-    >
-      <div className="customer-form-grid customer-shipping-form-grid">
-        <SearchableSelect
-          className="customer-form-span"
-          emptyMessage="No destination countries match your search."
-          label="Destination country"
-          listLabel="Destination country options"
-          onChange={(value) => {
-            setDestinationCountryId(value);
-            setDestinationOptionId("");
-          }}
-          options={countries.map((country) => ({
-            label: shippingCountryDisplayName(country, language),
-            keywords: `${country.code || ""} ${country.name}`,
-            value: country.id,
-          }))}
-          placeholder="Search or choose a country"
-          value={destinationCountryId}
-        />
-        {destinationCountryId && (
-          <DestinationPicker
-            label="Choose a shipping business"
-            onChange={setDestinationOptionId}
-            options={providerOptions}
-            service="transport"
-            value={destinationOptionId}
-          />
-        )}
-        {destination && (
-          <div className="customer-provider-banner customer-form-span">
-            <Store size={19} />
-            <div>
-              <strong>{destination.businessName}</strong>
-              <span>
-                Price provided after review. No payment is due when you submit
-                this request.
-              </span>
-            </div>
-          </div>
-        )}
+    <section className="customer-transport-quotes">
+      <header className="customer-transport-quotes-head">
+        <div>
+          <span className="customer-service-kicker">Your quote requests</span>
+          <h2>{requestSelected ? "Carrier selected" : "Compare carrier quotes"}</h2>
+          <p>
+            {requestSelected
+              ? "Your selected quote and next transport step are shown below."
+              : "Compare the complete offer before choosing a business."}
+          </p>
+        </div>
         <label>
-          Vehicle owner
-          <input
-            autoComplete="name"
-            onChange={(event) => setOwnerName(event.target.value)}
-            required
-            value={ownerName}
-          />
+          Quote request
+          <select
+            aria-label="Choose quote request"
+            onChange={(event) => onRequestChange(event.target.value)}
+            value={activeRequestId || activeRequest.id}
+          >
+            {requests.map((request) => (
+              <option key={request.id} value={request.id}>
+                {text(request.trackingCode, request.id)} ·{" "}
+                {text(request.carYear)} {text(request.carMake)}{" "}
+                {text(request.carModel)}
+              </option>
+            ))}
+          </select>
         </label>
-        <CustomerPhoneField
-          label="Contact phone"
-          onChange={setCustomerPhone}
-          required
-          value={customerPhone}
-        />
-        <label>
-          Car make
-          <input
-            onChange={(event) => setCarMake(event.target.value)}
-            placeholder="For example, Toyota"
-            required
-            value={carMake}
-          />
-        </label>
-        <label>
-          Car model
-          <input
-            onChange={(event) => setCarModel(event.target.value)}
-            placeholder="For example, RAV4"
-            required
-            value={carModel}
-          />
-        </label>
-        <label>
-          Car year
-          <input
-            max={currentYear + 1}
-            min={1900}
-            onChange={(event) => setCarYear(event.target.value)}
-            required
-            type="number"
-            value={carYear}
-          />
-        </label>
-        <label>
-          VIN number (optional)
-          <input
-            maxLength={17}
-            onChange={(event) => setVinNumber(event.target.value.toUpperCase())}
-            value={vinNumber}
-          />
-        </label>
-        <label>
-          Preferred transport date (optional)
-          <input
-            min={new Date().toISOString().slice(0, 10)}
-            onChange={(event) => setPreferredDate(event.target.value)}
-            type="date"
-            value={preferredDate}
-          />
-        </label>
-        <label className="customer-form-span">
-          Pickup address (optional)
-          <input
-            onChange={(event) => setPickupAddress(event.target.value)}
-            placeholder="Street, city, state, ZIP code"
-            value={pickupAddress}
-          />
-        </label>
-        <label className="customer-form-span">
-          Notes for the business (optional)
-          <textarea
-            maxLength={1000}
-            onChange={(event) => setNotes(event.target.value)}
-            placeholder="Share vehicle condition or pickup details"
-            rows={4}
-            value={notes}
-          />
-        </label>
+      </header>
+
+      <div className="customer-transport-request-summary">
+        <MapPin aria-hidden="true" size={19} />
+        <div>
+          <small>Route</small>
+          <strong>
+            {text(activeRequest.pickupArea, "Pickup area not provided")} →{" "}
+            {text(activeRequest.destinationCountryName, "Destination not provided")}
+          </strong>
+        </div>
+        <span className={`lst-badge ${requestCancelled ? "muted" : requestSelected ? "ok" : "warn"}`}>
+          {requestCancelled
+            ? "Cancelled"
+            : requestSelected
+              ? "Carrier selected"
+              : `${activeQuotes.length} ${activeQuotes.length === 1 ? "quote" : "quotes"} received`}
+        </span>
       </div>
-    </ServiceRequestForm>
+
+      {(actionError || quotes.error) && (
+        <div className="customer-inline-note error" role="alert">
+          <span>{actionError || quotes.error}</span>
+        </div>
+      )}
+
+      {quotes.loading ? (
+        <div className="customer-transport-quote-grid" aria-live="polite">
+          {[0, 1].map((item) => (
+            <div className="customer-transport-quote-skeleton" key={item}>
+              <span />
+              <span />
+              <span />
+            </div>
+          ))}
+        </div>
+      ) : activeQuotes.length === 0 ? (
+        <div className="customer-transport-awaiting">
+          <Clock3 aria-hidden="true" size={27} />
+          <div>
+            <h3>{requestCancelled ? "This request is closed" : "Carriers are reviewing your request"}</h3>
+            <p>
+              {requestCancelled
+                ? "No new quotes can be submitted."
+                : "We’ll show every quote here and notify you when one arrives."}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="customer-transport-quote-grid">
+          {activeQuotes.map((quote) => {
+            const selected =
+              quote.id === activeRequest.selectedQuoteId ||
+              quote.status === "selected";
+            const expired =
+              transportTimestamp(quote.expiresAt) > 0 &&
+              transportTimestamp(quote.expiresAt) < Date.now();
+            return (
+              <article
+                className={`customer-transport-quote-card${selected ? " selected" : ""}${expired ? " expired" : ""}`}
+                key={quote.id}
+              >
+                <header>
+                  <span className="customer-transport-business-mark">
+                    <Truck aria-hidden="true" size={19} />
+                  </span>
+                  <div>
+                    <strong>{text(quote.businessName, "Approved carrier")}</strong>
+                    <small><ShieldCheck aria-hidden="true" size={13} /> Approved business</small>
+                  </div>
+                  {selected && <span className="lst-badge ok">Selected</span>}
+                </header>
+                <div className="customer-transport-quote-price">
+                  <small>Total quote</small>
+                  <strong>
+                    {formatMoney(
+                      Number(quote.amountCents ?? 0) / 100,
+                      text(quote.currency, "USD"),
+                    )}
+                  </strong>
+                  <span>No payment due until the next confirmed step.</span>
+                </div>
+                <dl>
+                  <div>
+                    <dt><CalendarClock size={15} /> Pickup</dt>
+                    <dd>{quote.estimatedPickupDate ? formatDate(quote.estimatedPickupDate) : "Not provided"}</dd>
+                  </div>
+                  <div>
+                    <dt><Clock3 size={15} /> Estimated delivery</dt>
+                    <dd>{quote.estimatedDeliveryDate ? formatDate(quote.estimatedDeliveryDate) : "Not provided"}</dd>
+                  </div>
+                  <div>
+                    <dt><Truck size={15} /> Transport method</dt>
+                    <dd>{text(quote.transportMethod ?? activeRequest.requestedTransportMethod, "Open transport") === "enclosed" ? "Enclosed transport" : "Open transport"}</dd>
+                  </div>
+                  <div>
+                    <dt><Clock3 size={15} /> Quote expiry</dt>
+                    <dd>{quote.expiresAt ? formatDate(quote.expiresAt) : "No expiry provided"}</dd>
+                  </div>
+                </dl>
+                <div className="customer-transport-quote-terms">
+                  <small>Terms and inclusions</small>
+                  <p>{text(quote.terms, "No additional terms provided.")}</p>
+                </div>
+                {expired && <div className="customer-inline-note">This quote has expired.</div>}
+                <button
+                  aria-busy={busyAction === `select:${quote.id}`}
+                  className={selected ? "secondary-button" : "primary-button"}
+                  disabled={
+                    Boolean(busyAction) ||
+                    expired ||
+                    requestCancelled ||
+                    (requestSelected && !selected)
+                  }
+                  onClick={() => void selectQuote(quote)}
+                  type="button"
+                >
+                  {busyAction === `select:${quote.id}`
+                    ? "Selecting carrier..."
+                    : selected
+                      ? "Carrier selected"
+                      : requestSelected
+                        ? "Not selected"
+                        : "Choose this carrier"}
+                </button>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {!requestCancelled && !requestSelected && (
+        <footer className="customer-transport-quotes-foot">
+          <button
+            aria-busy={busyAction === "cancel"}
+            className="danger-button"
+            disabled={Boolean(busyAction)}
+            onClick={() => void cancelRequest()}
+            type="button"
+          >
+            <XCircle aria-hidden="true" size={16} />
+            {busyAction === "cancel" ? "Cancelling request..." : "Cancel quote request"}
+          </button>
+        </footer>
+      )}
+    </section>
   );
 }
 
@@ -3161,16 +3795,20 @@ function PickupFields({
 
 function AddressAutocomplete({
   id,
+  label = "Pickup address",
   onBlur,
   onChange,
   onSelect,
+  required = true,
   suggestionsEnabled,
   value,
 }: {
   id: string;
+  label?: string;
   onBlur?: () => void;
   onChange: (value: string) => void;
   onSelect: (suggestion: AddressSuggestion) => void;
+  required?: boolean;
   suggestionsEnabled: boolean;
   value: string;
 }) {
@@ -3181,7 +3819,7 @@ function AddressAutocomplete({
   const [activeIndex, setActiveIndex] = useState(-1);
   const [selectedAddress, setSelectedAddress] = useState("");
   const [touched, setTouched] = useState(false);
-  const addressInvalid = touched && value.trim().length === 0;
+  const addressInvalid = required && touched && value.trim().length === 0;
   const query = value.trim();
   const listboxId = `${id}-suggestions`;
 
@@ -3239,7 +3877,7 @@ function AddressAutocomplete({
 
   return (
     <div className="customer-address-field customer-form-span">
-      <label htmlFor={id}>Pickup address</label>
+      <label htmlFor={id}>{label}</label>
       <div className="customer-address-control">
         <MapPin aria-hidden="true" size={17} />
         <input
@@ -3258,6 +3896,7 @@ function AddressAutocomplete({
           aria-invalid={addressInvalid}
           autoComplete="off"
           id={id}
+          required={required}
           onBlur={() => {
             setTouched(true);
             onBlur?.();
@@ -3300,7 +3939,6 @@ function AddressAutocomplete({
               ? "Start typing a pickup address"
               : "Enter a pickup address"
           }
-          required
           role="combobox"
           value={value}
         />

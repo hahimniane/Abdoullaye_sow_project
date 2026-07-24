@@ -47,6 +47,8 @@ async function seedBusiness(id, {
   seaRate = 5,
   serviceAvailability,
   freightPickup,
+  destinationId = COUNTRY_ID,
+  destinationName = "Guinea",
 } = {}) {
   const ref = db.collection("businesses").doc(id);
   const availability = serviceAvailability || {
@@ -74,9 +76,9 @@ async function seedBusiness(id, {
       parkingPickupAvailable: true,
       parkingPickupFee: 40,
     }),
-    ref.collection("destinationCountries").doc(COUNTRY_ID).set({
-      countryId: COUNTRY_ID,
-      name: "Guinea",
+    ref.collection("destinationCountries").doc(destinationId).set({
+      countryId: destinationId,
+      name: destinationName,
       code: "GN",
       destinationCoverageVersion: 2,
       serviceAvailability: availability,
@@ -126,6 +128,75 @@ async function seedFreightManager(businessId, {
     businessPermissions: permissions,
   });
   return {uid};
+}
+
+async function seedTransportManager(businessId, {
+  permissions = ["transport"],
+  uid = `transport-manager-${businessId}`,
+} = {}) {
+  await db.collection("users").doc(uid).set({
+    role: "staff",
+    businessId,
+    fullName: `Transport Manager ${businessId}`,
+    businessPermissions: permissions,
+  });
+  return {uid};
+}
+
+function transportRequestInput(overrides = {}) {
+  return {
+    destinationCountryId: COUNTRY_ID,
+    destinationCountryName: "Client supplied name",
+    ownerName: "Vehicle Owner",
+    carMake: "Toyota",
+    carModel: "Camry",
+    carYear: "2022",
+    vinNumber: "1HGCM82633A004352",
+    customerPhone: "+15555550101",
+    pickupAddress: "100 Private Test Avenue",
+    pickupArea: "Bronx, NY 10458",
+    vehicleOperable: true,
+    requestedTransportMethod: "open",
+    flexibleDates: false,
+    preferredDate: futureIso(72),
+    notes: "Private handling instructions",
+    ...overrides,
+  };
+}
+
+function quoteInput(requestId, businessId, overrides = {}) {
+  return {
+    requestId,
+    businessId,
+    amountCents: 125000,
+    currency: "usd",
+    transportMethod: "open",
+    estimatedPickupDate: futureIso(48),
+    estimatedDeliveryDate: futureIso(240),
+    terms: "Door-to-port service",
+    ...overrides,
+  };
+}
+
+async function transportRequestData(requestId) {
+  const snapshot = await db.collection("transportRequests")
+      .doc(requestId).get();
+  assert.equal(snapshot.exists, true);
+  return snapshot.data() || {};
+}
+
+async function transportOpportunityData(requestId, businessId) {
+  const snapshot = await db.collection("transportOpportunities")
+      .doc(`${requestId}__${businessId}`).get();
+  assert.equal(snapshot.exists, true);
+  return snapshot.data() || {};
+}
+
+async function transportQuoteData(requestId, businessId) {
+  const snapshot = await db.collection("transportQuotes")
+      .doc(`${requestId}__${businessId}`).get();
+  assert.equal(snapshot.exists, true);
+  return snapshot.data() || {};
 }
 
 before(async () => {
@@ -779,99 +850,719 @@ describe("destination coverage admin callable", () => {
 });
 
 describe("car transport service callable lifecycle", () => {
-  it("lists eligible businesses and creates a quote request", async () => {
-    const businessId = "transport-service-business";
-    await seedBusiness(businessId);
-    const options = await functions.listTransportBusinessOptions.run({
-      data: {},
-    });
-    assert.ok(options.options.some((row) =>
-      row.businessId === businessId && row.country.id === COUNTRY_ID));
-
-    const created = await functions.createTransportRequest.run({
-      auth: {uid: CUSTOMER_UID},
-      data: {
-        businessId,
-        destinationCountryId: COUNTRY_ID,
-        ownerName: "Vehicle Owner",
-        carMake: "Toyota",
-        carModel: "Camry",
-        carYear: "2022",
-        vinNumber: "1HGCM82633A004352",
-        customerPhone: "+15555550101",
-        pickupAddress: "100 Test Avenue",
-        preferredDate: futureIso(72),
-        notes: "Handle with care",
-      },
-    });
-    const snapshot = await db.collection("transportRequests")
-        .doc(created.id).get();
-    assert.equal(snapshot.get("customerUid"), CUSTOMER_UID);
-    assert.equal(snapshot.get("businessId"), businessId);
-    assert.equal(snapshot.get("destinationCountryName"), "Guinea");
-    assert.equal(snapshot.get("quoteStatus"), "awaitingQuote");
-    assert.equal(snapshot.get("status"), "pending");
-    assert.equal(snapshot.get("price"), 0);
-    assert.match(snapshot.get("trackingCode"), /^TR/);
-  });
-
-  it("excludes car transport destinations disabled for that country",
+  it("creates one unassigned v2 request from server-derived eligibility",
       async () => {
-        const businessId = "transport-disabled-destination";
-        await seedBusiness(businessId, {
-          serviceAvailability: {
-            barrelShipping: true,
-            freightAir: true,
-            freightSea: true,
-            carTransport: false,
-          },
-        });
+        const eligibleA = "transport-market-a";
+        const eligibleB = "transport-market-b";
+        const noService = "transport-market-no-service";
+        const unapproved = "transport-market-unapproved";
+        const unavailable = "transport-market-unavailable";
+        const destinationId = "transport-market-derived-country";
+        const destinationName = "Derived Country";
 
-        const options = await functions.listTransportBusinessOptions.run({
-          data: {},
+        await Promise.all([
+          seedBusiness(eligibleA, {destinationId, destinationName}),
+          seedBusiness(eligibleB, {destinationId, destinationName}),
+          seedBusiness(noService, {
+            services: ["freight"],
+            destinationId,
+            destinationName,
+          }),
+          seedBusiness(unapproved, {
+            status: "pending",
+            destinationId,
+            destinationName,
+          }),
+          seedBusiness(unavailable, {
+            destinationId,
+            destinationName,
+            serviceAvailability: {
+              barrelShipping: true,
+              freightAir: true,
+              freightSea: true,
+              carTransport: false,
+            },
+          }),
+        ]);
+
+        const created = await functions.createTransportRequest.run({
+          auth: {uid: CUSTOMER_UID},
+          data: transportRequestInput({
+            destinationCountryId: destinationId,
+            businessId: unapproved,
+            eligibleBusinessIds: [unapproved, "forged-business"],
+          }),
         });
-        assert.equal(
-            options.options.some((row) =>
-              row.businessId === businessId && row.country.id === COUNTRY_ID),
-            false,
+        const request = await transportRequestData(created.id);
+
+        assert.equal(request.flowVersion, 2);
+        assert.equal(request.source, "customerMarketplace");
+        assert.equal(request.customerUid, CUSTOMER_UID);
+        assert.equal(request.status, "quote_requested");
+        assert.equal(request.quoteStatus, "collecting");
+        assert.equal(request.businessId, "");
+        assert.equal(request.businessName, "");
+        assert.equal(request.price, 0);
+        assert.equal(request.amountCents, 0);
+        assert.equal(request.currency, "usd");
+        assert.equal(request.selectedQuoteId, "");
+        assert.equal(request.selectedBusinessId, "");
+        assert.equal(request.selectedBusinessName, "");
+        assert.equal(request.selectedAmountCents, 0);
+        assert.equal(request.pickupArea, "Bronx, NY 10458");
+        assert.equal(request.vehicleOperable, true);
+        assert.equal(request.requestedTransportMethod, "open");
+        assert.equal(request.flexibleDates, false);
+        assert.match(request.trackingCode, /^TR/);
+        assert.ok(request.quoteDeadlineAt);
+        assert.deepEqual(
+            [...request.eligibleBusinessIds].sort(),
+            [eligibleA, eligibleB].sort(),
         );
+        assert.equal(request.eligibleBusinessCount, 2);
 
-        await assert.rejects(
-            () => functions.createTransportRequest.run({
-              auth: {uid: CUSTOMER_UID},
-              data: {
-                businessId,
-                destinationCountryId: COUNTRY_ID,
-                ownerName: "Vehicle Owner",
-                carMake: "Toyota",
-                carModel: "Camry",
-                carYear: "2022",
-                customerPhone: "+15555550101",
-              },
-            }),
-            /not available for car transport/,
+        const opportunities = await db.collection("transportOpportunities")
+            .where("requestId", "==", created.id).get();
+        assert.deepEqual(
+            opportunities.docs.map((doc) => doc.get("businessId")).sort(),
+            [eligibleA, eligibleB].sort(),
         );
       });
 
-  it("rejects businesses without transport or an active destination",
+  it("keeps private customer and vehicle identity out of opportunities",
       async () => {
-        const noServiceId = "transport-no-service";
-        await seedBusiness(noServiceId, {services: ["freight"]});
+        const businessId = "transport-market-sanitized";
+        await seedBusiness(businessId);
+
+        const created = await functions.createTransportRequest.run({
+          auth: {uid: CUSTOMER_UID},
+          data: transportRequestInput(),
+        });
+        const opportunity = await transportOpportunityData(
+            created.id,
+            businessId,
+        );
+
+        assert.equal(opportunity.flowVersion, 2);
+        assert.equal(opportunity.requestId, created.id);
+        assert.match(opportunity.trackingCode, /^TR/);
+        assert.equal(
+            opportunity.opportunityId,
+            `${created.id}__${businessId}`,
+        );
+        assert.equal(opportunity.businessId, businessId);
+        assert.equal(opportunity.destinationCountryId, COUNTRY_ID);
+        assert.equal(opportunity.destinationCountryName, "Guinea");
+        assert.equal(opportunity.carMake, "Toyota");
+        assert.equal(opportunity.carModel, "Camry");
+        assert.equal(opportunity.carYear, "2022");
+        assert.equal(opportunity.pickupArea, "Bronx, NY 10458");
+        assert.equal(opportunity.vehicleOperable, true);
+        assert.equal(opportunity.requestedTransportMethod, "open");
+        assert.equal(opportunity.flexibleDates, false);
+        assert.equal(opportunity.status, "open");
+        assert.ok(opportunity.expiresAt);
+
+        for (const privateField of [
+          "customerUid",
+          "ownerName",
+          "customerPhone",
+          "pickupAddress",
+          "notes",
+          "vinNumber",
+        ]) {
+          assert.equal(
+              Object.prototype.hasOwnProperty.call(
+                  opportunity,
+                  privateField,
+              ),
+              false,
+              `${privateField} must not be exposed in an opportunity`,
+          );
+        }
+      });
+
+  it("validates the sanitized marketplace matching fields", async () => {
+    for (const invalidData of [
+      {pickupArea: ""},
+      {pickupArea: "x".repeat(161)},
+      {pickupArea: "100 Main Street, Bronx, NY"},
+      {vehicleOperable: "yes"},
+      {requestedTransportMethod: ""},
+      {requestedTransportMethod: "flatbed"},
+      {flexibleDates: "sometimes"},
+    ]) {
+      await assert.rejects(
+          () => functions.createTransportRequest.run({
+            auth: {uid: CUSTOMER_UID},
+            data: transportRequestInput(invalidData),
+          }),
+          /pickup|operable|transport|method|flexible|boolean|required/i,
+      );
+    }
+  });
+
+  it("rejects a request when no approved provider covers the destination",
+      async () => {
+        const noService = "transport-market-none-service";
+        const unavailable = "transport-market-none-destination";
+        await Promise.all([
+          seedBusiness(noService, {services: ["freight"]}),
+          seedBusiness(unavailable, {
+            serviceAvailability: {
+              barrelShipping: false,
+              freightAir: true,
+              freightSea: false,
+              carTransport: false,
+            },
+          }),
+        ]);
+
         await assert.rejects(
             () => functions.createTransportRequest.run({
               auth: {uid: CUSTOMER_UID},
+              data: transportRequestInput({
+                destinationCountryId: "no-marketplace-coverage",
+              }),
+            }),
+            /available|eligible|destination/i,
+        );
+      });
+
+  it("allows only an authorized eligible transport manager to quote",
+      async () => {
+        const businessId = "transport-market-authorized";
+        const forgedBusinessId = "transport-market-forged-business";
+        await Promise.all([
+          seedBusiness(businessId),
+          seedBusiness(forgedBusinessId),
+        ]);
+        const manager = await seedTransportManager(businessId);
+        const noPermission = await seedTransportManager(businessId, {
+          permissions: [],
+          uid: "transport-manager-no-permission",
+        });
+        const created = await functions.createTransportRequest.run({
+          auth: {uid: CUSTOMER_UID},
+          data: transportRequestInput(),
+        });
+
+        await assert.rejects(
+            () => functions.submitTransportQuote.run({
+              auth: {uid: CUSTOMER_UID},
+              data: quoteInput(created.id, businessId),
+            }),
+            /permission|business|manager/i,
+        );
+        await assert.rejects(
+            () => functions.submitTransportQuote.run({
+              auth: noPermission,
+              data: quoteInput(created.id, businessId),
+            }),
+            /permission|business|manager/i,
+        );
+        await assert.rejects(
+            () => functions.submitTransportQuote.run({
+              auth: manager,
+              data: quoteInput(created.id, forgedBusinessId),
+            }),
+            /permission|business|manager|match/i,
+        );
+
+        await functions.submitTransportQuote.run({
+          auth: manager,
+          data: quoteInput(created.id, businessId),
+        });
+        const quote = await transportQuoteData(created.id, businessId);
+        assert.equal(quote.businessId, businessId);
+        assert.equal(quote.requestId, created.id);
+        assert.equal(quote.status, "submitted");
+      });
+
+  it("validates quotes and revises one deterministic quote per business",
+      async () => {
+        const businessId = "transport-market-revision";
+        await seedBusiness(businessId);
+        const manager = await seedTransportManager(businessId);
+        const created = await functions.createTransportRequest.run({
+          auth: {uid: CUSTOMER_UID},
+          data: transportRequestInput(),
+        });
+
+        for (const invalidData of [
+          {amountCents: 0},
+          {amountCents: 12.5},
+          {currency: "eur"},
+          {transportMethod: ""},
+          {transportMethod: "flatbed"},
+        ]) {
+          await assert.rejects(
+              () => functions.submitTransportQuote.run({
+                auth: manager,
+                data: quoteInput(created.id, businessId, invalidData),
+              }),
+              /amount|currency|transport|method|invalid/i,
+          );
+        }
+
+        await functions.submitTransportQuote.run({
+          auth: manager,
+          data: quoteInput(created.id, businessId),
+        });
+        await functions.submitTransportQuote.run({
+          auth: manager,
+          data: quoteInput(created.id, businessId, {
+            amountCents: 135000,
+            transportMethod: "enclosed",
+            terms: "Revised enclosed transport",
+          }),
+        });
+
+        const matches = await db.collection("transportQuotes")
+            .where("requestId", "==", created.id)
+            .where("businessId", "==", businessId)
+            .get();
+        assert.equal(matches.size, 1);
+        assert.equal(matches.docs[0].id, `${created.id}__${businessId}`);
+        assert.equal(matches.docs[0].get("amountCents"), 135000);
+        assert.equal(matches.docs[0].get("transportMethod"), "enclosed");
+        assert.equal(matches.docs[0].get("revision"), 2);
+        assert.equal(matches.docs[0].get("status"), "submitted");
+      });
+
+  it("withdraws a quote idempotently and prevents selecting it",
+      async () => {
+        const businessId = "transport-market-withdraw";
+        await seedBusiness(businessId);
+        const manager = await seedTransportManager(businessId);
+        const created = await functions.createTransportRequest.run({
+          auth: {uid: CUSTOMER_UID},
+          data: transportRequestInput(),
+        });
+        await functions.submitTransportQuote.run({
+          auth: manager,
+          data: quoteInput(created.id, businessId),
+        });
+
+        const withdrawal = {
+          auth: manager,
+          data: {requestId: created.id, businessId},
+        };
+        await functions.withdrawTransportQuote.run(withdrawal);
+        await functions.withdrawTransportQuote.run(withdrawal);
+
+        const quote = await transportQuoteData(created.id, businessId);
+        assert.equal(quote.status, "withdrawn");
+        await assert.rejects(
+            () => functions.selectTransportQuote.run({
+              auth: {uid: CUSTOMER_UID},
               data: {
-                businessId: noServiceId,
-                destinationCountryId: COUNTRY_ID,
-                ownerName: "Vehicle Owner",
-                carMake: "Toyota",
-                carModel: "Camry",
-                carYear: "2022",
-                customerPhone: "+15555550101",
+                requestId: created.id,
+                businessId,
               },
             }),
-            /not offering car transport/,
+            /withdrawn|available|submitted|select/i,
         );
+      });
+
+  it("lets only the customer owner select and assigns compatibility fields",
+      async () => {
+        const businessId = "transport-market-select";
+        await seedBusiness(businessId);
+        const manager = await seedTransportManager(businessId);
+        const created = await functions.createTransportRequest.run({
+          auth: {uid: CUSTOMER_UID},
+          data: transportRequestInput(),
+        });
+        await functions.submitTransportQuote.run({
+          auth: manager,
+          data: quoteInput(created.id, businessId, {amountCents: 145500}),
+        });
+        const quoteId = `${created.id}__${businessId}`;
+
+        await assert.rejects(
+            () => functions.selectTransportQuote.run({
+              auth: {uid: OTHER_UID},
+              data: {requestId: created.id, businessId},
+            }),
+            /permission|owner|customer/i,
+        );
+        await functions.selectTransportQuote.run({
+          auth: {uid: CUSTOMER_UID},
+          data: {requestId: created.id, businessId},
+        });
+
+        const request = await transportRequestData(created.id);
+        const quote = await transportQuoteData(created.id, businessId);
+        assert.equal(request.quoteStatus, "selected");
+        assert.equal(request.status, "pending");
+        assert.equal(request.selectedQuoteId, quoteId);
+        assert.equal(request.selectedBusinessId, businessId);
+        assert.equal(request.businessId, businessId);
+        assert.equal(request.selectedAmountCents, 145500);
+        assert.equal(request.amountCents, 145500);
+        assert.equal(request.price, 1455);
+        assert.equal(quote.status, "selected");
+      });
+
+  it("allows only the selected provider to advance fulfillment",
+      async () => {
+        const businessA = "transport-market-fulfillment-a";
+        const businessB = "transport-market-fulfillment-b";
+        await Promise.all([
+          seedBusiness(businessA),
+          seedBusiness(businessB),
+        ]);
+        const managerA = await seedTransportManager(businessA);
+        const managerB = await seedTransportManager(businessB);
+        const noPermission = await seedTransportManager(businessA, {
+          permissions: [],
+          uid: "transport-fulfillment-no-permission",
+        });
+        const created = await functions.createTransportRequest.run({
+          auth: {uid: CUSTOMER_UID},
+          data: transportRequestInput(),
+        });
+
+        await assert.rejects(
+            () => functions.updateTransportFulfillmentStatus.run({
+              auth: managerA,
+              data: {requestId: created.id, status: "scheduled"},
+            }),
+            /selected|assigned|quote/i,
+        );
+        await functions.submitTransportQuote.run({
+          auth: managerA,
+          data: quoteInput(created.id, businessA),
+        });
+        await functions.selectTransportQuote.run({
+          auth: {uid: CUSTOMER_UID},
+          data: {requestId: created.id, businessId: businessA},
+        });
+
+        for (const denied of [
+          {
+            auth: {uid: CUSTOMER_UID},
+            data: {requestId: created.id, status: "scheduled"},
+          },
+          {
+            auth: managerB,
+            data: {requestId: created.id, status: "scheduled"},
+          },
+          {
+            auth: noPermission,
+            data: {requestId: created.id, status: "scheduled"},
+          },
+        ]) {
+          await assert.rejects(
+              () => functions.updateTransportFulfillmentStatus.run(denied),
+              /permission|selected|assigned|business/i,
+          );
+        }
+        await assert.rejects(
+            () => functions.updateTransportFulfillmentStatus.run({
+              auth: managerA,
+              data: {requestId: created.id, status: "refunded"},
+            }),
+            /status|transition|invalid/i,
+        );
+
+        for (const status of ["scheduled", "in_transit", "delivered"]) {
+          await functions.updateTransportFulfillmentStatus.run({
+            auth: managerA,
+            data: {requestId: created.id, status},
+          });
+          const request = await transportRequestData(created.id);
+          assert.equal(request.status, status);
+          assert.equal(request.fulfillmentStatus, status);
+        }
+        await assert.rejects(
+            () => functions.updateTransportFulfillmentStatus.run({
+              auth: managerA,
+              data: {requestId: created.id, status: "cancelled"},
+            }),
+            /terminal|transition|delivered/i,
+        );
+      });
+
+  it("supports provider cancellation and keeps it terminal", async () => {
+    const businessId = "transport-market-fulfillment-cancel";
+    await seedBusiness(businessId);
+    const manager = await seedTransportManager(businessId);
+    const created = await functions.createTransportRequest.run({
+      auth: {uid: CUSTOMER_UID},
+      data: transportRequestInput(),
+    });
+    await functions.submitTransportQuote.run({
+      auth: manager,
+      data: quoteInput(created.id, businessId),
+    });
+    await functions.selectTransportQuote.run({
+      auth: {uid: CUSTOMER_UID},
+      data: {requestId: created.id, businessId},
+    });
+
+    await functions.updateTransportFulfillmentStatus.run({
+      auth: manager,
+      data: {requestId: created.id, status: "cancelled"},
+    });
+    const request = await transportRequestData(created.id);
+    assert.equal(request.status, "cancelled");
+    assert.equal(request.fulfillmentStatus, "cancelled");
+    await assert.rejects(
+        () => functions.updateTransportFulfillmentStatus.run({
+          auth: manager,
+          data: {requestId: created.id, status: "scheduled"},
+        }),
+        /terminal|transition|cancelled/i,
+    );
+  });
+
+  it("revalidates provider eligibility when a quote is submitted",
+      async () => {
+        const suspendedId = "transport-market-suspended";
+        const disabledId = "transport-market-disabled-after-create";
+        const selectionId = "transport-market-disabled-before-selection";
+        await Promise.all([
+          seedBusiness(suspendedId),
+          seedBusiness(disabledId),
+          seedBusiness(selectionId),
+        ]);
+        const suspendedManager = await seedTransportManager(suspendedId);
+        const disabledManager = await seedTransportManager(disabledId);
+        const selectionManager = await seedTransportManager(selectionId);
+        const created = await functions.createTransportRequest.run({
+          auth: {uid: CUSTOMER_UID},
+          data: transportRequestInput(),
+        });
+        await functions.submitTransportQuote.run({
+          auth: selectionManager,
+          data: quoteInput(created.id, selectionId),
+        });
+
+        await db.collection("businesses").doc(suspendedId)
+            .update({status: "suspended"});
+        await db.collection("businesses").doc(disabledId)
+            .collection("destinationCountries").doc(COUNTRY_ID).update({
+              "serviceAvailability.carTransport": false,
+              "carTransportAvailable": false,
+            });
+        await db.collection("businesses").doc(selectionId)
+            .update({status: "suspended"});
+
+        await assert.rejects(
+            () => functions.submitTransportQuote.run({
+              auth: suspendedManager,
+              data: quoteInput(created.id, suspendedId),
+            }),
+            /approved|available|eligible/i,
+        );
+        await assert.rejects(
+            () => functions.submitTransportQuote.run({
+              auth: disabledManager,
+              data: quoteInput(created.id, disabledId),
+            }),
+            /destination|available|eligible/i,
+        );
+        await assert.rejects(
+            () => functions.selectTransportQuote.run({
+              auth: {uid: CUSTOMER_UID},
+              data: {requestId: created.id, businessId: selectionId},
+            }),
+            /approved|available|eligible/i,
+        );
+      });
+
+  it("rejects quotes and selections after the request deadline",
+      async () => {
+        const businessId = "transport-market-expired";
+        await seedBusiness(businessId);
+        const manager = await seedTransportManager(businessId);
+        const created = await functions.createTransportRequest.run({
+          auth: {uid: CUSTOMER_UID},
+          data: transportRequestInput(),
+        });
+
+        await db.collection("transportRequests").doc(created.id).update({
+          quoteDeadlineAt: admin.firestore.Timestamp.fromMillis(
+              Date.now() - 1000,
+          ),
+        });
+        await assert.rejects(
+            () => functions.submitTransportQuote.run({
+              auth: manager,
+              data: quoteInput(created.id, businessId),
+            }),
+            /expired|deadline|closed/i,
+        );
+
+        await db.collection("transportQuotes")
+            .doc(`${created.id}__${businessId}`).set({
+              flowVersion: 2,
+              requestId: created.id,
+              opportunityId: `${created.id}__${businessId}`,
+              businessId,
+              businessName: businessId,
+              amountCents: 100000,
+              currency: "usd",
+              transportMethod: "open",
+              status: "submitted",
+              revision: 1,
+              expiresAt: admin.firestore.Timestamp.fromMillis(
+                  Date.now() - 1000,
+              ),
+            });
+        await assert.rejects(
+            () => functions.selectTransportQuote.run({
+              auth: {uid: CUSTOMER_UID},
+              data: {
+                requestId: created.id,
+                businessId,
+              },
+            }),
+            /expired|deadline|closed/i,
+        );
+      });
+
+  it("selects exactly one winner under concurrent customer requests",
+      async () => {
+        const businessA = "transport-market-race-a";
+        const businessB = "transport-market-race-b";
+        await Promise.all([
+          seedBusiness(businessA),
+          seedBusiness(businessB),
+        ]);
+        const managerA = await seedTransportManager(businessA);
+        const managerB = await seedTransportManager(businessB);
+        const created = await functions.createTransportRequest.run({
+          auth: {uid: CUSTOMER_UID},
+          data: transportRequestInput(),
+        });
+        await Promise.all([
+          functions.submitTransportQuote.run({
+            auth: managerA,
+            data: quoteInput(created.id, businessA, {amountCents: 110000}),
+          }),
+          functions.submitTransportQuote.run({
+            auth: managerB,
+            data: quoteInput(created.id, businessB, {amountCents: 120000}),
+          }),
+        ]);
+
+        const selections = await Promise.allSettled([
+          functions.selectTransportQuote.run({
+            auth: {uid: CUSTOMER_UID},
+            data: {
+              requestId: created.id,
+              businessId: businessA,
+            },
+          }),
+          functions.selectTransportQuote.run({
+            auth: {uid: CUSTOMER_UID},
+            data: {
+              requestId: created.id,
+              businessId: businessB,
+            },
+          }),
+        ]);
+        assert.equal(
+            selections.filter((result) => result.status === "fulfilled").length,
+            1,
+        );
+        assert.equal(
+            selections.filter((result) => result.status === "rejected").length,
+            1,
+        );
+
+        const request = await transportRequestData(created.id);
+        const quoteA = await transportQuoteData(created.id, businessA);
+        const quoteB = await transportQuoteData(created.id, businessB);
+        assert.ok([businessA, businessB].includes(request.businessId));
+        assert.equal(
+            [quoteA, quoteB].filter((quote) =>
+              quote.status === "selected").length,
+            1,
+        );
+      });
+
+  it("cancels collecting requests owner-only and idempotently",
+      async () => {
+        const businessId = "transport-market-cancel";
+        await seedBusiness(businessId);
+        const manager = await seedTransportManager(businessId);
+        const created = await functions.createTransportRequest.run({
+          auth: {uid: CUSTOMER_UID},
+          data: transportRequestInput(),
+        });
+
+        await assert.rejects(
+            () => functions.cancelTransportQuoteRequest.run({
+              auth: {uid: OTHER_UID},
+              data: {requestId: created.id},
+            }),
+            /permission|owner|customer/i,
+        );
+        const cancellation = {
+          auth: {uid: CUSTOMER_UID},
+          data: {requestId: created.id},
+        };
+        await functions.cancelTransportQuoteRequest.run(cancellation);
+        await functions.cancelTransportQuoteRequest.run(cancellation);
+
+        const request = await transportRequestData(created.id);
+        assert.equal(request.status, "cancelled");
+        assert.equal(request.fulfillmentStatus, "cancelled");
+        assert.equal(request.quoteStatus, "cancelled");
+        await assert.rejects(
+            () => functions.submitTransportQuote.run({
+              auth: manager,
+              data: quoteInput(created.id, businessId),
+            }),
+            /cancelled|closed|collecting/i,
+        );
+      });
+
+  it("does not apply v2 quote mutations to a legacy v1 request",
+      async () => {
+        const businessId = "transport-legacy-business";
+        const legacyId = "transport-legacy-v1";
+        await seedBusiness(businessId);
+        const manager = await seedTransportManager(businessId);
+        await db.collection("transportRequests").doc(legacyId).set({
+          customerUid: CUSTOMER_UID,
+          businessId,
+          businessName: "Legacy Business",
+          price: 950,
+          status: "pending",
+          quoteStatus: "awaitingQuote",
+          trackingCode: "TR-LEGACY",
+        });
+
+        for (const action of [
+          () => functions.submitTransportQuote.run({
+            auth: manager,
+            data: quoteInput(legacyId, businessId),
+          }),
+          () => functions.selectTransportQuote.run({
+            auth: {uid: CUSTOMER_UID},
+            data: {
+              requestId: legacyId,
+              businessId,
+            },
+          }),
+          () => functions.cancelTransportQuoteRequest.run({
+            auth: {uid: CUSTOMER_UID},
+            data: {requestId: legacyId},
+          }),
+        ]) {
+          await assert.rejects(action, /version|marketplace|legacy|flow/i);
+        }
+
+        const legacy = await transportRequestData(legacyId);
+        assert.equal(legacy.businessId, businessId);
+        assert.equal(legacy.price, 950);
+        assert.equal(legacy.status, "pending");
+        assert.equal(legacy.flowVersion, undefined);
       });
 });
 

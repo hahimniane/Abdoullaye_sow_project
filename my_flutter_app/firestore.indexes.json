@@ -130,6 +130,33 @@
         {"fieldPath": "purchaseStatus", "order": "ASCENDING"},
         {"fieldPath": "holdExpiresAt", "order": "ASCENDING"}
       ]
+    },
+    {
+      "collectionGroup": "transportOpportunities",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "businessId", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "expiresAt", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "transportQuotes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "businessId", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "updatedAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "transportQuotes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "requestId", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "amountCents", "order": "ASCENDING"}
+      ]
     }
   ],
   "fieldOverrides": [

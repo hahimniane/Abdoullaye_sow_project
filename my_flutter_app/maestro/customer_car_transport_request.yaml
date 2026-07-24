@@ -32,7 +32,13 @@ name: Customer requests car transport quote
 - extendedWaitUntil:
     visible: "(?s).*Request car transport.*"
     timeout: 20000
-- assertVisible: "(?s).*E2E Atlantic Logistics.*Guinea.*"
+- tapOn: "Destination Country"
+- extendedWaitUntil:
+    visible: "Search destination country"
+    timeout: 10000
+- tapOn: "Search destination country"
+- inputText: "Guinea"
+- tapOn: "(?s).*Guinea.*GN.*"
 - tapOn: "Make"
 - tapOn: "Acura"
 - tapOn: "Model"
@@ -41,10 +47,16 @@ name: Customer requests car transport quote
 - tapOn: "2025"
 - scrollUntilVisible:
     element:
+      text: "Pickup city, region, or postal code"
+    direction: DOWN
+- tapOn: "Pickup city, region, or postal code"
+- inputText: "Bronx, NY 10467"
+- scrollUntilVisible:
+    element:
       text: "Send request"
     direction: DOWN
 - tapOn: "Send request"
 - extendedWaitUntil:
-    visible: "(?s).*Request sent to E2E Atlantic Logistics.*Tracking TR-.*They will send you a price quote.*"
+    visible: "(?s).*Request TR-.*sent to eligible businesses.*compare their quotes in your orders.*"
     timeout: 30000
 - takeScreenshot: "output/ios-e2e/car-transport-requested"

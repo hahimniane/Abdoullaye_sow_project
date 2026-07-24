@@ -21,6 +21,7 @@ import {
   AlertTriangle,
   Car,
   CheckCircle2,
+  CircleDollarSign,
   ClipboardList,
   Clock3,
   Copy,
@@ -132,17 +133,13 @@ type ParkingDraft = {
   totalCost: string;
 };
 
-type TransportDraft = {
-  id: string;
-  ownerName: string;
-  carMake: string;
-  carModel: string;
-  carYear: string;
-  vinNumber: string;
-  countryId: string;
-  transportDate: string;
-  price: string;
-  status: string;
+type TransportQuoteDraft = {
+  requestId: string;
+  amount: string;
+  estimatedPickupDate: string;
+  estimatedDeliveryDate: string;
+  transportMethod: "open" | "enclosed";
+  terms: string;
 };
 
 type PoolDraft = SharedBarrelPoolDraft;
@@ -331,17 +328,13 @@ const emptyParkingDraft: ParkingDraft = {
   totalCost: "",
 };
 
-const emptyTransportDraft: TransportDraft = {
-  id: "",
-  ownerName: "",
-  carMake: "",
-  carModel: "",
-  carYear: "",
-  vinNumber: "",
-  countryId: "guinea",
-  transportDate: "",
-  price: "",
-  status: "pending",
+const emptyTransportQuoteDraft: TransportQuoteDraft = {
+  requestId: "",
+  amount: "",
+  estimatedPickupDate: "",
+  estimatedDeliveryDate: "",
+  transportMethod: "open",
+  terms: "",
 };
 
 function futureDateInput(days = 14) {
@@ -2317,235 +2310,419 @@ function transportTone(status: string) {
   }
 }
 
-export function TransportPanel({ businessId, previewMode = false, businessName = "" }: PanelProps) {
-  const transports = useBusinessRows("transportRequests", businessId, Boolean(businessId && !previewMode), 500);
+export function TransportPanel({ businessId, previewMode = false }: PanelProps) {
+  const enabled = Boolean(businessId && !previewMode);
+  const opportunities = useBusinessRows("transportOpportunities", businessId, enabled, 500);
+  const businessQuotes = useBusinessRows("transportQuotes", businessId, enabled, 500);
+  const transports = useBusinessRows("transportRequests", businessId, enabled, 500);
+  const [view, setView] = useState<"opportunities" | "jobs">("opportunities");
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all");
   const [message, setMessage] = useState("");
   const [busyId, setBusyId] = useState("");
-  const [draft, setDraft] = useState<TransportDraft>(emptyTransportDraft);
-  const [editingId, setEditingId] = useState("");
-  const [formOpen, setFormOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState<TransportQuoteDraft>(emptyTransportQuoteDraft);
+  const [quoteFormOpen, setQuoteFormOpen] = useState(false);
 
-  const searched = useMemo(
-    () => filterRows(transports.rows, search, ["trackingCode", "ownerName", "customerName", "carMake", "carModel", "carYear", "vinNumber", "destinationCountryName", "status"]),
+  const quoteByRequest = useMemo(
+    () =>
+      new Map(
+        businessQuotes.rows.map((quote) => [
+          text(quote.requestId, ""),
+          quote,
+        ]),
+      ),
+    [businessQuotes.rows],
+  );
+  const filteredOpportunities = useMemo(
+    () =>
+      filterRows(opportunities.rows, search, [
+        "trackingCode",
+        "carMake",
+        "carModel",
+        "carYear",
+        "pickupArea",
+        "destinationCountryName",
+        "status",
+      ]),
+    [opportunities.rows, search],
+  );
+  const filteredJobs = useMemo(
+    () =>
+      filterRows(transports.rows, search, [
+        "trackingCode",
+        "ownerName",
+        "customerName",
+        "carMake",
+        "carModel",
+        "carYear",
+        "vinNumber",
+        "destinationCountryName",
+        "status",
+      ]),
     [transports.rows, search],
   );
-  const filteredRows = useMemo(
-    () => (filter === "all" ? searched : searched.filter((row) => text(row.status, "") === filter)),
-    [searched, filter],
-  );
 
-  function openNew() {
-    setEditingId("");
-    setDraft(emptyTransportDraft);
-    setMessage("");
-    setFormOpen(true);
-  }
-  function closeForm() {
-    setEditingId("");
-    setDraft(emptyTransportDraft);
-    setFormOpen(false);
-  }
-  function editTransport(row: FirestoreRow) {
-    setEditingId(row.id);
+  function openQuote(opportunity: FirestoreRow) {
+    const requestId = text(opportunity.requestId, opportunity.id);
+    const quote = quoteByRequest.get(requestId);
     setDraft({
-      id: row.id,
-      ownerName: text(row.ownerName ?? row.customerName, ""),
-      carMake: text(row.carMake, ""),
-      carModel: text(row.carModel, ""),
-      carYear: text(row.carYear, ""),
-      vinNumber: text(row.vinNumber, ""),
-      countryId: text(row.destinationCountryId, "guinea"),
-      transportDate: dateInputValue(row.transportDate ?? row.createdAt),
-      price: numberString(row.price),
-      status: text(row.status, "pending"),
+      requestId,
+      amount:
+        Number(quote?.amountCents ?? 0) > 0
+          ? String(Number(quote?.amountCents) / 100)
+          : "",
+      estimatedPickupDate: dateInputValue(quote?.estimatedPickupDate),
+      estimatedDeliveryDate: dateInputValue(quote?.estimatedDeliveryDate),
+      transportMethod:
+        text(
+          quote?.transportMethod ?? opportunity.requestedTransportMethod,
+          "open",
+        ) ===
+        "enclosed"
+          ? "enclosed"
+          : "open",
+      terms: text(quote?.terms, ""),
     });
     setMessage("");
-    setFormOpen(true);
+    setQuoteFormOpen(true);
   }
 
   async function updateTransportStatus(row: FirestoreRow, status: string) {
     setBusyId(row.id);
     setMessage("");
     try {
-      await setDoc(doc(db, "transportRequests", row.id), { businessId, status, updatedAt: serverTimestamp() }, { merge: true });
+      const isMarketplaceJob =
+        Boolean(row.selectedQuoteId) ||
+        text(row.quoteStatus, "") === "selected" ||
+        Number(row.transportMarketplaceVersion ?? 0) >= 2;
+      if (isMarketplaceJob) {
+        await httpsCallable(functions, "updateTransportFulfillmentStatus")({
+          requestId: row.id,
+          status,
+        });
+      } else {
+        await setDoc(doc(db, "transportRequests", row.id), { businessId, status, updatedAt: serverTimestamp() }, { merge: true });
+      }
       setMessage("Transport updated.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Update failed.");
+    } catch {
+      setMessage("The transport status could not be updated. Try again.");
     } finally {
       setBusyId("");
     }
   }
 
-  async function saveTransport() {
-    if (!businessId) throw new Error("Business ID is required.");
-    if (!draft.ownerName.trim()) throw new Error("Owner name is required.");
-    if (!draft.carMake.trim() || !draft.carModel.trim() || !draft.carYear.trim()) {
-      throw new Error("Car make, model, and year are required.");
+  async function saveQuote() {
+    if (!draft.requestId || busyId) return;
+    const amount = Number(draft.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setMessage("Enter a valid quote amount.");
+      return;
     }
-    const country = countries.find((item) => item.id === draft.countryId);
-    if (!country) throw new Error("Select a destination country.");
-    const price = Number(draft.price);
-    if (!Number.isFinite(price) || price < 0) throw new Error("Enter a valid price.");
-    const ref = draft.id ? doc(db, "transportRequests", draft.id) : doc(collection(db, "transportRequests"));
-    const transportDate = draft.transportDate ? new Date(`${draft.transportDate}T12:00:00`) : new Date();
-    await setDoc(ref, {
-      businessId,
-      businessName,
-      ownerName: draft.ownerName.trim(),
-      carMake: draft.carMake.trim(),
-      carModel: draft.carModel.trim(),
-      carYear: draft.carYear.trim(),
-      vinNumber: draft.vinNumber.trim().toUpperCase(),
-      destinationCountryId: country.id,
-      destinationCountryName: country.name,
-      transportDate: Timestamp.fromDate(transportDate),
-      price,
-      status: draft.status,
-      updatedAt: serverTimestamp(),
-      ...(draft.id ? {} : { createdAt: serverTimestamp(), trackingCode: `TR-${ref.id.slice(0, 6).toUpperCase()}` }),
-    }, { merge: true });
-    closeForm();
-    setMessage(draft.id ? "Transport updated." : "Transport created.");
+    if (!draft.estimatedPickupDate || !draft.estimatedDeliveryDate) {
+      setMessage("Pickup and delivery dates are required.");
+      return;
+    }
+    if (
+      new Date(draft.estimatedDeliveryDate).getTime() <
+      new Date(draft.estimatedPickupDate).getTime()
+    ) {
+      setMessage("Estimated delivery must be after pickup.");
+      return;
+    }
+    setBusyId(`quote:${draft.requestId}`);
+    setMessage("");
+    try {
+      await httpsCallable(functions, "submitTransportQuote")({
+        requestId: draft.requestId,
+        amountCents: Math.round(amount * 100),
+        currency: "usd",
+        estimatedPickupDate: new Date(
+          `${draft.estimatedPickupDate}T12:00:00`,
+        ).toISOString(),
+        estimatedDeliveryDate: new Date(
+          `${draft.estimatedDeliveryDate}T12:00:00`,
+        ).toISOString(),
+        transportMethod: draft.transportMethod,
+        terms: draft.terms.trim(),
+      });
+      setQuoteFormOpen(false);
+      setDraft(emptyTransportQuoteDraft);
+      setMessage("Quote sent to the customer.");
+    } catch {
+      setMessage("The quote could not be sent. Check the details and try again.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function withdrawQuote(opportunity: FirestoreRow) {
+    const requestId = text(opportunity.requestId, opportunity.id);
+    const confirmed = confirmImportantAction(
+      "Withdraw this quote? The customer will no longer be able to select it.",
+      "Retirer ce devis ? Le client ne pourra plus le sélectionner.",
+    );
+    if (!confirmed) return;
+    setBusyId(`withdraw:${requestId}`);
+    setMessage("");
+    try {
+      await httpsCallable(functions, "withdrawTransportQuote")({ requestId });
+      setMessage("Quote withdrawn.");
+    } catch {
+      setMessage("The quote could not be withdrawn. Try again.");
+    } finally {
+      setBusyId("");
+    }
   }
 
   return (
-    <section className="lst">
+    <section className="lst transport-marketplace-panel">
       <header className="lst-head">
         <div className="lst-head-text">
           <h2>Vehicle transport</h2>
-          <p>{transports.rows.length === 0 ? "Schedule and track car transport for your customers." : `${transports.rows.length} request${transports.rows.length === 1 ? "" : "s"}`}</p>
+          <p>Quote on eligible customer requests, then manage accepted jobs separately.</p>
         </div>
         <div className="lst-head-actions">
-          <StatusText busy={busy || Boolean(busyId)} message={message} />
-          <button className="lst-add" type="button" onClick={openNew}><Plus size={17} /> New transport</button>
+          <StatusText busy={Boolean(busyId)} message={message} />
         </div>
       </header>
 
-      {transports.error && <div className="error-box">{transports.error}</div>}
-
-      <div className="lst-toolbar">
-        <div className="lst-search">
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tracking, owner, car, VIN…" />
-        </div>
-        <select className="lst-status-select" style={{ flex: "0 0 auto", minWidth: 150 }} value={filter} onChange={(event) => setFilter(event.target.value)}>
-          <option value="all">All statuses</option>
-          {transportStatuses.map((status) => (<option key={status} value={status}>{statusLabel(status)}</option>))}
-        </select>
-        <button className="lst-btn ghost" type="button" disabled={filteredRows.length === 0} onClick={() => downloadCsv("transport-requests.csv", filteredRows, ["trackingCode", "ownerName", "carMake", "carModel", "carYear", "vinNumber", "destinationCountryName", "price", "transportDate", "status", "updatedAt"])}>
-          <Download size={15} /> Export CSV
+      <div className="transport-marketplace-tabs" role="tablist">
+        <button
+          aria-selected={view === "opportunities"}
+          className={view === "opportunities" ? "active" : ""}
+          onClick={() => setView("opportunities")}
+          role="tab"
+          type="button"
+        >
+          Quote opportunities
+          <span>{opportunities.rows.length}</span>
+        </button>
+        <button
+          aria-selected={view === "jobs"}
+          className={view === "jobs" ? "active" : ""}
+          onClick={() => setView("jobs")}
+          role="tab"
+          type="button"
+        >
+          Accepted jobs
+          <span>{transports.rows.length}</span>
         </button>
       </div>
 
-      {transports.loading && <LoadingState />}
-      {!transports.loading && transports.rows.length === 0 && (
-        <div className="lst-empty">
-          <div className="lst-empty-icon"><Truck size={30} /></div>
-          <h3>No transport requests yet</h3>
-          <p>Schedule a vehicle transport to get started.</p>
-          <button className="lst-add" type="button" onClick={openNew}><Plus size={17} /> New transport</button>
+      {(opportunities.error || businessQuotes.error || transports.error) && (
+        <div className="error-box" role="alert">
+          Transport marketplace data could not be loaded. Refresh and try again.
         </div>
       )}
-      {!transports.loading && transports.rows.length > 0 && filteredRows.length === 0 && (
-        <EmptyState text="No transport requests match this filter." />
-      )}
 
-      <div className="pur-grid">
-        {filteredRows.map((row) => {
-          const status = text(row.status, "pending");
-          const busyRow = busyId === row.id;
-          return (
-            <article className="pur-card" key={row.id}>
-              <div className="pur-head">
-                <div className="pur-title">
-                  <strong>{transportTitle(row)}</strong>
-                  <span className="pur-kind">{text(row.trackingCode, "Transport")}</span>
-                </div>
-                <span className={`lst-badge ${transportTone(status)}`}>{statusLabel(status)}</span>
-              </div>
-              <div className="pur-info">
-                <div><span>Owner</span><b>{text(row.ownerName ?? row.customerName, "—")}</b></div>
-                <div><span>VIN</span><b>{text(row.vinNumber, "—")}</b></div>
-                <div><span>Destination</span><b>{text(row.destinationCountryName, "—")}</b></div>
-                <div><span>Price</span><b>{formatMoney(row.price)}</b></div>
-                <div><span>Transport date</span><b>{formatDate(row.transportDate ?? row.createdAt)}</b></div>
-              </div>
-              <div className="pur-actions">
-                <label className="bar-field"><span>Update status</span>
-                  <select value={status} disabled={busyRow} onChange={(event) => updateTransportStatus(row, event.target.value)}>
-                    {transportStatuses.map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}
-                  </select>
-                </label>
-                <button className="lst-btn ghost" type="button" disabled={busyRow} onClick={() => editTransport(row)}><Pencil size={14} /> Edit</button>
-              </div>
-            </article>
-          );
-        })}
+      <div className="lst-toolbar">
+        <div className="lst-search">
+          <input
+            aria-label="Search vehicle transport"
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={
+              view === "opportunities"
+                ? "Search route, vehicle, or reference"
+                : "Search customer, vehicle, or reference"
+            }
+            value={search}
+          />
+        </div>
+        {view === "jobs" && (
+          <button className="lst-btn ghost" type="button" disabled={filteredJobs.length === 0} onClick={() => downloadCsv("accepted-transport-jobs.csv", filteredJobs, ["trackingCode", "ownerName", "carMake", "carModel", "carYear", "vinNumber", "destinationCountryName", "selectedAmountCents", "transportDate", "status", "updatedAt"])}>
+            <Download size={15} /> Export CSV
+          </button>
+        )}
       </div>
 
-      {formOpen && (
+      {view === "opportunities" && (
+        <>
+          {(opportunities.loading || businessQuotes.loading) && <LoadingState />}
+          {!opportunities.loading && opportunities.rows.length === 0 && (
+            <div className="lst-empty">
+              <div className="lst-empty-icon"><ClipboardList size={30} /></div>
+              <h3>No quote opportunities right now</h3>
+              <p>Eligible customer requests will appear here when they match your service area.</p>
+            </div>
+          )}
+          {!opportunities.loading &&
+            opportunities.rows.length > 0 &&
+            filteredOpportunities.length === 0 && (
+              <EmptyState text="No quote opportunities match this search." />
+            )}
+          <div className="transport-opportunity-list">
+            {filteredOpportunities.map((opportunity) => {
+              const requestId = text(opportunity.requestId, opportunity.id);
+              const quote = quoteByRequest.get(requestId);
+              const quoteStatus = text(quote?.status, "");
+              const selected = quoteStatus === "selected";
+              const withdrawn = quoteStatus === "withdrawn";
+              const busyRow =
+                busyId === `quote:${requestId}` ||
+                busyId === `withdraw:${requestId}`;
+              return (
+                <article className="transport-opportunity-card" key={opportunity.id}>
+                  <header>
+                    <div>
+                      <span className="pur-kind">{text(opportunity.trackingCode, "New request")}</span>
+                      <h3>{transportTitle(opportunity)}</h3>
+                    </div>
+                    <span className={`lst-badge ${selected ? "ok" : quoteStatus === "submitted" ? "navy" : withdrawn ? "muted" : "warn"}`}>
+                      {selected
+                        ? "Quote selected"
+                        : quoteStatus === "submitted"
+                          ? "Quote submitted"
+                          : withdrawn
+                            ? "Quote withdrawn"
+                            : "Needs quote"}
+                    </span>
+                  </header>
+                  <div className="transport-opportunity-route">
+                    <MapPinned aria-hidden="true" size={20} />
+                    <div>
+                      <small>Route</small>
+                      <strong>
+                        {text(opportunity.pickupArea, "Pickup area not provided")} →{" "}
+                        {text(opportunity.destinationCountryName, "Destination not provided")}
+                      </strong>
+                    </div>
+                  </div>
+                  <dl>
+                    <div><dt>Vehicle condition</dt><dd>{opportunity.vehicleOperable === false ? "Needs assistance" : "Runs and drives"}</dd></div>
+                    <div><dt>Requested method</dt><dd>{text(opportunity.requestedTransportMethod, "open") === "enclosed" ? "Enclosed transport" : "Open transport"}</dd></div>
+                    <div><dt>Preferred pickup</dt><dd>{opportunity.preferredDate ? formatDate(opportunity.preferredDate) : "Flexible"}</dd></div>
+                    <div><dt>Quote deadline</dt><dd>{opportunity.expiresAt ? formatDate(opportunity.expiresAt) : "Not provided"}</dd></div>
+                  </dl>
+                  {quote && !withdrawn && (
+                    <div className="transport-business-quote-summary">
+                      <div><small>Your quote</small><strong>{formatMoney(Number(quote.amountCents ?? 0) / 100, text(quote.currency, "USD"))}</strong></div>
+                      <span>Pickup {quote.estimatedPickupDate ? formatDate(quote.estimatedPickupDate) : "not provided"} · Delivery {quote.estimatedDeliveryDate ? formatDate(quote.estimatedDeliveryDate) : "not provided"}</span>
+                    </div>
+                  )}
+                  <footer>
+                    {!selected && (
+                      <button
+                        className="lst-add"
+                        disabled={busyRow}
+                        onClick={() => openQuote(opportunity)}
+                        type="button"
+                      >
+                        <CircleDollarSign size={16} />
+                        {quoteStatus === "submitted" ? "Revise quote" : withdrawn ? "Submit new quote" : "Send quote"}
+                      </button>
+                    )}
+                    {quoteStatus === "submitted" && (
+                      <button
+                        aria-busy={busyId === `withdraw:${requestId}`}
+                        className="lst-btn danger"
+                        disabled={busyRow}
+                        onClick={() => void withdrawQuote(opportunity)}
+                        type="button"
+                      >
+                        {busyId === `withdraw:${requestId}` ? <RefreshCw className="spin" size={15} /> : <XCircle size={15} />}
+                        {busyId === `withdraw:${requestId}` ? "Withdrawing..." : "Withdraw quote"}
+                      </button>
+                    )}
+                    {selected && <span className="transport-selected-note"><CheckCircle2 size={16} /> This customer chose your quote. The job is now under Accepted jobs.</span>}
+                  </footer>
+                </article>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {view === "jobs" && (
+        <>
+          {transports.loading && <LoadingState />}
+          {!transports.loading && transports.rows.length === 0 && (
+            <div className="lst-empty">
+              <div className="lst-empty-icon"><Truck size={30} /></div>
+              <h3>No accepted transport jobs yet</h3>
+              <p>When a customer chooses your quote, the complete job will appear here.</p>
+            </div>
+          )}
+          {!transports.loading &&
+            transports.rows.length > 0 &&
+            filteredJobs.length === 0 && (
+              <EmptyState text="No accepted jobs match this search." />
+            )}
+          <div className="pur-grid">
+            {filteredJobs.map((row) => {
+              const status = text(row.status, "pending");
+              const busyRow = busyId === row.id;
+              const selectedAmountCents = Number(row.selectedAmountCents ?? 0);
+              return (
+                <article className="pur-card transport-job-card" key={row.id}>
+                  <div className="pur-head">
+                    <div className="pur-title">
+                      <strong>{transportTitle(row)}</strong>
+                      <span className="pur-kind">{text(row.trackingCode, "Transport")}</span>
+                    </div>
+                    <span className={`lst-badge ${transportTone(status)}`}>{statusLabel(status)}</span>
+                  </div>
+                  <div className="pur-info">
+                    <div><span>Owner</span><b>{text(row.ownerName ?? row.customerName, "—")}</b></div>
+                    <div><span>Contact phone</span><b>{text(row.customerPhone, "—")}</b></div>
+                    <div><span>Pickup</span><b>{text(row.pickupAddress, "—")}</b></div>
+                    <div><span>Destination</span><b>{text(row.destinationCountryName, "—")}</b></div>
+                    <div><span>Accepted quote</span><b>{selectedAmountCents > 0 ? formatMoney(selectedAmountCents / 100) : formatMoney(row.price)}</b></div>
+                    <div><span>Transport date</span><b>{formatDate(row.transportDate ?? row.estimatedPickupDate ?? row.createdAt)}</b></div>
+                  </div>
+                  <div className="pur-actions">
+                    <label className="bar-field"><span>Update job status</span>
+                      <select value={status} disabled={busyRow} onChange={(event) => updateTransportStatus(row, event.target.value)}>
+                        {transportStatuses.map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}
+                      </select>
+                    </label>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {quoteFormOpen && (
         <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={() => {
-          if (!busy) closeForm();
+          if (!busyId) setQuoteFormOpen(false);
         }}>
-          <div className="lst-modal" style={{ maxWidth: 560 }} onClick={(event) => event.stopPropagation()}>
+          <div className="lst-modal transport-quote-modal" onClick={(event) => event.stopPropagation()}>
             <header className="lst-modal-head">
-              <h3>{editingId ? "Edit transport" : "New transport"}</h3>
-              <button className="lst-icon-btn" type="button" disabled={busy} onClick={closeForm} aria-label="Close"><X size={18} /></button>
+              <div>
+                <span className="pur-kind">Structured quote</span>
+                <h3>{quoteByRequest.get(draft.requestId)?.status === "submitted" ? "Revise transport quote" : "Send transport quote"}</h3>
+              </div>
+              <button className="lst-icon-btn" type="button" disabled={Boolean(busyId)} onClick={() => setQuoteFormOpen(false)} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">
               {message && <div className="lst-form-error" role="alert">{message}</div>}
               <div className="lst-form-grid">
-                <label className="lst-field wide"><span>Owner name</span>
-                  <input value={draft.ownerName} onChange={(event) => setDraft((value) => ({ ...value, ownerName: event.target.value }))} placeholder="Customer name" />
+                <label className="lst-field wide"><span>Total quote (USD)</span>
+                  <input autoFocus inputMode="decimal" min="1" onChange={(event) => setDraft((value) => ({ ...value, amount: event.target.value }))} placeholder="For example, 1250" value={draft.amount} />
+                  <small>Enter the complete customer price, including your known fees.</small>
                 </label>
-                <label className="lst-field"><span>Make</span>
-                  <input value={draft.carMake} onChange={(event) => setDraft((value) => ({ ...value, carMake: event.target.value }))} placeholder="Toyota" />
+                <label className="lst-field"><span>Estimated pickup date</span>
+                  <input min={new Date().toISOString().slice(0, 10)} onChange={(event) => setDraft((value) => ({ ...value, estimatedPickupDate: event.target.value }))} type="date" value={draft.estimatedPickupDate} />
                 </label>
-                <label className="lst-field"><span>Model</span>
-                  <input value={draft.carModel} onChange={(event) => setDraft((value) => ({ ...value, carModel: event.target.value }))} placeholder="Land Cruiser" />
+                <label className="lst-field"><span>Estimated delivery date</span>
+                  <input min={draft.estimatedPickupDate || new Date().toISOString().slice(0, 10)} onChange={(event) => setDraft((value) => ({ ...value, estimatedDeliveryDate: event.target.value }))} type="date" value={draft.estimatedDeliveryDate} />
                 </label>
-                <label className="lst-field"><span>Year</span>
-                  <input inputMode="numeric" value={draft.carYear} onChange={(event) => setDraft((value) => ({ ...value, carYear: event.target.value }))} placeholder="2018" />
-                </label>
-                <label className="lst-field"><span>VIN</span>
-                  <input value={draft.vinNumber} onChange={(event) => setDraft((value) => ({ ...value, vinNumber: event.target.value }))} placeholder="17 characters" />
-                </label>
-                <SearchableSelect
-                  className="lst-field"
-                  emptyMessage="No countries match your search."
-                  label="Destination"
-                  listLabel="Country options"
-                  onChange={(countryId) =>
-                    setDraft((value) => ({ ...value, countryId }))
-                  }
-                  options={countries.map((country) => ({
-                    label: `${countryFlag(country.code)} ${countryName(country.id)}`,
-                    keywords: `${country.code} ${country.name}`,
-                    value: country.id,
-                  }))}
-                  placeholder="Search or choose a country"
-                  value={draft.countryId}
-                />
-                <label className="lst-field"><span>Transport date</span>
-                  <input type="date" value={draft.transportDate} onChange={(event) => setDraft((value) => ({ ...value, transportDate: event.target.value }))} />
-                </label>
-                <label className="lst-field"><span>Price (USD)</span>
-                  <input inputMode="decimal" value={draft.price} onChange={(event) => setDraft((value) => ({ ...value, price: event.target.value }))} placeholder="1200" />
-                </label>
-                <label className="lst-field"><span>Status</span>
-                  <select value={draft.status} onChange={(event) => setDraft((value) => ({ ...value, status: event.target.value }))}>
-                    {transportStatuses.map((status) => (<option key={status} value={status}>{statusLabel(status)}</option>))}
+                <label className="lst-field"><span>Transport method</span>
+                  <select onChange={(event) => setDraft((value) => ({ ...value, transportMethod: event.target.value === "enclosed" ? "enclosed" : "open" }))} value={draft.transportMethod}>
+                    <option value="open">Open transport</option>
+                    <option value="enclosed">Enclosed transport</option>
                   </select>
+                </label>
+                <label className="lst-field wide"><span>Terms and inclusions</span>
+                  <textarea maxLength={1000} onChange={(event) => setDraft((value) => ({ ...value, terms: event.target.value }))} placeholder="Explain what is included, timing assumptions, and any conditions." rows={4} value={draft.terms} />
                 </label>
               </div>
             </div>
             <footer className="lst-modal-foot">
-              <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeForm}>Cancel</button>
-              <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => runPanelAction(setBusy, setMessage, draft.id ? "Transport updated." : "Transport created.", saveTransport)}>
-                {busy ? <RefreshCw className="spin" size={16} /> : <Save size={16} />}
-                {busy ? "Saving..." : editingId ? "Save changes" : "Create transport"}
+              <button className="lst-btn ghost" type="button" disabled={Boolean(busyId)} onClick={() => setQuoteFormOpen(false)}>Cancel</button>
+              <button className="lst-add" type="button" disabled={Boolean(busyId)} aria-busy={Boolean(busyId)} onClick={() => void saveQuote()}>
+                {busyId ? <RefreshCw className="spin" size={16} /> : <Save size={16} />}
+                {busyId ? "Sending quote..." : quoteByRequest.get(draft.requestId)?.status === "submitted" ? "Save revised quote" : "Send quote"}
               </button>
             </footer>
           </div>

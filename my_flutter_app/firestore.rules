@@ -108,6 +108,18 @@ service cloud.firestore {
              );
     }
 
+    function isLegacyTransportRecord(data) {
+      return data.get('flowVersion', 1) != 2;
+    }
+
+    function ownsTransportRequest(userId, requestId) {
+      return request.auth != null &&
+        request.auth.uid == userId &&
+        exists(/databases/$(database)/documents/transportRequests/$(requestId)) &&
+        get(/databases/$(database)/documents/transportRequests/$(requestId))
+          .data.customerUid == userId;
+    }
+
     function validDeliveryEstimate(data) {
       return (
           data.deliveryEstimateMinDays == null &&
@@ -504,13 +516,17 @@ service cloud.firestore {
         (isAdmin(request.auth.uid) ||
          canManageBusiness(request.auth.uid, resource.data.businessId));
       allow create: if request.auth != null &&
+        isLegacyTransportRecord(request.resource.data) &&
         (hasAdminCapability(request.auth.uid, 'operations') ||
          canManageBusinessSection(request.auth.uid, request.resource.data.businessId, 'transport'));
       allow update: if request.auth != null &&
+        isLegacyTransportRecord(resource.data) &&
+        isLegacyTransportRecord(request.resource.data) &&
         request.resource.data.businessId == resource.data.businessId &&
         (hasAdminCapability(request.auth.uid, 'operations') ||
          canManageBusinessSection(request.auth.uid, resource.data.businessId, 'transport'));
       allow delete: if request.auth != null &&
+        isLegacyTransportRecord(resource.data) &&
         (hasAdminCapability(request.auth.uid, 'operations') ||
          canManageBusinessSection(request.auth.uid, resource.data.businessId, 'transport'));
       // Customers may read their own transport requests (for tracking) and
@@ -520,6 +536,8 @@ service cloud.firestore {
       allow read: if request.auth != null &&
         resource.data.customerUid == request.auth.uid;
       allow update: if request.auth != null &&
+        isLegacyTransportRecord(resource.data) &&
+        isLegacyTransportRecord(request.resource.data) &&
         resource.data.customerUid == request.auth.uid &&
         resource.data.status == 'pending' &&
         request.resource.data.status == 'cancelled' &&
@@ -528,6 +546,34 @@ service cloud.firestore {
         request.resource.data.price == resource.data.price &&
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['status', 'updatedAt']);
+    }
+
+    match /transportOpportunities/{opportunityId} {
+      allow read: if request.auth != null &&
+        (
+          isAdmin(request.auth.uid) ||
+          canManageBusinessSection(
+            request.auth.uid,
+            resource.data.businessId,
+            'transport'
+          ) ||
+          ownsTransportRequest(request.auth.uid, resource.data.requestId)
+        );
+      allow create, update, delete: if false;
+    }
+
+    match /transportQuotes/{quoteId} {
+      allow read: if request.auth != null &&
+        (
+          isAdmin(request.auth.uid) ||
+          canManageBusinessSection(
+            request.auth.uid,
+            resource.data.businessId,
+            'transport'
+          ) ||
+          ownsTransportRequest(request.auth.uid, resource.data.requestId)
+        );
+      allow create, update, delete: if false;
     }
 
     match /cars/{carId} {

@@ -202,3 +202,11 @@ Add future project conventions and repeated architectural decisions here.
   business offers that service. When one customer service exposes this class of
   mismatch, audit every service selector rather than waiting for separate user
   reports.
+- Car transport `flowVersion: 2` is an unassigned quote marketplace, not a
+  first-provider booking. The server derives eligible businesses and creates
+  deterministic top-level `transportOpportunities` and `transportQuotes`
+  documents. Opportunities expose only tracking, destination, coarse pickup
+  area, vehicle, and schedule preferences; exact contact/address/owner/VIN/
+  notes remain private until the customer transactionally selects one quote.
+  All v2 quote, cancellation, selection, and fulfillment mutations stay behind
+  permission-checked callables. Preserve assigned `flowVersion: 1` records.

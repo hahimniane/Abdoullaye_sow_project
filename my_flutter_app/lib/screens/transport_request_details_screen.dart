@@ -9,7 +9,9 @@ import 'package:provider/provider.dart';
 import '../data/car_catalog.dart';
 import '../l10n/app_localizations.dart';
 import '../models/transport_request.dart';
+import '../models/transport_quote.dart';
 import '../providers/auth_provider.dart';
+import '../services/transport_service.dart';
 import '../utils/transport_receipt_generator.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
@@ -47,6 +49,7 @@ class _TransportRequestDetailsScreenState
   late String _statusDraft;
   late String _persistedStatus;
   late String _trackingCode;
+  late TransportRequest _request;
 
   bool _isSaving = false;
 
@@ -75,6 +78,7 @@ class _TransportRequestDetailsScreenState
     _persistedStatus = widget.request.status;
     _statusDraft = _persistedStatus;
     _trackingCode = widget.request.trackingCode;
+    _request = widget.request;
 
     _initializeCatalog();
 
@@ -111,6 +115,7 @@ class _TransportRequestDetailsScreenState
 
     _isSaving = false;
     _trackingCode = latest.trackingCode;
+    _request = latest;
     _persistedStatus = latest.status;
     _statusDraft = _persistedStatus;
     _transportDate = latest.transportDate;
@@ -241,7 +246,10 @@ class _TransportRequestDetailsScreenState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final auth = Provider.of<AuthProvider>(context);
-    final canEdit = auth.isAdmin && _persistedStatus != 'completed';
+    final canEdit =
+        auth.isAdmin &&
+        !_request.usesQuoteMarketplace &&
+        _persistedStatus != 'completed';
 
     return Scaffold(
       body: Container(
@@ -333,7 +341,11 @@ class _TransportRequestDetailsScreenState
                             ],
                           ),
                           const SizedBox(height: 16),
-                          _CustomerRequestInfo(request: widget.request),
+                          _CustomerRequestInfo(request: _request),
+                          if (_request.usesQuoteMarketplace) ...[
+                            const SizedBox(height: 16),
+                            _TransportQuoteSection(request: _request),
+                          ],
                           const SizedBox(height: 16),
                           SupportEntryButton(
                             relatedCollection: 'transportRequests',
@@ -558,6 +570,404 @@ class _TransportRequestDetailsScreenState
   }
 }
 
+class _TransportQuoteSection extends StatefulWidget {
+  const _TransportQuoteSection({required this.request});
+
+  final TransportRequest request;
+
+  @override
+  State<_TransportQuoteSection> createState() => _TransportQuoteSectionState();
+}
+
+class _TransportQuoteSectionState extends State<_TransportQuoteSection> {
+  final _service = TransportService();
+  String _selectingQuoteId = '';
+  String _error = '';
+  bool _cancelling = false;
+
+  Future<void> _selectQuote(TransportQuote quote) async {
+    final l10n = AppLocalizations.of(context)!;
+    final price = NumberFormat.simpleCurrency(
+      name: quote.currency.toUpperCase(),
+    ).format(quote.amount);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.confirmTransportQuoteTitle),
+        content: Text(
+          l10n.confirmTransportQuoteMessage(quote.businessName, price),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.keepComparing),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.chooseThisBusiness),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _selectingQuoteId = quote.id;
+      _error = '';
+    });
+    try {
+      await _service.selectQuote(
+        requestId: widget.request.id,
+        quoteId: quote.id,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = l10n.couldNotSelectTransportQuote);
+    } finally {
+      if (mounted) setState(() => _selectingQuoteId = '');
+    }
+  }
+
+  Future<void> _cancelRequest() async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.confirmCancelTransportRequestTitle),
+        content: Text(l10n.confirmCancelTransportRequestMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.keepRequestOpen),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.cancelTransportRequest),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _cancelling = true;
+      _error = '';
+    });
+    try {
+      await _service.cancelRequest(widget.request.id);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = l10n.couldNotCancelTransportRequest);
+    } finally {
+      if (mounted) setState(() => _cancelling = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    if (widget.request.quoteStatus == 'cancelled') {
+      return _QuoteNotice(
+        icon: Icons.cancel_outlined,
+        title: l10n.transportRequestCancelled,
+        message: l10n.transportRequestCancelledSubtitle,
+      );
+    }
+    if (widget.request.hasSelectedQuote) {
+      final price = NumberFormat.simpleCurrency(
+        name: widget.request.currency.toUpperCase(),
+      ).format(widget.request.selectedAmountCents / 100);
+      return _QuoteNotice(
+        icon: Icons.verified_outlined,
+        title: l10n.transportQuoteSelectedTitle,
+        message: l10n.transportQuoteSelectedMessage(
+          widget.request.businessName.isNotEmpty
+              ? widget.request.businessName
+              : widget.request.selectedBusinessId,
+          price,
+        ),
+      );
+    }
+
+    return StreamBuilder<List<TransportQuote>>(
+      stream: _service.watchQuotes(widget.request.id),
+      builder: (context, snapshot) {
+        final quotes = snapshot.data ?? const <TransportQuote>[];
+        final activeQuotes = quotes
+            .where((quote) => quote.isSubmitted && !quote.isExpired)
+            .toList();
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.cream,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.rule),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.transportQuotesTitle,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.ink,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                l10n.transportQuotesIntro,
+                style: const TextStyle(color: AppColors.muted, height: 1.35),
+              ),
+              if (_error.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _error,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              if (snapshot.hasError) ...[
+                const SizedBox(height: 14),
+                Text(l10n.couldNotLoadTransportQuotes),
+              ] else if (!snapshot.hasData) ...[
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              ] else if (activeQuotes.isEmpty) ...[
+                const SizedBox(height: 16),
+                _QuoteNotice(
+                  icon: Icons.schedule_outlined,
+                  title: l10n.waitingForTransportQuotes,
+                  message: l10n.waitingForTransportQuotesSubtitle,
+                  compact: true,
+                ),
+              ] else ...[
+                const SizedBox(height: 14),
+                for (final quote in activeQuotes) ...[
+                  _TransportQuoteCard(
+                    quote: quote,
+                    selecting: _selectingQuoteId == quote.id,
+                    onSelect: () => _selectQuote(quote),
+                  ),
+                  if (quote != activeQuotes.last) const SizedBox(height: 12),
+                ],
+              ],
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: _cancelling || _selectingQuoteId.isNotEmpty
+                      ? null
+                      : _cancelRequest,
+                  child: Text(
+                    _cancelling
+                        ? l10n.cancellingTransportRequest
+                        : l10n.cancelTransportRequest,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TransportQuoteCard extends StatelessWidget {
+  const _TransportQuoteCard({
+    required this.quote,
+    required this.selecting,
+    required this.onSelect,
+  });
+
+  final TransportQuote quote;
+  final bool selecting;
+  final VoidCallback onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    final dateFormat = DateFormat.yMMMd(locale);
+    final price = NumberFormat.simpleCurrency(
+      name: quote.currency.toUpperCase(),
+    ).format(quote.amount);
+    final details = <MapEntry<String, String>>[
+      if (quote.estimatedPickupDate != null)
+        MapEntry(
+          l10n.estimatedPickup,
+          dateFormat.format(quote.estimatedPickupDate!),
+        ),
+      if (quote.estimatedDeliveryDate != null)
+        MapEntry(
+          l10n.estimatedDelivery,
+          dateFormat.format(quote.estimatedDeliveryDate!),
+        ),
+      if (quote.transportMethod.isNotEmpty)
+        MapEntry(
+          l10n.transportMethod,
+          quote.transportMethod == 'enclosed'
+              ? l10n.enclosedTransport
+              : l10n.openTransport,
+        ),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.cobalt.withValues(alpha: 0.28)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.cobaltDeep.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: AppColors.mist,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.local_shipping_outlined,
+                  color: AppColors.cobalt,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      quote.businessName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                    Text(
+                      price,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.cobalt,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          for (final detail in details)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      detail.key,
+                      style: const TextStyle(color: AppColors.muted),
+                    ),
+                  ),
+                  Text(
+                    detail.value,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ),
+          if (quote.terms.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              quote.terms,
+              style: const TextStyle(color: AppColors.ink, height: 1.35),
+            ),
+          ],
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: selecting ? null : onSelect,
+              child: Text(
+                selecting
+                    ? l10n.selectingTransportQuote
+                    : l10n.selectTransportQuote,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuoteNotice extends StatelessWidget {
+  const _QuoteNotice({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.compact = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(compact ? 14 : 18),
+      decoration: BoxDecoration(
+        color: AppColors.mist.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: AppColors.cobalt),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.ink,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  message,
+                  style: const TextStyle(color: AppColors.muted, height: 1.35),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _RoundedTextField extends StatelessWidget {
   const _RoundedTextField({
     required this.controller,
@@ -720,7 +1130,24 @@ class _CustomerRequestInfo extends StatelessWidget {
     }
 
     add(Icons.phone_outlined, l10n.phoneNumber, request.customerPhone);
+    add(Icons.map_outlined, l10n.pickupArea, request.pickupArea);
     add(Icons.place_outlined, l10n.pickup, request.pickupAddress);
+    if (request.usesQuoteMarketplace) {
+      add(
+        Icons.car_repair_outlined,
+        l10n.vehicleCondition,
+        request.vehicleOperable
+            ? l10n.vehicleRunsAndDrives
+            : l10n.vehicleInoperable,
+      );
+      add(
+        Icons.local_shipping_outlined,
+        l10n.preferredTransportMethod,
+        request.requestedTransportMethod == 'enclosed'
+            ? l10n.enclosedTransport
+            : l10n.openTransport,
+      );
+    }
     add(Icons.notes_outlined, l10n.additionalNotes, request.notes);
 
     return Container(

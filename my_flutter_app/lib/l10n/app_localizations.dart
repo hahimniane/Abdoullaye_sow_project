@@ -6512,6 +6512,258 @@ abstract class AppLocalizations {
   /// **'Request car transport'**
   String get requestCarTransport;
 
+  /// No description provided for @chooseTransportDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a destination for the car.'**
+  String get chooseTransportDestination;
+
+  /// No description provided for @whereIsTheCarGoing.
+  ///
+  /// In en, this message translates to:
+  /// **'Where is the car going?'**
+  String get whereIsTheCarGoing;
+
+  /// No description provided for @searchDestinationCountry.
+  ///
+  /// In en, this message translates to:
+  /// **'Search destination country'**
+  String get searchDestinationCountry;
+
+  /// No description provided for @noDestinationCountriesMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No destination countries match your search.'**
+  String get noDestinationCountriesMatch;
+
+  /// No description provided for @transportBusinessesWillQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Eligible verified businesses serving this destination will receive the vehicle details and send you quotes to compare.'**
+  String get transportBusinessesWillQuote;
+
+  /// No description provided for @vehicleCondition.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle condition'**
+  String get vehicleCondition;
+
+  /// No description provided for @vehicleRunsAndDrives.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs and drives'**
+  String get vehicleRunsAndDrives;
+
+  /// No description provided for @vehicleInoperable.
+  ///
+  /// In en, this message translates to:
+  /// **'Inoperable'**
+  String get vehicleInoperable;
+
+  /// No description provided for @preferredTransportMethod.
+  ///
+  /// In en, this message translates to:
+  /// **'Preferred transport method'**
+  String get preferredTransportMethod;
+
+  /// No description provided for @openTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Open carrier'**
+  String get openTransport;
+
+  /// No description provided for @enclosedTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Enclosed carrier'**
+  String get enclosedTransport;
+
+  /// No description provided for @pickupArea.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup city, region, or postal code'**
+  String get pickupArea;
+
+  /// No description provided for @pickupAreaHint.
+  ///
+  /// In en, this message translates to:
+  /// **'For example, Bronx, NY 10467'**
+  String get pickupAreaHint;
+
+  /// No description provided for @enterPickupArea.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the pickup city, region, or postal code.'**
+  String get enterPickupArea;
+
+  /// No description provided for @flexibleTransportDates.
+  ///
+  /// In en, this message translates to:
+  /// **'My dates are flexible'**
+  String get flexibleTransportDates;
+
+  /// No description provided for @flexibleTransportDatesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Businesses may quote the best available pickup window.'**
+  String get flexibleTransportDatesSubtitle;
+
+  /// No description provided for @transportMarketplaceRequestSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Request {trackingCode} sent to eligible businesses. You can compare their quotes in your orders.'**
+  String transportMarketplaceRequestSent(Object trackingCode);
+
+  /// No description provided for @transportQuotesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Business quotes'**
+  String get transportQuotesTitle;
+
+  /// No description provided for @transportQuotesIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Compare the total price, timing, method, and terms before choosing a transporter.'**
+  String get transportQuotesIntro;
+
+  /// No description provided for @waitingForTransportQuotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for business quotes'**
+  String get waitingForTransportQuotes;
+
+  /// No description provided for @waitingForTransportQuotesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Eligible verified businesses can review the route and vehicle now. We will keep this order updated as quotes arrive.'**
+  String get waitingForTransportQuotesSubtitle;
+
+  /// No description provided for @couldNotLoadTransportQuotes.
+  ///
+  /// In en, this message translates to:
+  /// **'The business quotes could not be loaded. Try again.'**
+  String get couldNotLoadTransportQuotes;
+
+  /// No description provided for @estimatedPickup.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated pickup'**
+  String get estimatedPickup;
+
+  /// No description provided for @estimatedDelivery.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated delivery'**
+  String get estimatedDelivery;
+
+  /// No description provided for @transportMethod.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport method'**
+  String get transportMethod;
+
+  /// No description provided for @selectTransportQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose this quote'**
+  String get selectTransportQuote;
+
+  /// No description provided for @selectingTransportQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Selecting quote...'**
+  String get selectingTransportQuote;
+
+  /// No description provided for @confirmTransportQuoteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose this transporter?'**
+  String get confirmTransportQuoteTitle;
+
+  /// No description provided for @confirmTransportQuoteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose {businessName} for {price}? This closes the request to other businesses.'**
+  String confirmTransportQuoteMessage(Object businessName, Object price);
+
+  /// No description provided for @keepComparing.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep comparing'**
+  String get keepComparing;
+
+  /// No description provided for @chooseThisBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose this business'**
+  String get chooseThisBusiness;
+
+  /// No description provided for @couldNotSelectTransportQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'This quote could not be selected. Check that it is still available and try again.'**
+  String get couldNotSelectTransportQuote;
+
+  /// No description provided for @transportQuoteSelectedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Transporter selected'**
+  String get transportQuoteSelectedTitle;
+
+  /// No description provided for @transportQuoteSelectedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{businessName} was selected for {price}. Your private contact and pickup details are now available to this business.'**
+  String transportQuoteSelectedMessage(Object businessName, Object price);
+
+  /// No description provided for @transportRequestCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport request cancelled'**
+  String get transportRequestCancelled;
+
+  /// No description provided for @transportRequestCancelledSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Businesses can no longer send or revise quotes for this request.'**
+  String get transportRequestCancelledSubtitle;
+
+  /// No description provided for @cancelTransportRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel transport request'**
+  String get cancelTransportRequest;
+
+  /// No description provided for @cancellingTransportRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelling request...'**
+  String get cancellingTransportRequest;
+
+  /// No description provided for @confirmCancelTransportRequestTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel this request?'**
+  String get confirmCancelTransportRequestTitle;
+
+  /// No description provided for @confirmCancelTransportRequestMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Businesses will no longer be able to send or revise quotes.'**
+  String get confirmCancelTransportRequestMessage;
+
+  /// No description provided for @keepRequestOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep request open'**
+  String get keepRequestOpen;
+
+  /// No description provided for @couldNotCancelTransportRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'The transport request could not be cancelled. Try again.'**
+  String get couldNotCancelTransportRequest;
+
   /// No description provided for @chooseBusinessAndDestination.
   ///
   /// In en, this message translates to:
@@ -6608,7 +6860,7 @@ abstract class AppLocalizations {
   /// No description provided for @transportQuoteNoPaymentNote.
   ///
   /// In en, this message translates to:
-  /// **'No payment now — the business reviews your request and sends a price quote you can accept.'**
+  /// **'No payment now — eligible businesses send quotes and you choose which one to accept.'**
   String get transportQuoteNoPaymentNote;
 
   /// No description provided for @noTransportBusinessesYet.

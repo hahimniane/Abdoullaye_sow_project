@@ -138,9 +138,38 @@ New user registers on web → verifies email/phone → lands in CustomerConsole.
 - **Accept:** quote → pay freight → settle balance on web.
 
 ### 4.4 Car transport (Phase 3, unpaid)
-- **Options:** `listTransportBusinessOptions`.
-- **Create:** `createTransportRequest({ businessId, destinationCountryId, destinationCountryName, ownerName, carMake, carModel, carYear, customerPhone, vinNumber, pickupAddress, notes, preferredDate?(ISO) })` → `{ id, trackingCode }`.
-- **Detail/cancel** from `transportRequests`.
+- **Availability:** `listTransportBusinessOptions` supplies the eligible,
+  searchable destination-country catalog. Customers do **not** preselect a
+  business.
+- **Create marketplace request:** `createTransportRequest({
+  destinationCountryId, destinationCountryName, pickupArea, ownerName,
+  carMake, carModel, carYear, vehicleOperable, requestedTransportMethod,
+  flexibleDates, customerPhone, vinNumber, pickupAddress, notes,
+  preferredDate?(ISO) })` → `{ id, trackingCode, eligibleBusinessCount,
+  quoteDeadlineAt }`.
+- **Privacy:** the server creates one sanitized
+  `transportOpportunities/{requestId}__{businessId}` for every eligible
+  approved business. Opportunities contain the destination, coarse pickup
+  area, vehicle, and schedule preferences only. The exact address, phone,
+  owner, VIN, and notes remain on the customer-owned request until a quote is
+  selected.
+- **Business quotes:** `submitTransportQuote({ requestId, amountCents,
+  currency:"usd", transportMethod, estimatedPickupDate?,
+  estimatedDeliveryDate?, terms? })` creates/revises deterministic
+  `transportQuotes/{requestId}__{businessId}`; `withdrawTransportQuote({
+  requestId })` withdraws it. Provider identity is derived from the
+  authenticated business account.
+- **Customer decision:** subscribe to `transportQuotes where
+  requestId==<requestId>`, compare price, timing, method, terms, and expiry,
+  then call `selectTransportQuote({ requestId, quoteId })`. Selection is
+  transactional and assigns exactly one business. `cancelTransportQuoteRequest({
+  requestId })` cancels an open unselected request.
+- **Fulfillment:** the selected business advances the accepted job through the
+  server-authoritative `updateTransportFulfillmentStatus({ requestId, status })`
+  transition rules. Version 2 requests cannot be rewritten directly from a
+  business client.
+- **Compatibility:** existing assigned transport requests remain
+  `flowVersion:1`; new marketplace requests are `flowVersion:2`.
 
 ### 4.5 Parking (Phase 4)
 - **Search:** `listParkingOptions({ city, startDate(ISO), endDate(ISO), customerLatitude?, customerLongitude?, pickupRequested })` → `{ options:[…] }`.
@@ -202,7 +231,13 @@ New user registers on web → verifies email/phone → lands in CustomerConsole.
 **Barrel:** `suggestPickupAddresses{input}` · `listActiveBarrelDestinationOptions` · `createBarrelShipmentPaymentIntent{…}` · `completeBarrelShipmentPayment{shipmentId}` · `cancelPendingBarrelShipment{shipmentId}` · `createBarrelOrderPaymentIntent{…}` · `completeBarrelOrderPayment{orderId}` · `cancelPendingBarrelOrder{orderId}` · `changeBarrelShipmentDestination{shipmentId,destinationCountryId,businessId,changeRequestId,marketplaceDisclosure}` · `completeBarrelDestinationChange{shipmentId,changeRequestId}` · `cancelPendingBarrelDestinationChange{shipmentId,changeRequestId}`
 **Pools:** `createBarrelPool{…}` · `requestJoinBarrelPool{…}` · `decideBarrelPoolJoin` · `createBarrelPoolBalancePaymentIntent` · `completeBarrelPoolBalancePayment` · `completeBarrelPoolDepositPayment` · `cancelPendingBarrelPoolDeposit` · `leaveBarrelPool` · `cancelBarrelPool`
 **Freight:** `quoteFreightPickup{businessId,pickupAddress?,pickupBorough?,pickupLatitude?,pickupLongitude?}` · `createFreightShipmentPaymentIntent{…}` · `completeFreightShipmentPayment{shipmentId}` · `cancelPendingFreightShipment{shipmentId}` · `createFreightSettlementPayment{shipmentId,marketplaceDisclosure}` · `completeFreightSettlementPayment{settlementId,attemptId}`
-**Transport:** `listTransportBusinessOptions` · `createTransportRequest{businessId,destinationCountryId,destinationCountryName,ownerName,carMake,carModel,carYear,customerPhone,vinNumber,pickupAddress,notes,preferredDate?}`
+**Transport:** `listTransportBusinessOptions` ·
+`createTransportRequest{destinationCountryId,destinationCountryName,pickupArea,ownerName,carMake,carModel,carYear,vehicleOperable,requestedTransportMethod,flexibleDates,customerPhone,vinNumber,pickupAddress,notes,preferredDate?}`
+· `submitTransportQuote{requestId,amountCents,currency,transportMethod,estimatedPickupDate?,estimatedDeliveryDate?,terms?}`
+· `withdrawTransportQuote{requestId}` ·
+`selectTransportQuote{requestId,quoteId}` ·
+`cancelTransportQuoteRequest{requestId}` ·
+`updateTransportFulfillmentStatus{requestId,status}`
 **Parking:** `listParkingOptions{city,startDate,endDate,customerLatitude?,customerLongitude?,pickupRequested}` · `createParkingReservation{…}` · `completeParkingReservation{reservationId}` · `cancelPendingParkingReservation{reservationId}`
 **Wallet:** `requestWalletCardRefund`
 **Support:** `createOrOpenSupportCase(request)` · `sendSupportMessage{caseId,content,messageType,replyTo?}` · `markSupportCaseRead{caseId}` · `setSupportTyping{caseId,typing}` · `editSupportMessage` · `deleteSupportMessageForMe` · `reopenSupportCase` · `uploadSupportAttachmentMetadata`

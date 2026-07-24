@@ -22,6 +22,17 @@ class TransportRequest {
     this.pickupAddress = '',
     this.notes = '',
     this.quoteStatus = '',
+    this.flowVersion = 1,
+    this.fulfillmentStatus = '',
+    this.selectedQuoteId = '',
+    this.selectedBusinessId = '',
+    this.selectedAmountCents = 0,
+    this.currency = 'usd',
+    this.quoteCount = 0,
+    this.pickupArea = '',
+    this.vehicleOperable = true,
+    this.requestedTransportMethod = 'open',
+    this.flexibleDates = true,
   });
 
   final String id;
@@ -48,8 +59,28 @@ class TransportRequest {
   /// business sets a price, then '' (priced).
   final String quoteStatus;
 
+  /// Version 1 requests were assigned directly to one business. Version 2
+  /// requests collect marketplace quotes before the customer selects one.
+  final int flowVersion;
+  final String fulfillmentStatus;
+  final String selectedQuoteId;
+  final String selectedBusinessId;
+  final int selectedAmountCents;
+  final String currency;
+  final int quoteCount;
+  final String pickupArea;
+  final bool vehicleOperable;
+  final String requestedTransportMethod;
+  final bool flexibleDates;
+
+  bool get usesQuoteMarketplace => flowVersion >= 2;
+  bool get hasSelectedQuote =>
+      selectedQuoteId.isNotEmpty && selectedBusinessId.isNotEmpty;
+
   /// True when a customer submitted this and no price has been set yet.
-  bool get awaitingQuote => quoteStatus == 'awaitingQuote' || price <= 0;
+  bool get awaitingQuote => usesQuoteMarketplace
+      ? quoteStatus == 'collecting' && !hasSelectedQuote
+      : quoteStatus == 'awaitingQuote' || price <= 0;
 
   factory TransportRequest.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -62,6 +93,10 @@ class TransportRequest {
   }) {
     final trackingCode = data['trackingCode'];
     final carYear = data['carYear'];
+    final flowVersion = (data['flowVersion'] as num?)?.toInt() ?? 1;
+    final selectedAmountCents =
+        (data['selectedAmountCents'] as num?)?.toInt() ?? 0;
+    final legacyPrice = (data['price'] as num?)?.toDouble();
     return TransportRequest(
       id: id,
       trackingCode: trackingCode is String && trackingCode.trim().isNotEmpty
@@ -77,13 +112,16 @@ class TransportRequest {
       },
       vinNumber: (data['vinNumber'] ?? '') as String,
       destinationCountryId:
-          (data['destinationCountryId'] ?? 'guinea') as String,
+          (data['destinationCountryId'] ?? (flowVersion >= 2 ? '' : 'guinea'))
+              as String,
       destinationCountryName:
-          (data['destinationCountryName'] ?? 'Guinea') as String,
+          (data['destinationCountryName'] ?? (flowVersion >= 2 ? '' : 'Guinea'))
+              as String,
       transportDate:
           (data['transportDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      price: (data['price'] as num?)?.toDouble() ?? 0,
-      status: (data['status'] ?? 'pending') as String,
+      price: legacyPrice ?? selectedAmountCents / 100,
+      status:
+          (data['fulfillmentStatus'] ?? data['status'] ?? 'pending') as String,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       businessName: (data['businessName'] ?? '') as String,
       businessId: (data['businessId'] ?? '') as String,
@@ -92,6 +130,19 @@ class TransportRequest {
       pickupAddress: (data['pickupAddress'] ?? '') as String,
       notes: (data['notes'] ?? '') as String,
       quoteStatus: (data['quoteStatus'] ?? '') as String,
+      flowVersion: flowVersion,
+      fulfillmentStatus: (data['fulfillmentStatus'] ?? '') as String,
+      selectedQuoteId: (data['selectedQuoteId'] ?? '') as String,
+      selectedBusinessId:
+          (data['selectedBusinessId'] ?? data['businessId'] ?? '') as String,
+      selectedAmountCents: selectedAmountCents,
+      currency: (data['currency'] ?? 'usd') as String,
+      quoteCount: (data['quoteCount'] as num?)?.toInt() ?? 0,
+      pickupArea: (data['pickupArea'] ?? '') as String,
+      vehicleOperable: data['vehicleOperable'] != false,
+      requestedTransportMethod:
+          (data['requestedTransportMethod'] ?? 'open') as String,
+      flexibleDates: data['flexibleDates'] != false,
     );
   }
 
@@ -116,6 +167,19 @@ class TransportRequest {
       'pickupAddress': pickupAddress,
       'notes': notes,
       'quoteStatus': quoteStatus,
+      'flowVersion': flowVersion,
+      if (flowVersion >= 2) ...{
+        'fulfillmentStatus': fulfillmentStatus,
+        'selectedQuoteId': selectedQuoteId,
+        'selectedBusinessId': selectedBusinessId,
+        'selectedAmountCents': selectedAmountCents,
+        'currency': currency,
+        'quoteCount': quoteCount,
+        'pickupArea': pickupArea,
+        'vehicleOperable': vehicleOperable,
+        'requestedTransportMethod': requestedTransportMethod,
+        'flexibleDates': flexibleDates,
+      },
     };
   }
 
@@ -140,6 +204,17 @@ class TransportRequest {
     String? pickupAddress,
     String? notes,
     String? quoteStatus,
+    int? flowVersion,
+    String? fulfillmentStatus,
+    String? selectedQuoteId,
+    String? selectedBusinessId,
+    int? selectedAmountCents,
+    String? currency,
+    int? quoteCount,
+    String? pickupArea,
+    bool? vehicleOperable,
+    String? requestedTransportMethod,
+    bool? flexibleDates,
   }) {
     return TransportRequest(
       id: id ?? this.id,
@@ -163,6 +238,18 @@ class TransportRequest {
       pickupAddress: pickupAddress ?? this.pickupAddress,
       notes: notes ?? this.notes,
       quoteStatus: quoteStatus ?? this.quoteStatus,
+      flowVersion: flowVersion ?? this.flowVersion,
+      fulfillmentStatus: fulfillmentStatus ?? this.fulfillmentStatus,
+      selectedQuoteId: selectedQuoteId ?? this.selectedQuoteId,
+      selectedBusinessId: selectedBusinessId ?? this.selectedBusinessId,
+      selectedAmountCents: selectedAmountCents ?? this.selectedAmountCents,
+      currency: currency ?? this.currency,
+      quoteCount: quoteCount ?? this.quoteCount,
+      pickupArea: pickupArea ?? this.pickupArea,
+      vehicleOperable: vehicleOperable ?? this.vehicleOperable,
+      requestedTransportMethod:
+          requestedTransportMethod ?? this.requestedTransportMethod,
+      flexibleDates: flexibleDates ?? this.flexibleDates,
     );
   }
 }

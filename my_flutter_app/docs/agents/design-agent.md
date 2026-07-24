@@ -146,3 +146,9 @@ Return:
 - Pickup addresses are global, not New York-only. Use a fast Stripe-style
   address autocomplete as the user types, support mouse and keyboard selection,
   and preserve a clear manual-entry fallback when suggestions are unavailable.
+- Car transport is route-first quote matching: customers choose an eligible
+  destination and describe the pickup area, vehicle condition, carrier
+  preference, and timing without preselecting a business. Businesses quote from
+  a separate opportunity inbox; customers compare price, pickup/delivery
+  timing, method, terms, and expiry before choosing. Never present `$0.00` as a
+  transport price while quotes are pending.

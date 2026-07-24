@@ -3640,6 +3640,150 @@ class AppLocalizationsFr extends AppLocalizations {
   String get requestCarTransport => 'Demander le transport de voiture';
 
   @override
+  String get chooseTransportDestination =>
+      'Choisissez une destination pour la voiture.';
+
+  @override
+  String get whereIsTheCarGoing => 'Où va la voiture ?';
+
+  @override
+  String get searchDestinationCountry => 'Rechercher le pays de destination';
+
+  @override
+  String get noDestinationCountriesMatch =>
+      'Aucun pays de destination ne correspond à votre recherche.';
+
+  @override
+  String get transportBusinessesWillQuote =>
+      'Les entreprises vérifiées admissibles qui desservent cette destination recevront les détails du véhicule et vous enverront des devis à comparer.';
+
+  @override
+  String get vehicleCondition => 'État du véhicule';
+
+  @override
+  String get vehicleRunsAndDrives => 'Roule et fonctionne';
+
+  @override
+  String get vehicleInoperable => 'Non roulant';
+
+  @override
+  String get preferredTransportMethod => 'Méthode de transport préférée';
+
+  @override
+  String get openTransport => 'Transporteur ouvert';
+
+  @override
+  String get enclosedTransport => 'Transporteur fermé';
+
+  @override
+  String get pickupArea => 'Ville, région ou code postal de ramassage';
+
+  @override
+  String get pickupAreaHint => 'Par exemple, Bronx, NY 10467';
+
+  @override
+  String get enterPickupArea =>
+      'Indiquez la ville, la région ou le code postal de ramassage.';
+
+  @override
+  String get flexibleTransportDates => 'Mes dates sont flexibles';
+
+  @override
+  String get flexibleTransportDatesSubtitle =>
+      'Les entreprises peuvent proposer la meilleure fenêtre de ramassage disponible.';
+
+  @override
+  String transportMarketplaceRequestSent(Object trackingCode) {
+    return 'La demande $trackingCode a été envoyée aux entreprises admissibles. Vous pouvez comparer leurs devis dans vos commandes.';
+  }
+
+  @override
+  String get transportQuotesTitle => 'Devis des entreprises';
+
+  @override
+  String get transportQuotesIntro =>
+      'Comparez le prix total, les délais, la méthode et les conditions avant de choisir un transporteur.';
+
+  @override
+  String get waitingForTransportQuotes => 'En attente des devis';
+
+  @override
+  String get waitingForTransportQuotesSubtitle =>
+      'Les entreprises vérifiées admissibles peuvent maintenant examiner le trajet et le véhicule. Cette commande sera mise à jour à mesure que les devis arrivent.';
+
+  @override
+  String get couldNotLoadTransportQuotes =>
+      'Impossible de charger les devis des entreprises. Réessayez.';
+
+  @override
+  String get estimatedPickup => 'Ramassage estimé';
+
+  @override
+  String get estimatedDelivery => 'Livraison estimée';
+
+  @override
+  String get transportMethod => 'Méthode de transport';
+
+  @override
+  String get selectTransportQuote => 'Choisir ce devis';
+
+  @override
+  String get selectingTransportQuote => 'Sélection du devis...';
+
+  @override
+  String get confirmTransportQuoteTitle => 'Choisir ce transporteur ?';
+
+  @override
+  String confirmTransportQuoteMessage(Object businessName, Object price) {
+    return 'Choisir $businessName pour $price ? Cette action ferme la demande aux autres entreprises.';
+  }
+
+  @override
+  String get keepComparing => 'Continuer à comparer';
+
+  @override
+  String get chooseThisBusiness => 'Choisir cette entreprise';
+
+  @override
+  String get couldNotSelectTransportQuote =>
+      'Impossible de sélectionner ce devis. Vérifiez qu’il est encore disponible et réessayez.';
+
+  @override
+  String get transportQuoteSelectedTitle => 'Transporteur sélectionné';
+
+  @override
+  String transportQuoteSelectedMessage(Object businessName, Object price) {
+    return '$businessName a été sélectionnée pour $price. Vos coordonnées privées et les détails du ramassage sont maintenant accessibles à cette entreprise.';
+  }
+
+  @override
+  String get transportRequestCancelled => 'Demande de transport annulée';
+
+  @override
+  String get transportRequestCancelledSubtitle =>
+      'Les entreprises ne peuvent plus envoyer ni modifier de devis pour cette demande.';
+
+  @override
+  String get cancelTransportRequest => 'Annuler la demande de transport';
+
+  @override
+  String get cancellingTransportRequest => 'Annulation de la demande...';
+
+  @override
+  String get confirmCancelTransportRequestTitle => 'Annuler cette demande ?';
+
+  @override
+  String get confirmCancelTransportRequestMessage =>
+      'Les entreprises ne pourront plus envoyer ni modifier de devis.';
+
+  @override
+  String get keepRequestOpen => 'Garder la demande ouverte';
+
+  @override
+  String get couldNotCancelTransportRequest =>
+      'Impossible d’annuler la demande de transport. Réessayez.';
+
+  @override
   String get chooseBusinessAndDestination =>
       'Choisissez une entreprise et une destination.';
 
@@ -3696,7 +3840,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get transportQuoteNoPaymentNote =>
-      'Aucun paiement maintenant — l’entreprise examine votre demande et envoie un devis que vous pourrez accepter.';
+      'Aucun paiement maintenant — les entreprises admissibles envoient des devis et vous choisissez celui à accepter.';
 
   @override
   String get noTransportBusinessesYet =>

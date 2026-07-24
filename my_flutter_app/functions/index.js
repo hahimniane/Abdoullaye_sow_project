@@ -123,6 +123,10 @@ const DEFAULT_BUSINESS_ID = "keren_auto_sales";
 const DEFAULT_BUSINESS_NAME = "Keren";
 const MAX_BARREL_QUANTITY = 20;
 const MAX_BARREL_ORDER_LINES = 10;
+const TRANSPORT_QUOTE_WINDOW_DAYS = 7;
+const MAX_TRANSPORT_QUOTE_PROVIDERS = 400;
+const MAX_TRANSPORT_QUOTE_CENTS = 100000000;
+const TRANSPORT_QUOTE_METHODS = new Set(["open", "enclosed"]);
 const VALID_BUSINESS_SERVICES = [
   "barrelShipping",
   "sharedBarrels",
@@ -1825,9 +1829,241 @@ exports.listTransportBusinessOptions = onCall(
     },
 );
 
-// Creates a customer car-transport request scoped to a chosen business that
-// offers the service. No payment at request time — the request lands as
-// "pending" with quoteStatus "awaitingQuote" and the business sets the price.
+function transportMarketplaceDocumentId(requestId, businessId) {
+  return `${requestId}__${businessId}`;
+}
+
+function transportQuoteBusinessId(data, requestId) {
+  const providedBusinessId = String(data?.businessId || "").trim();
+  const quoteId = String(data?.quoteId || "").trim();
+  if (providedBusinessId) {
+    const businessId =
+      requireTransportDocumentId(providedBusinessId, "Business");
+    if (quoteId &&
+        quoteId !== transportMarketplaceDocumentId(requestId, businessId)) {
+      throw new HttpsError(
+          "invalid-argument",
+          "Transport quote and business do not match",
+      );
+    }
+    return businessId;
+  }
+  const prefix = `${requestId}__`;
+  if (!quoteId.startsWith(prefix)) {
+    throw new HttpsError("invalid-argument", "Transport quote is invalid");
+  }
+  return requireTransportDocumentId(
+      quoteId.slice(prefix.length),
+      "Business",
+  );
+}
+
+async function requireTransportManagerBusinessId(uid, requestedBusinessId) {
+  const user = await getUserProfile(uid);
+  const provided = String(requestedBusinessId || "").trim();
+  const businessId = user.role === "admin" ?
+    requireTransportDocumentId(provided, "Business") :
+    String(user.businessId || "").trim();
+  if (!businessId ||
+      (provided && provided !== businessId) ||
+      !canManageBusiness(user, businessId)) {
+    throw new HttpsError(
+        "permission-denied",
+        "Business transport manager access required",
+    );
+  }
+  if (!hasBusinessPermission(user, "transport")) {
+    throw new HttpsError(
+        "permission-denied",
+        "Transport permission is required for this staff account",
+    );
+  }
+  return businessId;
+}
+
+function requireTransportDocumentId(value, fieldName) {
+  const id = String(value || "").trim();
+  if (!id || id.length > 128 || id.includes("/")) {
+    throw new HttpsError(
+        "invalid-argument",
+        `${fieldName} is invalid`,
+    );
+  }
+  return id;
+}
+
+function transportText(data, field, label, maxLength, required = false) {
+  const value = String(data?.[field] || "").trim();
+  if (required && !value) {
+    throw new HttpsError("invalid-argument", `${label} is required`);
+  }
+  if (value.length > maxLength) {
+    throw new HttpsError(
+        "invalid-argument",
+        `${label} must be ${maxLength} characters or fewer`,
+    );
+  }
+  return value;
+}
+
+function requireSanitizedTransportPickupArea(value) {
+  const streetNumberPattern = /\d+\s+/;
+  const streetTypePattern =
+    /\b(?:avenue|ave|boulevard|blvd|drive|dr|lane|ln|road|rd|street|st|way)\b/i;
+  const unitPattern = /\b(?:apartment|apt|suite|unit)\s*[#\w-]*/i;
+  if (/[\r\n]/.test(value) ||
+      (streetNumberPattern.test(value) && streetTypePattern.test(value)) ||
+      unitPattern.test(value)) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Pickup area must contain only city, state, province, and postal code",
+    );
+  }
+}
+
+function parseTransportPreferredDate(value) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Preferred transport date is invalid",
+    );
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (parsed.getTime() < today.getTime()) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Preferred transport date cannot be in the past",
+    );
+  }
+  return FirestoreTimestamp.fromDate(parsed);
+}
+
+function parseTransportQuoteDates(data) {
+  const pickupRaw = data?.estimatedPickupDate;
+  const deliveryRaw = data?.estimatedDeliveryDate;
+  if (!pickupRaw && !deliveryRaw) {
+    return {estimatedPickupDate: null, estimatedDeliveryDate: null};
+  }
+  if (!pickupRaw || !deliveryRaw) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Estimated pickup and delivery dates must be provided together",
+    );
+  }
+  const pickup = new Date(pickupRaw);
+  const delivery = new Date(deliveryRaw);
+  if (Number.isNaN(pickup.getTime()) ||
+      Number.isNaN(delivery.getTime())) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Estimated pickup or delivery date is invalid",
+    );
+  }
+  if (pickup.getTime() <= Date.now()) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Estimated pickup date must be in the future",
+    );
+  }
+  if (delivery.getTime() < pickup.getTime()) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Estimated delivery date cannot be before pickup",
+    );
+  }
+  return {
+    estimatedPickupDate: FirestoreTimestamp.fromDate(pickup),
+    estimatedDeliveryDate: FirestoreTimestamp.fromDate(delivery),
+  };
+}
+
+function assertTransportProviderEligible(
+    businessDoc,
+    destinationDoc,
+    businessId,
+) {
+  if (!businessDoc.exists || businessDoc.data()?.status !== "approved") {
+    throw new HttpsError(
+        "failed-precondition",
+        "This transport business is not approved",
+    );
+  }
+  const business = businessDoc.data();
+  requireBusinessService(
+      business,
+      "carTransport",
+      "This business is not offering car transport right now.",
+  );
+  if (!destinationDoc.exists ||
+      !carTransportDestinationAvailable(destinationDoc.data())) {
+    throw new HttpsError(
+        "failed-precondition",
+        "This business no longer serves the requested destination",
+    );
+  }
+  return {
+    businessId,
+    business,
+    country: destinationDoc.data(),
+  };
+}
+
+async function eligibleTransportProviders(db, destinationCountryId) {
+  const businesses = await db.collection("businesses")
+      .where("status", "==", "approved")
+      .get();
+  const candidates = businesses.docs.filter((businessDoc) =>
+    normalizeBusinessServices(
+        businessDoc.data().enabledServices,
+    ).includes("carTransport"),
+  );
+  const destinations = await Promise.all(candidates.map((businessDoc) =>
+    businessDoc.ref.collection("destinationCountries")
+        .doc(destinationCountryId)
+        .get(),
+  ));
+  return candidates.flatMap((businessDoc, index) => {
+    const destinationDoc = destinations[index];
+    if (!destinationDoc.exists ||
+        !carTransportDestinationAvailable(destinationDoc.data())) {
+      return [];
+    }
+    return [{
+      businessId: businessDoc.id,
+      business: businessDoc.data(),
+      country: destinationDoc.data(),
+    }];
+  });
+}
+
+function assertCollectingTransportRequest(data) {
+  if (Number(data.flowVersion || 1) !== 2) {
+    throw new HttpsError(
+        "failed-precondition",
+        "This action is only available for marketplace transport requests",
+    );
+  }
+  if (data.quoteStatus !== "collecting" ||
+      data.status !== "quote_requested") {
+    throw new HttpsError(
+        "failed-precondition",
+        "This transport request is closed and no longer collecting quotes",
+    );
+  }
+  if (toMillis(data.quoteDeadlineAt) <= Date.now()) {
+    throw new HttpsError(
+        "failed-precondition",
+        "This transport quote request has expired",
+    );
+  }
+}
+
+// Creates an unassigned marketplace request and one sanitized, deterministic
+// opportunity for every currently eligible transport business. Existing v1
+// records remain assigned directly to one business and are not modified here.
 exports.createTransportRequest = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
@@ -1836,85 +2072,102 @@ exports.createTransportRequest = onCall(
     async (request) => {
       const uid = requireAuth(request);
       const data = request.data || {};
-
-      const businessId = String(data.businessId || "").trim();
-      if (!businessId) {
-        throw new HttpsError(
-            "invalid-argument",
-            "Select a business that offers car transport.",
-        );
-      }
-
-      const businessDoc = await admin.firestore()
-          .collection("businesses")
-          .doc(businessId)
-          .get();
-      if (!businessDoc.exists || businessDoc.data().status !== "approved") {
-        throw new HttpsError(
-            "failed-precondition",
-            "This business is not available right now.",
-        );
-      }
-      const business = businessDoc.data();
-      requireBusinessService(
-          business,
-          "carTransport",
-          "This business is not offering car transport right now.",
-      );
-
       const destinationCountryId =
-          String(data.destinationCountryId || "").trim();
-      if (!destinationCountryId) {
+        requireTransportDocumentId(
+            data.destinationCountryId,
+            "Destination country",
+        );
+      const ownerName =
+        transportText(data, "ownerName", "Owner name", 120, true);
+      const carMake =
+        transportText(data, "carMake", "Car make", 80, true);
+      const carModel =
+        transportText(data, "carModel", "Car model", 80, true);
+      const carYear =
+        transportText(data, "carYear", "Car year", 4, true);
+      const year = Number(carYear);
+      const currentYear = new Date().getFullYear();
+      if (!Number.isInteger(year) || year < 1886 || year > currentYear + 1) {
         throw new HttpsError(
             "invalid-argument",
-            "Choose a destination for this transport request.",
+            "Car year is invalid",
         );
       }
-      let destinationCountryName =
-          String(data.destinationCountryName || "").trim();
-      const destDoc = await businessDoc.ref
-          .collection("destinationCountries")
-          .doc(destinationCountryId)
-          .get();
-      if (!destDoc.exists ||
-          !carTransportDestinationAvailable(destDoc.data())) {
+      const vinNumber =
+        transportText(data, "vinNumber", "VIN or chassis number", 32)
+            .toUpperCase();
+      if (vinNumber && !/^[A-Z0-9 -]{4,32}$/.test(vinNumber)) {
+        throw new HttpsError(
+            "invalid-argument",
+            "VIN or chassis number contains unsupported characters",
+        );
+      }
+      const customerPhone =
+        transportText(data, "customerPhone", "Contact phone", 40, true);
+      requireValidPhoneNumber(customerPhone, "Contact phone");
+      const pickupArea =
+        transportText(data, "pickupArea", "Pickup area", 160, true);
+      requireSanitizedTransportPickupArea(pickupArea);
+      const pickupAddress =
+        transportText(data, "pickupAddress", "Pickup address", 500);
+      const notes = transportText(data, "notes", "Notes", 2000);
+      if (typeof data.vehicleOperable !== "boolean") {
+        throw new HttpsError(
+            "invalid-argument",
+            "Vehicle operable must be true or false",
+        );
+      }
+      const vehicleOperable = data.vehicleOperable;
+      const requestedTransportMethod =
+        String(data.requestedTransportMethod || "").trim().toLowerCase();
+      if (!TRANSPORT_QUOTE_METHODS.has(requestedTransportMethod)) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Requested transport method must be open or enclosed",
+        );
+      }
+      if (typeof data.flexibleDates !== "boolean") {
+        throw new HttpsError(
+            "invalid-argument",
+            "Flexible dates must be true or false",
+        );
+      }
+      const flexibleDates = data.flexibleDates;
+      const preferredDate = parseTransportPreferredDate(data.preferredDate);
+
+      const db = admin.firestore();
+      const providers =
+        await eligibleTransportProviders(db, destinationCountryId);
+      if (providers.length === 0) {
         throw new HttpsError(
             "failed-precondition",
-            "That destination is not available for car transport with " +
-              "this business.",
+            "No approved businesses currently serve this destination",
         );
       }
-      destinationCountryName =
-        destDoc.data().name || destinationCountryName || destinationCountryId;
-
-      const ownerName = String(data.ownerName || "").trim();
-      const carMake = String(data.carMake || "").trim();
-      const carModel = String(data.carModel || "").trim();
-      const carYear = String(data.carYear || "").trim();
-      const vinNumber = String(data.vinNumber || "").trim();
-      const customerPhone = String(data.customerPhone || "").trim();
-      const pickupAddress = String(data.pickupAddress || "").trim();
-      const notes = String(data.notes || "").trim();
-
-      if (!ownerName || !carMake || !carModel || !carYear || !customerPhone) {
+      if (providers.length > MAX_TRANSPORT_QUOTE_PROVIDERS) {
         throw new HttpsError(
-            "invalid-argument",
-            "Fill in the owner, car make/model/year, and a contact phone.",
+            "resource-exhausted",
+            "Too many transport providers matched this request",
         );
-      }
-
-      let preferredDate = null;
-      if (data.preferredDate) {
-        const parsed = new Date(data.preferredDate);
-        if (!Number.isNaN(parsed.getTime())) {
-          preferredDate = FirestoreTimestamp.fromDate(parsed);
-        }
       }
 
       const trackingCode =
           await generateTrackingCode("TR", "transportRequests");
+      const requestRef = db.collection("transportRequests").doc();
+      const eligibleBusinessIds =
+        providers.map((provider) => provider.businessId);
+      const destinationCountryName = String(
+          providers[0].country.name ||
+          data.destinationCountryName ||
+          destinationCountryId,
+      ).trim();
+      const quoteDeadlineAt = FirestoreTimestamp.fromMillis(
+          Date.now() +
+          TRANSPORT_QUOTE_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+      );
       const now = FirestoreFieldValue.serverTimestamp();
       const docData = {
+        flowVersion: 2,
         trackingCode,
         ownerName,
         carMake,
@@ -1926,24 +2179,563 @@ exports.createTransportRequest = onCall(
         transportDate: preferredDate || now,
         preferredDate: preferredDate || null,
         price: 0,
-        quoteStatus: "awaitingQuote",
-        status: "pending",
-        businessId,
-        businessName: business.name || businessId,
+        amountCents: 0,
+        currency: SHIPMENT_CURRENCY,
+        quoteStatus: "collecting",
+        status: "quote_requested",
+        fulfillmentStatus: "not_started",
+        businessId: "",
+        businessName: "",
         customerUid: uid,
         customerPhone,
+        pickupArea,
         pickupAddress,
         notes,
-        source: "customer",
+        vehicleOperable,
+        requestedTransportMethod,
+        flexibleDates,
+        source: "customerMarketplace",
+        eligibleBusinessIds,
+        eligibleBusinessCount: eligibleBusinessIds.length,
+        quoteDeadlineAt,
+        selectedQuoteId: "",
+        selectedBusinessId: "",
+        selectedBusinessName: "",
+        selectedAmountCents: 0,
         createdAt: now,
         updatedAt: now,
       };
+      const batch = db.batch();
+      batch.create(requestRef, docData);
+      providers.forEach((provider) => {
+        const opportunityId = transportMarketplaceDocumentId(
+            requestRef.id,
+            provider.businessId,
+        );
+        const opportunityRef =
+          db.collection("transportOpportunities").doc(opportunityId);
+        batch.create(opportunityRef, {
+          flowVersion: 2,
+          requestId: requestRef.id,
+          opportunityId,
+          trackingCode,
+          businessId: provider.businessId,
+          businessName:
+            String(provider.business.name || provider.businessId).trim(),
+          destinationCountryId,
+          destinationCountryName,
+          carMake,
+          carModel,
+          carYear,
+          pickupArea,
+          vehicleOperable,
+          requestedTransportMethod,
+          flexibleDates,
+          preferredDate: preferredDate || null,
+          status: "open",
+          expiresAt: quoteDeadlineAt,
+          createdAt: now,
+          updatedAt: now,
+        });
+      });
+      await batch.commit();
 
-      const ref = await admin.firestore()
-          .collection("transportRequests")
-          .add(docData);
+      return {
+        id: requestRef.id,
+        trackingCode,
+        eligibleBusinessCount: eligibleBusinessIds.length,
+        quoteDeadlineAt: quoteDeadlineAt.toDate().toISOString(),
+      };
+    },
+);
 
-      return {id: ref.id, trackingCode};
+exports.submitTransportQuote = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const requestId =
+        requireTransportDocumentId(data.requestId, "Transport request");
+      const businessId =
+        await requireTransportManagerBusinessId(uid, data.businessId);
+
+      const amountCents = Number(data.amountCents);
+      if (!Number.isSafeInteger(amountCents) ||
+          amountCents <= 0 ||
+          amountCents > MAX_TRANSPORT_QUOTE_CENTS) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Quote amount must be a positive integer amount in cents",
+        );
+      }
+      const currency = String(data.currency || "").trim().toLowerCase();
+      if (currency !== SHIPMENT_CURRENCY) {
+        throw new HttpsError(
+            "invalid-argument",
+            `Transport quotes must use ${SHIPMENT_CURRENCY.toUpperCase()}`,
+        );
+      }
+      const transportMethod =
+        String(data.transportMethod || "").trim().toLowerCase();
+      if (!TRANSPORT_QUOTE_METHODS.has(transportMethod)) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Transport method must be open or enclosed",
+        );
+      }
+      const terms = transportText(data, "terms", "Quote terms", 1000);
+      const quoteDates = parseTransportQuoteDates(data);
+
+      const db = admin.firestore();
+      const requestRef = db.collection("transportRequests").doc(requestId);
+      const marketplaceId =
+        transportMarketplaceDocumentId(requestId, businessId);
+      const opportunityRef =
+        db.collection("transportOpportunities").doc(marketplaceId);
+      const quoteRef = db.collection("transportQuotes").doc(marketplaceId);
+      const businessRef = db.collection("businesses").doc(businessId);
+      const result = await db.runTransaction(async (transaction) => {
+        const [requestDoc, opportunityDoc, existingQuote, businessDoc] =
+          await Promise.all([
+            transaction.get(requestRef),
+            transaction.get(opportunityRef),
+            transaction.get(quoteRef),
+            transaction.get(businessRef),
+          ]);
+        if (!requestDoc.exists) {
+          throw new HttpsError(
+              "not-found",
+              "Transport request not found",
+          );
+        }
+        const requestData = requestDoc.data();
+        assertCollectingTransportRequest(requestData);
+        if (!opportunityDoc.exists ||
+            opportunityDoc.data().businessId !== businessId) {
+          throw new HttpsError(
+              "not-found",
+              "Transport opportunity not found",
+          );
+        }
+        const destinationRef = businessRef.collection("destinationCountries")
+            .doc(requestData.destinationCountryId);
+        const destinationDoc = await transaction.get(destinationRef);
+        const provider = assertTransportProviderEligible(
+            businessDoc,
+            destinationDoc,
+            businessId,
+        );
+        if (opportunityDoc.data().status === "cancelled" ||
+            opportunityDoc.data().status === "closed" ||
+            toMillis(opportunityDoc.data().expiresAt) <= Date.now()) {
+          throw new HttpsError(
+              "failed-precondition",
+              "This transport opportunity is closed",
+          );
+        }
+
+        const previous = existingQuote.exists ? existingQuote.data() : {};
+        const revision = Number(previous.revision || 0) + 1;
+        const now = FirestoreFieldValue.serverTimestamp();
+        transaction.set(quoteRef, {
+          flowVersion: 2,
+          requestId,
+          opportunityId: marketplaceId,
+          businessId,
+          businessName:
+            String(provider.business.name || businessId).trim(),
+          amountCents,
+          currency,
+          transportMethod,
+          estimatedPickupDate: quoteDates.estimatedPickupDate,
+          estimatedDeliveryDate: quoteDates.estimatedDeliveryDate,
+          terms,
+          status: "submitted",
+          revision,
+          expiresAt: requestData.quoteDeadlineAt,
+          createdAt: previous.createdAt || now,
+          submittedAt: now,
+          updatedAt: now,
+        });
+        transaction.update(opportunityRef, {
+          status: "quoted",
+          quoteId: quoteRef.id,
+          quotedAt: now,
+          updatedAt: now,
+        });
+        return {revision};
+      });
+
+      return {
+        success: true,
+        quoteId: quoteRef.id,
+        requestId,
+        businessId,
+        revision: result.revision,
+      };
+    },
+);
+
+exports.withdrawTransportQuote = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const requestId =
+        requireTransportDocumentId(data.requestId, "Transport request");
+      const businessId =
+        await requireTransportManagerBusinessId(uid, data.businessId);
+
+      const db = admin.firestore();
+      const requestRef = db.collection("transportRequests").doc(requestId);
+      const marketplaceId =
+        transportMarketplaceDocumentId(requestId, businessId);
+      const opportunityRef =
+        db.collection("transportOpportunities").doc(marketplaceId);
+      const quoteRef = db.collection("transportQuotes").doc(marketplaceId);
+      const businessRef = db.collection("businesses").doc(businessId);
+      await db.runTransaction(async (transaction) => {
+        const [requestDoc, opportunityDoc, quoteDoc, businessDoc] =
+          await Promise.all([
+            transaction.get(requestRef),
+            transaction.get(opportunityRef),
+            transaction.get(quoteRef),
+            transaction.get(businessRef),
+          ]);
+        if (!requestDoc.exists) {
+          throw new HttpsError("not-found", "Transport request not found");
+        }
+        if (!opportunityDoc.exists ||
+            opportunityDoc.data().businessId !== businessId) {
+          throw new HttpsError("not-found", "Transport opportunity not found");
+        }
+        if (!quoteDoc.exists) {
+          throw new HttpsError("not-found", "Transport quote not found");
+        }
+        if (quoteDoc.data().status === "withdrawn") return;
+        const requestData = requestDoc.data();
+        assertCollectingTransportRequest(requestData);
+        const destinationDoc = await transaction.get(
+            businessRef.collection("destinationCountries")
+                .doc(requestData.destinationCountryId),
+        );
+        assertTransportProviderEligible(
+            businessDoc,
+            destinationDoc,
+            businessId,
+        );
+        const now = FirestoreFieldValue.serverTimestamp();
+        transaction.update(quoteRef, {
+          status: "withdrawn",
+          withdrawnAt: now,
+          updatedAt: now,
+        });
+        transaction.update(opportunityRef, {
+          status: "open",
+          quoteId: FirestoreFieldValue.delete(),
+          quotedAt: FirestoreFieldValue.delete(),
+          updatedAt: now,
+        });
+      });
+      return {success: true, quoteId: quoteRef.id};
+    },
+);
+
+exports.selectTransportQuote = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const requestId =
+        requireTransportDocumentId(data.requestId, "Transport request");
+      const businessId = transportQuoteBusinessId(data, requestId);
+      const db = admin.firestore();
+      const requestRef = db.collection("transportRequests").doc(requestId);
+      const marketplaceId =
+        transportMarketplaceDocumentId(requestId, businessId);
+      const quoteRef = db.collection("transportQuotes").doc(marketplaceId);
+      const businessRef = db.collection("businesses").doc(businessId);
+
+      const selected = await db.runTransaction(async (transaction) => {
+        const requestDoc = await transaction.get(requestRef);
+        if (!requestDoc.exists) {
+          throw new HttpsError("not-found", "Transport request not found");
+        }
+        const requestData = requestDoc.data();
+        if (requestData.customerUid !== uid) {
+          throw new HttpsError(
+              "permission-denied",
+              "Only the customer can select a transport quote",
+          );
+        }
+        if (requestData.quoteStatus === "selected") {
+          if (requestData.selectedQuoteId === quoteRef.id) {
+            return {
+              quoteId: quoteRef.id,
+              businessId: requestData.selectedBusinessId,
+              amountCents: requestData.selectedAmountCents,
+              alreadySelected: true,
+            };
+          }
+          throw new HttpsError(
+              "failed-precondition",
+              "A different transport quote was already selected",
+          );
+        }
+        assertCollectingTransportRequest(requestData);
+        const [quoteDoc, businessDoc, destinationDoc] = await Promise.all([
+          transaction.get(quoteRef),
+          transaction.get(businessRef),
+          transaction.get(
+              businessRef.collection("destinationCountries")
+                  .doc(requestData.destinationCountryId),
+          ),
+        ]);
+        if (!quoteDoc.exists ||
+            quoteDoc.data().requestId !== requestId ||
+            quoteDoc.data().businessId !== businessId) {
+          throw new HttpsError("not-found", "Transport quote not found");
+        }
+        const quote = quoteDoc.data();
+        if (quote.status !== "submitted" ||
+            toMillis(quote.expiresAt) <= Date.now()) {
+          throw new HttpsError(
+              "failed-precondition",
+              "This transport quote is unavailable or expired",
+          );
+        }
+        const provider = assertTransportProviderEligible(
+            businessDoc,
+            destinationDoc,
+            businessId,
+        );
+        const eligibleBusinessIds =
+          Array.isArray(requestData.eligibleBusinessIds) ?
+            requestData.eligibleBusinessIds :
+            [];
+        if (!eligibleBusinessIds.includes(businessId)) {
+          throw new HttpsError(
+              "failed-precondition",
+              "This business was not invited to quote",
+          );
+        }
+        const now = FirestoreFieldValue.serverTimestamp();
+        transaction.update(requestRef, {
+          quoteStatus: "selected",
+          status: "pending",
+          fulfillmentStatus: "pending",
+          businessId,
+          businessName:
+            String(provider.business.name || businessId).trim(),
+          selectedQuoteId: quoteRef.id,
+          selectedBusinessId: businessId,
+          selectedBusinessName:
+            String(provider.business.name || businessId).trim(),
+          selectedAmountCents: quote.amountCents,
+          amountCents: quote.amountCents,
+          currency: quote.currency,
+          price: dollarsFromCents(quote.amountCents),
+          transportMethod: quote.transportMethod,
+          estimatedPickupDate: quote.estimatedPickupDate || null,
+          estimatedDeliveryDate: quote.estimatedDeliveryDate || null,
+          quoteTerms: quote.terms || "",
+          selectedAt: now,
+          updatedAt: now,
+        });
+        transaction.update(quoteRef, {
+          status: "selected",
+          selectedAt: now,
+          updatedAt: now,
+        });
+        eligibleBusinessIds.forEach((eligibleBusinessId) => {
+          const opportunityId = transportMarketplaceDocumentId(
+              requestId,
+              eligibleBusinessId,
+          );
+          transaction.update(
+              db.collection("transportOpportunities").doc(opportunityId),
+              {
+                status: eligibleBusinessId === businessId ?
+                  "selected" :
+                  "closed",
+                updatedAt: now,
+              },
+          );
+        });
+        return {
+          quoteId: quoteRef.id,
+          businessId,
+          amountCents: quote.amountCents,
+          alreadySelected: false,
+        };
+      });
+
+      return {success: true, requestId, ...selected};
+    },
+);
+
+exports.cancelTransportQuoteRequest = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const requestId = requireTransportDocumentId(
+          request.data?.requestId,
+          "Transport request",
+      );
+      const db = admin.firestore();
+      const requestRef = db.collection("transportRequests").doc(requestId);
+      const result = await db.runTransaction(async (transaction) => {
+        const requestDoc = await transaction.get(requestRef);
+        if (!requestDoc.exists) {
+          throw new HttpsError("not-found", "Transport request not found");
+        }
+        const requestData = requestDoc.data();
+        if (requestData.customerUid !== uid) {
+          throw new HttpsError(
+              "permission-denied",
+              "Only the customer can cancel this transport request",
+          );
+        }
+        if (Number(requestData.flowVersion || 1) !== 2) {
+          throw new HttpsError(
+              "failed-precondition",
+              "This is not a marketplace transport request",
+          );
+        }
+        if (requestData.quoteStatus === "cancelled") {
+          return {alreadyCancelled: true};
+        }
+        if (requestData.quoteStatus !== "collecting" ||
+            requestData.status !== "quote_requested") {
+          throw new HttpsError(
+              "failed-precondition",
+              "This transport request can no longer be cancelled here",
+          );
+        }
+        const eligibleBusinessIds =
+          Array.isArray(requestData.eligibleBusinessIds) ?
+            requestData.eligibleBusinessIds :
+            [];
+        const now = FirestoreFieldValue.serverTimestamp();
+        transaction.update(requestRef, {
+          quoteStatus: "cancelled",
+          status: "cancelled",
+          fulfillmentStatus: "cancelled",
+          cancelledAt: now,
+          updatedAt: now,
+        });
+        eligibleBusinessIds.forEach((businessId) => {
+          const opportunityId =
+            transportMarketplaceDocumentId(requestId, businessId);
+          transaction.update(
+              db.collection("transportOpportunities").doc(opportunityId),
+              {status: "cancelled", updatedAt: now},
+          );
+        });
+        return {alreadyCancelled: false};
+      });
+      return {success: true, requestId, ...result};
+    },
+);
+
+exports.updateTransportFulfillmentStatus = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const requestId =
+        requireTransportDocumentId(data.requestId, "Transport request");
+      const nextStatus = String(data.status || "").trim().toLowerCase();
+      const allowedStatuses = new Set([
+        "scheduled",
+        "in_transit",
+        "delivered",
+        "cancelled",
+      ]);
+      if (!allowedStatuses.has(nextStatus)) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Transport status is invalid",
+        );
+      }
+      const businessId =
+        await requireTransportManagerBusinessId(uid, data.businessId);
+      const db = admin.firestore();
+      const requestRef = db.collection("transportRequests").doc(requestId);
+      const result = await db.runTransaction(async (transaction) => {
+        const requestDoc = await transaction.get(requestRef);
+        if (!requestDoc.exists) {
+          throw new HttpsError("not-found", "Transport request not found");
+        }
+        const requestData = requestDoc.data();
+        if (Number(requestData.flowVersion || 1) !== 2 ||
+            requestData.quoteStatus !== "selected") {
+          throw new HttpsError(
+              "failed-precondition",
+              "This is not a selected marketplace transport request",
+          );
+        }
+        if (requestData.selectedBusinessId !== businessId ||
+            requestData.businessId !== businessId) {
+          throw new HttpsError(
+              "permission-denied",
+              "Only the selected transport business can update this request",
+          );
+        }
+        const currentStatus = String(
+            requestData.fulfillmentStatus || requestData.status || "",
+        );
+        if (currentStatus === nextStatus) {
+          return {previousStatus: currentStatus, alreadyUpdated: true};
+        }
+        const transitions = {
+          pending: new Set(["scheduled", "in_transit", "cancelled"]),
+          scheduled: new Set(["in_transit", "cancelled"]),
+          in_transit: new Set(["delivered"]),
+          delivered: new Set(),
+          cancelled: new Set(),
+        };
+        const allowedNext = transitions[currentStatus];
+        if (!allowedNext || !allowedNext.has(nextStatus)) {
+          throw new HttpsError(
+              "failed-precondition",
+              `Transport cannot move from ${currentStatus} to ${nextStatus}`,
+          );
+        }
+        const now = FirestoreFieldValue.serverTimestamp();
+        transaction.update(requestRef, {
+          status: nextStatus,
+          fulfillmentStatus: nextStatus,
+          statusUpdatedAt: now,
+          statusUpdatedBy: uid,
+          updatedAt: now,
+          ...(nextStatus === "delivered" ? {deliveredAt: now} : {}),
+          ...(nextStatus === "cancelled" ? {cancelledAt: now} : {}),
+        });
+        return {previousStatus: currentStatus, alreadyUpdated: false};
+      });
+      return {
+        success: true,
+        requestId,
+        businessId,
+        status: nextStatus,
+        ...result,
+      };
     },
 );
 

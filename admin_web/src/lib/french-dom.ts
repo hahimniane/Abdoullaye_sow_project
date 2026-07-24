@@ -313,10 +313,216 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Start typing a New York pickup address":
     "Commencez à saisir une adresse de collecte à New York",
   "The request timed out. Try again.": "La demande a expiré. Réessayez.",
+  "Your request is open for quotes":
+    "Votre demande est ouverte aux devis",
+  "Eligible approved businesses serving this route can now review the vehicle and send you a quote.":
+    "Les entreprises approuvées admissibles qui desservent cet itinéraire peuvent maintenant examiner le véhicule et vous envoyer un devis.",
+  "Car transport quotes": "Devis de transport de véhicule",
+  "Tell us about the route and vehicle":
+    "Décrivez-nous l’itinéraire et le véhicule",
+  "Complete one request. Eligible approved businesses will send prices and timing for you to compare.":
+    "Remplissez une seule demande. Les entreprises approuvées admissibles vous enverront leurs tarifs et délais à comparer.",
+  Route: "Itinéraire",
+  "Where is the vehicle now, and which country is it going to?":
+    "Où se trouve le véhicule maintenant et vers quel pays va-t-il ?",
+  "Pickup area": "Zone de collecte",
+  "City, state or province, postal code":
+    "Ville, État ou province, code postal",
+  "Businesses see this general area when preparing quotes.":
+    "Les entreprises voient cette zone générale lorsqu’elles préparent leurs devis.",
+  "Exact pickup address (optional)":
+    "Adresse exacte de collecte (facultatif)",
+  "Ready for carrier matching":
+    "Prêt pour la mise en relation avec des transporteurs",
+  "Your request will be shared only with eligible approved businesses serving this route.":
+    "Votre demande sera partagée uniquement avec les entreprises approuvées admissibles qui desservent cet itinéraire.",
+  "These details help businesses prepare an accurate quote.":
+    "Ces renseignements aident les entreprises à préparer un devis précis.",
+  "Can the vehicle be driven?": "Le véhicule peut-il rouler ?",
+  "Yes, it runs": "Oui, il roule",
+  "No, it needs assistance": "Non, il nécessite une assistance",
+  "Preferences and contact": "Préférences et coordonnées",
+  "Tell businesses when and how you would like to move it.":
+    "Indiquez aux entreprises quand et comment vous souhaitez le transporter.",
+  "Transport method": "Mode de transport",
+  "Open transport": "Transport ouvert",
+  "Enclosed transport": "Transport fermé",
+  "Preferred pickup date (optional)":
+    "Date de collecte souhaitée (facultatif)",
+  "My dates are flexible": "Mes dates sont flexibles",
+  "Businesses may suggest a nearby pickup date.":
+    "Les entreprises peuvent proposer une date de collecte proche.",
+  "Notes for carriers (optional)":
+    "Notes pour les transporteurs (facultatif)",
+  "Share access details, vehicle condition, or timing needs":
+    "Indiquez les détails d’accès, l’état du véhicule ou vos besoins de calendrier",
+  "Review your quote request": "Vérifiez votre demande de devis",
+  "No payment is due when you send this request.":
+    "Aucun paiement n’est dû lors de l’envoi de cette demande.",
+  "Exact pickup address": "Adresse exacte de collecte",
+  "Vehicle condition": "État du véhicule",
+  "Runs and drives": "Roule et fonctionne",
+  "Needs assistance": "Nécessite une assistance",
+  "Preferred pickup": "Collecte souhaitée",
+  "Request quotes": "Demander des devis",
+  "Sign in to send request": "Se connecter pour envoyer la demande",
+  "Sending request...": "Envoi de la demande...",
+  "How it works": "Fonctionnement",
+  "One secure request": "Une demande sécurisée",
+  "Your contact details stay private until a quote is selected.":
+    "Vos coordonnées restent privées jusqu’à la sélection d’un devis.",
+  "Compare real quotes": "Comparez de vrais devis",
+  "Review total price, timing, method, and terms together.":
+    "Comparez ensemble le prix total, les délais, le mode et les conditions.",
+  "Choose your carrier": "Choisissez votre transporteur",
+  "You decide which approved business should handle the vehicle.":
+    "Vous choisissez l’entreprise approuvée qui prendra en charge le véhicule.",
+  "No payment today": "Aucun paiement aujourd’hui",
+  "Sending a request only starts the quote process.":
+    "L’envoi d’une demande démarre uniquement le processus de devis.",
+  "Your quote requests": "Vos demandes de devis",
+  "Carrier selected": "Transporteur sélectionné",
+  "Compare carrier quotes": "Comparer les devis des transporteurs",
+  "Your selected quote and next transport step are shown below.":
+    "Votre devis sélectionné et la prochaine étape du transport sont affichés ci-dessous.",
+  "Compare the complete offer before choosing a business.":
+    "Comparez l’offre complète avant de choisir une entreprise.",
+  "Quote request": "Demande de devis",
+  "Choose quote request": "Choisir une demande de devis",
+  "Pickup area not provided": "Zone de collecte non indiquée",
+  "Destination not provided": "Destination non indiquée",
+  "quote received": "devis reçu",
+  "quotes received": "devis reçus",
+  "Some quotes could not be loaded. Try again.":
+    "Certains devis n’ont pas pu être chargés. Réessayez.",
+  "Carriers are reviewing your request":
+    "Les transporteurs examinent votre demande",
+  "We’ll show every quote here and notify you when one arrives.":
+    "Nous afficherons chaque devis ici et vous avertirons dès son arrivée.",
+  "This request is closed": "Cette demande est fermée",
+  "No new quotes can be submitted.":
+    "Aucun nouveau devis ne peut être envoyé.",
+  "Approved carrier": "Transporteur approuvé",
+  "Approved business": "Entreprise approuvée",
+  Selected: "Sélectionné",
+  "Total quote": "Devis total",
+  "No payment due until the next confirmed step.":
+    "Aucun paiement n’est dû avant la prochaine étape confirmée.",
+  "Estimated delivery": "Livraison estimée",
+  "Quote expiry": "Expiration du devis",
+  "No expiry provided": "Aucune date d’expiration indiquée",
+  "Terms and inclusions": "Conditions et inclusions",
+  "No additional terms provided.":
+    "Aucune condition supplémentaire indiquée.",
+  "not provided": "non indiquée",
+  "This quote has expired.": "Ce devis a expiré.",
+  "Selecting carrier...": "Sélection du transporteur...",
+  "Not selected": "Non sélectionné",
+  "Choose this carrier": "Choisir ce transporteur",
+  "Choose this carrier?": "Choisir ce transporteur ?",
+  "Choose this carrier and quoted total?":
+    "Choisir ce transporteur et ce montant ?",
+  "Choose carrier": "Choisir le transporteur",
+  "Keep comparing": "Continuer à comparer",
+  "Cancel quote request": "Annuler la demande de devis",
+  "Cancelling request...": "Annulation de la demande...",
+  "Cancel this quote request?": "Annuler cette demande de devis ?",
+  "Cancel this quote request? Businesses will no longer be able to submit or revise quotes.":
+    "Annuler cette demande de devis ? Les entreprises ne pourront plus envoyer ni réviser de devis.",
+  "Businesses will no longer be able to submit or revise quotes.":
+    "Les entreprises ne pourront plus envoyer ni réviser de devis.",
+  "Cancel request": "Annuler la demande",
+  "Keep request": "Conserver la demande",
+  "The carrier could not be selected. Try again.":
+    "Le transporteur n’a pas pu être sélectionné. Réessayez.",
+  "The quote request could not be cancelled. Try again.":
+    "La demande de devis n’a pas pu être annulée. Réessayez.",
+  "We couldn’t load your transport requests. Try again.":
+    "Nous n’avons pas pu charger vos demandes de transport. Réessayez.",
+  "Loading your quote requests...":
+    "Chargement de vos demandes de devis...",
+  "approved business is currently available for car transport. Route eligibility is confirmed securely when you submit.":
+    "entreprise approuvée est actuellement disponible pour le transport de véhicules. L’admissibilité de l’itinéraire est confirmée de façon sécurisée lors de l’envoi.",
+  "approved businesses are currently available for car transport. Route eligibility is confirmed securely when you submit.":
+    "entreprises approuvées sont actuellement disponibles pour le transport de véhicules. L’admissibilité de l’itinéraire est confirmée de façon sécurisée lors de l’envoi.",
 };
 
 export const TEXT_TRANSLATIONS: Record<string, string> = {
   ...CUSTOMER_SHIPPING_TRANSLATIONS,
+  "Quote on eligible customer requests, then manage accepted jobs separately.":
+    "Répondez aux demandes admissibles des clients, puis gérez séparément les transports acceptés.",
+  "Quote opportunities": "Possibilités de devis",
+  "Accepted jobs": "Transports acceptés",
+  "Transport marketplace data could not be loaded.":
+    "Les données de la place de marché du transport n’ont pas pu être chargées.",
+  "Transport marketplace data could not be loaded. Refresh and try again.":
+    "Les données de la place de marché du transport n’ont pas pu être chargées. Actualisez la page et réessayez.",
+  "Search vehicle transport": "Rechercher un transport de véhicule",
+  "Search route, vehicle, or reference":
+    "Rechercher un itinéraire, un véhicule ou une référence",
+  "Search customer, vehicle, or reference":
+    "Rechercher un client, un véhicule ou une référence",
+  "No quote opportunities right now":
+    "Aucune possibilité de devis pour le moment",
+  "Eligible customer requests will appear here when they match your service area.":
+    "Les demandes admissibles des clients apparaîtront ici lorsqu’elles correspondront à votre zone de service.",
+  "No quote opportunities match this search.":
+    "Aucune possibilité de devis ne correspond à cette recherche.",
+  "New request": "Nouvelle demande",
+  "Quote selected": "Devis sélectionné",
+  "Quote submitted": "Devis envoyé",
+  "Quote withdrawn": "Devis retiré",
+  "Needs quote": "Devis requis",
+  "Requested method": "Mode demandé",
+  "Quote deadline": "Date limite du devis",
+  "Your quote": "Votre devis",
+  "Revise quote": "Réviser le devis",
+  "Submit new quote": "Envoyer un nouveau devis",
+  "Send quote": "Envoyer le devis",
+  "Withdrawing...": "Retrait...",
+  "Withdraw quote": "Retirer le devis",
+  "Withdraw this quote?": "Retirer ce devis ?",
+  "Withdraw this quote? The customer will no longer be able to select it.":
+    "Retirer ce devis ? Le client ne pourra plus le sélectionner.",
+  "The customer will no longer be able to select it.":
+    "Le client ne pourra plus le sélectionner.",
+  "Keep quote": "Conserver le devis",
+  "Quote withdrawn.": "Devis retiré.",
+  "The quote could not be withdrawn. Try again.":
+    "Le devis n’a pas pu être retiré. Réessayez.",
+  "This customer chose your quote. The job is now under Accepted jobs.":
+    "Ce client a choisi votre devis. Le transport se trouve maintenant dans Transports acceptés.",
+  "No accepted transport jobs yet":
+    "Aucun transport accepté pour le moment",
+  "When a customer chooses your quote, the complete job will appear here.":
+    "Lorsqu’un client choisit votre devis, le transport complet apparaît ici.",
+  "No accepted jobs match this search.":
+    "Aucun transport accepté ne correspond à cette recherche.",
+  "Accepted quote": "Devis accepté",
+  "Update job status": "Mettre à jour le statut du transport",
+  "Structured quote": "Devis structuré",
+  "Revise transport quote": "Réviser le devis de transport",
+  "Send transport quote": "Envoyer un devis de transport",
+  "Total quote (USD)": "Devis total (USD)",
+  "For example, 1250": "Par exemple, 1 250",
+  "Enter the complete customer price, including your known fees.":
+    "Saisissez le prix total pour le client, y compris tous les frais connus.",
+  "Estimated pickup date": "Date de collecte estimée",
+  "Estimated delivery date": "Date de livraison estimée",
+  "Explain what is included, timing assumptions, and any conditions.":
+    "Expliquez ce qui est inclus, les hypothèses de délai et les éventuelles conditions.",
+  "Sending quote...": "Envoi du devis...",
+  "Save revised quote": "Enregistrer le devis révisé",
+  "Quote sent to the customer.": "Devis envoyé au client.",
+  "Enter a valid quote amount.": "Saisissez un montant de devis valide.",
+  "Pickup and delivery dates are required.":
+    "Les dates de collecte et de livraison sont obligatoires.",
+  "Estimated delivery must be after pickup.":
+    "La livraison estimée doit être postérieure à la collecte.",
+  "The quote could not be sent. Check the details and try again.":
+    "Le devis n’a pas pu être envoyé. Vérifiez les informations et réessayez.",
+  "The transport status could not be updated. Try again.":
+    "Le statut du transport n’a pas pu être mis à jour. Réessayez.",
   "Return wallet balance": "Rembourser le solde du portefeuille",
   "Return to card": "Retour vers la carte",
   "Move your available balance back to your payment card.":
@@ -2499,24 +2705,36 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
 
 const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "Add a photo by URL": "Ajouter une photo par URL",
+  "Choose quote request": "Choisir une demande de devis",
+  "City, state or province, postal code":
+    "Ville, État ou province, code postal",
   "Collapse navigation": "Réduire la navigation",
   "Copy tracking code": "Copier le code de suivi",
   "Delivery status": "Statut de livraison",
   "Explain missing documents, expiry issues, or why a document is not applicable.":
     "Expliquez les documents manquants, les problèmes d’expiration ou pourquoi un document est sans objet.",
   "Expand navigation": "Développer la navigation",
+  "Explain what is included, timing assumptions, and any conditions.":
+    "Expliquez ce qui est inclus, les hypothèses de délai et les éventuelles conditions.",
   "Filter business sections": "Filtrer les sections entreprise",
   "Filter services...": "Filtrer les services...",
   "No-show note (optional)": "Note d’absence (facultatif)",
   Pin: "Épingler",
   "Search car, buyer, phone, status…":
     "Rechercher voiture, acheteur, téléphone, statut…",
+  "Search customer, vehicle, or reference":
+    "Rechercher un client, un véhicule ou une référence",
   "Search destinations…": "Rechercher des destinations…",
   "Search make, model, status…": "Rechercher marque, modèle, statut…",
+  "Search route, vehicle, or reference":
+    "Rechercher un itinéraire, un véhicule ou une référence",
   "Search tracking, owner, car, VIN…":
     "Rechercher suivi, propriétaire, voiture, VIN…",
   "Search tracking, sender, receiver, phone…":
     "Rechercher suivi, expéditeur, destinataire, téléphone…",
+  "Search vehicle transport": "Rechercher un transport de véhicule",
+  "Share access details, vehicle condition, or timing needs":
+    "Indiquez les détails d’accès, l’état du véhicule ou vos besoins de calendrier",
   "Signed-in account": "Compte connecté",
   Unpin: "Désépingler",
   "Verification document summary": "Résumé des documents de vérification",
