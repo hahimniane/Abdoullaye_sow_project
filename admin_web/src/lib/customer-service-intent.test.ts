@@ -88,3 +88,15 @@ test("guest continuation copy is localized in French", () => {
     "Enregistrez votre demande de stationnement",
   );
 });
+
+test("guest service forms keep their header copy readable on narrow screens", () => {
+  const styles = readFileSync("src/app/globals.css", "utf8");
+  assert.match(
+    styles,
+    /\.customer-request-form > \.panel-header > div\s*\{[\s\S]*display: grid;[\s\S]*gap: 5px;/,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 480px\)\s*\{[\s\S]*\.customer-entry-header\s*\{[\s\S]*display: grid;[\s\S]*\.customer-entry-header-actions \.secondary-button\s*\{[\s\S]*width: 100%;/,
+  );
+});

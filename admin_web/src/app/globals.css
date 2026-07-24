@@ -5180,6 +5180,26 @@ button[data-loading="true"]::before {
   }
 }
 
+@media (max-width: 480px) {
+  .customer-entry-header {
+    align-items: stretch;
+    display: grid;
+    gap: 8px;
+    padding: 10px 14px;
+  }
+
+  .customer-entry-brand,
+  .customer-entry-header-actions,
+  .customer-entry-header-actions .secondary-button {
+    width: 100%;
+  }
+
+  .customer-entry-brand .brand-badge,
+  .customer-entry-header-actions .secondary-button {
+    justify-content: center;
+  }
+}
+
 /* Listings modal — full field set extras */
 .lst-modal { max-width: 720px; }
 .lst-form-section {
@@ -5850,6 +5870,31 @@ button[data-loading="true"]::before {
   border-radius: 11px;
   box-shadow: 0 8px 24px rgba(11, 59, 56, 0.06);
   padding: 18px;
+}
+
+.customer-request-form > .panel-header {
+  align-items: flex-start;
+  min-height: 0;
+  padding: 0 0 14px;
+}
+
+.customer-request-form > .panel-header > div {
+  align-items: flex-start;
+  display: grid;
+  gap: 5px;
+}
+
+.customer-request-form > .panel-header h2 {
+  font-size: 18px;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  text-transform: none;
+}
+
+.customer-request-form > .panel-header p {
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
 }
 
 .customer-shipping-stack {
