@@ -64,6 +64,10 @@ export type PaymentReturnState =
   | "failed"
   | "cancelled";
 
+export type CheckoutReturnConfirmation = {
+  state: PaymentReturnState;
+};
+
 const RETURN_STATUS_FIELDS: Record<CustomerCheckoutOrderType, string[]> = {
   parking: ["paymentStatus", "checkoutStatus", "status"],
   barrelPoolDeposit: ["paymentStatus", "checkoutStatus"],
@@ -121,4 +125,8 @@ export function paymentReturnState(
     return "failed";
   }
   return "pending";
+}
+
+export function paymentReturnShouldRedirect(state: string) {
+  return state === "success";
 }

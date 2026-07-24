@@ -90,6 +90,9 @@ const {
 const {
   checkoutRecordId,
   checkoutSessionIdempotencyKey,
+  customerCheckoutPaymentSucceeded,
+  customerCheckoutReturnEventId,
+  customerCheckoutReturnVerification,
   customerCheckoutReturnUrls,
   paymentIntentIdFromClientSecret,
   requireCustomerCheckoutAction,
@@ -2033,6 +2036,12 @@ function stripeFormRequest(path, body, options = {}) {
 
 async function retrieveStripePaymentIntent(paymentIntentId) {
   return stripeRequest(`/payment_intents/${paymentIntentId}`);
+}
+
+async function retrieveStripeCheckoutSession(sessionId) {
+  return stripeRequest(
+      `/checkout/sessions/${encodeURIComponent(sessionId)}`,
+  );
 }
 
 async function cancelStripePaymentIntent(paymentIntentId) {
@@ -4471,6 +4480,124 @@ async function reconcileStripePaymentEvent(event) {
   }
   return true;
 }
+
+exports.confirmCustomerCheckoutSession = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const orderType = cleanText(request.data?.orderType, 80);
+      const recordId = cleanText(request.data?.recordId, 180);
+      const sessionId = cleanText(request.data?.sessionId, 220);
+      let session;
+      let verification;
+      try {
+        customerCheckoutReturnEventId(sessionId);
+        session = await retrieveStripeCheckoutSession(sessionId);
+        verification = customerCheckoutReturnVerification({
+          session,
+          customerUid,
+          orderType,
+          recordId,
+        });
+      } catch (error) {
+        const code = String(error?.code || "");
+        if (code === "checkout-session-mismatch") {
+          throw new HttpsError(
+              "permission-denied",
+              "This payment does not belong to this account",
+          );
+        }
+        if (
+          code === "invalid-checkout-session" ||
+          code === "invalid-checkout-return" ||
+          code === "unsupported-checkout-action"
+        ) {
+          throw new HttpsError(
+              "invalid-argument",
+              "The payment return link is invalid",
+          );
+        }
+        throw error;
+      }
+
+      const target = routePaymentIntentMetadata(session.metadata);
+      if (target.customerUid !== customerUid) {
+        throw new HttpsError(
+            "permission-denied",
+            "This payment belongs to a different account",
+        );
+      }
+      const ref = admin.firestore().doc(target.path);
+      const snapshot = await ref.get();
+      if (!snapshot.exists) {
+        throw new HttpsError("not-found", "Payment record not found");
+      }
+      if (
+        String(snapshot.data()?.checkoutSessionId || "") !== sessionId
+      ) {
+        throw new HttpsError(
+            "permission-denied",
+            "Checkout Session does not match the payment record",
+        );
+      }
+      if (verification.state !== "paid" || !verification.event) {
+        return {state: "pending"};
+      }
+
+      const event = verification.event;
+      const claimed = await claimStripeWebhookEvent(event);
+      if (!claimed) {
+        const current = (await ref.get()).data() || {};
+        return {
+          state: customerCheckoutPaymentSucceeded(
+              current,
+              target.config.paymentStatusField,
+          ) ?
+            "success" :
+            "pending",
+        };
+      }
+
+      try {
+        const checkoutIntentBound = await bindCheckoutPaymentIntent(event);
+        const paymentHandled = await reconcileStripePaymentEvent(event);
+        const current = (await ref.get()).data() || {};
+        const succeeded = customerCheckoutPaymentSucceeded(
+            current,
+            target.config.paymentStatusField,
+        );
+        await finishStripeWebhookEvent(event.id, succeeded ?
+          "completed" :
+          "failed", {
+          checkoutIntentBound,
+          paymentHandled,
+          source: "customer_checkout_return",
+        });
+        return {state: succeeded ? "success" : "pending"};
+      } catch (error) {
+        await finishStripeWebhookEvent(event.id, "failed", {
+          errorMessage: String(error.message || "Return recovery failed").slice(
+              0,
+              500,
+          ),
+          source: "customer_checkout_return",
+        }).catch(() => {});
+        logger.error("Customer Checkout return recovery failed", {
+          orderType,
+          recordId,
+          message: error.message,
+        });
+        throw new HttpsError(
+            "internal",
+            "Payment confirmation is temporarily unavailable",
+        );
+      }
+    },
+);
 
 exports.handleBusinessProStripeWebhook = onRequest(
     {

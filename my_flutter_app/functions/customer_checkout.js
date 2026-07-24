@@ -128,10 +128,92 @@ function checkoutSessionIdempotencyKey(paymentIntentId) {
   return `laawol-checkout-v1-${digest}`;
 }
 
+function customerCheckoutReturnEventId(sessionId) {
+  const value = String(sessionId || "").trim();
+  if (!/^cs_(?:test_|live_)?[A-Za-z0-9]+$/.test(value)) {
+    const error = new Error("Invalid Checkout Session");
+    error.code = "invalid-checkout-session";
+    throw error;
+  }
+  const digest = crypto.createHash("sha256")
+      .update(value)
+      .digest("hex")
+      .slice(0, 32);
+  return `evt_return_${digest}`;
+}
+
+function customerCheckoutReturnVerification({
+  session,
+  customerUid,
+  orderType,
+  recordId,
+}) {
+  const uid = String(customerUid || "").trim();
+  const type = String(orderType || "").trim();
+  const id = String(recordId || "").trim();
+  requireCustomerCheckoutAction(type);
+  if (!uid || !id || !session || typeof session !== "object") {
+    const error = new Error("Invalid Checkout return");
+    error.code = "invalid-checkout-return";
+    throw error;
+  }
+
+  const sessionId = String(session.id || "").trim();
+  const eventId = customerCheckoutReturnEventId(sessionId);
+  const metadata = session.metadata || {};
+  const mismatches = [
+    [String(session.client_reference_id || "").trim(), id],
+    [String(metadata.checkoutOrderType || "").trim(), type],
+    [String(metadata.checkoutRecordId || "").trim(), id],
+    [String(metadata.customerUid || "").trim(), uid],
+  ].filter(([actual, expected]) => actual !== expected);
+  if (mismatches.length > 0) {
+    const error = new Error("Checkout Session does not match this order");
+    error.code = "checkout-session-mismatch";
+    throw error;
+  }
+
+  const paymentIntentId = String(session.payment_intent || "").trim();
+  const paid =
+    String(session.status || "").trim() === "complete" &&
+    String(session.payment_status || "").trim() === "paid" &&
+    paymentIntentId.startsWith("pi_");
+  if (!paid) {
+    return {state: "pending", event: null};
+  }
+
+  return {
+    state: "paid",
+    event: {
+      id: eventId,
+      type: "checkout.session.completed",
+      created: Number(session.created || 0),
+      data: {object: session},
+    },
+  };
+}
+
+function customerCheckoutPaymentSucceeded(data, paymentStatusField) {
+  const paymentStatus = String(data?.[paymentStatusField] || "")
+      .trim()
+      .toLowerCase();
+  return [
+    "succeeded",
+    "paid",
+    "completed",
+    "applied",
+    "reserved",
+  ].includes(paymentStatus) ||
+    String(data?.stripeReconciliationState || "").trim() === "succeeded";
+}
+
 module.exports = {
   CUSTOMER_CHECKOUT_ACTIONS,
   checkoutRecordId,
   checkoutSessionIdempotencyKey,
+  customerCheckoutPaymentSucceeded,
+  customerCheckoutReturnEventId,
+  customerCheckoutReturnVerification,
   customerCheckoutAction,
   customerCheckoutReturnUrls,
   normalizedConsoleUrl,

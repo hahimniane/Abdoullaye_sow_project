@@ -190,3 +190,8 @@ Add future project conventions and repeated architectural decisions here.
   air/sea per-kilogram rates. Keep checkout payloads price-free so the backend
   remains authoritative. Car transport stays quote-only, and freight pickup
   keeps the final total pending until an authoritative quote exists.
+- Hosted Stripe Checkout must have both a same-mode registered webhook and an
+  authenticated return-session recovery path. Recovery retrieves the Session
+  from Stripe, validates its user/type/record metadata and attached Firestore
+  record, binds the Checkout-created PaymentIntent, and reuses the idempotent
+  reconciliation path. Redirect only after persisted payment success.

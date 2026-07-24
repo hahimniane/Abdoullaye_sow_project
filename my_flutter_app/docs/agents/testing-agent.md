@@ -261,3 +261,8 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   resolved environment to the real Firebase deploy command; otherwise Firebase
   predeploy hooks can fail after a green preflight because macOS cannot locate
   Java from the raw shell environment.
+- Hosted Checkout release checks must cover the configured Stripe webhook, not
+  only whether the Cloud Function URL responds. Regression coverage should
+  prove a paid return Session can self-heal a delayed or missing webhook, cannot
+  cross user/type/record boundaries, and redirects exactly once only after the
+  persisted payment state succeeds.

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -6,6 +8,7 @@ import {
   buildCheckoutRequest,
   checkoutRedirectUrl,
   paymentReturnState,
+  paymentReturnShouldRedirect,
 } from "./customer-checkout.ts";
 
 test("customer checkout covers all 12 server-paid rails", () => {
@@ -78,4 +81,36 @@ test("payment return only reports success from authoritative record state", () =
     paymentReturnState("freightShipment", { checkoutStatus: "expired" }),
     "failed",
   );
+  assert.equal(
+    paymentReturnState("barrelOrder", {
+      paymentStatus: "pending",
+      checkoutStatus: "open",
+      status: "pending_payment",
+    }),
+    "pending",
+  );
+  assert.equal(
+    paymentReturnState("barrelOrder", { checkoutStatus: "completed" }),
+    "success",
+  );
+  assert.equal(
+    paymentReturnState("barrelOrder", { paymentStatus: "cancelled" }),
+    "cancelled",
+  );
+  assert.equal(paymentReturnShouldRedirect("pending"), false);
+  assert.equal(paymentReturnShouldRedirect("failed"), false);
+  assert.equal(paymentReturnShouldRedirect("cancelled"), false);
+  assert.equal(paymentReturnShouldRedirect("success"), true);
+});
+
+test("payment return recovers the Checkout session and automatically returns", () => {
+  const component = fs.readFileSync(
+    path.join(process.cwd(), "src/components/pay-return.tsx"),
+    "utf8",
+  );
+  assert.match(component, /confirmCustomerCheckoutSession/);
+  assert.match(component, /paymentReturnShouldRedirect\(state\)/);
+  assert.match(component, /window\.location\.replace\("\/"\)/);
+  assert.match(component, /const timeoutId = setTimeout/);
+  assert.doesNotMatch(component, /console\.(?:log|warn|error).*sessionId/);
 });

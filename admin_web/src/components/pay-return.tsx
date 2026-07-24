@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
+import { httpsCallable } from "firebase/functions";
 import {
   collection,
   doc,
@@ -12,10 +13,12 @@ import {
 } from "firebase/firestore";
 import { CheckCircle2, CircleX, Clock3, RefreshCw } from "lucide-react";
 
-import { auth, db } from "@/lib/firebase";
+import { auth, db, functions } from "@/lib/firebase";
 import {
   isCustomerCheckoutOrderType,
   paymentReturnState,
+  paymentReturnShouldRedirect,
+  type CheckoutReturnConfirmation,
   type CustomerCheckoutOrderType,
   type PaymentReturnState,
 } from "@/lib/customer-checkout";
@@ -69,6 +72,7 @@ export function PayReturn() {
     const search = new URLSearchParams(window.location.search);
     const type = search.get("type") || "";
     const recordId = search.get("id")?.trim() || "";
+    const sessionId = search.get("session")?.trim() || "";
     if (!isCustomerCheckoutOrderType(type) || !recordId) {
       setState("invalid");
       return undefined;
@@ -80,7 +84,12 @@ export function PayReturn() {
     }
 
     let stopSnapshot: (() => void) | undefined;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let confirmationStartedFor = "";
+    let active = true;
+    const timeoutId = setTimeout(
+      () => setState((current) => current === "pending" ? "timeout" : current),
+      PAYMENT_RETURN_TIMEOUT_MS,
+    );
     const stopAuth = onAuthStateChanged(auth, (user) => {
       stopSnapshot?.();
       if (!user) {
@@ -88,12 +97,36 @@ export function PayReturn() {
         return;
       }
       setState("pending");
+      if (sessionId && confirmationStartedFor !== user.uid) {
+        confirmationStartedFor = user.uid;
+        const confirmCheckout = httpsCallable<
+          {
+            orderType: CustomerCheckoutOrderType;
+            recordId: string;
+            sessionId: string;
+          },
+          CheckoutReturnConfirmation
+        >(functions, "confirmCustomerCheckoutSession");
+        void confirmCheckout({ orderType: type, recordId, sessionId })
+          .then((response) => {
+            if (active && response.data.state === "success") {
+              setState("success");
+            }
+          })
+          .catch(() => {
+            // Keep the authoritative Firestore listener active. A delayed
+            // webhook can still complete the order before the safety timeout.
+          });
+      }
       const path = directPaymentPath(type, recordId, user.uid);
       if (path) {
         stopSnapshot = onSnapshot(
           doc(db, ...path),
           (snapshot) => {
-            if (!snapshot.exists()) return;
+            if (!snapshot.exists()) {
+              setState("invalid");
+              return;
+            }
             setState(paymentReturnState(type, snapshot.data()));
           },
           () => setState("failed"),
@@ -123,17 +156,22 @@ export function PayReturn() {
           () => setState("failed"),
         );
       }
-      timeoutId = setTimeout(
-        () => setState((current) => current === "pending" ? "timeout" : current),
-        PAYMENT_RETURN_TIMEOUT_MS,
-      );
     });
     return () => {
+      active = false;
       stopAuth();
       stopSnapshot?.();
-      if (timeoutId) clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
     };
   }, []);
+
+  useEffect(() => {
+    if (!paymentReturnShouldRedirect(state)) return undefined;
+    const redirectId = setTimeout(() => {
+      window.location.replace("/");
+    }, 1_200);
+    return () => clearTimeout(redirectId);
+  }, [state]);
 
   const content = returnContent(state);
   const Icon = content.icon;

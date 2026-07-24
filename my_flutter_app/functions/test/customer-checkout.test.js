@@ -4,6 +4,9 @@ const {
   CUSTOMER_CHECKOUT_ACTIONS,
   checkoutRecordId,
   checkoutSessionIdempotencyKey,
+  customerCheckoutPaymentSucceeded,
+  customerCheckoutReturnEventId,
+  customerCheckoutReturnVerification,
   customerCheckoutReturnUrls,
   paymentIntentIdFromClientSecret,
   requireCustomerCheckoutAction,
@@ -75,5 +78,111 @@ describe("customer Checkout routing", () => {
     assert.equal(first, checkoutSessionIdempotencyKey("pi_123"));
     assert.notEqual(first, checkoutSessionIdempotencyKey("pi_456"));
     assert.match(first, /^laawol-checkout-v1-[a-f0-9]{32}$/);
+  });
+
+  it("authorizes a paid return and creates a deterministic event", () => {
+    const session = {
+      id: "cs_test_paid123",
+      status: "complete",
+      payment_status: "paid",
+      payment_intent: "pi_paid123",
+      created: 1720000000,
+      client_reference_id: "order_1",
+      metadata: {
+        paymentType: "barrel_order",
+        customerUid: "user_1",
+        orderId: "order_1",
+        checkoutOrderType: "barrelOrder",
+        checkoutRecordId: "order_1",
+      },
+    };
+    const result = customerCheckoutReturnVerification({
+      session,
+      customerUid: "user_1",
+      orderType: "barrelOrder",
+      recordId: "order_1",
+    });
+    assert.equal(result.state, "paid");
+    assert.equal(result.event.type, "checkout.session.completed");
+    assert.equal(result.event.data.object, session);
+    assert.equal(
+        result.event.id,
+        customerCheckoutReturnEventId(session.id),
+    );
+    assert.match(result.event.id, /^evt_return_[a-f0-9]{32}$/);
+  });
+
+  it("keeps an unpaid Checkout return pending", () => {
+    const result = customerCheckoutReturnVerification({
+      session: {
+        id: "cs_test_pending123",
+        status: "open",
+        payment_status: "unpaid",
+        payment_intent: null,
+        client_reference_id: "order_1",
+        metadata: {
+          customerUid: "user_1",
+          checkoutOrderType: "barrelOrder",
+          checkoutRecordId: "order_1",
+        },
+      },
+      customerUid: "user_1",
+      orderType: "barrelOrder",
+      recordId: "order_1",
+    });
+    assert.deepEqual(result, {state: "pending", event: null});
+  });
+
+  it("rejects Checkout returns for another user, type, or record", () => {
+    const base = {
+      id: "cs_test_mismatch123",
+      status: "complete",
+      payment_status: "paid",
+      payment_intent: "pi_paid123",
+      client_reference_id: "order_1",
+      metadata: {
+        customerUid: "user_1",
+        checkoutOrderType: "barrelOrder",
+        checkoutRecordId: "order_1",
+      },
+    };
+    for (const input of [
+      {customerUid: "user_2", orderType: "barrelOrder", recordId: "order_1"},
+      {
+        customerUid: "user_1",
+        orderType: "freightShipment",
+        recordId: "order_1",
+      },
+      {customerUid: "user_1", orderType: "barrelOrder", recordId: "order_2"},
+    ]) {
+      assert.throws(
+          () => customerCheckoutReturnVerification({session: base, ...input}),
+          (error) => error.code === "checkout-session-mismatch",
+      );
+    }
+  });
+
+  it("returns success only from an authoritative saved payment state", () => {
+    assert.equal(
+        customerCheckoutPaymentSucceeded(
+            {paymentStatus: "pending", checkoutStatus: "completed"},
+            "paymentStatus",
+        ),
+        false,
+    );
+    assert.equal(
+        customerCheckoutPaymentSucceeded(
+            {paymentStatus: "succeeded"},
+            "paymentStatus",
+        ),
+        true,
+    );
+    assert.equal(
+        customerCheckoutPaymentSucceeded(
+            {stripeReconciliationState: "succeeded"},
+            "paymentStatus",
+        ),
+        true,
+    );
   });
 });

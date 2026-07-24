@@ -33,6 +33,7 @@ const STRIPE_CALLABLES = [
   "createParkingReservation",
   "completeParkingReservation",
   "createCustomerCheckoutSession",
+  "confirmCustomerCheckoutSession",
 ];
 
 const MAPS_PRICED_PAYMENT_CALLABLES = new Set([
@@ -113,6 +114,10 @@ describe("payment runtime configuration", () => {
     assert.match(source, /bindCheckoutPaymentIntent\(event\)/);
     assert.match(source, /reconcileCustomerCheckoutFailure\(event\)/);
     assert.match(source, /checkoutOriginalPaymentIntentId/);
+    assert.match(source, /exports\.confirmCustomerCheckoutSession/);
+    assert.match(source, /customerCheckoutReturnVerification/);
+    assert.match(source, /retrieveStripeCheckoutSession\(sessionId\)/);
+    assert.match(source, /bindCheckoutPaymentIntent\(event\)/);
     assert.match(source, /outside the allowed window/);
   });
 
