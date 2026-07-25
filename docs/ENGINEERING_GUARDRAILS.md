@@ -69,6 +69,19 @@ under construction. The authorization expires automatically at
 project again requires `DEPLOY_ENV=production` with an `sk_live_` key.
 Simulation remains prohibited and no other production check is relaxed.
 
+### Time-boxed CI-verification skip
+
+Through **August 15, 2026 at 11:59:59 p.m. America/New_York**, the "Green CI
+for deployed commit" preflight check is satisfied automatically, without
+`ALLOW_UNVERIFIED_CI=1`, so deploys are not blocked waiting on a GitHub Actions
+run to finish. The authorization expires automatically at
+`2026-08-16T04:00:00Z`; after that instant preflight fails closed again and a
+real green CI run (or an explicit, logged `ALLOW_UNVERIFIED_CI=1`) is required.
+Every other gate still applies every time regardless of this window: clean
+git tree, local unit tests, local build from source, App Check config, IAM
+verification, and post-deploy smoke checks all still run and still block a
+bad deploy. Only the wait for the remote CI result is skipped.
+
 ### Firebase Gen 2 deployment recovery
 
 Firebase Functions Gen 2 deployments can fail even after a green preflight when

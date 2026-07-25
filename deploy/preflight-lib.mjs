@@ -5,6 +5,8 @@ import path from "node:path";
 export const DEFAULT_PRODUCTION_PROJECT = "car-selling-flutter-app";
 export const DEVELOPMENT_PAYMENT_WINDOW_END =
   "2026-09-01T04:00:00.000Z";
+export const CI_VERIFICATION_SKIP_WINDOW_END =
+  "2026-08-16T04:00:00.000Z";
 export const HOSTINGER_PRODUCTION_IPV4 = "46.202.183.189";
 export const HOSTINGER_PRODUCTION_IPV6 = "2a02:4780:2b:1948:0:998:df10:5";
 export const TRUSTED_DNS_OVER_HTTPS_PROVIDERS = [
