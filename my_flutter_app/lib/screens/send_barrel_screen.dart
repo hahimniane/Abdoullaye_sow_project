@@ -9,6 +9,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../providers/app_gate_provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
@@ -501,11 +502,13 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                         children: [
                           _BarrelHero(animation: _heroController),
                           const SizedBox(height: 18),
-                          _SharedBarrelCard(
-                            onTap: () =>
-                                Navigator.pushNamed(context, '/open-barrels'),
-                          ),
-                          const SizedBox(height: 18),
+                          if (context.watch<AppGateProvider>().sharedBarrelsEnabled) ...[
+                            _SharedBarrelCard(
+                              onTap: () =>
+                                  Navigator.pushNamed(context, '/open-barrels'),
+                            ),
+                            const SizedBox(height: 18),
+                          ],
                           Form(
                             key: _formKey,
                             child: Column(

@@ -13,7 +13,7 @@
   var textTranslations = {
     "Trusted service marketplace": "Marketplace de services de confiance",
     "Find the right business for the road home.": "Trouvez la bonne entreprise pour la route vers le pays.",
-    "Laawol Digital is a platform where registered businesses offer diaspora services — shipping, cars, sourcing, food, and professional help. We bring the pricing, tracking, support, and accountability into one place so customers can choose with confidence.": "Laawol Digital est une plateforme où des entreprises inscrites proposent des services pour la diaspora : expédition, voitures, approvisionnement, restauration et aide professionnelle. Nous rassemblons les prix, le suivi, l’assistance et la responsabilité au même endroit pour que les clients choisissent en confiance.",
+    "Laawol Digital is a platform where registered businesses offer diaspora services — shipping, cars, freight, food, and professional help. We bring the pricing, tracking, support, and accountability into one place so customers can choose with confidence.": "Laawol Digital est une plateforme où des entreprises inscrites proposent des services pour la diaspora : expédition, voitures, fret, restauration et aide professionnelle. Nous rassemblons les prix, le suivi, l’assistance et la responsabilité au même endroit pour que les clients choisissent en confiance.",
     "Get the app": "Télécharger l’application",
     "Explore services": "Découvrir les services",
     "Featured businesses": "Entreprises mises en avant",

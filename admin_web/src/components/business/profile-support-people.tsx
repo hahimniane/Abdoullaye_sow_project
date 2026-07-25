@@ -52,6 +52,7 @@ import {
   type BusinessServiceSettingsDraft,
 } from "@/lib/business-service-settings";
 import { COUNTRY_CATALOG } from "@/lib/country-catalog";
+import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import { db, functions, storage } from "@/lib/firebase";
 import { formatDate, text } from "@/lib/format";
 import { currentWebLanguage } from "@/lib/language";
@@ -399,6 +400,10 @@ export function BusinessServicesPanel({
     businessServiceSettingsFromRow(business),
   );
   const {busy, busyLabel, error, run} = useActionFeedback(runAction, toast);
+  const sharedBarrelsEnabled = useSharedBarrelsEnabled();
+  const visibleServiceOptions = sharedBarrelsEnabled
+    ? serviceOptions
+    : serviceOptions.filter((service) => service.id !== "sharedBarrels");
 
   useEffect(() => {
     setDraft(businessServiceSettingsFromRow(business));
@@ -562,7 +567,7 @@ export function BusinessServicesPanel({
           disabled={!canManage || busy}
         >
           <div className="service-selector-grid">
-            {serviceOptions.map((service) => {
+            {visibleServiceOptions.map((service) => {
               const active = draft.enabledServices.includes(service.id);
               return (
                 <button

@@ -42,6 +42,7 @@ import {
 import { auth, db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
 import { customerCarListingIsEligible } from "@/lib/customer-service-eligibility";
+import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
 import { CustomerCars } from "@/components/customer-cars";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
@@ -121,6 +122,7 @@ export function CustomerConsole({
   const [activeTab, setActiveTab] = useState<CustomerTab>(() =>
     firebaseUser.phoneNumber ? "home" : "profile",
   );
+  const sharedBarrelsEnabled = useSharedBarrelsEnabled();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
@@ -219,18 +221,26 @@ export function CustomerConsole({
         <nav className="sidebar customer-sidebar" aria-label="Customer sections">
           {tabs.map((tab) => {
             const Icon = tab.icon;
+            const label =
+              tab.id === "parkingPools" && !sharedBarrelsEnabled
+                ? "Parking"
+                : tab.label;
+            const description =
+              tab.id === "parkingPools" && !sharedBarrelsEnabled
+                ? "Reserve a parking space"
+                : tab.description;
             return (
               <button
                 className={activeTab === tab.id ? "active" : ""}
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                title={tab.label}
+                title={label}
                 type="button"
               >
                 <Icon size={18} />
                 <span className="nav-text">
-                  <b>{tab.label}</b>
-                  <small>{tab.description}</small>
+                  <b>{label}</b>
+                  <small>{description}</small>
                 </span>
               </button>
             );

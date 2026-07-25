@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/customer_service_catalog.dart';
+import '../providers/app_gate_provider.dart';
 import '../services/nav_prefs.dart';
 import '../theme/app_colors.dart';
 
@@ -62,8 +64,10 @@ class _CustomizeNavbarScreenState extends State<CustomizeNavbarScreen> {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final full = _pinned.length >= maxPinnedServices;
+    final sharedBarrelsEnabled = context.watch<AppGateProvider>().sharedBarrelsEnabled;
     final available = customerServiceCatalog
         .where((s) => !_pinned.contains(s.id))
+        .where((s) => sharedBarrelsEnabled || s.id != 'shared')
         .toList();
 
     return Scaffold(

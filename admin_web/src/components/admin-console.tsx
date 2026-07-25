@@ -5125,6 +5125,9 @@ function SettingsView({
 }
 
 const GENERAL_DEFAULTS = {
+  features: {
+    sharedBarrelsEnabled: false,
+  },
   branding: {
     platformName: "Laawol Digital",
     tagline: "Trusted services from registered businesses",
@@ -5218,6 +5221,10 @@ function mergeGeneral(
 ): GeneralSettings {
   const d = data ?? {};
   return {
+    features: {
+      ...GENERAL_DEFAULTS.features,
+      ...((d.features as object) ?? {}),
+    },
     branding: {
       ...GENERAL_DEFAULTS.branding,
       ...((d.branding as object) ?? {}),
@@ -5361,10 +5368,18 @@ function MoreSettings({
         active = false;
       };
     }
-    getDoc(doc(db, "platformConfig", "general"))
-      .then((snap) => {
+    Promise.all([
+      getDoc(doc(db, "platformConfig", "general")),
+      getDoc(doc(db, "appConfig", "client")),
+    ])
+      .then(([generalSnap, featuresSnap]) => {
         if (active) {
-          setDraft(mergeGeneral(snap.exists() ? snap.data() : undefined));
+          setDraft(
+            mergeGeneral({
+              ...(generalSnap.exists() ? generalSnap.data() : {}),
+              features: featuresSnap.exists() ? featuresSnap.data() : {},
+            }),
+          );
           setLoaded(true);
         }
       })
@@ -5387,6 +5402,9 @@ function MoreSettings({
     });
   }, [eligibleBusinesses]);
 
+  function setFeatures(key: string, value: boolean) {
+    setDraft((d) => ({ ...d, features: { ...d.features, [key]: value } }));
+  }
   function setBranding(key: string, value: string) {
     setDraft((d) => ({ ...d, branding: { ...d.branding, [key]: value } }));
   }
@@ -5405,6 +5423,23 @@ function MoreSettings({
 
   async function saveSection(section: keyof GeneralSettings) {
     if (previewMode) return;
+    // Feature flags are written to appConfig/client (not platformConfig/general)
+    // because that document already has a public "allow read: if true" rule
+    // (firestore.rules) and is already fetched at startup by the Flutter app's
+    // AppGateProvider — reusing it means customer/business web and the mobile
+    // app can all read the flag with no rules change and no auth requirement.
+    if (section === "features") {
+      await setDoc(
+        doc(db, "appConfig", "client"),
+        {
+          ...draft.features,
+          updatedAt: serverTimestamp(),
+          updatedBy: currentUserId,
+        },
+        { merge: true },
+      );
+      return;
+    }
     await setDoc(
       doc(db, "platformConfig", "general"),
       {
@@ -5500,6 +5535,39 @@ function MoreSettings({
 
   return (
     <>
+      <Panel
+        title="Feature availability"
+        icon={<SlidersHorizontal size={18} />}
+        action={
+          <button
+            className="primary-button compact"
+            type="button"
+            onClick={() =>
+              runAction(
+              "Feature availability saved",
+              () => saveSection("features"),
+              {
+                confirm: "Save feature availability changes?",
+                confirmFr:
+                  "Enregistrer les changements de disponibilité des fonctionnalités ?",
+              },
+              )
+            }
+          >
+            Save
+          </button>
+        }
+      >
+        <div className="toggle-list">
+          <ToggleRow
+            label="Shared barrel pools"
+            hint="Lets customers post/join shared barrels and businesses manage pools, on web and mobile. Off hides the feature everywhere without removing any code or data."
+            checked={draft.features.sharedBarrelsEnabled}
+            onChange={(v) => setFeatures("sharedBarrelsEnabled", v)}
+          />
+        </div>
+      </Panel>
+
       <Panel
         title="Platform transaction fee"
         icon={<BadgeDollarSign size={18} />}

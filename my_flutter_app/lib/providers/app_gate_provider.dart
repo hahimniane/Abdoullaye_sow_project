@@ -96,10 +96,16 @@ class AppGateProvider extends ChangeNotifier {
   AppGateStatus _status = AppGateStatus.checking;
   AppVersionDecision? _decision;
   Object? _lastError;
+  // Remote feature flags piggyback on the same appConfig/client document this
+  // provider already fetches at startup for version gating, so toggling a
+  // feature (e.g. pausing shared barrels) from the admin console takes effect
+  // without shipping a new app release.
+  bool _sharedBarrelsEnabled = false;
 
   AppGateStatus get status => _status;
   AppVersionDecision? get decision => _decision;
   Object? get lastError => _lastError;
+  bool get sharedBarrelsEnabled => _sharedBarrelsEnabled;
   bool get isBlocking =>
       _status == AppGateStatus.checking ||
       _status == AppGateStatus.offline ||
@@ -137,6 +143,7 @@ class AppGateProvider extends ChangeNotifier {
       final configData = await _appConfigLoader().timeout(
         const Duration(seconds: 8),
       );
+      _sharedBarrelsEnabled = configData['sharedBarrelsEnabled'] == true;
       final config = AppVersionConfig.fromMap(configData);
       final decision = config.evaluate(
         platformKey: platformKey(),

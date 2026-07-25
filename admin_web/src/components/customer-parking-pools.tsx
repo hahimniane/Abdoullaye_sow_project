@@ -25,6 +25,7 @@ import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ServiceRequestForm } from "@/components/service-request-form";
 import { marketplaceDisclosure } from "@/lib/disclosures";
+import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import { db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
 import { isValidPhone } from "@/lib/phone";
@@ -95,7 +96,9 @@ export function CustomerParkingPools({
   onAuthenticationRequired,
   profile,
 }: CustomerParkingPoolsProps) {
+  const sharedBarrelsEnabled = useSharedBarrelsEnabled();
   const [area, setArea] = useState<"parking" | "pools">(initialArea);
+  const effectiveArea = sharedBarrelsEnabled ? area : "parking";
 
   return (
     <section className="customer-service-hub">
@@ -110,25 +113,27 @@ export function CustomerParkingPools({
         </div>
         <ShieldCheck aria-hidden="true" size={32} />
       </div>
-      <div className="customer-service-tabs" aria-label="Choose a service">
-        <button
-          aria-pressed={area === "parking"}
-          className={area === "parking" ? "active" : ""}
-          onClick={() => setArea("parking")}
-          type="button"
-        >
-          <CarFront size={17} /> Parking
-        </button>
-        <button
-          aria-pressed={area === "pools"}
-          className={area === "pools" ? "active" : ""}
-          onClick={() => setArea("pools")}
-          type="button"
-        >
-          <PackageOpen size={17} /> Shared barrels
-        </button>
-      </div>
-      {area === "parking" ? (
+      {sharedBarrelsEnabled && (
+        <div className="customer-service-tabs" aria-label="Choose a service">
+          <button
+            aria-pressed={effectiveArea === "parking"}
+            className={effectiveArea === "parking" ? "active" : ""}
+            onClick={() => setArea("parking")}
+            type="button"
+          >
+            <CarFront size={17} /> Parking
+          </button>
+          <button
+            aria-pressed={effectiveArea === "pools"}
+            className={effectiveArea === "pools" ? "active" : ""}
+            onClick={() => setArea("pools")}
+            type="button"
+          >
+            <PackageOpen size={17} /> Shared barrels
+          </button>
+        </div>
+      )}
+      {effectiveArea === "parking" ? (
         <ParkingWorkspace
           authenticated={authenticated}
           onAuthenticationRequired={onAuthenticationRequired}

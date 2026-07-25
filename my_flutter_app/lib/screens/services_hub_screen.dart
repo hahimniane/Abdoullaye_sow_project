@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
+import '../providers/app_gate_provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 
@@ -85,6 +86,7 @@ class ShippingTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final sharedBarrelsEnabled = context.watch<AppGateProvider>().sharedBarrelsEnabled;
     return _CategoryTab(
       title: l10n.hubShipping,
       subtitle: l10n.hubShippingSubtitle,
@@ -96,13 +98,14 @@ class ShippingTab extends StatelessWidget {
           AppColors.cobalt,
           '/barrel',
         ),
-        _HubItem(
-          l10n.hubSharedBarrels,
-          l10n.hubSharedBarrelsSubtitle,
-          Icons.group_add_outlined,
-          AppColors.saffron,
-          '/open-barrels',
-        ),
+        if (sharedBarrelsEnabled)
+          _HubItem(
+            l10n.hubSharedBarrels,
+            l10n.hubSharedBarrelsSubtitle,
+            Icons.group_add_outlined,
+            AppColors.saffron,
+            '/open-barrels',
+          ),
         _HubItem(
           l10n.orderTypeFreight,
           l10n.hubFreightSubtitle,

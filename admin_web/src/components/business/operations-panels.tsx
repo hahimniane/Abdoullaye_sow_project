@@ -53,6 +53,7 @@ import {
   withSelectedDestinationCountry,
 } from "@/lib/destination-countries";
 import { confirmImportantAction } from "@/lib/action-confirmation";
+import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import {
   sharedBarrelDeadlineIso,
   sharedBarrelPoolErrorMessage,
@@ -1669,6 +1670,7 @@ function deadlineHasPassed(value: unknown) {
 }
 
 export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinations }: PanelProps) {
+  const sharedBarrelsEnabled = useSharedBarrelsEnabled();
   const enabled = Boolean(businessId && !previewMode);
   const shipments = useBusinessRows("barrelShipments", businessId, enabled, 500);
   const pools = useBusinessRows("barrelPools", businessId, enabled, 500);
@@ -2018,6 +2020,8 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
         </button>
       </div>
 
+      {sharedBarrelsEnabled && (
+      <>
       <div className="lst-subsection">
         <div className="lst-subhead">
           <div>
@@ -2479,6 +2483,8 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
             </footer>
           </div>
         </div>
+      )}
+      </>
       )}
 
       {shipments.loading && <LoadingState />}

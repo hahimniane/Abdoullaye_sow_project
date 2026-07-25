@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/l10n/app_localizations.dart';
+import 'package:my_flutter_app/providers/app_gate_provider.dart';
 import 'package:my_flutter_app/screens/services_hub_screen.dart';
+import 'package:provider/provider.dart';
 
 void main() {
   test('orders wait for every service stream before leaving loading state', () {
@@ -56,17 +58,22 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        locale: Locale('fr'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: ShippingTab(),
+      ChangeNotifierProvider<AppGateProvider>.value(
+        value: AppGateProvider.test(status: AppGateStatus.ready),
+        child: const MaterialApp(
+          locale: Locale('fr'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ShippingTab(),
+        ),
       ),
     );
 
     expect(find.text('Expédition'), findsOneWidget);
     expect(find.text('Envoyer un baril'), findsOneWidget);
-    expect(find.text('Barils partagés'), findsOneWidget);
+    // Shared barrels is paused platform-wide (default off); it should not
+    // render until the remote flag is turned back on.
+    expect(find.text('Barils partagés'), findsNothing);
     expect(find.text('Fret'), findsOneWidget);
     expect(find.text('Transporter une voiture'), findsOneWidget);
     expect(tester.takeException(), isNull);

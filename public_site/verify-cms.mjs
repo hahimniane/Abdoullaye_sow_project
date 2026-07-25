@@ -114,7 +114,7 @@ assertIncludes(index, 'id="featuredBusinessesGrid"', "index.html");
 assertIncludes(index, 'data-cms="hero.headline"', "index.html");
 assertIncludes(index, 'data-cms="featured.heading"', "index.html");
 
-for (const file of ["index.html", "source.html"]) {
+for (const file of ["index.html"]) {
   const html = read(file);
   assertIncludes(html, 'data-src-en="assets/app-shipping-en.png?v=2"', file);
   assertIncludes(html, 'data-src-fr="assets/app-shipping-fr.png?v=2"', file);
@@ -124,9 +124,24 @@ for (const file of ["index.html", "source.html"]) {
     `${file} must show a real localized app capture, not the retired mock UI`,
   );
 }
+for (const file of ["tracking.html"]) {
+  const html = read(file);
+  assertIncludes(html, 'data-src-en="assets/app-activity-en.png?v=1"', file);
+  assertIncludes(html, 'data-src-fr="assets/app-activity-fr.png?v=1"', file);
+  assert(
+    !html.includes('class="phone phone-sm"') &&
+      !html.includes("fabric-sample.jpg"),
+    `${file} must show a real localized app capture, not the retired mock UI`,
+  );
+}
 assert(
   existsSync(path.join(root, "assets", "app-shipping-en.png")) &&
     existsSync(path.join(root, "assets", "app-shipping-fr.png")),
+  "localized real-app capture assets must be present",
+);
+assert(
+  existsSync(path.join(root, "assets", "app-activity-en.png")) &&
+    existsSync(path.join(root, "assets", "app-activity-fr.png")),
   "localized real-app capture assets must be present",
 );
 

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="google" content="notranslate" />
   <title>Inscrire votre entreprise — Laawol Digital</title>
-  <meta name="description" content="Postulez pour proposer expédition, voitures, approvisionnement et plus sur Laawol Digital. Inscrivez votre entreprise, choisissez vos services et soyez visible après approbation." />
+  <meta name="description" content="Postulez pour proposer expédition, voitures, fret et plus sur Laawol Digital. Inscrivez votre entreprise, choisissez vos services et soyez visible après approbation." />
   <meta name="theme-color" content="#0b3b38" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -56,7 +56,7 @@
       <nav class="nav-links" aria-label="Navigation principale">
         <a href="index.html">Accueil</a>
         <a href="services.html">Services</a>
-        <a href="source.html">Commander depuis le pays</a>
+        <a href="tracking.html">Suivi de commande</a>
         <a href="app.html">Application</a>
         <a href="about.html">À propos</a>
         <a href="contact.html">Contact</a>
@@ -70,7 +70,7 @@
     <div class="mobile-menu" id="mobileMenu">
       <a href="index.html">Accueil</a>
       <a href="services.html">Services</a>
-      <a href="source.html">Commander depuis le pays</a>
+      <a href="tracking.html">Suivi de commande</a>
       <a href="app.html">Application</a>
       <a href="about.html">À propos</a>
       <a href="contact.html">Contact</a>
@@ -182,10 +182,10 @@
     <div class="container footer-grid">
       <div class="footer-brand">
         <a class="brand" href="index.html"><span class="brand-mark"><img src="assets/logo.png" alt="Laawol" width="32" height="32" style="border-radius:8px;display:block" /></span><span class="brand-text light">Laawol<span>Digital</span></span></a>
-        <p>Une plateforme de confiance pour la diaspora africaine : des entreprises inscrites proposent l’expédition, les voitures, l’approvisionnement, la restauration et des services professionnels avec un accompagnement plus clair.</p>
+        <p>Une plateforme de confiance pour la diaspora africaine : des entreprises inscrites proposent l’expédition, les voitures, le fret, la restauration et des services professionnels avec un accompagnement plus clair.</p>
       </div>
       <div class="footer-col"><h4>Explorer</h4>
-        <a href="services.html">Services</a><a href="source.html">Commander depuis le pays</a><a href="app.html">Application</a><a href="about.html">À propos</a>
+        <a href="services.html">Services</a><a href="tracking.html">Suivi de commande</a><a href="app.html">Application</a><a href="about.html">À propos</a>
       </div>
       <div class="footer-col"><h4>Entreprise</h4>
         <a href="about.html">Notre histoire</a><a href="partner.html">Inscrire votre entreprise</a><a href="contact.html">Contact</a><a href="https://admin.laawoldigital.com">Console admin</a>
@@ -239,7 +239,9 @@
     // Service catalog — mirrors my_flutter_app/lib/models/business_service.dart
     const SERVICES = [
       { key: "barrelShipping", label: "Barrel shipping", desc: "Ship barrels to destination countries." },
-      { key: "sharedBarrels", label: "Shared barrels", desc: "Manage partial barrels, drop-offs, and customer consolidation." },
+      // Shared barrels: paused platform-wide (Settings -> Feature availability
+      // -> Shared barrel pools). Not deleted, just hidden until re-enabled.
+      // { key: "sharedBarrels", label: "Shared barrels", desc: "Manage partial barrels, drop-offs, and customer consolidation." },
       { key: "carSales",       label: "Car sales", desc: "Publish cars so customers can browse and buy them." },
       { key: "carParking",     label: "Car parking", desc: "Manage parked cars and parking receipts." },
       { key: "carTransport",   label: "Car transport", desc: "Track vehicle transport requests." },
