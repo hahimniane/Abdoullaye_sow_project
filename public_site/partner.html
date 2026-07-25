@@ -208,6 +208,7 @@
 
   <script type="module">
     import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js";
     import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
     import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
@@ -222,6 +223,16 @@
       appId: "1:577373430777:web:5af70db59c5d49a8125328",
     };
     const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+    // createCustomerUser/submitBusinessApplication enforce App Check in
+    // production; without this, every call from this page fails with a
+    // generic "Unauthenticated" error (Firebase reports a missing/invalid
+    // App Check token on a callable the same way it reports a missing auth
+    // token, which is misleading). Same reCAPTCHA Enterprise key admin_web
+    // uses, already registered for laawoldigital.com.
+    initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider("6Lcs5FUtAAAAAA_XmvDg0rDqUE4noHLjFCLqofHX"),
+      isTokenAutoRefreshEnabled: true,
+    });
     const auth = getAuth(app);
     const functions = getFunctions(app); // default region us-central1, matches mobile
     const storage = getStorage(app);
