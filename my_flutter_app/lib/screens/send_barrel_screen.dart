@@ -1170,7 +1170,7 @@ class _BusinessOptionCard extends StatelessWidget {
 
     final note = option.serviceNote?.trim() ?? '';
     final destinationNote = option.country.destinationNote?.trim() ?? '';
-    final deliveryEstimate = option.country.deliveryEstimateLabel;
+    final deliveryEstimate = option.country.barrelShippingDeliveryEstimateLabel;
 
     return Semantics(
       button: true,

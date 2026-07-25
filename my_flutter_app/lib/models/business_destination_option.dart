@@ -134,10 +134,20 @@ class BusinessDestinationOption {
           country['freightSeaDepartureDays'],
         ),
         carTransportAvailable: _legacyCarTransportAvailable(country),
-        deliveryEstimateMinDays: (country['deliveryEstimateMinDays'] as num?)
-            ?.toInt(),
-        deliveryEstimateMaxDays: (country['deliveryEstimateMaxDays'] as num?)
-            ?.toInt(),
+        barrelShippingDeliveryEstimateMinDays:
+            (country['barrelShippingDeliveryEstimateMinDays'] as num?)
+                ?.toInt(),
+        barrelShippingDeliveryEstimateMaxDays:
+            (country['barrelShippingDeliveryEstimateMaxDays'] as num?)
+                ?.toInt(),
+        freightAirDeliveryEstimateMinDays:
+            (country['freightAirDeliveryEstimateMinDays'] as num?)?.toInt(),
+        freightAirDeliveryEstimateMaxDays:
+            (country['freightAirDeliveryEstimateMaxDays'] as num?)?.toInt(),
+        freightSeaDeliveryEstimateMinDays:
+            (country['freightSeaDeliveryEstimateMinDays'] as num?)?.toInt(),
+        freightSeaDeliveryEstimateMaxDays:
+            (country['freightSeaDeliveryEstimateMaxDays'] as num?)?.toInt(),
         destinationNote: country['destinationNote'] as String?,
       ),
     );
@@ -248,10 +258,18 @@ class BusinessDestinationOption {
           data['freightSeaDepartureDays'],
         ),
         carTransportAvailable: _legacyCarTransportAvailable(data),
-        deliveryEstimateMinDays: (data['deliveryEstimateMinDays'] as num?)
-            ?.toInt(),
-        deliveryEstimateMaxDays: (data['deliveryEstimateMaxDays'] as num?)
-            ?.toInt(),
+        barrelShippingDeliveryEstimateMinDays:
+            (data['barrelShippingDeliveryEstimateMinDays'] as num?)?.toInt(),
+        barrelShippingDeliveryEstimateMaxDays:
+            (data['barrelShippingDeliveryEstimateMaxDays'] as num?)?.toInt(),
+        freightAirDeliveryEstimateMinDays:
+            (data['freightAirDeliveryEstimateMinDays'] as num?)?.toInt(),
+        freightAirDeliveryEstimateMaxDays:
+            (data['freightAirDeliveryEstimateMaxDays'] as num?)?.toInt(),
+        freightSeaDeliveryEstimateMinDays:
+            (data['freightSeaDeliveryEstimateMinDays'] as num?)?.toInt(),
+        freightSeaDeliveryEstimateMaxDays:
+            (data['freightSeaDeliveryEstimateMaxDays'] as num?)?.toInt(),
         destinationNote: data['destinationNote'] as String?,
       ),
     );

@@ -174,11 +174,25 @@ class _DestinationCountriesScreenState
           ? ''
           : country!.freightSeaPricePerKg.toStringAsFixed(0),
     );
-    final minDaysController = TextEditingController(
-      text: country?.deliveryEstimateMinDays?.toString() ?? '',
+    // Each service has its own real-world transit time, so each gets an
+    // independent min/max pair instead of one shared estimate.
+    final barrelMinDaysController = TextEditingController(
+      text: country?.barrelShippingDeliveryEstimateMinDays?.toString() ?? '',
     );
-    final maxDaysController = TextEditingController(
-      text: country?.deliveryEstimateMaxDays?.toString() ?? '',
+    final barrelMaxDaysController = TextEditingController(
+      text: country?.barrelShippingDeliveryEstimateMaxDays?.toString() ?? '',
+    );
+    final airMinDaysController = TextEditingController(
+      text: country?.freightAirDeliveryEstimateMinDays?.toString() ?? '',
+    );
+    final airMaxDaysController = TextEditingController(
+      text: country?.freightAirDeliveryEstimateMaxDays?.toString() ?? '',
+    );
+    final seaMinDaysController = TextEditingController(
+      text: country?.freightSeaDeliveryEstimateMinDays?.toString() ?? '',
+    );
+    final seaMaxDaysController = TextEditingController(
+      text: country?.freightSeaDeliveryEstimateMaxDays?.toString() ?? '',
     );
     var barrelShippingEnabled =
         offersBarrelShipping && (country?.barrelShippingAvailable ?? false);
@@ -297,23 +311,37 @@ class _DestinationCountriesScreenState
                                   onChanged: (value) => updateService(
                                     () => barrelShippingEnabled = value,
                                   ),
-                                  child: TextFormField(
-                                    controller: barrelPriceController,
-                                    decoration: InputDecoration(
-                                      labelText: l10n.barrelShippingPrice,
-                                      prefixText: r'$',
-                                    ),
-                                    keyboardType:
-                                        const TextInputType.numberWithOptions(
-                                          decimal: true,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      TextFormField(
+                                        controller: barrelPriceController,
+                                        decoration: InputDecoration(
+                                          labelText: l10n.barrelShippingPrice,
+                                          prefixText: r'$',
                                         ),
-                                    validator: (value) => _serviceRateError(
-                                      value: value ?? '',
-                                      isEnabled: barrelShippingEnabled,
-                                      serviceLabel:
-                                          l10n.destinationBarrelService,
-                                      l10n: l10n,
-                                    ),
+                                        keyboardType:
+                                            const TextInputType.numberWithOptions(
+                                              decimal: true,
+                                            ),
+                                        validator: (value) => _serviceRateError(
+                                          value: value ?? '',
+                                          isEnabled: barrelShippingEnabled,
+                                          serviceLabel:
+                                              l10n.destinationBarrelService,
+                                          l10n: l10n,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      _DeliveryEstimateFields(
+                                        minController: barrelMinDaysController,
+                                        maxController: barrelMaxDaysController,
+                                        deliveryEstimateError:
+                                            _deliveryEstimateError,
+                                        l10n: l10n,
+                                      ),
+                                    ],
                                   ),
                                 ),
                               if (offersFreight)
@@ -354,6 +382,14 @@ class _DestinationCountriesScreenState
                                         onChanged: (days) => setModalState(
                                           () => freightAirDepartureDays = days,
                                         ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      _DeliveryEstimateFields(
+                                        minController: airMinDaysController,
+                                        maxController: airMaxDaysController,
+                                        deliveryEstimateError:
+                                            _deliveryEstimateError,
+                                        l10n: l10n,
                                       ),
                                     ],
                                   ),
@@ -397,6 +433,14 @@ class _DestinationCountriesScreenState
                                           () => freightSeaDepartureDays = days,
                                         ),
                                       ),
+                                      const SizedBox(height: 12),
+                                      _DeliveryEstimateFields(
+                                        minController: seaMinDaysController,
+                                        maxController: seaMaxDaysController,
+                                        deliveryEstimateError:
+                                            _deliveryEstimateError,
+                                        l10n: l10n,
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -425,55 +469,6 @@ class _DestinationCountriesScreenState
                           ),
                         );
                       },
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: minDaysController,
-                            decoration: InputDecoration(
-                              labelText: l10n.minDeliveryDays,
-                              prefixIcon: const Icon(Icons.schedule_outlined),
-                            ),
-                            keyboardType: TextInputType.number,
-                            validator: (value) => _deliveryEstimateError(
-                              minValue: value ?? '',
-                              maxValue: maxDaysController.text,
-                              validateMin: true,
-                              l10n: l10n,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextFormField(
-                            controller: maxDaysController,
-                            decoration: InputDecoration(
-                              labelText: l10n.maxDeliveryDays,
-                              prefixIcon: const Icon(
-                                Icons.event_available_outlined,
-                              ),
-                            ),
-                            keyboardType: TextInputType.number,
-                            validator: (value) => _deliveryEstimateError(
-                              minValue: minDaysController.text,
-                              maxValue: value ?? '',
-                              validateMin: false,
-                              l10n: l10n,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      l10n.optionalDeliveryEstimateNote,
-                      style: const TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
                     ),
                     const SizedBox(height: 16),
                     FilledButton(
@@ -508,9 +503,15 @@ class _DestinationCountriesScreenState
               .toLowerCase()
               .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
               .replaceAll(RegExp(r'^-|-$'), '');
-      final minDays = int.tryParse(minDaysController.text.trim());
-      final maxDays = int.tryParse(maxDaysController.text.trim());
-      final hasEstimate = minDays != null && maxDays != null;
+      final barrelMinDays = int.tryParse(barrelMinDaysController.text.trim());
+      final barrelMaxDays = int.tryParse(barrelMaxDaysController.text.trim());
+      final hasBarrelEstimate = barrelMinDays != null && barrelMaxDays != null;
+      final airMinDays = int.tryParse(airMinDaysController.text.trim());
+      final airMaxDays = int.tryParse(airMaxDaysController.text.trim());
+      final hasAirEstimate = airMinDays != null && airMaxDays != null;
+      final seaMinDays = int.tryParse(seaMinDaysController.text.trim());
+      final seaMaxDays = int.tryParse(seaMaxDaysController.text.trim());
+      final hasSeaEstimate = seaMinDays != null && seaMaxDays != null;
       await FirebaseFirestore.instance
           .collection('businesses')
           .doc(businessId)
@@ -540,11 +541,23 @@ class _DestinationCountriesScreenState
                 ? _orderedDepartureDays(freightSeaDepartureDays)
                 : const <String>[],
             'carTransportAvailable': carTransportEnabled,
-            'deliveryEstimateMinDays': hasEstimate
-                ? minDays
+            'barrelShippingDeliveryEstimateMinDays': hasBarrelEstimate
+                ? barrelMinDays
                 : FieldValue.delete(),
-            'deliveryEstimateMaxDays': hasEstimate
-                ? maxDays
+            'barrelShippingDeliveryEstimateMaxDays': hasBarrelEstimate
+                ? barrelMaxDays
+                : FieldValue.delete(),
+            'freightAirDeliveryEstimateMinDays': hasAirEstimate
+                ? airMinDays
+                : FieldValue.delete(),
+            'freightAirDeliveryEstimateMaxDays': hasAirEstimate
+                ? airMaxDays
+                : FieldValue.delete(),
+            'freightSeaDeliveryEstimateMinDays': hasSeaEstimate
+                ? seaMinDays
+                : FieldValue.delete(),
+            'freightSeaDeliveryEstimateMaxDays': hasSeaEstimate
+                ? seaMaxDays
                 : FieldValue.delete(),
             'isActive': serviceAvailability.values.any((enabled) => enabled),
             'updatedAt': FieldValue.serverTimestamp(),
@@ -561,8 +574,12 @@ class _DestinationCountriesScreenState
       barrelPriceController.dispose();
       freightAirPriceController.dispose();
       freightSeaPriceController.dispose();
-      minDaysController.dispose();
-      maxDaysController.dispose();
+      barrelMinDaysController.dispose();
+      barrelMaxDaysController.dispose();
+      airMinDaysController.dispose();
+      airMaxDaysController.dispose();
+      seaMinDaysController.dispose();
+      seaMaxDaysController.dispose();
     }
   }
 
@@ -853,6 +870,44 @@ class _DestinationCountriesScreenState
     ];
   }
 
+  List<Widget> _deliveryEstimateChips(
+    AppLocalizations l10n,
+    DestinationCountry country,
+  ) {
+    return [
+      if (country.isBarrelShippingConfigured &&
+          country.barrelShippingDeliveryEstimateLabel != null)
+        _DestinationSummaryChip(
+          icon: Icons.schedule_outlined,
+          label: l10n.destinationServicePriceSummary(
+            l10n.destinationBarrelService,
+            country.barrelShippingDeliveryEstimateLabel!,
+          ),
+          muted: true,
+        ),
+      if (country.freightAvailable('air') &&
+          country.freightAirDeliveryEstimateLabel != null)
+        _DestinationSummaryChip(
+          icon: Icons.schedule_outlined,
+          label: l10n.destinationServicePriceSummary(
+            l10n.destinationFreightAir,
+            country.freightAirDeliveryEstimateLabel!,
+          ),
+          muted: true,
+        ),
+      if (country.freightAvailable('sea') &&
+          country.freightSeaDeliveryEstimateLabel != null)
+        _DestinationSummaryChip(
+          icon: Icons.schedule_outlined,
+          label: l10n.destinationServicePriceSummary(
+            l10n.destinationFreightSea,
+            country.freightSeaDeliveryEstimateLabel!,
+          ),
+          muted: true,
+        ),
+    ];
+  }
+
   List<Widget> _countryTiles(
     BuildContext context,
     List<DestinationCountry> countries, {
@@ -904,16 +959,12 @@ class _DestinationCountriesScreenState
                       );
                     },
                   ),
-                  if (country.deliveryEstimateLabel != null) ...[
+                  if (_deliveryEstimateChips(l10n, country).isNotEmpty) ...[
                     const SizedBox(height: 8),
-                    Text(
-                      l10n.deliveryEstimateSummary(
-                        country.deliveryEstimateLabel!,
-                      ),
-                      style: const TextStyle(
-                        color: AppColors.muted,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _deliveryEstimateChips(l10n, country),
                     ),
                   ],
                 ],
@@ -968,6 +1019,81 @@ class _DestinationCountriesScreenState
             ),
         ],
       ),
+    );
+  }
+}
+
+class _DeliveryEstimateFields extends StatelessWidget {
+  const _DeliveryEstimateFields({
+    required this.minController,
+    required this.maxController,
+    required this.deliveryEstimateError,
+    required this.l10n,
+  });
+
+  final TextEditingController minController;
+  final TextEditingController maxController;
+  final String? Function({
+    required String minValue,
+    required String maxValue,
+    required bool validateMin,
+    required AppLocalizations l10n,
+  })
+  deliveryEstimateError;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: minController,
+                decoration: InputDecoration(
+                  labelText: l10n.minDeliveryDays,
+                  prefixIcon: const Icon(Icons.schedule_outlined),
+                ),
+                keyboardType: TextInputType.number,
+                validator: (value) => deliveryEstimateError(
+                  minValue: value ?? '',
+                  maxValue: maxController.text,
+                  validateMin: true,
+                  l10n: l10n,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextFormField(
+                controller: maxController,
+                decoration: InputDecoration(
+                  labelText: l10n.maxDeliveryDays,
+                  prefixIcon: const Icon(Icons.event_available_outlined),
+                ),
+                keyboardType: TextInputType.number,
+                validator: (value) => deliveryEstimateError(
+                  minValue: minController.text,
+                  maxValue: value ?? '',
+                  validateMin: false,
+                  l10n: l10n,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          l10n.optionalDeliveryEstimateNote,
+          style: const TextStyle(
+            color: AppColors.muted,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }

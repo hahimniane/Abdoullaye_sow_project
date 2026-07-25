@@ -93,8 +93,14 @@ type DestinationDraft = {
   price: string;
   freightAirPrice: string;
   freightSeaPrice: string;
-  minDays: string;
-  maxDays: string;
+  // Each service has its own real-world transit time, so delivery estimates
+  // are tracked per service rather than one shared pair for the country.
+  barrelMinDays: string;
+  barrelMaxDays: string;
+  freightAirMinDays: string;
+  freightAirMaxDays: string;
+  freightSeaMinDays: string;
+  freightSeaMaxDays: string;
   freightAirDepartureDays: DestinationDepartureDay[];
   freightSeaDepartureDays: DestinationDepartureDay[];
   note: string;
@@ -298,8 +304,12 @@ const emptyDestinationDraft: DestinationDraft = {
   price: "",
   freightAirPrice: "",
   freightSeaPrice: "",
-  minDays: "",
-  maxDays: "",
+  barrelMinDays: "",
+  barrelMaxDays: "",
+  freightAirMinDays: "",
+  freightAirMaxDays: "",
+  freightSeaMinDays: "",
+  freightSeaMaxDays: "",
   freightAirDepartureDays: [],
   freightSeaDepartureDays: [],
   note: "",
@@ -318,6 +328,28 @@ function destinationDraftAvailability(
     freightSea: draft.freightSea,
     carTransport: draft.carTransport,
   };
+}
+
+function parseDeliveryEstimate(
+  minText: string,
+  maxText: string,
+): { minDays: number; maxDays: number } | null {
+  const min = minText.trim();
+  const max = maxText.trim();
+  if (min === "" && max === "") return null;
+  const minDays = Number(min);
+  const maxDays = Number(max);
+  if (
+    min === "" ||
+    max === "" ||
+    !Number.isInteger(minDays) ||
+    !Number.isInteger(maxDays) ||
+    minDays <= 0 ||
+    maxDays < minDays
+  ) {
+    throw new Error("Enter a valid min/max delivery day range.");
+  }
+  return { minDays, maxDays };
 }
 
 const emptyListingDraft: ListingDraft = {
@@ -493,8 +525,12 @@ export function DestinationsPanel({
       price: numberString(row.barrelShippingPrice),
       freightAirPrice: numberString(row.freightAirPricePerKg),
       freightSeaPrice: numberString(row.freightSeaPricePerKg),
-      minDays: numberString(row.deliveryEstimateMinDays),
-      maxDays: numberString(row.deliveryEstimateMaxDays),
+      barrelMinDays: numberString(row.barrelShippingDeliveryEstimateMinDays),
+      barrelMaxDays: numberString(row.barrelShippingDeliveryEstimateMaxDays),
+      freightAirMinDays: numberString(row.freightAirDeliveryEstimateMinDays),
+      freightAirMaxDays: numberString(row.freightAirDeliveryEstimateMaxDays),
+      freightSeaMinDays: numberString(row.freightSeaDeliveryEstimateMinDays),
+      freightSeaMaxDays: numberString(row.freightSeaDeliveryEstimateMaxDays),
       freightAirDepartureDays: destinationDepartureDays(
         row.freightAirDepartureDays,
       ),
@@ -546,30 +582,24 @@ export function DestinationsPanel({
           ? freightSeaPrice
           : 0,
     };
-    const minText = draft.minDays.trim();
-    const maxText = draft.maxDays.trim();
-    const hasEstimate = minText !== "" || maxText !== "";
-    const minDays = Number(minText);
-    const maxDays = Number(maxText);
+    const barrelEstimate = parseDeliveryEstimate(
+      draft.barrelMinDays,
+      draft.barrelMaxDays,
+    );
+    const freightAirEstimate = parseDeliveryEstimate(
+      draft.freightAirMinDays,
+      draft.freightAirMaxDays,
+    );
+    const freightSeaEstimate = parseDeliveryEstimate(
+      draft.freightSeaMinDays,
+      draft.freightSeaMaxDays,
+    );
     const rateError = destinationRateError(
       enabledServices,
       availability,
       rates,
     );
     if (rateError) throw new Error(rateError);
-    if (
-      hasEstimate &&
-      (
-        minText === "" ||
-        maxText === "" ||
-        !Number.isInteger(minDays) ||
-        !Number.isInteger(maxDays) ||
-        minDays <= 0 ||
-        maxDays < minDays
-      )
-    ) {
-      throw new Error("Enter a valid min/max delivery day range.");
-    }
     await setDoc(
       doc(db, "businesses", businessId, "destinationCountries", country.id),
       {
@@ -592,8 +622,24 @@ export function DestinationsPanel({
           ? draft.freightSeaDepartureDays
           : [],
         carTransportAvailable: availability.carTransport,
-        deliveryEstimateMinDays: hasEstimate ? minDays : deleteField(),
-        deliveryEstimateMaxDays: hasEstimate ? maxDays : deleteField(),
+        barrelShippingDeliveryEstimateMinDays: barrelEstimate
+          ? barrelEstimate.minDays
+          : deleteField(),
+        barrelShippingDeliveryEstimateMaxDays: barrelEstimate
+          ? barrelEstimate.maxDays
+          : deleteField(),
+        freightAirDeliveryEstimateMinDays: freightAirEstimate
+          ? freightAirEstimate.minDays
+          : deleteField(),
+        freightAirDeliveryEstimateMaxDays: freightAirEstimate
+          ? freightAirEstimate.maxDays
+          : deleteField(),
+        freightSeaDeliveryEstimateMinDays: freightSeaEstimate
+          ? freightSeaEstimate.minDays
+          : deleteField(),
+        freightSeaDeliveryEstimateMaxDays: freightSeaEstimate
+          ? freightSeaEstimate.maxDays
+          : deleteField(),
         destinationNote: draft.note.trim(),
         isActive: Object.values(availability).some(Boolean),
         updatedAt: serverTimestamp(),
@@ -703,8 +749,12 @@ export function DestinationsPanel({
                   "barrelShippingPrice",
                   "freightAirPricePerKg",
                   "freightSeaPricePerKg",
-                  "deliveryEstimateMinDays",
-                  "deliveryEstimateMaxDays",
+                  "barrelShippingDeliveryEstimateMinDays",
+                  "barrelShippingDeliveryEstimateMaxDays",
+                  "freightAirDeliveryEstimateMinDays",
+                  "freightAirDeliveryEstimateMaxDays",
+                  "freightSeaDeliveryEstimateMinDays",
+                  "freightSeaDeliveryEstimateMaxDays",
                   "isActive",
                   "updatedAt",
                 ],
@@ -788,8 +838,27 @@ export function DestinationsPanel({
                 {Boolean(text(row.destinationNote, "")) && <small>{text(row.destinationNote, "")}</small>}
               </div>
               <div className="destination-delivery-cell">
-                <strong>{deliveryWindow(row) || "Not set"}</strong>
-                <span>Shared country estimate</span>
+                {availability.barrelShipping && (
+                  <div className="destination-delivery-row">
+                    <span>Barrel</span>
+                    <strong>{serviceDeliveryWindow(row, "barrelShipping") || "Not set"}</strong>
+                  </div>
+                )}
+                {availability.freightAir && (
+                  <div className="destination-delivery-row">
+                    <span>Air</span>
+                    <strong>{serviceDeliveryWindow(row, "freightAir") || "Not set"}</strong>
+                  </div>
+                )}
+                {availability.freightSea && (
+                  <div className="destination-delivery-row">
+                    <span>Sea</span>
+                    <strong>{serviceDeliveryWindow(row, "freightSea") || "Not set"}</strong>
+                  </div>
+                )}
+                {!availability.barrelShipping && !availability.freightAir && !availability.freightSea && (
+                  <span className="destination-service-empty">No estimate needed</span>
+                )}
               </div>
               <div>
                 <span className={`destination-status ${active ? "active" : "paused"}`}>
@@ -853,17 +922,25 @@ export function DestinationsPanel({
                       checked={draft.barrelShipping}
                       onChange={(checked) => setDraft((value) => ({ ...value, barrelShipping: checked }))}
                     >
-                      <label className="lst-field">
-                        <span>Price per barrel (USD)</span>
-                        <input
-                          inputMode="decimal"
-                          min="0"
-                          type="number"
-                          value={draft.price}
-                          onChange={(event) => setDraft((value) => ({ ...value, price: event.target.value }))}
-                          placeholder="250"
+                      <>
+                        <label className="lst-field">
+                          <span>Price per barrel (USD)</span>
+                          <input
+                            inputMode="decimal"
+                            min="0"
+                            type="number"
+                            value={draft.price}
+                            onChange={(event) => setDraft((value) => ({ ...value, price: event.target.value }))}
+                            placeholder="250"
+                          />
+                        </label>
+                        <DeliveryEstimateFields
+                          minDays={draft.barrelMinDays}
+                          maxDays={draft.barrelMaxDays}
+                          onMinChange={(barrelMinDays) => setDraft((value) => ({ ...value, barrelMinDays }))}
+                          onMaxChange={(barrelMaxDays) => setDraft((value) => ({ ...value, barrelMaxDays }))}
                         />
-                      </label>
+                      </>
                     </DestinationServiceControl>
                   )}
                   {globalAvailability.freightAir && (
@@ -895,6 +972,12 @@ export function DestinationsPanel({
                               freightAirDepartureDays,
                             }))
                           }
+                        />
+                        <DeliveryEstimateFields
+                          minDays={draft.freightAirMinDays}
+                          maxDays={draft.freightAirMaxDays}
+                          onMinChange={(freightAirMinDays) => setDraft((value) => ({ ...value, freightAirMinDays }))}
+                          onMaxChange={(freightAirMaxDays) => setDraft((value) => ({ ...value, freightAirMaxDays }))}
                         />
                       </>
                     </DestinationServiceControl>
@@ -929,6 +1012,12 @@ export function DestinationsPanel({
                             }))
                           }
                         />
+                        <DeliveryEstimateFields
+                          minDays={draft.freightSeaMinDays}
+                          maxDays={draft.freightSeaMaxDays}
+                          onMinChange={(freightSeaMinDays) => setDraft((value) => ({ ...value, freightSeaMinDays }))}
+                          onMaxChange={(freightSeaMaxDays) => setDraft((value) => ({ ...value, freightSeaMaxDays }))}
+                        />
                       </>
                     </DestinationServiceControl>
                   )}
@@ -942,16 +1031,6 @@ export function DestinationsPanel({
                     />
                   )}
                 </div>
-                <div className="destination-form-intro wide">
-                  <strong>Estimated delivery for this country</strong>
-                  <span>Optional. This estimate applies to every active service configured above.</span>
-                </div>
-                <label className="lst-field"><span>Minimum days</span>
-                  <input inputMode="numeric" min="1" type="number" value={draft.minDays} onChange={(event) => setDraft((value) => ({ ...value, minDays: event.target.value }))} placeholder="14" />
-                </label>
-                <label className="lst-field"><span>Maximum days</span>
-                  <input inputMode="numeric" min="1" type="number" value={draft.maxDays} onChange={(event) => setDraft((value) => ({ ...value, maxDays: event.target.value }))} placeholder="30" />
-                </label>
                 <label className="lst-field wide"><span>Customer route note (optional)</span>
                   <textarea rows={2} value={draft.note} onChange={(event) => setDraft((value) => ({ ...value, note: event.target.value }))} placeholder="e.g. Door-to-door delivery in Conakry included" />
                 </label>
@@ -1050,6 +1129,32 @@ function DestinationServiceControl({
       </div>
       {checked && children && <div className="destination-service-control-body">{children}</div>}
     </section>
+  );
+}
+
+function DeliveryEstimateFields({
+  minDays,
+  maxDays,
+  onMinChange,
+  onMaxChange,
+}: {
+  minDays: string;
+  maxDays: string;
+  onMinChange: (value: string) => void;
+  onMaxChange: (value: string) => void;
+}) {
+  return (
+    <fieldset className="destination-delivery-estimate">
+      <legend>Estimated delivery (optional)</legend>
+      <div className="destination-delivery-estimate-fields">
+        <label className="lst-field"><span>Minimum days</span>
+          <input inputMode="numeric" min="1" type="number" value={minDays} onChange={(event) => onMinChange(event.target.value)} placeholder="14" />
+        </label>
+        <label className="lst-field"><span>Maximum days</span>
+          <input inputMode="numeric" min="1" type="number" value={maxDays} onChange={(event) => onMaxChange(event.target.value)} placeholder="30" />
+        </label>
+      </div>
+    </fieldset>
   );
 }
 
@@ -3866,6 +3971,16 @@ function selectableStateOptions(current: string) {
 function deliveryWindow(row: FirestoreRow) {
   const minDays = Number(row.deliveryEstimateMinDays);
   const maxDays = Number(row.deliveryEstimateMaxDays);
+  if (!Number.isFinite(minDays) || !Number.isFinite(maxDays) || minDays <= 0 || maxDays <= 0) return "";
+  return `${minDays}-${maxDays} jours`;
+}
+
+// Country coverage rows can enable barrel shipping, air freight, and sea
+// freight at once, each with its own transit time, so the estimate is read
+// per service rather than one shared value for the whole row.
+function serviceDeliveryWindow(row: FirestoreRow, service: string) {
+  const minDays = Number(row[`${service}DeliveryEstimateMinDays`]);
+  const maxDays = Number(row[`${service}DeliveryEstimateMaxDays`]);
   if (!Number.isFinite(minDays) || !Number.isFinite(maxDays) || minDays <= 0 || maxDays <= 0) return "";
   return `${minDays}-${maxDays} jours`;
 }

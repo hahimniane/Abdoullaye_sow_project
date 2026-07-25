@@ -1360,24 +1360,84 @@ function normalizeBusinessPermissions(raw) {
   );
 }
 
-function deliveryEstimateFromCountry(country) {
-  const minDays = Number(country.deliveryEstimateMinDays);
-  const maxDays = Number(country.deliveryEstimateMaxDays);
+// Country coverage docs can enable barrel shipping, air freight, and sea
+// freight simultaneously, and each has its own real-world transit time — so
+// the delivery estimate is stored per service (e.g. "barrelShipping",
+// "freightAir", "freightSea"), never as one shared pair for the whole
+// country.
+function deliveryEstimateValuesFromFields(minDaysRaw, maxDaysRaw) {
+  const minDays = Number(minDaysRaw);
+  const maxDays = Number(maxDaysRaw);
   if (
     !Number.isInteger(minDays) ||
     !Number.isInteger(maxDays) ||
     minDays <= 0 ||
     maxDays < minDays
   ) {
-    return {};
+    return null;
   }
   return {
-    deliveryEstimateMinDays: minDays,
-    deliveryEstimateMaxDays: maxDays,
-    deliveryEstimateLabel: minDays === maxDays ?
+    minDays,
+    maxDays,
+    label: minDays === maxDays ?
       `${minDays} days` :
       `${minDays}-${maxDays} days`,
   };
+}
+
+function deliveryEstimateValues(country, service) {
+  return deliveryEstimateValuesFromFields(
+      country[`${service}DeliveryEstimateMinDays`],
+      country[`${service}DeliveryEstimateMaxDays`],
+  );
+}
+
+// Used when booking a specific, already-known service: the resulting
+// shipment/order document only ever represents that one service, so the
+// generic (unprefixed) field names it has always used are still correct.
+function deliveryEstimateFromCountry(country, service) {
+  const values = deliveryEstimateValues(country, service);
+  if (!values) return {};
+  return {
+    deliveryEstimateMinDays: values.minDays,
+    deliveryEstimateMaxDays: values.maxDays,
+    deliveryEstimateLabel: values.label,
+  };
+}
+
+// Re-derives/re-validates an estimate that's already stored using the
+// generic (unprefixed) field names — e.g. on a shared barrel pool or an
+// already-booked shipment, both of which are always single-service
+// documents (the field names were copied from deliveryEstimateFromCountry
+// at creation time, so there's no per-service ambiguity to resolve here).
+function deliveryEstimateFromGenericFields(row) {
+  const values = deliveryEstimateValuesFromFields(
+      row.deliveryEstimateMinDays,
+      row.deliveryEstimateMaxDays,
+  );
+  if (!values) return {};
+  return {
+    deliveryEstimateMinDays: values.minDays,
+    deliveryEstimateMaxDays: values.maxDays,
+    deliveryEstimateLabel: values.label,
+  };
+}
+
+// Used when listing destination options before a service has been chosen
+// (e.g. a country offering both air and sea freight): each configured
+// service gets its own independently-addressable min/max/label so the
+// client can show the correct one next to the service it actually
+// describes.
+function deliveryEstimatesByService(country, services) {
+  const result = {};
+  for (const service of services) {
+    const values = deliveryEstimateValues(country, service);
+    if (!values) continue;
+    result[`${service}DeliveryEstimateMinDays`] = values.minDays;
+    result[`${service}DeliveryEstimateMaxDays`] = values.maxDays;
+    result[`${service}DeliveryEstimateLabel`] = values.label;
+  }
+  return result;
 }
 
 const DESTINATION_DEPARTURE_DAYS = [
@@ -1401,19 +1461,9 @@ function normalizedDestinationDepartureDays(value) {
 function compareDestinationOptions(a, b) {
   const country = a.country.name.localeCompare(b.country.name);
   if (country !== 0) return country;
-  const aEstimate = deliveryEstimateFromCountry(a.country);
-  const bEstimate = deliveryEstimateFromCountry(b.country);
-  const aHasEstimate = aEstimate.deliveryEstimateMinDays !== undefined;
-  const bHasEstimate = bEstimate.deliveryEstimateMinDays !== undefined;
-  if (aHasEstimate !== bHasEstimate) return aHasEstimate ? -1 : 1;
-  if (aHasEstimate && bHasEstimate) {
-    const minDays =
-      aEstimate.deliveryEstimateMinDays - bEstimate.deliveryEstimateMinDays;
-    if (minDays !== 0) return minDays;
-    const maxDays =
-      aEstimate.deliveryEstimateMaxDays - bEstimate.deliveryEstimateMaxDays;
-    if (maxDays !== 0) return maxDays;
-  }
+  // A country row can now carry independent delivery estimates per service
+  // (barrel/air/sea), so there is no longer a single "delivery estimate" to
+  // sort mixed-service options by; fall back to price and business name.
   const price =
     a.country.barrelShippingPrice - b.country.barrelShippingPrice;
   if (price !== 0) return price;
@@ -1783,7 +1833,7 @@ async function getApprovedBusinessDestination({businessId, countryId}) {
     business,
     country,
     shippingFee,
-    deliveryEstimate: deliveryEstimateFromCountry(country),
+    deliveryEstimate: deliveryEstimateFromCountry(country, "barrelShipping"),
   };
 }
 
@@ -1875,7 +1925,11 @@ exports.listActiveBarrelDestinationOptions = onCall(
                     country.freightSeaDepartureDays,
                 ),
               destinationNote: country.destinationNote || "",
-              ...deliveryEstimateFromCountry(country),
+              ...deliveryEstimatesByService(country, [
+                "barrelShipping",
+                "freightAir",
+                "freightSea",
+              ]),
             },
           });
         });
@@ -1951,7 +2005,9 @@ exports.listTransportBusinessOptions = onCall(
                     country.freightSeaDepartureDays,
                 ),
               destinationNote: country.destinationNote || "",
-              ...deliveryEstimateFromCountry(country),
+              // Car transport is quoted per-request (estimatedPickupDate/
+              // estimatedDeliveryDate on the quote), not a promised country-
+              // level window, so no delivery estimate is attached here.
             },
           });
         });
@@ -10681,19 +10737,33 @@ exports.updateDestinationCoverage = onCall(
           carTransport: request.data?.carTransportAvailable === true,
         };
       const nextIsActive = Object.values(availability).some(Boolean);
-      const minDaysRaw = request.data?.deliveryEstimateMinDays;
-      const maxDaysRaw = request.data?.deliveryEstimateMaxDays;
       const destinationNote = String(
           request.data?.destinationNote ||
           request.data?.details ||
           "",
       ).trim();
-      const hasEstimate = minDaysRaw !== null &&
-        minDaysRaw !== undefined &&
-        maxDaysRaw !== null &&
-        maxDaysRaw !== undefined;
-      const minDays = Number(minDaysRaw);
-      const maxDays = Number(maxDaysRaw);
+      // Each service has its own real-world transit time, so a country
+      // offering barrel shipping and both freight modes gets three
+      // independent estimate pairs instead of one shared pair.
+      const deliveryEstimateServices = [
+        "barrelShipping",
+        "freightAir",
+        "freightSea",
+      ];
+      const deliveryEstimates = {};
+      for (const service of deliveryEstimateServices) {
+        const minDaysRaw = request.data?.[`${service}DeliveryEstimateMinDays`];
+        const maxDaysRaw = request.data?.[`${service}DeliveryEstimateMaxDays`];
+        const hasEstimate = minDaysRaw !== null &&
+          minDaysRaw !== undefined &&
+          maxDaysRaw !== null &&
+          maxDaysRaw !== undefined;
+        deliveryEstimates[service] = {
+          hasEstimate,
+          minDays: Number(minDaysRaw),
+          maxDays: Number(maxDaysRaw),
+        };
+      }
 
       if (!businessId || !countryId) {
         throw new HttpsError(
@@ -10738,19 +10808,22 @@ exports.updateDestinationCoverage = onCall(
             "Sea freight destinations need a rate greater than 0",
         );
       }
-      if (
-        hasEstimate &&
-        (
-          !Number.isInteger(minDays) ||
-          !Number.isInteger(maxDays) ||
-          minDays <= 0 ||
-          maxDays < minDays
-        )
-      ) {
-        throw new HttpsError(
-            "invalid-argument",
-            "Delivery days must be positive whole numbers",
-        );
+      for (const service of deliveryEstimateServices) {
+        const estimate = deliveryEstimates[service];
+        if (
+          estimate.hasEstimate &&
+          (
+            !Number.isInteger(estimate.minDays) ||
+            !Number.isInteger(estimate.maxDays) ||
+            estimate.minDays <= 0 ||
+            estimate.maxDays < estimate.minDays
+          )
+        ) {
+          throw new HttpsError(
+              "invalid-argument",
+              "Delivery days must be positive whole numbers",
+          );
+        }
       }
 
       const db = admin.firestore();
@@ -10797,14 +10870,17 @@ exports.updateDestinationCoverage = onCall(
           FirestoreFieldValue.delete(),
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       };
-      if (hasEstimate) {
-        payload.deliveryEstimateMinDays = minDays;
-        payload.deliveryEstimateMaxDays = maxDays;
-      } else {
-        payload.deliveryEstimateMinDays =
-          FirestoreFieldValue.delete();
-        payload.deliveryEstimateMaxDays =
-          FirestoreFieldValue.delete();
+      for (const service of deliveryEstimateServices) {
+        const estimate = deliveryEstimates[service];
+        if (estimate.hasEstimate) {
+          payload[`${service}DeliveryEstimateMinDays`] = estimate.minDays;
+          payload[`${service}DeliveryEstimateMaxDays`] = estimate.maxDays;
+        } else {
+          payload[`${service}DeliveryEstimateMinDays`] =
+            FirestoreFieldValue.delete();
+          payload[`${service}DeliveryEstimateMaxDays`] =
+            FirestoreFieldValue.delete();
+        }
       }
       const previousDoc = await destinationRef.get();
       const previous = previousDoc.data() || {};
@@ -14010,7 +14086,7 @@ exports.sealBarrelPool = onCall(
         businessPayoutAmountCents: accounting.businessPayoutCents,
         paymentStatus: hasManualBalanceDue ? "balance_due" : "succeeded",
         status: hasManualBalanceDue ? "pending_payment" : "pending",
-        ...deliveryEstimateFromCountry(pool),
+        ...deliveryEstimateFromGenericFields(pool),
         createdAt: now,
         updatedAt: now,
         ...(hasManualBalanceDue ? {} : {paidAt: now}),
@@ -16307,7 +16383,10 @@ async function getApprovedFreightDestination({businessId, countryId, mode}) {
     business,
     country,
     pricePerKg,
-    deliveryEstimate: deliveryEstimateFromCountry(country),
+    deliveryEstimate: deliveryEstimateFromCountry(
+        country,
+        mode === "air" ? "freightAir" : "freightSea",
+    ),
     departureDays: normalizedDestinationDepartureDays(
         mode === "air" ?
           country.freightAirDepartureDays :

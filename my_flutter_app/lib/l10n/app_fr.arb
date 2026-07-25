@@ -1408,6 +1408,20 @@
       "maximum": {"type": "int"}
     }
   },
+  "freightAirDeliveryEstimateDays": "Livraison aérienne : {minimum}-{maximum} jours",
+  "@freightAirDeliveryEstimateDays": {
+    "placeholders": {
+      "minimum": {"type": "int"},
+      "maximum": {"type": "int"}
+    }
+  },
+  "freightSeaDeliveryEstimateDays": "Livraison maritime : {minimum}-{maximum} jours",
+  "@freightSeaDeliveryEstimateDays": {
+    "placeholders": {
+      "minimum": {"type": "int"},
+      "maximum": {"type": "int"}
+    }
+  },
   "searchBusinessOrCountry": "Rechercher une entreprise ou un pays",
   "noMatchFor": "Aucun résultat pour « {query} »",
   "@noMatchFor": {

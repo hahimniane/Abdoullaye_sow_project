@@ -570,13 +570,22 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                           Icons.verified_outlined,
                           l10n.approvedBusiness,
                         ),
-                        if (o.country.hasDeliveryEstimate)
+                        if (air && o.country.hasDeliveryEstimateFor('freightAir'))
                           _ratePill(
                             theme,
                             Icons.schedule_outlined,
-                            l10n.freightDeliveryEstimateDays(
-                              o.country.deliveryEstimateMinDays!,
-                              o.country.deliveryEstimateMaxDays!,
+                            l10n.freightAirDeliveryEstimateDays(
+                              o.country.freightAirDeliveryEstimateMinDays!,
+                              o.country.freightAirDeliveryEstimateMaxDays!,
+                            ),
+                          ),
+                        if (sea && o.country.hasDeliveryEstimateFor('freightSea'))
+                          _ratePill(
+                            theme,
+                            Icons.schedule_outlined,
+                            l10n.freightSeaDeliveryEstimateDays(
+                              o.country.freightSeaDeliveryEstimateMinDays!,
+                              o.country.freightSeaDeliveryEstimateMaxDays!,
                             ),
                           ),
                         if (air && airDepartureDays.isNotEmpty)

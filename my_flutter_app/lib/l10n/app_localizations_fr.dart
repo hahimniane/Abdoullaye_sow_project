@@ -3454,6 +3454,16 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String freightAirDeliveryEstimateDays(int minimum, int maximum) {
+    return 'Livraison aérienne : $minimum-$maximum jours';
+  }
+
+  @override
+  String freightSeaDeliveryEstimateDays(int minimum, int maximum) {
+    return 'Livraison maritime : $minimum-$maximum jours';
+  }
+
+  @override
   String get searchBusinessOrCountry => 'Rechercher une entreprise ou un pays';
 
   @override

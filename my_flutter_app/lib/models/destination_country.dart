@@ -17,8 +17,12 @@ class DestinationCountry {
     this.freightAirDepartureDays = const [],
     this.freightSeaDepartureDays = const [],
     this.carTransportAvailable = false,
-    this.deliveryEstimateMinDays,
-    this.deliveryEstimateMaxDays,
+    this.barrelShippingDeliveryEstimateMinDays,
+    this.barrelShippingDeliveryEstimateMaxDays,
+    this.freightAirDeliveryEstimateMinDays,
+    this.freightAirDeliveryEstimateMaxDays,
+    this.freightSeaDeliveryEstimateMinDays,
+    this.freightSeaDeliveryEstimateMaxDays,
     this.destinationNote,
   });
 
@@ -45,8 +49,15 @@ class DestinationCountry {
   final List<String> freightAirDepartureDays;
   final List<String> freightSeaDepartureDays;
   final bool carTransportAvailable;
-  final int? deliveryEstimateMinDays;
-  final int? deliveryEstimateMaxDays;
+  // Each service has its own real-world transit time, so the delivery
+  // estimate is tracked per service instead of one shared pair for the
+  // whole country.
+  final int? barrelShippingDeliveryEstimateMinDays;
+  final int? barrelShippingDeliveryEstimateMaxDays;
+  final int? freightAirDeliveryEstimateMinDays;
+  final int? freightAirDeliveryEstimateMaxDays;
+  final int? freightSeaDeliveryEstimateMinDays;
+  final int? freightSeaDeliveryEstimateMaxDays;
   final String? destinationNote;
 
   Map<String, bool> get serviceAvailability => {
@@ -90,19 +101,56 @@ class DestinationCountry {
     return displayCode.isEmpty ? name : '$name ($displayCode)';
   }
 
-  bool get hasDeliveryEstimate =>
-      deliveryEstimateMinDays != null &&
-      deliveryEstimateMaxDays != null &&
-      deliveryEstimateMinDays! > 0 &&
-      deliveryEstimateMaxDays! >= deliveryEstimateMinDays!;
-
-  String? get deliveryEstimateLabel {
-    if (!hasDeliveryEstimate) return null;
-    if (deliveryEstimateMinDays == deliveryEstimateMaxDays) {
-      return '$deliveryEstimateMinDays days';
+  (int, int)? _deliveryEstimateRange(String service) {
+    final int? minDays;
+    final int? maxDays;
+    switch (service) {
+      case 'barrelShipping':
+        minDays = barrelShippingDeliveryEstimateMinDays;
+        maxDays = barrelShippingDeliveryEstimateMaxDays;
+        break;
+      case 'freightAir':
+        minDays = freightAirDeliveryEstimateMinDays;
+        maxDays = freightAirDeliveryEstimateMaxDays;
+        break;
+      case 'freightSea':
+        minDays = freightSeaDeliveryEstimateMinDays;
+        maxDays = freightSeaDeliveryEstimateMaxDays;
+        break;
+      default:
+        minDays = null;
+        maxDays = null;
     }
-    return '$deliveryEstimateMinDays-$deliveryEstimateMaxDays days';
+    if (minDays == null || maxDays == null || minDays <= 0 || maxDays < minDays) {
+      return null;
+    }
+    return (minDays, maxDays);
   }
+
+  bool hasDeliveryEstimateFor(String service) =>
+      _deliveryEstimateRange(service) != null;
+
+  bool get hasAnyDeliveryEstimate =>
+      hasDeliveryEstimateFor('barrelShipping') ||
+      hasDeliveryEstimateFor('freightAir') ||
+      hasDeliveryEstimateFor('freightSea');
+
+  String? deliveryEstimateLabelFor(String service) {
+    final range = _deliveryEstimateRange(service);
+    if (range == null) return null;
+    final (minDays, maxDays) = range;
+    if (minDays == maxDays) return '$minDays days';
+    return '$minDays-$maxDays days';
+  }
+
+  bool get hasBarrelShippingDeliveryEstimate =>
+      hasDeliveryEstimateFor('barrelShipping');
+  String? get barrelShippingDeliveryEstimateLabel =>
+      deliveryEstimateLabelFor('barrelShipping');
+  String? get freightAirDeliveryEstimateLabel =>
+      deliveryEstimateLabelFor('freightAir');
+  String? get freightSeaDeliveryEstimateLabel =>
+      deliveryEstimateLabelFor('freightSea');
 
   factory DestinationCountry.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? <String, dynamic>{};
@@ -144,10 +192,18 @@ class DestinationCountry {
       freightAirDepartureDays: _departureDays(data['freightAirDepartureDays']),
       freightSeaDepartureDays: _departureDays(data['freightSeaDepartureDays']),
       carTransportAvailable: _legacyCarTransportAvailable(data),
-      deliveryEstimateMinDays: (data['deliveryEstimateMinDays'] as num?)
-          ?.toInt(),
-      deliveryEstimateMaxDays: (data['deliveryEstimateMaxDays'] as num?)
-          ?.toInt(),
+      barrelShippingDeliveryEstimateMinDays:
+          (data['barrelShippingDeliveryEstimateMinDays'] as num?)?.toInt(),
+      barrelShippingDeliveryEstimateMaxDays:
+          (data['barrelShippingDeliveryEstimateMaxDays'] as num?)?.toInt(),
+      freightAirDeliveryEstimateMinDays:
+          (data['freightAirDeliveryEstimateMinDays'] as num?)?.toInt(),
+      freightAirDeliveryEstimateMaxDays:
+          (data['freightAirDeliveryEstimateMaxDays'] as num?)?.toInt(),
+      freightSeaDeliveryEstimateMinDays:
+          (data['freightSeaDeliveryEstimateMinDays'] as num?)?.toInt(),
+      freightSeaDeliveryEstimateMaxDays:
+          (data['freightSeaDeliveryEstimateMaxDays'] as num?)?.toInt(),
       destinationNote: data['destinationNote'] as String?,
     );
   }
@@ -166,10 +222,20 @@ class DestinationCountry {
       'freightAirDepartureDays': freightAirDepartureDays,
       'freightSeaDepartureDays': freightSeaDepartureDays,
       'carTransportAvailable': carTransportAvailable,
-      if (deliveryEstimateMinDays != null)
-        'deliveryEstimateMinDays': deliveryEstimateMinDays,
-      if (deliveryEstimateMaxDays != null)
-        'deliveryEstimateMaxDays': deliveryEstimateMaxDays,
+      if (barrelShippingDeliveryEstimateMinDays != null)
+        'barrelShippingDeliveryEstimateMinDays':
+            barrelShippingDeliveryEstimateMinDays,
+      if (barrelShippingDeliveryEstimateMaxDays != null)
+        'barrelShippingDeliveryEstimateMaxDays':
+            barrelShippingDeliveryEstimateMaxDays,
+      if (freightAirDeliveryEstimateMinDays != null)
+        'freightAirDeliveryEstimateMinDays': freightAirDeliveryEstimateMinDays,
+      if (freightAirDeliveryEstimateMaxDays != null)
+        'freightAirDeliveryEstimateMaxDays': freightAirDeliveryEstimateMaxDays,
+      if (freightSeaDeliveryEstimateMinDays != null)
+        'freightSeaDeliveryEstimateMinDays': freightSeaDeliveryEstimateMinDays,
+      if (freightSeaDeliveryEstimateMaxDays != null)
+        'freightSeaDeliveryEstimateMaxDays': freightSeaDeliveryEstimateMaxDays,
       if (destinationNote != null && destinationNote!.isNotEmpty)
         'destinationNote': destinationNote,
       'updatedAt': FieldValue.serverTimestamp(),

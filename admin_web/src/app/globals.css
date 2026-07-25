@@ -8283,7 +8283,7 @@ button[data-loading="true"]::before {
 }
 .destination-delivery-cell {
   display: grid;
-  gap: 2px;
+  gap: 6px;
 }
 .destination-delivery-cell strong {
   color: var(--ink);
@@ -8292,6 +8292,17 @@ button[data-loading="true"]::before {
 .destination-delivery-cell span {
   color: var(--muted);
   font-size: 11px;
+}
+.destination-delivery-row {
+  align-items: baseline;
+  display: flex;
+  gap: 6px;
+}
+.destination-delivery-row span {
+  flex: 0 0 auto;
+  font-weight: 700;
+  min-width: 34px;
+  text-transform: uppercase;
 }
 .destination-status {
   border-radius: 999px;

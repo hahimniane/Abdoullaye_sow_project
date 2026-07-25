@@ -129,8 +129,8 @@ async function seedSharedBarrelFixture() {
           name: "Guinea",
           isActive: true,
           barrelShippingPrice: 200,
-          deliveryEstimateMinDays: 20,
-          deliveryEstimateMaxDays: 30,
+          barrelShippingDeliveryEstimateMinDays: 20,
+          barrelShippingDeliveryEstimateMaxDays: 30,
         }),
   ]);
 }

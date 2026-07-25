@@ -1407,6 +1407,20 @@
       "maximum": {"type": "int"}
     }
   },
+  "freightAirDeliveryEstimateDays": "Air delivery: {minimum}-{maximum} days",
+  "@freightAirDeliveryEstimateDays": {
+    "placeholders": {
+      "minimum": {"type": "int"},
+      "maximum": {"type": "int"}
+    }
+  },
+  "freightSeaDeliveryEstimateDays": "Sea delivery: {minimum}-{maximum} days",
+  "@freightSeaDeliveryEstimateDays": {
+    "placeholders": {
+      "minimum": {"type": "int"},
+      "maximum": {"type": "int"}
+    }
+  },
   "searchBusinessOrCountry": "Search a business or country",
   "noMatchFor": "No match for \"{query}\"",
   "@noMatchFor": {

@@ -90,8 +90,15 @@ async function seedBusiness(id, {
       carTransportAvailable: availability.carTransport,
       freightAirDepartureDays: ["monday", "thursday"],
       freightSeaDepartureDays: ["saturday"],
-      deliveryEstimateMinDays: 10,
-      deliveryEstimateMaxDays: 20,
+      // Deliberately different per service so tests can confirm a shipment
+      // inherits the estimate for the service it actually booked, not a
+      // shared country-level value.
+      barrelShippingDeliveryEstimateMinDays: 10,
+      barrelShippingDeliveryEstimateMaxDays: 20,
+      freightAirDeliveryEstimateMinDays: 3,
+      freightAirDeliveryEstimateMaxDays: 5,
+      freightSeaDeliveryEstimateMinDays: 25,
+      freightSeaDeliveryEstimateMaxDays: 35,
     }),
   ]);
   return ref;
@@ -395,8 +402,10 @@ describe("freight service callable lifecycle", () => {
         assert.equal(airShipment.estimatedTotalCents, 12500);
         assert.equal(airShipment.priceSettlementStatus, "awaiting_weight");
         assert.equal(airShipment.destinationCountryName, "Guinea");
-        assert.equal(airShipment.deliveryEstimateMinDays, 10);
-        assert.equal(airShipment.deliveryEstimateMaxDays, 20);
+        // Air freight's own estimate (3-5 days), not barrel shipping's
+        // (10-20) or sea freight's (25-35) — proves the per-service split.
+        assert.equal(airShipment.deliveryEstimateMinDays, 3);
+        assert.equal(airShipment.deliveryEstimateMaxDays, 5);
         assert.deepEqual(
             airShipment.freightDepartureDays,
             ["monday", "thursday"],
@@ -411,6 +420,9 @@ describe("freight service callable lifecycle", () => {
         assert.equal(seaShipment.shippingFee, 37.5);
         assert.equal(seaShipment.cardChargeAmountCents, 3750);
         assert.deepEqual(seaShipment.freightDepartureDays, ["saturday"]);
+        // Sea freight's own estimate (25-35 days) — independent of air's.
+        assert.equal(seaShipment.deliveryEstimateMinDays, 25);
+        assert.equal(seaShipment.deliveryEstimateMaxDays, 35);
       });
 
   it("prices a NY borough pickup and records its appointment", async () => {
@@ -1734,8 +1746,8 @@ describe("barrel shipping service callable lifecycle", () => {
               code: "GH",
               isActive: true,
               barrelShippingPrice: 300,
-              deliveryEstimateMinDays: 12,
-              deliveryEstimateMaxDays: 24,
+              barrelShippingDeliveryEstimateMinDays: 12,
+              barrelShippingDeliveryEstimateMaxDays: 24,
             });
         const changed = await functions.changeBarrelShipmentDestination.run({
           auth: {uid: CUSTOMER_UID},
@@ -1766,8 +1778,8 @@ describe("barrel shipping service callable lifecycle", () => {
               code: "SL",
               isActive: true,
               barrelShippingPrice: 350,
-              deliveryEstimateMinDays: 12,
-              deliveryEstimateMaxDays: 24,
+              barrelShippingDeliveryEstimateMinDays: 12,
+              barrelShippingDeliveryEstimateMaxDays: 24,
             });
         await updated.ref.update({payoutStatus: "paid"});
         await assert.rejects(
@@ -1886,8 +1898,8 @@ describe("barrel shipping service callable lifecycle", () => {
           code: "GH",
           isActive: true,
           barrelShippingPrice: 300,
-          deliveryEstimateMinDays: 12,
-          deliveryEstimateMaxDays: 24,
+          barrelShippingDeliveryEstimateMinDays: 12,
+          barrelShippingDeliveryEstimateMaxDays: 24,
         });
         const created = await functions.createBarrelOrderPaymentIntent.run({
           auth: {uid: CUSTOMER_UID},
@@ -1944,8 +1956,8 @@ describe("barrel shipping service callable lifecycle", () => {
           code: "GH",
           isActive: true,
           barrelShippingPrice: 300,
-          deliveryEstimateMinDays: 12,
-          deliveryEstimateMaxDays: 24,
+          barrelShippingDeliveryEstimateMinDays: 12,
+          barrelShippingDeliveryEstimateMaxDays: 24,
         });
         const pickupDateTime = futureIso();
         const created = await functions.createBarrelOrderPaymentIntent.run({
@@ -2011,8 +2023,8 @@ describe("barrel shipping service callable lifecycle", () => {
           code: "GH",
           isActive: true,
           barrelShippingPrice: 300,
-          deliveryEstimateMinDays: 12,
-          deliveryEstimateMaxDays: 24,
+          barrelShippingDeliveryEstimateMinDays: 12,
+          barrelShippingDeliveryEstimateMaxDays: 24,
         });
         const pickupDateTime = futureIso();
         const created = await functions.createBarrelOrderPaymentIntent.run({

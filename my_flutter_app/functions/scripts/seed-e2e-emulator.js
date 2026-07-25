@@ -198,8 +198,12 @@ async function main() {
     barrelShippingPrice: 225,
     freightAirPricePerKg: 12.5,
     freightSeaPricePerKg: 5,
-    deliveryEstimateMinDays: 10,
-    deliveryEstimateMaxDays: 20,
+    barrelShippingDeliveryEstimateMinDays: 10,
+    barrelShippingDeliveryEstimateMaxDays: 20,
+    freightAirDeliveryEstimateMinDays: 3,
+    freightAirDeliveryEstimateMaxDays: 5,
+    freightSeaDeliveryEstimateMinDays: 25,
+    freightSeaDeliveryEstimateMaxDays: 35,
     updatedAt: now,
   });
   set("shipmentPricing/barrelPickup", {

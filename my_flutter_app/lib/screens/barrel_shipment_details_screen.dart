@@ -1145,8 +1145,9 @@ class _DestinationEditor extends StatelessWidget {
                       [
                         option.businessName,
                         currency.format(option.country.barrelShippingPrice),
-                        if (option.country.deliveryEstimateLabel != null)
-                          option.country.deliveryEstimateLabel!,
+                        if (option.country.barrelShippingDeliveryEstimateLabel !=
+                            null)
+                          option.country.barrelShippingDeliveryEstimateLabel!,
                       ].join(' • '),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1323,7 +1324,7 @@ class _BusinessSwitchOption extends StatelessWidget {
       option.businessEmail,
       option.businessWebsite,
     ].where((item) => item != null && item.trim().isNotEmpty).join(' • ');
-    final deliveryEstimate = option.country.deliveryEstimateLabel;
+    final deliveryEstimate = option.country.barrelShippingDeliveryEstimateLabel;
 
     return InkWell(
       onTap: onTap,

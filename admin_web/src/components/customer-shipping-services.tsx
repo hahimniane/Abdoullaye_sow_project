@@ -74,6 +74,8 @@ const CALL_TIMEOUT_MS = 30_000;
 
 type ShippingService = "barrel" | "freight" | "transport";
 
+type DeliveryEstimateService = "barrelShipping" | "freightAir" | "freightSea";
+
 type DestinationCountry = {
   id: string;
   code?: string;
@@ -82,8 +84,14 @@ type DestinationCountry = {
   barrelShippingPrice?: number;
   freightAirPricePerKg?: number;
   freightSeaPricePerKg?: number;
-  deliveryEstimateMinDays?: number;
-  deliveryEstimateMaxDays?: number;
+  // Each service has its own real-world transit time, so the country
+  // carries an independent estimate per service instead of one shared pair.
+  barrelShippingDeliveryEstimateMinDays?: number;
+  barrelShippingDeliveryEstimateMaxDays?: number;
+  freightAirDeliveryEstimateMinDays?: number;
+  freightAirDeliveryEstimateMaxDays?: number;
+  freightSeaDeliveryEstimateMinDays?: number;
+  freightSeaDeliveryEstimateMaxDays?: number;
   freightAirDepartureDays?: string[];
   freightSeaDepartureDays?: string[];
   destinationNote?: string;
@@ -107,8 +115,12 @@ type DestinationOption = {
 };
 
 type DestinationLogisticsCountry = {
-  deliveryEstimateMinDays?: unknown;
-  deliveryEstimateMaxDays?: unknown;
+  barrelShippingDeliveryEstimateMinDays?: unknown;
+  barrelShippingDeliveryEstimateMaxDays?: unknown;
+  freightAirDeliveryEstimateMinDays?: unknown;
+  freightAirDeliveryEstimateMaxDays?: unknown;
+  freightSeaDeliveryEstimateMinDays?: unknown;
+  freightSeaDeliveryEstimateMaxDays?: unknown;
   freightAirDepartureDays?: unknown;
   freightSeaDepartureDays?: unknown;
 };
@@ -180,9 +192,12 @@ const departureDayLabels: Record<string, string> = {
   sunday: "Sunday",
 };
 
-function deliveryWindow(country: DestinationLogisticsCountry) {
-  const minimum = Number(country.deliveryEstimateMinDays);
-  const maximum = Number(country.deliveryEstimateMaxDays);
+function deliveryWindow(
+  country: DestinationLogisticsCountry,
+  service: DeliveryEstimateService,
+) {
+  const minimum = Number(country[`${service}DeliveryEstimateMinDays`]);
+  const maximum = Number(country[`${service}DeliveryEstimateMaxDays`]);
   if (
     !Number.isInteger(minimum) ||
     !Number.isInteger(maximum) ||
@@ -211,16 +226,24 @@ function departureDays(
 
 function DeliveryWindow({
   country,
+  service,
 }: {
   country: DestinationLogisticsCountry;
+  service: DeliveryEstimateService;
 }) {
-  const window = deliveryWindow(country);
+  const window = deliveryWindow(country, service);
   if (!window) return null;
+  const label =
+    service === "freightAir"
+      ? "Typical delivery (air)"
+      : service === "freightSea"
+        ? "Typical delivery (sea)"
+        : "Typical delivery";
   return (
     <span className="customer-provider-logistics">
       <Clock3 aria-hidden="true" size={14} />
       <span>
-        <small>Typical delivery</small>
+        <small>{label}</small>
         <strong>
           {window.minimum === window.maximum
             ? window.minimum
@@ -829,7 +852,7 @@ function BarrelShipmentForm({
                     <span className="customer-barrel-provider-name">
                       <strong>{option.businessName}</strong>
                       <small>Approved business</small>
-                      <DeliveryWindow country={option.country} />
+                      <DeliveryWindow country={option.country} service="barrelShipping" />
                     </span>
                     <span className="customer-barrel-provider-price">
                       <strong>{rate ? formatMoney(rate) : "Rate unavailable"}</strong>
@@ -1640,7 +1663,7 @@ function BarrelOrderForm({
                       <span className="customer-barrel-provider-name">
                         <strong>{option.businessName}</strong>
                         <small>Approved business</small>
-                        <DeliveryWindow country={option.country} />
+                        <DeliveryWindow country={option.country} service="barrelShipping" />
                       </span>
                       <span className="customer-barrel-provider-price">
                         <strong>
@@ -3693,7 +3716,28 @@ function DestinationPicker({
               )}
               {service !== "transport" && (
                 <span className="customer-destination-logistics">
-                  <DeliveryWindow country={option.country} />
+                  {service === "barrel" && (
+                    <DeliveryWindow
+                      country={option.country}
+                      service="barrelShipping"
+                    />
+                  )}
+                  {service === "freight" && (
+                    <>
+                      {airRate && (
+                        <DeliveryWindow
+                          country={option.country}
+                          service="freightAir"
+                        />
+                      )}
+                      {seaRate && (
+                        <DeliveryWindow
+                          country={option.country}
+                          service="freightSea"
+                        />
+                      )}
+                    </>
+                  )}
                   {service === "freight" && (
                     <FreightDepartureSchedule
                       country={option.country}

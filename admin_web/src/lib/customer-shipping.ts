@@ -111,8 +111,14 @@ export type ShippingPricingCountry = {
   barrelShippingPrice?: unknown;
   freightAirPricePerKg?: unknown;
   freightSeaPricePerKg?: unknown;
-  deliveryEstimateMinDays?: unknown;
-  deliveryEstimateMaxDays?: unknown;
+  // Each service has its own real-world transit time, so the country carries
+  // an independent estimate per service instead of one shared value.
+  barrelShippingDeliveryEstimateMinDays?: unknown;
+  barrelShippingDeliveryEstimateMaxDays?: unknown;
+  freightAirDeliveryEstimateMinDays?: unknown;
+  freightAirDeliveryEstimateMaxDays?: unknown;
+  freightSeaDeliveryEstimateMinDays?: unknown;
+  freightSeaDeliveryEstimateMaxDays?: unknown;
   freightAirDepartureDays?: unknown;
   freightSeaDepartureDays?: unknown;
   serviceAvailability?: {

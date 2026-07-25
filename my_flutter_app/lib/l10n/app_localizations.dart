@@ -6206,6 +6206,18 @@ abstract class AppLocalizations {
   /// **'Delivery: {minimum}-{maximum} days'**
   String freightDeliveryEstimateDays(int minimum, int maximum);
 
+  /// No description provided for @freightAirDeliveryEstimateDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Air delivery: {minimum}-{maximum} days'**
+  String freightAirDeliveryEstimateDays(int minimum, int maximum);
+
+  /// No description provided for @freightSeaDeliveryEstimateDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Sea delivery: {minimum}-{maximum} days'**
+  String freightSeaDeliveryEstimateDays(int minimum, int maximum);
+
   /// No description provided for @searchBusinessOrCountry.
   ///
   /// In en, this message translates to:

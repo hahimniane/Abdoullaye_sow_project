@@ -141,7 +141,7 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   Sea: "Maritime",
   Quotes: "Devis",
   "Not set": "Non défini",
-  "Shared country estimate": "Estimation commune au pays",
+  "No estimate needed": "Aucune estimation nécessaire",
   Paused: "Suspendu",
   Configure: "Configurer",
   "Pause all": "Tout suspendre",
@@ -180,15 +180,14 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   Sat: "Sam",
   Sun: "Dim",
   "Typical delivery": "Livraison habituelle",
+  "Typical delivery (air)": "Livraison habituelle (aérien)",
+  "Typical delivery (sea)": "Livraison habituelle (maritime)",
   days: "jours",
   "Regular departure days": "Jours de départ habituels",
   "Car transport quotes": "Devis de transport de véhicules",
   "Customers can request a quote. You set the route price when responding.":
     "Les clients peuvent demander un devis. Vous fixez le prix de l’itinéraire lors de votre réponse.",
-  "Estimated delivery for this country":
-    "Livraison estimée pour ce pays",
-  "Optional. This estimate applies to every active service configured above.":
-    "Facultatif. Cette estimation s’applique à tous les services actifs configurés ci-dessus.",
+  "Estimated delivery (optional)": "Livraison estimée (facultatif)",
   "Minimum days": "Jours minimum",
   "Maximum days": "Jours maximum",
   "Customer route note (optional)":
@@ -203,6 +202,12 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Barrel fee": "Tarif par baril",
   "Air / kg": "Aérien / kg",
   "Sea / kg": "Maritime / kg",
+  "Barrel min": "Baril min",
+  "Barrel max": "Baril max",
+  "Air min": "Aérien min",
+  "Air max": "Aérien max",
+  "Sea min": "Maritime min",
+  "Sea max": "Maritime max",
   "Car quotes": "Devis de transport",
   "Choose at least one service for this country.":
     "Choisissez au moins un service pour ce pays.",
@@ -1931,8 +1936,12 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Delete role": "Supprimer le rôle",
   "Deleting...": "Suppression...",
   Delivery: "Livraison",
-  "Delivery days must be positive whole numbers, with max greater than or equal to min.":
-    "Les jours de livraison doivent être des nombres entiers positifs, avec un maximum supérieur ou égal au minimum.",
+  "Barrel delivery days must be positive whole numbers, with max greater than or equal to min.":
+    "Les jours de livraison pour le baril doivent être des nombres entiers positifs, avec un maximum supérieur ou égal au minimum.",
+  "Air freight delivery days must be positive whole numbers, with max greater than or equal to min.":
+    "Les jours de livraison pour le fret aérien doivent être des nombres entiers positifs, avec un maximum supérieur ou égal au minimum.",
+  "Sea freight delivery days must be positive whole numbers, with max greater than or equal to min.":
+    "Les jours de livraison pour le fret maritime doivent être des nombres entiers positifs, avec un maximum supérieur ou égal au minimum.",
   "Delivery estimate": "Estimation de livraison",
   "Delivery max (days)": "Livraison max (jours)",
   "Delivery min (days)": "Livraison min (jours)",
@@ -1976,8 +1985,12 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Enter a valid min/max delivery day range.":
     "Saisissez une plage de jours de livraison min/max valide.",
   "Enter a valid price.": "Saisissez un prix valide.",
-  "Enter both min and max delivery days, or leave both empty.":
-    "Saisissez les jours minimum et maximum, ou laissez les deux champs vides.",
+  "Enter both min and max barrel delivery days, or leave both empty.":
+    "Saisissez les jours minimum et maximum pour le baril, ou laissez les deux champs vides.",
+  "Enter both min and max air freight delivery days, or leave both empty.":
+    "Saisissez les jours minimum et maximum pour le fret aérien, ou laissez les deux champs vides.",
+  "Enter both min and max sea freight delivery days, or leave both empty.":
+    "Saisissez les jours minimum et maximum pour le fret maritime, ou laissez les deux champs vides.",
   "Every queue is clear. Browse a business workspace to review activity.":
     "Toutes les files sont vides. Ouvrez un espace entreprise pour examiner l’activité.",
   "Every service request across all businesses, in one place. Pick a service to focus, or browse them all.":

@@ -106,8 +106,8 @@ function destinationCoverage(overrides = {}) {
     barrelShippingPrice: 0,
     freightAirPricePerKg: 0,
     freightSeaPricePerKg: 0,
-    deliveryEstimateMinDays: 10,
-    deliveryEstimateMaxDays: 20,
+    barrelShippingDeliveryEstimateMinDays: 10,
+    barrelShippingDeliveryEstimateMaxDays: 20,
     ...overrides,
   };
 }
@@ -852,8 +852,8 @@ describe("business dashboard Firestore rules", () => {
           countryId: "car_optional_estimate",
           name: "Car Optional Estimate",
         };
-        delete optionalEstimateCoverage.deliveryEstimateMinDays;
-        delete optionalEstimateCoverage.deliveryEstimateMaxDays;
+        delete optionalEstimateCoverage.barrelShippingDeliveryEstimateMinDays;
+        delete optionalEstimateCoverage.barrelShippingDeliveryEstimateMaxDays;
         await assertSucceeds(
             ownerB.doc(
                 "businesses/biz_b/destinationCountries/car_optional_estimate",

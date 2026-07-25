@@ -145,8 +145,8 @@ class BusinessService {
       for (final option in options) {
         final existing = byCountry[option.country.id];
         if (existing == null ||
-            (!existing.hasDeliveryEstimate &&
-                option.country.hasDeliveryEstimate) ||
+            (!existing.hasAnyDeliveryEstimate &&
+                option.country.hasAnyDeliveryEstimate) ||
             option.country.barrelShippingPrice < existing.barrelShippingPrice) {
           byCountry[option.country.id] = option.country;
         }
@@ -187,19 +187,9 @@ class BusinessService {
   ) {
     final country = a.country.name.compareTo(b.country.name);
     if (country != 0) return country;
-    if (a.country.hasDeliveryEstimate != b.country.hasDeliveryEstimate) {
-      return a.country.hasDeliveryEstimate ? -1 : 1;
-    }
-    if (a.country.hasDeliveryEstimate && b.country.hasDeliveryEstimate) {
-      final minDays = a.country.deliveryEstimateMinDays!.compareTo(
-        b.country.deliveryEstimateMinDays!,
-      );
-      if (minDays != 0) return minDays;
-      final maxDays = a.country.deliveryEstimateMaxDays!.compareTo(
-        b.country.deliveryEstimateMaxDays!,
-      );
-      if (maxDays != 0) return maxDays;
-    }
+    // Options can offer barrel shipping and/or freight at once, each with
+    // its own transit time, so there is no single "the" estimate to sort
+    // mixed-service options by; fall back to price and business name.
     final price = a.country.barrelShippingPrice.compareTo(
       b.country.barrelShippingPrice,
     );

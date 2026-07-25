@@ -1048,8 +1048,8 @@ const previewData = {
       code: "GN",
       businessName: "Keren Auto Sales",
       barrelShippingPrice: 275,
-      deliveryEstimateMinDays: 21,
-      deliveryEstimateMaxDays: 28,
+      barrelShippingDeliveryEstimateMinDays: 21,
+      barrelShippingDeliveryEstimateMaxDays: 28,
       destinationNote:
         "Conakry warehouse receives cleared barrels Monday through Friday.",
       isActive: true,
@@ -1061,8 +1061,8 @@ const previewData = {
       code: "SN",
       businessName: "Keren Auto Sales",
       barrelShippingPrice: 310,
-      deliveryEstimateMinDays: 24,
-      deliveryEstimateMaxDays: 31,
+      barrelShippingDeliveryEstimateMinDays: 24,
+      barrelShippingDeliveryEstimateMaxDays: 31,
       destinationNote: "Dakar pickup requires receiver ID and tracking code.",
       isActive: true,
     },
@@ -1073,8 +1073,8 @@ const previewData = {
       code: "GM",
       businessName: "Keren Auto Sales",
       barrelShippingPrice: 295,
-      deliveryEstimateMinDays: 24,
-      deliveryEstimateMaxDays: 31,
+      barrelShippingDeliveryEstimateMinDays: 24,
+      barrelShippingDeliveryEstimateMaxDays: 31,
       destinationNote:
         "Banjul route runs through the Senegal dispatch partner.",
       isActive: true,
@@ -10790,11 +10790,25 @@ function DestinationCoverageRow({
   const [freightSeaPrice, setFreightSeaPrice] = useState(
     String(destination.freightSeaPricePerKg ?? ""),
   );
-  const [minDays, setMinDays] = useState(
-    String(destination.deliveryEstimateMinDays ?? ""),
+  // Each service has its own real-world transit time, so barrel/air/sea
+  // each get an independent min/max pair instead of one shared estimate.
+  const [barrelMinDays, setBarrelMinDays] = useState(
+    String(destination.barrelShippingDeliveryEstimateMinDays ?? ""),
   );
-  const [maxDays, setMaxDays] = useState(
-    String(destination.deliveryEstimateMaxDays ?? ""),
+  const [barrelMaxDays, setBarrelMaxDays] = useState(
+    String(destination.barrelShippingDeliveryEstimateMaxDays ?? ""),
+  );
+  const [airMinDays, setAirMinDays] = useState(
+    String(destination.freightAirDeliveryEstimateMinDays ?? ""),
+  );
+  const [airMaxDays, setAirMaxDays] = useState(
+    String(destination.freightAirDeliveryEstimateMaxDays ?? ""),
+  );
+  const [seaMinDays, setSeaMinDays] = useState(
+    String(destination.freightSeaDeliveryEstimateMinDays ?? ""),
+  );
+  const [seaMaxDays, setSeaMaxDays] = useState(
+    String(destination.freightSeaDeliveryEstimateMaxDays ?? ""),
   );
   const [destinationNote, setDestinationNote] = useState(
     text(destination.destinationNote ?? destination.details, ""),
@@ -10808,8 +10822,16 @@ function DestinationCoverageRow({
     setPrice(String(destination.barrelShippingPrice ?? ""));
     setFreightAirPrice(String(destination.freightAirPricePerKg ?? ""));
     setFreightSeaPrice(String(destination.freightSeaPricePerKg ?? ""));
-    setMinDays(String(destination.deliveryEstimateMinDays ?? ""));
-    setMaxDays(String(destination.deliveryEstimateMaxDays ?? ""));
+    setBarrelMinDays(
+      String(destination.barrelShippingDeliveryEstimateMinDays ?? ""),
+    );
+    setBarrelMaxDays(
+      String(destination.barrelShippingDeliveryEstimateMaxDays ?? ""),
+    );
+    setAirMinDays(String(destination.freightAirDeliveryEstimateMinDays ?? ""));
+    setAirMaxDays(String(destination.freightAirDeliveryEstimateMaxDays ?? ""));
+    setSeaMinDays(String(destination.freightSeaDeliveryEstimateMinDays ?? ""));
+    setSeaMaxDays(String(destination.freightSeaDeliveryEstimateMaxDays ?? ""));
     setDestinationNote(
       text(destination.destinationNote ?? destination.details, ""),
     );
@@ -10837,26 +10859,41 @@ function DestinationCoverageRow({
     );
     if (rateError) throw new Error(rateError);
 
-    const hasMin = minDays.trim() !== "";
-    const hasMax = maxDays.trim() !== "";
-    const nextMin = Number(minDays);
-    const nextMax = Number(maxDays);
-    if (hasMin !== hasMax) {
-      throw new Error(
-        "Enter both min and max delivery days, or leave both empty.",
-      );
-    }
-    if (
-      hasMin &&
-      (!Number.isInteger(nextMin) ||
-        !Number.isInteger(nextMax) ||
-        nextMin <= 0 ||
-        nextMax < nextMin)
+    function parsedEstimate(
+      min: string,
+      max: string,
+      messages: { incomplete: string; invalid: string },
     ) {
-      throw new Error(
-        "Delivery days must be positive whole numbers, with max greater than or equal to min.",
-      );
+      const hasMin = min.trim() !== "";
+      const hasMax = max.trim() !== "";
+      const nextMin = Number(min);
+      const nextMax = Number(max);
+      if (hasMin !== hasMax) {
+        throw new Error(messages.incomplete);
+      }
+      if (
+        hasMin &&
+        (!Number.isInteger(nextMin) ||
+          !Number.isInteger(nextMax) ||
+          nextMin <= 0 ||
+          nextMax < nextMin)
+      ) {
+        throw new Error(messages.invalid);
+      }
+      return hasMin ? {minDays: nextMin, maxDays: nextMax} : null;
     }
+    const barrelEstimate = parsedEstimate(barrelMinDays, barrelMaxDays, {
+      incomplete: "Enter both min and max barrel delivery days, or leave both empty.",
+      invalid: "Barrel delivery days must be positive whole numbers, with max greater than or equal to min.",
+    });
+    const airEstimate = parsedEstimate(airMinDays, airMaxDays, {
+      incomplete: "Enter both min and max air freight delivery days, or leave both empty.",
+      invalid: "Air freight delivery days must be positive whole numbers, with max greater than or equal to min.",
+    });
+    const seaEstimate = parsedEstimate(seaMinDays, seaMaxDays, {
+      incomplete: "Enter both min and max sea freight delivery days, or leave both empty.",
+      invalid: "Sea freight delivery days must be positive whole numbers, with max greater than or equal to min.",
+    });
 
     const businessId = text(destination.businessId, "");
     const countryId = text(destination.id, "");
@@ -10880,8 +10917,12 @@ function DestinationCoverageRow({
       ),
       serviceAvailability: canonicalAvailability,
       carTransportAvailable: canonicalAvailability.carTransport,
-      deliveryEstimateMinDays: hasMin ? nextMin : undefined,
-      deliveryEstimateMaxDays: hasMax ? nextMax : undefined,
+      barrelShippingDeliveryEstimateMinDays: barrelEstimate?.minDays,
+      barrelShippingDeliveryEstimateMaxDays: barrelEstimate?.maxDays,
+      freightAirDeliveryEstimateMinDays: airEstimate?.minDays,
+      freightAirDeliveryEstimateMaxDays: airEstimate?.maxDays,
+      freightSeaDeliveryEstimateMinDays: seaEstimate?.minDays,
+      freightSeaDeliveryEstimateMaxDays: seaEstimate?.maxDays,
       destinationNote: destinationNote.trim(),
       isActive: Object.values(canonicalAvailability).some(Boolean),
     });
@@ -10925,19 +10966,47 @@ function DestinationCoverageRow({
               Barrel
             </label>
             {availability.barrelShipping && (
-              <label className="destination-control">
-                <span>Barrel fee</span>
-                <input
-                  aria-label={`${text(destination.name, destination.id)} barrel shipping fee`}
-                  className="small-input"
-                  inputMode="decimal"
-                  min="0"
-                  onChange={(event) => setPrice(event.target.value)}
-                  placeholder="Fee"
-                  type="number"
-                  value={price}
-                />
-              </label>
+              <>
+                <label className="destination-control">
+                  <span>Barrel fee</span>
+                  <input
+                    aria-label={`${text(destination.name, destination.id)} barrel shipping fee`}
+                    className="small-input"
+                    inputMode="decimal"
+                    min="0"
+                    onChange={(event) => setPrice(event.target.value)}
+                    placeholder="Fee"
+                    type="number"
+                    value={price}
+                  />
+                </label>
+                <label className="destination-control">
+                  <span>Barrel min</span>
+                  <input
+                    aria-label={`${text(destination.name, destination.id)} barrel minimum delivery days`}
+                    className="small-input"
+                    inputMode="numeric"
+                    min="1"
+                    onChange={(event) => setBarrelMinDays(event.target.value)}
+                    placeholder="Days"
+                    type="number"
+                    value={barrelMinDays}
+                  />
+                </label>
+                <label className="destination-control">
+                  <span>Barrel max</span>
+                  <input
+                    aria-label={`${text(destination.name, destination.id)} barrel maximum delivery days`}
+                    className="small-input"
+                    inputMode="numeric"
+                    min="1"
+                    onChange={(event) => setBarrelMaxDays(event.target.value)}
+                    placeholder="Days"
+                    type="number"
+                    value={barrelMaxDays}
+                  />
+                </label>
+              </>
             )}
           </>
         )}
@@ -10954,16 +11023,44 @@ function DestinationCoverageRow({
               Air
             </label>
             {availability.freightAir && (
-              <label className="destination-control">
-                <span>Air / kg</span>
-                <input
-                  className="small-input"
-                  min="0"
-                  onChange={(event) => setFreightAirPrice(event.target.value)}
-                  type="number"
-                  value={freightAirPrice}
-                />
-              </label>
+              <>
+                <label className="destination-control">
+                  <span>Air / kg</span>
+                  <input
+                    className="small-input"
+                    min="0"
+                    onChange={(event) => setFreightAirPrice(event.target.value)}
+                    type="number"
+                    value={freightAirPrice}
+                  />
+                </label>
+                <label className="destination-control">
+                  <span>Air min</span>
+                  <input
+                    aria-label={`${text(destination.name, destination.id)} air freight minimum delivery days`}
+                    className="small-input"
+                    inputMode="numeric"
+                    min="1"
+                    onChange={(event) => setAirMinDays(event.target.value)}
+                    placeholder="Days"
+                    type="number"
+                    value={airMinDays}
+                  />
+                </label>
+                <label className="destination-control">
+                  <span>Air max</span>
+                  <input
+                    aria-label={`${text(destination.name, destination.id)} air freight maximum delivery days`}
+                    className="small-input"
+                    inputMode="numeric"
+                    min="1"
+                    onChange={(event) => setAirMaxDays(event.target.value)}
+                    placeholder="Days"
+                    type="number"
+                    value={airMaxDays}
+                  />
+                </label>
+              </>
             )}
             <label className="switch-line destination-active">
               <input
@@ -10976,16 +11073,44 @@ function DestinationCoverageRow({
               Sea
             </label>
             {availability.freightSea && (
-              <label className="destination-control">
-                <span>Sea / kg</span>
-                <input
-                  className="small-input"
-                  min="0"
-                  onChange={(event) => setFreightSeaPrice(event.target.value)}
-                  type="number"
-                  value={freightSeaPrice}
-                />
-              </label>
+              <>
+                <label className="destination-control">
+                  <span>Sea / kg</span>
+                  <input
+                    className="small-input"
+                    min="0"
+                    onChange={(event) => setFreightSeaPrice(event.target.value)}
+                    type="number"
+                    value={freightSeaPrice}
+                  />
+                </label>
+                <label className="destination-control">
+                  <span>Sea min</span>
+                  <input
+                    aria-label={`${text(destination.name, destination.id)} sea freight minimum delivery days`}
+                    className="small-input"
+                    inputMode="numeric"
+                    min="1"
+                    onChange={(event) => setSeaMinDays(event.target.value)}
+                    placeholder="Days"
+                    type="number"
+                    value={seaMinDays}
+                  />
+                </label>
+                <label className="destination-control">
+                  <span>Sea max</span>
+                  <input
+                    aria-label={`${text(destination.name, destination.id)} sea freight maximum delivery days`}
+                    className="small-input"
+                    inputMode="numeric"
+                    min="1"
+                    onChange={(event) => setSeaMaxDays(event.target.value)}
+                    placeholder="Days"
+                    type="number"
+                    value={seaMaxDays}
+                  />
+                </label>
+              </>
             )}
           </>
         )}
@@ -11001,32 +11126,6 @@ function DestinationCoverageRow({
             Car quotes
           </label>
         )}
-        <label className="destination-control">
-          <span>Min</span>
-          <input
-            aria-label={`${text(destination.name, destination.id)} minimum delivery days`}
-            className="small-input"
-            inputMode="numeric"
-            min="1"
-            onChange={(event) => setMinDays(event.target.value)}
-            placeholder="Days"
-            type="number"
-            value={minDays}
-          />
-        </label>
-        <label className="destination-control">
-          <span>Max</span>
-          <input
-            aria-label={`${text(destination.name, destination.id)} maximum delivery days`}
-            className="small-input"
-            inputMode="numeric"
-            min="1"
-            onChange={(event) => setMaxDays(event.target.value)}
-            placeholder="Days"
-            type="number"
-            value={maxDays}
-          />
-        </label>
         <label className="destination-control destination-note-control">
           <span>Details</span>
           <input
