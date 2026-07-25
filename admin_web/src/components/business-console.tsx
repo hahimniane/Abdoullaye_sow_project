@@ -740,6 +740,7 @@ function TodayView({
         freightShipments={freightShipments}
         transports={transports}
         parkedCars={parkedCars}
+        services={services}
       />
       <PayoutsPanel
         businessId={businessId}
@@ -984,6 +985,7 @@ function AnalyticsView({
   freightShipments,
   transports,
   parkedCars,
+  services,
 }: {
   cars: FirestoreRow[];
   purchases: FirestoreRow[];
@@ -991,6 +993,7 @@ function AnalyticsView({
   freightShipments: FirestoreRow[];
   transports: FirestoreRow[];
   parkedCars: FirestoreRow[];
+  services: Set<string>;
 }) {
   const listingBreakdown = topStatuses(cars, "status");
   const operationBreakdown = topStatuses(
@@ -1008,6 +1011,12 @@ function AnalyticsView({
     parkedCars,
       }),
     [freightShipments, parkedCars, purchases, shipments, transports],
+  );
+  const visibleServiceRows = earnings.services.filter(
+    (service) =>
+      services.has(service.serviceId) ||
+      service.paidTransactions > 0 ||
+      service.pendingTransactions > 0,
   );
   const activeInventoryValue = cars
     .filter((row) => text(row.status, "") === "active")
@@ -1077,7 +1086,7 @@ function AnalyticsView({
             <span>Business earnings</span>
             <span>Pending</span>
           </div>
-          {earnings.services.map((service) => (
+          {visibleServiceRows.map((service) => (
             <div className="earnings-table-row" key={service.serviceId}>
               <span>
                 <strong>{service.label}</strong>
