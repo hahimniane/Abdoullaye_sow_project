@@ -34,6 +34,14 @@ import type { FirestoreRow, UserProfile } from "@/types/admin";
 const ACTION_TIMEOUT_MS = 30_000;
 const SNAPSHOT_TIMEOUT_MS = 15_000;
 
+// Firebase callable failures carry the exact reason the backend rejected the
+// request (e.g. "Verify your phone number before using shared barrels").
+// Falling back to a generic string here would hide that from the user.
+function checkoutErrorMessage(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message.trim() : "";
+  return message || fallback;
+}
+
 type CustomerParkingPoolsProps = {
   firebaseUser?: User | null;
   authenticated?: boolean;
@@ -412,9 +420,12 @@ function ParkingReservationForm({
         pickupRequested,
         marketplaceDisclosure: marketplaceDisclosure(),
       });
-    } catch {
+    } catch (submitError) {
       setError(
-        "The parking reservation could not be started. Check the details and try again.",
+        checkoutErrorMessage(
+          submitError,
+          "The parking reservation could not be started. Check the details and try again.",
+        ),
       );
     } finally {
       setSubmitting(false);
@@ -1125,11 +1136,14 @@ function PoolRequestForm({
           ),
         });
       }
-    } catch {
+    } catch (submitError) {
       setError(
-        creating
-          ? "The shared barrel could not be posted. Check the details and try again."
-          : "The share request could not be started. Check the details and try again.",
+        checkoutErrorMessage(
+          submitError,
+          creating
+            ? "The shared barrel could not be posted. Check the details and try again."
+            : "The share request could not be started. Check the details and try again.",
+        ),
       );
     } finally {
       setSubmitting(false);
@@ -1160,7 +1174,10 @@ function PoolRequestForm({
             <Detail label="Destination" value={destination} />
             <Detail label="Provider" value={provider} />
             <Detail label="Sender" value={senderName.trim()} />
-            <Detail label="Receiver" value={receiverName.trim()} />
+            <Detail
+              label={creating ? "Receiver (for your shares only)" : "Receiver"}
+              value={receiverName.trim()}
+            />
             <Detail
               label={creating ? "Your shares" : "Shares requested"}
               value={sharesClaimed}
@@ -1413,8 +1430,13 @@ function PoolBalanceForm({
         }),
         marketplaceDisclosure: marketplaceDisclosure(),
       });
-    } catch {
-      setError("The balance payment could not be started. Try again.");
+    } catch (submitError) {
+      setError(
+        checkoutErrorMessage(
+          submitError,
+          "The balance payment could not be started. Try again.",
+        ),
+      );
     } finally {
       setSubmitting(false);
     }
