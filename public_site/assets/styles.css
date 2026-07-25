@@ -152,7 +152,7 @@ a{color:inherit; text-decoration:none}
 /* services */
 .service-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:22px}
 .service-card{background:var(--paper); border:1px solid var(--line); border-radius:var(--r-lg); padding:28px 24px; box-shadow:var(--shadow); transition:transform .22s var(--ease-pro), box-shadow .22s ease, border-color .22s ease}
-.service-card:hover{transform:translateY(-2px); box-shadow:var(--shadow-lg); border-color:rgba(13,148,136,.52)}
+.service-card:hover{transform:translateY(-4px); box-shadow:var(--shadow-lg); border-color:rgba(13,148,136,.52)}
 .service-card:focus-visible{outline:3px solid rgba(13,148,136,.28); outline-offset:4px; border-color:var(--teal)}
 .service-icon{width:54px; height:54px; border-radius:15px; display:grid; place-items:center; margin-bottom:18px}
 .service-icon svg{width:28px; height:28px}
@@ -524,22 +524,25 @@ a.service-card:focus-visible .link-arrow{
   color:var(--teal);
   border-color:rgba(13,148,136,.42);
 }
+/* Filled by default (not only on hover): on touch devices there is no hover
+   state, so the "this is a button" signal has to be visible at rest. */
 a.service-card .link-arrow span{
   display:grid;
   place-items:center;
   flex:0 0 auto;
-  width:30px;
-  height:30px;
-  border-radius:9px;
-  color:var(--teal-deep);
-  background:var(--mist);
-  transition:transform .18s ease, color .18s ease, background .18s ease;
+  width:32px;
+  height:32px;
+  border-radius:10px;
+  color:#fff;
+  background:var(--teal-deep);
+  box-shadow:0 4px 10px rgba(11,59,56,.22);
+  transition:transform .18s var(--ease-pro), background .18s ease, box-shadow .18s ease;
 }
 a.service-card:hover .link-arrow span,
 a.service-card:focus-visible .link-arrow span{
-  color:#fff;
-  background:var(--teal-deep);
-  transform:translateX(4px);
+  background:var(--teal);
+  transform:translateX(4px) scale(1.08);
+  box-shadow:0 6px 16px rgba(13,148,136,.34);
 }
 
 .mobile-menu .customer-login-link{min-height:44px}
