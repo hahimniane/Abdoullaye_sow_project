@@ -583,9 +583,15 @@ function ProfileView({ firebaseUser, profile }: { firebaseUser: User; profile: U
   const [phoneError, setPhoneError] = useState("");
   const recaptcha = useRef<RecaptchaVerifier | null>(null);
   const normalizedDraft = normalizePhone(phone);
+  // Require the backend's own record of verification (profile.phoneVerified),
+  // not just a live match against the Auth SDK's phoneNumber: those two can
+  // drift apart (e.g. a phone linked outside the normal verify-code flow),
+  // and showing "Verified" here when the shared-barrel gate would still
+  // reject the account is exactly the kind of mismatch that confuses users.
   const phoneVerified =
     isValidE164(normalizedDraft) &&
-    normalizePhone(firebaseUser.phoneNumber || "") === normalizedDraft;
+    normalizePhone(firebaseUser.phoneNumber || "") === normalizedDraft &&
+    profile?.phoneVerified === true;
 
   function changePhone(value: string) {
     setPhone(value);
