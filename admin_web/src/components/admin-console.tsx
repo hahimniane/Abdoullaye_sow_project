@@ -2212,6 +2212,7 @@ export function AdminConsole() {
       "finance",
       "support",
       "website",
+      "settings",
     ) ||
       (enabled && activeTab === "people" && adminEmailVerified),
     500,
@@ -5132,10 +5133,6 @@ const GENERAL_DEFAULTS = {
     whatsapp: "",
     address: "",
   },
-  shipping: {
-    defaultBarrelPrice: "",
-    destinations: [] as FirestoreRow[],
-  },
   applications: {
     requireDocuments: true,
     requirePhone: true,
@@ -5220,18 +5217,10 @@ function mergeGeneral(
   data: Record<string, unknown> | undefined,
 ): GeneralSettings {
   const d = data ?? {};
-  const shipping = (d.shipping as { destinations?: unknown }) ?? {};
   return {
     branding: {
       ...GENERAL_DEFAULTS.branding,
       ...((d.branding as object) ?? {}),
-    },
-    shipping: {
-      ...GENERAL_DEFAULTS.shipping,
-      ...((d.shipping as object) ?? {}),
-      destinations: Array.isArray(shipping.destinations)
-        ? (shipping.destinations as FirestoreRow[])
-        : [],
     },
     applications: {
       ...GENERAL_DEFAULTS.applications,
@@ -5401,9 +5390,6 @@ function MoreSettings({
   function setBranding(key: string, value: string) {
     setDraft((d) => ({ ...d, branding: { ...d.branding, [key]: value } }));
   }
-  function setShipping(key: string, value: unknown) {
-    setDraft((d) => ({ ...d, shipping: { ...d.shipping, [key]: value } }));
-  }
   function setApplications(key: string, value: boolean) {
     setDraft((d) => ({
       ...d,
@@ -5415,27 +5401,6 @@ function MoreSettings({
       ...d,
       notifications: { ...d.notifications, [key]: value },
     }));
-  }
-
-  function addDestination() {
-    setShipping("destinations", [
-      ...draft.shipping.destinations,
-      { name: "", code: "", price: "", minDays: "", maxDays: "" },
-    ]);
-  }
-  function setDestination(index: number, key: string, value: string) {
-    setShipping(
-      "destinations",
-      draft.shipping.destinations.map((row, i) =>
-        i === index ? { ...row, [key]: value } : row,
-      ),
-    );
-  }
-  function removeDestination(index: number) {
-    setShipping(
-      "destinations",
-      draft.shipping.destinations.filter((_, i) => i !== index),
-    );
   }
 
   async function saveSection(section: keyof GeneralSettings) {
@@ -5808,158 +5773,6 @@ function MoreSettings({
               onChange={(e) => setBranding("address", e.target.value)}
             />
           </label>
-        </div>
-      </Panel>
-
-      <Panel
-        title="Default barrel pricing & destinations"
-        icon={<BadgeDollarSign size={18} />}
-        action={
-          <button
-            className="primary-button compact"
-            type="button"
-            onClick={() =>
-              runAction(
-              "Shipping defaults saved",
-              () => saveSection("shipping"),
-              {
-                confirm:
-                  "Save default barrel pricing and destination changes?",
-                confirmFr:
-                  "Enregistrer les changements des tarifs et destinations par défaut des barils ?",
-              },
-              )
-            }
-          >
-            Save
-          </button>
-        }
-      >
-        <div className="settings-form narrow">
-          <label>
-            Default barrel price (USD)
-            <input
-              inputMode="decimal"
-              value={String(draft.shipping.defaultBarrelPrice ?? "")}
-              onChange={(e) =>
-                setShipping("defaultBarrelPrice", e.target.value)
-              }
-              placeholder="e.g. 275"
-            />
-          </label>
-        </div>
-        <div className="dest-editor">
-          <div className="dest-editor-head">
-            <span>Country</span>
-            <span>Code</span>
-            <span>Price</span>
-            <span>Min days</span>
-            <span>Max days</span>
-            <span></span>
-          </div>
-          {draft.shipping.destinations.map((row, index) => {
-            const rowCode = text(row.code, "").toUpperCase();
-            const selectedCountry = COUNTRY_CATALOG.find(
-              (country) =>
-                country.code === rowCode ||
-                country.name.toLowerCase() ===
-                  text(row.name, "").toLowerCase(),
-            );
-            const legacyValue = `legacy-country-${index}`;
-            return (
-            <div className="dest-editor-row" key={index}>
-              <SearchableSelect
-                className="dest-editor-country"
-                emptyMessage="No countries match your search."
-                hideLabel
-                label="Country"
-                listLabel="Country options"
-                onChange={(countryCode) => {
-                  const country = COUNTRY_CATALOG.find(
-                    (item) => item.code === countryCode,
-                  );
-                  if (!country) return;
-                  setShipping(
-                    "destinations",
-                    draft.shipping.destinations.map((item, itemIndex) =>
-                      itemIndex === index
-                        ? {
-                            ...item,
-                            code: country.code,
-                            name: country.name,
-                          }
-                        : item,
-                    ),
-                  );
-                }}
-                options={[
-                  ...(!selectedCountry && text(row.name, "")
-                    ? [{
-                        label: `${countryFlag(rowCode)} ${text(row.name, "")}`,
-                        keywords: rowCode,
-                        value: legacyValue,
-                      }]
-                    : []),
-                  ...COUNTRY_CATALOG.map((country) => ({
-                    label: `${countryFlag(country.code)} ${country.name}`,
-                    keywords: country.code,
-                    value: country.code,
-                  })),
-                ]}
-                placeholder="Search country"
-                value={
-                  selectedCountry?.code ??
-                  (text(row.name, "") ? legacyValue : "")
-                }
-              />
-              <input
-                placeholder="Code"
-                value={text(row.code, "")}
-                readOnly
-              />
-              <input
-                placeholder="Price"
-                inputMode="decimal"
-                value={text(row.price, "")}
-                onChange={(e) => setDestination(index, "price", e.target.value)}
-              />
-              <input
-                placeholder="Min"
-                inputMode="numeric"
-                value={text(row.minDays, "")}
-                onChange={(e) =>
-                  setDestination(index, "minDays", e.target.value)
-                }
-              />
-              <input
-                placeholder="Max"
-                inputMode="numeric"
-                value={text(row.maxDays, "")}
-                onChange={(e) =>
-                  setDestination(index, "maxDays", e.target.value)
-                }
-              />
-              <button
-                className="icon-danger"
-                type="button"
-                title="Remove"
-                onClick={() => removeDestination(index)}
-              >
-                <X size={15} />
-              </button>
-            </div>
-            );
-          })}
-          {draft.shipping.destinations.length === 0 && (
-            <EmptyState text="No default destinations yet." />
-          )}
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={addDestination}
-          >
-            Add destination
-          </button>
         </div>
       </Panel>
 
