@@ -43,6 +43,10 @@
     .hint{color:var(--muted); font-size:12px; margin-top:6px}
     .req{color:#dc2626}
     .signed-note{background:rgba(13,148,136,.06); border:1px solid rgba(13,148,136,.25); border-radius:12px; padding:12px 14px; font-size:14px; color:var(--ink-soft); margin-bottom:16px}
+    .consent-row{display:flex; align-items:flex-start; gap:10px; font-size:14px; color:var(--ink-soft); cursor:pointer; margin-bottom:14px}
+    .consent-row:last-child{margin-bottom:0}
+    .consent-row input{flex:0 0 auto; margin-top:3px; width:18px; height:18px; accent-color:var(--teal)}
+    .consent-row a{color:var(--teal); font-weight:600}
     @media (max-width:680px){ .apply-card .field-row,.partner-service-list{grid-template-columns:1fr} }
   </style>
 </head>
@@ -173,6 +177,18 @@
         </label>
       </div>
 
+      <div class="apply-card">
+        <h2>✅ Conditions</h2>
+        <label class="consent-row">
+          <input type="checkbox" id="legalAccept" required />
+          <span>J’accepte les <a href="terms.html" target="_blank" rel="noreferrer">Conditions d’utilisation</a> et la <a href="privacy.html" target="_blank" rel="noreferrer">Politique de confidentialité</a>. <span class="req">*</span></span>
+        </label>
+        <label class="consent-row">
+          <input type="checkbox" id="marketplaceAccept" required />
+          <span>Je comprends que l’entreprise sélectionnée est le prestataire de service indépendant responsable de l’exécution, du délai et de la performance. <span class="req">*</span></span>
+        </label>
+      </div>
+
       <button class="btn btn-primary btn-lg" type="submit" id="submitBtn" style="width:100%">Envoyer la demande</button>
       <small class="form-note">En envoyant, vous créez un compte entreprise Laawol et acceptez l’examen par la plateforme. Vous pouvez configurer votre tableau de bord immédiatement; les clients vous verront après approbation.</small>
     </form>
@@ -266,6 +282,11 @@
     const businessCity = $("businessCity");
     const businessCityText = $("businessCityText");
     const countryCatalog = window.LaawolCountryCatalog;
+
+    // Must match functions/marketplace_disclosure.js exactly — the backend
+    // rejects createCustomerUser/submitBusinessApplication without these.
+    const LEGAL_ACCEPTANCE_VERSION = "terms-privacy-marketplace-v1";
+    const MARKETPLACE_DISCLOSURE_VERSION = "marketplace-provider-responsibility-v1";
 
     function localize(value) {
       return window.LaawolI18n && typeof window.LaawolI18n.localize === "function"
@@ -451,6 +472,8 @@
       if (!selectedCity) return showError("Sélectionnez la ville de votre entreprise.");
       if (businessPhone && !PHONE_OK(businessPhone)) return showError("Saisissez un téléphone d’entreprise valide, ou laissez ce champ vide.");
       if (businessEmail && !EMAIL_OK(businessEmail)) return showError("Saisissez un email d’entreprise valide, ou laissez ce champ vide.");
+      if (!$("legalAccept").checked) return showError("Veuillez accepter les conditions d’utilisation et la politique de confidentialité.");
+      if (!$("marketplaceAccept").checked) return showError("Veuillez confirmer que vous comprenez votre rôle de prestataire indépendant.");
 
       submitBtn.disabled = true;
       submitBtn.textContent = "Envoi…";
@@ -462,7 +485,13 @@
         //    admin/customer session that happened to be in the browser.
         try {
           const createUser = httpsCallable(functions, "createCustomerUser");
-          const res = await createUser({ email, password, fullName: ownerName, phone: ownerPhone });
+          const res = await createUser({
+            email,
+            password,
+            fullName: ownerName,
+            phone: ownerPhone,
+            legalAcceptance: { accepted: true, version: LEGAL_ACCEPTANCE_VERSION, locale: "fr" },
+          });
           const signInEmail = (res.data && res.data.email) ? res.data.email : email;
           await signInWithEmailAndPassword(auth, signInEmail, password);
         } catch (err) {
@@ -495,6 +524,7 @@
           country: selectedCountry,
           state: selectedCountry,
           postalCode: "",
+          marketplaceDisclosure: { accepted: true, version: MARKETPLACE_DISCLOSURE_VERSION, locale: "fr" },
         });
         const businessId = appRes.data && appRes.data.businessId;
 
