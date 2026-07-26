@@ -9084,6 +9084,12 @@ abstract class AppLocalizations {
   /// **'Laawol is not the seller, carrier, or service provider and does not guarantee the business’s delivery date or performance. This does not limit rights that cannot legally be waived.'**
   String get marketplaceNoGuaranteeBody;
 
+  /// No description provided for @freightAutoChargeDisclosureBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The weight you enter is an estimate. If the business confirms a different weight after pickup, Laawol will try to automatically charge the card you use today for any additional amount due. If that charge doesn’t go through, you’ll need to open the app to complete payment before your shipment can continue. If your shipment weighs less, you’ll be refunded automatically.'**
+  String get freightAutoChargeDisclosureBody;
+
   /// No description provided for @marketplaceResponsibilityCheckbox.
   ///
   /// In en, this message translates to:

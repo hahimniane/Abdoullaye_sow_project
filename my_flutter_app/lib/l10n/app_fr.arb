@@ -2152,6 +2152,7 @@
   "@marketplaceProviderResponsibilityBody": {"placeholders": {"providerNames": {}}},
   "marketplacePaymentFlowBody": "Laawol vous aide à trouver des entreprises, encaisse et traite votre paiement, peut déduire des frais de plateforme indiqués et peut transférer ultérieurement la rémunération de l’entreprise. Laawol peut aider au suivi, à l’assistance, aux remboursements et aux litiges.",
   "marketplaceNoGuaranteeBody": "Laawol n’est ni le vendeur, ni le transporteur, ni le prestataire et ne garantit ni la date de livraison ni la prestation de l’entreprise. Cela ne limite pas les droits auxquels la loi ne permet pas de renoncer.",
+  "freightAutoChargeDisclosureBody": "Le poids que vous indiquez est une estimation. Si l’entreprise confirme un poids différent après la prise en charge, Laawol tentera de facturer automatiquement la carte utilisée aujourd’hui pour tout montant supplémentaire dû. Si cette charge échoue, vous devrez ouvrir l’application pour finaliser le paiement avant que votre expédition puisse continuer. Si votre expédition pèse moins, vous serez automatiquement remboursé.",
   "marketplaceResponsibilityCheckbox": "Je comprends la responsabilité de l’entreprise et je souhaite continuer.",
   "selectedBusiness": "L’entreprise sélectionnée",
   "accountLegalAcceptance": "J’accepte les Conditions d’utilisation et la Politique de confidentialité de Laawol, y compris son rôle de place de marché.",

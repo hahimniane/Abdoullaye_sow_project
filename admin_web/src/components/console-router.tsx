@@ -682,7 +682,7 @@ function RoleSignInCard({
           password,
           fullName: fullName.trim(),
           phone: phone.trim(),
-          legalAcceptance: legalAcceptance(),
+          legalAcceptance: legalAcceptance(accepted),
         });
         const credential = await signInWithEmailAndPassword(
           auth,

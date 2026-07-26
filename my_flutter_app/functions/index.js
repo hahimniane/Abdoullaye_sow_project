@@ -3079,6 +3079,16 @@ async function createStripePaymentIntent(params) {
   if (params.applicationFeeAmount) {
     body.set("application_fee_amount", String(params.applicationFeeAmount));
   }
+  // customerId + setupFutureUsage together save whichever payment method the
+  // customer confirms with to that Stripe Customer, so a later charge (see
+  // confirmStripePaymentIntent's offSession option) can reuse it without the
+  // customer having to re-enter their card.
+  if (params.customerId) {
+    body.set("customer", params.customerId);
+  }
+  if (params.setupFutureUsage) {
+    body.set("setup_future_usage", params.setupFutureUsage);
+  }
   Object.entries(params.metadata).forEach(([key, value]) => {
     body.set(`metadata[${key}]`, value);
   });
@@ -3147,6 +3157,65 @@ async function cancelStripePaymentIntent(paymentIntentId, connectedAccountId) {
         }),
       },
   );
+}
+
+// Confirms a PaymentIntent server-side using a saved payment method, with no
+// customer present (see attemptAutomaticFreightBalanceCharge). Stripe throws
+// for this call whenever the card is declined or the issuer requires an
+// authentication step it can't complete off-session - callers should treat
+// any thrown error here as "couldn't auto-charge, fall back to asking the
+// customer to pay in-app," not as a fatal failure of the calling flow.
+async function confirmStripePaymentIntent({
+  paymentIntentId,
+  connectedAccountId,
+  paymentMethodId,
+  offSession = false,
+}) {
+  const body = new URLSearchParams();
+  if (paymentMethodId) body.set("payment_method", paymentMethodId);
+  if (offSession) body.set("off_session", "true");
+  return stripeFormRequest(
+      `/payment_intents/${paymentIntentId}/confirm`,
+      body,
+      {
+        ...(connectedAccountId && {
+          headers: {"Stripe-Account": connectedAccountId},
+        }),
+      },
+  );
+}
+
+// Off-session charges (freight balance top-ups - see
+// attemptAutomaticFreightBalanceCharge) must reuse a Stripe Customer and
+// saved payment method on the SAME ledger the original charge ran on: the
+// platform account for a normal charge, or the business's own connected
+// account for a direct charge. Scoped by (uid, connectedAccountId) so a
+// repeat customer of the same business doesn't get a fresh Stripe Customer
+// object every shipment.
+async function ensureStripeCustomerId({uid, email, connectedAccountId}) {
+  const db = admin.firestore();
+  const scopeKey = connectedAccountId ?
+    `connect_${connectedAccountId}` : "platform";
+  const docRef = db.collection("users").doc(uid)
+      .collection("stripeCustomerAccounts").doc(scopeKey);
+  const existing = await docRef.get();
+  const existingId = existing.exists ?
+    String(existing.data()?.stripeCustomerId || "").trim() : "";
+  if (existingId) return existingId;
+  const body = new URLSearchParams();
+  if (email) body.set("email", email);
+  body.set("metadata[uid]", uid);
+  const customer = await stripeFormRequest("/customers", body, {
+    ...(connectedAccountId && {
+      headers: {"Stripe-Account": connectedAccountId},
+    }),
+  });
+  await docRef.set({
+    stripeCustomerId: customer.id,
+    connectedAccountId: connectedAccountId || "",
+    createdAt: FirestoreFieldValue.serverTimestamp(),
+  });
+  return customer.id;
 }
 
 async function createStripeExpressAccount(params) {
@@ -17223,6 +17292,26 @@ exports.createFreightShipmentPaymentIntent = onCall(
         };
       }
 
+      // Saving the card used for the estimate lets a later weight-adjustment
+      // balance (see confirmFreightShipmentWeight) be charged automatically
+      // without the customer re-entering it - but that's a convenience, not
+      // a requirement, so a hiccup resolving/creating the Stripe Customer
+      // must never block the estimate payment itself.
+      let stripeCustomerId = "";
+      try {
+        stripeCustomerId = await ensureStripeCustomerId({
+          uid: customerUid,
+          email: userRecord.email || "",
+          connectedAccountId: payoutFields.stripeConnectedAccountId ||
+            undefined,
+        });
+      } catch (error) {
+        logger.warn("Could not prepare a Stripe customer for freight", {
+          shipmentId: shipmentRef.id,
+          message: error.message,
+        });
+      }
+
       let paymentIntent;
       try {
         paymentIntent = await createStripePaymentIntent({
@@ -17235,6 +17324,8 @@ exports.createFreightShipmentPaymentIntent = onCall(
                 payoutFields.platformFeeCents, chargeCents,
             ) :
             undefined,
+          customerId: stripeCustomerId || undefined,
+          setupFutureUsage: stripeCustomerId ? "off_session" : undefined,
           metadata: {
             shipmentId: shipmentRef.id,
             trackingCode,
@@ -17246,6 +17337,7 @@ exports.createFreightShipmentPaymentIntent = onCall(
         });
         await shipmentRef.update({
           stripePaymentIntentId: paymentIntent.id,
+          stripeCustomerId,
           updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
       } catch (error) {
@@ -17355,6 +17447,10 @@ exports.completeFreightShipmentPayment = onCall(
         ...settlementUpdate,
         status: paidStatus,
         paidAt: FirestoreFieldValue.serverTimestamp(),
+        // Saved so a later weight-adjustment balance can be charged
+        // automatically (see attemptAutomaticFreightBalanceCharge) without
+        // asking the customer to re-enter their card.
+        stripePaymentMethodId: intent.payment_method || "",
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
       if (!versionTwo) {
@@ -17643,6 +17739,11 @@ async function processFreightSettlementRefund({settlementRef, shipmentRef}) {
       serviceType: "freight_shipment_final",
       idempotencySuffix: `${settlement.shipmentId}_freight_final_v1`,
     });
+    await notifyFreightRefundIssued({
+      shipmentId: settlement.shipmentId,
+      shipment: shipmentDoc.data() || {},
+      settlement,
+    });
     return (await settlementRef.get()).data() || settlement;
   } catch (error) {
     logger.error("Freight settlement refund failed", {
@@ -17870,10 +17971,230 @@ exports.confirmFreightShipmentWeight = onCall(
           serviceType: "freight_shipment_final",
           idempotencySuffix: `${shipmentId}_freight_final_v1`,
         });
+      } else if (result.priceSettlementStatus ===
+          FreightSettlementStatus.BALANCE_DUE) {
+        const attempted = await attemptAutomaticFreightBalanceCharge({
+          shipmentId,
+          customerUid: result.customerUid,
+        });
+        if (attempted) {
+          const settledDoc = await settlementRef.get();
+          result = settledDoc.data() || result;
+        }
       }
       return freightSettlementResponse(result);
     },
 );
+
+// Real, specific copy for the weight-adjustment balance-due event, replacing
+// the generic "shipment is now awaiting_balance_payment" status-change
+// notification (see notifyFreightShipmentStatus, which skips this internal
+// status precisely so this is the only notification the customer gets for
+// this event).
+async function notifyFreightBalanceDue({
+  shipmentId,
+  shipment,
+  autoChargeAttempted,
+  autoChargeSucceeded = false,
+}) {
+  const uid = shipment.customerUid;
+  if (!uid) return;
+  const amount = dollarsFromCents(Number(shipment.balanceDueCents || 0));
+  const verifiedWeightKg = shipment.verifiedWeightKg;
+  const estimatedWeightKg = shipment.estimatedWeightKg;
+  const weightNote = (verifiedWeightKg && estimatedWeightKg) ?
+    ` Your shipment was confirmed at ${verifiedWeightKg}kg, more than the ` +
+      `${estimatedWeightKg}kg you entered.` :
+    "";
+  const businessName = shipment.businessName || "The business";
+  let title;
+  let body;
+  if (autoChargeAttempted && autoChargeSucceeded) {
+    title = "Additional shipping charge";
+    body = `${businessName} confirmed your shipment weighed more than ` +
+      `estimated.${weightNote} We automatically charged your card an ` +
+      `additional $${amount} to cover the difference.`;
+  } else if (autoChargeAttempted) {
+    title = "Action needed: complete your shipping payment";
+    body = `${businessName} confirmed your shipment weighed more than ` +
+      `estimated.${weightNote} An additional $${amount} is due. We tried ` +
+      `to charge your card automatically, but it didn't go through - ` +
+      `please open the app to complete this payment so your shipment can ` +
+      `continue.`;
+  } else {
+    title = "Action needed: complete your shipping payment";
+    body = `${businessName} confirmed your shipment weighed more than ` +
+      `estimated.${weightNote} An additional $${amount} is due - please ` +
+      `open the app to complete this payment so your shipment can continue.`;
+  }
+  await sendPreferenceNotification({
+    uid,
+    preferenceKey: "shipmentActivity",
+    title,
+    body,
+    data: {
+      type: "freight_balance_due",
+      shipmentId: shipmentId || "",
+      autoChargeAttempted: String(!!autoChargeAttempted),
+      autoChargeSucceeded: String(!!autoChargeSucceeded),
+    },
+  });
+}
+
+// Real, specific copy for the weight-adjustment refund event, replacing the
+// generic "shipment is now settlement_processing" status-change notification
+// (see notifyFreightShipmentStatus, which skips this internal status
+// precisely so this is the only notification the customer gets for it).
+async function notifyFreightRefundIssued({shipmentId, shipment, settlement}) {
+  const uid = shipment.customerUid;
+  if (!uid) return;
+  const refundCardCents = Number(settlement.refundCardCents || 0);
+  const refundWalletCents = Number(settlement.refundWalletCents || 0);
+  const verifiedWeightKg = settlement.verifiedWeightKg;
+  const estimatedWeightKg = settlement.estimatedWeightKg;
+  const weightNote = (verifiedWeightKg && estimatedWeightKg) ?
+    ` Your shipment was confirmed at ${verifiedWeightKg}kg, less than the ` +
+      `${estimatedWeightKg}kg you entered.` :
+    "";
+  const businessName = shipment.businessName || "The business";
+  const destinationParts = [];
+  if (refundCardCents > 0) {
+    destinationParts.push(
+        `$${dollarsFromCents(refundCardCents)} back to your card`,
+    );
+  }
+  if (refundWalletCents > 0) {
+    destinationParts.push(
+        `$${dollarsFromCents(refundWalletCents)} credited to your Laawol ` +
+          `wallet`,
+    );
+  }
+  const destinationNote = destinationParts.length ?
+    ` ${destinationParts.join(" and ")}.` :
+    "";
+  await sendPreferenceNotification({
+    uid,
+    preferenceKey: "shipmentActivity",
+    title: "Shipping refund issued",
+    body: `${businessName} confirmed your shipment weighed less than ` +
+      `estimated.${weightNote}${destinationNote}`,
+    data: {
+      type: "freight_refund_issued",
+      shipmentId: shipmentId || "",
+    },
+  });
+}
+
+// When the confirmed weight is HIGHER than estimated, try charging the
+// customer automatically using the payment method saved from their original
+// estimate payment (see createFreightShipmentPaymentIntent /
+// completeFreightShipmentPayment) - no app visit required. This deliberately
+// reuses createFreightSettlementPayment/completeFreightSettlementPayment's
+// own logic via .run() (the same in-process pattern
+// cancelPendingFreightShipment already uses) instead of re-deriving routing/
+// idempotency rules here, so there is exactly one place that decides how a
+// freight balance charge is created and settled. Returns true if the charge
+// was attempted (successfully or not) so the caller knows whether to re-read
+// the settlement; false if no saved card exists (e.g. a pre-feature
+// shipment), in which case nothing changes and the existing manual
+// createFreightSettlementPayment flow is unaffected.
+async function attemptAutomaticFreightBalanceCharge({shipmentId, customerUid}) {
+  const db = admin.firestore();
+  const shipmentDoc = await db.collection("freightShipments")
+      .doc(shipmentId).get();
+  const shipment = shipmentDoc.data() || {};
+  const stripePaymentMethodId =
+    String(shipment.stripePaymentMethodId || "").trim();
+  if (!stripePaymentMethodId) {
+    await notifyFreightBalanceDue({
+      shipmentId, shipment, autoChargeAttempted: false,
+    });
+    return false;
+  }
+
+  if (SIMULATE_PAYMENTS) {
+    await exports.createFreightSettlementPayment.run({
+      auth: {uid: customerUid},
+      data: {shipmentId},
+    });
+    await notifyFreightBalanceDue({
+      shipmentId, shipment, autoChargeAttempted: true,
+      autoChargeSucceeded: true,
+    });
+    return true;
+  }
+
+  // createFreightSettlementPayment also runs recordMarketplaceDisclosure,
+  // which requires a real customer-supplied disclosure acceptance - this
+  // internal call never has one, since no customer is present to give it.
+  // That's fine: treat the throw the same as any other reason the automatic
+  // charge couldn't go through (nothing gets created), and let the
+  // customer's later in-app manual payment attempt - which DOES supply a
+  // real disclosure acceptance - create the attempt/intent fresh.
+  let creationResult;
+  try {
+    creationResult = await exports.createFreightSettlementPayment.run({
+      auth: {uid: customerUid},
+      data: {shipmentId},
+    });
+  } catch (error) {
+    logger.warn("Could not prepare automatic freight balance charge", {
+      shipmentId,
+      message: error.message,
+    });
+    await notifyFreightBalanceDue({
+      shipmentId, shipment, autoChargeAttempted: true,
+      autoChargeSucceeded: false,
+    });
+    return true;
+  }
+  if (creationResult.alreadySettled || !creationResult.clientSecret) {
+    return true;
+  }
+
+  const paymentIntentId = paymentIntentIdFromClientSecret(
+      creationResult.clientSecret,
+  );
+  if (!paymentIntentId) return true;
+
+  const connectedAccountId = shipment.stripeChargeType === "direct" ?
+    (shipment.stripeConnectedAccountId || undefined) : undefined;
+
+  let confirmed = null;
+  try {
+    confirmed = await confirmStripePaymentIntent({
+      paymentIntentId,
+      connectedAccountId,
+      paymentMethodId: stripePaymentMethodId,
+      offSession: true,
+    });
+  } catch (error) {
+    logger.warn("Automatic freight balance charge did not go through", {
+      shipmentId,
+      message: error.message,
+    });
+  }
+
+  if (confirmed?.status === "succeeded") {
+    await exports.completeFreightSettlementPayment.run({
+      auth: {uid: customerUid},
+      data: {
+        settlementId: creationResult.settlementId,
+        attemptId: creationResult.attemptId,
+      },
+    });
+    await notifyFreightBalanceDue({
+      shipmentId, shipment, autoChargeAttempted: true,
+      autoChargeSucceeded: true,
+    });
+    return true;
+  }
+  await notifyFreightBalanceDue({
+    shipmentId, shipment, autoChargeAttempted: true,
+    autoChargeSucceeded: false,
+  });
+  return true;
+}
 
 async function applyFreightSettlementPayment({
   settlementId,
@@ -18116,6 +18437,11 @@ exports.createFreightSettlementPayment = onCall(
           currency: settlement.currency || SHIPMENT_CURRENCY,
           connectedAccountId: balanceConnectedAccountId || undefined,
           applicationFeeAmount: balanceApplicationFeeAmount,
+          // Required whenever a saved payment method is used to confirm
+          // this intent off-session (see attemptAutomaticFreightBalanceCharge)
+          // - Stripe rejects a customer-owned payment_method on an intent
+          // that isn't tied to that same customer.
+          customerId: shipment.stripeCustomerId || undefined,
           metadata: {
             settlementId,
             attemptId,
@@ -18262,11 +18588,23 @@ exports.retryFreightSettlementRefunds = onSchedule(
     },
 );
 
+// Internal, settlement-only status values that get their own specific
+// notification elsewhere (notifyFreightBalanceDue / notifyFreightRefundIssued)
+// - the generic "shipment is now X" copy below is never useful for these and
+// would otherwise double up with the dedicated one.
+const FREIGHT_STATUS_NOTIFIED_ELSEWHERE = new Set([
+  "awaiting_balance_payment",
+  "settlement_processing",
+]);
+
 exports.notifyFreightShipmentStatus = onDocumentUpdated(
     "freightShipments/{shipmentId}",
     async (event) => {
       if (!statusChanged(event)) return;
       const after = event.data.after.data() || {};
+      if (FREIGHT_STATUS_NOTIFIED_ELSEWHERE.has(String(after.status || ""))) {
+        return;
+      }
       const uid = userIdFrom(after, ["customerUid", "senderUid", "uid"]);
       await sendPreferenceNotification({
         uid,

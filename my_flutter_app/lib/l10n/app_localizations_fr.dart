@@ -5146,6 +5146,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Laawol n’est ni le vendeur, ni le transporteur, ni le prestataire et ne garantit ni la date de livraison ni la prestation de l’entreprise. Cela ne limite pas les droits auxquels la loi ne permet pas de renoncer.';
 
   @override
+  String get freightAutoChargeDisclosureBody =>
+      'Le poids que vous indiquez est une estimation. Si l’entreprise confirme un poids différent après la prise en charge, Laawol tentera de facturer automatiquement la carte utilisée aujourd’hui pour tout montant supplémentaire dû. Si cette charge échoue, vous devrez ouvrir l’application pour finaliser le paiement avant que votre expédition puisse continuer. Si votre expédition pèse moins, vous serez automatiquement remboursé.';
+
+  @override
   String get marketplaceResponsibilityCheckbox =>
       'Je comprends la responsabilité de l’entreprise et je souhaite continuer.';
 

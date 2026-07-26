@@ -706,6 +706,33 @@ describe("freight service callable lifecycle", () => {
         assert.equal(repeated.alreadySettled, true);
       });
 
+  it("automatically charges a heavier balance when a card is on file",
+      async () => {
+        const businessId = "freight-auto-charge-business";
+        await seedBusiness(businessId);
+        const manager = await seedFreightManager(businessId);
+        const booking = await functions.createFreightShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: freightInput(businessId, {weightKg: 10}),
+        });
+        // Stands in for a card saved from the customer's original estimate
+        // payment (see completeFreightShipmentPayment) - without this, the
+        // shipment falls back to the existing manual-payment flow instead.
+        await db.collection("freightShipments").doc(booking.shipmentId)
+            .update({stripePaymentMethodId: "pm_test_on_file"});
+
+        const confirmed = await functions.confirmFreightShipmentWeight.run({
+          auth: manager,
+          data: {shipmentId: booking.shipmentId, verifiedWeightKg: 12},
+        });
+        assert.equal(confirmed.priceSettlementStatus, "settled");
+        const shipment = await freightData(booking.shipmentId);
+        assert.equal(shipment.priceSettlementStatus, "settled");
+        assert.equal(shipment.balancePaymentStatus, "succeeded");
+        assert.equal(shipment.status, "pending");
+        assert.equal(shipment.price, 150);
+      });
+
   it("converges simultaneous freight balance payment requests",
       async () => {
         const businessId = "freight-concurrent-settlement-business";

@@ -891,7 +891,7 @@ function CarActionForm({
         carId: car.id,
         buyerName: buyerName.trim(),
         buyerPhone: buyerPhone.trim(),
-        marketplaceDisclosure: marketplaceDisclosure(),
+        marketplaceDisclosure: marketplaceDisclosure(accepted),
         ...(action === "deposit" && {
           holdUntilDate: new Date(`${holdUntilDate}T12:00:00`).toISOString(),
         }),

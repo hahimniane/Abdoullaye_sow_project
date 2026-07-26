@@ -2151,6 +2151,7 @@
   "@marketplaceProviderResponsibilityBody": {"placeholders": {"providerNames": {}}},
   "marketplacePaymentFlowBody": "Laawol helps you find businesses, collects and processes your payment, may deduct a disclosed platform fee, and may transfer the business payout later. Laawol can assist with tracking, support, refunds, and disputes.",
   "marketplaceNoGuaranteeBody": "Laawol is not the seller, carrier, or service provider and does not guarantee the business’s delivery date or performance. This does not limit rights that cannot legally be waived.",
+  "freightAutoChargeDisclosureBody": "The weight you enter is an estimate. If the business confirms a different weight after pickup, Laawol will try to automatically charge the card you use today for any additional amount due. If that charge doesn’t go through, you’ll need to open the app to complete payment before your shipment can continue. If your shipment weighs less, you’ll be refunded automatically.",
   "marketplaceResponsibilityCheckbox": "I understand the business’s responsibility and want to continue.",
   "selectedBusiness": "The selected business",
   "accountLegalAcceptance": "I agree to Laawol’s Terms of Service and Privacy Policy, including its marketplace role.",

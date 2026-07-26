@@ -8,6 +8,11 @@ import {
   marketplaceDisclosure,
 } from "./disclosures.ts";
 
+test("marketplace and legal disclosures refuse to claim acceptance that wasn't given", () => {
+  assert.throws(() => marketplaceDisclosure(false));
+  assert.throws(() => legalAcceptance(false));
+});
+
 test("web disclosure versions match the server contracts", () => {
   assert.equal(
     MARKETPLACE_DISCLOSURE_VERSION,
@@ -30,8 +35,8 @@ test("web disclosures send the language code required by the server", () => {
         },
       },
     });
-    assert.equal(marketplaceDisclosure().locale, "fr");
-    assert.equal(legalAcceptance().locale, "fr");
+    assert.equal(marketplaceDisclosure(true).locale, "fr");
+    assert.equal(legalAcceptance(true).locale, "fr");
 
     Object.defineProperty(globalThis, "window", {
       configurable: true,
@@ -41,8 +46,8 @@ test("web disclosures send the language code required by the server", () => {
         },
       },
     });
-    assert.equal(marketplaceDisclosure().locale, "en");
-    assert.equal(legalAcceptance().locale, "en");
+    assert.equal(marketplaceDisclosure(true).locale, "en");
+    assert.equal(legalAcceptance(true).locale, "en");
   } finally {
     if (originalWindow) {
       Object.defineProperty(globalThis, "window", originalWindow);

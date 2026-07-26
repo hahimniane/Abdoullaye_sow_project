@@ -979,6 +979,8 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "La demande n’a pas pu être terminée. Vérifiez les détails et réessayez.",
   "I understand that the selected business is the independent service provider responsible for fulfillment, timing, and performance.":
     "Je comprends que l’entreprise sélectionnée est le prestataire indépendant responsable de l’exécution, des délais et de la qualité du service.",
+  "The weight you enter is an estimate. If the business confirms a different weight after pickup, Laawol will try to automatically charge the card you use today for any additional amount due. If that charge doesn’t go through, you’ll need to open the app to complete payment before your shipment can continue. If your shipment weighs less, you’ll be refunded automatically.":
+    "Le poids que vous indiquez est une estimation. Si l’entreprise confirme un poids différent après la prise en charge, Laawol tentera de facturer automatiquement la carte utilisée aujourd’hui pour tout montant supplémentaire dû. Si cette charge échoue, vous devrez ouvrir l’application pour finaliser le paiement avant que votre expédition puisse continuer. Si votre expédition pèse moins, vous serez automatiquement remboursé.",
   "The secure payment page could not be opened.":
     "La page de paiement sécurisé n’a pas pu être ouverte.",
   "The payment request timed out. Try again.":

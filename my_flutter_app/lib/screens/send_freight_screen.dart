@@ -333,6 +333,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       context,
       providerNames: option.businessName,
       transactionSummary: l10n.sendFreight,
+      additionalBody: l10n.freightAutoChargeDisclosureBody,
     );
     if (marketplaceAcceptance == null || !mounted) return;
     setState(() => _busy = true);

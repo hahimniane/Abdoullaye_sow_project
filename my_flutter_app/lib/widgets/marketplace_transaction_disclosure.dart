@@ -8,6 +8,7 @@ Future<MarketplaceDisclosureAcceptance?> confirmMarketplaceTransaction(
   BuildContext context, {
   required String providerNames,
   required String transactionSummary,
+  String? additionalBody,
 }) async {
   return showDialog<MarketplaceDisclosureAcceptance>(
     context: context,
@@ -15,6 +16,7 @@ Future<MarketplaceDisclosureAcceptance?> confirmMarketplaceTransaction(
     builder: (_) => _MarketplaceTransactionDisclosureDialog(
       providerNames: providerNames,
       transactionSummary: transactionSummary,
+      additionalBody: additionalBody,
     ),
   );
 }
@@ -23,10 +25,12 @@ class _MarketplaceTransactionDisclosureDialog extends StatefulWidget {
   const _MarketplaceTransactionDisclosureDialog({
     required this.providerNames,
     required this.transactionSummary,
+    this.additionalBody,
   });
 
   final String providerNames;
   final String transactionSummary;
+  final String? additionalBody;
 
   @override
   State<_MarketplaceTransactionDisclosureDialog> createState() =>
@@ -67,6 +71,14 @@ class _MarketplaceTransactionDisclosureDialogState
             Text(l10n.marketplacePaymentFlowBody),
             const SizedBox(height: 10),
             Text(l10n.marketplaceNoGuaranteeBody),
+            if (widget.additionalBody != null &&
+                widget.additionalBody!.trim().isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                widget.additionalBody!,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
             const SizedBox(height: 12),
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,

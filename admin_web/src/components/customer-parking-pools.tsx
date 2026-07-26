@@ -423,7 +423,7 @@ function ParkingReservationForm({
         startDate: localDateToIso(startDate, 9),
         endDate: localDateToIso(endDate, 17),
         pickupRequested,
-        marketplaceDisclosure: marketplaceDisclosure(),
+        marketplaceDisclosure: marketplaceDisclosure(accepted),
       });
     } catch (submitError) {
       setError(
@@ -1117,7 +1117,7 @@ function PoolRequestForm({
         pickupBorough: "",
         useWalletBalance,
         sharesClaimed: claimed,
-        marketplaceDisclosure: marketplaceDisclosure(),
+        marketplaceDisclosure: marketplaceDisclosure(accepted),
       };
       if (creating && selectedDestination) {
         await startCheckout("barrelPoolDeposit", {
@@ -1433,7 +1433,7 @@ function PoolBalanceForm({
         ...(text(pool.balancePaymentRequestId, "") && {
           requestId: text(pool.balancePaymentRequestId),
         }),
-        marketplaceDisclosure: marketplaceDisclosure(),
+        marketplaceDisclosure: marketplaceDisclosure(accepted),
       });
     } catch (submitError) {
       setError(

@@ -742,7 +742,7 @@ function BarrelShipmentForm({
             officeLocationId,
             useWalletBalance,
           },
-          marketplaceDisclosure(),
+          marketplaceDisclosure(accepted),
         ),
       );
     } catch {
@@ -1523,7 +1523,7 @@ function BarrelOrderForm({
             useDifferentPickupDetails: usesDifferentPickups,
             useWalletBalance,
           },
-          marketplaceDisclosure(),
+          marketplaceDisclosure(accepted),
         ),
       );
     } catch {
@@ -2439,7 +2439,7 @@ function FreightShipmentForm({
             officeLocationId,
             useWalletBalance,
           },
-          marketplaceDisclosure(),
+          marketplaceDisclosure(accepted),
         ),
       );
     } catch {
@@ -2545,6 +2545,15 @@ function FreightShipmentForm({
                   value={formatMoney(quote.fee, quote.currency || "USD")}
                 />
               )}
+              <div className="customer-inline-note">
+                The weight you enter is an estimate. If the business confirms
+                a different weight after pickup, Laawol will try to
+                automatically charge the card you use today for any
+                additional amount due. If that charge doesn&rsquo;t go
+                through, you&rsquo;ll need to open the app to complete
+                payment before your shipment can continue. If your shipment
+                weighs less, you&rsquo;ll be refunded automatically.
+              </div>
               <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
             </ReviewGrid>
           }
@@ -2808,7 +2817,7 @@ function FreightSettlements({ shipments }: { shipments: FirestoreRow[] }) {
         "freightSettlement",
         buildFreightSettlementPayload(
           shipment.id,
-          marketplaceDisclosure(),
+          marketplaceDisclosure(acceptedId === shipment.id),
         ),
       );
     } catch {
