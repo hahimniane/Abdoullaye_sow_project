@@ -2046,6 +2046,11 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chooseALocation => 'Choisissez un lieu';
 
   @override
+  String locationsAvailableChooseOne(Object count) {
+    return '$count lieux disponibles — choisissez-en un';
+  }
+
+  @override
   String get servicesForDestination => 'Services pour cette destination';
 
   @override

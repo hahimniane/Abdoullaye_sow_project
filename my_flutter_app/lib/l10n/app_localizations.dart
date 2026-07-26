@@ -3728,6 +3728,12 @@ abstract class AppLocalizations {
   /// **'Choose a location'**
   String get chooseALocation;
 
+  /// No description provided for @locationsAvailableChooseOne.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} locations available — choose one'**
+  String locationsAvailableChooseOne(Object count);
+
   /// No description provided for @servicesForDestination.
   ///
   /// In en, this message translates to:

@@ -2003,6 +2003,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chooseALocation => 'Choose a location';
 
   @override
+  String locationsAvailableChooseOne(Object count) {
+    return '$count locations available — choose one';
+  }
+
+  @override
   String get servicesForDestination => 'Services for this destination';
 
   @override

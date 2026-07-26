@@ -7184,25 +7184,73 @@ button[data-loading="true"]::before {
   font-weight: 700;
 }
 
-.customer-office-location-picker {
+.customer-office-locations {
+  border: 0;
   display: grid;
   flex-basis: 100%;
-  gap: 6px;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 0;
 }
 
-.customer-office-location-picker > span {
-  color: var(--muted);
-  font-size: 12px;
+.customer-office-locations legend {
+  color: var(--brand-strong);
+  font-size: 12.5px;
   font-weight: 800;
+  margin-bottom: 2px;
+  padding: 0;
+  width: 100%;
 }
 
-.customer-office-location-picker select {
+.customer-office-location-choice {
+  align-items: center;
   background: var(--paper-soft);
-  border: 1px solid var(--rule-strong, #b8d7d3);
-  border-radius: 10px;
-  font: inherit;
-  min-height: 46px;
-  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  cursor: pointer;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  min-height: 58px;
+  padding: 10px 14px;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.customer-office-location-choice:hover {
+  border-color: color-mix(in srgb, var(--brand) 45%, var(--rule));
+}
+
+.customer-office-location-choice.selected {
+  background: var(--brand-mist);
+  border-color: var(--brand);
+}
+
+.customer-office-location-choice > input {
+  accent-color: var(--brand);
+  height: 18px;
+  margin: 0;
+  width: 18px;
+}
+
+.customer-office-location-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.customer-office-location-text strong {
+  color: var(--ink);
+  font-size: 0.93rem;
+}
+
+.customer-office-location-text small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .customer-address-field {

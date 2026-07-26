@@ -827,6 +827,12 @@
     }
   },
   "chooseALocation": "Choisissez un lieu",
+  "locationsAvailableChooseOne": "{count} lieux disponibles — choisissez-en un",
+  "@locationsAvailableChooseOne": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "servicesForDestination": "Services pour cette destination",
   "servicesForDestinationHelp": "Activez uniquement ce que cette entreprise propose pour ce pays.",
   "enableBusinessServiceBeforeDestination": "Activez l’expédition de barils, le fret ou le transport de véhicules dans le profil de l’entreprise avant de configurer la couverture des destinations.",

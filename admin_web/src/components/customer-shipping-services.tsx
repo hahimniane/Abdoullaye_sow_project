@@ -4066,19 +4066,34 @@ function PickupFields({
           <Store aria-hidden="true" size={17} /> Bring to office
         </button>
         {!pickup.requested && officeLocations.length > 1 ? (
-          <label className="customer-office-location-picker customer-form-span">
-            <span>Choose a location</span>
-            <select
-              onChange={(event) => onOfficeLocationChange?.(event.target.value)}
-              value={selectedOfficeLocationId}
-            >
-              {officeLocations.map((location) => (
-                <option key={location.id} value={location.id}>
-                  {location.label} — {location.address}
-                </option>
-              ))}
-            </select>
-          </label>
+          <fieldset className="customer-office-locations customer-form-span">
+            <legend>
+              {officeLocations.length} locations available — choose one
+            </legend>
+            {officeLocations.map((location) => (
+              <label
+                className={`customer-office-location-choice${
+                  selectedOfficeLocationId === location.id ? " selected" : ""
+                }`}
+                key={location.id}
+              >
+                <input
+                  checked={selectedOfficeLocationId === location.id}
+                  name={`office-location-${idSuffix}`}
+                  onChange={() => onOfficeLocationChange?.(location.id)}
+                  type="radio"
+                  value={location.id}
+                />
+                <span className="customer-option-icon">
+                  <Store aria-hidden="true" size={18} />
+                </span>
+                <span className="customer-office-location-text">
+                  <strong>{location.label}</strong>
+                  <small>{location.address}</small>
+                </span>
+              </label>
+            ))}
+          </fieldset>
         ) : (
           !pickup.requested &&
           !officeLocationsLoading && (

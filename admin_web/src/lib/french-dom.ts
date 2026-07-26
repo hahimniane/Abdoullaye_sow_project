@@ -247,7 +247,8 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "Ajoutez chaque destination, entreprise, destinataire et quantité de barils à une seule commande.",
   "Add to order": "Ajouter à la commande",
   "Address suggestions": "Suggestions d’adresses",
-  "Choose a location": "Choisissez un lieu",
+  "locations available — choose one":
+    "lieux disponibles — choisissez-en un",
   "Address suggestions are unavailable. Enter the complete address to continue.":
     "Les suggestions d’adresses sont indisponibles. Saisissez l’adresse complète pour continuer.",
   "Almost there": "Vous y êtes presque",

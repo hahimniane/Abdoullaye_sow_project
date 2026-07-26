@@ -826,6 +826,12 @@
     }
   },
   "chooseALocation": "Choose a location",
+  "locationsAvailableChooseOne": "{count} locations available — choose one",
+  "@locationsAvailableChooseOne": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "servicesForDestination": "Services for this destination",
   "servicesForDestinationHelp": "Turn on only what this business offers for this country.",
   "enableBusinessServiceBeforeDestination": "Enable barrel shipping, freight, or car transport on the business profile before configuring destination coverage.",
