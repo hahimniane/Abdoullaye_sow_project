@@ -1377,6 +1377,11 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Select city": "Sélectionnez une ville",
   "Select color": "Sélectionnez une couleur",
   "Select condition": "Sélectionnez l’état",
+  "Select make": "Sélectionnez la marque",
+  "Select make first": "Sélectionnez d’abord une marque",
+  "Select model": "Sélectionnez le modèle",
+  "Select model first": "Sélectionnez d’abord un modèle",
+  "Select year": "Sélectionnez l’année",
   "Select whether this vehicle has a rebuilt title.":
     "Indiquez si ce véhicule a un titre reconstruit.",
   "Select country": "Sélectionnez un pays",

@@ -38,6 +38,7 @@ import {
 
 import { db, functions, storage } from "@/lib/firebase";
 import { asDate, formatDate, formatMoney, text } from "@/lib/format";
+import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
 import type {
   ActionConfirmationOptions,
   ActionRunner,
@@ -797,21 +798,22 @@ function SupportThread({
   // Upload an attachment to the case's own storage path, then register it as a
   // message via the callable (which re-validates path/type/size). Mirrors the
   // Flutter app's flow and the wouri attachment design.
-  async function uploadAttachment(file: File | null | undefined) {
-    if (!file || uploading) return;
+  async function uploadAttachment(rawFile: File | null | undefined) {
+    if (!rawFile || uploading) return;
     setUploadError("");
-    const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/-+/g, "-");
-    const path = `support_cases/${caseId}/${currentUid}/${Date.now()}-${safeName}`;
-    const mimeType = file.type || "application/octet-stream";
-    const messageType = mimeType.startsWith("image/")
-      ? "image"
-      : mimeType.startsWith("video/")
-        ? "video"
-        : mimeType.startsWith("audio/")
-          ? "voice"
-          : "file";
     setUploading(true);
     try {
+      const file = await ensureBrowserDisplayableImage(rawFile);
+      const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/-+/g, "-");
+      const path = `support_cases/${caseId}/${currentUid}/${Date.now()}-${safeName}`;
+      const mimeType = file.type || "application/octet-stream";
+      const messageType = mimeType.startsWith("image/")
+        ? "image"
+        : mimeType.startsWith("video/")
+          ? "video"
+          : mimeType.startsWith("audio/")
+            ? "voice"
+            : "file";
       const target = storageRef(storage, path);
       await uploadBytes(target, file, { contentType: mimeType });
       const url = await getDownloadURL(target);

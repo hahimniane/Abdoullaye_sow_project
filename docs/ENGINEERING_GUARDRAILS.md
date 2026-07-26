@@ -234,6 +234,7 @@ Rules:
 | **US states + cities** (complete) | `lib/data/us_locations.dart` → `usStateNames` | `src/lib/us-locations.ts` → `US_STATE_NAMES` | All states; cities per state. |
 | **Barrel destination countries** (CURATED) | Firestore `destinationCountries` / `country_catalog.dart` filtered | `operations-panels.tsx` `countries` | Deliberately limited (West Africa). Not for addresses. |
 | **Car attributes** (condition, body, fuel, …) | `staff_car_management_screen.dart` | `operations-panels.tsx` option lists | Keep both sides in sync. |
+| **Car make/model/year** (complete, cascading) | `lib/data/car_catalog.dart` → `CarCatalog.instance` (backed by `assets/data/car_models_flutter.json`) | `src/lib/car-catalog.ts` → `getMakes()`/`getModels()`/`getYears()` (backed by `src/lib/car-models-data.json`, a verbatim copy) | 88 makes, 2,739 make/model/year rows. Do not accept free-text make/model — use the cascading pickers so listing data stays searchable/filterable. |
 | **Console translations** | n/a (app uses ARB l10n) | `src/lib/french-dom.ts` | See the translation guardrails in §3. |
 
 If the thing you need is not in this table and is reference data or a reusable

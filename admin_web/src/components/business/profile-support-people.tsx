@@ -55,6 +55,7 @@ import { COUNTRY_CATALOG } from "@/lib/country-catalog";
 import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import { db, functions, storage } from "@/lib/firebase";
 import { formatDate, text } from "@/lib/format";
+import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
 import { currentWebLanguage } from "@/lib/language";
 import { CITIES_BY_STATE, US_STATE_NAMES } from "@/lib/us-locations";
 import type { FirestoreRow } from "@/types/admin";
@@ -227,8 +228,17 @@ export function BusinessProfilePanel({
     setDraft((current) => ({...current, [field]: value}));
   }
 
-  function selectImage(event: ChangeEvent<HTMLInputElement>) {
-    setImageFile(event.target.files?.[0] ?? null);
+  async function selectImage(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    if (!file) {
+      setImageFile(null);
+      return;
+    }
+    try {
+      setImageFile(await ensureBrowserDisplayableImage(file));
+    } catch {
+      toast?.("error", "Could not process that image. Try a JPG or PNG instead.");
+    }
   }
 
   function selectVerificationFile(documentId: string, event: ChangeEvent<HTMLInputElement>) {

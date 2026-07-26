@@ -67,6 +67,7 @@ import {
 import { SearchableSelect } from "@/components/searchable-select";
 import { COUNTRY_CATALOG } from "@/lib/country-catalog";
 import { auth, db, functions, storage } from "@/lib/firebase";
+import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
 import {
   resolveAdminRoleKey,
   resolveAssignableAdminRole,
@@ -6607,9 +6608,10 @@ function WebsiteView({
       { merge: true },
     );
   }
-  async function uploadLogo(file: File) {
+  async function uploadLogo(rawFile: File) {
     if (!featureDraft.businessId)
       throw new Error("Choose a business before uploading a logo.");
+    const file = await ensureBrowserDisplayableImage(rawFile);
     const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
     const path = `businessLogos/${featureDraft.businessId}/logo_${Date.now()}.${extension}`;
     const target = storageRef(storage, path);
@@ -7248,9 +7250,10 @@ function AdminAccountPanel({
     });
   }
 
-  async function uploadPhoto(file: File) {
+  async function uploadPhoto(rawFile: File) {
     if (!firebaseUser)
       throw new Error("Sign in before uploading a profile photo.");
+    const file = await ensureBrowserDisplayableImage(rawFile);
     const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
     const path = `users/${firebaseUser.uid}/admin_profile_${Date.now()}.${extension}`;
     const target = storageRef(storage, path);

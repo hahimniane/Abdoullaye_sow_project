@@ -74,6 +74,8 @@ import {
   type DestinationServiceAvailability,
 } from "@/lib/destination-pricing";
 import { currentLanguage, formatDate, formatMoney, text } from "@/lib/format";
+import { getMakes, getModels, getYears } from "@/lib/car-catalog";
+import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
 import { US_STATE_OPTIONS, citiesForState, withSelected } from "@/lib/us-locations";
 import type { FirestoreRow } from "@/types/admin";
 
@@ -1382,6 +1384,15 @@ export function ListingsPanel({
     () => withSelected(citiesForState(draft.locationState), draft.locationCity),
     [draft.locationCity, draft.locationState],
   );
+  const makeOptions = useMemo(() => withSelected(getMakes(), draft.make), [draft.make]);
+  const modelOptions = useMemo(
+    () => (draft.make ? withSelected(getModels(draft.make), draft.model) : []),
+    [draft.make, draft.model],
+  );
+  const yearOptions = useMemo(
+    () => (draft.make && draft.model ? withSelected(getYears(draft.make, draft.model), draft.year) : []),
+    [draft.make, draft.model, draft.year],
+  );
   function toggleFeature(feature: string) {
     setDraft((value) => ({
       ...value,
@@ -1394,15 +1405,23 @@ export function ListingsPanel({
   function newKey() {
     return Math.random().toString(36).slice(2);
   }
-  function addImageFiles(files: FileList | null) {
+  async function addImageFiles(files: FileList | null) {
     if (!files) return;
-    setImages((prev) => {
-      const room = MAX_LISTING_IMAGES - prev.length;
-      const additions = Array.from(files)
-        .slice(0, Math.max(0, room))
-        .map((file) => ({ key: newKey(), file, preview: URL.createObjectURL(file) }));
-      return [...prev, ...additions];
-    });
+    const room = MAX_LISTING_IMAGES - images.length;
+    const selected = Array.from(files).slice(0, Math.max(0, room));
+    let additions: EditImage[];
+    try {
+      additions = await Promise.all(
+        selected.map(async (file) => {
+          const displayable = await ensureBrowserDisplayableImage(file);
+          return { key: newKey(), file: displayable, preview: URL.createObjectURL(displayable) };
+        }),
+      );
+    } catch {
+      setMessage("Could not process one of those images. Try a JPG or PNG instead.");
+      return;
+    }
+    setImages((prev) => [...prev, ...additions]);
   }
   function addImageUrl() {
     const url = imageUrlInput.trim();
@@ -1724,13 +1743,33 @@ export function ListingsPanel({
                   <input value={draft.title} onChange={(event) => setDraft((value) => ({ ...value, title: event.target.value }))} placeholder="e.g. 2019 Toyota Camry XLE" />
                 </label>
                 <label className="lst-field"><span>Make</span>
-                  <input value={draft.make} onChange={(event) => setDraft((value) => ({ ...value, make: event.target.value }))} placeholder="Toyota" />
+                  <select
+                    value={draft.make}
+                    onChange={(event) => setDraft((value) => ({ ...value, make: event.target.value, model: "", year: "" }))}
+                  >
+                    <option value="">Select make</option>
+                    {makeOptions.map((option) => (<option key={option} value={option}>{option}</option>))}
+                  </select>
                 </label>
                 <label className="lst-field"><span>Model</span>
-                  <input value={draft.model} onChange={(event) => setDraft((value) => ({ ...value, model: event.target.value }))} placeholder="Camry" />
+                  <select
+                    disabled={!draft.make}
+                    value={draft.model}
+                    onChange={(event) => setDraft((value) => ({ ...value, model: event.target.value, year: "" }))}
+                  >
+                    <option value="">{draft.make ? "Select model" : "Select make first"}</option>
+                    {modelOptions.map((option) => (<option key={option} value={option}>{option}</option>))}
+                  </select>
                 </label>
                 <label className="lst-field"><span>Year</span>
-                  <input inputMode="numeric" value={draft.year} onChange={(event) => setDraft((value) => ({ ...value, year: event.target.value }))} placeholder="2019" />
+                  <select
+                    disabled={!draft.model}
+                    value={draft.year}
+                    onChange={(event) => setDraft((value) => ({ ...value, year: event.target.value }))}
+                  >
+                    <option value="">{draft.model ? "Select year" : "Select model first"}</option>
+                    {yearOptions.map((option) => (<option key={option} value={option}>{option}</option>))}
+                  </select>
                 </label>
                 <label className="lst-field"><span>Condition</span>
                   <select value={draft.condition} onChange={(event) => setDraft((value) => ({ ...value, condition: event.target.value }))}>
