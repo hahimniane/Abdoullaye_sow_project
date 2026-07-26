@@ -226,6 +226,12 @@ export function ConsoleRouter() {
       }
       setBooting(true);
       try {
+        // Storage rules read role/businessId/etc. from the ID token's custom
+        // claims. Those claims are set server-side (syncUserCustomClaims)
+        // whenever the Firestore profile changes, but a cached token doesn't
+        // pick that up until it naturally expires (~1hr). Force a refresh on
+        // every session load so a stale token never causes storage/unauthorized.
+        await user.getIdToken(true);
         const snap = await loadProfile(user.uid);
         if (!active) return;
         if (!snap.exists()) {

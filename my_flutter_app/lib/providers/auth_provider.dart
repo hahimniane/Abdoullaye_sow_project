@@ -192,6 +192,12 @@ class AuthProvider extends ChangeNotifier {
     final signedInUser = _auth.currentUser;
     if (signedInUser != null) {
       try {
+        // Storage rules read role/businessId/etc. from the ID token's custom
+        // claims, which sync from Firestore server-side (syncUserCustomClaims)
+        // whenever the profile changes. A cached token doesn't pick that up
+        // until it naturally expires (~1hr), so force a refresh on every
+        // session load to avoid stale-claims storage/unauthorized errors.
+        await signedInUser.getIdToken(true);
         debugPrint('🔍 Fetching user document from Firestore...');
         var userDoc = await _firestore
             .collection('users')
