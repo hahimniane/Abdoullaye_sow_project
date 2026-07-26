@@ -814,6 +814,13 @@ function TodayView({
   );
 }
 
+type BusinessFeeSettings = {
+  stripeFeeMode: string;
+  connectReady: boolean;
+  defaultPlatformFeePct: number;
+  hasBusinessOverride: boolean;
+};
+
 function PayoutsPanel({
   businessId,
   business,
@@ -832,6 +839,31 @@ function PayoutsPanel({
   >("");
   const [error, setError] = useState("");
   const [autoRefreshKey, setAutoRefreshKey] = useState("");
+  const [feeSettings, setFeeSettings] = useState<BusinessFeeSettings | null>(
+    null,
+  );
+  const [feeSettingsError, setFeeSettingsError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    if (!businessId || previewMode) return undefined;
+    httpsCallable(functions, "getBusinessFeeSettings")({businessId})
+      .then((result) => {
+        if (active) setFeeSettings(result.data as BusinessFeeSettings);
+      })
+      .catch((err) => {
+        if (active) {
+          setFeeSettingsError(
+            err instanceof Error
+              ? err.message
+              : "Could not load your fee settings.",
+          );
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [businessId, previewMode]);
   const payoutStatus = resolveBusinessPayoutStatus({
     stripeAccountId: business?.stripeAccountId,
     chargesEnabled: business?.chargesEnabled,
@@ -988,6 +1020,41 @@ function PayoutsPanel({
         </div>
       )}
       {error && <div className="error-box">{error}</div>}
+      {feeSettings && (
+        <div className="fee-settings-card">
+          <div className="fee-settings-row">
+            <span>Platform fee</span>
+            <strong>
+              {(feeSettings.defaultPlatformFeePct * 100).toFixed(2)}%
+            </strong>
+          </div>
+          {feeSettings.hasBusinessOverride ? (
+            <span className="status-pill compact">Custom rate for your business</span>
+          ) : (
+            <small>May vary by service on our default rate.</small>
+          )}
+          <div className="fee-settings-row">
+            <span>Who pays Stripe&apos;s processing fee</span>
+            <strong>
+              {feeSettings.stripeFeeMode === "business_absorbs_processing_fee"
+                ? "You"
+                : "Laawol"}
+            </strong>
+          </div>
+          {feeSettings.stripeFeeMode === "business_absorbs_processing_fee" &&
+            !feeSettings.connectReady && (
+              <div className="info-band">
+                Your account is set to pay Stripe&apos;s processing fee
+                directly, but this only takes effect once your Stripe payout
+                setup is complete - until then, payments still use the
+                default (Laawol pays Stripe&apos;s fee).
+              </div>
+          )}
+        </div>
+      )}
+      {feeSettingsError && (
+        <div className="error-box">{feeSettingsError}</div>
+      )}
     </Panel>
   );
 }

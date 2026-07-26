@@ -5203,6 +5203,22 @@ function businessCommissionRate(business: FirestoreRow) {
   return Number.isFinite(rate) && rate >= 0 && rate < 1 ? rate : null;
 }
 
+// Must match functions/index.js's STRIPE_FEE_MODE_BUSINESS_ABSORBS /
+// STRIPE_FEE_MODE_PLATFORM_ABSORBS exactly - this is the same
+// businesses/{id}.stripeFeeMode field the backend reads to decide whether a
+// payment is a plain platform-owned charge (platform absorbs Stripe's own
+// processing fee, then transfers the business its net payout) or a direct
+// charge on the business's own connected account (the business absorbs
+// Stripe's fee; only the platform's cut is auto-routed to the platform).
+const STRIPE_FEE_MODE_BUSINESS_ABSORBS = "business_absorbs_processing_fee";
+const STRIPE_FEE_MODE_PLATFORM_ABSORBS = "platform_absorbs_processing_fee";
+
+function businessStripeFeeMode(business: FirestoreRow) {
+  return business.stripeFeeMode === STRIPE_FEE_MODE_BUSINESS_ABSORBS ?
+    STRIPE_FEE_MODE_BUSINESS_ABSORBS :
+    STRIPE_FEE_MODE_PLATFORM_ABSORBS;
+}
+
 function businessSearchText(business: FirestoreRow) {
   return [
     business.id,
@@ -5296,6 +5312,9 @@ function MoreSettings({
   );
   const [platformFeeDraft, setPlatformFeeDraft] = useState("10");
   const [businessFeeDraft, setBusinessFeeDraft] = useState("10");
+  const [feeModeDraft, setFeeModeDraft] = useState(
+    STRIPE_FEE_MODE_PLATFORM_ABSORBS,
+  );
   const [businessFeeSearch, setBusinessFeeSearch] = useState("");
   const [deliverySearch, setDeliverySearch] = useState("");
   const [deliveryStatusFilter, setDeliveryStatusFilter] =
@@ -5491,6 +5510,7 @@ function MoreSettings({
         doc(db, "businesses", business.id),
         {
           platformFeePct: rate,
+          stripeFeeMode: feeModeDraft,
           platformFeeUpdatedAt: serverTimestamp(),
           platformFeeUpdatedBy: currentUserId,
         },
@@ -5506,6 +5526,7 @@ function MoreSettings({
       updateDoc(doc(db, "businesses", business.id), {
         platformFeePct: deleteField(),
         platformCommissionPct: deleteField(),
+        stripeFeeMode: deleteField(),
         platformFeeUpdatedAt: serverTimestamp(),
         platformFeeUpdatedBy: currentUserId,
       }),
@@ -5659,6 +5680,35 @@ function MoreSettings({
               placeholder="10"
             />
           </label>
+          <label className="commission-rate-input">
+            Who pays Stripe&apos;s fee?
+            <select
+              value={feeModeDraft}
+              onChange={(event) => setFeeModeDraft(event.target.value)}
+            >
+              <option value={STRIPE_FEE_MODE_PLATFORM_ABSORBS}>
+                Platform (default)
+              </option>
+              <option value={STRIPE_FEE_MODE_BUSINESS_ABSORBS}>
+                Business
+              </option>
+            </select>
+          </label>
+        </div>
+        <div className="info-band">
+          <p>
+            Platform (default): the business is paid net of the platform fee
+            only. Stripe&apos;s own processing fee comes out of the
+            platform&apos;s cut, not the business&apos;s payout.
+          </p>
+          <p>
+            Business: the customer&apos;s payment goes directly to the
+            business&apos;s own Stripe account. Stripe&apos;s processing fee
+            is deducted from their balance, and only the platform fee is
+            automatically routed to the platform. Requires the business to
+            have finished Stripe Connect onboarding, otherwise this falls
+            back to Platform automatically.
+          </p>
         </div>
         <div className="commission-actions">
           <button
@@ -5752,6 +5802,23 @@ function MoreSettings({
                         </>
                   ) : (
                     percentLabelFromRate(overrideRate)
+                  )}
+                </span>
+                <span
+                  className={
+                    businessStripeFeeMode(business) ===
+                    STRIPE_FEE_MODE_BUSINESS_ABSORBS
+                      ? "commission-override"
+                      : "commission-default"
+                  }
+                >
+                  {businessStripeFeeMode(business) ===
+                  STRIPE_FEE_MODE_BUSINESS_ABSORBS ? (
+                    "Business pays Stripe fee"
+                  ) : (
+                    <>
+                      <span>Default</span> Platform pays Stripe fee
+                    </>
                   )}
                 </span>
               </label>

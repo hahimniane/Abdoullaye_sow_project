@@ -5,6 +5,7 @@ const CUSTOMER_CHECKOUT_ACTIONS = Object.freeze({
     createFunction: "createParkingReservation",
     recordIdKey: "reservationId",
     productName: "Laawol parking reservation",
+    collection: "parkedCars",
   }),
   barrelPoolDeposit: Object.freeze({
     createFunction: "createBarrelPool",
@@ -20,16 +21,19 @@ const CUSTOMER_CHECKOUT_ACTIONS = Object.freeze({
     createFunction: "createBarrelPoolBalancePaymentIntent",
     recordIdKey: "requestId",
     productName: "Laawol shared barrel balance",
+    collection: "barrelPoolBalanceRequests",
   }),
   barrelShipment: Object.freeze({
     createFunction: "createBarrelShipmentPaymentIntent",
     recordIdKey: "shipmentId",
     productName: "Laawol barrel shipment",
+    collection: "barrelShipments",
   }),
   barrelOrder: Object.freeze({
     createFunction: "createBarrelOrderPaymentIntent",
     recordIdKey: "orderId",
     productName: "Laawol barrel shipment order",
+    collection: "barrelOrders",
   }),
   barrelDestinationChange: Object.freeze({
     createFunction: "changeBarrelShipmentDestination",
@@ -40,26 +44,36 @@ const CUSTOMER_CHECKOUT_ACTIONS = Object.freeze({
     createFunction: "createFreightShipmentPaymentIntent",
     recordIdKey: "shipmentId",
     productName: "Laawol freight shipment",
+    collection: "freightShipments",
   }),
   freightSettlement: Object.freeze({
     createFunction: "createFreightSettlementPayment",
     recordIdKey: "settlementId",
     productName: "Laawol freight balance",
+    // The settlement's charge routing actually lives on its paymentAttempts
+    // sub-doc, not this top-level doc - direct-charge routing isn't
+    // resolvable from recordId alone here, so this action stays
+    // platform-mode-only for the web checkout-redirect path.
   }),
   carDeposit: Object.freeze({
     createFunction: "createCarDepositPaymentIntent",
     recordIdKey: "purchaseId",
     productName: "Laawol vehicle hold deposit",
+    collection: "carPurchases",
   }),
   carPurchase: Object.freeze({
     createFunction: "createCarPurchasePaymentIntent",
     recordIdKey: "purchaseId",
     productName: "Laawol vehicle purchase",
+    collection: "carPurchases",
   }),
   holdExtension: Object.freeze({
     createFunction: "createPaidHoldExtensionPaymentIntent",
     recordIdKey: "purchaseId",
     productName: "Laawol vehicle hold extension",
+    collection: "carPurchases",
+    chargeTypeField: "extensionStripeChargeType",
+    connectedAccountField: "extensionStripeConnectedAccountId",
   }),
 });
 

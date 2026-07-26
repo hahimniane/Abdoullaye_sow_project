@@ -1200,6 +1200,22 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Business commission overrides": "Commissions spécifiques par entreprise",
   "Business commissions reset": "Commissions des entreprises réinitialisées",
   "Business commissions saved": "Commissions des entreprises enregistrées",
+  "Who pays Stripe's fee?": "Qui paie les frais de Stripe ?",
+  "Platform (default)": "Plateforme (par défaut)",
+  "Business pays Stripe fee": "L’entreprise paie les frais Stripe",
+  "Platform pays Stripe fee": "La plateforme paie les frais Stripe",
+  "Platform (default): the business is paid net of the platform fee only. Stripe's own processing fee comes out of the platform's cut, not the business's payout.":
+    "Plateforme (par défaut) : l’entreprise est payée nette des frais de " +
+    "plateforme uniquement. Les frais de traitement propres à Stripe sont " +
+    "prélevés sur la part de la plateforme, pas sur le versement de " +
+    "l’entreprise.",
+  "Business: the customer's payment goes directly to the business's own Stripe account. Stripe's processing fee is deducted from their balance, and only the platform fee is automatically routed to the platform. Requires the business to have finished Stripe Connect onboarding, otherwise this falls back to Platform automatically.":
+    "Entreprise : le paiement du client va directement au compte Stripe de " +
+    "l’entreprise. Les frais de traitement Stripe sont déduits de son " +
+    "solde, et seuls les frais de plateforme sont automatiquement " +
+    "acheminés vers la plateforme. Nécessite que l’entreprise ait terminé " +
+    "l’intégration Stripe Connect, sinon cela revient automatiquement à " +
+    "Plateforme.",
   "Business has consented to being featured":
     "L’entreprise a accepté d’être mise en avant",
   "Bypass Laawol documents and approve this business? Stripe is complete, and this override will be saved on the verification review.":
@@ -2511,6 +2527,16 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Platform fee": "Frais plateforme",
   "Platform fee (%)": "Frais plateforme (%)",
   "Platform fee saved": "Frais plateforme enregistrés",
+  "Custom rate for your business": "Tarif personnalisé pour votre entreprise",
+  "May vary by service on our default rate.":
+    "Peut varier selon le service, sur notre tarif par défaut.",
+  "Who pays Stripe's processing fee": "Qui paie les frais de traitement Stripe",
+  "Your account is set to pay Stripe's processing fee directly, but this only takes effect once your Stripe payout setup is complete - until then, payments still use the default (Laawol pays Stripe's fee).":
+    "Votre compte est configuré pour payer directement les frais de " +
+    "traitement Stripe, mais cela ne prend effet qu’une fois votre " +
+    "configuration des versements Stripe terminée - en attendant, les " +
+    "paiements utilisent toujours le mode par défaut (Laawol paie les " +
+    "frais Stripe).",
   "Platform fees": "Frais plateforme",
   "Platform transaction fee": "Frais de transaction plateforme",
   "Use default for selected": "Utiliser la valeur par défaut pour la sélection",

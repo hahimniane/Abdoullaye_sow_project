@@ -116,9 +116,62 @@ describe("payment runtime configuration", () => {
     assert.match(source, /checkoutOriginalPaymentIntentId/);
     assert.match(source, /exports\.confirmCustomerCheckoutSession/);
     assert.match(source, /customerCheckoutReturnVerification/);
-    assert.match(source, /retrieveStripeCheckoutSession\(sessionId\)/);
+    assert.match(source, /retrieveStripeCheckoutSession\(\s*sessionId,/);
     assert.match(source, /bindCheckoutPaymentIntent\(event\)/);
     assert.match(source, /outside the allowed window/);
+  });
+
+  it("routes a business's fee-mode setting to a Stripe direct charge", () => {
+    const source = fs.readFileSync(
+        path.join(__dirname, "..", "index.js"),
+        "utf8",
+    );
+    // businesses/{id}.stripeFeeMode picks which side absorbs Stripe's own
+    // processing fee - "business_absorbs_processing_fee" routes the charge
+    // directly to the business's connected account via a Stripe-Account
+    // header + application_fee_amount, instead of the default platform-
+    // owned charge + separate transfer.
+    assert.match(
+        source,
+        /business\?\.stripeFeeMode === STRIPE_FEE_MODE_BUSINESS_ABSORBS/,
+    );
+    assert.match(
+        source,
+        /connectReady && stripeFeeMode === STRIPE_FEE_MODE_BUSINESS_ABSORBS/,
+    );
+    assert.match(
+        source,
+        /"Stripe-Account": params\.connectedAccountId/,
+    );
+    assert.match(
+        source,
+        /"application_fee_amount",\s*String\(params\.applicationFeeAmount\)/,
+    );
+    // A succeeded direct charge already settled the platform/business split
+    // atomically at charge time - the separate transfer step must be
+    // skipped, not just given a zero amount, or the payout record would
+    // stay marked unpaid forever.
+    assert.match(
+        source,
+        /data\[stripeChargeTypeField\] === "direct"/,
+    );
+    // Every completion/cancellation/refund path re-resolving a payment's
+    // Stripe state must carry the original charge's connected-account
+    // context forward, or lookups for a direct-charge business's payment
+    // fail outright (a plain retrieval only works for the account that
+    // created the resource).
+    assert.match(
+        source,
+        /function stripeAccountIdForRetrieval\(data\)/,
+    );
+    // Wallet credit and mid-flight weight/price adjustments can shrink the
+    // actual card charge below the fee originally computed against the full
+    // gross price - Stripe rejects a PaymentIntent if application_fee_amount
+    // exceeds amount, so every direct-charge call site must clamp it.
+    assert.match(
+        source,
+        /function clampedApplicationFeeAmount\(feeCents, chargeCents\)/,
+    );
   });
 
   it("guards unauthenticated barrel order completion recovery", () => {

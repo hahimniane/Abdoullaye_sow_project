@@ -3068,6 +3068,17 @@ async function createStripePaymentIntent(params) {
   body.set("amount", String(params.amount));
   body.set("currency", params.currency);
   body.set("automatic_payment_methods[enabled]", "true");
+  // A connectedAccountId + applicationFeeAmount together make this a Stripe
+  // "direct charge": the PaymentIntent is created directly on the business's
+  // connected account (via the Stripe-Account header below), so Stripe's own
+  // processing fee is deducted from THEIR balance, not the platform's. Only
+  // the applicationFeeAmount (the platform's cut) is automatically routed to
+  // the platform's balance. Without these, this is a plain platform-owned
+  // PaymentIntent (the platform absorbs Stripe's processing fee, and the
+  // business's net payout is pushed later via a separate transfer).
+  if (params.applicationFeeAmount) {
+    body.set("application_fee_amount", String(params.applicationFeeAmount));
+  }
   Object.entries(params.metadata).forEach(([key, value]) => {
     body.set(`metadata[${key}]`, value);
   });
@@ -3078,6 +3089,9 @@ async function createStripePaymentIntent(params) {
       "Idempotency-Key": paymentIntentIdempotencyKey({
         paymentType: params.metadata.paymentType,
         stableDomainIds: params.metadata,
+      }),
+      ...(params.connectedAccountId && {
+        "Stripe-Account": params.connectedAccountId,
       }),
     },
     body,
@@ -3098,20 +3112,40 @@ function stripeFormRequest(path, body, options = {}) {
   });
 }
 
-async function retrieveStripePaymentIntent(paymentIntentId) {
-  return stripeRequest(`/payment_intents/${paymentIntentId}`);
+// connectedAccountId must be passed here whenever the PaymentIntent was
+// created as a direct charge (see createStripePaymentIntent) - Stripe only
+// resolves a direct-charge PaymentIntent when the same Stripe-Account header
+// is present on every later request for it.
+async function retrieveStripePaymentIntent(
+    paymentIntentId, connectedAccountId,
+) {
+  return stripeRequest(`/payment_intents/${paymentIntentId}`, {
+    ...(connectedAccountId && {
+      headers: {"Stripe-Account": connectedAccountId},
+    }),
+  });
 }
 
-async function retrieveStripeCheckoutSession(sessionId) {
+async function retrieveStripeCheckoutSession(sessionId, connectedAccountId) {
   return stripeRequest(
       `/checkout/sessions/${encodeURIComponent(sessionId)}`,
+      {
+        ...(connectedAccountId && {
+          headers: {"Stripe-Account": connectedAccountId},
+        }),
+      },
   );
 }
 
-async function cancelStripePaymentIntent(paymentIntentId) {
+async function cancelStripePaymentIntent(paymentIntentId, connectedAccountId) {
   return stripeFormRequest(
       `/payment_intents/${paymentIntentId}/cancel`,
       new URLSearchParams(),
+      {
+        ...(connectedAccountId && {
+          headers: {"Stripe-Account": connectedAccountId},
+        }),
+      },
   );
 }
 
@@ -3172,6 +3206,9 @@ async function createStripeRefund(params) {
   });
   return stripeFormRequest("/refunds", body, {
     idempotencyKey: params.idempotencyKey,
+    ...(params.connectedAccountId && {
+      headers: {"Stripe-Account": params.connectedAccountId},
+    }),
   });
 }
 
@@ -3219,6 +3256,12 @@ async function createStripeCustomerCheckoutSession(params) {
   if (params.customerEmail) {
     body.set("customer_email", params.customerEmail);
   }
+  if (params.applicationFeeAmount) {
+    body.set(
+        "payment_intent_data[application_fee_amount]",
+        String(params.applicationFeeAmount),
+    );
+  }
   Object.entries(params.metadata).forEach(([key, value]) => {
     body.set(`metadata[${key}]`, String(value));
     body.set(`payment_intent_data[metadata][${key}]`, String(value));
@@ -3226,13 +3269,21 @@ async function createStripeCustomerCheckoutSession(params) {
   return stripeFormRequest("/checkout/sessions", body, {
     idempotencyKey:
       checkoutSessionIdempotencyKey(params.originalPaymentIntentId),
+    ...(params.connectedAccountId && {
+      headers: {"Stripe-Account": params.connectedAccountId},
+    }),
   });
 }
 
-async function expireStripeCheckoutSession(sessionId) {
+async function expireStripeCheckoutSession(sessionId, connectedAccountId) {
   return stripeFormRequest(
       `/checkout/sessions/${encodeURIComponent(sessionId)}/expire`,
       new URLSearchParams(),
+      {
+        ...(connectedAccountId && {
+          headers: {"Stripe-Account": connectedAccountId},
+        }),
+      },
   );
 }
 
@@ -5040,8 +5091,32 @@ exports.createCustomerCheckoutSession = onCall(
             "The payment action did not create a payable record",
         );
       }
-      const originalIntent =
-        await retrieveStripePaymentIntent(originalPaymentIntentId);
+      // The redirect-based Checkout Session flow needs to know up front
+      // whether the original PaymentIntent it's re-creating was a direct
+      // charge on a business's connected account - unlike the embedded/
+      // client_secret flow, there's no other chance to learn this before
+      // the very first Stripe call for this payment.
+      let checkoutConnectedAccountId;
+      let checkoutApplicationFeeAmount;
+      if (action.collection) {
+        const recordSnapshot = await admin.firestore()
+            .collection(action.collection).doc(recordId).get();
+        const record = recordSnapshot.exists ? recordSnapshot.data() || {} : {};
+        const chargeTypeField = action.chargeTypeField || "stripeChargeType";
+        const connectedAccountField =
+          action.connectedAccountField || "stripeConnectedAccountId";
+        if (record[chargeTypeField] === "direct") {
+          checkoutConnectedAccountId = record[connectedAccountField] ||
+            undefined;
+          checkoutApplicationFeeAmount = Number(
+              record.platformFeeCents ?? record.extensionPlatformFeeCents ?? 0,
+          ) || undefined;
+        }
+      }
+      const originalIntent = await retrieveStripePaymentIntent(
+          originalPaymentIntentId,
+          checkoutConnectedAccountId,
+      );
       const target = routePaymentIntentMetadata(originalIntent.metadata);
       if (target.customerUid !== customerUid) {
         throw new HttpsError(
@@ -5087,6 +5162,13 @@ exports.createCustomerCheckoutSession = onCall(
         originalPaymentIntentId,
         productName: action.productName,
         recordId,
+        connectedAccountId: checkoutConnectedAccountId,
+        applicationFeeAmount: checkoutConnectedAccountId ?
+          clampedApplicationFeeAmount(
+              checkoutApplicationFeeAmount,
+              Number(originalIntent.amount),
+          ) :
+          undefined,
         ...returnUrls,
       });
 
@@ -5098,7 +5180,10 @@ exports.createCustomerCheckoutSession = onCall(
           orderType,
         });
       } catch (error) {
-        await expireStripeCheckoutSession(session.id).catch(
+        await expireStripeCheckoutSession(
+            session.id,
+            checkoutConnectedAccountId,
+        ).catch(
             (expireError) => logger.error(
                 "Could not expire an unattached Checkout Session",
                 {
@@ -5228,6 +5313,64 @@ exports.refreshBusinessStripeAccountStatus = onCall(
     },
 );
 
+// Server-authoritative so a business always sees the exact rate/mode a real
+// charge would use - reuses the same resolution chain (business override ->
+// service pricing doc -> env -> default) as every createXPaymentIntent
+// call site, rather than the client re-deriving it (and risking drift) from
+// raw Firestore fields.
+exports.getBusinessFeeSettings = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const {businessId} = request.data || {};
+      if (!businessId) {
+        throw new HttpsError("invalid-argument", "Business ID is required");
+      }
+      await requireBusinessManager(uid, businessId);
+      const [businessDoc, pricingDoc] = await Promise.all([
+        admin.firestore().collection("businesses").doc(businessId).get(),
+        admin.firestore().collection("shipmentPricing").doc("serviceFees")
+            .get(),
+      ]);
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+      const business = businessDoc.data() || {};
+      const pricing = pricingDoc.data() || {};
+      const defaultPlatformFeePct = servicePlatformFeePctFromPricing(
+          pricing, [],
+      );
+      const hasBusinessOverride =
+        businessPlatformFeePctFromBusiness(business) !== null;
+      return {
+        businessId,
+        stripeFeeMode: businessStripeFeeMode(business),
+        connectReady: !!business.stripeAccountId &&
+          business.payoutsEnabled === true,
+        defaultPlatformFeePct,
+        hasBusinessOverride,
+        services: {
+          barrelShipping: barrelPlatformFeePctFromPricing(pricing, business),
+          sharedBarrels: sharedBarrelPlatformFeePctFromPricing(
+              pricing, business,
+          ),
+          freight: servicePlatformFeePctForBusiness(
+              pricing, business, ["freightPlatformFeePct"],
+          ),
+          carSales: servicePlatformFeePctForBusiness(
+              pricing, business, ["carPurchasePlatformFeePct"],
+          ),
+          carDeposit: servicePlatformFeePctForBusiness(
+              pricing, business, ["carDepositPlatformFeePct"],
+          ),
+          carParking: servicePlatformFeePctForBusiness(
+              pricing, business, ["parkingPlatformFeePct"],
+          ),
+        },
+      };
+    },
+);
+
 const PAYMENT_COMPLETION_EXPORTS = Object.freeze({
   parking_deposit: "completeParkingReservation",
   barrel_pool_deposit: "completeBarrelPoolDepositPayment",
@@ -5354,7 +5497,7 @@ async function finishStripeWebhookEvent(eventId, status, details = {}) {
   }, {merge: true});
 }
 
-async function paymentIntentForStripeEvent(event) {
+async function paymentIntentForStripeEvent(event, connectedAccountId) {
   const object = event?.data?.object || {};
   if (String(event?.type || "").startsWith("payment_intent.")) {
     return object;
@@ -5362,11 +5505,15 @@ async function paymentIntentForStripeEvent(event) {
   let paymentIntentId = String(object.payment_intent || "").trim();
   const chargeId = String(object.charge || "").trim();
   if (!paymentIntentId && chargeId.startsWith("ch_")) {
-    const charge = await stripeRequest(`/charges/${chargeId}`);
+    const charge = await stripeRequest(`/charges/${chargeId}`, {
+      ...(connectedAccountId && {
+        headers: {"Stripe-Account": connectedAccountId},
+      }),
+    });
     paymentIntentId = String(charge.payment_intent || "").trim();
   }
   if (!paymentIntentId) return null;
-  return retrieveStripePaymentIntent(paymentIntentId);
+  return retrieveStripePaymentIntent(paymentIntentId, connectedAccountId);
 }
 
 async function loadAndValidatePaymentTarget({event, intent}) {
@@ -5502,8 +5649,8 @@ async function bindCheckoutPaymentIntent(event) {
   return true;
 }
 
-async function reconcileStripePaymentEvent(event) {
-  const intent = await paymentIntentForStripeEvent(event);
+async function reconcileStripePaymentEvent(event, connectedAccountId) {
+  const intent = await paymentIntentForStripeEvent(event, connectedAccountId);
   const paymentType = String(intent?.metadata?.paymentType || "").trim();
   if (!intent || !PAYMENT_COMPLETION_EXPORTS[paymentType]) return false;
   const {target, decision, superseded} = await loadAndValidatePaymentTarget({
@@ -5556,11 +5703,40 @@ exports.confirmCustomerCheckoutSession = onCall(
       const orderType = cleanText(request.data?.orderType, 80);
       const recordId = cleanText(request.data?.recordId, 180);
       const sessionId = cleanText(request.data?.sessionId, 220);
+      // Same reasoning as createCustomerCheckoutSession: if the Checkout
+      // Session was created on a business's connected account (a direct
+      // charge), retrieving it here also requires that same Stripe-Account
+      // header - resolve it from the stored record before the first Stripe
+      // call, the same way it was resolved when the session was created.
+      let confirmConnectedAccountId;
+      try {
+        const action = requireCustomerCheckoutAction(orderType);
+        if (action.collection && recordId) {
+          const recordSnapshot = await admin.firestore()
+              .collection(action.collection).doc(recordId).get();
+          const record = recordSnapshot.exists ?
+            recordSnapshot.data() || {} : {};
+          const chargeTypeField = action.chargeTypeField ||
+            "stripeChargeType";
+          const connectedAccountField = action.connectedAccountField ||
+            "stripeConnectedAccountId";
+          if (record[chargeTypeField] === "direct") {
+            confirmConnectedAccountId = record[connectedAccountField] ||
+              undefined;
+          }
+        }
+      } catch {
+        // Fall through - the checks below will reject an unsupported/
+        // invalid orderType with the right error either way.
+      }
       let session;
       let verification;
       try {
         customerCheckoutReturnEventId(sessionId);
-        session = await retrieveStripeCheckoutSession(sessionId);
+        session = await retrieveStripeCheckoutSession(
+            sessionId,
+            confirmConnectedAccountId,
+        );
         verification = customerCheckoutReturnVerification({
           session,
           customerUid,
@@ -5628,7 +5804,10 @@ exports.confirmCustomerCheckoutSession = onCall(
 
       try {
         const checkoutIntentBound = await bindCheckoutPaymentIntent(event);
-        const paymentHandled = await reconcileStripePaymentEvent(event);
+        const paymentHandled = await reconcileStripePaymentEvent(
+            event,
+            confirmConnectedAccountId,
+        );
         const current = (await ref.get()).data() || {};
         const succeeded = customerCheckoutPaymentSucceeded(
             current,
@@ -5832,6 +6011,8 @@ const STALE_PAYMENT_SCANS = Object.freeze([
     collection: "carPurchases",
     statusField: "extensionPaymentStatus",
     intent: "extensionPaymentIntentId",
+    chargeTypeField: "extensionStripeChargeType",
+    connectedAccountField: "extensionStripeConnectedAccountId",
   },
 ]);
 
@@ -5842,6 +6023,15 @@ function stalePaymentIntentId(scan, data) {
     return String(values[values.length - 1] || "").trim();
   }
   return String(data[scan.intent] || "").trim();
+}
+
+function stalePaymentConnectedAccountId(scan, data) {
+  const chargeTypeField = scan.chargeTypeField || "stripeChargeType";
+  const connectedAccountField =
+    scan.connectedAccountField || "stripeConnectedAccountId";
+  return data[chargeTypeField] === "direct" ?
+    data[connectedAccountField] || undefined :
+    undefined;
 }
 
 async function recordPaymentReconciliationFailure(scan, snapshot, error) {
@@ -5892,10 +6082,14 @@ exports.reconcileStaleStripePayments = onSchedule(
           const page = await query.get();
           for (const snapshot of page.docs) {
             checked += 1;
-            const intentId = stalePaymentIntentId(scan, snapshot.data() || {});
+            const staleData = snapshot.data() || {};
+            const intentId = stalePaymentIntentId(scan, staleData);
             if (!intentId || intentId.startsWith("simulated_")) continue;
             try {
-              const intent = await retrieveStripePaymentIntent(intentId);
+              const intent = await retrieveStripePaymentIntent(
+                  intentId,
+                  stalePaymentConnectedAccountId(scan, staleData),
+              );
               const event = {
                 id: `evt_reconcile_${crypto.createHash("sha256")
                     .update(`${intent.id}:${intent.status}`)
@@ -7629,6 +7823,7 @@ exports.createParkingReservation = onCall(
       let paymentCents = 0;
       let totalCents = 0;
       let option;
+      let payoutFields;
       await db.runTransaction(async (transaction) => {
         const businessDoc = await transaction.get(businessRef);
         if (!businessDoc.exists) {
@@ -7676,6 +7871,12 @@ exports.createParkingReservation = onCall(
         );
         const connectReady = !!business.stripeAccountId &&
           business.payoutsEnabled === true;
+        payoutFields = servicePayoutFields({
+          grossCents: paymentCents,
+          platformFeePct,
+          connectReady,
+          business,
+        });
         const now = FirestoreFieldValue.serverTimestamp();
         transaction.set(reservationRef, {
           trackingCode,
@@ -7712,11 +7913,7 @@ exports.createParkingReservation = onCall(
           monthlyRate: option.monthlyRate,
           minimumDays: option.minimumDays,
           instructions: option.instructions,
-          ...servicePayoutFields({
-            grossCents: paymentCents,
-            platformFeePct,
-            connectReady,
-          }),
+          ...payoutFields,
           createdAt: now,
           updatedAt: now,
         });
@@ -7728,6 +7925,10 @@ exports.createParkingReservation = onCall(
           paymentIntent = await createStripePaymentIntent({
             amount: paymentCents,
             currency: SHIPMENT_CURRENCY,
+            connectedAccountId:
+              payoutFields.stripeConnectedAccountId || undefined,
+            applicationFeeAmount: payoutFields.stripeChargeType === "direct" ?
+              payoutFields.platformFeeCents : undefined,
             metadata: {
               reservationId: reservationRef.id,
               trackingCode,
@@ -7806,6 +8007,7 @@ exports.completeParkingReservation = onCall(
       }
       const intent = await retrieveStripePaymentIntent(
           reservation.stripePaymentIntentId,
+          stripeAccountIdForRetrieval(reservation),
       );
       if (intent.status !== "succeeded") {
         await reservationRef.update({
@@ -7870,6 +8072,7 @@ exports.cancelPendingParkingReservation = onCall(
         }
         const intent = await retrieveStripePaymentIntent(
             reservation.stripePaymentIntentId,
+            stripeAccountIdForRetrieval(reservation),
         );
         if (intent.status === "succeeded") {
           await ref.update({
@@ -7908,6 +8111,7 @@ exports.cancelPendingParkingReservation = onCall(
         if (intent.status !== "canceled") {
           await cancelStripePaymentIntent(
               reservation.stripePaymentIntentId,
+              stripeAccountIdForRetrieval(reservation),
           );
         }
       }
@@ -13106,6 +13310,11 @@ exports.requestJoinBarrelPool = onCall(
           refundableAmountCents: depositCents,
           refundableAmount: dollarsFromCents(depositCents),
           platformFeePct,
+          // connectReady is deliberately false here (no business doc fetched
+          // in this flow) - this deposit doesn't pay out on its own, it only
+          // becomes part of the pool's eventual shipment payout, which
+          // already resolves the real business + fee-mode fresh at shipment
+          // settlement time. This deposit charge itself stays platform-mode.
           ...servicePayoutFields({
             grossCents: depositCents,
             platformFeePct,
@@ -14500,9 +14709,31 @@ exports.createBarrelPoolBalancePaymentIntent = onCall(
         };
       }
 
+      // The request doc's payout fields were computed with connectReady
+      // hardcoded false when the balance-due request was first created
+      // (before the business's live Connect status is known) - recompute
+      // them fresh here, right before the real charge, using the business's
+      // current Stripe status and fee-mode setting.
+      const businessId = String(pool.businessId || "").trim();
+      const businessDoc = businessId ?
+        await db.collection("businesses").doc(businessId).get() :
+        null;
+      const business = businessDoc?.exists ? businessDoc.data() : {};
+      const connectReady = !!business.stripeAccountId &&
+        business.payoutsEnabled === true;
+      const payoutFields = servicePayoutFields({
+        grossCents: amountCents,
+        platformFeePct: Number(balanceRequest.platformFeePct || 0),
+        connectReady,
+        business,
+      });
+
       const paymentIntent = await createStripePaymentIntent({
         amount: amountCents,
         currency: balanceRequest.currency || pool.currency || SHIPMENT_CURRENCY,
+        connectedAccountId: payoutFields.stripeConnectedAccountId || undefined,
+        applicationFeeAmount: payoutFields.stripeChargeType === "direct" ?
+          payoutFields.platformFeeCents : undefined,
         metadata: {
           requestId: requestRef.id,
           poolId: actualPoolId,
@@ -14515,6 +14746,7 @@ exports.createBarrelPoolBalancePaymentIntent = onCall(
       const now = FirestoreFieldValue.serverTimestamp();
       await Promise.all([
         requestRef.update({
+          ...payoutFields,
           stripePaymentIntentId: paymentIntent.id,
           updatedAt: now,
         }),
@@ -14595,7 +14827,10 @@ exports.completeBarrelPoolBalancePayment = onCall(
               "Simulated shared barrel balance payments are disabled",
           );
         }
-        const intent = await retrieveStripePaymentIntent(requestIntentId);
+        const intent = await retrieveStripePaymentIntent(
+            requestIntentId,
+            stripeAccountIdForRetrieval(requestData),
+        );
         if (intent.status !== "succeeded") {
           await requestRef.update({
             paymentStatus: intent.status,
@@ -15151,16 +15386,63 @@ function sharedBarrelPlatformFeePctFromPricing(pricingDoc, business) {
   ]);
 }
 
+// Businesses/{id}.stripeFeeMode controls who absorbs Stripe's own processing
+// fee (~2.9%+30c), set per-business by an admin (see MoreSettings' Business
+// commission overrides panel in admin_web). Default: the platform absorbs it
+// (a plain PaymentIntent on the platform's own account, then a separate
+// transfer of businessPayoutCents to the business - Stripe's fee only
+// reduces the platform's own cut). "business_absorbs_processing_fee" instead
+// creates the PaymentIntent as a Stripe direct charge on the business's own
+// connected account (Stripe-Account header + application_fee_amount), so
+// Stripe's processing fee comes out of THEIR balance and only the platform
+// fee is auto-routed to the platform - no separate transfer needed.
+const STRIPE_FEE_MODE_BUSINESS_ABSORBS = "business_absorbs_processing_fee";
+const STRIPE_FEE_MODE_PLATFORM_ABSORBS = "platform_absorbs_processing_fee";
+
+function businessStripeFeeMode(business) {
+  return business?.stripeFeeMode === STRIPE_FEE_MODE_BUSINESS_ABSORBS ?
+    STRIPE_FEE_MODE_BUSINESS_ABSORBS :
+    STRIPE_FEE_MODE_PLATFORM_ABSORBS;
+}
+
+// A direct-charge PaymentIntent only resolves when every later Stripe
+// request for it (retrieve/cancel/refund) carries the same Stripe-Account
+// header it was created with - this picks that header's value (or undefined
+// for a plain platform-owned PaymentIntent) off a stored payment record.
+function stripeAccountIdForRetrieval(data) {
+  return data?.stripeChargeType === "direct" ?
+    data.stripeConnectedAccountId || undefined :
+    undefined;
+}
+
+// Stripe rejects a PaymentIntent if application_fee_amount exceeds amount.
+// The platform fee is normally computed off the full gross price, but some
+// flows let a customer cover part of that gross with wallet credit first,
+// so the actual card charge can be smaller than the gross the fee was based
+// on - clamp so a direct-charge business's payment intent never fails to
+// create over this.
+function clampedApplicationFeeAmount(feeCents, chargeCents) {
+  return Math.max(0, Math.min(Number(feeCents) || 0, Number(chargeCents) || 0));
+}
+
 function servicePayoutFields({
   grossCents,
   platformFeePct,
   connectReady,
+  business,
 }) {
   const platformFeeCents = Math.round(grossCents * platformFeePct);
+  const stripeFeeMode = businessStripeFeeMode(business);
+  const useDirectCharge =
+    connectReady && stripeFeeMode === STRIPE_FEE_MODE_BUSINESS_ABSORBS;
   return {
     platformFeeCents,
     businessPayoutCents: Math.max(0, grossCents - platformFeeCents),
     payoutStatus: connectReady ? "pending" : "pending_account",
+    stripeFeeMode,
+    stripeChargeType: useDirectCharge ? "direct" : "platform",
+    stripeConnectedAccountId:
+      useDirectCharge ? String(business.stripeAccountId) : "",
   };
 }
 
@@ -15168,11 +15450,13 @@ function barrelLinePayoutFields({
   shippingFeeCents,
   platformFeePct,
   connectReady,
+  business,
 }) {
   return servicePayoutFields({
     grossCents: shippingFeeCents,
     platformFeePct,
     connectReady,
+    business,
   });
 }
 
@@ -15199,6 +15483,7 @@ function barrelDestinationPayoutUpdate({
   shippingFeeCents,
   platformFeePct,
   connectReady,
+  business,
 }) {
   return {
     platformFeePct,
@@ -15206,6 +15491,7 @@ function barrelDestinationPayoutUpdate({
       shippingFeeCents,
       platformFeePct,
       connectReady,
+      business,
     }),
     payoutTransferId: FirestoreFieldValue.delete(),
     paidOutAt: FirestoreFieldValue.delete(),
@@ -15265,6 +15551,7 @@ async function issueBusinessPayoutTransfer({
   payoutTransferIdField = "payoutTransferId",
   paidOutAtField = "paidOutAt",
   payoutErrorField = "payoutError",
+  stripeChargeTypeField = "stripeChargeType",
 }) {
   if (SIMULATE_PAYMENTS) return;
   if (data[payoutStatusField] === "paid") return;
@@ -15273,6 +15560,18 @@ async function issueBusinessPayoutTransfer({
     logger.warn("Blocked unsettled freight payout", {
       documentPath: ref.path,
       priceSettlementStatus: data.priceSettlementStatus || "missing",
+    });
+    return;
+  }
+  // Direct-charge payments already settled the split atomically at charge
+  // time (Stripe routed the application fee to the platform and left the
+  // rest, minus Stripe's own processing fee, in the business's own connected
+  // account) - there is nothing left to transfer.
+  if (data[stripeChargeTypeField] === "direct") {
+    await ref.update({
+      [payoutStatusField]: "paid",
+      [paidOutAtField]: FirestoreFieldValue.serverTimestamp(),
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
     });
     return;
   }
@@ -15536,6 +15835,7 @@ exports.createBarrelShipmentPaymentIntent = onCall(
         shippingFeeCents: lineShippingFeeCents,
         platformFeePct,
         connectReady,
+        business,
       });
 
       const shipmentRef = db.collection("barrelShipments").doc();
@@ -15649,6 +15949,13 @@ exports.createBarrelShipmentPaymentIntent = onCall(
         paymentIntent = await createStripePaymentIntent({
           amount: chargeCents,
           currency: SHIPMENT_CURRENCY,
+          connectedAccountId:
+            payoutFields.stripeConnectedAccountId || undefined,
+          applicationFeeAmount: payoutFields.stripeChargeType === "direct" ?
+            clampedApplicationFeeAmount(
+                payoutFields.platformFeeCents, chargeCents,
+            ) :
+            undefined,
           metadata: {
             shipmentId: shipmentRef.id,
             trackingCode,
@@ -15886,6 +16193,7 @@ exports.createBarrelOrderPaymentIntent = onCall(
             shippingFeeCents: lineShippingFeeCents,
             platformFeePct,
             connectReady,
+            business,
           }),
         });
       }
@@ -15897,6 +16205,38 @@ exports.createBarrelOrderPaymentIntent = onCall(
       if (!Number.isFinite(orderTotalCents) || orderTotalCents <= 0) {
         throw new HttpsError("failed-precondition", "Invalid order total");
       }
+
+      // A single Stripe PaymentIntent covers the whole order, but a direct
+      // charge belongs to exactly one connected account - only honor a
+      // line's direct-charge fee mode when every line in this order is the
+      // same business. Otherwise fall back to the platform-owned charge +
+      // separate per-line transfers, regardless of any one business's
+      // setting, so a mixed-business order never silently skips a payout.
+      const orderBusinessIds = new Set(
+          validatedLines.map((line) => line.businessId),
+      );
+      const isSingleBusinessOrder = orderBusinessIds.size === 1;
+      if (!isSingleBusinessOrder) {
+        validatedLines.forEach((line) => {
+          line.payoutFields = {
+            ...line.payoutFields,
+            stripeChargeType: "platform",
+            stripeConnectedAccountId: "",
+          };
+        });
+      }
+      const orderChargeType = isSingleBusinessOrder ?
+        validatedLines[0].payoutFields.stripeChargeType :
+        "platform";
+      const orderConnectedAccountId = orderChargeType === "direct" ?
+        validatedLines[0].payoutFields.stripeConnectedAccountId :
+        "";
+      const orderApplicationFeeCents = orderChargeType === "direct" ?
+        validatedLines.reduce(
+            (sum, line) => sum + line.payoutFields.platformFeeCents,
+            0,
+        ) :
+        0;
 
       // Different lines can be different businesses with different office
       // locations, so the order-level summary can only show one address
@@ -16083,6 +16423,10 @@ exports.createBarrelOrderPaymentIntent = onCall(
         paymentIntent = await createStripePaymentIntent({
           amount: chargeCents,
           currency: SHIPMENT_CURRENCY,
+          connectedAccountId: orderConnectedAccountId || undefined,
+          applicationFeeAmount: orderChargeType === "direct" ?
+            clampedApplicationFeeAmount(orderApplicationFeeCents, chargeCents) :
+            undefined,
           metadata: {
             orderId: orderRef.id,
             customerUid,
@@ -16092,6 +16436,8 @@ exports.createBarrelOrderPaymentIntent = onCall(
         await Promise.all([
           orderRef.update({
             stripePaymentIntentId: paymentIntent.id,
+            stripeChargeType: orderChargeType,
+            stripeConnectedAccountId: orderConnectedAccountId,
             updatedAt: FirestoreFieldValue.serverTimestamp(),
           }),
           ...shipmentRefs.map((ref) => ref.update({
@@ -16187,6 +16533,7 @@ exports.completeBarrelShipmentPayment = onCall(
 
       const intent = await retrieveStripePaymentIntent(
           shipment.stripePaymentIntentId,
+          stripeAccountIdForRetrieval(shipment),
       );
       if (intent.status !== "succeeded") {
         await shipmentRef.update({
@@ -16258,6 +16605,7 @@ exports.cancelPendingBarrelShipment = onCall(
         }
         const intent = await retrieveStripePaymentIntent(
             shipment.stripePaymentIntentId,
+            stripeAccountIdForRetrieval(shipment),
         );
         if (intent.status === "succeeded") {
           await exports.completeBarrelShipmentPayment.run({
@@ -16275,7 +16623,10 @@ exports.cancelPendingBarrelShipment = onCall(
           return {success: true, shipmentId};
         }
         if (intent.status !== "canceled") {
-          await cancelStripePaymentIntent(shipment.stripePaymentIntentId);
+          await cancelStripePaymentIntent(
+              shipment.stripePaymentIntentId,
+              stripeAccountIdForRetrieval(shipment),
+          );
         }
       }
 
@@ -16351,6 +16702,7 @@ exports.completeBarrelOrderPayment = onCall(
         }
         const intent = await retrieveStripePaymentIntent(
             orderIntentId,
+            stripeAccountIdForRetrieval(order),
         );
         if (intent.status !== "succeeded") {
           await orderRef.update({
@@ -16448,6 +16800,7 @@ exports.cancelPendingBarrelOrder = onCall(
         }
         const intent = await retrieveStripePaymentIntent(
             order.stripePaymentIntentId,
+            stripeAccountIdForRetrieval(order),
         );
         if (intent.status === "succeeded") {
           await exports.completeBarrelOrderPayment.run({
@@ -16465,7 +16818,10 @@ exports.cancelPendingBarrelOrder = onCall(
           return {success: true, orderId};
         }
         if (intent.status !== "canceled") {
-          await cancelStripePaymentIntent(order.stripePaymentIntentId);
+          await cancelStripePaymentIntent(
+              order.stripePaymentIntentId,
+              stripeAccountIdForRetrieval(order),
+          );
         }
       }
 
@@ -16705,6 +17061,7 @@ exports.createFreightShipmentPaymentIntent = onCall(
         grossCents: shippingFeeCents,
         platformFeePct,
         connectReady,
+        business,
       });
       let walletAppliedCents = 0;
       await db.runTransaction(async (transaction) => {
@@ -16821,6 +17178,13 @@ exports.createFreightShipmentPaymentIntent = onCall(
         paymentIntent = await createStripePaymentIntent({
           amount: chargeCents,
           currency: SHIPMENT_CURRENCY,
+          connectedAccountId:
+            payoutFields.stripeConnectedAccountId || undefined,
+          applicationFeeAmount: payoutFields.stripeChargeType === "direct" ?
+            clampedApplicationFeeAmount(
+                payoutFields.platformFeeCents, chargeCents,
+            ) :
+            undefined,
           metadata: {
             shipmentId: shipmentRef.id,
             trackingCode,
@@ -16923,6 +17287,7 @@ exports.completeFreightShipmentPayment = onCall(
 
       const intent = await retrieveStripePaymentIntent(
           shipment.stripePaymentIntentId,
+          stripeAccountIdForRetrieval(shipment),
       );
       if (intent.status !== "succeeded") {
         await shipmentRef.update({
@@ -16994,6 +17359,7 @@ exports.cancelPendingFreightShipment = onCall(
         }
         const intent = await retrieveStripePaymentIntent(
             shipment.stripePaymentIntentId,
+            stripeAccountIdForRetrieval(shipment),
         );
         if (intent.status === "succeeded") {
           await exports.completeFreightShipmentPayment.run({
@@ -17011,7 +17377,10 @@ exports.cancelPendingFreightShipment = onCall(
           return {success: true, shipmentId};
         }
         if (intent.status !== "canceled") {
-          await cancelStripePaymentIntent(shipment.stripePaymentIntentId);
+          await cancelStripePaymentIntent(
+              shipment.stripePaymentIntentId,
+              stripeAccountIdForRetrieval(shipment),
+          );
         }
       }
 
@@ -17097,6 +17466,7 @@ async function processFreightSettlementRefund({settlementRef, shipmentRef}) {
         refund = await createStripeRefund({
           paymentIntentId,
           amount: cardRefundCents,
+          connectedAccountId: stripeAccountIdForRetrieval(shipmentDoc.data()),
           idempotencyKey:
             `freight-refund-v1-${settlement.shipmentId}-` +
             `${settlement.settlementVersion || 1}`,
@@ -17325,12 +17695,23 @@ exports.confirmFreightShipmentWeight = onCall(
           throw new HttpsError("failed-precondition", error.message);
         }
         const now = FirestoreFieldValue.serverTimestamp();
-        const payoutFields = servicePayoutFields({
-          grossCents: calculation.finalShippingFeeCents,
-          platformFeePct: Number(shipment.platformFeePct || 0),
-          connectReady:
-            !!business.stripeAccountId && business.payoutsEnabled === true,
-        });
+        // The estimate's PaymentIntent already locked in a charge type/
+        // connected account at creation time (a succeeded charge's Stripe
+        // routing can't be changed after the fact) - reuse that instead of
+        // recomputing from the business's *current* fee-mode setting, which
+        // may have changed since the estimate was charged.
+        const payoutFields = {
+          ...servicePayoutFields({
+            grossCents: calculation.finalShippingFeeCents,
+            platformFeePct: Number(shipment.platformFeePct || 0),
+            connectReady:
+              !!business.stripeAccountId && business.payoutsEnabled === true,
+          }),
+          stripeChargeType: shipment.stripeChargeType || "platform",
+          stripeConnectedAccountId: shipment.stripeConnectedAccountId || "",
+          stripeFeeMode: shipment.stripeFeeMode ||
+            STRIPE_FEE_MODE_PLATFORM_ABSORBS,
+        };
         const shipmentStatus = calculation.balanceDueCents > 0 ?
           "awaiting_balance_payment" :
           calculation.refundDueCents > 0 ? "settlement_processing" : "pending";
@@ -17446,12 +17827,24 @@ async function applyFreightSettlementPayment({
   const businessDoc = await db.collection("businesses")
       .doc(settlement.businessId).get();
   const business = businessDoc.exists ? businessDoc.data() || {} : {};
-  const payoutFields = servicePayoutFields({
-    grossCents: Number(settlement.finalShippingFeeCents || 0),
-    platformFeePct: Number(settlement.platformFeePct || 0),
-    connectReady:
-      !!business.stripeAccountId && business.payoutsEnabled === true,
-  });
+  const shipmentSnapshotForRouting = await shipmentRef.get();
+  const shipmentForRouting = shipmentSnapshotForRouting.data() || {};
+  const payoutFields = {
+    ...servicePayoutFields({
+      grossCents: Number(settlement.finalShippingFeeCents || 0),
+      platformFeePct: Number(settlement.platformFeePct || 0),
+      connectReady:
+        !!business.stripeAccountId && business.payoutsEnabled === true,
+    }),
+    // Reuse the estimate charge's already-locked-in routing (see the same
+    // note in confirmFreightShipmentWeight) rather than the business's
+    // current fee-mode setting, which may have changed since.
+    stripeChargeType: shipmentForRouting.stripeChargeType || "platform",
+    stripeConnectedAccountId:
+      shipmentForRouting.stripeConnectedAccountId || "",
+    stripeFeeMode: shipmentForRouting.stripeFeeMode ||
+      STRIPE_FEE_MODE_PLATFORM_ABSORBS,
+  };
   const now = FirestoreFieldValue.serverTimestamp();
   await db.runTransaction(async (transaction) => {
     const [freshSettlementDoc, attemptDoc] = await Promise.all([
@@ -17613,9 +18006,24 @@ exports.createFreightSettlementPayment = onCall(
         };
       }
 
+      // The balance top-up charge follows the same account routing as the
+      // shipment's original estimate charge (locked in on the shipment doc
+      // at estimate-creation time), so a direct-charge business's balance
+      // adjustment lands with them too, not with the platform.
+      const balanceChargeType = shipment.stripeChargeType || "platform";
+      const balanceConnectedAccountId = shipment.stripeConnectedAccountId || "";
+      const balancePlatformFeePct = Number(settlement.platformFeePct || 0);
+      const balanceApplicationFeeAmount = balanceChargeType === "direct" ?
+        clampedApplicationFeeAmount(
+            Math.round(balanceDueCents * balancePlatformFeePct),
+            balanceDueCents,
+        ) :
+        undefined;
+
       if (attempt.stripePaymentIntentId) {
         const existingIntent = await retrieveStripePaymentIntent(
             attempt.stripePaymentIntentId,
+            balanceConnectedAccountId || undefined,
         );
         if (existingIntent.status === "succeeded") {
           await applyFreightSettlementPayment({
@@ -17639,6 +18047,8 @@ exports.createFreightSettlementPayment = onCall(
         const paymentIntent = await createStripePaymentIntent({
           amount: balanceDueCents,
           currency: settlement.currency || SHIPMENT_CURRENCY,
+          connectedAccountId: balanceConnectedAccountId || undefined,
+          applicationFeeAmount: balanceApplicationFeeAmount,
           metadata: {
             settlementId,
             attemptId,
@@ -17651,6 +18061,8 @@ exports.createFreightSettlementPayment = onCall(
         await Promise.all([
           attemptRef.update({
             stripePaymentIntentId: paymentIntent.id,
+            stripeChargeType: balanceChargeType,
+            stripeConnectedAccountId: balanceConnectedAccountId,
             updatedAt: FirestoreFieldValue.serverTimestamp(),
           }),
           settlementRef.update({
@@ -17739,6 +18151,7 @@ exports.completeFreightSettlementPayment = onCall(
         }
         intent = await retrieveStripePaymentIntent(
             intentId,
+            stripeAccountIdForRetrieval(attempt),
         );
       }
       await applyFreightSettlementPayment({
@@ -17894,6 +18307,7 @@ exports.changeBarrelShipmentDestination = onCall(
           shippingFeeCents: destinationShippingFeeCents,
           platformFeePct,
           connectReady,
+          business,
         });
 
       const differenceCents = newTotalCents - previousTotalCents;
@@ -18540,6 +18954,7 @@ exports.createCarDepositPaymentIntent = onCall(
 
       const purchaseRef = db.collection("carPurchases").doc();
       const now = FirestoreFieldValue.serverTimestamp();
+      let payoutFields;
       await db.runTransaction(async (transaction) => {
         const lockedCarDoc = await transaction.get(carRef);
         if (!lockedCarDoc.exists) {
@@ -18557,10 +18972,11 @@ exports.createCarDepositPaymentIntent = onCall(
           business: carBusiness.business,
           holdUntilDate,
         });
-        const payoutFields = servicePayoutFields({
+        payoutFields = servicePayoutFields({
           grossCents: holdQuote.amountCents,
           platformFeePct,
           connectReady,
+          business: carBusiness.business,
         });
         transaction.set(purchaseRef, {
           carId,
@@ -18678,6 +19094,10 @@ exports.createCarDepositPaymentIntent = onCall(
         paymentIntent = await createStripePaymentIntent({
           amount: holdQuote.amountCents,
           currency: DEPOSIT_CURRENCY,
+          connectedAccountId:
+            payoutFields.stripeConnectedAccountId || undefined,
+          applicationFeeAmount: payoutFields.stripeChargeType === "direct" ?
+            payoutFields.platformFeeCents : undefined,
           metadata: {
             carId,
             buyerUid,
@@ -19079,6 +19499,7 @@ exports.createCarPurchasePaymentIntent = onCall(
         grossCents: purchaseAmountCents,
         platformFeePct,
         connectReady,
+        business: carBusiness.business,
       });
       const now = FirestoreFieldValue.serverTimestamp();
 
@@ -19177,6 +19598,10 @@ exports.createCarPurchasePaymentIntent = onCall(
         paymentIntent = await createStripePaymentIntent({
           amount: purchaseAmountCents,
           currency: PURCHASE_CURRENCY,
+          connectedAccountId:
+            payoutFields.stripeConnectedAccountId || undefined,
+          applicationFeeAmount: payoutFields.stripeChargeType === "direct" ?
+            payoutFields.platformFeeCents : undefined,
           metadata: {
             carId,
             buyerUid,
@@ -19270,7 +19695,9 @@ exports.completeCarPurchase = onCall(
       }
 
       const intent = await retrieveStripePaymentIntent(
-          purchase.stripePaymentIntentId);
+          purchase.stripePaymentIntentId,
+          stripeAccountIdForRetrieval(purchase),
+      );
       if (intent.status !== "succeeded") {
         await purchaseRef.update({
           paymentStatus: intent.status,
@@ -19374,7 +19801,9 @@ exports.cancelPendingCarPurchase = onCall(
           );
         }
         const intent = await retrieveStripePaymentIntent(
-            purchase.stripePaymentIntentId);
+            purchase.stripePaymentIntentId,
+            stripeAccountIdForRetrieval(purchase),
+        );
         if (intent.status === "succeeded") {
           const completion = purchase.paymentType === "reservation_deposit" ?
             exports.completeCarDepositReservation :
@@ -19394,7 +19823,10 @@ exports.cancelPendingCarPurchase = onCall(
           return {success: true, purchaseId};
         }
         if (intent.status !== "canceled") {
-          await cancelStripePaymentIntent(purchase.stripePaymentIntentId);
+          await cancelStripePaymentIntent(
+              purchase.stripePaymentIntentId,
+              stripeAccountIdForRetrieval(purchase),
+          );
         }
       }
 
@@ -19475,7 +19907,9 @@ exports.completeCarDepositReservation = onCall(
       }
 
       const intent = await retrieveStripePaymentIntent(
-          purchase.stripePaymentIntentId);
+          purchase.stripePaymentIntentId,
+          stripeAccountIdForRetrieval(purchase),
+      );
       if (intent.status !== "succeeded") {
         await purchaseRef.update({
           paymentStatus: intent.status,
@@ -19986,6 +20420,7 @@ exports.createPaidHoldExtensionPaymentIntent = onCall(
         grossCents: extraCents,
         platformFeePct: extensionPlatformFeePct,
         connectReady: extensionConnectReady,
+        business,
       });
 
       async function applyExtension(paymentIntentId, paymentStatus) {
@@ -20006,6 +20441,9 @@ exports.createPaidHoldExtensionPaymentIntent = onCall(
           extensionBusinessPayoutCents:
             extensionPayoutFields.businessPayoutCents,
           extensionPayoutStatus: extensionPayoutFields.payoutStatus,
+          extensionStripeChargeType: extensionPayoutFields.stripeChargeType,
+          extensionStripeConnectedAccountId:
+            extensionPayoutFields.stripeConnectedAccountId,
           purchaseStatus: "reserved",
           depositForfeitureStatus: "active",
           extensionPaidAt: now,
@@ -20021,6 +20459,10 @@ exports.createPaidHoldExtensionPaymentIntent = onCall(
       const paymentIntent = await createStripePaymentIntent({
         amount: extraCents,
         currency: DEPOSIT_CURRENCY,
+        connectedAccountId:
+          extensionPayoutFields.stripeConnectedAccountId || undefined,
+        applicationFeeAmount: extensionPayoutFields.stripeChargeType ===
+          "direct" ? extensionPayoutFields.platformFeeCents : undefined,
         metadata: {
           purchaseId,
           extensionId: purchase.extensionId,
@@ -20037,6 +20479,9 @@ exports.createPaidHoldExtensionPaymentIntent = onCall(
         extensionBusinessPayoutCents:
           extensionPayoutFields.businessPayoutCents,
         extensionPayoutStatus: extensionPayoutFields.payoutStatus,
+        extensionStripeChargeType: extensionPayoutFields.stripeChargeType,
+        extensionStripeConnectedAccountId:
+          extensionPayoutFields.stripeConnectedAccountId,
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
       return {purchaseId, clientSecret: paymentIntent.client_secret};
@@ -20085,7 +20530,12 @@ exports.completePaidHoldExtensionPayment = onCall(
           );
         }
       } else {
-        const intent = await retrieveStripePaymentIntent(intentId);
+        const intent = await retrieveStripePaymentIntent(
+            intentId,
+            purchase.extensionStripeChargeType === "direct" ?
+              purchase.extensionStripeConnectedAccountId || undefined :
+              undefined,
+        );
         if (intent.status !== "succeeded") {
           await purchaseRef.update({
             extensionPaymentStatus: intent.status,
@@ -20129,6 +20579,7 @@ exports.completePaidHoldExtensionPayment = onCall(
         payoutTransferIdField: "extensionPayoutTransferId",
         paidOutAtField: "extensionPaidOutAt",
         payoutErrorField: "extensionPayoutError",
+        stripeChargeTypeField: "extensionStripeChargeType",
       });
       return {success: true, purchaseId};
     },

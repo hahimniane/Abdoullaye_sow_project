@@ -1915,6 +1915,37 @@ button[data-loading="true"]::before {
   min-height: 36px;
 }
 
+.fee-settings-card {
+  background: rgba(248, 250, 252, 0.94);
+  border: 1px solid rgba(13, 148, 136, 0.14);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  margin: 0 14px 14px;
+  padding: 12px;
+}
+
+.fee-settings-row {
+  align-items: center;
+  display: flex;
+  font-size: 13px;
+  justify-content: space-between;
+}
+
+.fee-settings-row span {
+  color: var(--muted);
+}
+
+.fee-settings-row strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.fee-settings-card > small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .inline-error {
   background: rgba(220, 38, 38, 0.08);
   border: 1px solid rgba(220, 38, 38, 0.22);
@@ -4615,7 +4646,7 @@ button[data-loading="true"]::before {
   border-top: 1px solid rgba(13, 148, 136, 0.12);
   display: grid;
   gap: 12px;
-  grid-template-columns: 24px minmax(220px, 1fr) 120px 132px;
+  grid-template-columns: 24px minmax(220px, 1fr) 120px 132px 170px;
   min-height: 62px;
   padding: 10px 16px;
 }
