@@ -1921,7 +1921,7 @@ export function ListingsPanel({
                   ))}
                   {images.length < MAX_LISTING_IMAGES && (
                     <label className="lst-photo-add">
-                      <input type="file" accept="image/*" multiple hidden onChange={(event) => { addImageFiles(event.target.files); event.target.value = ""; }} />
+                      <input type="file" accept="image/*,.heic,.heif" multiple hidden onChange={(event) => { addImageFiles(event.target.files); event.target.value = ""; }} />
                       <Plus size={20} />
                       <span>Add photos</span>
                     </label>

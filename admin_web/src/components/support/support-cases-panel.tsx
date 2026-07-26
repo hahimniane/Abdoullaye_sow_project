@@ -978,7 +978,7 @@ function SupportThread({
               <ImagePlus size={14} /> {uploading ? "Sending…" : "Photo"}
               <input
                 type="file"
-                accept="image/*"
+                accept="image/*,.heic,.heif"
                 hidden
                 disabled={uploading}
                 onChange={(event) => {
@@ -991,7 +991,7 @@ function SupportThread({
               <Paperclip size={14} /> File
               <input
                 type="file"
-                accept="image/*,video/*,audio/*,application/pdf,text/plain,.doc,.docx"
+                accept="image/*,.heic,.heif,video/*,audio/*,application/pdf,text/plain,.doc,.docx"
                 hidden
                 disabled={uploading}
                 onChange={(event) => {

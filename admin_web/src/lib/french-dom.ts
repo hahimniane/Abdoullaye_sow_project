@@ -942,6 +942,11 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Max $": "Max $",
   "Clear all filters": "Effacer tous les filtres",
   "Sold by": "Vendu par",
+  "Zoom in": "Zoomer",
+  "Zoom in on photo": "Zoomer sur la photo",
+  "Previous photo": "Photo précédente",
+  "Next photo": "Photo suivante",
+  "Close zoomed photo": "Fermer la photo agrandie",
   "Clean title": "Titre propre",
   "Favorites could not be loaded.":
     "Les favoris n’ont pas pu être chargés.",

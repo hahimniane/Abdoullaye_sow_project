@@ -358,7 +358,7 @@ export function BusinessProfilePanel({
             <div className="bp-logo-actions">
               <label className="lst-btn ghost" style={{ cursor: "pointer" }}>
                 <ImageUp size={14} /> Choose image
-                <input accept="image/*" type="file" hidden onChange={selectImage} />
+                <input accept="image/*,.heic,.heif" type="file" hidden onChange={selectImage} />
               </label>
               {imageFile && <button className="lst-btn ghost" type="button" onClick={() => setImageFile(null)}>Clear</button>}
             </div>

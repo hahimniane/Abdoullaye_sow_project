@@ -14,6 +14,8 @@ import { httpsCallable } from "firebase/functions";
 import {
   CalendarDays,
   Car,
+  ChevronLeft,
+  ChevronRight,
   Fuel,
   Gauge,
   Heart,
@@ -22,6 +24,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   X,
+  ZoomIn,
 } from "lucide-react";
 
 import {
@@ -623,6 +626,7 @@ function CarDetail({
 }) {
   const images = useMemo(() => carImages(car), [car]);
   const [activeImage, setActiveImage] = useState(0);
+  const [zoomed, setZoomed] = useState(false);
   useEffect(() => setActiveImage(0), [car.id]);
 
   return (
@@ -665,12 +669,22 @@ function CarDetail({
           <>
             <div className="customer-car-gallery">
               {images.length > 0 ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  alt={carTitle(car)}
-                  className="customer-car-detail-image"
-                  src={images[activeImage]}
-                />
+                <button
+                  aria-label="Zoom in on photo"
+                  className="customer-car-photo-frame"
+                  onClick={() => setZoomed(true)}
+                  type="button"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    alt={carTitle(car)}
+                    className="customer-car-detail-image"
+                    src={images[activeImage]}
+                  />
+                  <span className="customer-car-zoom-hint">
+                    <ZoomIn size={13} /> Zoom in
+                  </span>
+                </button>
               ) : (
                 <div className="listing-photo-placeholder customer-car-detail-image">
                   <Car size={36} />
@@ -741,6 +755,86 @@ function CarDetail({
           </>
         )}
       </aside>
+      {zoomed && images.length > 0 && (
+        <CarPhotoLightbox
+          images={images}
+          index={activeImage}
+          onClose={() => setZoomed(false)}
+          onIndexChange={setActiveImage}
+        />
+      )}
+    </div>
+  );
+}
+
+function CarPhotoLightbox({
+  images,
+  index,
+  onClose,
+  onIndexChange,
+}: {
+  images: string[];
+  index: number;
+  onClose: () => void;
+  onIndexChange: (index: number) => void;
+}) {
+  useEffect(() => {
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+      if (event.key === "ArrowLeft") onIndexChange((index - 1 + images.length) % images.length);
+      if (event.key === "ArrowRight") onIndexChange((index + 1) % images.length);
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [images.length, index, onClose, onIndexChange]);
+
+  return (
+    <div
+      className="customer-car-lightbox"
+      onClick={onClose}
+      role="presentation"
+    >
+      {images.length > 1 && (
+        <button
+          aria-label="Previous photo"
+          className="customer-car-lightbox-nav prev"
+          onClick={(event) => {
+            event.stopPropagation();
+            onIndexChange((index - 1 + images.length) % images.length);
+          }}
+          type="button"
+        >
+          <ChevronLeft size={26} />
+        </button>
+      )}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        alt=""
+        className="customer-car-lightbox-image"
+        onClick={(event) => event.stopPropagation()}
+        src={images[index]}
+      />
+      {images.length > 1 && (
+        <button
+          aria-label="Next photo"
+          className="customer-car-lightbox-nav next"
+          onClick={(event) => {
+            event.stopPropagation();
+            onIndexChange((index + 1) % images.length);
+          }}
+          type="button"
+        >
+          <ChevronRight size={26} />
+        </button>
+      )}
+      <button
+        aria-label="Close zoomed photo"
+        className="customer-car-lightbox-close"
+        onClick={onClose}
+        type="button"
+      >
+        <X size={20} />
+      </button>
     </div>
   );
 }

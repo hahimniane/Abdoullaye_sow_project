@@ -6974,7 +6974,7 @@ function WebsiteView({
               Upload logo
               <input
                 type="file"
-                accept="image/*"
+                accept="image/*,.heic,.heif"
                 disabled={!featureDraft.businessId || uploadingLogo}
                 onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -7391,7 +7391,7 @@ function AdminAccountPanel({
             <label className="secondary-button account-upload">
               {uploading ? "Uploading..." : "Upload photo"}
               <input
-                accept="image/*"
+                accept="image/*,.heic,.heif"
                 disabled={uploading}
                 onChange={(event) => {
                   const file = event.target.files?.[0];
