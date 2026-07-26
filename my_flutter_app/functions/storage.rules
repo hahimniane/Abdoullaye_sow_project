@@ -1,56 +1,58 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    function hasUserProfile() {
-      return request.auth != null &&
-        firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    // Firebase Storage security rules in this project cannot reliably read
+    // Firestore in production (cross-service firestore.get()/exists() calls
+    // from storage.rules deny even for docs the caller legitimately owns,
+    // confirmed by isolated rule testing - see the
+    // storage-rules-cross-service-broken memory). Every business-scoped
+    // upload rule used to depend on exactly that kind of read, which is why
+    // business logo/profile/listing/verification uploads silently failed
+    // for non-admin users despite the client reporting a normal "saved"
+    // flow. functions/index.js's syncUserCustomClaims trigger mirrors each
+    // user's role/businessId/adminRole/businessPermissions from their
+    // Firestore profile onto their Auth token any time that profile
+    // changes, so these rules can read request.auth.token.* directly -
+    // no cross-service call needed for any of the checks below.
+    function userRole() {
+      return request.auth != null ? request.auth.token.get('role', '') : '';
     }
 
-    function userProfile() {
-      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
-    }
-
-    function isAdmin() {
-      return hasUserProfile() &&
-        request.auth.token.email_verified == true &&
-        userProfile().role == 'admin';
-    }
-
-    function canManageBusinessLogo(businessId) {
-      return hasAdminCapability('businesses') ||
-        (
-          hasUserProfile() &&
-          (
-            userProfile().businessId == businessId ||
-            userOwnsBusinessDocument(businessId)
-          ) &&
-          userProfile().role == 'businessOwner'
-        );
-    }
-
-    function userOwnsBusinessDocument(businessId) {
-      return firestore.exists(/databases/(default)/documents/businesses/$(businessId)) &&
-        'ownerUid' in firestore.get(/databases/(default)/documents/businesses/$(businessId)).data &&
-        firestore.get(/databases/(default)/documents/businesses/$(businessId)).data.ownerUid == request.auth.uid;
-    }
-
-    function isLinkedToBusiness(businessId) {
-      return hasUserProfile() &&
-        (userProfile().businessId == businessId ||
-         userOwnsBusinessDocument(businessId));
+    function userBusinessId() {
+      return request.auth != null ?
+        request.auth.token.get('businessId', '') : '';
     }
 
     function userAdminRole() {
-      return userProfile().get('adminRole', '') is string ?
-        userProfile().get('adminRole', '') : "";
+      return request.auth != null ?
+        request.auth.token.get('adminRole', '') : '';
+    }
+
+    function userBusinessPermissions() {
+      return request.auth != null ?
+        request.auth.token.get('businessPermissions', []) : [];
+    }
+
+    function isAdmin() {
+      return request.auth != null &&
+        request.auth.token.email_verified == true &&
+        userRole() == 'admin';
+    }
+
+    function isLinkedToBusiness(businessId) {
+      return request.auth != null && userBusinessId() == businessId;
     }
 
     function isSuperAdmin() {
       return request.auth != null &&
-        hasUserProfile() && userProfile().role == 'admin' &&
-        userProfile().get('adminRole', '') == 'superAdmin';
+        userRole() == 'admin' &&
+        userAdminRole() == 'superAdmin';
     }
 
+    // Custom per-role permission overrides (platformConfig/permissions) are
+    // still Firestore-backed, so this one check remains subject to the same
+    // cross-service limitation as before - a narrower, pre-existing gap
+    // than the business-scoped checks this file otherwise fixes.
     function hasDynamicAdminCapability(section) {
       return firestore.exists(/databases/(default)/documents/platformConfig/permissions) &&
         userAdminRole() in firestore.get(/databases/(default)/documents/platformConfig/permissions).data.roles &&
@@ -80,9 +82,15 @@ service firebase.storage {
     }
 
     function hasBusinessSection(section) {
-      return userProfile().get('businessPermissions', []) is list &&
-        userProfile().get('businessPermissions', []).size() > 0 &&
-        section in userProfile().get('businessPermissions', []);
+      return section in userBusinessPermissions();
+    }
+
+    function canManageBusinessLogo(businessId) {
+      return hasAdminCapability('businesses') ||
+        (
+          isLinkedToBusiness(businessId) &&
+          userRole() == 'businessOwner'
+        );
     }
 
     function canManageBusinessListingImages(businessId) {
@@ -90,9 +98,9 @@ service firebase.storage {
         (
           isLinkedToBusiness(businessId) &&
           (
-            userProfile().role == 'businessOwner' ||
+            userRole() == 'businessOwner' ||
             (
-              userProfile().role == 'staff' &&
+              userRole() == 'staff' &&
               hasBusinessSection('listings')
             )
           )
@@ -104,9 +112,9 @@ service firebase.storage {
         (
           isLinkedToBusiness(businessId) &&
           (
-            userProfile().role == 'businessOwner' ||
+            userRole() == 'businessOwner' ||
             (
-              userProfile().role == 'staff' &&
+              userRole() == 'staff' &&
               hasBusinessSection('profile')
             )
           )
@@ -118,9 +126,9 @@ service firebase.storage {
         (
           isLinkedToBusiness(businessId) &&
           (
-            userProfile().role == 'businessOwner' ||
+            userRole() == 'businessOwner' ||
             (
-              userProfile().role == 'staff' &&
+              userRole() == 'staff' &&
               hasBusinessSection('profile')
             )
           )
@@ -130,17 +138,12 @@ service firebase.storage {
     function canManageBusinessSupportAsMember(businessId) {
       return isLinkedToBusiness(businessId) &&
         (
-          userProfile().role == 'businessOwner' ||
+          userRole() == 'businessOwner' ||
           (
-            userProfile().role == 'staff' &&
+            userRole() == 'staff' &&
             hasBusinessSection('support')
           )
         );
-    }
-
-    function canManageBusinessSupport(businessId) {
-      return hasAdminCapability('support') ||
-        canManageBusinessSupportAsMember(businessId);
     }
 
     function validImageUpload() {
@@ -168,6 +171,11 @@ service firebase.storage {
       ];
     }
 
+    // Support-case membership (customer/participant/business) is inherently
+    // per-case data that only Firestore has, so this check is still
+    // Firestore-backed and still subject to the cross-service limitation
+    // above for non-admins. The support_cases write rule below does not
+    // depend on it for that reason - see the comment there.
     function canAccessSupportCase(caseId) {
       return request.auth != null &&
         firestore.exists(/databases/(default)/documents/supportCases/$(caseId)) &&
@@ -183,12 +191,11 @@ service firebase.storage {
     }
 
     // Access control is enforced by the scoped path (support_cases/{caseId}/
-    // {uploaderUid}) + canAccessSupportCase, and the uploadSupportAttachmentMetadata
-    // callable validates the real content type and per-type size before the file
-    // ever becomes a message. So the storage rule only guards a max size here.
-    // A strict content-type allowlist previously rejected uploads whose type was
-    // missing or 'application/octet-stream' (common on web / some pickers),
-    // surfacing as storage/unauthorized — i.e. "the rules won't let me upload".
+    // {uploaderUid}) + a size cap. It deliberately does NOT call
+    // canAccessSupportCase here (that needs a cross-service Firestore read
+    // that fails in prod for non-admins) - the uploadSupportAttachmentMetadata
+    // callable validates the real content type and case membership, using
+    // the Admin SDK, before the file ever becomes a message.
     function validSupportUpload() {
       return request.resource.size < 50 * 1024 * 1024;
     }
@@ -241,7 +248,6 @@ service firebase.storage {
         (request.auth.uid == uploaderUid || canAccessSupportCase(caseId));
       allow write: if request.auth != null &&
         request.auth.uid == uploaderUid &&
-        canAccessSupportCase(caseId) &&
         validSupportUpload();
     }
 

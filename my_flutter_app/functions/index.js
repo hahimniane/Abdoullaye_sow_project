@@ -10107,6 +10107,62 @@ async function updateBusinessMembershipHandler(request, forcedRole = "") {
   };
 }
 
+// Firebase Storage security rules in this project cannot read Firestore
+// (cross-service firestore.get()/firestore.exists() calls from storage.rules
+// reliably deny), so business-scoped upload rules can't check a user's role/
+// businessId by reading their Firestore profile the way Firestore rules do.
+// Mirroring role/businessId/adminRole/businessPermissions onto the Auth
+// token as custom claims lets storage.rules read request.auth.token.* -
+// no cross-service call needed. This is the single place that keeps claims
+// in sync: every role/businessId assignment in this file writes through
+// users/{uid}, so this trigger never needs a matching call at each of those
+// call sites.
+function userClaimsFromProfile(data) {
+  return {
+    role: typeof data.role === "string" ? data.role : null,
+    businessId: typeof data.businessId === "string" ? data.businessId : null,
+    adminRole: typeof data.adminRole === "string" ? data.adminRole : null,
+    businessPermissions: Array.isArray(data.businessPermissions) ?
+      data.businessPermissions.filter((item) => typeof item === "string") :
+      [],
+  };
+}
+
+exports.syncUserCustomClaims = onDocumentWritten(
+    "users/{userId}",
+    async (event) => {
+      const userId = event.params.userId;
+      const after = event.data?.after;
+      if (!after?.exists) {
+        try {
+          await admin.auth().setCustomUserClaims(userId, null);
+        } catch (error) {
+          logger.warn("Failed to clear custom claims on user deletion", {
+            userId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        return;
+      }
+      const nextClaims = userClaimsFromProfile(after.data() || {});
+      const before = event.data?.before;
+      if (before?.exists) {
+        const previousClaims = userClaimsFromProfile(before.data() || {});
+        if (JSON.stringify(previousClaims) === JSON.stringify(nextClaims)) {
+          return;
+        }
+      }
+      try {
+        await admin.auth().setCustomUserClaims(userId, nextClaims);
+      } catch (error) {
+        logger.warn("Failed to sync custom claims", {
+          userId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+);
+
 exports.updateBusinessMembership = onCall(
     MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     (request) => updateBusinessMembershipHandler(request),

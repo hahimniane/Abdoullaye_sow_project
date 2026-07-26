@@ -23,10 +23,65 @@ function firestoreFor(uid) {
     testEnv.unauthenticatedContext().firestore();
 }
 
+// Storage rules can't read Firestore in production (see storage.rules'
+// comments and the storage-rules-cross-service-broken memory), so they
+// authorize business-scoped uploads from custom auth-token claims instead -
+// the same role/businessId/adminRole/businessPermissions
+// functions/index.js's syncUserCustomClaims trigger mirrors from each
+// user's Firestore profile. This roster is that mirror for every uid these
+// tests authenticate as, so a storage test exercises the same claims shape
+// production actually has, not just whatever the local emulator lets
+// cross-service Firestore reads get away with.
+const TEST_USER_CLAIMS = {
+  "super-admin": {role: "admin", adminRole: "superAdmin"},
+  "platform-admin": {role: "admin"},
+  "operations-admin": {role: "admin", adminRole: "operationsManager"},
+  "content-admin": {role: "admin", adminRole: "contentManager"},
+  "finance-admin": {role: "admin", adminRole: "financeManager"},
+  "support-admin": {role: "admin", adminRole: "supportAdmin"},
+  "owner-a": {role: "businessOwner", businessId: "biz_a"},
+  "owner-b": {role: "businessOwner", businessId: "biz_b"},
+  "staff-listings-a": {
+    role: "staff", businessId: "biz_a", businessPermissions: ["listings"],
+  },
+  "staff-profile-a": {
+    role: "staff", businessId: "biz_a", businessPermissions: ["profile"],
+  },
+  "staff-barrels-a": {
+    role: "staff", businessId: "biz_a", businessPermissions: ["barrels"],
+  },
+  "staff-freight-a": {
+    role: "staff", businessId: "biz_a", businessPermissions: ["freight"],
+  },
+  "staff-transport-a": {
+    role: "staff", businessId: "biz_a", businessPermissions: ["transport"],
+  },
+  "staff-destinations-a": {
+    role: "staff", businessId: "biz_a", businessPermissions: ["destinations"],
+  },
+  "staff-transport-b": {
+    role: "staff", businessId: "biz_b", businessPermissions: ["transport"],
+  },
+  "staff-support-a": {
+    role: "staff", businessId: "biz_a", businessPermissions: ["support"],
+  },
+  "staff-missing-permissions-a": {role: "staff", businessId: "biz_a"},
+  "staff-empty-permissions-a": {
+    role: "staff", businessId: "biz_a", businessPermissions: [],
+  },
+  "customer-owner": {role: "customer"},
+  "customer-joiner": {role: "customer"},
+  "customer-stranger": {role: "customer"},
+  "customer-support": {role: "customer"},
+};
+
 function storageFor(uid) {
-  return uid ?
-    testEnv.authenticatedContext(uid, {email_verified: true}).storage() :
-    testEnv.unauthenticatedContext().storage();
+  if (!uid) return testEnv.unauthenticatedContext().storage();
+  const claims = TEST_USER_CLAIMS[uid] || {};
+  return testEnv.authenticatedContext(uid, {
+    email_verified: true,
+    ...claims,
+  }).storage();
 }
 
 function storageForToken(uid, token) {
@@ -1822,23 +1877,15 @@ describe("featured business logo Storage rules", () => {
 });
 
 describe("business profile image Storage rules", () => {
-  it("allows linked owners and business-doc owners to upload profile images",
-      async () => {
-        await assertSucceeds(
-            putBusinessProfileImage(
-                storageFor("owner-a"),
-                "biz_a",
-                "profile.jpg",
-            ),
-        );
-        await assertSucceeds(
-            putBusinessProfileImage(
-                storageFor("owner-doconly"),
-                "biz_doc_owner",
-                "profile.jpg",
-            ),
-        );
-      });
+  it("allows a linked owner to upload profile images", async () => {
+    await assertSucceeds(
+        putBusinessProfileImage(
+            storageFor("owner-a"),
+            "biz_a",
+            "profile.jpg",
+        ),
+    );
+  });
 
   it("denies unauthenticated, cross-business, and invalid profile uploads",
       async () => {
@@ -1854,6 +1901,21 @@ describe("business profile image Storage rules", () => {
                 storageFor("owner-a"),
                 "biz_b",
                 "cross.jpg",
+            ),
+        );
+        // A business doc's ownerUid alone must not grant access without a
+        // matching businessId claim - that legacy fallback required a
+        // cross-service Firestore read that's broken in production, so it
+        // was removed rather than left silently non-functional.
+        await assertFails(
+            putBusinessProfileImage(
+                storageForToken("owner-doconly", {
+                  email_verified: true,
+                  role: "businessOwner",
+                  businessId: "legacy_business_id",
+                }),
+                "biz_doc_owner",
+                "profile.jpg",
             ),
         );
         await assertFails(
@@ -2185,38 +2247,20 @@ describe("support attachment Storage rules", () => {
     );
   });
 
-  it("denies strangers, wrong uploader paths, and invalid support files",
+  it("denies wrong uploader paths and invalid support files",
       async () => {
-        await assertFails(
-            putSupportAttachment(
-                storageFor("customer-stranger"),
-                "case_a",
-                "customer-stranger",
-                "cross.pdf",
-            ),
-        );
+        // Storage rules only enforce the uploader's own uid path + a size
+        // cap here - real case membership (customer/participant/business,
+        // including "a stranger to this case") is enforced afterward by
+        // the uploadSupportAttachmentMetadata callable via the Admin SDK,
+        // not by these rules, because that check needs a Firestore read
+        // that's broken cross-service in production for non-admins.
         await assertFails(
             putSupportAttachment(
                 storageFor("customer-support"),
                 "case_a",
                 "other-user",
                 "wrong-owner.pdf",
-            ),
-        );
-        await assertFails(
-            putSupportAttachment(
-                storageFor("staff-empty-permissions-a"),
-                "case_a",
-                "staff-empty-permissions-a",
-                "empty-permissions.pdf",
-            ),
-        );
-        await assertFails(
-            putSupportAttachment(
-                storageFor("content-admin"),
-                "case_a",
-                "content-admin",
-                "content.pdf",
             ),
         );
         await assertFails(
