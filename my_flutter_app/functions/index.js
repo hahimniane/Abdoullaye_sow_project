@@ -18156,10 +18156,7 @@ async function attemptAutomaticFreightBalanceCharge({shipmentId, customerUid}) {
   }
 
   if (SIMULATE_PAYMENTS) {
-    await exports.createFreightSettlementPayment.run({
-      auth: {uid: customerUid},
-      data: {shipmentId},
-    });
+    await createFreightSettlementPaymentCore({shipmentId, customerUid});
     await notifyFreightBalanceDue({
       shipmentId, shipment, autoChargeAttempted: true,
       autoChargeSucceeded: true,
@@ -18167,18 +18164,20 @@ async function attemptAutomaticFreightBalanceCharge({shipmentId, customerUid}) {
     return true;
   }
 
-  // createFreightSettlementPayment also runs recordMarketplaceDisclosure,
-  // which requires a real customer-supplied disclosure acceptance - this
-  // internal call never has one, since no customer is present to give it.
-  // That's fine: treat the throw the same as any other reason the automatic
-  // charge couldn't go through (nothing gets created), and let the
-  // customer's later in-app manual payment attempt - which DOES supply a
-  // real disclosure acceptance - create the attempt/intent fresh.
+  // Uses the core helper directly (not the exported
+  // createFreightSettlementPayment callable) so this internal,
+  // system-initiated charge doesn't require a
+  // fresh customer disclosure acceptance - there's no customer present to
+  // give one, and they already consented once at the original estimate
+  // payment. A real Stripe/business error can still occur here, so this stays
+  // wrapped: treat any failure as "auto-charge couldn't go through," and let
+  // the customer's later in-app manual payment attempt - which DOES supply a
+  // real disclosure acceptance through the public callable - create the
+  // attempt/intent fresh.
   let creationResult;
   try {
-    creationResult = await exports.createFreightSettlementPayment.run({
-      auth: {uid: customerUid},
-      data: {shipmentId},
+    creationResult = await createFreightSettlementPaymentCore({
+      shipmentId, customerUid,
     });
   } catch (error) {
     logger.warn("Could not prepare automatic freight balance charge", {
@@ -18335,6 +18334,203 @@ async function applyFreightSettlementPayment({
   return shipmentDoc.data() || {};
 }
 
+// Split out from the exported callable so attemptAutomaticFreightBalanceCharge
+// can create/reuse this same payment intent without going through
+// recordMarketplaceDisclosure - that check exists to prove a customer freshly
+// consented to THIS payment action, which doesn't apply to a charge the
+// system initiates on its own after the business confirms weight (the
+// customer already consented once, at the original estimate payment).
+async function createFreightSettlementPaymentCore({shipmentId, customerUid}) {
+  {
+    const db = admin.firestore();
+    const shipmentRef = db.collection("freightShipments").doc(shipmentId);
+    const shipmentDoc = await shipmentRef.get();
+    if (!shipmentDoc.exists) {
+      throw new HttpsError("not-found", "Shipment not found");
+    }
+    const shipment = shipmentDoc.data() || {};
+    if (shipment.customerUid !== customerUid) {
+      throw new HttpsError("permission-denied", "Shipment access denied");
+    }
+    const settlementId = String(shipment.settlementId || "").trim();
+    if (!settlementId) {
+      throw new HttpsError(
+          "failed-precondition",
+          "Weight is not confirmed yet",
+      );
+    }
+    const settlementRef = db.collection("freightSettlements")
+        .doc(settlementId);
+    const settlementDoc = await settlementRef.get();
+    if (!settlementDoc.exists) {
+      throw new HttpsError("not-found", "Freight settlement not found");
+    }
+    const settlement = settlementDoc.data() || {};
+    if (settlement.priceSettlementStatus ===
+          FreightSettlementStatus.SETTLED) {
+      return {settlementId, shipmentId, alreadySettled: true};
+    }
+    if (![FreightSettlementStatus.BALANCE_DUE,
+      FreightSettlementStatus.BALANCE_PAYMENT_PENDING].includes(
+        settlement.priceSettlementStatus,
+    )) {
+      throw new HttpsError(
+          "failed-precondition",
+          "This freight settlement has no payable balance",
+      );
+    }
+    const attemptId = "balance_v1";
+    const attemptRef = settlementRef.collection("paymentAttempts")
+        .doc(attemptId);
+    const balanceDueCents = Number(settlement.balanceDueCents || 0);
+    const attempt = await db.runTransaction(async (transaction) => {
+      const attemptDoc = await transaction.get(attemptRef);
+      if (attemptDoc.exists) return attemptDoc.data() || {};
+      const now = FirestoreFieldValue.serverTimestamp();
+      const createdAttempt = {
+        attemptId,
+        settlementId,
+        shipmentId,
+        customerUid,
+        businessId: settlement.businessId,
+        currency: settlement.currency || SHIPMENT_CURRENCY,
+        cardChargeAmountCents: balanceDueCents,
+        cardChargeAmount: dollarsFromCents(balanceDueCents),
+        paymentStatus: "pending",
+        applicationStatus: "pending",
+        createdAt: now,
+        updatedAt: now,
+      };
+      transaction.create(attemptRef, createdAttempt);
+      return createdAttempt;
+    });
+
+    if (SIMULATE_PAYMENTS) {
+      if (!attempt.stripePaymentIntentId) {
+        await attemptRef.update({
+          stripePaymentIntentId: `simulated_freight_balance_${settlementId}`,
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+      }
+      await applyFreightSettlementPayment({
+        settlementId,
+        attemptId,
+        customerUid,
+        intent: {status: "succeeded"},
+      });
+      return {
+        settlementId,
+        attemptId,
+        shipmentId,
+        simulatedPayment: true,
+        cardChargeAmount: dollarsFromCents(balanceDueCents),
+      };
+    }
+
+    // The balance top-up charge follows the same account routing as the
+    // shipment's original estimate charge (locked in on the shipment doc
+    // at estimate-creation time), so a direct-charge business's balance
+    // adjustment lands with them too, not with the platform.
+    const balanceChargeType = shipment.stripeChargeType || "platform";
+    const balanceConnectedAccountId = shipment.stripeConnectedAccountId || "";
+    const balancePlatformFeePct = Number(settlement.platformFeePct || 0);
+    const balanceApplicationFeeAmount = balanceChargeType === "direct" ?
+        clampedApplicationFeeAmount(
+            Math.round(balanceDueCents * balancePlatformFeePct),
+            balanceDueCents,
+        ) :
+        undefined;
+
+    if (attempt.stripePaymentIntentId) {
+      const existingIntent = await retrieveStripePaymentIntent(
+          attempt.stripePaymentIntentId,
+          balanceConnectedAccountId || undefined,
+      );
+      if (existingIntent.status === "succeeded") {
+        await applyFreightSettlementPayment({
+          settlementId,
+          attemptId,
+          customerUid,
+          intent: existingIntent,
+        });
+        return {settlementId, attemptId, shipmentId, alreadySettled: true};
+      }
+      return {
+        settlementId,
+        attemptId,
+        shipmentId,
+        clientSecret: existingIntent.client_secret,
+        cardChargeAmount: dollarsFromCents(balanceDueCents),
+      };
+    }
+
+    try {
+      const paymentIntent = await createStripePaymentIntent({
+        amount: balanceDueCents,
+        currency: settlement.currency || SHIPMENT_CURRENCY,
+        connectedAccountId: balanceConnectedAccountId || undefined,
+        applicationFeeAmount: balanceApplicationFeeAmount,
+        // Required whenever a saved payment method is used to confirm
+        // this intent off-session (see attemptAutomaticFreightBalanceCharge)
+        // - Stripe rejects a customer-owned payment_method on an intent
+        // that isn't tied to that same customer.
+        customerId: shipment.stripeCustomerId || undefined,
+        metadata: {
+          settlementId,
+          attemptId,
+          shipmentId,
+          customerUid,
+          businessId: settlement.businessId,
+          paymentType: "freight_settlement_adjustment",
+        },
+      });
+      await Promise.all([
+        attemptRef.update({
+          stripePaymentIntentId: paymentIntent.id,
+          stripeChargeType: balanceChargeType,
+          stripeConnectedAccountId: balanceConnectedAccountId,
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }),
+        settlementRef.update({
+          priceSettlementStatus:
+              FreightSettlementStatus.BALANCE_PAYMENT_PENDING,
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }),
+        shipmentRef.update({
+          priceSettlementStatus:
+              FreightSettlementStatus.BALANCE_PAYMENT_PENDING,
+          balancePaymentStatus: "pending",
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }),
+      ]);
+      return {
+        settlementId,
+        attemptId,
+        shipmentId,
+        clientSecret: paymentIntent.client_secret,
+        cardChargeAmount: dollarsFromCents(balanceDueCents),
+      };
+    } catch (error) {
+      await Promise.all([
+        attemptRef.set({
+          paymentStatus: "failed",
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }, {merge: true}),
+        settlementRef.set({
+          priceSettlementStatus: FreightSettlementStatus.BALANCE_DUE,
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }, {merge: true}),
+        shipmentRef.set({
+          priceSettlementStatus: FreightSettlementStatus.BALANCE_DUE,
+          balancePaymentStatus: "failed",
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }, {merge: true}),
+      ]);
+      throw error;
+    }
+  }
+}
+
 exports.createFreightSettlementPayment = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
@@ -18352,192 +18548,7 @@ exports.createFreightSettlementPayment = onCall(
       if (!shipmentId) {
         throw new HttpsError("invalid-argument", "Shipment ID is required");
       }
-      const db = admin.firestore();
-      const shipmentRef = db.collection("freightShipments").doc(shipmentId);
-      const shipmentDoc = await shipmentRef.get();
-      if (!shipmentDoc.exists) {
-        throw new HttpsError("not-found", "Shipment not found");
-      }
-      const shipment = shipmentDoc.data() || {};
-      if (shipment.customerUid !== customerUid) {
-        throw new HttpsError("permission-denied", "Shipment access denied");
-      }
-      const settlementId = String(shipment.settlementId || "").trim();
-      if (!settlementId) {
-        throw new HttpsError(
-            "failed-precondition",
-            "Weight is not confirmed yet",
-        );
-      }
-      const settlementRef = db.collection("freightSettlements")
-          .doc(settlementId);
-      const settlementDoc = await settlementRef.get();
-      if (!settlementDoc.exists) {
-        throw new HttpsError("not-found", "Freight settlement not found");
-      }
-      const settlement = settlementDoc.data() || {};
-      if (settlement.priceSettlementStatus ===
-          FreightSettlementStatus.SETTLED) {
-        return {settlementId, shipmentId, alreadySettled: true};
-      }
-      if (![FreightSettlementStatus.BALANCE_DUE,
-        FreightSettlementStatus.BALANCE_PAYMENT_PENDING].includes(
-          settlement.priceSettlementStatus,
-      )) {
-        throw new HttpsError(
-            "failed-precondition",
-            "This freight settlement has no payable balance",
-        );
-      }
-      const attemptId = "balance_v1";
-      const attemptRef = settlementRef.collection("paymentAttempts")
-          .doc(attemptId);
-      const balanceDueCents = Number(settlement.balanceDueCents || 0);
-      const attempt = await db.runTransaction(async (transaction) => {
-        const attemptDoc = await transaction.get(attemptRef);
-        if (attemptDoc.exists) return attemptDoc.data() || {};
-        const now = FirestoreFieldValue.serverTimestamp();
-        const createdAttempt = {
-          attemptId,
-          settlementId,
-          shipmentId,
-          customerUid,
-          businessId: settlement.businessId,
-          currency: settlement.currency || SHIPMENT_CURRENCY,
-          cardChargeAmountCents: balanceDueCents,
-          cardChargeAmount: dollarsFromCents(balanceDueCents),
-          paymentStatus: "pending",
-          applicationStatus: "pending",
-          createdAt: now,
-          updatedAt: now,
-        };
-        transaction.create(attemptRef, createdAttempt);
-        return createdAttempt;
-      });
-
-      if (SIMULATE_PAYMENTS) {
-        if (!attempt.stripePaymentIntentId) {
-          await attemptRef.update({
-            stripePaymentIntentId: `simulated_freight_balance_${settlementId}`,
-            updatedAt: FirestoreFieldValue.serverTimestamp(),
-          });
-        }
-        await applyFreightSettlementPayment({
-          settlementId,
-          attemptId,
-          customerUid,
-          intent: {status: "succeeded"},
-        });
-        return {
-          settlementId,
-          attemptId,
-          shipmentId,
-          simulatedPayment: true,
-          cardChargeAmount: dollarsFromCents(balanceDueCents),
-        };
-      }
-
-      // The balance top-up charge follows the same account routing as the
-      // shipment's original estimate charge (locked in on the shipment doc
-      // at estimate-creation time), so a direct-charge business's balance
-      // adjustment lands with them too, not with the platform.
-      const balanceChargeType = shipment.stripeChargeType || "platform";
-      const balanceConnectedAccountId = shipment.stripeConnectedAccountId || "";
-      const balancePlatformFeePct = Number(settlement.platformFeePct || 0);
-      const balanceApplicationFeeAmount = balanceChargeType === "direct" ?
-        clampedApplicationFeeAmount(
-            Math.round(balanceDueCents * balancePlatformFeePct),
-            balanceDueCents,
-        ) :
-        undefined;
-
-      if (attempt.stripePaymentIntentId) {
-        const existingIntent = await retrieveStripePaymentIntent(
-            attempt.stripePaymentIntentId,
-            balanceConnectedAccountId || undefined,
-        );
-        if (existingIntent.status === "succeeded") {
-          await applyFreightSettlementPayment({
-            settlementId,
-            attemptId,
-            customerUid,
-            intent: existingIntent,
-          });
-          return {settlementId, attemptId, shipmentId, alreadySettled: true};
-        }
-        return {
-          settlementId,
-          attemptId,
-          shipmentId,
-          clientSecret: existingIntent.client_secret,
-          cardChargeAmount: dollarsFromCents(balanceDueCents),
-        };
-      }
-
-      try {
-        const paymentIntent = await createStripePaymentIntent({
-          amount: balanceDueCents,
-          currency: settlement.currency || SHIPMENT_CURRENCY,
-          connectedAccountId: balanceConnectedAccountId || undefined,
-          applicationFeeAmount: balanceApplicationFeeAmount,
-          // Required whenever a saved payment method is used to confirm
-          // this intent off-session (see attemptAutomaticFreightBalanceCharge)
-          // - Stripe rejects a customer-owned payment_method on an intent
-          // that isn't tied to that same customer.
-          customerId: shipment.stripeCustomerId || undefined,
-          metadata: {
-            settlementId,
-            attemptId,
-            shipmentId,
-            customerUid,
-            businessId: settlement.businessId,
-            paymentType: "freight_settlement_adjustment",
-          },
-        });
-        await Promise.all([
-          attemptRef.update({
-            stripePaymentIntentId: paymentIntent.id,
-            stripeChargeType: balanceChargeType,
-            stripeConnectedAccountId: balanceConnectedAccountId,
-            updatedAt: FirestoreFieldValue.serverTimestamp(),
-          }),
-          settlementRef.update({
-            priceSettlementStatus:
-              FreightSettlementStatus.BALANCE_PAYMENT_PENDING,
-            updatedAt: FirestoreFieldValue.serverTimestamp(),
-          }),
-          shipmentRef.update({
-            priceSettlementStatus:
-              FreightSettlementStatus.BALANCE_PAYMENT_PENDING,
-            balancePaymentStatus: "pending",
-            updatedAt: FirestoreFieldValue.serverTimestamp(),
-          }),
-        ]);
-        return {
-          settlementId,
-          attemptId,
-          shipmentId,
-          clientSecret: paymentIntent.client_secret,
-          cardChargeAmount: dollarsFromCents(balanceDueCents),
-        };
-      } catch (error) {
-        await Promise.all([
-          attemptRef.set({
-            paymentStatus: "failed",
-            updatedAt: FirestoreFieldValue.serverTimestamp(),
-          }, {merge: true}),
-          settlementRef.set({
-            priceSettlementStatus: FreightSettlementStatus.BALANCE_DUE,
-            updatedAt: FirestoreFieldValue.serverTimestamp(),
-          }, {merge: true}),
-          shipmentRef.set({
-            priceSettlementStatus: FreightSettlementStatus.BALANCE_DUE,
-            balancePaymentStatus: "failed",
-            updatedAt: FirestoreFieldValue.serverTimestamp(),
-          }, {merge: true}),
-        ]);
-        throw error;
-      }
+      return createFreightSettlementPaymentCore({shipmentId, customerUid});
     },
 );
 
