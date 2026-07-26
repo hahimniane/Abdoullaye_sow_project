@@ -3153,6 +3153,13 @@ async function createStripeExpressAccount(params) {
   const body = new URLSearchParams();
   body.set("type", "express");
   body.set("capabilities[transfers][requested]", "true");
+  // card_payments is required for a direct charge to land on the business's
+  // own account (see businesses/{id}.stripeFeeMode /
+  // STRIPE_FEE_MODE_BUSINESS_ABSORBS) - transfers alone only supports the
+  // platform-owned-charge-then-separate-transfer model. Requesting both up
+  // front means a business can switch fee modes later without a second
+  // onboarding flow.
+  body.set("capabilities[card_payments][requested]", "true");
   if (params.email) body.set("email", params.email);
   if (params.country) body.set("country", params.country);
   Object.entries(params.metadata || {}).forEach(([key, value]) => {
@@ -10362,6 +10369,49 @@ exports.syncUserCustomClaims = onDocumentWritten(
         logger.warn("Failed to sync custom claims", {
           userId,
           error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+);
+
+// A business's connected account only ever requests the "transfers"
+// capability at onboarding (createStripeExpressAccount) - that's all the
+// default platform-absorbs-Stripe's-fee model needs. Direct charges (see
+// STRIPE_FEE_MODE_BUSINESS_ABSORBS) additionally require the connected
+// account to hold "card_payments" itself, which isn't requested until an
+// admin actually turns that mode on for a business that already onboarded
+// under the old default. Request it here so existing businesses don't
+// silently fail their first direct charge; Stripe walks the account through
+// whatever extra requirements that capability needs on its own.
+exports.syncBusinessStripeCapabilities = onDocumentWritten(
+    {document: "businesses/{businessId}", secrets: [stripeSecretKey]},
+    async (event) => {
+      const after = event.data?.after;
+      if (!after?.exists) return;
+      const data = after.data() || {};
+      const stripeAccountId = String(data.stripeAccountId || "").trim();
+      if (
+        data.stripeFeeMode !== STRIPE_FEE_MODE_BUSINESS_ABSORBS ||
+        !stripeAccountId
+      ) {
+        return;
+      }
+      const before = event.data?.before;
+      const previousMode = before?.exists ?
+        (before.data() || {}).stripeFeeMode : undefined;
+      if (previousMode === STRIPE_FEE_MODE_BUSINESS_ABSORBS) return;
+      try {
+        const body = new URLSearchParams();
+        body.set("capabilities[card_payments][requested]", "true");
+        await stripeFormRequest(
+            `/accounts/${encodeURIComponent(stripeAccountId)}`,
+            body,
+        );
+      } catch (error) {
+        logger.warn("Could not request card_payments capability", {
+          businessId: event.params.businessId,
+          stripeAccountId,
+          message: error instanceof Error ? error.message : String(error),
         });
       }
     },
