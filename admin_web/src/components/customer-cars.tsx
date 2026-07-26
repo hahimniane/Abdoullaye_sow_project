@@ -307,6 +307,23 @@ export function CustomerCars({
   const filterCount = activeFilterCount(filters);
   const filtersActive = filterCount > 0;
 
+  if (selectedCar) {
+    return (
+      <CarDetailPage
+        action={action}
+        authenticated={authenticated}
+        car={selectedCar}
+        onAction={setAction}
+        onAuthenticationRequired={onAuthenticationRequired}
+        onBack={() => {
+          setSelectedCar(null);
+          setAction(null);
+        }}
+        profile={profile}
+      />
+    );
+  }
+
   return (
     <section className="panel">
       <div className="panel-header customer-cars-header">
@@ -589,31 +606,22 @@ export function CustomerCars({
           );
         })}
       </div>
-      {selectedCar && (
-        <CarDetail
-          action={action}
-          authenticated={authenticated}
-          car={selectedCar}
-          onAction={setAction}
-          onAuthenticationRequired={onAuthenticationRequired}
-          onClose={() => {
-            setSelectedCar(null);
-            setAction(null);
-          }}
-          profile={profile}
-        />
-      )}
     </section>
   );
 }
 
-function CarDetail({
+// Full-page layout (gallery + specs on the left, a sticky price/action card
+// on the right) instead of a side drawer - this is the layout every major
+// vehicle marketplace (AutoTrader, Cars.com, Turo, Facebook Marketplace) uses
+// for listings, because a photo-heavy detail view needs real width to avoid
+// feeling cramped or, if forced wider, ending up as an edge-to-edge overlay.
+function CarDetailPage({
   action,
   authenticated,
   car,
   onAction,
   onAuthenticationRequired,
-  onClose,
+  onBack,
   profile,
 }: {
   action: CarAction | null;
@@ -621,7 +629,7 @@ function CarDetail({
   car: FirestoreRow;
   onAction: (action: CarAction | null) => void;
   onAuthenticationRequired?: () => void;
-  onClose: () => void;
+  onBack: () => void;
   profile: UserProfile;
 }) {
   const images = useMemo(() => carImages(car), [car]);
@@ -630,43 +638,26 @@ function CarDetail({
   useEffect(() => setActiveImage(0), [car.id]);
 
   return (
-    <div className="account-overlay" role="presentation">
-      <button
-        aria-label="Close car details"
-        className="account-backdrop"
-        onClick={onClose}
-        type="button"
-      />
-      <aside
-        aria-modal="true"
-        className="account-drawer customer-car-drawer"
-        role="dialog"
-      >
-        <div className="account-drawer-head">
-          <div>
-            <h2>{carTitle(car)}</h2>
-          </div>
-          <button
-            aria-label="Close car details"
-            className="icon-button subtle"
-            onClick={onClose}
-            type="button"
-          >
-            <X size={18} />
-          </button>
-        </div>
-        {action ? (
+    <section className="panel customer-car-detail-page">
+      <button className="link-button customer-car-back" onClick={onBack} type="button">
+        <ChevronLeft size={16} /> Back to listings
+      </button>
+      {action ? (
+        <div className="customer-car-detail-form">
+          <h2>{carTitle(car)}</h2>
           <CarActionForm
             action={action}
             authenticated={authenticated}
             car={car}
             onCancel={() => onAction(null)}
-            onComplete={onClose}
+            onComplete={onBack}
             onAuthenticationRequired={onAuthenticationRequired}
             profile={profile}
           />
-        ) : (
-          <>
+        </div>
+      ) : (
+        <div className="customer-car-detail-grid">
+          <div className="customer-car-detail-main">
             <div className="customer-car-gallery">
               {images.length > 0 ? (
                 <button
@@ -707,14 +698,6 @@ function CarDetail({
                 </div>
               )}
             </div>
-            <div className="customer-car-detail-price-row">
-              <strong className="customer-car-detail-price">{formatMoney(car.price)}</strong>
-              {car.isRebuiltTitle === false && (
-                <span className="customer-car-chip good">
-                  <ShieldCheck size={13} /> Clean title
-                </span>
-              )}
-            </div>
             <div className="customer-car-fact-grid">
               <FactTile icon={MapPin} label="Location" value={carLocation(car)} />
               <FactTile icon={CalendarDays} label="Year" value={text(car.year, "Not provided")} />
@@ -725,10 +708,23 @@ function CarDetail({
               <FactTile icon={ShieldCheck} label="Condition" value={optionLabelOrFallback(car.condition)} />
               <FactTile icon={ShieldCheck} label="Rebuilt title" value={rebuiltTitle(car.isRebuiltTitle)} />
             </div>
+            {text(car.description, "") && (
+              <p className="customer-car-description">{text(car.description)}</p>
+            )}
+          </div>
+          <aside className="customer-car-detail-side">
+            <h2>{carTitle(car)}</h2>
             <p className="customer-car-business-line">
               Sold by <strong>{text(car.businessName, "Approved business")}</strong>
             </p>
-            {car.description && <p className="customer-car-description">{text(car.description)}</p>}
+            <div className="customer-car-detail-price-row">
+              <strong className="customer-car-detail-price">{formatMoney(car.price)}</strong>
+              {car.isRebuiltTitle === false && (
+                <span className="customer-car-chip good">
+                  <ShieldCheck size={13} /> Clean title
+                </span>
+              )}
+            </div>
             <div className="customer-car-actions">
               <button
                 className="primary-button"
@@ -752,9 +748,9 @@ function CarDetail({
                 <CalendarDays size={16} /> Reserve a viewing
               </button>
             </div>
-          </>
-        )}
-      </aside>
+          </aside>
+        </div>
+      )}
       {zoomed && images.length > 0 && (
         <CarPhotoLightbox
           images={images}
@@ -763,7 +759,7 @@ function CarDetail({
           onIndexChange={setActiveImage}
         />
       )}
-    </div>
+    </section>
   );
 }
 

@@ -9566,18 +9566,68 @@ button[data-loading="true"]::before {
   margin: 0;
 }
 
-/* The car detail view uses far more imagery than the other account-drawer
-   consumers (profile edit, deletion, etc.), so it overrides the shared
-   side-anchored drawer with a large centered modal instead of forking a
-   whole new overlay component. */
-.customer-car-drawer {
-  border-radius: 14px;
-  border-left: 0;
-  box-shadow: 0 30px 90px rgba(8, 47, 45, 0.32);
-  height: min(88vh, 920px);
-  margin: auto;
-  max-width: min(960px, calc(100vw - 32px));
-  width: min(960px, calc(100vw - 32px));
+/* The car detail view uses far more imagery than a side drawer suits, so it
+   is a full page section (gallery + specs on the left, a sticky price/action
+   card on the right) - the layout every major vehicle marketplace
+   (AutoTrader, Cars.com, Turo, Facebook Marketplace) uses for listings. */
+.customer-car-detail-page {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.customer-car-back {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  justify-self: start;
+}
+
+.customer-car-detail-grid {
+  display: grid;
+  gap: 26px;
+  grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr);
+  align-items: start;
+}
+
+.customer-car-detail-main {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.customer-car-detail-side {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  position: sticky;
+  top: 16px;
+}
+
+.customer-car-detail-side h2 {
+  font-size: 22px;
+  margin: 0;
+}
+
+.customer-car-detail-side .customer-car-actions {
+  flex-direction: column;
+}
+
+.customer-car-detail-side .customer-car-actions > button {
+  flex: none;
+  width: 100%;
+}
+
+.customer-car-detail-form {
+  max-width: 560px;
+}
+
+.customer-car-detail-form h2 {
+  margin: 0 0 14px;
 }
 
 .customer-car-gallery {
@@ -10494,6 +10544,14 @@ button[data-loading="true"]::before {
   .customer-search-button {
     grid-column: 1 / -1;
   }
+
+  .customer-car-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .customer-car-detail-side {
+    position: static;
+  }
 }
 
 @media (max-width: 560px) {
@@ -10561,13 +10619,6 @@ button[data-loading="true"]::before {
   .customer-car-filters {
     margin-left: 0;
     margin-right: 0;
-  }
-
-  .customer-car-drawer {
-    border-radius: 0;
-    height: 100vh;
-    max-width: 100vw;
-    width: 100vw;
   }
 
   .customer-car-lightbox-nav {

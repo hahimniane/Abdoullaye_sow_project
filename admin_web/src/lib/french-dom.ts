@@ -942,6 +942,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Max $": "Max $",
   "Clear all filters": "Effacer tous les filtres",
   "Sold by": "Vendu par",
+  "Back to listings": "Retour aux annonces",
   "Zoom in": "Zoomer",
   "Zoom in on photo": "Zoomer sur la photo",
   "Previous photo": "Photo précédente",
