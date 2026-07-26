@@ -49,6 +49,11 @@
     "Start a freight request": "Commencer une demande de fret",
     "Privacy": "Confidentialité",
     "Terms of Service": "Conditions d’utilisation",
+    "Privacy Policy": "Politique de confidentialité",
+    "I accept the": "J’accepte les",
+    "and the": "et la",
+    "I understand that the selected business is the independent service provider responsible for fulfillment, timing, and performance.":
+      "Je comprends que l’entreprise sélectionnée est le prestataire de service indépendant responsable de l’exécution, du délai et de la performance.",
     "A better way to find serious businesses": "Une meilleure façon de trouver des entreprises sérieuses",
     "A few ideas": "Quelques idées",
     "A global, two-way marketplace connecting the diaspora and home across many services": "Une marketplace mondiale à double sens qui relie la diaspora et le pays à travers de nombreux services",
