@@ -3218,7 +3218,14 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "No password is collected here. The invitation expires and access remains inactive until it is accepted.":
     "Aucun mot de passe n’est recueilli ici. L’invitation expire et l’accès reste inactif jusqu’à son acceptation.",
   "Send invitation": "Envoyer l’invitation",
+  "Sending...": "Envoi en cours...",
   "Invitation sent": "Invitation envoyée",
+  "This person already has staff or admin access somewhere in the system. Remove their existing access first, then invite them again.":
+    "Cette personne a déjà un accès employé ou administrateur ailleurs dans le système. Supprimez d’abord son accès existant, puis invitez-la à nouveau.",
+  "There's already a pending invitation for this person. Resend or cancel it instead of sending a new one.":
+    "Une invitation est déjà en attente pour cette personne. Renvoyez-la ou annulez-la au lieu d’en envoyer une nouvelle.",
+  "The invitation could not be sent. Try again.":
+    "L’invitation n’a pas pu être envoyée. Réessayez.",
   "Loading more...": "Chargement en cours…",
   "Load more people": "Afficher plus de personnes",
   "More people could not be loaded. Try again.":

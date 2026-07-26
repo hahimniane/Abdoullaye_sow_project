@@ -2136,6 +2136,28 @@ function useAdminDestinationCoverage(enabled: boolean) {
   return {rows, loading, error, refresh};
 }
 
+function inviteErrorMessage(error: unknown) {
+  const reason =
+    error && typeof error === "object" && "details" in error
+      ? text(
+          (error as {details?: {reason?: unknown}}).details?.reason,
+          "",
+        )
+      : "";
+  if (reason === "existing-authority-conflict") {
+    return "This person already has staff or admin access somewhere in " +
+      "the system. Remove their existing access first, then invite them " +
+      "again.";
+  }
+  if (reason === "invitation-already-pending") {
+    return "There's already a pending invitation for this person. " +
+      "Resend or cancel it instead of sending a new one.";
+  }
+  return error instanceof Error && error.message ?
+    error.message :
+    "The invitation could not be sent. Try again.";
+}
+
 function adminVerificationErrorMessage(error: unknown) {
   const code =
     error && typeof error === "object" && "code" in error
@@ -2504,11 +2526,20 @@ export function AdminConsole() {
       }
       const id = actionSequence.current + 1;
       actionSequence.current = id;
+      // Enter-to-submit from a text field leaves document.activeElement on
+      // the input, not the button - fall back to the submit button inside
+      // that same form so loading/disabled state doesn't silently no-op for
+      // the (very common) case of submitting via Enter rather than a click.
       const activeElement = document.activeElement;
       const trigger =
-        activeElement instanceof HTMLElement
-          ? (activeElement.closest("button") as HTMLButtonElement | null)
-        : null;
+        activeElement instanceof HTMLElement ?
+          ((activeElement.closest("button") as HTMLButtonElement | null) ??
+            (activeElement
+                .closest("form")
+                ?.querySelector('button[type="submit"]') as
+              | HTMLButtonElement
+              | null)) :
+          null;
       const triggerWasDisabled = trigger?.disabled ?? false;
       if (trigger) {
         trigger.dataset.loading = "true";
@@ -7589,6 +7620,8 @@ function CreatePersonForms({
     "profile",
     "people",
   ]);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   function reset() {
     setPersonType("platformAdmin");
@@ -7597,6 +7630,7 @@ function CreatePersonForms({
     setPlatformAdminRole("operationsManager");
     setBusinessId("");
     setBusinessPermissions(["profile", "people"]);
+    setError("");
   }
 
   async function submit() {
@@ -7613,10 +7647,24 @@ function CreatePersonForms({
           : undefined,
       locale: currentInterfaceLocale(),
     };
-    if (personType === "platformAdmin") {
-      await inviteMarketplaceAdmin(payload);
-    } else {
-      await inviteMarketplaceBusinessMember(payload);
+    setSubmitting(true);
+    setError("");
+    try {
+      if (personType === "platformAdmin") {
+        await inviteMarketplaceAdmin(payload);
+      } else {
+        await inviteMarketplaceBusinessMember(payload);
+      }
+    } catch (submitError) {
+      const friendly = inviteErrorMessage(submitError);
+      setError(friendly);
+      // Re-thrown so the shared runAction still records this as a failed
+      // action (it would otherwise show a false "success" toast) - the
+      // inline message above is the one actually visible to the user,
+      // since this dialog stays open and sits on top of the toast corner.
+      throw new Error(friendly);
+    } finally {
+      setSubmitting(false);
     }
     await refreshPeople();
     reset();
@@ -7631,6 +7679,7 @@ function CreatePersonForms({
           setPersonType(
             canInviteAdmins ? "platformAdmin" : "businessPerson",
           );
+          setError("");
           setOpen(true);
         }}
         type="button"
@@ -7684,6 +7733,7 @@ function CreatePersonForms({
                 });
               }}
             >
+              {error && <div className="error-box">{error}</div>}
               <fieldset className="people-invite-type">
                 <legend>Access type</legend>
                 {canInviteAdmins && (
@@ -7823,14 +7873,21 @@ function CreatePersonForms({
               <div className="account-drawer-actions">
                 <button
                   className="secondary-button"
+                  disabled={submitting}
                   onClick={() => setOpen(false)}
                   type="button"
                 >
                   Cancel
                 </button>
-                <button className="primary-button" type="submit">
+                <button
+                  aria-busy={submitting}
+                  className="primary-button"
+                  data-loading={submitting || undefined}
+                  disabled={submitting}
+                  type="submit"
+                >
                   <Send size={15} />
-                  Send invitation
+                  {submitting ? "Sending..." : "Send invitation"}
                 </button>
               </div>
             </form>
@@ -8275,22 +8332,35 @@ function CreateBusinessStaffForm({
     "profile",
     "people",
   ]);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   function reset() {
     setFullName("");
     setEmail("");
     setBusinessPermissions(["profile", "people"]);
+    setError("");
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await inviteMarketplaceBusinessMember({
-      fullName: fullName.trim(),
-      email: email.trim().toLowerCase(),
-      businessId: business.id,
-      businessPermissions,
-      locale: currentInterfaceLocale(),
-    });
+    setSubmitting(true);
+    setError("");
+    try {
+      await inviteMarketplaceBusinessMember({
+        fullName: fullName.trim(),
+        email: email.trim().toLowerCase(),
+        businessId: business.id,
+        businessPermissions,
+        locale: currentInterfaceLocale(),
+      });
+    } catch (submitError) {
+      const friendly = inviteErrorMessage(submitError);
+      setError(friendly);
+      throw new Error(friendly);
+    } finally {
+      setSubmitting(false);
+    }
     reset();
   }
 
@@ -8307,6 +8377,7 @@ function CreateBusinessStaffForm({
       <span className="form-note strong">
         Invite staff to {text(business.name, business.id)}
       </span>
+      {error && <div className="error-box">{error}</div>}
       <input
         required
         autoComplete="name"
@@ -8349,7 +8420,14 @@ function CreateBusinessStaffForm({
         No password is collected. The person will set one from the expiring
         email invitation.
       </p>
-      <button className="primary-button">Send invitation</button>
+      <button
+        aria-busy={submitting}
+        className="primary-button"
+        data-loading={submitting || undefined}
+        disabled={submitting}
+      >
+        {submitting ? "Sending..." : "Send invitation"}
+      </button>
     </form>
   );
 }

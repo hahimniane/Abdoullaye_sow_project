@@ -1444,13 +1444,17 @@ export function BusinessPeoplePanel({
         if (!draft.fullName.trim()) throw new Error("Enter a staff name.");
         if (!draft.email.trim()) throw new Error("Enter a staff email.");
 
-        await httpsCallable(functions, "inviteBusinessMember")({
-          businessId,
-          fullName: draft.fullName.trim(),
-          email: draft.email.trim().toLowerCase(),
-          businessPermissions: draft.businessPermissions,
-          locale: document.documentElement.lang.startsWith("fr") ? "fr" : "en",
-        });
+        try {
+          await httpsCallable(functions, "inviteBusinessMember")({
+            businessId,
+            fullName: draft.fullName.trim(),
+            email: draft.email.trim().toLowerCase(),
+            businessPermissions: draft.businessPermissions,
+            locale: document.documentElement.lang.startsWith("fr") ? "fr" : "en",
+          });
+        } catch (submitError) {
+          throw new Error(inviteStaffErrorMessage(submitError));
+        }
         setDraft(emptyStaffDraft);
         setFormOpen(false);
       },
@@ -1533,6 +1537,7 @@ export function BusinessPeoplePanel({
             </header>
             <form id="business-people-form" onSubmit={submit}>
               <div className="lst-modal-body">
+                {error && <div className="error-box" style={{ marginBottom: 14 }}>{error}</div>}
                 <div className="info-band" style={{ marginBottom: 14 }}>This person will set their own password from an expiring email invitation for {businessName}.</div>
                 <div className="lst-form-grid">
                   <label className="lst-field"><span>Full name</span>
@@ -1640,6 +1645,27 @@ function StaffRow({
       )}
     </article>
   );
+}
+
+function inviteStaffErrorMessage(error: unknown) {
+  const reason =
+    error && typeof error === "object" && "details" in error ?
+      String(
+          (error as {details?: {reason?: unknown}}).details?.reason ?? "",
+      ) :
+      "";
+  if (reason === "existing-authority-conflict") {
+    return "This person already has staff or admin access somewhere in " +
+      "the system. Remove their existing access first, then invite them " +
+      "again.";
+  }
+  if (reason === "invitation-already-pending") {
+    return "There's already a pending invitation for this person. " +
+      "Resend or cancel it instead of sending a new one.";
+  }
+  return error instanceof Error && error.message ?
+    error.message :
+    "The invitation could not be sent. Try again.";
 }
 
 function useActionFeedback(runAction?: ActionRunner, toast?: ToastCallback) {
