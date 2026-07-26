@@ -17589,12 +17589,29 @@ async function processFreightSettlementRefund({settlementRef, shipmentRef}) {
     const businessDoc = await db.collection("businesses")
         .doc(settlement.businessId).get();
     const business = businessDoc.exists ? businessDoc.data() || {} : {};
-    const payoutFields = servicePayoutFields({
-      grossCents: Number(settlement.finalShippingFeeCents || 0),
-      platformFeePct: Number(settlement.platformFeePct || 0),
-      connectReady:
-        !!business.stripeAccountId && business.payoutsEnabled === true,
-    });
+    const shipmentSnapshotForRouting = await shipmentRef.get();
+    const shipmentForRouting = shipmentSnapshotForRouting.data() || {};
+    const payoutFields = {
+      ...servicePayoutFields({
+        grossCents: Number(settlement.finalShippingFeeCents || 0),
+        platformFeePct: Number(settlement.platformFeePct || 0),
+        connectReady:
+          !!business.stripeAccountId && business.payoutsEnabled === true,
+        business,
+      }),
+      // Reuse the estimate charge's already-locked-in routing (see the same
+      // note in confirmFreightShipmentWeight / applyFreightSettlementPayment)
+      // rather than the business's current fee-mode setting, which may have
+      // changed since - otherwise a direct-charge shipment that needed a
+      // weight-adjustment refund would get relabeled "platform" here and
+      // issueBusinessPayoutTransfer would wrongly send the business a second,
+      // separate transfer for money they already received at charge time.
+      stripeChargeType: shipmentForRouting.stripeChargeType || "platform",
+      stripeConnectedAccountId:
+        shipmentForRouting.stripeConnectedAccountId || "",
+      stripeFeeMode: shipmentForRouting.stripeFeeMode ||
+        STRIPE_FEE_MODE_PLATFORM_ABSORBS,
+    };
     const now = FirestoreFieldValue.serverTimestamp();
     await db.runTransaction(async (transaction) => {
       const fresh = await transaction.get(settlementRef);

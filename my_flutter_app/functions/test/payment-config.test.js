@@ -174,6 +174,38 @@ describe("payment runtime configuration", () => {
     );
   });
 
+  it("preserves a direct-charge shipment's routing through a weight " +
+      "refund", () => {
+    const source = fs.readFileSync(
+        path.join(__dirname, "..", "index.js"),
+        "utf8",
+    );
+    // A weight-adjustment refund (verified weight came in lower than the
+    // estimate) must reuse the shipment's original stripeChargeType/
+    // stripeConnectedAccountId/stripeFeeMode - not recompute them - or a
+    // direct-charge business's shipment gets relabeled "platform" here and
+    // issueBusinessPayoutTransfer wrongly sends that business a second,
+    // separate transfer for money it already received atomically at charge
+    // time.
+    const refundFnMatch = source.match(
+        /async function processFreightSettlementRefund\(\{[\s\S]*?\n\}\n/,
+    );
+    assert.ok(refundFnMatch, "processFreightSettlementRefund not found");
+    const refundFnSource = refundFnMatch[0];
+    assert.match(
+        refundFnSource,
+        /stripeChargeType: shipmentForRouting\.stripeChargeType \|\|/,
+    );
+    assert.match(
+        refundFnSource,
+        /shipmentForRouting\.stripeConnectedAccountId \|\| ""/,
+    );
+    assert.match(
+        refundFnSource,
+        /stripeFeeMode: shipmentForRouting\.stripeFeeMode \|\|/,
+    );
+  });
+
   it("guards unauthenticated barrel order completion recovery", () => {
     const source = fs.readFileSync(
         path.join(__dirname, "..", "index.js"),
