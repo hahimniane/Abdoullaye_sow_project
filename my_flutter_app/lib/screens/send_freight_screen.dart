@@ -14,6 +14,7 @@ import '../services/freight_shipment_service.dart';
 import '../utils/receiver_phone_rules.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
+import '../widgets/office_location_picker.dart';
 
 /// Customer screen to send a parcel/box by freight, priced by weight,
 /// by air or sea. Search-first: find a business + destination, then book.
@@ -55,6 +56,9 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   bool _pickupQuoting = false;
   String? _pickupError;
   Timer? _pickupDebounce;
+  // Which of the business's office locations to drop off at (when the
+  // business has more than one and pickup isn't requested).
+  String _officeLocationId = '';
   int _pickupQuoteId = 0;
 
   @override
@@ -182,6 +186,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     _pickupQuoting = false;
     _pickupError = null;
     _pickupAddressController.clear();
+    _officeLocationId = '';
   }
 
   void _schedulePickupQuote() {
@@ -350,6 +355,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         pickupDateTime: _pickupRequested
             ? _pickupDateTime!.toUtc().toIso8601String()
             : null,
+        officeLocationId: _pickupRequested ? null : _officeLocationId,
         marketplaceAcceptance: marketplaceAcceptance,
       );
       if (!mounted) return;
@@ -715,6 +721,14 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
               ),
               const SizedBox(height: 10),
               _pickupFeeStatus(theme, l10n),
+            ] else if (_selected != null) ...[
+              const SizedBox(height: 12),
+              OfficeLocationPicker(
+                businessId: _selected!.businessId,
+                fallbackAddress: _selected!.businessAddress ?? '',
+                selectedLocationId: _officeLocationId,
+                onChanged: (value) => setState(() => _officeLocationId = value),
+              ),
             ],
           ],
         ),

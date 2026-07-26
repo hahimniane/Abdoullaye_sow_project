@@ -1792,6 +1792,88 @@ async function requireBusinessPermission(uid, businessId, section) {
   return user;
 }
 
+// A business can register more than one physical office/drop-off location
+// (separate branches), stored as businesses/{id}/officeLocations/{id}. A
+// business with none configured yet falls back to its single main address so
+// "bring to office" keeps working without requiring every business to set
+// this up first.
+function defaultOfficeLocationFromBusiness(business) {
+  const address = [
+    business.addressLine1,
+    business.city,
+    business.state,
+    business.postalCode,
+  ]
+      .filter((part) => typeof part === "string" && part.trim())
+      .join(", ");
+  if (!address) return null;
+  return {
+    id: "default",
+    label: business.name || "Main office",
+    address,
+    isActive: true,
+  };
+}
+
+function formatOfficeLocationAddress(location) {
+  if (!location) return "";
+  return String(location.address || "").trim();
+}
+
+async function listBusinessOfficeLocations(db, businessId, business) {
+  const snapshot = await db.collection("businesses").doc(businessId)
+      .collection("officeLocations")
+      .where("isActive", "==", true)
+      .get();
+  const locations = snapshot.docs
+      .map((doc) => ({id: doc.id, ...doc.data()}))
+      .sort((a, b) => {
+        const order = Number(a.sortOrder || 0) - Number(b.sortOrder || 0);
+        if (order !== 0) return order;
+        return String(a.label || "").localeCompare(String(b.label || ""));
+      });
+  if (locations.length > 0) return locations;
+  const fallback = defaultOfficeLocationFromBusiness(business);
+  return fallback ? [fallback] : [];
+}
+
+// Resolves exactly which of a business's office locations a customer's
+// "bring to office" drop-off refers to. Requires an explicit choice only
+// when the business actually has more than one active location.
+async function resolveOfficeDropOffLocation({
+  db,
+  businessId,
+  business,
+  officeLocationId,
+}) {
+  const locations = await listBusinessOfficeLocations(db, businessId, business);
+  if (locations.length === 0) {
+    throw new HttpsError(
+        "failed-precondition",
+        "This business has no office location configured for drop-off yet.",
+    );
+  }
+  const requestedId = String(officeLocationId || "").trim();
+  if (requestedId) {
+    const match = locations.find((location) => location.id === requestedId);
+    if (!match) {
+      throw new HttpsError(
+          "invalid-argument",
+          "Select a valid office location for this business.",
+      );
+    }
+    return match;
+  }
+  if (locations.length > 1) {
+    throw new HttpsError(
+        "invalid-argument",
+        "This business has multiple office locations - " +
+          "select one for drop-off.",
+    );
+  }
+  return locations[0];
+}
+
 async function getApprovedBusinessDestination({businessId, countryId}) {
   const db = admin.firestore();
   const resolvedBusinessId = businessId || DEFAULT_BUSINESS_ID;
@@ -15312,6 +15394,7 @@ exports.createBarrelShipmentPaymentIntent = onCall(
         pickupAddress,
         pickupBorough,
         pickupDateTime,
+        officeLocationId,
         useWalletBalance,
       } = request.data || {};
 
@@ -15361,6 +15444,14 @@ exports.createBarrelShipmentPaymentIntent = onCall(
           pricingDoc.data(),
           business,
       );
+      const officeLocation = wantsPickup ?
+        null :
+        await resolveOfficeDropOffLocation({
+          db,
+          businessId: businessDestination.businessId,
+          business,
+          officeLocationId,
+        });
       const pickup = wantsPickup ?
         await computeBarrelPickupFee({
           pricing,
@@ -15368,7 +15459,7 @@ exports.createBarrelShipmentPaymentIntent = onCall(
           key: googleMapsApiKey.value(),
         }) :
         {
-          address: pricing.officeAddress,
+          address: formatOfficeLocationAddress(officeLocation),
           borough: "",
           serviceArea: "Office drop-off",
           model: null,
@@ -15396,7 +15487,7 @@ exports.createBarrelShipmentPaymentIntent = onCall(
       const now = FirestoreFieldValue.serverTimestamp();
       const cleanPickupAddress = wantsPickup ?
         pickup.address :
-        pricing.officeAddress;
+        formatOfficeLocationAddress(officeLocation);
       let walletAppliedCents = 0;
       await db.runTransaction(async (transaction) => {
         if (useWalletBalance === true) {
@@ -15434,6 +15525,10 @@ exports.createBarrelShipmentPaymentIntent = onCall(
           pickupModel: pickup.model,
           pickupMiles: pickup.distanceMiles || 0,
           pickupFee: pickup.fee,
+          ...(officeLocation && {
+            officeLocationId: officeLocation.id,
+            officeLocationLabel: officeLocation.label,
+          }),
           quantity: barrelQuantity,
           shippingFee: lineShippingFee,
           unitShippingFee: shippingFee,
@@ -15604,9 +15699,6 @@ exports.createBarrelOrderPaymentIntent = onCall(
         admin.auth().getUser(customerUid),
       ]);
       const pickupPricing = barrelPickupPricingFromData(pricingDoc.data());
-      const cleanPickupAddress = wantsPickup ?
-        String(pickupAddress).trim() :
-        pickupPricing.officeAddress;
       const pickupQuoteCache = new Map();
       const pickupQuoteForAddress = async (address) => {
         const key = String(address || "").trim().toLowerCase();
@@ -15636,9 +15728,6 @@ exports.createBarrelOrderPaymentIntent = onCall(
           line.pickupRequested === undefined ?
             wantsPickup :
             line.pickupRequested === true;
-        const linePickupAddress = lineWantsPickup ?
-          String(line.pickupAddress || pickupAddress || "").trim() :
-          pickupPricing.officeAddress;
         const linePickupBorough = lineWantsPickup ?
           String(line.pickupBorough || pickupBorough || "").trim() :
           "Office drop-off";
@@ -15656,6 +15745,23 @@ exports.createBarrelOrderPaymentIntent = onCall(
           );
         }
         requireValidPhoneNumber(receiverPhone, "Receiver phone");
+        const businessDestination = await getApprovedBusinessDestination({
+          businessId,
+          countryId: destinationCountryId,
+        });
+        const {business, country, shippingFee, deliveryEstimate} =
+          businessDestination;
+        const lineOfficeLocation = lineWantsPickup ?
+          null :
+          await resolveOfficeDropOffLocation({
+            db,
+            businessId: businessDestination.businessId,
+            business,
+            officeLocationId: line.officeLocationId,
+          });
+        const linePickupAddress = lineWantsPickup ?
+          String(line.pickupAddress || pickupAddress || "").trim() :
+          formatOfficeLocationAddress(lineOfficeLocation);
         if (
           lineWantsPickup &&
           (!linePickupAddress || !linePickupDateTime)
@@ -15671,7 +15777,7 @@ exports.createBarrelOrderPaymentIntent = onCall(
         const linePickup = lineWantsPickup ?
           await pickupQuoteForAddress(linePickupAddress) :
           {
-            address: pickupPricing.officeAddress,
+            address: formatOfficeLocationAddress(lineOfficeLocation),
             borough: "",
             serviceArea: "Office drop-off",
             model: null,
@@ -15679,12 +15785,6 @@ exports.createBarrelOrderPaymentIntent = onCall(
             fee: 0,
           };
         const linePickupFeeCents = Math.round(linePickup.fee * 100);
-        const businessDestination = await getApprovedBusinessDestination({
-          businessId,
-          countryId: destinationCountryId,
-        });
-        const {business, country, shippingFee, deliveryEstimate} =
-          businessDestination;
         const lineShippingFee =
           Math.round(shippingFee * quantity * 100) / 100;
         const lineShippingFeeCents = Math.round(lineShippingFee * 100);
@@ -15716,6 +15816,10 @@ exports.createBarrelOrderPaymentIntent = onCall(
           pickupModel: linePickup.model,
           pickupAppointment: linePickupAppointment,
           pickupMiles: linePickup.distanceMiles || 0,
+          officeLocationId: lineOfficeLocation ? lineOfficeLocation.id : null,
+          officeLocationLabel: lineOfficeLocation ?
+            lineOfficeLocation.label :
+            null,
           unitShippingFee: shippingFee,
           lineShippingFee,
           lineShippingFeeCents,
@@ -15737,6 +15841,18 @@ exports.createBarrelOrderPaymentIntent = onCall(
       if (!Number.isFinite(orderTotalCents) || orderTotalCents <= 0) {
         throw new HttpsError("failed-precondition", "Invalid order total");
       }
+
+      // Different lines can be different businesses with different office
+      // locations, so the order-level summary can only show one address
+      // when every drop-off line actually shares the same one.
+      const officeDropOffAddresses = new Set(
+          validatedLines
+              .filter((line) => !line.pickupRequested)
+              .map((line) => line.pickupAddress),
+      );
+      const sharedOfficeDropOffSummary = officeDropOffAddresses.size === 1 ?
+        [...officeDropOffAddresses][0] :
+        "Multiple office locations";
 
       const orderRef = db.collection("barrelOrders").doc();
       const shipmentRefs = validatedLines.map(() =>
@@ -15772,7 +15888,7 @@ exports.createBarrelOrderPaymentIntent = onCall(
           pickupRequested: validatedLines.some((line) => line.pickupRequested),
           pickupAddress: validatedLines.some((line) => line.pickupRequested) ?
             "See shipment pickup details" :
-            cleanPickupAddress,
+            sharedOfficeDropOffSummary,
           pickupBorough: validatedLines.some((line) => line.pickupRequested) ?
             "Multiple/line-specific" :
             "Office drop-off",
@@ -15830,6 +15946,10 @@ exports.createBarrelOrderPaymentIntent = onCall(
             pickupModel: line.pickupModel,
             pickupMiles: line.pickupMiles,
             pickupFee: dollarsFromCents(line.pickupFeeCents),
+            ...(line.officeLocationId && {
+              officeLocationId: line.officeLocationId,
+              officeLocationLabel: line.officeLocationLabel,
+            }),
             quantity: line.quantity,
             unitShippingFee: line.unitShippingFee,
             shippingFee: line.lineShippingFee,
@@ -16422,6 +16542,7 @@ exports.createFreightShipmentPaymentIntent = onCall(
         pickupLatitude,
         pickupLongitude,
         pickupDateTime,
+        officeLocationId,
         useWalletBalance,
       } = request.data || {};
 
@@ -16508,12 +16629,20 @@ exports.createFreightShipmentPaymentIntent = onCall(
       }
       const totalCents = Math.round(total * 100);
 
+      const officeLocation = wantsPickup ?
+        null :
+        await resolveOfficeDropOffLocation({
+          db,
+          businessId: freightDestination.businessId,
+          business,
+          officeLocationId,
+        });
       const shipmentRef = db.collection("freightShipments").doc();
       const trackingCode = await generateTrackingCode("FR", "freightShipments");
       const now = FirestoreFieldValue.serverTimestamp();
       const cleanPickupAddress = wantsPickup ?
         String(pickupAddress).trim() :
-        (pickupConfig.originAddress || business.addressLine1 || "");
+        formatOfficeLocationAddress(officeLocation);
       const connectReady =
         !!business.stripeAccountId && business.payoutsEnabled === true;
       const payoutFields = servicePayoutFields({
@@ -16566,6 +16695,10 @@ exports.createFreightShipmentPaymentIntent = onCall(
           pickupDistanceKm: pickup.distanceKm,
           pickupFee: pickup.fee,
           pickupFeeCents,
+          ...(officeLocation && {
+            officeLocationId: officeLocation.id,
+            officeLocationLabel: officeLocation.label,
+          }),
           shippingFee,
           estimatedShippingFee: shippingFee,
           estimatedShippingFeeCents: shippingFeeCents,

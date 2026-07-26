@@ -951,11 +951,22 @@ test("shipping UI uses the canonical server option, quote, request, and checkout
   );
   [
     "listActiveBarrelDestinationOptions",
-    "suggestPickupAddresses",
     "quoteFreightPickup",
     "listTransportBusinessOptions",
     "createTransportRequest",
   ].forEach((callable) => assert.match(source, new RegExp(`"${callable}"`)));
+  // Address entry is the shared AddressAutocomplete component (also used by
+  // the business console), which itself calls suggestPickupAddresses.
+  assert.match(source, /<AddressAutocomplete/);
+  assert.match(
+    source,
+    /import\s*\{[\s\S]*AddressAutocomplete[\s\S]*\}\s*from\s*"@\/components\/address-autocomplete"/,
+  );
+  const addressAutocompleteSource = readFileSync(
+    new URL("../components/address-autocomplete.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(addressAutocompleteSource, /"suggestPickupAddresses"/);
   assert.match(source, /startCheckout\(\s*"barrelShipment"/);
   assert.match(source, /startCheckout\(\s*"barrelOrder"/);
   assert.match(source, /startCheckout\(\s*"freightShipment"/);
@@ -973,14 +984,14 @@ test("shipping UI uses the canonical server option, quote, request, and checkout
 
 test("pickup address entry automatically exposes an accessible searchable suggestion list", () => {
   const source = readFileSync(
-    new URL("../components/customer-shipping-services.tsx", import.meta.url),
+    new URL("../components/address-autocomplete.tsx", import.meta.url),
     "utf8",
   );
   const styles = readFileSync(
     new URL("../app/globals.css", import.meta.url),
     "utf8",
   );
-  assert.match(source, /callFunction<AddressSuggestion\[\]>\("suggestPickupAddresses"/);
+  assert.match(source, /"suggestPickupAddresses"/);
   assert.match(source, /aria-autocomplete="list"/);
   assert.match(source, /role="combobox"/);
   assert.match(source, /role="listbox"/);

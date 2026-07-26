@@ -28,6 +28,10 @@ import {
   XCircle,
 } from "lucide-react";
 
+import {
+  AddressAutocomplete,
+  type AddressSuggestion,
+} from "@/components/address-autocomplete";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
 import { ServiceRequestForm } from "@/components/service-request-form";
@@ -107,11 +111,18 @@ type DestinationOption = {
   id: string;
   businessId: string;
   businessName: string;
+  businessAddress?: string;
   enabledServices?: readonly string[];
   businessStatus?: string;
   freightPickupAvailable?: boolean;
   freightPickupModel?: "borough" | "distance";
   country: DestinationCountry;
+};
+
+type OfficeLocationOption = {
+  id: string;
+  label: string;
+  address: string;
 };
 
 type DestinationLogisticsCountry = {
@@ -123,15 +134,6 @@ type DestinationLogisticsCountry = {
   freightSeaDeliveryEstimateMaxDays?: unknown;
   freightAirDepartureDays?: unknown;
   freightSeaDepartureDays?: unknown;
-};
-
-type AddressSuggestion = {
-  description: string;
-  placeId: string;
-  borough?: string;
-  formattedAddress?: string;
-  latitude?: number;
-  longitude?: number;
 };
 
 type FreightQuote = {
@@ -303,6 +305,53 @@ function selectedOption(
 
 function localDateTimeIso(value: string) {
   return new Date(value).toISOString();
+}
+
+// A business can register more than one physical office/drop-off location,
+// so "bring to office" needs to show/let the customer choose among that
+// specific business's own locations instead of one shared address.
+function useOfficeLocations(businessId: string) {
+  const [locations, setLocations] = useState<OfficeLocationOption[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!businessId) {
+      setLocations([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    return onSnapshot(
+      query(
+        collection(db, "businesses", businessId, "officeLocations"),
+        where("isActive", "==", true),
+      ),
+      (snapshot) => {
+        const rows = snapshot.docs
+          .map((item) => {
+            const data = item.data();
+            return {
+              id: item.id,
+              label: text(data.label, "Office"),
+              address: text(data.address, ""),
+              sortOrder: Number(data.sortOrder || 0),
+            };
+          })
+          .sort(
+            (a, b) =>
+              a.sortOrder - b.sortOrder || a.label.localeCompare(b.label),
+          );
+        setLocations(rows);
+        setLoading(false);
+      },
+      () => {
+        setLocations([]);
+        setLoading(false);
+      },
+    );
+  }, [businessId]);
+
+  return { locations, loading };
 }
 
 export function CustomerShippingServices({
@@ -594,9 +643,23 @@ function BarrelShipmentForm({
     : null;
   const pickupFee = pricing?.pickupFee ?? null;
   const estimatedTotal = pricing?.total ?? null;
+  const officeLocations = useOfficeLocations(destination?.businessId ?? "");
+  const [officeLocationId, setOfficeLocationId] = useState("");
+  useEffect(() => {
+    if (officeLocations.locations.length === 0) {
+      setOfficeLocationId("");
+    } else if (
+      !officeLocations.locations.some((location) => location.id === officeLocationId)
+    ) {
+      setOfficeLocationId(officeLocations.locations[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [officeLocations.locations]);
   const officeAddress =
-    pickupPricing?.officeAddress ??
-    DEFAULT_BARREL_PICKUP_PRICING.officeAddress;
+    officeLocations.locations.find((location) => location.id === officeLocationId)
+      ?.address ??
+    destination?.businessAddress ??
+    "the business office";
 
   useEffect(() => {
     let active = true;
@@ -676,6 +739,7 @@ function BarrelShipmentForm({
                 dateTime: localDateTimeIso(pickup.dateTime),
               }),
             },
+            officeLocationId,
             useWalletBalance,
           },
           marketplaceDisclosure(),
@@ -971,6 +1035,10 @@ function BarrelShipmentForm({
               <PickupFields
                 lockDetectedBorough
                 officeAddress={officeAddress}
+                officeLocations={officeLocations.locations}
+                officeLocationsLoading={officeLocations.loading}
+                selectedOfficeLocationId={officeLocationId}
+                onOfficeLocationChange={setOfficeLocationId}
                 pickup={pickup}
                 setPickup={setPickup}
                 suggestionsEnabled={authenticated}
@@ -1084,6 +1152,7 @@ type BarrelOrderLine = {
   quantity: number;
   pickup: PickupDetails;
   pickupQuote: BarrelPickupQuote | null;
+  officeLocationId: string;
 };
 
 function BarrelOrderForm({
@@ -1163,9 +1232,51 @@ function BarrelOrderForm({
             ? "Include the country calling code for a WhatsApp number."
             : "Enter a valid international phone number."
       : "";
-  const officeAddress =
-    pickupPricing?.officeAddress ??
-    DEFAULT_BARREL_PICKUP_PRICING.officeAddress;
+  const editorOfficeLocations = useOfficeLocations(destination?.businessId ?? "");
+  const [editorOfficeLocationId, setEditorOfficeLocationId] = useState("");
+  useEffect(() => {
+    if (editorOfficeLocations.locations.length === 0) {
+      setEditorOfficeLocationId("");
+    } else if (
+      !editorOfficeLocations.locations.some(
+        (location) => location.id === editorOfficeLocationId,
+      )
+    ) {
+      setEditorOfficeLocationId(editorOfficeLocations.locations[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorOfficeLocations.locations]);
+  const editorOfficeAddress =
+    editorOfficeLocations.locations.find(
+      (location) => location.id === editorOfficeLocationId,
+    )?.address ??
+    destination?.businessAddress ??
+    "the business office";
+  // The shared-pickup summary (used when lines don't set their own pickup)
+  // reflects the first destination's business, since that is the common
+  // single-business-order case.
+  const sharedOfficeLocations = useOfficeLocations(
+    lines[0]?.option.businessId ?? "",
+  );
+  const [sharedOfficeLocationId, setSharedOfficeLocationId] = useState("");
+  useEffect(() => {
+    if (sharedOfficeLocations.locations.length === 0) {
+      setSharedOfficeLocationId("");
+    } else if (
+      !sharedOfficeLocations.locations.some(
+        (location) => location.id === sharedOfficeLocationId,
+      )
+    ) {
+      setSharedOfficeLocationId(sharedOfficeLocations.locations[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedOfficeLocations.locations]);
+  const sharedOfficeAddress =
+    sharedOfficeLocations.locations.find(
+      (location) => location.id === sharedOfficeLocationId,
+    )?.address ??
+    lines[0]?.option.businessAddress ??
+    "the business office";
   const totalBarrels = lines.reduce(
     (total, line) => total + line.quantity,
     0,
@@ -1274,6 +1385,7 @@ function BarrelOrderForm({
       quantity,
       pickup: previous?.pickup ?? { ...sharedPickup },
       pickupQuote: previous?.pickupQuote ?? sharedPickupQuote,
+      officeLocationId: previous?.officeLocationId ?? editorOfficeLocationId,
     };
     setLines((current) =>
       editingIndex === null
@@ -1298,6 +1410,7 @@ function BarrelOrderForm({
     );
     setReceiverPhoneTouched(false);
     setQuantity(line.quantity);
+    setEditorOfficeLocationId(line.officeLocationId);
     setEditorOpen(true);
   }
 
@@ -1385,6 +1498,11 @@ function BarrelOrderForm({
               receiverName: line.receiverName,
               receiverPhone: line.receiverPhone,
               quantity: line.quantity,
+              // Office location always travels per line (it depends on that
+              // line's own business), even when pickup itself is shared.
+              officeLocationId: usesDifferentPickups
+                ? line.officeLocationId
+                : sharedOfficeLocationId,
               ...(usesDifferentPickups && {
                 pickup: {
                   ...line.pickup,
@@ -1807,7 +1925,11 @@ function BarrelOrderForm({
                 <PickupFields
                   idSuffix="shared-order"
                   lockDetectedBorough
-                  officeAddress={officeAddress}
+                  officeAddress={sharedOfficeAddress}
+                  officeLocations={sharedOfficeLocations.locations}
+                  officeLocationsLoading={sharedOfficeLocations.loading}
+                  selectedOfficeLocationId={sharedOfficeLocationId}
+                  onOfficeLocationChange={setSharedOfficeLocationId}
                   onAddressBlur={() => void quoteSharedPickup()}
                   onAddressSelected={(suggestion) =>
                     void quoteSharedPickup(
@@ -1834,63 +1956,50 @@ function BarrelOrderForm({
             ) : (
               <div className="customer-line-pickups">
                 {lines.map((line, index) => (
-                  <article className="customer-line-pickup" key={line.id}>
-                    <header>
-                      <span>Destination {index + 1}</span>
-                      <strong>
-                        {countryName(line.option.country)} ·{" "}
-                        {line.option.businessName}
-                      </strong>
-                    </header>
-                    <div className="customer-form-grid customer-shipping-form-grid">
-                      <PickupFields
-                        idSuffix={line.id}
-                        lockDetectedBorough
-                        officeAddress={officeAddress}
-                        onAddressBlur={() => void quoteLinePickup(line.id)}
-                        onAddressSelected={(suggestion) =>
-                          void quoteLinePickup(
-                            line.id,
-                            suggestion.formattedAddress ||
-                              suggestion.description,
-                          )
-                        }
-                        onPickupChanged={() => {
-                          setLines((current) =>
-                            current.map((item) =>
-                              item.id === line.id
-                                ? { ...item, pickupQuote: null }
-                                : item,
-                            ),
-                          );
-                          setPickupQuoteError("");
-                        }}
-                        pickup={line.pickup}
-                        setPickup={(pickup) =>
-                          setLines((current) =>
-                            current.map((item) =>
-                              item.id === line.id
-                                ? { ...item, pickup }
-                                : item,
-                            ),
-                          )
-                        }
-                        suggestionsEnabled
-                      />
-                      {line.pickup.requested && (
-                        <PickupAvailability
-                          error={
-                            quotingPickupId === line.id
-                              ? ""
-                              : pickupQuoteError
-                          }
-                          onRetry={() => void quoteLinePickup(line.id)}
-                          quote={line.pickupQuote}
-                          quoting={quotingPickupId === line.id}
-                        />
-                      )}
-                    </div>
-                  </article>
+                  <BarrelOrderLinePickup
+                    countryLabel={countryName(line.option.country)}
+                    index={index}
+                    key={line.id}
+                    line={line}
+                    onAddressSelected={(suggestion) =>
+                      void quoteLinePickup(
+                        line.id,
+                        suggestion.formattedAddress || suggestion.description,
+                      )
+                    }
+                    onOfficeLocationChange={(officeLocationId) =>
+                      setLines((current) =>
+                        current.map((item) =>
+                          item.id === line.id
+                            ? { ...item, officeLocationId }
+                            : item,
+                        ),
+                      )
+                    }
+                    onPickupBlur={() => void quoteLinePickup(line.id)}
+                    onPickupChanged={() => {
+                      setLines((current) =>
+                        current.map((item) =>
+                          item.id === line.id
+                            ? { ...item, pickupQuote: null }
+                            : item,
+                        ),
+                      );
+                      setPickupQuoteError("");
+                    }}
+                    pickupQuoteError={
+                      quotingPickupId === line.id ? "" : pickupQuoteError
+                    }
+                    quoting={quotingPickupId === line.id}
+                    onRetryPickupQuote={() => void quoteLinePickup(line.id)}
+                    setPickup={(pickup) =>
+                      setLines((current) =>
+                        current.map((item) =>
+                          item.id === line.id ? { ...item, pickup } : item,
+                        ),
+                      )
+                    }
+                  />
                 ))}
               </div>
             )}
@@ -1966,6 +2075,79 @@ function BarrelOrderForm({
         )}
       </div>
     </ServiceRequestForm>
+  );
+}
+
+function BarrelOrderLinePickup({
+  countryLabel,
+  index,
+  line,
+  onAddressSelected,
+  onOfficeLocationChange,
+  onPickupBlur,
+  onPickupChanged,
+  onRetryPickupQuote,
+  pickupQuoteError,
+  quoting,
+  setPickup,
+}: {
+  countryLabel: string;
+  index: number;
+  line: BarrelOrderLine;
+  onAddressSelected: (suggestion: AddressSuggestion) => void;
+  onOfficeLocationChange: (officeLocationId: string) => void;
+  onPickupBlur: () => void;
+  onPickupChanged: () => void;
+  onRetryPickupQuote: () => void;
+  pickupQuoteError: string;
+  quoting: boolean;
+  setPickup: (pickup: PickupDetails) => void;
+}) {
+  // Each destination line can be a different business, so its office
+  // locations must be looked up independently rather than sharing one hook
+  // call across the whole order.
+  const officeLocations = useOfficeLocations(line.option.businessId);
+  const officeAddress =
+    officeLocations.locations.find(
+      (location) => location.id === line.officeLocationId,
+    )?.address ??
+    line.option.businessAddress ??
+    "the business office";
+
+  return (
+    <article className="customer-line-pickup">
+      <header>
+        <span>Destination {index + 1}</span>
+        <strong>
+          {countryLabel} · {line.option.businessName}
+        </strong>
+      </header>
+      <div className="customer-form-grid customer-shipping-form-grid">
+        <PickupFields
+          idSuffix={line.id}
+          lockDetectedBorough
+          officeAddress={officeAddress}
+          officeLocations={officeLocations.locations}
+          officeLocationsLoading={officeLocations.loading}
+          selectedOfficeLocationId={line.officeLocationId}
+          onOfficeLocationChange={onOfficeLocationChange}
+          onAddressBlur={onPickupBlur}
+          onAddressSelected={onAddressSelected}
+          onPickupChanged={onPickupChanged}
+          pickup={line.pickup}
+          setPickup={setPickup}
+          suggestionsEnabled
+        />
+        {line.pickup.requested && (
+          <PickupAvailability
+            error={pickupQuoteError}
+            onRetry={onRetryPickupQuote}
+            quote={line.pickupQuote}
+            quoting={quoting}
+          />
+        )}
+      </div>
+    </article>
   );
 }
 
@@ -2116,6 +2298,23 @@ function FreightShipmentForm({
         weightKg,
       })
     : null;
+  const officeLocations = useOfficeLocations(destination?.businessId ?? "");
+  const [officeLocationId, setOfficeLocationId] = useState("");
+  useEffect(() => {
+    if (officeLocations.locations.length === 0) {
+      setOfficeLocationId("");
+    } else if (
+      !officeLocations.locations.some((location) => location.id === officeLocationId)
+    ) {
+      setOfficeLocationId(officeLocations.locations[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [officeLocations.locations]);
+  const officeAddress =
+    officeLocations.locations.find((location) => location.id === officeLocationId)
+      ?.address ??
+    destination?.businessAddress ??
+    "the business office";
 
   useEffect(() => {
     if (
@@ -2237,6 +2436,7 @@ function FreightShipmentForm({
                 dateTime: localDateTimeIso(pickup.dateTime),
               }),
             },
+            officeLocationId,
             useWalletBalance,
           },
           marketplaceDisclosure(),
@@ -2476,6 +2676,11 @@ function FreightShipmentForm({
               disabled={Boolean(destination && !pickupAllowed)}
               idSuffix="freight"
               lockDetectedBorough={!pickupUsesBoroughPricing}
+              officeAddress={officeAddress}
+              officeLocations={officeLocations.locations}
+              officeLocationsLoading={officeLocations.loading}
+              selectedOfficeLocationId={officeLocationId}
+              onOfficeLocationChange={setOfficeLocationId}
               onAddressSelected={(suggestion) => {
                 setPickupLocation(suggestion);
                 setQuote(null);
@@ -3807,6 +4012,10 @@ function PickupFields({
   idSuffix = "default",
   lockDetectedBorough = false,
   officeAddress = "the business office",
+  officeLocations = [],
+  officeLocationsLoading = false,
+  selectedOfficeLocationId = "",
+  onOfficeLocationChange,
   onAddressBlur,
   onAddressSelected,
   onPickupChanged,
@@ -3818,6 +4027,10 @@ function PickupFields({
   idSuffix?: string;
   lockDetectedBorough?: boolean;
   officeAddress?: string;
+  officeLocations?: OfficeLocationOption[];
+  officeLocationsLoading?: boolean;
+  selectedOfficeLocationId?: string;
+  onOfficeLocationChange?: (locationId: string) => void;
   onAddressBlur?: () => void;
   onAddressSelected?: (suggestion: AddressSuggestion) => void;
   onPickupChanged?: () => void;
@@ -3852,16 +4065,33 @@ function PickupFields({
         >
           <Store aria-hidden="true" size={17} /> Bring to office
         </button>
-        {!pickup.requested && (
-          <small className="customer-pickup-office">
-            {officeAddress === "the business office" ? (
-              <span>Drop off at the business office</span>
-            ) : (
-              <>
-                <span>Drop off at</span> {officeAddress}
-              </>
-            )}
-          </small>
+        {!pickup.requested && officeLocations.length > 1 ? (
+          <label className="customer-office-location-picker customer-form-span">
+            <span>Choose a location</span>
+            <select
+              onChange={(event) => onOfficeLocationChange?.(event.target.value)}
+              value={selectedOfficeLocationId}
+            >
+              {officeLocations.map((location) => (
+                <option key={location.id} value={location.id}>
+                  {location.label} — {location.address}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          !pickup.requested &&
+          !officeLocationsLoading && (
+            <small className="customer-pickup-office">
+              {officeAddress === "the business office" ? (
+                <span>Drop off at the business office</span>
+              ) : (
+                <>
+                  <span>Drop off at</span> {officeAddress}
+                </>
+              )}
+            </small>
+          )
         )}
       </fieldset>
       {pickup.requested && (
@@ -3948,218 +4178,6 @@ function PickupFields({
         </>
       )}
     </>
-  );
-}
-
-function AddressAutocomplete({
-  id,
-  label = "Pickup address",
-  onBlur,
-  onChange,
-  onSelect,
-  required = true,
-  suggestionsEnabled,
-  value,
-}: {
-  id: string;
-  label?: string;
-  onBlur?: () => void;
-  onChange: (value: string) => void;
-  onSelect: (suggestion: AddressSuggestion) => void;
-  required?: boolean;
-  suggestionsEnabled: boolean;
-  value: string;
-}) {
-  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [suggestionError, setSuggestionError] = useState(false);
-  const [searchedQuery, setSearchedQuery] = useState("");
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const [selectedAddress, setSelectedAddress] = useState("");
-  const [touched, setTouched] = useState(false);
-  const addressInvalid = required && touched && value.trim().length === 0;
-  const query = value.trim();
-  const listboxId = `${id}-suggestions`;
-
-  function selectSuggestion(suggestion: AddressSuggestion) {
-    const resolved =
-      suggestion.formattedAddress || suggestion.description;
-    setSelectedAddress(resolved);
-    setSuggestions([]);
-    setActiveIndex(-1);
-    onSelect(suggestion);
-  }
-
-  useEffect(() => {
-    if (
-      !suggestionsEnabled ||
-      query.length < 3 ||
-      query === selectedAddress
-    ) {
-      setSuggestions([]);
-      setLoading(false);
-      setSuggestionError(false);
-      setSearchedQuery("");
-      setActiveIndex(-1);
-      return;
-    }
-    let active = true;
-    const debounce = setTimeout(() => {
-      setLoading(true);
-      setSuggestionError(false);
-      void callFunction<AddressSuggestion[]>("suggestPickupAddresses", {
-        input: query,
-      })
-        .then((result) => {
-          if (!active) return;
-          setSuggestions(Array.isArray(result) ? result : []);
-          setSearchedQuery(query);
-          setActiveIndex(-1);
-        })
-        .catch(() => {
-          if (!active) return;
-          setSuggestions([]);
-          setSearchedQuery(query);
-          setSuggestionError(true);
-          setActiveIndex(-1);
-        })
-        .finally(() => {
-          if (active) setLoading(false);
-        });
-    }, 250);
-    return () => {
-      active = false;
-      clearTimeout(debounce);
-    };
-  }, [query, selectedAddress, suggestionsEnabled]);
-
-  return (
-    <div className="customer-address-field customer-form-span">
-      <label htmlFor={id}>{label}</label>
-      <div className="customer-address-control">
-        <MapPin aria-hidden="true" size={17} />
-        <input
-          aria-activedescendant={
-            activeIndex >= 0
-              ? `${listboxId}-option-${activeIndex}`
-              : undefined
-          }
-          aria-autocomplete="list"
-          aria-busy={loading}
-          aria-controls={suggestionsEnabled ? listboxId : undefined}
-          aria-describedby={
-            addressInvalid ? `${id}-error` : undefined
-          }
-          aria-expanded={suggestions.length > 0}
-          aria-invalid={addressInvalid}
-          autoComplete="off"
-          id={id}
-          required={required}
-          onBlur={() => {
-            setTouched(true);
-            onBlur?.();
-          }}
-          onChange={(event) => {
-            setSelectedAddress("");
-            setSuggestionError(false);
-            setSearchedQuery("");
-            setActiveIndex(-1);
-            onChange(event.target.value);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "ArrowDown" && suggestions.length > 0) {
-              event.preventDefault();
-              setActiveIndex((current) =>
-                Math.min(current + 1, suggestions.length - 1),
-              );
-            } else if (
-              event.key === "ArrowUp" &&
-              suggestions.length > 0
-            ) {
-              event.preventDefault();
-              setActiveIndex((current) =>
-                current <= 0 ? suggestions.length - 1 : current - 1,
-              );
-            } else if (
-              event.key === "Enter" &&
-              activeIndex >= 0 &&
-              suggestions[activeIndex]
-            ) {
-              event.preventDefault();
-              selectSuggestion(suggestions[activeIndex]);
-            } else if (event.key === "Escape") {
-              setSuggestions([]);
-              setActiveIndex(-1);
-            }
-          }}
-          placeholder={
-            suggestionsEnabled
-              ? "Start typing a pickup address"
-              : "Enter a pickup address"
-          }
-          role="combobox"
-          value={value}
-        />
-        {loading && <span className="loading-spinner" />}
-      </div>
-      {addressInvalid && (
-        <small
-          className="customer-field-error"
-          id={`${id}-error`}
-        >
-          Enter a complete pickup address.
-        </small>
-      )}
-      {suggestions.length > 0 && (
-        <div
-          aria-label="Address suggestions"
-          className="customer-address-suggestions"
-          id={listboxId}
-          role="listbox"
-        >
-          {suggestions.map((suggestion, index) => (
-            <button
-              aria-selected={activeIndex === index}
-              className={activeIndex === index ? "active" : ""}
-              id={`${listboxId}-option-${index}`}
-              key={suggestion.placeId}
-              onClick={() => selectSuggestion(suggestion)}
-              onMouseEnter={() => setActiveIndex(index)}
-              onMouseDown={(event) => event.preventDefault()}
-              role="option"
-              type="button"
-            >
-              <MapPin size={15} />
-              <span>
-                <strong>{suggestion.description}</strong>
-                {suggestion.borough && <small>{suggestion.borough}</small>}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-      {loading && (
-        <small className="customer-address-status" role="status">
-          Searching addresses...
-        </small>
-      )}
-      {!loading &&
-        !suggestionError &&
-        query.length >= 3 &&
-        searchedQuery === query &&
-        suggestions.length === 0 && (
-          <small className="customer-address-status" role="status">
-            No matching addresses. Keep typing or enter the complete address.
-          </small>
-        )}
-      {suggestionError && (
-        <small className="customer-address-status error" role="status">
-          {
-            "Address suggestions are unavailable. Enter the complete address to continue."
-          }
-        </small>
-      )}
-    </div>
   );
 }
 

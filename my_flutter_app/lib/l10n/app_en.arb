@@ -812,6 +812,20 @@
   },
   "selectDestinationCountries": "Select destination services",
   "manageDestinationsFees": "Manage destinations and services",
+  "officeLocations": "Office locations",
+  "addOfficeLocation": "Add office location",
+  "editOfficeLocation": "Edit office location",
+  "manageOfficeLocations": "Manage office locations",
+  "officeLocationHelp": "Where can customers physically drop off items?",
+  "addOfficeLocationsHelp": "Add at least one so customers can drop off items in person.",
+  "locationName": "Location name",
+  "activeOfficeLocationsCount": "{count} active office {count, plural, one{location} other{locations}}.",
+  "@activeOfficeLocationsCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "chooseALocation": "Choose a location",
   "servicesForDestination": "Services for this destination",
   "servicesForDestinationHelp": "Turn on only what this business offers for this country.",
   "enableBusinessServiceBeforeDestination": "Enable barrel shipping, freight, or car transport on the business profile before configuring destination coverage.",

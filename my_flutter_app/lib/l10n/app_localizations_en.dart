@@ -1966,6 +1966,43 @@ class AppLocalizationsEn extends AppLocalizations {
   String get manageDestinationsFees => 'Manage destinations and services';
 
   @override
+  String get officeLocations => 'Office locations';
+
+  @override
+  String get addOfficeLocation => 'Add office location';
+
+  @override
+  String get editOfficeLocation => 'Edit office location';
+
+  @override
+  String get manageOfficeLocations => 'Manage office locations';
+
+  @override
+  String get officeLocationHelp =>
+      'Where can customers physically drop off items?';
+
+  @override
+  String get addOfficeLocationsHelp =>
+      'Add at least one so customers can drop off items in person.';
+
+  @override
+  String get locationName => 'Location name';
+
+  @override
+  String activeOfficeLocationsCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'locations',
+      one: 'location',
+    );
+    return '$count active office $_temp0.';
+  }
+
+  @override
+  String get chooseALocation => 'Choose a location';
+
+  @override
   String get servicesForDestination => 'Services for this destination';
 
   @override

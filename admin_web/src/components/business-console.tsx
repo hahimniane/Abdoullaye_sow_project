@@ -30,6 +30,7 @@ import {
   DestinationsPanel,
   FreightPanel,
   ListingsPanel,
+  OfficeLocationsPanel,
   ParkingPanel,
   PurchasesPanel,
   TransportPanel,
@@ -449,13 +450,26 @@ export function BusinessConsole({
               />
               <div className="service-settings-summary coverage-summary">
                 <div>
+                  <strong>Office locations</strong>
+                  <span>
+                    Add every physical location customers can bring items to.
+                  </span>
+                </div>
+                <span className="service-settings-step">3 · Locations</span>
+              </div>
+              <OfficeLocationsPanel
+                businessId={businessId}
+                previewMode={previewMode}
+              />
+              <div className="service-settings-summary coverage-summary">
+                <div>
                   <strong>Country coverage &amp; route pricing</strong>
                   <span>
                     Choose countries, customer rates, departure days, and
                     delivery estimates.
                   </span>
                 </div>
-                <span className="service-settings-step">3 · Coverage</span>
+                <span className="service-settings-step">4 · Coverage</span>
               </div>
               <DestinationsPanel
                 businessId={businessId}

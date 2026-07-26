@@ -14,8 +14,11 @@ import '../l10n/app_localizations.dart';
 import '../models/business_profile.dart';
 import '../models/business_service.dart';
 import '../models/destination_country.dart';
+import '../models/office_location.dart';
 import '../providers/auth_provider.dart';
+import '../services/office_location_service.dart';
 import '../theme/app_colors.dart';
+import 'office_locations_screen.dart';
 import '../utils/business_profile_validation.dart';
 import '../utils/phone_number_validator.dart';
 import '../widgets/app_snackbars.dart';
@@ -789,6 +792,11 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                 ],
                 if (offersDestinationShipping) ...[
                   const SizedBox(height: 18),
+                  _OfficeLocationsPanel(
+                    businessId: business.id,
+                    canEdit: canEdit,
+                  ),
+                  const SizedBox(height: 18),
                   _DestinationSetupPanel(
                     businessId: business.id,
                     canEdit: canEdit,
@@ -893,6 +901,63 @@ class _DestinationSetupPanel extends StatelessWidget {
                   activeCountries.isEmpty
                       ? l10n.selectDestinationCountries
                       : l10n.manageDestinationsFees,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _OfficeLocationsPanel extends StatelessWidget {
+  const _OfficeLocationsPanel({
+    required this.businessId,
+    required this.canEdit,
+  });
+
+  final String businessId;
+  final bool canEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return _Panel(
+      title: l10n.officeLocations,
+      child: StreamBuilder<List<OfficeLocation>>(
+        stream: OfficeLocationService().allLocations(businessId),
+        builder: (context, snapshot) {
+          final locations = snapshot.data ?? const <OfficeLocation>[];
+          final activeCount = locations.where((item) => item.isActive).length;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                activeCount == 0
+                    ? l10n.addOfficeLocationsHelp
+                    : l10n.activeOfficeLocationsCount(activeCount),
+                style: const TextStyle(
+                  color: AppColors.muted,
+                  fontWeight: FontWeight.w700,
+                  height: 1.3,
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: canEdit
+                    ? () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              OfficeLocationsScreen(businessId: businessId),
+                        ),
+                      )
+                    : null,
+                icon: const Icon(Icons.storefront_outlined),
+                label: Text(
+                  locations.isEmpty
+                      ? l10n.addOfficeLocation
+                      : l10n.manageOfficeLocations,
                 ),
               ),
             ],

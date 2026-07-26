@@ -199,4 +199,44 @@ void main() {
     expect(line.toCallableJson().keys, isNot(contains('pickupAddress')));
     expect(line.toCallableJson().keys, isNot(contains('pickupDateTime')));
   });
+
+  test(
+    'barrel order line only serializes officeLocationId when a business office was chosen',
+    () {
+      final country = DestinationCountry(
+        id: 'guinea',
+        name: 'Guinea',
+        code: 'GN',
+        isActive: true,
+        barrelShippingPrice: 120,
+      );
+      final business = BusinessDestinationOption(
+        id: 'business-a-guinea',
+        businessId: 'business-a',
+        businessName: 'Business A',
+        country: country,
+      );
+      final withoutLocation = BarrelOrderLine(
+        country: country,
+        business: business,
+        receiverName: 'Receiver',
+        receiverPhone: '+2245550101',
+        quantity: 1,
+      );
+      expect(
+        withoutLocation.toCallableJson().keys,
+        isNot(contains('officeLocationId')),
+      );
+
+      final withLocation = withoutLocation.copyWith(
+        officeLocationId: 'bronx-warehouse',
+      );
+      expect(
+        withLocation.toCallableJson()['officeLocationId'],
+        'bronx-warehouse',
+      );
+      // copyWith without an override must preserve the existing value.
+      expect(withLocation.copyWith().officeLocationId, 'bronx-warehouse');
+    },
+  );
 }

@@ -43,6 +43,7 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { AddressAutocomplete } from "@/components/address-autocomplete";
 import { SearchableSelect } from "@/components/searchable-select";
 import { db, functions, storage } from "@/lib/firebase";
 import {
@@ -1052,6 +1053,206 @@ export function DestinationsPanel({
         </div>
       )}
     </section>
+  );
+}
+
+type OfficeLocationDraft = {
+  label: string;
+  address: string;
+};
+
+const emptyOfficeLocationDraft: OfficeLocationDraft = {
+  label: "",
+  address: "",
+};
+
+// Customers "bringing an item to office" need to pick which of a business's
+// physical locations to go to, so a business can register more than one
+// (separate branches) instead of a single implicit address.
+export function OfficeLocationsPanel({
+  businessId,
+  previewMode = false,
+}: PanelProps) {
+  const locations = useBusinessSubcollectionRows(
+    "officeLocations",
+    businessId,
+    Boolean(businessId && !previewMode),
+    50,
+  );
+  const [draft, setDraft] = useState<OfficeLocationDraft>(
+    emptyOfficeLocationDraft,
+  );
+  const [editingId, setEditingId] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+
+  const rows = useMemo(
+    () =>
+      [...locations.rows].sort((a, b) => {
+        const order = Number(a.sortOrder || 0) - Number(b.sortOrder || 0);
+        return order !== 0 ? order : text(a.label, "").localeCompare(text(b.label, ""));
+      }),
+    [locations.rows],
+  );
+
+  function openNew() {
+    setEditingId("");
+    setDraft(emptyOfficeLocationDraft);
+    setMessage("");
+    setFormOpen(true);
+  }
+  function closeForm() {
+    setEditingId("");
+    setDraft(emptyOfficeLocationDraft);
+    setMessage("");
+    setFormOpen(false);
+  }
+  function editLocation(row: FirestoreRow) {
+    setEditingId(row.id);
+    setDraft({
+      label: text(row.label, ""),
+      address: text(row.address, ""),
+    });
+    setMessage("");
+    setFormOpen(true);
+  }
+
+  async function saveLocation() {
+    if (!businessId) throw new Error("Business ID is required.");
+    const label = draft.label.trim();
+    const address = draft.address.trim();
+    if (!label) throw new Error("Enter a name for this location.");
+    if (!address) throw new Error("Enter an address.");
+    const ref = editingId
+      ? doc(db, "businesses", businessId, "officeLocations", editingId)
+      : doc(collection(db, "businesses", businessId, "officeLocations"));
+    const existing = rows.find((row) => row.id === editingId);
+    await setDoc(
+      ref,
+      {
+        businessId,
+        label,
+        address,
+        isActive: true,
+        sortOrder: Number(existing?.sortOrder ?? rows.length),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+    setEditingId("");
+    setDraft(emptyOfficeLocationDraft);
+    setFormOpen(false);
+    setMessage(`${label} saved.`);
+  }
+
+  async function toggleActive(row: FirestoreRow) {
+    await setDoc(
+      doc(db, "businesses", businessId, "officeLocations", row.id),
+      { isActive: !(row.isActive === true), updatedAt: serverTimestamp() },
+      { merge: true },
+    );
+  }
+
+  return (
+    <Panel
+      title="Office locations"
+      icon={<MapPinned size={18} />}
+      action={
+        <button className="lst-btn ghost" type="button" onClick={openNew}>
+          <Plus size={15} /> Add location
+        </button>
+      }
+    >
+      <p className="card-sub">
+        Customers choosing “bring to office” pick from these locations. Add
+        every branch customers can physically drop items off at.
+      </p>
+      {message && <div className="lst-form-error" role="alert">{message}</div>}
+      {locations.loading && <LoadingState />}
+      {!locations.loading && rows.length === 0 && (
+        <div className="lst-empty compact">
+          <h3>No office locations yet</h3>
+          <p>Add at least one so customers can drop off items in person.</p>
+          <button className="lst-add" type="button" onClick={openNew}><Plus size={17} /> Add your first location</button>
+        </div>
+      )}
+      {rows.length > 0 && (
+        <div className="row-list compact">
+          {rows.map((row) => (
+            <article className="data-row" key={row.id}>
+              <div>
+                <strong>{text(row.label, "Office")}</strong>
+                <small>{text(row.address, "") || "No address on file"}</small>
+              </div>
+              <span className={`status-pill compact ${row.isActive === true ? "" : "warning"}`}>
+                {row.isActive === true ? "Active" : "Paused"}
+              </span>
+              <div className="destination-row-actions">
+                <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => editLocation(row)}><Pencil size={14} /> Edit</button>
+                <button
+                  className={row.isActive === true ? "destination-pause" : "lst-btn ghost"}
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    runPanelAction(
+                      setBusy,
+                      setMessage,
+                      row.isActive === true ? "Location paused." : "Location reactivated.",
+                      () => toggleActive(row),
+                    )
+                  }
+                >
+                  {row.isActive === true ? "Pause" : "Reactivate"}
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+
+      {formOpen && (
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={() => { if (!busy) closeForm(); }}>
+          <div className="lst-modal" onClick={(event) => event.stopPropagation()}>
+            <header className="lst-modal-head">
+              <div>
+                <h3>{editingId ? "Edit location" : "Add office location"}</h3>
+                <p>Where can customers drop off items in person?</p>
+              </div>
+              <button className="lst-icon-btn" type="button" disabled={busy} onClick={closeForm} aria-label="Close"><X size={18} /></button>
+            </header>
+            <div className="lst-modal-body">
+              {message && <div className="lst-form-error" role="alert">{message}</div>}
+              <div className="lst-form-grid">
+                <label className="lst-field wide"><span>Location name</span>
+                  <input value={draft.label} onChange={(event) => setDraft((value) => ({ ...value, label: event.target.value }))} placeholder="e.g. Bronx Warehouse" />
+                </label>
+                <AddressAutocomplete
+                  id={`office-location-address-${editingId || "new"}`}
+                  label="Address"
+                  onChange={(address) => setDraft((value) => ({ ...value, address }))}
+                  onSelect={(suggestion) =>
+                    setDraft((value) => ({
+                      ...value,
+                      address: suggestion.formattedAddress || suggestion.description,
+                    }))
+                  }
+                  suggestionsEnabled
+                  value={draft.address}
+                />
+              </div>
+            </div>
+            <footer className="lst-modal-foot">
+              <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeForm}>Cancel</button>
+              <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => runPanelAction(setBusy, setMessage, "Location saved.", saveLocation)}>
+                {busy ? <RefreshCw className="spin" size={16} /> : <Save size={16} />}
+                {busy ? "Saving..." : "Save location"}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
+    </Panel>
   );
 }
 

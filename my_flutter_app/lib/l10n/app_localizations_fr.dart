@@ -2009,6 +2009,43 @@ class AppLocalizationsFr extends AppLocalizations {
   String get manageDestinationsFees => 'Gérer les destinations et services';
 
   @override
+  String get officeLocations => 'Lieux de dépôt';
+
+  @override
+  String get addOfficeLocation => 'Ajouter un lieu de dépôt';
+
+  @override
+  String get editOfficeLocation => 'Modifier le lieu de dépôt';
+
+  @override
+  String get manageOfficeLocations => 'Gérer les lieux de dépôt';
+
+  @override
+  String get officeLocationHelp =>
+      'Où les clients peuvent-ils déposer leurs articles en personne ?';
+
+  @override
+  String get addOfficeLocationsHelp =>
+      'Ajoutez-en au moins un pour que les clients puissent déposer leurs articles en personne.';
+
+  @override
+  String get locationName => 'Nom du lieu';
+
+  @override
+  String activeOfficeLocationsCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'lieux de dépôt actifs',
+      one: 'lieu de dépôt actif',
+    );
+    return '$count $_temp0.';
+  }
+
+  @override
+  String get chooseALocation => 'Choisissez un lieu';
+
+  @override
   String get servicesForDestination => 'Services pour cette destination';
 
   @override

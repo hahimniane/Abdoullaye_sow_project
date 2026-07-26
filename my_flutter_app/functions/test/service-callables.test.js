@@ -1888,6 +1888,108 @@ describe("barrel shipping service callable lifecycle", () => {
     );
   });
 
+  it("falls back to the business's main address when no office " +
+      "locations are configured",
+  async () => {
+    const businessId = "barrel-office-fallback";
+    await seedBusiness(businessId);
+    const created = await functions.createBarrelShipmentPaymentIntent.run({
+      auth: {uid: CUSTOMER_UID},
+      data: {
+        senderName: "Fallback Sender",
+        receiverName: "Fallback Receiver",
+        receiverPhone: "+224620000040",
+        destinationCountryId: COUNTRY_ID,
+        businessId,
+        quantity: 1,
+        pickupRequested: false,
+        useWalletBalance: false,
+      },
+    });
+    const shipment = await db.collection("barrelShipments")
+        .doc(created.shipmentId).get();
+    assert.equal(shipment.get("pickupAddress"), "100 Test Avenue, Bronx");
+    assert.equal(shipment.get("officeLocationId"), "default");
+  });
+
+  it("requires choosing among a business's multiple office locations",
+      async () => {
+        const businessId = "barrel-office-multiple";
+        await seedBusiness(businessId);
+        await db.collection("businesses").doc(businessId)
+            .collection("officeLocations").doc("bronx").set({
+              businessId,
+              label: "Bronx Warehouse",
+              address: "10 Bronx Way, Bronx, NY",
+              isActive: true,
+              sortOrder: 0,
+            });
+        await db.collection("businesses").doc(businessId)
+            .collection("officeLocations").doc("manhattan").set({
+              businessId,
+              label: "Manhattan Office",
+              address: "20 Manhattan Ave, New York, NY",
+              isActive: true,
+              sortOrder: 1,
+            });
+
+        const attempt = () => functions.createBarrelShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: {
+            senderName: "Multi Sender",
+            receiverName: "Multi Receiver",
+            receiverPhone: "+224620000041",
+            destinationCountryId: COUNTRY_ID,
+            businessId,
+            quantity: 1,
+            pickupRequested: false,
+            useWalletBalance: false,
+          },
+        });
+        await assert.rejects(attempt, /multiple office locations/);
+
+        await assert.rejects(
+            () => functions.createBarrelShipmentPaymentIntent.run({
+              auth: {uid: CUSTOMER_UID},
+              data: {
+                senderName: "Multi Sender",
+                receiverName: "Multi Receiver",
+                receiverPhone: "+224620000041",
+                destinationCountryId: COUNTRY_ID,
+                businessId,
+                quantity: 1,
+                pickupRequested: false,
+                officeLocationId: "not-a-real-location",
+                useWalletBalance: false,
+              },
+            }),
+            /Select a valid office location/,
+        );
+
+        const created = await functions.createBarrelShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: {
+            senderName: "Multi Sender",
+            receiverName: "Multi Receiver",
+            receiverPhone: "+224620000041",
+            destinationCountryId: COUNTRY_ID,
+            businessId,
+            quantity: 1,
+            pickupRequested: false,
+            officeLocationId: "manhattan",
+            useWalletBalance: false,
+          },
+        });
+        const shipment = await db.collection("barrelShipments")
+            .doc(created.shipmentId).get();
+        assert.equal(
+            shipment.get("pickupAddress"),
+            "20 Manhattan Ave, New York, NY",
+        );
+        assert.equal(shipment.get("officeLocationId"), "manhattan");
+        assert.equal(shipment.get("officeLocationLabel"), "Manhattan Office");
+      });
+
   it("creates one paid order with independent destination shipments",
       async () => {
         const businessId = "barrel-order-service-business";
@@ -2075,7 +2177,11 @@ describe("barrel shipping service callable lifecycle", () => {
             shipments.map((shipment) => shipment.get("pickupAddress")),
             [
               "123 Atlantic Ave, Brooklyn, NY 11201",
-              "Bronx Test Office",
+              // Office drop-off now resolves to the business's own address
+              // (no configured office locations, so it falls back to the
+              // business's main address) instead of the old shared global
+              // pricing-doc placeholder.
+              "100 Test Avenue, Bronx",
             ],
         );
         assert.deepEqual(

@@ -813,6 +813,20 @@
   },
   "selectDestinationCountries": "Sélectionner les services de destination",
   "manageDestinationsFees": "Gérer les destinations et services",
+  "officeLocations": "Lieux de dépôt",
+  "addOfficeLocation": "Ajouter un lieu de dépôt",
+  "editOfficeLocation": "Modifier le lieu de dépôt",
+  "manageOfficeLocations": "Gérer les lieux de dépôt",
+  "officeLocationHelp": "Où les clients peuvent-ils déposer leurs articles en personne ?",
+  "addOfficeLocationsHelp": "Ajoutez-en au moins un pour que les clients puissent déposer leurs articles en personne.",
+  "locationName": "Nom du lieu",
+  "activeOfficeLocationsCount": "{count} {count, plural, one{lieu de dépôt actif} other{lieux de dépôt actifs}}.",
+  "@activeOfficeLocationsCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "chooseALocation": "Choisissez un lieu",
   "servicesForDestination": "Services pour cette destination",
   "servicesForDestinationHelp": "Activez uniquement ce que cette entreprise propose pour ce pays.",
   "enableBusinessServiceBeforeDestination": "Activez l’expédition de barils, le fret ou le transport de véhicules dans le profil de l’entreprise avant de configurer la couverture des destinations.",

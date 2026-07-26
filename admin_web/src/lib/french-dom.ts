@@ -94,7 +94,33 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "Couverture par pays et tarification des itinéraires",
   "Choose countries, customer rates, departure days, and delivery estimates.":
     "Choisissez les pays, les tarifs clients, les jours de départ et les délais de livraison.",
-  "3 · Coverage": "3 · Couverture",
+  "4 · Coverage": "4 · Couverture",
+  "Office locations": "Lieux de dépôt",
+  "Add every physical location customers can bring items to.":
+    "Ajoutez chaque lieu physique où les clients peuvent apporter leurs articles.",
+  "3 · Locations": "3 · Lieux",
+  "Add location": "Ajouter un lieu",
+  "Customers choosing “bring to office” pick from these locations. Add every branch customers can physically drop items off at.":
+    "Les clients qui choisissent « apporter au bureau » choisissent parmi ces lieux. Ajoutez chaque succursale où les clients peuvent déposer leurs articles en personne.",
+  "No office locations yet": "Aucun lieu de dépôt pour le moment",
+  "Add at least one so customers can drop off items in person.":
+    "Ajoutez-en au moins un pour que les clients puissent déposer leurs articles en personne.",
+  "Add your first location": "Ajoutez votre premier lieu",
+  "No address on file": "Aucune adresse enregistrée",
+  Pause: "Suspendre",
+  Reactivate: "Réactiver",
+  "Location paused.": "Lieu suspendu.",
+  "Location reactivated.": "Lieu réactivé.",
+  "Edit location": "Modifier le lieu",
+  "Add office location": "Ajouter un lieu de dépôt",
+  "Where can customers drop off items in person?":
+    "Où les clients peuvent-ils déposer leurs articles en personne ?",
+  "Location name": "Nom du lieu",
+  "e.g. Bronx Warehouse": "p. ex. Entrepôt du Bronx",
+  "Enter a name for this location.": "Saisissez un nom pour ce lieu.",
+  "Enter an address.": "Saisissez une adresse.",
+  "Location saved.": "Lieu enregistré.",
+  "Save location": "Enregistrer le lieu",
   "Service settings saved": "Paramètres des services enregistrés",
   "Business profile is still loading.":
     "Le profil de l’entreprise est encore en cours de chargement.",
@@ -221,6 +247,7 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "Ajoutez chaque destination, entreprise, destinataire et quantité de barils à une seule commande.",
   "Add to order": "Ajouter à la commande",
   "Address suggestions": "Suggestions d’adresses",
+  "Choose a location": "Choisissez un lieu",
   "Address suggestions are unavailable. Enter the complete address to continue.":
     "Les suggestions d’adresses sont indisponibles. Saisissez l’adresse complète pour continuer.",
   "Almost there": "Vous y êtes presque",
@@ -242,11 +269,13 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Edit destination": "Modifier la destination",
   "Each pickup fee is shown for its destination shipment.":
     "Chaque frais de collecte est indiqué pour son expédition de destination.",
+  "Enter a complete address.": "Saisissez une adresse complète.",
   "Enter a complete pickup address.":
     "Saisissez une adresse de collecte complète.",
   "Enter a complete pickup address to check availability and price.":
     "Saisissez une adresse de collecte complète pour vérifier la disponibilité et le tarif.",
   "Enter a pickup address": "Saisissez une adresse de collecte",
+  "Enter an address": "Saisissez une adresse",
   "Enter a pickup address to see the complete total.":
     "Saisissez une adresse de collecte pour voir le total complet.",
   "How should these destination shipments be collected?":
@@ -262,6 +291,7 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Service area": "Zone desservie",
   "Start typing a pickup address":
     "Commencez à saisir une adresse de collecte",
+  "Start typing an address": "Commencez à saisir une adresse",
   "The barrel order could not be started. Check the details and try again.":
     "La commande de barils n’a pas pu être démarrée. Vérifiez les informations et réessayez.",
   "The shared pickup fee is charged once per destination shipment.":

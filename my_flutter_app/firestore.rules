@@ -210,17 +210,27 @@ service cloud.firestore {
           .data.customerUid == userId;
     }
 
-    function validDeliveryEstimate(data) {
+    // Each service (barrel/air/sea) has its own real-world transit time, so
+    // each gets an independent, independently-optional min/max pair.
+    function validServiceDeliveryEstimate(data, serviceKey) {
+      let minKey = serviceKey + 'DeliveryEstimateMinDays';
+      let maxKey = serviceKey + 'DeliveryEstimateMaxDays';
       return (
-          data.get('deliveryEstimateMinDays', null) == null &&
-          data.get('deliveryEstimateMaxDays', null) == null
+          data.get(minKey, null) == null &&
+          data.get(maxKey, null) == null
         ) ||
         (
-          data.get('deliveryEstimateMinDays', null) is int &&
-          data.get('deliveryEstimateMaxDays', null) is int &&
-          data.deliveryEstimateMinDays > 0 &&
-          data.deliveryEstimateMaxDays >= data.deliveryEstimateMinDays
+          data.get(minKey, null) is int &&
+          data.get(maxKey, null) is int &&
+          data.get(minKey, null) > 0 &&
+          data.get(maxKey, null) >= data.get(minKey, null)
         );
+    }
+
+    function validDeliveryEstimate(data) {
+      return validServiceDeliveryEstimate(data, 'barrelShipping') &&
+        validServiceDeliveryEstimate(data, 'freightAir') &&
+        validServiceDeliveryEstimate(data, 'freightSea');
     }
 
     function validDepartureDays(data, key) {
@@ -336,6 +346,20 @@ service cloud.firestore {
         data.isActive == hasService &&
         data.get('carTransportAvailable', false) ==
           destinationServiceEnabled(data, 'carTransport');
+    }
+
+    // A business can register more than one physical office/drop-off
+    // location (e.g. separate branches), so this is a subcollection rather
+    // than scalar fields on the business doc itself.
+    function validOfficeLocation(data, businessId) {
+      return data.businessId == businessId &&
+        data.get('label', '') is string &&
+        data.label.size() > 0 &&
+        data.label.size() <= 80 &&
+        data.get('address', '') is string &&
+        data.address.size() > 0 &&
+        data.address.size() <= 200 &&
+        data.get('isActive', true) is bool;
     }
 
     function validUserRoleState(data) {
@@ -771,11 +795,24 @@ service cloud.firestore {
           validDepartureDays(request.resource.data, 'freightSeaDepartureDays');
         allow delete: if false;
       }
+
+      match /officeLocations/{locationId} {
+        allow read: if get(/databases/$(database)/documents/businesses/$(businessId)).data.status == 'approved' ||
+          (request.auth != null && canManageBusiness(request.auth.uid, businessId));
+        allow create, update: if request.auth != null &&
+          canManageBusinessSection(request.auth.uid, businessId, 'profile') &&
+          validOfficeLocation(request.resource.data, businessId);
+        allow delete: if false;
+      }
     }
 
     match /destinationCountries/{countryId} {
       allow read: if true;
       allow write: if request.auth != null && isSuperAdmin(request.auth.uid);
+    }
+
+    match /{path=**}/officeLocations/{locationId} {
+      allow read: if request.auth != null && isAdmin(request.auth.uid);
     }
 
     match /{path=**}/destinationCountries/{countryId} {

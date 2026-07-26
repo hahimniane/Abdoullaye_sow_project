@@ -3674,6 +3674,60 @@ abstract class AppLocalizations {
   /// **'Manage destinations and services'**
   String get manageDestinationsFees;
 
+  /// No description provided for @officeLocations.
+  ///
+  /// In en, this message translates to:
+  /// **'Office locations'**
+  String get officeLocations;
+
+  /// No description provided for @addOfficeLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Add office location'**
+  String get addOfficeLocation;
+
+  /// No description provided for @editOfficeLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit office location'**
+  String get editOfficeLocation;
+
+  /// No description provided for @manageOfficeLocations.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage office locations'**
+  String get manageOfficeLocations;
+
+  /// No description provided for @officeLocationHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Where can customers physically drop off items?'**
+  String get officeLocationHelp;
+
+  /// No description provided for @addOfficeLocationsHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Add at least one so customers can drop off items in person.'**
+  String get addOfficeLocationsHelp;
+
+  /// No description provided for @locationName.
+  ///
+  /// In en, this message translates to:
+  /// **'Location name'**
+  String get locationName;
+
+  /// No description provided for @activeOfficeLocationsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} active office {count, plural, one{location} other{locations}}.'**
+  String activeOfficeLocationsCount(num count);
+
+  /// No description provided for @chooseALocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a location'**
+  String get chooseALocation;
+
   /// No description provided for @servicesForDestination.
   ///
   /// In en, this message translates to:

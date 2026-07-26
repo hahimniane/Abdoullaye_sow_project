@@ -16,6 +16,7 @@ class BarrelOrderLine {
     this.pickupFee = 0,
     this.pickupDateTime,
     this.hasPickupOverride = false,
+    this.officeLocationId = '',
   });
 
   final DestinationCountry country;
@@ -30,10 +31,31 @@ class BarrelOrderLine {
   final double pickupFee;
   final DateTime? pickupDateTime;
   final bool hasPickupOverride;
+  // Which of the business's office locations to drop off at, when this
+  // line isn't using courier pickup.
+  final String officeLocationId;
 
   double get unitShippingFee => country.barrelShippingPrice;
   double get shippingFee => unitShippingFee * quantity;
   double get lineTotal => shippingFee + pickupFee;
+
+  BarrelOrderLine copyWith({String? officeLocationId}) {
+    return BarrelOrderLine(
+      country: country,
+      business: business,
+      receiverName: receiverName,
+      receiverPhone: receiverPhone,
+      receiverPhoneIsWhatsappOnly: receiverPhoneIsWhatsappOnly,
+      quantity: quantity,
+      pickupRequested: pickupRequested,
+      pickupAddress: pickupAddress,
+      pickupBorough: pickupBorough,
+      pickupFee: pickupFee,
+      pickupDateTime: pickupDateTime,
+      hasPickupOverride: hasPickupOverride,
+      officeLocationId: officeLocationId ?? this.officeLocationId,
+    );
+  }
 
   Map<String, dynamic> toCallableJson() {
     return {
@@ -42,6 +64,7 @@ class BarrelOrderLine {
       'receiverName': receiverName,
       'receiverPhone': receiverPhone,
       'quantity': quantity,
+      if (officeLocationId.isNotEmpty) 'officeLocationId': officeLocationId,
       if (hasPickupOverride) ...{
         'pickupRequested': pickupRequested,
         'pickupAddress': pickupAddress,

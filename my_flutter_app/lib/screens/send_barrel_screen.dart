@@ -28,6 +28,7 @@ import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/destination_country_field.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
+import '../widgets/office_location_picker.dart';
 import '../theme/app_colors.dart';
 
 class SendBarrelScreen extends StatefulWidget {
@@ -49,6 +50,9 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
   BarrelPickupPricing _pickupPricing = BarrelPickupPricing.defaultPricing;
   bool _pickupRequested = true;
   bool _useDifferentPickupDetails = false;
+  // Office location for the shared (non-per-line) drop-off case, keyed to
+  // the first destination's business — the common single-business order.
+  String _sharedOfficeLocationId = '';
   bool _isSubmitting = false;
   bool _pricingLoaded = false;
   String _pickupBorough = 'Bronx';
@@ -218,7 +222,13 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
     });
 
     try {
-      final lines = List.of(_orderLines);
+      // Office location always travels per line (it depends on that line's
+      // own business), even when pickup itself is shared across the order.
+      final lines = _usesDifferentPickupDetails
+          ? List.of(_orderLines)
+          : _orderLines
+                .map((line) => line.copyWith(officeLocationId: _sharedOfficeLocationId))
+                .toList();
       final order = await _shipmentService.payForOrder(
         senderName: _senderNameController.text.trim(),
         lines: lines,
@@ -708,12 +718,32 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                                     ),
                                                   ],
                                                 )
-                                              : _OfficeDropOffTile(
+                                              : OfficeLocationPicker(
                                                   key: const ValueKey(
                                                     'shared-dropoff',
                                                   ),
-                                                  address: _pickupPricing
-                                                      .officeAddress,
+                                                  businessId: _orderLines
+                                                          .isNotEmpty
+                                                      ? _orderLines
+                                                            .first
+                                                            .business
+                                                            .businessId
+                                                      : '',
+                                                  fallbackAddress:
+                                                      _orderLines.isNotEmpty
+                                                      ? (_orderLines
+                                                                .first
+                                                                .business
+                                                                .businessAddress ??
+                                                            '')
+                                                      : '',
+                                                  selectedLocationId:
+                                                      _sharedOfficeLocationId,
+                                                  onChanged: (value) => setState(
+                                                    () =>
+                                                        _sharedOfficeLocationId =
+                                                            value,
+                                                  ),
                                                 ),
                                         ),
                                       ],
@@ -978,53 +1008,6 @@ class _FormSection extends StatelessWidget {
   }
 }
 
-class _OfficeDropOffTile extends StatelessWidget {
-  const _OfficeDropOffTile({super.key, required this.address});
-
-  final String address;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.lightSurfaceVariant,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.rule),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.storefront_outlined, color: AppColors.cobaltDeep),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  AppLocalizations.of(context)!.dropOffOffice,
-                  style: const TextStyle(
-                    color: AppColors.ink,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  address,
-                  style: const TextStyle(
-                    color: AppColors.muted,
-                    fontWeight: FontWeight.w600,
-                    height: 1.3,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _InlineNotice extends StatelessWidget {
   const _InlineNotice({required this.message});
@@ -2693,6 +2676,7 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
   bool _pickupRequested = true;
   String _pickupBorough = 'Bronx';
   DateTime? _pickupDateTime;
+  String _officeLocationId = '';
 
   @override
   void initState() {
@@ -2717,6 +2701,7 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
         ? initial!.pickupBorough
         : 'Bronx';
     _pickupDateTime = initial?.pickupDateTime;
+    _officeLocationId = initial?.officeLocationId ?? '';
   }
 
   @override
@@ -2820,6 +2805,10 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
         pickupFee: _pickupFee,
         pickupDateTime: _pickupRequested ? _pickupDateTime : null,
         hasPickupOverride: widget.collectPickupDetails,
+        officeLocationId:
+            widget.collectPickupDetails && !_pickupRequested
+                ? _officeLocationId
+                : '',
       ),
     );
   }
@@ -2889,6 +2878,7 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                           setState(() {
                             _country = country;
                             _business = null;
+                            _officeLocationId = '';
                             if (!_showWhatsapp) {
                               _receiverPhoneIsWhatsappOnly = false;
                             }
@@ -2900,8 +2890,10 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                         _BusinessOptionSelector(
                           countryId: _country!.id,
                           value: _business,
-                          onChanged: (option) =>
-                              setState(() => _business = option),
+                          onChanged: (option) => setState(() {
+                            _business = option;
+                            _officeLocationId = '';
+                          }),
                         ),
                       ],
                       const SizedBox(height: 14),
@@ -3040,9 +3032,14 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                                     ),
                                   ],
                                 )
-                              : _OfficeDropOffTile(
+                              : OfficeLocationPicker(
                                   key: const ValueKey('line-dropoff'),
-                                  address: widget.pickupPricing.officeAddress,
+                                  businessId: _business?.businessId ?? '',
+                                  fallbackAddress:
+                                      _business?.businessAddress ?? '',
+                                  selectedLocationId: _officeLocationId,
+                                  onChanged: (value) =>
+                                      setState(() => _officeLocationId = value),
                                 ),
                         ),
                       ],

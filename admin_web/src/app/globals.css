@@ -7184,6 +7184,27 @@ button[data-loading="true"]::before {
   font-weight: 700;
 }
 
+.customer-office-location-picker {
+  display: grid;
+  flex-basis: 100%;
+  gap: 6px;
+}
+
+.customer-office-location-picker > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.customer-office-location-picker select {
+  background: var(--paper-soft);
+  border: 1px solid var(--rule-strong, #b8d7d3);
+  border-radius: 10px;
+  font: inherit;
+  min-height: 46px;
+  padding: 0 12px;
+}
+
 .customer-address-field {
   display: grid;
   gap: 6px;

@@ -34,6 +34,7 @@ class FreightShipmentService {
     String? pickupAddress,
     String? pickupBorough,
     String? pickupDateTime,
+    String? officeLocationId,
     required MarketplaceDisclosureAcceptance marketplaceAcceptance,
   }) async {
     final response = await _functions
@@ -50,6 +51,8 @@ class FreightShipmentService {
           'pickupAddress': ?pickupAddress,
           'pickupBorough': ?pickupBorough,
           'pickupDateTime': ?pickupDateTime,
+          if (!pickupRequested && officeLocationId != null)
+            'officeLocationId': officeLocationId,
           'useWalletBalance': useWalletBalance,
           'marketplaceDisclosure': marketplaceAcceptance.toJson(),
         });
