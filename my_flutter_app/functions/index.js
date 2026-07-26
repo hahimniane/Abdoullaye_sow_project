@@ -3329,13 +3329,30 @@ async function createStripeCustomerCheckoutSession(params) {
       "line_items[0][price_data][product_data][name]",
       params.productName,
   );
-  if (params.customerEmail) {
+  // Stripe rejects a Checkout Session that sets both customer and
+  // customer_email - the Customer object (when present) already carries the
+  // email, so only fall back to customer_email without one.
+  if (params.customerEmail && !params.customerId) {
     body.set("customer_email", params.customerEmail);
   }
   if (params.applicationFeeAmount) {
     body.set(
         "payment_intent_data[application_fee_amount]",
         String(params.applicationFeeAmount),
+    );
+  }
+  // Same purpose as createStripePaymentIntent's customerId/setupFutureUsage -
+  // ties the card the customer enters on Stripe's hosted Checkout page to a
+  // Stripe Customer so it can be reused for an off-session charge later (see
+  // attemptAutomaticFreightBalanceCharge). Without this, the web redirect
+  // flow's PaymentIntent never gets a customer/setup_future_usage, and a
+  // later off-session confirm has no reusable payment method to fall back on.
+  if (params.customerId) {
+    body.set("customer", params.customerId);
+  }
+  if (params.setupFutureUsage) {
+    body.set(
+        "payment_intent_data[setup_future_usage]", params.setupFutureUsage,
     );
   }
   Object.entries(params.metadata).forEach(([key, value]) => {
@@ -5230,10 +5247,30 @@ exports.createCustomerCheckoutSession = onCall(
         checkoutOrderType: orderType,
         checkoutRecordId: recordId,
       };
+      // Only freight has a later off-session charge to reuse this for (see
+      // attemptAutomaticFreightBalanceCharge) - resolving a Stripe Customer
+      // for every checkout type would just create unused Stripe objects.
+      let checkoutStripeCustomerId;
+      if (orderType === "freightShipment") {
+        try {
+          checkoutStripeCustomerId = await ensureStripeCustomerId({
+            uid: customerUid,
+            email: request.auth?.token?.email || "",
+            connectedAccountId: checkoutConnectedAccountId,
+          });
+        } catch (error) {
+          logger.warn("Could not prepare a Stripe customer for checkout", {
+            recordId,
+            message: error.message,
+          });
+        }
+      }
       const session = await createStripeCustomerCheckoutSession({
         amount: Number(originalIntent.amount),
         currency: originalIntent.currency,
         customerEmail: request.auth?.token?.email || "",
+        customerId: checkoutStripeCustomerId,
+        setupFutureUsage: checkoutStripeCustomerId ? "off_session" : undefined,
         metadata: checkoutMetadata,
         originalPaymentIntentId,
         productName: action.productName,
@@ -17449,8 +17486,14 @@ exports.completeFreightShipmentPayment = onCall(
         paidAt: FirestoreFieldValue.serverTimestamp(),
         // Saved so a later weight-adjustment balance can be charged
         // automatically (see attemptAutomaticFreightBalanceCharge) without
-        // asking the customer to re-enter their card.
+        // asking the customer to re-enter their card. Read off the intent
+        // that actually succeeded rather than trusting what was set at
+        // creation time - the web redirect checkout flow re-creates a
+        // separate PaymentIntent via a Checkout Session, so the customer id
+        // set on the original embedded-flow intent isn't necessarily the one
+        // this payment method actually belongs to.
         stripePaymentMethodId: intent.payment_method || "",
+        stripeCustomerId: intent.customer || shipment.stripeCustomerId || "",
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
       if (!versionTwo) {

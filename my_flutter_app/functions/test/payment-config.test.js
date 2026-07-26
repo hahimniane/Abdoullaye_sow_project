@@ -206,6 +206,49 @@ describe("payment runtime configuration", () => {
     );
   });
 
+  it("saves a reusable card for freight through both payment paths", () => {
+    const source = fs.readFileSync(
+        path.join(__dirname, "..", "index.js"),
+        "utf8",
+    );
+    // A freight balance can only be charged automatically (see
+    // attemptAutomaticFreightBalanceCharge) if the estimate's card got
+    // attached to a Stripe Customer with setup_future_usage. Web pays via a
+    // Checkout Session (a separate PaymentIntent from the one
+    // createFreightShipmentPaymentIntent creates), so both paths - the
+    // embedded/client_secret flow AND the Checkout Session - must resolve
+    // and attach a customer, or web-originated shipments silently never get
+    // a reusable card while mobile-originated ones do.
+    assert.match(source, /customerId: stripeCustomerId \|\| undefined,/);
+    assert.match(
+        source,
+        /setupFutureUsage: stripeCustomerId \? "off_session" : undefined,/,
+    );
+    assert.match(
+        source,
+        /checkoutStripeCustomerId = await ensureStripeCustomerId\(/,
+    );
+    assert.match(
+        source,
+        /"payment_intent_data\[setup_future_usage\]", params\.setupFutureUsage/,
+    );
+    // Checkout Sessions reject setting both customer and customer_email -
+    // the fallback to customer_email must be conditioned on customerId being
+    // absent, not sent unconditionally alongside it.
+    assert.match(
+        source,
+        /if \(params\.customerEmail && !params\.customerId\)/,
+    );
+    // completeFreightShipmentPayment must read the customer/payment method
+    // off whichever PaymentIntent actually succeeded, not just whatever was
+    // set at estimate-creation time - the Checkout Session path re-creates a
+    // separate PaymentIntent the original customerId was never attached to.
+    assert.match(
+        source,
+        /intent\.customer \|\| shipment\.stripeCustomerId \|\| ""/,
+    );
+  });
+
   it("guards unauthenticated barrel order completion recovery", () => {
     const source = fs.readFileSync(
         path.join(__dirname, "..", "index.js"),
