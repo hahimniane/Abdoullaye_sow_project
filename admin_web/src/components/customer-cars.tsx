@@ -11,8 +11,27 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
-import { CalendarDays, Car, Heart, MapPin, X } from "lucide-react";
+import {
+  CalendarDays,
+  Car,
+  Fuel,
+  Gauge,
+  Heart,
+  MapPin,
+  Settings2,
+  ShieldCheck,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 
+import {
+  bodyTypeOptions,
+  conditionOptions,
+  drivetrainOptions,
+  fuelOptions,
+  optionLabel,
+  transmissionOptions,
+} from "@/components/business/operations-panels";
 import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { ServiceRequestForm } from "@/components/service-request-form";
@@ -37,6 +56,102 @@ type CustomerCarsProps = {
 
 type CarAction = "viewing" | "deposit" | "purchase";
 
+type CarSort =
+  | "newest"
+  | "priceLow"
+  | "priceHigh"
+  | "yearNew"
+  | "yearOld"
+  | "mileageLow"
+  | "mileageHigh";
+
+type CarFilters = {
+  make: string;
+  condition: string;
+  bodyType: string;
+  transmission: string;
+  fuelType: string;
+  drivetrain: string;
+  businessName: string;
+  location: string;
+  minYear: string;
+  maxYear: string;
+  minPrice: string;
+  maxPrice: string;
+  minMileage: string;
+  maxMileage: string;
+  sort: CarSort;
+};
+
+const emptyCarFilters: CarFilters = {
+  make: "",
+  condition: "",
+  bodyType: "",
+  transmission: "",
+  fuelType: "",
+  drivetrain: "",
+  businessName: "",
+  location: "",
+  minYear: "",
+  maxYear: "",
+  minPrice: "",
+  maxPrice: "",
+  minMileage: "",
+  maxMileage: "",
+  sort: "newest",
+};
+
+// Same scalar fields used by _CarFilters in
+// my_flutter_app/lib/screens/sell_cars_screen.dart, so the count matches
+// what a customer would see as "active" on mobile.
+function activeFilterCount(filters: CarFilters): number {
+  return [
+    filters.make,
+    filters.condition,
+    filters.bodyType,
+    filters.transmission,
+    filters.fuelType,
+    filters.drivetrain,
+    filters.businessName,
+    filters.location,
+    filters.minYear,
+    filters.maxYear,
+    filters.minPrice,
+    filters.maxPrice,
+    filters.minMileage,
+    filters.maxMileage,
+  ].filter((value) => value !== "").length + (filters.sort !== "newest" ? 1 : 0);
+}
+
+function uniqueValues(rows: FirestoreRow[], selector: (row: FirestoreRow) => string): string[] {
+  const values = new Set<string>();
+  for (const row of rows) {
+    const value = selector(row).trim();
+    if (value) values.add(value);
+  }
+  return Array.from(values).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+}
+
+function numberOrNull(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed.replace(/[^0-9.]/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function carYear(car: FirestoreRow): number | null {
+  return numberOrNull(text(car.year, ""));
+}
+
+function carMileage(car: FirestoreRow): number | null {
+  return numberOrNull(text(car.mileage, ""));
+}
+
+function carCreatedAtMillis(car: FirestoreRow): number {
+  const value = car.createdAt as { toMillis?: () => number } | undefined;
+  return typeof value?.toMillis === "function" ? value.toMillis() : 0;
+}
+
 export function CustomerCars({
   firebaseUser,
   authenticated = true,
@@ -45,6 +160,8 @@ export function CustomerCars({
   state,
 }: CustomerCarsProps) {
   const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<CarFilters>(emptyCarFilters);
+  const [showFilters, setShowFilters] = useState(false);
   const [selectedCar, setSelectedCar] = useState<FirestoreRow | null>(null);
   const [action, setAction] = useState<CarAction | null>(null);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
@@ -63,22 +180,82 @@ export function CustomerCars({
       );
   }, [firebaseUser]);
 
+  const makeOptions = useMemo(() => uniqueValues(state.rows, (car) => text(car.make, "")), [state.rows]);
+  const businessOptions = useMemo(
+    () => uniqueValues(state.rows, (car) => text(car.businessName, "")),
+    [state.rows],
+  );
+  const locationOptions = useMemo(() => uniqueValues(state.rows, carLocation), [state.rows]);
+
   const filteredCars = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    if (!needle) return state.rows;
-    return state.rows.filter((car) =>
-      [
-        car.title,
-        car.make,
-        car.model,
-        car.year,
-        car.businessName,
-        car.location,
-        car.locationCity,
-        car.locationState,
-      ].some((value) => text(value, "").toLowerCase().includes(needle)),
-    );
-  }, [search, state.rows]);
+    const minYear = numberOrNull(filters.minYear);
+    const maxYear = numberOrNull(filters.maxYear);
+    const minPrice = numberOrNull(filters.minPrice);
+    const maxPrice = numberOrNull(filters.maxPrice);
+    const minMileage = numberOrNull(filters.minMileage);
+    const maxMileage = numberOrNull(filters.maxMileage);
+
+    const rows = state.rows.filter((car) => {
+      const matchesSearch =
+        !needle ||
+        [
+          car.title,
+          car.make,
+          car.model,
+          car.year,
+          car.businessName,
+          car.location,
+          car.locationCity,
+          car.locationState,
+        ].some((value) => text(value, "").toLowerCase().includes(needle));
+      if (!matchesSearch) return false;
+
+      if (filters.make && text(car.make, "") !== filters.make) return false;
+      if (filters.condition && text(car.condition, "") !== filters.condition) return false;
+      if (filters.bodyType && text(car.bodyType, "") !== filters.bodyType) return false;
+      if (filters.transmission && text(car.transmission, "") !== filters.transmission) return false;
+      if (filters.fuelType && text(car.fuelType, "") !== filters.fuelType) return false;
+      if (filters.drivetrain && text(car.drivetrain, "") !== filters.drivetrain) return false;
+      if (filters.businessName && text(car.businessName, "") !== filters.businessName) return false;
+      if (filters.location && carLocation(car) !== filters.location) return false;
+
+      const year = carYear(car);
+      if (minYear !== null && (year === null || year < minYear)) return false;
+      if (maxYear !== null && (year === null || year > maxYear)) return false;
+
+      const price = numberOrNull(String(car.price ?? "")) ?? 0;
+      if (minPrice !== null && price < minPrice) return false;
+      if (maxPrice !== null && price > maxPrice) return false;
+
+      const mileage = carMileage(car);
+      if (minMileage !== null && (mileage === null || mileage < minMileage)) return false;
+      if (maxMileage !== null && (mileage === null || mileage > maxMileage)) return false;
+
+      return true;
+    });
+
+    const sorted = [...rows].sort((a, b) => {
+      switch (filters.sort) {
+        case "priceLow":
+          return (numberOrNull(String(a.price ?? "")) ?? 0) - (numberOrNull(String(b.price ?? "")) ?? 0);
+        case "priceHigh":
+          return (numberOrNull(String(b.price ?? "")) ?? 0) - (numberOrNull(String(a.price ?? "")) ?? 0);
+        case "mileageLow":
+          return (carMileage(a) ?? Number.MAX_SAFE_INTEGER) - (carMileage(b) ?? Number.MAX_SAFE_INTEGER);
+        case "mileageHigh":
+          return (carMileage(b) ?? -1) - (carMileage(a) ?? -1);
+        case "yearNew":
+          return (carYear(b) ?? 0) - (carYear(a) ?? 0);
+        case "yearOld":
+          return (carYear(a) ?? 0) - (carYear(b) ?? 0);
+        case "newest":
+        default:
+          return carCreatedAtMillis(b) - carCreatedAtMillis(a);
+      }
+    });
+    return sorted;
+  }, [search, state.rows, filters]);
 
   useEffect(() => {
     if (
@@ -124,6 +301,9 @@ export function CustomerCars({
     }
   }
 
+  const filterCount = activeFilterCount(filters);
+  const filtersActive = filterCount > 0;
+
   return (
     <section className="panel">
       <div className="panel-header customer-cars-header">
@@ -131,17 +311,190 @@ export function CustomerCars({
           <Car size={18} />
           <h2>Browse cars</h2>
         </div>
-        <span className="status-pill compact">{state.rows.length} listings</span>
+        <span className="status-pill compact">{filteredCars.length} listings</span>
       </div>
-      <label className="customer-car-search">
-        <span>Search car listings</span>
-        <input
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Make, model, year, business, or location"
-          type="search"
-          value={search}
-        />
-      </label>
+      <div className="customer-car-toolbar">
+        <label className="customer-car-search">
+          <span>Search car listings</span>
+          <input
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Make, model, year, business, or location"
+            type="search"
+            value={search}
+          />
+        </label>
+        <label className="customer-car-sort">
+          <span>Sort by</span>
+          <select
+            value={filters.sort}
+            onChange={(event) =>
+              setFilters((current) => ({ ...current, sort: event.target.value as CarSort }))
+            }
+          >
+            <option value="newest">Newest</option>
+            <option value="priceLow">Price: low to high</option>
+            <option value="priceHigh">Price: high to low</option>
+            <option value="yearNew">Year: newest first</option>
+            <option value="yearOld">Year: oldest first</option>
+            <option value="mileageLow">Mileage: low to high</option>
+            <option value="mileageHigh">Mileage: high to low</option>
+          </select>
+        </label>
+        <button
+          className={`secondary-button customer-filter-toggle ${filtersActive ? "active" : ""}`}
+          onClick={() => setShowFilters((value) => !value)}
+          type="button"
+        >
+          <SlidersHorizontal size={16} />
+          {filtersActive ? `Filters (${filterCount})` : "Filters"}
+        </button>
+      </div>
+      {showFilters && (
+        <div className="customer-car-filters">
+          <div className="customer-car-filters-grid">
+            <label>
+              <span>Make</span>
+              <select
+                value={filters.make}
+                onChange={(event) => setFilters((current) => ({ ...current, make: event.target.value }))}
+              >
+                <option value="">Any make</option>
+                {makeOptions.map((option) => (<option key={option} value={option}>{option}</option>))}
+              </select>
+            </label>
+            <label>
+              <span>Condition</span>
+              <select
+                value={filters.condition}
+                onChange={(event) => setFilters((current) => ({ ...current, condition: event.target.value }))}
+              >
+                <option value="">Any condition</option>
+                {conditionOptions.map((option) => (<option key={option} value={option}>{optionLabel(option)}</option>))}
+              </select>
+            </label>
+            <label>
+              <span>Body type</span>
+              <select
+                value={filters.bodyType}
+                onChange={(event) => setFilters((current) => ({ ...current, bodyType: event.target.value }))}
+              >
+                <option value="">Any body type</option>
+                {bodyTypeOptions.map((option) => (<option key={option} value={option}>{optionLabel(option)}</option>))}
+              </select>
+            </label>
+            <label>
+              <span>Transmission</span>
+              <select
+                value={filters.transmission}
+                onChange={(event) => setFilters((current) => ({ ...current, transmission: event.target.value }))}
+              >
+                <option value="">Any transmission</option>
+                {transmissionOptions.map((option) => (<option key={option} value={option}>{optionLabel(option)}</option>))}
+              </select>
+            </label>
+            <label>
+              <span>Fuel type</span>
+              <select
+                value={filters.fuelType}
+                onChange={(event) => setFilters((current) => ({ ...current, fuelType: event.target.value }))}
+              >
+                <option value="">Any fuel type</option>
+                {fuelOptions.map((option) => (<option key={option} value={option}>{optionLabel(option)}</option>))}
+              </select>
+            </label>
+            <label>
+              <span>Drivetrain</span>
+              <select
+                value={filters.drivetrain}
+                onChange={(event) => setFilters((current) => ({ ...current, drivetrain: event.target.value }))}
+              >
+                <option value="">Any drivetrain</option>
+                {drivetrainOptions.map((option) => (<option key={option} value={option}>{optionLabel(option)}</option>))}
+              </select>
+            </label>
+            <label>
+              <span>Business</span>
+              <select
+                value={filters.businessName}
+                onChange={(event) => setFilters((current) => ({ ...current, businessName: event.target.value }))}
+              >
+                <option value="">Any business</option>
+                {businessOptions.map((option) => (<option key={option} value={option}>{option}</option>))}
+              </select>
+            </label>
+            <label>
+              <span>Location</span>
+              <select
+                value={filters.location}
+                onChange={(event) => setFilters((current) => ({ ...current, location: event.target.value }))}
+              >
+                <option value="">Any location</option>
+                {locationOptions.map((option) => (<option key={option} value={option}>{option}</option>))}
+              </select>
+            </label>
+            <label className="customer-car-filter-range">
+              <span>Year</span>
+              <div>
+                <input
+                  inputMode="numeric"
+                  onChange={(event) => setFilters((current) => ({ ...current, minYear: event.target.value }))}
+                  placeholder="Min"
+                  value={filters.minYear}
+                />
+                <input
+                  inputMode="numeric"
+                  onChange={(event) => setFilters((current) => ({ ...current, maxYear: event.target.value }))}
+                  placeholder="Max"
+                  value={filters.maxYear}
+                />
+              </div>
+            </label>
+            <label className="customer-car-filter-range">
+              <span>Price</span>
+              <div>
+                <input
+                  inputMode="numeric"
+                  onChange={(event) => setFilters((current) => ({ ...current, minPrice: event.target.value }))}
+                  placeholder="Min $"
+                  value={filters.minPrice}
+                />
+                <input
+                  inputMode="numeric"
+                  onChange={(event) => setFilters((current) => ({ ...current, maxPrice: event.target.value }))}
+                  placeholder="Max $"
+                  value={filters.maxPrice}
+                />
+              </div>
+            </label>
+            <label className="customer-car-filter-range">
+              <span>Mileage</span>
+              <div>
+                <input
+                  inputMode="numeric"
+                  onChange={(event) => setFilters((current) => ({ ...current, minMileage: event.target.value }))}
+                  placeholder="Min"
+                  value={filters.minMileage}
+                />
+                <input
+                  inputMode="numeric"
+                  onChange={(event) => setFilters((current) => ({ ...current, maxMileage: event.target.value }))}
+                  placeholder="Max"
+                  value={filters.maxMileage}
+                />
+              </div>
+            </label>
+          </div>
+          {filtersActive && (
+            <button
+              className="link-button"
+              onClick={() => setFilters(emptyCarFilters)}
+              type="button"
+            >
+              Clear all filters
+            </button>
+          )}
+        </div>
+      )}
       {(state.error || error) && (
         <div className="error-box">
           {state.error ? "Car listings could not be loaded." : error}
@@ -154,12 +507,15 @@ export function CustomerCars({
         </div>
       )}
       {!state.loading && state.rows.length > 0 && filteredCars.length === 0 && (
-        <div className="empty-state">No cars match your search.</div>
+        <div className="empty-state">No cars match your search and filters.</div>
       )}
       <div className="customer-car-grid">
         {filteredCars.map((car) => {
           const imageUrl = carImage(car);
           const favorite = favorites.has(car.id);
+          const mileage = text(car.mileage, "");
+          const transmission = text(car.transmission, "");
+          const fuelType = text(car.fuelType, "");
           return (
             <article className="customer-car-card" key={car.id}>
               <div className="customer-car-photo">
@@ -171,6 +527,9 @@ export function CustomerCars({
                     <Car size={28} />
                   </div>
                 )}
+                {car.condition ? (
+                  <span className="customer-car-badge">{optionLabel(text(car.condition, ""))}</span>
+                ) : null}
                 <button
                   aria-label={
                     favorite ? "Remove car from favorites" : "Add car to favorites"
@@ -184,6 +543,7 @@ export function CustomerCars({
                 >
                   <Heart fill={favorite ? "currentColor" : "none"} size={18} />
                 </button>
+                <div className="customer-car-photo-price">{formatMoney(car.price)}</div>
               </div>
               <div className="customer-car-card-body">
                 <div>
@@ -193,21 +553,24 @@ export function CustomerCars({
                     {carLocation(car)}
                   </p>
                 </div>
-                <strong>{formatMoney(car.price)}</strong>
-                <dl className="customer-car-facts">
-                  <div>
-                    <dt>Business</dt>
-                    <dd>{text(car.businessName, "Approved business")}</dd>
-                  </div>
-                  <div>
-                    <dt>Condition</dt>
-                    <dd>{text(car.condition, "Not provided")}</dd>
-                  </div>
-                  <div>
-                    <dt>Rebuilt title</dt>
-                    <dd>{rebuiltTitle(car.isRebuiltTitle)}</dd>
-                  </div>
-                </dl>
+                <div className="customer-car-chip-row">
+                  {mileage && (
+                    <span className="customer-car-chip">
+                      <Gauge size={13} /> {mileage} mi
+                    </span>
+                  )}
+                  {transmission && (
+                    <span className="customer-car-chip">
+                      <Settings2 size={13} /> {optionLabel(transmission)}
+                    </span>
+                  )}
+                  {fuelType && (
+                    <span className="customer-car-chip">
+                      <Fuel size={13} /> {optionLabel(fuelType)}
+                    </span>
+                  )}
+                </div>
+                <p className="customer-car-business">{text(car.businessName, "Approved business")}</p>
                 <button
                   className="secondary-button"
                   onClick={() => {
@@ -258,6 +621,10 @@ function CarDetail({
   onClose: () => void;
   profile: UserProfile;
 }) {
+  const images = useMemo(() => carImages(car), [car]);
+  const [activeImage, setActiveImage] = useState(0);
+  useEffect(() => setActiveImage(0), [car.id]);
+
   return (
     <div className="account-overlay" role="presentation">
       <button
@@ -274,7 +641,6 @@ function CarDetail({
         <div className="account-drawer-head">
           <div>
             <h2>{carTitle(car)}</h2>
-            <p>{formatMoney(car.price)}</p>
           </div>
           <button
             aria-label="Close car details"
@@ -297,30 +663,58 @@ function CarDetail({
           />
         ) : (
           <>
-            {carImage(car) ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                alt={carTitle(car)}
-                className="customer-car-detail-image"
-                src={carImage(car)}
-              />
-            ) : (
-              <div className="listing-photo-placeholder customer-car-detail-image">
-                <Car size={36} />
-              </div>
-            )}
-            <dl className="row-detail-grid">
-              <Detail label="Business" value={text(car.businessName, "Approved business")} />
-              <Detail label="Location" value={carLocation(car)} />
-              <Detail label="Year" value={text(car.year, "Not provided")} />
-              <Detail label="Mileage" value={text(car.mileage, "Not provided")} />
-              <Detail label="Condition" value={text(car.condition, "Not provided")} />
-              <Detail label="Body type" value={text(car.bodyType, "Not provided")} />
-              <Detail label="Fuel" value={text(car.fuelType, "Not provided")} />
-              <Detail label="Transmission" value={text(car.transmission, "Not provided")} />
-              <Detail label="Rebuilt title" value={rebuiltTitle(car.isRebuiltTitle)} />
-            </dl>
-            {car.description && <p>{text(car.description)}</p>}
+            <div className="customer-car-gallery">
+              {images.length > 0 ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  alt={carTitle(car)}
+                  className="customer-car-detail-image"
+                  src={images[activeImage]}
+                />
+              ) : (
+                <div className="listing-photo-placeholder customer-car-detail-image">
+                  <Car size={36} />
+                </div>
+              )}
+              {images.length > 1 && (
+                <div className="customer-car-gallery-thumbs">
+                  {images.map((url, index) => (
+                    <button
+                      aria-label={`Show photo ${index + 1}`}
+                      className={`customer-car-thumb ${index === activeImage ? "active" : ""}`}
+                      key={url}
+                      onClick={() => setActiveImage(index)}
+                      type="button"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img alt="" src={url} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="customer-car-detail-price-row">
+              <strong className="customer-car-detail-price">{formatMoney(car.price)}</strong>
+              {car.isRebuiltTitle === false && (
+                <span className="customer-car-chip good">
+                  <ShieldCheck size={13} /> Clean title
+                </span>
+              )}
+            </div>
+            <div className="customer-car-fact-grid">
+              <FactTile icon={MapPin} label="Location" value={carLocation(car)} />
+              <FactTile icon={CalendarDays} label="Year" value={text(car.year, "Not provided")} />
+              <FactTile icon={Gauge} label="Mileage" value={text(car.mileage, "Not provided")} />
+              <FactTile icon={Car} label="Body type" value={optionLabelOrFallback(car.bodyType)} />
+              <FactTile icon={Fuel} label="Fuel" value={optionLabelOrFallback(car.fuelType)} />
+              <FactTile icon={Settings2} label="Transmission" value={optionLabelOrFallback(car.transmission)} />
+              <FactTile icon={ShieldCheck} label="Condition" value={optionLabelOrFallback(car.condition)} />
+              <FactTile icon={ShieldCheck} label="Rebuilt title" value={rebuiltTitle(car.isRebuiltTitle)} />
+            </div>
+            <p className="customer-car-business-line">
+              Sold by <strong>{text(car.businessName, "Approved business")}</strong>
+            </p>
+            {car.description && <p className="customer-car-description">{text(car.description)}</p>}
             <div className="customer-car-actions">
               <button
                 className="primary-button"
@@ -531,9 +925,46 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
+function FactTile({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof MapPin;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="customer-car-fact-tile">
+      <Icon size={16} />
+      <div>
+        <dt>{label}</dt>
+        <dd>{value}</dd>
+      </div>
+    </div>
+  );
+}
+
+function optionLabelOrFallback(value: unknown) {
+  const label = optionLabel(text(value, ""));
+  return label || "Not provided";
+}
+
 function carImage(car: FirestoreRow) {
   const images = Array.isArray(car.imageUrls) ? car.imageUrls : [];
   return text(car.imageUrl ?? images[0], "");
+}
+
+function carImages(car: FirestoreRow): string[] {
+  const images = Array.isArray(car.imageUrls) ? car.imageUrls : [];
+  const urls = new Set<string>();
+  const primary = text(car.imageUrl, "");
+  if (primary) urls.add(primary);
+  for (const value of images) {
+    const url = text(value, "");
+    if (url) urls.add(url);
+  }
+  return Array.from(urls);
 }
 
 function carTitle(car: FirestoreRow) {

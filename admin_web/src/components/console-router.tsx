@@ -27,6 +27,20 @@ import { useFrenchDomTranslation } from "@/lib/french-dom";
 import { isValidPhone } from "@/lib/phone";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
 
+const previewCustomerUser = {
+  uid: "customer-preview",
+  email: "customer@example.com",
+  phoneNumber: "+12015550100",
+} as User;
+
+const previewCustomerProfile: UserProfile = {
+  id: "customer-preview",
+  role: "customer",
+  fullName: "Preview Customer",
+  email: "customer@example.com",
+  phone: "+12015550100",
+};
+
 const previewBusinessUser = {
   uid: "business-preview",
   email: "owner@atlanticexports.com",
@@ -189,7 +203,7 @@ export function ConsoleRouter() {
   const [booting, setBooting] = useState(true);
   const [authError, setAuthError] = useState("");
   const [previewMode, setPreviewMode] = useState(false);
-  const [previewConsole, setPreviewConsole] = useState<"admin" | "business">("admin");
+  const [previewConsole, setPreviewConsole] = useState<"admin" | "business" | "customer">("admin");
   const [previewStripeState, setPreviewStripeState] = useState<PreviewStripeState>("none");
   const [profileRetry, setProfileRetry] = useState(0);
   const [serviceIntent, setServiceIntent] = useState(
@@ -208,7 +222,10 @@ export function ConsoleRouter() {
     if (localPreview) {
       setPreviewMode(true);
       const requestedConsole = url.searchParams.get("console");
-      setPreviewConsole(requestedConsole === "business" ? "business" : "admin");
+      setPreviewConsole(
+        requestedConsole === "business" ? "business" :
+        requestedConsole === "customer" ? "customer" : "admin",
+      );
       setPreviewStripeState(resolvePreviewStripeState(url.searchParams.get("stripe")));
       setBooting(false);
       return undefined;
@@ -260,6 +277,15 @@ export function ConsoleRouter() {
           firebaseUser={previewBusinessUser}
           profile={previewBusinessProfile}
           previewBusiness={businessForPreviewStripeState(previewStripeState)}
+          onSignOut={() => setPreviewMode(false)}
+        />
+      );
+    }
+    if (previewConsole === "customer") {
+      return (
+        <CustomerConsole
+          firebaseUser={previewCustomerUser}
+          profile={previewCustomerProfile}
           onSignOut={() => setPreviewMode(false)}
         />
       );

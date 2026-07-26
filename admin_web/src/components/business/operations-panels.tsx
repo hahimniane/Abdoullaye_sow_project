@@ -191,16 +191,16 @@ const listingStatuses = ["draft", "active", "reserved", "sold", "inactive"];
 // Car attribute option lists — kept in sync with the mobile listing form
 // (my_flutter_app/lib/screens/staff_car_management_screen.dart). These power the
 // same customer-facing filters as the app.
-const conditionOptions = ["new", "used", "certified", "salvage"];
-const bodyTypeOptions = ["sedan", "suv", "truck", "van", "coupe", "hatchback", "wagon", "convertible"];
-const transmissionOptions = ["automatic", "manual", "cvt"];
-const fuelOptions = ["gas", "diesel", "hybrid", "electric", "plug_in_hybrid"];
-const drivetrainOptions = ["fwd", "rwd", "awd", "4wd"];
+export const conditionOptions = ["new", "used", "certified", "salvage"];
+export const bodyTypeOptions = ["sedan", "suv", "truck", "van", "coupe", "hatchback", "wagon", "convertible"];
+export const transmissionOptions = ["automatic", "manual", "cvt"];
+export const fuelOptions = ["gas", "diesel", "hybrid", "electric", "plug_in_hybrid"];
+export const drivetrainOptions = ["fwd", "rwd", "awd", "4wd"];
 const colorOptions = ["black", "white", "silver", "gray", "red", "blue", "green", "yellow", "brown", "beige", "gold", "orange", "purple", "burgundy", "other"];
 const featureOptions = ["backup_camera", "bluetooth", "leather_seats", "sunroof", "navigation", "heated_seats", "apple_carplay", "android_auto", "blind_spot", "third_row", "remote_start", "keyless_entry"];
 
 const ACRONYMS = new Set(["suv", "cvt", "vin", "fwd", "rwd", "awd", "4wd"]);
-function optionLabel(value: string) {
+export function optionLabel(value: string) {
   const labels: Record<"en" | "fr", Record<string, string>> = {
     en: {
       automatic: "Automatic",
