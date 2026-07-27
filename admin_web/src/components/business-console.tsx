@@ -18,6 +18,7 @@ import {
   Package,
   ParkingCircle,
   Search,
+  Settings,
   Sparkles,
   Star,
   Truck,
@@ -41,6 +42,12 @@ import {
   BusinessServicesPanel,
 } from "@/components/business/profile-support-people";
 import { SupportCasesPanel } from "@/components/support/support-cases-panel";
+import { NotificationBell } from "@/components/notification-bell";
+import { ToggleRow } from "@/components/toggle-row";
+import {
+  mergeNotificationPreferences,
+  notificationPreferenceFields,
+} from "@/lib/notification-preferences";
 import { useBusinessCollection, useBusinessStaff } from "@/lib/business-data";
 import {
   buildBusinessSidebarGroups,
@@ -76,6 +83,88 @@ const serviceLabels: Record<string, string> = {
 };
 
 const businessSidebarStorageKey = "laawol:business-sidebar-pins";
+
+function tabForNotification(type: string): BusinessTab {
+  switch (type) {
+    case "support_message":
+    case "support_escalated":
+      return "cases";
+    case "business_verification_review":
+    case "business_verification_document":
+    case "business_application_status":
+      return "profile";
+    case "barrel_shipment_status":
+      return "barrels";
+    case "freight_shipment_status":
+    case "freight_balance_due":
+    case "freight_refund_issued":
+      return "freight";
+    case "parking_reservation_status":
+      return "parking";
+    default:
+      return "today";
+  }
+}
+
+function NotificationPreferencesPanel({ profile }: { profile: UserProfile }) {
+  const [prefs, setPrefs] = useState(() =>
+    mergeNotificationPreferences(profile.notificationPreferences),
+  );
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+
+  async function save() {
+    if (saving) return;
+    setSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      await httpsCallable(functions, "updateNotificationPreferences")({
+        notificationPreferences: prefs,
+      });
+      setNotice("Notification preferences saved.");
+    } catch {
+      setError("Your preferences could not be saved. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="panel">
+      <div className="panel-header">
+        <div><Settings size={18} /><h2>Your notification preferences</h2></div>
+      </div>
+      {error && <div className="error-box">{error}</div>}
+      {notice && <div className="info-band">{notice}</div>}
+      <div className="toggle-list">
+        {notificationPreferenceFields.map((field) => (
+          <ToggleRow
+            key={field.key}
+            label={field.label}
+            hint={field.hint}
+            checked={prefs[field.key]}
+            onChange={(value) =>
+              setPrefs((current) => ({ ...current, [field.key]: value }))
+            }
+          />
+        ))}
+      </div>
+      <div className="customer-profile-actions">
+        <button
+          className="primary-button"
+          data-loading={saving}
+          disabled={saving}
+          onClick={() => void save()}
+          type="button"
+        >
+          {saving ? "Saving..." : "Save preferences"}
+        </button>
+      </div>
+    </section>
+  );
+}
 
 export function BusinessConsole({
   firebaseUser,
@@ -310,6 +399,11 @@ export function BusinessConsole({
               {profile.role === "businessOwner" ? "Owner" : "Staff"}
             </span>
           </div>
+          <NotificationBell
+            enabled={Boolean(firebaseUser.uid) && !previewMode}
+            onSelect={(data) => setActiveTab(tabForNotification(data.type ?? ""))}
+            uid={firebaseUser.uid}
+          />
           <button
             className="icon-button"
             onClick={handleSignOut}
@@ -406,7 +500,10 @@ export function BusinessConsole({
             />
           )}
           {activeTab === "profile" && (
-            <BusinessProfilePanel businessId={businessId} business={business} />
+            <>
+              <BusinessProfilePanel businessId={businessId} business={business} />
+              <NotificationPreferencesPanel profile={profile} />
+            </>
           )}
           {activeTab === "listings" && (
             <ListingsPanel

@@ -64,7 +64,9 @@ import {
   X,
 } from "lucide-react";
 
+import { NotificationBell } from "@/components/notification-bell";
 import { SearchableSelect } from "@/components/searchable-select";
+import { ToggleRow } from "@/components/toggle-row";
 import { COUNTRY_CATALOG } from "@/lib/country-catalog";
 import { auth, db, functions, storage } from "@/lib/firebase";
 import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
@@ -121,6 +123,21 @@ const tabs = [
 ] as const;
 
 type Tab = (typeof tabs)[number];
+
+function tabForNotification(type: string): Tab {
+  switch (type) {
+    case "support_message":
+    case "support_escalated":
+      return "support";
+    case "business_application":
+    case "business_application_status":
+    case "business_verification_document":
+    case "business_verification_review":
+      return "businesses";
+    default:
+      return "today";
+  }
+}
 
 const navGroups: Array<{ label: string; tabs: Tab[] }> = [
   { label: "Overview", tabs: ["today"] },
@@ -2679,6 +2696,11 @@ export function AdminConsole() {
             </span>
             <span className="admin-role-tag">{perms.label}</span>
           </button>
+          <NotificationBell
+            enabled={Boolean(firebaseUser?.uid) && !previewMode}
+            onSelect={(data) => setActiveTab(tabForNotification(data.type ?? ""))}
+            uid={firebaseUser?.uid ?? ""}
+          />
           <button
             className="icon-button"
             onClick={handleSignOut}
@@ -5309,37 +5331,6 @@ function mergeGeneral(
       ...((d.notifications as object) ?? {}),
     },
   };
-}
-
-function ToggleRow({
-  label,
-  hint,
-  checked,
-  onChange,
-}: {
-  label: string;
-  hint?: string;
-  checked: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <div className="toggle-row">
-      <span className="toggle-text">
-        <b>{label}</b>
-        {hint && <small>{hint}</small>}
-      </span>
-      <button
-        type="button"
-        className={`switch ${checked ? "on" : ""}`}
-        role="switch"
-        aria-checked={checked}
-        aria-label={label}
-        onClick={() => onChange(!checked)}
-      >
-        <span className="knob" />
-      </button>
-    </div>
-  );
 }
 
 function MoreSettings({

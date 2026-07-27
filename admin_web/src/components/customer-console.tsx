@@ -45,6 +45,12 @@ import { customerCarListingIsEligible } from "@/lib/customer-service-eligibility
 import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
 import { CustomerCars } from "@/components/customer-cars";
+import { NotificationBell } from "@/components/notification-bell";
+import { ToggleRow } from "@/components/toggle-row";
+import {
+  mergeNotificationPreferences,
+  notificationPreferenceFields,
+} from "@/lib/notification-preferences";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { CustomerParkingPools } from "@/components/customer-parking-pools";
 import { CustomerShippingServices } from "@/components/customer-shipping-services";
@@ -113,6 +119,25 @@ const tabs: Array<{
   { id: "support", label: "Support", description: "Messages about your orders", icon: Headphones },
   { id: "profile", label: "Profile", description: "Account and security", icon: UserRound },
 ];
+
+function tabForNotification(type: string): CustomerTab {
+  switch (type) {
+    case "wallet_refund_status":
+      return "wallet";
+    case "support_message":
+    case "support_escalated":
+      return "support";
+    case "car_purchase_status":
+    case "barrel_shipment_status":
+    case "freight_shipment_status":
+    case "freight_balance_due":
+    case "freight_refund_issued":
+    case "parking_reservation_status":
+      return "orders";
+    default:
+      return "home";
+  }
+}
 
 export function CustomerConsole({
   firebaseUser,
@@ -203,6 +228,11 @@ export function CustomerConsole({
             </span>
             <span className="admin-role-tag">Customer</span>
           </div>
+          <NotificationBell
+            enabled={Boolean(firebaseUser.uid)}
+            onSelect={(data) => setActiveTab(tabForNotification(data.type ?? ""))}
+            uid={firebaseUser.uid}
+          />
           <button
             aria-label="Sign out"
             className="icon-button"
@@ -580,6 +610,9 @@ function WalletView({ state }: { state: WalletState }) {
 function ProfileView({ firebaseUser, profile }: { firebaseUser: User; profile: UserProfile }) {
   const [fullName, setFullName] = useState(text(profile.fullName, ""));
   const [phone, setPhone] = useState(text(profile.phone, ""));
+  const [prefs, setPrefs] = useState(() =>
+    mergeNotificationPreferences(profile.notificationPreferences),
+  );
   const [saving, setSaving] = useState(false);
   const [verificationId, setVerificationId] = useState("");
   const [verificationPhone, setVerificationPhone] = useState("");
@@ -634,16 +667,7 @@ function ProfileView({ firebaseUser, profile }: { firebaseUser: User; profile: U
       await httpsCallable(functions, "updateCustomerProfile")({
         fullName: fullName.trim(),
         phone: phone.trim(),
-        notificationPreferences:
-          profile.notificationPreferences ?? {
-            channels: { push: true, email: true, sms: false },
-            categories: {
-              orders: true,
-              payments: true,
-              support: true,
-              marketing: false,
-            },
-          },
+        notificationPreferences: prefs,
       });
       setNotice("Profile saved.");
     } catch {
@@ -880,6 +904,37 @@ function ProfileView({ firebaseUser, profile }: { firebaseUser: User; profile: U
             <div id="customer-phone-recaptcha" />
           </div>
         )}
+      </section>
+      <section className="panel">
+        <div className="panel-header">
+          <div><Settings size={18} /><h2>Notification preferences</h2></div>
+        </div>
+        {error && <div className="error-box">{error}</div>}
+        {notice && <div className="info-band">{notice}</div>}
+        <div className="toggle-list">
+          {notificationPreferenceFields.map((field) => (
+            <ToggleRow
+              key={field.key}
+              label={field.label}
+              hint={field.hint}
+              checked={prefs[field.key]}
+              onChange={(value) =>
+                setPrefs((current) => ({ ...current, [field.key]: value }))
+              }
+            />
+          ))}
+        </div>
+        <div className="customer-profile-actions">
+          <button
+            className="primary-button"
+            data-loading={saving}
+            disabled={saving || !fullName.trim() || !isValidPhone(phone)}
+            onClick={() => void saveProfile()}
+            type="button"
+          >
+            {saving ? "Saving..." : "Save preferences"}
+          </button>
+        </div>
       </section>
       <section className="panel customer-danger-zone">
         <div className="panel-header"><div><h2>Delete account</h2></div></div>

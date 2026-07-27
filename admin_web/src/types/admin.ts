@@ -27,6 +27,7 @@ export type UserProfile = FirestoreRow & {
   hasProfile?: boolean;
   disabled?: boolean;
   emailVerified?: boolean | null;
+  notificationPreferences?: Record<string, boolean>;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 };

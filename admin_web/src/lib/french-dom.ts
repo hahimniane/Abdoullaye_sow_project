@@ -3233,6 +3233,33 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Impossible de charger davantage de personnes. Réessayez.",
   "Marketplace-wide people search could not be completed.":
     "La recherche de personnes dans toute la place de marché n’a pas pu être effectuée.",
+  Notifications: "Notifications",
+  "Mark all read": "Tout marquer comme lu",
+  "No notifications yet": "Aucune notification pour le moment",
+  "Notification preferences": "Préférences de notification",
+  "Your notification preferences": "Vos préférences de notification",
+  "Save preferences": "Enregistrer les préférences",
+  "Notification preferences saved.": "Préférences de notification enregistrées.",
+  "Your preferences could not be saved. Try again.":
+    "Vos préférences n’ont pas pu être enregistrées. Réessayez.",
+  "Alerts sent to your phone or browser":
+    "Alertes envoyées à votre téléphone ou navigateur",
+  "Updates sent to your email address":
+    "Mises à jour envoyées à votre adresse courriel",
+  "Text messages for account activity":
+    "Messages texte pour l’activité du compte",
+  "Car purchase and reservation updates":
+    "Mises à jour des achats et réservations de véhicules",
+  "Purchases, parking, and reservation status":
+    "État des achats, du stationnement et des réservations",
+  "Shipment updates": "Mises à jour des expéditions",
+  "Barrel and freight shipment status":
+    "État des expéditions de barils et de fret",
+  "Wallet updates": "Mises à jour du portefeuille",
+  "Refund and balance changes": "Remboursements et changements de solde",
+  "Business updates": "Mises à jour de l’entreprise",
+  "Application, verification, and account status":
+    "État de la candidature, de la vérification et du compte",
 };
 
 const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
