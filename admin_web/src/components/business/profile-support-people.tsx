@@ -141,6 +141,29 @@ const businessPermissionOptions = [
   {id: "growth", label: "Growth"},
 ];
 
+// Which service must be active before a permission actually does anything.
+// Not enforced server-side and not disabled here - a business can still grant
+// this ahead of turning the service on, so staff already have access the
+// moment it goes live instead of needing a second invite/edit round trip.
+const businessPermissionRequiredService: Partial<Record<string, string>> = {
+  barrels: "barrelShipping",
+  freight: "freight",
+  transport: "carTransport",
+  parking: "carParking",
+  listings: "carSales",
+  purchases: "carSales",
+};
+
+function businessOffersService(
+  business: FirestoreRow | null | undefined,
+  serviceId: string,
+) {
+  const services = Array.isArray(business?.enabledServices) ?
+    business.enabledServices.map((item) => text(item, "")) :
+    [];
+  return services.includes(serviceId);
+}
+
 const serviceOptions = [
   {
     id: "barrelShipping",
@@ -1519,6 +1542,7 @@ export function BusinessPeoplePanel({
         {rows.map((row) => (
           <StaffRow
             key={`${row._path ?? row.id}`}
+            business={business}
             canManageStaff={canManageStaff}
             row={row}
             saving={busy}
@@ -1550,9 +1574,18 @@ export function BusinessPeoplePanel({
                   <div className="lst-chips wide">
                     {businessPermissionOptions.map((permission) => {
                       const on = draft.businessPermissions.includes(permission.id);
+                      const requiredService =
+                        businessPermissionRequiredService[permission.id];
+                      const notYetOffered = Boolean(
+                        requiredService &&
+                          !businessOffersService(business, requiredService),
+                      );
                       return (
                         <button key={permission.id} type="button" className={`lst-chip ${on ? "on" : ""}`} onClick={() => update({ businessPermissions: togglePermission(draft.businessPermissions, permission.id, !on) })}>
                           {permission.label}
+                          {notYetOffered && (
+                            <small className="lst-chip-note"> · not yet offered</small>
+                          )}
                         </button>
                       );
                     })}
@@ -1576,12 +1609,14 @@ export function BusinessPeoplePanel({
 
 function StaffRow({
   row,
+  business,
   canManageStaff,
   saving,
   setPermissions,
   savePermissions,
 }: {
   row: FirestoreRow;
+  business?: FirestoreRow | null;
   canManageStaff: boolean;
   saving: boolean;
   setPermissions: (permissions: string[]) => void;
@@ -1618,6 +1653,12 @@ function StaffRow({
           <div className="lst-chips">
             {businessPermissionOptions.map((permission) => {
               const on = permissions.includes(permission.id);
+              const requiredService =
+                businessPermissionRequiredService[permission.id];
+              const notYetOffered = Boolean(
+                requiredService &&
+                  !businessOffersService(business, requiredService),
+              );
               return (
                 <button
                   key={permission.id}
@@ -1627,6 +1668,9 @@ function StaffRow({
                   onClick={() => toggle(permission.id, !on)}
                 >
                   {permission.label}
+                  {notYetOffered && (
+                    <small className="lst-chip-note"> · not yet offered</small>
+                  )}
                 </button>
               );
             })}

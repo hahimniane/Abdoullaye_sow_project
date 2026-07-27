@@ -156,6 +156,29 @@ function businessPermissionLabel(permission: string) {
     : permission.charAt(0).toUpperCase() + permission.slice(1);
 }
 
+// Which service must be active before a permission actually does anything.
+// Not enforced/disabled here - a business can grant it ahead of turning the
+// service on, so staff already have access the moment it goes live instead
+// of needing a second invite/edit round trip.
+const businessPermissionRequiredService: Partial<Record<string, string>> = {
+  barrels: "barrelShipping",
+  freight: "freight",
+  transport: "carTransport",
+  parking: "carParking",
+  listings: "carSales",
+  purchases: "carSales",
+};
+
+function businessOffersService(
+  business: FirestoreRow | null | undefined,
+  serviceId: string,
+) {
+  const services = Array.isArray(business?.enabledServices)
+    ? business.enabledServices.map((item) => text(item, ""))
+    : [];
+  return services.includes(serviceId);
+}
+
 // ---- Admin roles & privileges (RBAC) ----
 // Roles are fully dynamic: super admins create/edit them in Settings and they
 // are stored in Firestore (platformConfig/permissions). Each role grants each
@@ -7838,26 +7861,45 @@ function CreatePersonForms({
                         adjusted later.
                       </p>
                       <div>
-                        {businessStaffPermissionOptions.map((permission) => (
-                          <label key={permission}>
-                            <input
-                              checked={businessPermissions.includes(
-                                permission,
-                              )}
-                              onChange={(event) =>
-                                setBusinessPermissions((current) =>
-                                  event.target.checked
-                                    ? [...current, permission]
-                                    : current.filter(
-                                        (item) => item !== permission,
-                                      ),
-                                )
-                              }
-                              type="checkbox"
-                            />
-                            <span>{businessPermissionLabel(permission)}</span>
-                          </label>
-                        ))}
+                        {businessStaffPermissionOptions.map((permission) => {
+                          const requiredService =
+                            businessPermissionRequiredService[permission];
+                          const selectedBusiness = businesses.find(
+                            (candidate) => candidate.id === businessId,
+                          );
+                          const notYetOffered = Boolean(
+                            requiredService &&
+                              !businessOffersService(
+                                  selectedBusiness,
+                                  requiredService,
+                              ),
+                          );
+                          return (
+                            <label key={permission}>
+                              <input
+                                checked={businessPermissions.includes(
+                                  permission,
+                                )}
+                                onChange={(event) =>
+                                  setBusinessPermissions((current) =>
+                                    event.target.checked
+                                      ? [...current, permission]
+                                      : current.filter(
+                                          (item) => item !== permission,
+                                        ),
+                                  )
+                                }
+                                type="checkbox"
+                              />
+                              <span>
+                                {businessPermissionLabel(permission)}
+                                {notYetOffered && (
+                                  <small className="permission-note"> · not yet offered</small>
+                                )}
+                              </span>
+                            </label>
+                          );
+                        })}
                       </div>
                     </fieldset>
                   </>
@@ -8398,22 +8440,35 @@ function CreateBusinessStaffForm({
       <fieldset className="people-permission-picker compact">
         <legend>Business permissions</legend>
         <div>
-          {businessStaffPermissionOptions.map((permission) => (
-            <label key={permission}>
-              <input
-                checked={businessPermissions.includes(permission)}
-                onChange={(event) =>
-                  setBusinessPermissions((current) =>
-                    event.target.checked
-                      ? [...current, permission]
-                      : current.filter((item) => item !== permission),
-                  )
-                }
-                type="checkbox"
-              />
-              <span>{businessPermissionLabel(permission)}</span>
-            </label>
-          ))}
+          {businessStaffPermissionOptions.map((permission) => {
+            const requiredService =
+              businessPermissionRequiredService[permission];
+            const notYetOffered = Boolean(
+              requiredService &&
+                !businessOffersService(business, requiredService),
+            );
+            return (
+              <label key={permission}>
+                <input
+                  checked={businessPermissions.includes(permission)}
+                  onChange={(event) =>
+                    setBusinessPermissions((current) =>
+                      event.target.checked
+                        ? [...current, permission]
+                        : current.filter((item) => item !== permission),
+                    )
+                  }
+                  type="checkbox"
+                />
+                <span>
+                  {businessPermissionLabel(permission)}
+                  {notYetOffered && (
+                    <small className="permission-note"> · not yet offered</small>
+                  )}
+                </span>
+              </label>
+            );
+          })}
         </div>
       </fieldset>
       <p className="form-note">

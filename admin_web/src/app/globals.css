@@ -5564,6 +5564,7 @@ button[data-loading="true"]::before {
 }
 .lst-chip:hover { border-color: var(--brand); }
 .lst-chip.on { background: var(--mist); border-color: var(--brand); color: var(--brand-strong); }
+.lst-chip-note { font-weight: 500; opacity: 0.65; }
 
 /* Listings modal — photo gallery with cover selection */
 .lst-photos { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
@@ -11219,6 +11220,7 @@ button[data-loading="true"]::before {
 }
 .people-permission-picker input { margin: 0; min-height: auto; padding: 0; }
 .people-permission-picker.compact { flex: 1 1 100%; }
+.permission-note { font-weight: 500; opacity: 0.65; }
 .people-invite-note {
   align-items: flex-start;
   background: rgba(204,251,241,.3);

@@ -3219,6 +3219,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Aucun mot de passe n’est recueilli ici. L’invitation expire et l’accès reste inactif jusqu’à son acceptation.",
   "Send invitation": "Envoyer l’invitation",
   "Sending...": "Envoi en cours...",
+  "· not yet offered": "· pas encore proposé",
   "Invitation sent": "Invitation envoyée",
   "This person already has staff or admin access somewhere in the system. Remove their existing access first, then invite them again.":
     "Cette personne a déjà un accès employé ou administrateur ailleurs dans le système. Supprimez d’abord son accès existant, puis invitez-la à nouveau.",
