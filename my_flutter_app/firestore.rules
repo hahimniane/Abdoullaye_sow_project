@@ -493,6 +493,17 @@ service cloud.firestore {
         allow read, create, update, delete: if request.auth != null &&
           request.auth.uid == userId;
       }
+
+      // Written only by backend Admin SDK notification dispatch; clients may
+      // only read their own feed and toggle read state.
+      match /notifications/{notificationId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow update: if request.auth != null && request.auth.uid == userId &&
+          request.resource.data.diff(resource.data)
+            .affectedKeys()
+            .hasOnly(['read', 'readAt']);
+        allow create, delete: if false;
+      }
     }
 
     match /phoneSignInAliases/{alias} {

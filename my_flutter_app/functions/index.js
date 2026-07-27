@@ -615,6 +615,25 @@ exports.syncVerifiedCustomerPhone = onCall(
     },
 );
 
+// Standalone from updateCustomerProfile: business staff/owners and admins
+// have no full-name/phone editing flow of their own on the web consoles, so
+// this lets any authenticated user update just their notification
+// preferences without also supplying a valid fullName/phone.
+exports.updateNotificationPreferences = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const notificationPreferences = normalizeNotificationPreferences(
+          request.data?.notificationPreferences,
+      );
+      await admin.firestore().collection("users").doc(uid).set({
+        notificationPreferences,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      }, {merge: true});
+      return {success: true, notificationPreferences};
+    },
+);
+
 exports.notifyCarPurchaseStatus = onDocumentUpdated(
     "carPurchases/{purchaseId}",
     async (event) => {
@@ -689,6 +708,26 @@ exports.notifyBusinessApplicationStatus = onDocumentUpdated(
         data: {
           type: "business_application_status",
           applicationId: event.params.applicationId,
+          status: after.status || "",
+        },
+      });
+    },
+);
+
+exports.notifyParkingReservationStatus = onDocumentUpdated(
+    "parkedCars/{reservationId}",
+    async (event) => {
+      if (!statusChanged(event)) return;
+      const after = event.data.after.data() || {};
+      const uid = userIdFrom(after, ["customerUid", "ownerUid", "uid"]);
+      await sendPreferenceNotification({
+        uid,
+        preferenceKey: "carActivity",
+        title: "Parking update",
+        body: `Your parking reservation is now ${after.status || "updated"}.`,
+        data: {
+          type: "parking_reservation_status",
+          reservationId: event.params.reservationId,
           status: after.status || "",
         },
       });
@@ -3980,6 +4019,16 @@ async function sendPreferenceNotification({
   if (prefs[preferenceKey] === false) return;
   const settings = await loadPlatformNotificationSettings(db);
   if (!platformNotificationEnabled(settings, preferenceKey, settingKey)) return;
+
+  await db.collection("users").doc(uid).collection("notifications").doc().set({
+    title,
+    body,
+    data: Object.fromEntries(
+        Object.entries(data).map(([key, value]) => [key, String(value ?? "")]),
+    ),
+    read: false,
+    createdAt: FirestoreFieldValue.serverTimestamp(),
+  });
 
   await queueNotificationDeliveries({
     db,
