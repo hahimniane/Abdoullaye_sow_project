@@ -69,7 +69,8 @@ class AuthProvider extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseFunctions _functions = FirebaseFunctions.instance;
-  final PushNotificationService _pushNotifications = PushNotificationService();
+  final PushNotificationService _pushNotifications =
+      PushNotificationService.instance;
 
   User? _user;
   bool _isStaff = false;

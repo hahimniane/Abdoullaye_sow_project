@@ -7,9 +7,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'firebase_environment_options.dart';
 import 'firebase_emulator_config.dart';
+import 'navigation/app_navigator.dart';
 import 'providers/language_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/app_gate_provider.dart';
+import 'services/push_notification_service.dart';
 import 'theme/app_theme.dart';
 import 'l10n/app_localizations.dart';
 import 'widgets/app_gate_boundary.dart';
@@ -65,6 +67,7 @@ void main() async {
   await initializeFirebaseCrashlytics();
   await initializeFirebaseAppCheck();
   await StripeConfigService.ensureConfigured();
+  await PushNotificationService.instance.initialize();
   runApp(const MyApp());
 }
 
@@ -169,6 +172,7 @@ class MyApp extends StatelessWidget {
         builder: (context, languageProvider, authProvider, child) {
           return MaterialApp(
             title: 'Laawol Digital',
+            navigatorKey: rootNavigatorKey,
             scaffoldMessengerKey: rootScaffoldMessengerKey,
             locale: languageProvider.currentLocale,
             supportedLocales: const [Locale('en'), Locale('fr')],
