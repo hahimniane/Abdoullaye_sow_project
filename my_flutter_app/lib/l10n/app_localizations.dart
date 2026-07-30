@@ -1382,6 +1382,120 @@ abstract class AppLocalizations {
   /// **'Refunded'**
   String get orderStatusRefunded;
 
+  /// No description provided for @orderLeaveReviewCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave a review'**
+  String get orderLeaveReviewCta;
+
+  /// No description provided for @orderReviewedBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Reviewed'**
+  String get orderReviewedBadge;
+
+  /// No description provided for @reviewComposerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave a review'**
+  String get reviewComposerTitle;
+
+  /// No description provided for @reviewRatingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'How would you rate this service?'**
+  String get reviewRatingLabel;
+
+  /// No description provided for @reviewRatingRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please select a star rating.'**
+  String get reviewRatingRequired;
+
+  /// No description provided for @reviewCommentHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell us about your experience'**
+  String get reviewCommentHint;
+
+  /// No description provided for @reviewCommentRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please write a short comment.'**
+  String get reviewCommentRequired;
+
+  /// No description provided for @reviewSubmitButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit review'**
+  String get reviewSubmitButton;
+
+  /// No description provided for @reviewSubmitSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Thanks for your review!'**
+  String get reviewSubmitSuccess;
+
+  /// No description provided for @reviewSubmitFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not submit your review. Please try again.'**
+  String get reviewSubmitFailed;
+
+  /// No description provided for @reviewAlreadySubmitted.
+  ///
+  /// In en, this message translates to:
+  /// **'You already reviewed this order.'**
+  String get reviewAlreadySubmitted;
+
+  /// No description provided for @reviewOrderNotCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'This order is not completed yet.'**
+  String get reviewOrderNotCompleted;
+
+  /// No description provided for @reviewsSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer reviews'**
+  String get reviewsSectionTitle;
+
+  /// No description provided for @reviewsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No reviews yet.'**
+  String get reviewsEmpty;
+
+  /// No description provided for @reviewFlagButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Report'**
+  String get reviewFlagButton;
+
+  /// No description provided for @reviewFlagDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Report this review'**
+  String get reviewFlagDialogTitle;
+
+  /// No description provided for @reviewFlagReasonHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Why are you reporting this review?'**
+  String get reviewFlagReasonHint;
+
+  /// No description provided for @reviewFlagSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit report'**
+  String get reviewFlagSubmit;
+
+  /// No description provided for @reviewFlagSubmitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Thanks, we\'ll take a look.'**
+  String get reviewFlagSubmitted;
+
   /// No description provided for @filterParking.
   ///
   /// In en, this message translates to:
@@ -2888,6 +3002,114 @@ abstract class AppLocalizations {
   /// **'Staff controls'**
   String get staffControls;
 
+  /// No description provided for @trackingUpdatesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking updates'**
+  String get trackingUpdatesTitle;
+
+  /// No description provided for @trackingUpdatesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No updates yet.'**
+  String get trackingUpdatesEmpty;
+
+  /// No description provided for @addTrackingUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Add update'**
+  String get addTrackingUpdate;
+
+  /// No description provided for @trackingUpdateAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking update added.'**
+  String get trackingUpdateAdded;
+
+  /// No description provided for @trackingUpdateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'What happened'**
+  String get trackingUpdateLabel;
+
+  /// No description provided for @trackingUpdateLabelHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Departed origin port'**
+  String get trackingUpdateLabelHint;
+
+  /// No description provided for @trackingUpdateLabelRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please describe what happened.'**
+  String get trackingUpdateLabelRequired;
+
+  /// No description provided for @trackingUpdateLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Location (optional)'**
+  String get trackingUpdateLocation;
+
+  /// No description provided for @trackingUpdateNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes (optional)'**
+  String get trackingUpdateNotes;
+
+  /// No description provided for @containerTrackingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Automated container tracking'**
+  String get containerTrackingTitle;
+
+  /// No description provided for @containerTrackingDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the container, booking, or bill of lading number from the carrier to get automatic tracking updates.'**
+  String get containerTrackingDescription;
+
+  /// No description provided for @containerNumberLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Container / booking / BOL number'**
+  String get containerNumberLabel;
+
+  /// No description provided for @containerNumberHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. MSKU1234567'**
+  String get containerNumberHint;
+
+  /// No description provided for @carrierCodeOptionalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Carrier SCAC code (optional)'**
+  String get carrierCodeOptionalLabel;
+
+  /// No description provided for @startTrackingButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Start tracking'**
+  String get startTrackingButton;
+
+  /// No description provided for @containerNumberRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid tracking number.'**
+  String get containerNumberRequired;
+
+  /// No description provided for @containerTrackingStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'Automated tracking started.'**
+  String get containerTrackingStarted;
+
+  /// No description provided for @automatedTrackingActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Automated tracking active'**
+  String get automatedTrackingActive;
+
   /// No description provided for @shippingBusiness.
   ///
   /// In en, this message translates to:
@@ -3307,18 +3529,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No active approved business destinations are available.'**
   String get noApprovedDestinationsAvailable;
-
-  /// No description provided for @carrierTracking.
-  ///
-  /// In en, this message translates to:
-  /// **'Carrier tracking'**
-  String get carrierTracking;
-
-  /// No description provided for @couldNotOpenCarrierTracking.
-  ///
-  /// In en, this message translates to:
-  /// **'Could not open carrier tracking.'**
-  String get couldNotOpenCarrierTracking;
 
   /// No description provided for @trackingNumberCopiedShort.
   ///
@@ -6085,6 +6295,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Business application updates'**
   String get businessActivityNotifications;
+
+  /// No description provided for @reviewActivityNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Review requests'**
+  String get reviewActivityNotifications;
 
   /// No description provided for @faceId.
   ///

@@ -29,6 +29,9 @@ function publicParkingOption(option) {
       Number(data.distanceMiles) :
       null,
     estimatedTotal: Math.max(0, finiteNumber(data.estimatedTotal)),
+    reviewCount: Math.max(0, Math.trunc(finiteNumber(data.reviewCount))),
+    reviewAverage: Math.max(0, finiteNumber(data.reviewAverage)),
+    reviewWeightedScore: Math.max(0, finiteNumber(data.reviewWeightedScore)),
   };
 }
 
@@ -55,6 +58,9 @@ function publicOpenBarrelOption(id, pool) {
     holderRole: cleanString(data.holderRole || "customer", 40),
     approvalMode: cleanString(data.approvalMode || "approval", 40),
     status: "open",
+    reviewCount: Math.max(0, Math.trunc(finiteNumber(data.reviewCount))),
+    reviewAverage: Math.max(0, finiteNumber(data.reviewAverage)),
+    reviewWeightedScore: Math.max(0, finiteNumber(data.reviewWeightedScore)),
   };
 }
 

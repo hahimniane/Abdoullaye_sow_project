@@ -23,6 +23,7 @@ import {
   Settings2,
   ShieldCheck,
   SlidersHorizontal,
+  Star,
   X,
   ZoomIn,
 } from "lucide-react";
@@ -590,7 +591,11 @@ export function CustomerCars({
                     </span>
                   )}
                 </div>
-                <p className="customer-car-business">{text(car.businessName, "Approved business")}</p>
+                <p className="customer-car-business">
+                  {text(car.businessName, "Approved business")}
+                  {" "}
+                  <BusinessRatingBadge car={car} />
+                </p>
                 <button
                   className="secondary-button"
                   onClick={() => {
@@ -716,6 +721,8 @@ function CarDetailPage({
             <h2>{carTitle(car)}</h2>
             <p className="customer-car-business-line">
               Sold by <strong>{text(car.businessName, "Approved business")}</strong>
+              {" "}
+              <BusinessRatingBadge car={car} />
             </p>
             <div className="customer-car-detail-price-row">
               <strong className="customer-car-detail-price">{formatMoney(car.price)}</strong>
@@ -1038,6 +1045,21 @@ function FactTile({
 function optionLabelOrFallback(value: unknown) {
   const label = optionLabel(text(value, ""));
   return label || "Not provided";
+}
+
+// businessReviewAverage/businessReviewCount are denormalized onto each active
+// car doc by the submitBusinessReview/resolveFlaggedReview Cloud Functions,
+// since this view reads `cars` directly with no join to `businesses`.
+function BusinessRatingBadge({ car }: { car: FirestoreRow }) {
+  const count = Number(car.businessReviewCount) || 0;
+  if (count <= 0) return null;
+  const average = Number(car.businessReviewAverage) || 0;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>
+      <Star size={12} fill="#f59e0b" color="#f59e0b" />
+      {average.toFixed(1)} ({count})
+    </span>
+  );
 }
 
 function carImage(car: FirestoreRow) {

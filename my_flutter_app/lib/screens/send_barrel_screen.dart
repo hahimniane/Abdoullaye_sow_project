@@ -23,6 +23,8 @@ import '../services/payment_flow_safety.dart';
 import '../utils/barrel_receipt_generator.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/receiver_phone_rules.dart';
+import '../widgets/business_reviews_sheet.dart';
+import '../widgets/rating_summary_badge.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
@@ -1202,6 +1204,18 @@ class _BusinessOptionCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
+                    if (option.reviewCount > 0) ...[
+                      const SizedBox(height: 2),
+                      RatingSummaryBadge(
+                        average: option.reviewAverage,
+                        count: option.reviewCount,
+                        onTap: () => showBusinessReviewsSheet(
+                          context,
+                          businessId: option.businessId,
+                          businessName: option.businessName,
+                        ),
+                      ),
+                    ],
                     if (contact.isNotEmpty)
                       Text(
                         contact,

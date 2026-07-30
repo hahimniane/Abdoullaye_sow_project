@@ -187,6 +187,15 @@ class BusinessService {
   ) {
     final country = a.country.name.compareTo(b.country.name);
     if (country != 0) return country;
+    // A well-reviewed business should generally surface ahead of a cheaper
+    // unrated one, but price still matters among similarly-rated options -
+    // ignore noise-level rating differences so this doesn't flip-flop ahead
+    // of price on every recompute. Mirrors compareDestinationOptions in
+    // functions/index.js; keep the two in sync.
+    final rating = b.reviewWeightedScore.compareTo(a.reviewWeightedScore);
+    if (rating.sign != 0 && (b.reviewWeightedScore - a.reviewWeightedScore).abs() > 0.05) {
+      return rating;
+    }
     // Options can offer barrel shipping and/or freight at once, each with
     // its own transit time, so there is no single "the" estimate to sort
     // mixed-service options by; fall back to price and business name.

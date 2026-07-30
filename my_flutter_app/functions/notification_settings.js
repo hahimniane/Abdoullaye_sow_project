@@ -7,6 +7,7 @@ function defaultNotificationPreferences() {
     shipmentActivity: true,
     walletActivity: true,
     businessActivity: true,
+    reviewActivity: true,
     supportActivity: true,
     supportMessages: true,
     supportEscalations: true,
@@ -29,6 +30,8 @@ function normalizeNotificationPreferences(raw) {
     walletActivity: prefs.walletActivity !== false && defaults.walletActivity,
     businessActivity:
       prefs.businessActivity !== false && defaults.businessActivity,
+    reviewActivity:
+      prefs.reviewActivity !== false && defaults.reviewActivity,
     supportActivity:
       prefs.supportActivity !== false && defaults.supportActivity,
     supportMessages:
@@ -56,6 +59,7 @@ function defaultPlatformNotificationSettings() {
     newApplication: true,
     businessLifecycle: true,
     verificationDocuments: true,
+    reviewRequests: true,
     supportMessages: true,
     supportEscalations: true,
     supportCaseUpdates: true,
@@ -96,6 +100,7 @@ const NOTIFICATION_SETTING_BY_PREFERENCE = {
   shipmentActivity: "shipmentStatus",
   walletActivity: "refundDecision",
   businessActivity: "businessLifecycle",
+  reviewActivity: "reviewRequests",
   supportActivity: "supportMessages",
   supportMessages: "supportMessages",
   supportEscalations: "supportEscalations",

@@ -37,6 +37,7 @@ import 'screens/add_staff_screen.dart';
 import 'screens/signup_screen.dart';
 import 'screens/my_purchases_screen.dart';
 import 'screens/orders_screen.dart';
+import 'screens/review_composer_screen.dart';
 import 'screens/staff_purchase_management_screen.dart';
 import 'screens/destination_countries_screen.dart';
 import 'screens/account_profile_screen.dart';
@@ -218,6 +219,12 @@ class MyApp extends StatelessWidget {
               '/my-purchases': (context) =>
                   const MyPurchasesScreen(showBackButton: true),
               '/orders': (context) => const OrdersScreen(showBackButton: true),
+              '/leave-review': (context) {
+                final args =
+                    ModalRoute.of(context)!.settings.arguments
+                        as ReviewComposerArguments;
+                return ReviewComposerScreen(arguments: args);
+              },
               '/purchase-management': (context) =>
                   const StaffPurchaseManagementScreen(),
               '/destination-countries': (context) =>

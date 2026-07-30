@@ -30,6 +30,7 @@ describe("notification settings helpers", () => {
           shipmentActivity: true,
           walletActivity: true,
           businessActivity: true,
+          reviewActivity: true,
           supportActivity: false,
           supportMessages: false,
           supportEscalations: false,

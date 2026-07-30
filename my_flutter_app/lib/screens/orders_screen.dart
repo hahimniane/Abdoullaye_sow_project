@@ -8,9 +8,12 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../models/customer_order.dart';
 import '../providers/auth_provider.dart';
+import '../services/business_review_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_back_button.dart';
+import '../widgets/async_action_button.dart';
 import '../widgets/support_entry_button.dart';
+import 'review_composer_screen.dart';
 import 'tracking_screen.dart';
 
 /// Unified "Orders" — every paid transaction (cars, barrels, freight,
@@ -31,12 +34,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
   OrderStatus? _statusFilter;
 
   final List<StreamSubscription<dynamic>> _subscriptions = [];
+  final BusinessReviewService _reviewService = BusinessReviewService();
   bool _subscribed = false;
   List<DocumentSnapshot<Map<String, dynamic>>>? _cars;
   List<DocumentSnapshot<Map<String, dynamic>>>? _barrels;
   List<DocumentSnapshot<Map<String, dynamic>>>? _freight;
   List<DocumentSnapshot<Map<String, dynamic>>>? _transport;
   List<DocumentSnapshot<Map<String, dynamic>>>? _parking;
+  Set<String> _reviewedKeys = const {};
 
   @override
   void didChangeDependencies() {
@@ -89,6 +94,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
       db.collection('parkedCars').where('customerUid', isEqualTo: user.uid),
       (docs) => _parking = docs,
     );
+    _subscriptions.add(
+      _reviewService.reviewedOrderKeysForCurrentUser().listen((keys) {
+        if (mounted) setState(() => _reviewedKeys = keys);
+      }),
+    );
   }
 
   @override
@@ -109,17 +119,28 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   List<CustomerOrder> _allOrders() {
     final orders = <CustomerOrder>[];
+    // One malformed document (e.g. a legacy or hand-edited record missing a
+    // required field) must not blank out every other order on this screen -
+    // skip just that record and keep going.
+    void addSafely(String collection, String docId, CustomerOrder Function() build) {
+      try {
+        orders.add(build());
+      } catch (error) {
+        debugPrint('Skipping malformed $collection/$docId order: $error');
+      }
+    }
+
     for (final doc in _cars ?? const []) {
-      orders.add(CustomerOrder.fromCarPurchase(doc));
+      addSafely('carPurchases', doc.id, () => CustomerOrder.fromCarPurchase(doc));
     }
     for (final doc in _freight ?? const []) {
-      orders.add(CustomerOrder.fromFreight(doc));
+      addSafely('freightShipments', doc.id, () => CustomerOrder.fromFreight(doc));
     }
     for (final doc in _transport ?? const []) {
-      orders.add(CustomerOrder.fromTransport(doc));
+      addSafely('transportRequests', doc.id, () => CustomerOrder.fromTransport(doc));
     }
     for (final doc in _parking ?? const []) {
-      orders.add(CustomerOrder.fromParking(doc));
+      addSafely('parkedCars', doc.id, () => CustomerOrder.fromParking(doc));
     }
     final barrelGroups =
         <String, List<DocumentSnapshot<Map<String, dynamic>>>>{};
@@ -131,7 +152,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
       barrelGroups.putIfAbsent(key, () => []).add(doc);
     }
     for (final group in barrelGroups.values) {
-      orders.add(CustomerOrder.fromBarrelGroup(group));
+      addSafely(
+        'barrelShipments',
+        group.first.id,
+        () => CustomerOrder.fromBarrelGroup(group),
+      );
     }
     orders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return orders;
@@ -146,6 +171,20 @@ class _OrdersScreenState extends State<OrdersScreen> {
         order.businessName.toLowerCase().contains(q) ||
         order.subtitle.toLowerCase().contains(q) ||
         (order.trackingCode?.toLowerCase().contains(q) ?? false);
+  }
+
+  void _openReview(CustomerOrder order) {
+    Navigator.pushNamed(
+      context,
+      '/leave-review',
+      arguments: ReviewComposerArguments(
+        relatedCollection: order.relatedCollection,
+        relatedId: order.relatedId,
+        businessId: order.businessId,
+        businessName: order.businessName,
+        orderTitle: order.title,
+      ),
+    );
   }
 
   void _open(CustomerOrder order) {
@@ -222,6 +261,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       itemBuilder: (context, index) => _OrderCard(
                         order: filtered[index],
                         onTap: () => _open(filtered[index]),
+                        reviewed: _reviewedKeys.contains(
+                          '${filtered[index].relatedCollection}_'
+                          '${filtered[index].relatedId}',
+                        ),
+                        onLeaveReview: () => _openReview(filtered[index]),
                       ),
                     ),
             ),
@@ -498,10 +542,17 @@ class _StatusChips extends StatelessWidget {
 }
 
 class _OrderCard extends StatelessWidget {
-  const _OrderCard({required this.order, required this.onTap});
+  const _OrderCard({
+    required this.order,
+    required this.onTap,
+    required this.reviewed,
+    required this.onLeaveReview,
+  });
 
   final CustomerOrder order;
   final VoidCallback onTap;
+  final bool reviewed;
+  final VoidCallback onLeaveReview;
 
   @override
   Widget build(BuildContext context) {
@@ -597,12 +648,30 @@ class _OrderCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              SupportEntryButton(
-                relatedCollection: order.relatedCollection,
-                relatedId: order.relatedId,
-                subject: l10n.supportChat,
-                relatedLabel: order.title,
-                compact: true,
+              Row(
+                children: [
+                  Expanded(
+                    child: SupportEntryButton(
+                      relatedCollection: order.relatedCollection,
+                      relatedId: order.relatedId,
+                      subject: l10n.supportChat,
+                      relatedLabel: order.title,
+                      compact: true,
+                    ),
+                  ),
+                  if (order.status == OrderStatus.completed) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: reviewed
+                          ? _ReviewedPill(label: l10n.orderReviewedBadge)
+                          : AsyncActionButton.outlined(
+                              onPressed: () => onLeaveReview(),
+                              label: l10n.orderLeaveReviewCta,
+                              icon: Icons.star_border_rounded,
+                            ),
+                    ),
+                  ],
+                ],
               ),
             ],
           ),
@@ -634,6 +703,41 @@ class _StatusPill extends StatelessWidget {
           fontSize: 11.5,
           fontWeight: FontWeight.w800,
         ),
+      ),
+    );
+  }
+}
+
+class _ReviewedPill extends StatelessWidget {
+  const _ReviewedPill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.sage.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.sage.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.star_rounded, color: AppColors.sage, size: 16),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.sage,
+              fontWeight: FontWeight.w800,
+              fontSize: 12.5,
+            ),
+          ),
+        ],
       ),
     );
   }

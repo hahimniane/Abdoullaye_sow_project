@@ -19,9 +19,11 @@ import '../utils/barrel_receipt_generator.dart';
 import '../utils/receiver_phone_rules.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/container_tracking_card.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/destination_country_field.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/shipment_tracking_section.dart';
 import '../widgets/support_entry_button.dart';
 import '../theme/app_colors.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
@@ -788,6 +790,22 @@ class _BarrelShipmentDetailsScreenState
                             createdAt: dateLabel,
                             onCopy: _copyTrackingNumber,
                             onReceipt: _reprintReceipt,
+                          ),
+                          if (canEditAdminFields) ...[
+                            const SizedBox(height: 12),
+                            ContainerTrackingCard(
+                              relatedCollection: 'barrelShipments',
+                              relatedId: _currentShipment.id,
+                              containerNumber: _currentShipment.containerNumber,
+                              trackingProvider:
+                                  _currentShipment.trackingProvider,
+                            ),
+                          ],
+                          const SizedBox(height: 12),
+                          ShipmentTrackingSection(
+                            relatedCollection: 'barrelShipments',
+                            relatedId: _currentShipment.id,
+                            canEdit: canEditAdminFields,
                           ),
                           const SizedBox(height: 12),
                           SupportEntryButton(

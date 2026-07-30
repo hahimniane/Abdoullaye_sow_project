@@ -1,6 +1,20 @@
 {
   "indexes": [
     {
+      "collectionGroup": "destinationCountries",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "businessStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "featuredBusinesses",
       "queryScope": "COLLECTION",
       "fields": [

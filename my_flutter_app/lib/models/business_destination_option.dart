@@ -20,6 +20,9 @@ class BusinessDestinationOption {
     this.businessStatus = 'approved',
     this.freightPickupAvailable = false,
     this.freightPickupModel = 'distance',
+    this.reviewCount = 0,
+    this.reviewAverage = 0,
+    this.reviewWeightedScore = 0,
   });
 
   final String id;
@@ -34,6 +37,13 @@ class BusinessDestinationOption {
   final List<String> enabledServices;
   final String? serviceNote;
   final String businessStatus;
+
+  /// Customer rating shown alongside this option. reviewWeightedScore is the
+  /// Bayesian-damped score used for ranking (see business_review.js on the
+  /// server); reviewAverage is the plain average shown to customers.
+  final int reviewCount;
+  final double reviewAverage;
+  final double reviewWeightedScore;
 
   /// Whether this business offers freight home-pickup, and its already-resolved
   /// pricing model (`'distance'` or `'borough'`), as computed server-side.
@@ -92,6 +102,10 @@ class BusinessDestinationOption {
       freightPickupModel: (data['freightPickupModel'] as String?) == 'borough'
           ? 'borough'
           : 'distance',
+      reviewCount: (data['reviewCount'] as num?)?.toInt() ?? 0,
+      reviewAverage: (data['reviewAverage'] as num?)?.toDouble() ?? 0,
+      reviewWeightedScore:
+          (data['reviewWeightedScore'] as num?)?.toDouble() ?? 0,
       country: DestinationCountry(
         id: (country['id'] ?? '') as String,
         name: (country['name'] ?? '') as String,
@@ -216,6 +230,25 @@ class BusinessDestinationOption {
             : business['freightPickupModel'],
         businessData == null ? data['state'] : business['state'],
       ),
+      reviewCount:
+          ((businessData == null ? data['reviewCount'] : business['reviewCount'])
+                  as num?)
+              ?.toInt() ??
+          0,
+      reviewAverage:
+          ((businessData == null
+                      ? data['reviewAverage']
+                      : business['reviewAverage'])
+                  as num?)
+              ?.toDouble() ??
+          0,
+      reviewWeightedScore:
+          ((businessData == null
+                      ? data['reviewWeightedScore']
+                      : business['reviewWeightedScore'])
+                  as num?)
+              ?.toDouble() ??
+          0,
       country: DestinationCountry(
         id: doc.id,
         name: (data['name'] ?? doc.id) as String,

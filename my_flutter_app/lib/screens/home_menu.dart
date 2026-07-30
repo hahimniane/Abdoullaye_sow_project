@@ -85,9 +85,14 @@ class _HomeMenuState extends State<HomeMenu> {
             'parkingDate',
           ).snapshots().listen(
             (snapshot) {
-              final parkedCars = snapshot.docs
-                  .map((doc) => ParkedCar.fromFirestore(doc))
-                  .toList();
+              final parkedCars = <ParkedCar>[];
+              for (final doc in snapshot.docs) {
+                try {
+                  parkedCars.add(ParkedCar.fromFirestore(doc));
+                } catch (error) {
+                  debugPrint('Skipping malformed parkedCars/${doc.id}: $error');
+                }
+              }
               _parkedCars
                 ..clear()
                 ..addAll(parkedCars);

@@ -39,6 +39,9 @@ class BarrelShipment {
     required this.price,
     required this.status,
     required this.createdAt,
+    this.containerNumber = '',
+    this.carrierScac = '',
+    this.trackingProvider = '',
   });
 
   final String id;
@@ -78,6 +81,13 @@ class BarrelShipment {
   final double price;
   final String status;
   final DateTime createdAt;
+  // Sea container tracking (Phase 2): empty when no automated tracking has
+  // been started - staff can still add manual milestones regardless.
+  final String containerNumber;
+  final String carrierScac;
+  final String trackingProvider; // '' (manual) | 'carrier_api'
+
+  bool get hasAutomatedTracking => trackingProvider == 'carrier_api';
 
   factory BarrelShipment.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -128,6 +138,9 @@ class BarrelShipment {
       price: (data['price'] as num?)?.toDouble() ?? 0,
       status: (data['status'] ?? 'pending') as String,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      containerNumber: (data['containerNumber'] ?? '') as String,
+      carrierScac: (data['carrierScac'] ?? '') as String,
+      trackingProvider: (data['trackingProvider'] ?? '') as String,
     );
   }
 

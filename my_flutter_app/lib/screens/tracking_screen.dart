@@ -5,17 +5,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/customer_order.dart';
 import '../providers/auth_provider.dart';
 import '../services/freight_shipment_service.dart';
+import '../services/shipment_tracking_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/barrel_receipt_generator.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
+import '../widgets/shipment_tracking_section.dart';
 
 enum _StatusFilter { inProgress, delivered, all }
 
@@ -129,6 +130,7 @@ class TrackingScreen extends StatefulWidget {
     this.repository,
     this.customerUidOverride,
     this.freightService,
+    this.trackingService,
     this.focusShipmentId,
   });
 
@@ -136,6 +138,7 @@ class TrackingScreen extends StatefulWidget {
   final CustomerTrackingRepository? repository;
   final String? customerUidOverride;
   final FreightShipmentService? freightService;
+  final ShipmentTrackingService? trackingService;
   final String? focusShipmentId;
 
   @override
@@ -143,10 +146,6 @@ class TrackingScreen extends StatefulWidget {
 }
 
 class _TrackingScreenState extends State<TrackingScreen> {
-  static final Uri _carrierTrackingUri = Uri.parse(
-    'https://www.maersk.com/tracking',
-  );
-
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
   _StatusFilter _status = _StatusFilter.inProgress;
@@ -214,20 +213,6 @@ class _TrackingScreenState extends State<TrackingScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
-  }
-
-  Future<void> _openCarrierTracking() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final l10n = AppLocalizations.of(context)!;
-    final opened = await launchUrl(
-      _carrierTrackingUri,
-      mode: LaunchMode.externalApplication,
-    );
-    if (!opened) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.couldNotOpenCarrierTracking)),
-      );
-    }
   }
 
   bool _inProgress(CustomerTrackingShipment s) =>
@@ -307,7 +292,6 @@ class _TrackingScreenState extends State<TrackingScreen> {
             message: l10n.signInToTrackShipments,
             actionLabel: l10n.signIn,
             onAction: () => Navigator.pushNamed(context, '/login'),
-            onOpenCarrierTracking: _openCarrierTracking,
             showBackButton: widget.showBackButton,
           ),
         ),
@@ -325,7 +309,6 @@ class _TrackingScreenState extends State<TrackingScreen> {
                 title: l10n.trackShipment,
                 icon: Icons.lock_outline,
                 message: l10n.shipmentsLoadError,
-                onOpenCarrierTracking: _openCarrierTracking,
                 showBackButton: widget.showBackButton,
               ),
             );
@@ -344,7 +327,6 @@ class _TrackingScreenState extends State<TrackingScreen> {
                 message: l10n.shipmentsAppearAfterPayment,
                 actionLabel: l10n.sendBarrels,
                 onAction: () => Navigator.pushNamed(context, '/barrel'),
-                onOpenCarrierTracking: _openCarrierTracking,
                 showBackButton: widget.showBackButton,
               ),
             );
@@ -361,6 +343,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
               onPayBalance: shipment.isFreight && shipment.balanceDue > 0
                   ? () => _payFreightBalance(shipment)
                   : null,
+              trackingService: widget.trackingService,
             );
           }
 
@@ -377,8 +360,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                     title: focusedShipment?.isFreight == true
                         ? l10n.freightOrderDetails
                         : l10n.trackShipment,
-                    onOpenCarrierTracking: _openCarrierTracking,
-                    showBackButton: widget.showBackButton,
+                        showBackButton: widget.showBackButton,
                   ),
                   Expanded(
                     child: focusedShipment == null
@@ -438,8 +420,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
               children: [
                 _ShipmentsHeader(
                   title: l10n.trackShipment,
-                  onOpenCarrierTracking: _openCarrierTracking,
-                  showBackButton: widget.showBackButton,
+                    showBackButton: widget.showBackButton,
                 ),
                 _TrackSearchField(
                   controller: _searchController,
@@ -537,14 +518,9 @@ class _ShipmentGroup {
 }
 
 class _ShipmentsHeader extends StatelessWidget {
-  const _ShipmentsHeader({
-    required this.title,
-    required this.onOpenCarrierTracking,
-    required this.showBackButton,
-  });
+  const _ShipmentsHeader({required this.title, required this.showBackButton});
 
   final String title;
-  final VoidCallback onOpenCarrierTracking;
   final bool showBackButton;
 
   @override
@@ -564,11 +540,6 @@ class _ShipmentsHeader extends StatelessWidget {
                 context,
               ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
             ),
-          ),
-          IconButton(
-            onPressed: onOpenCarrierTracking,
-            tooltip: AppLocalizations.of(context)!.carrierTracking,
-            icon: const Icon(Icons.open_in_new),
           ),
           const LanguageToggle(),
         ],
@@ -989,12 +960,14 @@ class _ShipmentCard extends StatelessWidget {
     this.onPayBalance,
     this.balancePaymentBusy = false,
     this.focused = false,
+    this.trackingService,
   });
 
   final CustomerTrackingShipment shipment;
   final VoidCallback? onPayBalance;
   final bool balancePaymentBusy;
   final bool focused;
+  final ShipmentTrackingService? trackingService;
 
   Future<void> _copyTrackingNumber(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: shipment.trackingCode));
@@ -1181,6 +1154,15 @@ class _ShipmentCard extends StatelessWidget {
                     ),
                 ],
               ),
+              if (shipment.isFreight) ...[
+                const SizedBox(height: 14),
+                ShipmentTrackingSection(
+                  relatedCollection: freightTrackingCollection,
+                  relatedId: shipment.id,
+                  canEdit: false,
+                  trackingService: trackingService,
+                ),
+              ],
             ],
           ),
         ),
@@ -1324,7 +1306,6 @@ class _EmptyShipmentsState extends StatelessWidget {
   const _EmptyShipmentsState({
     required this.title,
     required this.message,
-    required this.onOpenCarrierTracking,
     this.icon = Icons.inventory_2_outlined,
     this.actionLabel,
     this.onAction,
@@ -1336,18 +1317,13 @@ class _EmptyShipmentsState extends StatelessWidget {
   final IconData icon;
   final String? actionLabel;
   final VoidCallback? onAction;
-  final VoidCallback onOpenCarrierTracking;
   final bool showBackButton;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _ShipmentsHeader(
-          title: title,
-          onOpenCarrierTracking: onOpenCarrierTracking,
-          showBackButton: showBackButton,
-        ),
+        _ShipmentsHeader(title: title, showBackButton: showBackButton),
         Expanded(
           child: Center(
             child: Padding(
@@ -1374,25 +1350,11 @@ class _EmptyShipmentsState extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      if (actionLabel != null && onAction != null)
-                        FilledButton(
-                          onPressed: onAction,
-                          child: Text(actionLabel!),
-                        ),
-                      OutlinedButton.icon(
-                        onPressed: onOpenCarrierTracking,
-                        icon: const Icon(Icons.open_in_new, size: 18),
-                        label: Text(
-                          AppLocalizations.of(context)!.carrierTracking,
-                        ),
-                      ),
-                    ],
-                  ),
+                  if (actionLabel != null && onAction != null)
+                    FilledButton(
+                      onPressed: onAction,
+                      child: Text(actionLabel!),
+                    ),
                 ],
               ),
             ),

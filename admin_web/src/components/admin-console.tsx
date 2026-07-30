@@ -31,6 +31,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import {
@@ -47,6 +48,7 @@ import {
   Check,
   ClipboardList,
   DatabaseZap,
+  Flag,
   LifeBuoy,
   LogOut,
   Menu,
@@ -57,6 +59,7 @@ import {
   Shield,
   ShieldOff,
   SlidersHorizontal,
+  Star,
   Store,
   Truck,
   UserCog,
@@ -1976,6 +1979,55 @@ function useAdminCollectionGroup(name: string, enabled: boolean, max = 500) {
   return { rows, loading, error };
 }
 
+// A plain collectionGroup("reviews") listen (as useAdminCollectionGroup
+// would do) is denied by firestore.rules: the {path=**}/reviews rule that
+// authorizes this collection-group query is only provable when the query
+// itself filters to moderationStatus == "flagged", so that filter has to be
+// baked into the query here rather than left to a generic caller.
+function useFlaggedReviews(enabled: boolean, max = 300) {
+  const [rows, setRows] = useState<FirestoreRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!enabled) {
+      setRows([]);
+      setLoading(false);
+      setError("");
+      return;
+    }
+    setLoading(true);
+    const unsubscribe = onSnapshot(
+      query(
+        collectionGroup(db, "reviews"),
+        where("moderationStatus", "==", "flagged"),
+        limit(max),
+      ),
+      (snapshot) => {
+        setRows(
+          snapshot.docs.map((item) => ({
+            id: item.id,
+            _path: item.ref.path,
+            _parentId: item.ref.parent.parent?.id ?? "",
+            _parentPath: item.ref.parent.parent?.path ?? "",
+            ...item.data(),
+          })),
+        );
+        setLoading(false);
+        setError("");
+      },
+      (snapshotError) => {
+        setRows([]);
+        setError(snapshotError.message);
+        setLoading(false);
+      },
+    );
+    return unsubscribe;
+  }, [enabled, max]);
+
+  return { rows, loading, error };
+}
+
 function useAdminAuthUsers(enabled: boolean) {
   const [rows, setRows] = useState<FirestoreRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -2338,6 +2390,7 @@ export function AdminConsole() {
   const destinations = useAdminDestinationCoverage(
     enabled && (activeTab === "businesses" || activeTab === "marketplace"),
   );
+  const flaggedReviews = useFlaggedReviews(tabNeeds("marketplace"), 300);
   const applications = useAdminCollection(
     "businessApplications",
     tabNeeds("today", "businesses"),
@@ -2380,6 +2433,7 @@ export function AdminConsole() {
   const purchaseRows = previewMode ? previewData.purchases : purchases.rows;
   const refundRows = previewMode ? previewData.refunds : refunds.rows;
   const barrelPoolBalanceRows = previewMode ? [] : barrelPoolBalances.rows;
+  const flaggedReviewRows = previewMode ? [] : flaggedReviews.rows;
   const walletRows = previewMode ? previewData.wallets : wallets.rows;
   const walletTransactionRows = previewMode
     ? previewData.walletTransactions
@@ -2824,6 +2878,7 @@ export function AdminConsole() {
               businesses={businessRows}
               pricing={pricingRows}
               destinations={destinationRows}
+              flaggedReviews={flaggedReviewRows}
               errors={[cars.error, pricing.error, destinations.error].filter(
                 Boolean,
               )}
@@ -10440,11 +10495,113 @@ function listingImageUrl(item: FirestoreRow) {
   return "";
 }
 
+function FlaggedReviewsPanel({
+  reviews,
+  businesses,
+  runAction,
+}: {
+  reviews: FirestoreRow[];
+  businesses: FirestoreRow[];
+  runAction: ActionRunner;
+}) {
+  const flagged = reviews.filter(
+    (row) => text(row.moderationStatus, "") === "flagged",
+  );
+  if (flagged.length === 0) return null;
+
+  function businessName(businessId: string) {
+    const business = businesses.find((item) => item.id === businessId);
+    return text(business?.name, businessId);
+  }
+
+  function resolve(
+    businessId: string,
+    reviewId: string,
+    action: "dismiss" | "remove",
+  ) {
+    return runAction(
+      action === "remove" ? "Review removed" : "Flag dismissed",
+      () =>
+        httpsCallable(functions, "resolveFlaggedReview")({
+          businessId,
+          reviewId,
+          action,
+        }),
+      action === "remove"
+        ? {
+            confirm: "Remove this review? This cannot be undone.",
+            confirmFr: "Supprimer cet avis ? Cette action est irréversible.",
+          }
+        : undefined,
+    );
+  }
+
+  return (
+    <Panel
+      title={`Flagged reviews (${flagged.length})`}
+      icon={<Flag size={18} />}
+    >
+      <div className="pur-grid">
+        {flagged.map((row) => {
+          const businessId = text(row._parentId, "");
+          const rating = Number(row.rating) || 0;
+          const flagCount = Number(row.flagCount) || 0;
+          return (
+            <article className="pur-card alert" key={String(row._path ?? row.id)}>
+              <div className="pur-head">
+                <div className="pur-title">
+                  <strong>{businessName(businessId)}</strong>
+                  <span className="pur-kind">{text(row.orderType, "")}</span>
+                </div>
+                <span className="lst-badge warn">
+                  {flagCount} flag{flagCount === 1 ? "" : "s"}
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: 2 }}>
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <Star
+                    key={value}
+                    size={14}
+                    fill={value <= rating ? "#f59e0b" : "none"}
+                    color="#f59e0b"
+                  />
+                ))}
+              </div>
+              {text(row.comment) && <p>{text(row.comment)}</p>}
+              <p style={{ color: "var(--muted)", fontSize: 13 }}>
+                {text(row.customerDisplayName, "Customer")} ·{" "}
+                {formatDate(row.createdAt)}
+              </p>
+              <div className="pur-actions">
+                <button
+                  className="lst-btn ghost"
+                  onClick={() => resolve(businessId, row.id, "dismiss")}
+                  type="button"
+                >
+                  Dismiss
+                </button>
+                <button
+                  className="lst-btn danger"
+                  onClick={() => resolve(businessId, row.id, "remove")}
+                  type="button"
+                >
+                  Remove review
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
 function MarketplaceView({
   cars,
   businesses,
   pricing,
   destinations,
+  flaggedReviews,
   errors,
   loading,
   refreshDestinations,
@@ -10454,6 +10611,7 @@ function MarketplaceView({
   businesses: FirestoreRow[];
   pricing: FirestoreRow[];
   destinations: FirestoreRow[];
+  flaggedReviews: FirestoreRow[];
   errors: string[];
   loading: boolean;
   refreshDestinations: () => void;
@@ -10603,6 +10761,11 @@ function MarketplaceView({
       {loading && (
         <div className="empty-state">Loading marketplace records...</div>
       )}
+      <FlaggedReviewsPanel
+        reviews={flaggedReviews}
+        businesses={businesses}
+        runAction={runAction}
+      />
       <Panel title="Business listings" icon={<Store size={18} />}>
         <div className="marketplace-filter-grid">
           <label className="compact-search wide">

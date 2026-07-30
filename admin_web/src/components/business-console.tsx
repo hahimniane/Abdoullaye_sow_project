@@ -41,6 +41,7 @@ import {
   BusinessProfilePanel,
   BusinessServicesPanel,
 } from "@/components/business/profile-support-people";
+import { ReviewsPanel } from "@/components/business/reviews-panel";
 import { SupportCasesPanel } from "@/components/support/support-cases-panel";
 import { NotificationBell } from "@/components/notification-bell";
 import { ToggleRow } from "@/components/toggle-row";
@@ -585,6 +586,9 @@ export function BusinessConsole({
               error={staff.error}
               canManageStaff={profile.role === "businessOwner"}
             />
+          )}
+          {activeTab === "reviews" && (
+            <ReviewsPanel businessId={businessId} previewMode={previewMode} />
           )}
           {activeTab === "cases" && (
             <SupportCasesPanel
@@ -1441,6 +1445,7 @@ function tabIcon(tab: BusinessTab) {
     parking: <ParkingCircle {...props} />,
     destinations: <MapPinned {...props} />,
     people: <UserCog {...props} />,
+    reviews: <Star {...props} />,
     cases: <MessageCircle {...props} />,
     growth: <Sparkles {...props} />,
   };

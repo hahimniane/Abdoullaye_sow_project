@@ -44,6 +44,8 @@ import {
 } from "lucide-react";
 
 import { AddressAutocomplete } from "@/components/address-autocomplete";
+import { ContainerTrackingCard } from "@/components/business/container-tracking-card";
+import { TrackingUpdatesSection } from "@/components/business/tracking-updates-section";
 import { SearchableSelect } from "@/components/searchable-select";
 import { db, functions, storage } from "@/lib/firebase";
 import {
@@ -2899,6 +2901,14 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
                   </select>
                 </label>
               </div>
+
+              <ContainerTrackingCard
+                relatedCollection="barrelShipments"
+                relatedId={row.id}
+                containerNumber={text(row.containerNumber, "")}
+                trackingProvider={text(row.trackingProvider, "")}
+              />
+              <TrackingUpdatesSection relatedCollection="barrelShipments" relatedId={row.id} />
             </article>
           );
         })}
@@ -3041,6 +3051,16 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
                 {versionTwo && verifiedWeight <= 0 && <label className="bar-field"><span>Enter verified weight</span><input aria-label="Enter verified weight" inputMode="decimal" value={weightDrafts[row.id] ?? ""} onChange={(event) => setWeightDrafts((current) => ({ ...current, [row.id]: event.target.value }))} placeholder="0.0" /><button className="lst-btn primary" type="button" disabled={busy || !paymentReady} onClick={() => confirmWeight(row)}>Confirm weight and final price</button></label>}
                 <label className="bar-field"><span>Update status</span><select value={status} disabled={busy || !paymentReady || !settlementReady} onChange={(event) => updateStatus(row, event.target.value)}>{["pending_payment", "awaiting_weight_confirmation", "awaiting_balance_payment", "settlement_processing", "pending", "in_transit", "ready_for_pickup", "completed", "cancelled"].map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}</select></label>
               </div>
+
+              {text(row.mode ?? row.freightMode, "") === "sea" && (
+                <ContainerTrackingCard
+                  relatedCollection="freightShipments"
+                  relatedId={row.id}
+                  containerNumber={text(row.containerNumber, "")}
+                  trackingProvider={text(row.trackingProvider, "")}
+                />
+              )}
+              <TrackingUpdatesSection relatedCollection="freightShipments" relatedId={row.id} />
             </article>
           );
         })}

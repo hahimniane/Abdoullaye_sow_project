@@ -9,12 +9,16 @@ import '../data/nyc_boroughs.dart';
 import '../l10n/app_localizations.dart';
 import '../models/business_destination_option.dart';
 import '../models/business_service.dart';
+import '../models/office_location.dart';
 import '../services/business_service.dart';
 import '../services/freight_shipment_service.dart';
+import '../services/office_location_service.dart';
 import '../utils/receiver_phone_rules.dart';
+import '../widgets/business_reviews_sheet.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
 import '../widgets/office_location_picker.dart';
+import '../widgets/rating_summary_badge.dart';
 
 /// Customer screen to send a parcel/box by freight, priced by weight,
 /// by air or sea. Search-first: find a business + destination, then book.
@@ -328,6 +332,22 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         _snack(_pickupError ?? l10n.freightPickupQuoteFailed);
         return;
       }
+    } else {
+      // OfficeLocationPicker auto-selects the first location via a
+      // post-frame callback once its stream first resolves, so
+      // _officeLocationId can still be empty here if the user reaches "Pay
+      // estimate" before that callback runs (e.g. a business with multiple
+      // locations on a slow connection) - the server then rejects the
+      // request for lacking a chosen location. Resolve it directly instead
+      // of relying on that timing.
+      final locations = await OfficeLocationService()
+          .activeLocations(option.businessId)
+          .first;
+      if (!mounted) return;
+      _officeLocationId = OfficeLocation.resolveSelectedId(
+        locations,
+        _officeLocationId,
+      );
     }
     final marketplaceAcceptance = await confirmMarketplaceTransaction(
       context,
@@ -544,6 +564,18 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
+                    if (o.reviewCount > 0) ...[
+                      const SizedBox(height: 2),
+                      RatingSummaryBadge(
+                        average: o.reviewAverage,
+                        count: o.reviewCount,
+                        onTap: () => showBusinessReviewsSheet(
+                          context,
+                          businessId: o.businessId,
+                          businessName: o.businessName,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 2),
                     Text(
                       l10n.toDestination(o.country.name),

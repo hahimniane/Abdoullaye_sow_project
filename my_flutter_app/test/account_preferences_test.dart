@@ -13,6 +13,7 @@ void main() {
     expect(prefs.shipmentActivity, isTrue);
     expect(prefs.walletActivity, isTrue);
     expect(prefs.businessActivity, isTrue);
+    expect(prefs.reviewActivity, isTrue);
     expect(prefs.supportActivity, isTrue);
     expect(prefs.supportMessages, isTrue);
     expect(prefs.supportEscalations, isTrue);
@@ -34,6 +35,7 @@ void main() {
       'shipmentActivity': false,
       'walletActivity': false,
       'businessActivity': true,
+      'reviewActivity': true,
       'supportActivity': true,
       'supportMessages': true,
       'supportEscalations': true,

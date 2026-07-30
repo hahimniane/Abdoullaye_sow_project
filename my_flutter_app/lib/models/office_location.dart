@@ -37,4 +37,22 @@ class OfficeLocation {
     });
     return copy;
   }
+
+  /// The location id a submission should use: [currentId] when it's still
+  /// among [locations], otherwise the first location once there's more than
+  /// one to choose from (matching the single-location fallback tile, which
+  /// never requires an explicit choice). Used both by the picker widget's
+  /// auto-select and by callers that need to resolve a selection
+  /// synchronously right before submitting, since the widget's own
+  /// auto-select runs on a post-frame callback that may not have fired yet.
+  static String resolveSelectedId(
+    List<OfficeLocation> locations,
+    String currentId,
+  ) {
+    if (locations.length <= 1) return currentId;
+    if (locations.any((location) => location.id == currentId)) {
+      return currentId;
+    }
+    return locations.first.id;
+  }
 }

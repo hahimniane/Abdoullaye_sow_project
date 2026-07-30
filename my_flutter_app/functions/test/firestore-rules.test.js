@@ -333,6 +333,35 @@ async function seedFirestore() {
         ownerUid: "owner-doconly",
         status: "approved",
       },
+      "businesses/biz_pending": {
+        name: "Business Pending",
+        status: "pending",
+      },
+      "businesses/biz_a/reviews/review_1": {
+        businessId: "biz_a",
+        customerUid: "customer-owner",
+        rating: 5,
+        comment: "Great service",
+        moderationStatus: "published",
+      },
+      "businesses/biz_a/reviews/review_1/flags/staff-listings-a": {
+        uid: "staff-listings-a",
+        reason: "Suspected fake review",
+      },
+      "businesses/biz_a/reviews/review_flagged": {
+        businessId: "biz_a",
+        customerUid: "customer-owner",
+        rating: 1,
+        comment: "Never showed up",
+        moderationStatus: "flagged",
+      },
+      "businesses/biz_pending/reviews/review_2": {
+        businessId: "biz_pending",
+        customerUid: "customer-owner",
+        rating: 3,
+        comment: "Pending business review",
+        moderationStatus: "published",
+      },
       "cars/car_a_1": {
         businessId: "biz_a",
         title: "Car A 1",
@@ -358,6 +387,16 @@ async function seedFirestore() {
         customerName: "Customer B",
         parkingStatus: "active",
       },
+      "barrelShipments/barrel_a": {
+        businessId: "biz_a",
+        customerUid: "customer-owner",
+        trackingCode: "BR-A",
+        status: "in_transit",
+      },
+      "barrelShipments/barrel_a/trackingEvents/event_1": {
+        label: "Departed origin port",
+        source: "staff",
+      },
       "freightShipments/freight_a": {
         businessId: "biz_a",
         customerUid: "customer-owner",
@@ -367,6 +406,10 @@ async function seedFirestore() {
         price: 100,
         paymentStatus: "succeeded",
         status: "pending",
+      },
+      "freightShipments/freight_a/trackingEvents/event_1": {
+        label: "Left the warehouse",
+        source: "staff",
       },
       "freightShipments/freight_b": {
         businessId: "biz_b",
@@ -1111,6 +1154,217 @@ describe("business dashboard Firestore rules", () => {
         staffDb.doc("businessSupportRequests/support_a").get(),
     );
     await assertFails(staffDb.doc("businessSupportRequests/support_b").get());
+  });
+});
+
+describe("shipment tracking timeline Firestore rules", () => {
+  it("lets the shipment's own customer and the business's staff read " +
+      "a barrel shipment's tracking events", async () => {
+    const customerDb = firestoreFor("customer-owner");
+    const staffDb = firestoreFor("staff-barrels-a");
+
+    await assertSucceeds(
+        customerDb.doc("barrelShipments/barrel_a/trackingEvents/event_1")
+            .get(),
+    );
+    await assertSucceeds(
+        staffDb.doc("barrelShipments/barrel_a/trackingEvents/event_1").get(),
+    );
+  });
+
+  it("denies a different customer or an unrelated business from reading " +
+      "a barrel shipment's tracking events", async () => {
+    const strangerDb = firestoreFor("customer-stranger");
+    const otherBusinessStaffDb = firestoreFor("staff-transport-b");
+
+    await assertFails(
+        strangerDb.doc("barrelShipments/barrel_a/trackingEvents/event_1")
+            .get(),
+    );
+    await assertFails(
+        otherBusinessStaffDb
+            .doc("barrelShipments/barrel_a/trackingEvents/event_1")
+            .get(),
+    );
+  });
+
+  it("applies the same rule to a freight shipment's tracking events",
+      async () => {
+        const customerDb = firestoreFor("customer-owner");
+        const strangerDb = firestoreFor("customer-stranger");
+
+        await assertSucceeds(
+            customerDb
+                .doc("freightShipments/freight_a/trackingEvents/event_1")
+                .get(),
+        );
+        await assertFails(
+            strangerDb
+                .doc("freightShipments/freight_a/trackingEvents/event_1")
+                .get(),
+        );
+      });
+
+  it("denies direct client writes to a shipment's tracking events " +
+      "(server-only via addShipmentTrackingMilestone)", async () => {
+    const staffDb = firestoreFor("staff-barrels-a");
+    await assertFails(
+        staffDb.doc("barrelShipments/barrel_a/trackingEvents/event_2").set({
+          label: "Forged update",
+          source: "staff",
+        }),
+    );
+    await assertFails(
+        staffDb.doc("barrelShipments/barrel_a/trackingEvents/event_1")
+            .update({label: "Edited"}),
+    );
+  });
+});
+
+describe("business review Firestore rules", () => {
+  it("lets anyone read a review on an approved business", async () => {
+    const anonDb = firestoreFor(null);
+    await assertSucceeds(anonDb.doc("businesses/biz_a/reviews/review_1").get());
+  });
+
+  it("denies reading a review on a not-yet-approved business, " +
+      "except its own author or staff", async () => {
+    const anonDb = firestoreFor(null);
+    const strangerDb = firestoreFor("customer-stranger");
+    const authorDb = firestoreFor("customer-owner");
+
+    await assertFails(
+        anonDb.doc("businesses/biz_pending/reviews/review_2").get(),
+    );
+    await assertFails(
+        strangerDb.doc("businesses/biz_pending/reviews/review_2").get(),
+    );
+    await assertSucceeds(
+        authorDb.doc("businesses/biz_pending/reviews/review_2").get(),
+    );
+  });
+
+  it("denies direct client writes to a review, even by its own author " +
+      "or the reviewed business's staff", async () => {
+    const authorDb = firestoreFor("customer-owner");
+    const staffDb = firestoreFor("staff-listings-a");
+
+    await assertFails(authorDb.doc("businesses/biz_a/reviews/review_1").set({
+      businessId: "biz_a",
+      customerUid: "customer-owner",
+      rating: 1,
+      comment: "Edited",
+      moderationStatus: "published",
+    }));
+    await assertFails(
+        staffDb.doc("businesses/biz_a/reviews/review_1").update({rating: 1}),
+    );
+    await assertFails(
+        authorDb.doc("businesses/biz_a/reviews/review_1").delete(),
+    );
+    await assertFails(
+        authorDb.doc("businesses/biz_a/reviews/review_new").set({
+          businessId: "biz_a",
+          customerUid: "customer-owner",
+          rating: 5,
+          comment: "New review",
+          moderationStatus: "published",
+        }),
+    );
+  });
+
+  it("only lets the reviewed business's staff or an admin read who " +
+      "flagged a review", async () => {
+    const staffDb = firestoreFor("staff-listings-a");
+    const otherBusinessStaffDb = firestoreFor("staff-transport-b");
+    const adminDb = firestoreFor("super-admin");
+    const authorDb = firestoreFor("customer-owner");
+
+    await assertSucceeds(
+        staffDb.doc(
+            "businesses/biz_a/reviews/review_1/flags/staff-listings-a",
+        ).get(),
+    );
+    await assertSucceeds(
+        adminDb.doc(
+            "businesses/biz_a/reviews/review_1/flags/staff-listings-a",
+        ).get(),
+    );
+    await assertFails(
+        otherBusinessStaffDb.doc(
+            "businesses/biz_a/reviews/review_1/flags/staff-listings-a",
+        ).get(),
+    );
+    await assertFails(
+        authorDb.doc(
+            "businesses/biz_a/reviews/review_1/flags/staff-listings-a",
+        ).get(),
+    );
+  });
+
+  it("denies direct client writes to a review's flags", async () => {
+    const authorDb = firestoreFor("customer-owner");
+    await assertFails(
+        authorDb.doc("businesses/biz_a/reviews/review_1/flags/customer-owner")
+            .set({uid: "customer-owner", reason: "Not real"}),
+    );
+  });
+
+  // The businesses/{businessId}/reviews/{reviewId} rule above only
+  // authorizes queries scoped to one specific business (a direct
+  // subcollection reference or a get()) - it does NOT cover a true
+  // collectionGroup('reviews') query spanning every business, which
+  // Firestore only authorizes via a separate top-level {path=**} rule. This
+  // gap is invisible to every .doc(...).get() test above (none of them
+  // exercise collectionGroup), so it needs its own dedicated coverage - see
+  // the {path=**}/reviews rule in firestore.rules.
+  it("lets an admin list flagged reviews via a collectionGroup query, " +
+      "but denies the same query to a non-admin", async () => {
+    const adminDb = firestoreFor("super-admin");
+    const staffDb = firestoreFor("staff-listings-a");
+
+    const adminSnap = await assertSucceeds(
+        adminDb.collectionGroup("reviews")
+            .where("moderationStatus", "==", "flagged")
+            .get(),
+    );
+    assert.deepEqual(
+        adminSnap.docs.map((doc) => doc.id).sort(),
+        ["review_flagged"],
+    );
+
+    await assertFails(
+        staffDb.collectionGroup("reviews")
+            .where("moderationStatus", "==", "flagged")
+            .get(),
+    );
+  });
+
+  it("lets a customer list their own reviews via a collectionGroup query, " +
+      "but denies the same query for a different customer's uid", async () => {
+    const authorDb = firestoreFor("customer-owner");
+    const strangerDb = firestoreFor("customer-stranger");
+
+    const ownSnap = await assertSucceeds(
+        authorDb.collectionGroup("reviews")
+            .where("customerUid", "==", "customer-owner")
+            .get(),
+    );
+    assert.deepEqual(
+        ownSnap.docs.map((doc) => doc.id).sort(),
+        ["review_1", "review_2", "review_flagged"],
+    );
+
+    await assertFails(
+        strangerDb.collectionGroup("reviews")
+            .where("customerUid", "==", "customer-owner")
+            .get(),
+    );
+  });
+
+  it("denies an unfiltered collectionGroup query on reviews to anyone", async () => {
+    const adminDb = firestoreFor("super-admin");
+    await assertFails(adminDb.collectionGroup("reviews").get());
   });
 });
 

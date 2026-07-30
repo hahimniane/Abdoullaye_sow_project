@@ -1,3 +1,4 @@
+import '../screens/review_composer_screen.dart';
 import '../screens/tracking_screen.dart';
 
 /// Where to navigate for a given push notification's `data` payload.
@@ -29,7 +30,28 @@ NotificationRoute? routeForNotificationData(Map<String, dynamic> data) {
         arguments: TrackingScreenArguments(shipmentId: shipmentId),
       );
     case 'parking_reservation_status':
+    case 'transport_request_status':
       return const NotificationRoute('/orders');
+    case 'review_request':
+      final relatedCollection = data['relatedCollection']?.toString();
+      final relatedId = data['relatedId']?.toString();
+      final businessId = data['businessId']?.toString();
+      if (relatedCollection == null ||
+          relatedCollection.isEmpty ||
+          relatedId == null ||
+          relatedId.isEmpty ||
+          businessId == null ||
+          businessId.isEmpty) {
+        return null;
+      }
+      return NotificationRoute(
+        '/leave-review',
+        arguments: ReviewComposerArguments(
+          relatedCollection: relatedCollection,
+          relatedId: relatedId,
+          businessId: businessId,
+        ),
+      );
     case 'wallet_refund_status':
       return const NotificationRoute('/wallet');
     case 'business_application_status':

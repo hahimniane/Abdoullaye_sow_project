@@ -698,6 +698,64 @@ class AppLocalizationsEn extends AppLocalizations {
   String get orderStatusRefunded => 'Refunded';
 
   @override
+  String get orderLeaveReviewCta => 'Leave a review';
+
+  @override
+  String get orderReviewedBadge => 'Reviewed';
+
+  @override
+  String get reviewComposerTitle => 'Leave a review';
+
+  @override
+  String get reviewRatingLabel => 'How would you rate this service?';
+
+  @override
+  String get reviewRatingRequired => 'Please select a star rating.';
+
+  @override
+  String get reviewCommentHint => 'Tell us about your experience';
+
+  @override
+  String get reviewCommentRequired => 'Please write a short comment.';
+
+  @override
+  String get reviewSubmitButton => 'Submit review';
+
+  @override
+  String get reviewSubmitSuccess => 'Thanks for your review!';
+
+  @override
+  String get reviewSubmitFailed =>
+      'We could not submit your review. Please try again.';
+
+  @override
+  String get reviewAlreadySubmitted => 'You already reviewed this order.';
+
+  @override
+  String get reviewOrderNotCompleted => 'This order is not completed yet.';
+
+  @override
+  String get reviewsSectionTitle => 'Customer reviews';
+
+  @override
+  String get reviewsEmpty => 'No reviews yet.';
+
+  @override
+  String get reviewFlagButton => 'Report';
+
+  @override
+  String get reviewFlagDialogTitle => 'Report this review';
+
+  @override
+  String get reviewFlagReasonHint => 'Why are you reporting this review?';
+
+  @override
+  String get reviewFlagSubmit => 'Submit report';
+
+  @override
+  String get reviewFlagSubmitted => 'Thanks, we\'ll take a look.';
+
+  @override
   String get filterParking => 'Parked Cars';
 
   @override
@@ -1527,6 +1585,61 @@ class AppLocalizationsEn extends AppLocalizations {
   String get staffControls => 'Staff controls';
 
   @override
+  String get trackingUpdatesTitle => 'Tracking updates';
+
+  @override
+  String get trackingUpdatesEmpty => 'No updates yet.';
+
+  @override
+  String get addTrackingUpdate => 'Add update';
+
+  @override
+  String get trackingUpdateAdded => 'Tracking update added.';
+
+  @override
+  String get trackingUpdateLabel => 'What happened';
+
+  @override
+  String get trackingUpdateLabelHint => 'e.g. Departed origin port';
+
+  @override
+  String get trackingUpdateLabelRequired => 'Please describe what happened.';
+
+  @override
+  String get trackingUpdateLocation => 'Location (optional)';
+
+  @override
+  String get trackingUpdateNotes => 'Notes (optional)';
+
+  @override
+  String get containerTrackingTitle => 'Automated container tracking';
+
+  @override
+  String get containerTrackingDescription =>
+      'Enter the container, booking, or bill of lading number from the carrier to get automatic tracking updates.';
+
+  @override
+  String get containerNumberLabel => 'Container / booking / BOL number';
+
+  @override
+  String get containerNumberHint => 'e.g. MSKU1234567';
+
+  @override
+  String get carrierCodeOptionalLabel => 'Carrier SCAC code (optional)';
+
+  @override
+  String get startTrackingButton => 'Start tracking';
+
+  @override
+  String get containerNumberRequired => 'Enter a valid tracking number.';
+
+  @override
+  String get containerTrackingStarted => 'Automated tracking started.';
+
+  @override
+  String get automatedTrackingActive => 'Automated tracking active';
+
+  @override
   String get shippingBusiness => 'Shipping business';
 
   @override
@@ -1750,12 +1863,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get noApprovedDestinationsAvailable =>
       'No active approved business destinations are available.';
-
-  @override
-  String get carrierTracking => 'Carrier tracking';
-
-  @override
-  String get couldNotOpenCarrierTracking => 'Could not open carrier tracking.';
 
   @override
   String get trackingNumberCopiedShort => 'Tracking number copied.';
@@ -3319,6 +3426,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get businessActivityNotifications => 'Business application updates';
+
+  @override
+  String get reviewActivityNotifications => 'Review requests';
 
   @override
   String get faceId => 'Face ID';

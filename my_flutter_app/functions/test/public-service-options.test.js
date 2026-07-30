@@ -27,8 +27,25 @@ test(
       assert.equal(Object.hasOwn(option, "email"), false);
       assert.equal(Object.hasOwn(option, "latitude"), false);
       assert.equal(Object.hasOwn(option, "longitude"), false);
+      assert.equal(option.reviewCount, 0);
+      assert.equal(option.reviewAverage, 0);
+      assert.equal(option.reviewWeightedScore, 0);
     },
 );
+
+test("public parking options surface a business's review aggregate", () => {
+  const option = publicParkingOption({
+    businessId: "business-1",
+    businessName: "Secure Parking",
+    reviewCount: 42,
+    reviewAverage: 4.3,
+    reviewWeightedScore: 4.198,
+  });
+
+  assert.equal(option.reviewCount, 42);
+  assert.equal(option.reviewAverage, 4.3);
+  assert.equal(option.reviewWeightedScore, 4.198);
+});
 
 test(
     "public shared-barrel options expose only the actionable mirror fields",
@@ -47,5 +64,6 @@ test(
       assert.equal(option.sharesAvailable, 2);
       assert.equal(Object.hasOwn(option, "createdByUid"), false);
       assert.equal(Object.hasOwn(option, "publicParticipants"), false);
+      assert.equal(option.reviewCount, 0);
     },
 );

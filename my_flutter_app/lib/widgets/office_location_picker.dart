@@ -39,16 +39,16 @@ class OfficeLocationPicker extends StatelessWidget {
                       : AppLocalizations.of(context)!.dropOffOffice),
           );
         }
-        final validSelection = locations.any(
-          (location) => location.id == selectedLocationId,
+        final effectiveSelection = OfficeLocation.resolveSelectedId(
+          locations,
+          selectedLocationId,
         );
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!validSelection) onChanged(locations.first.id);
-        });
+        if (effectiveSelection != selectedLocationId) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            onChanged(effectiveSelection);
+          });
+        }
         final l10n = AppLocalizations.of(context)!;
-        final effectiveSelection = validSelection
-            ? selectedLocationId
-            : locations.first.id;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

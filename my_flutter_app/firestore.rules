@@ -587,6 +587,24 @@ service cloud.firestore {
             'receiverPhone',
             'updatedAt'
           ]);
+
+      // Milestone timeline for this shipment (staff-entered updates and, once
+      // a container is subscribed for tracking, carrier-API events). Writes
+      // are server-only (addShipmentTrackingMilestone / the tracking
+      // webhook) so validation lives in one place, matching the reviews
+      // subcollection pattern above.
+      match /trackingEvents/{eventId} {
+        allow read: if request.auth != null &&
+          (
+            isAdmin(request.auth.uid) ||
+            canManageBusiness(
+              request.auth.uid,
+              get(/databases/$(database)/documents/barrelShipments/$(shipmentId)).data.businessId
+            ) ||
+            get(/databases/$(database)/documents/barrelShipments/$(shipmentId)).data.customerUid == request.auth.uid
+          );
+        allow create, update, delete: if false;
+      }
     }
 
     match /barrelOrders/{orderId} {
@@ -646,6 +664,21 @@ service cloud.firestore {
             'receiverPhone',
             'updatedAt'
           ]);
+
+      // Milestone timeline for this shipment - see the identical block under
+      // barrelShipments above for the full rationale.
+      match /trackingEvents/{eventId} {
+        allow read: if request.auth != null &&
+          (
+            isAdmin(request.auth.uid) ||
+            canManageBusiness(
+              request.auth.uid,
+              get(/databases/$(database)/documents/freightShipments/$(shipmentId)).data.businessId
+            ) ||
+            get(/databases/$(database)/documents/freightShipments/$(shipmentId)).data.customerUid == request.auth.uid
+          );
+        allow create, update, delete: if false;
+      }
     }
 
     match /freightSettlements/{settlementId} {
@@ -815,6 +848,26 @@ service cloud.firestore {
           validOfficeLocation(request.resource.data, businessId);
         allow delete: if false;
       }
+
+      // Customer reviews of a completed order. Fully public once the
+      // business is approved (same openness as destinationCountries above),
+      // so shoppers can see ratings/comments before booking. All writes go
+      // through submitBusinessReview/flagBusinessReview/resolveFlaggedReview
+      // (Admin SDK) so order-ownership, completed-status, and one-review-
+      // per-order validation lives in one place, not duplicated in rules.
+      match /reviews/{reviewId} {
+        allow read: if get(/databases/$(database)/documents/businesses/$(businessId)).data.status == 'approved' ||
+          (request.auth != null &&
+           (canManageBusiness(request.auth.uid, businessId) ||
+            resource.data.customerUid == request.auth.uid));
+        allow create, update, delete: if false;
+
+        match /flags/{flagUid} {
+          allow read: if request.auth != null &&
+            (canManageBusiness(request.auth.uid, businessId) || isAdmin(request.auth.uid));
+          allow create, update, delete: if false;
+        }
+      }
     }
 
     match /destinationCountries/{countryId} {
@@ -828,6 +881,20 @@ service cloud.firestore {
 
     match /{path=**}/destinationCountries/{countryId} {
       allow read: if request.auth != null && isAdmin(request.auth.uid);
+    }
+
+    // The nested businesses/{businessId}/reviews/{reviewId} rule above only
+    // authorizes queries scoped to one specific business (a direct
+    // subcollection reference or a get()); it does NOT cover a true
+    // collectionGroup('reviews') query spanning every business, which
+    // Firestore only authorizes via this separate {path=**} form (same
+    // pattern as officeLocations/destinationCountries above). This is what
+    // makes both the admin flagged-reviews moderation queue and a mobile
+    // customer's "which of my orders have I already reviewed" check work.
+    match /{path=**}/reviews/{reviewId} {
+      allow read: if request.auth != null &&
+        ((isAdmin(request.auth.uid) && resource.data.moderationStatus == 'flagged') ||
+         resource.data.customerUid == request.auth.uid);
     }
 
     match /businessApplications/{applicationId} {

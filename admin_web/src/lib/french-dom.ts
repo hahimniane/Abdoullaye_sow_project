@@ -2012,6 +2012,26 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Customer wallet balance": "Solde du portefeuille client",
   Customers: "Clients",
   "Customers and help": "Clients et aide",
+  Reviews: "Avis",
+  "Ratings and customer feedback": "Évaluations et avis clients",
+  "Customer ratings and comments for completed orders appear here.":
+    "Les évaluations et commentaires des clients pour les commandes terminées apparaissent ici.",
+  "No reviews yet": "Aucun avis pour le moment",
+  "Customers can leave a review once you mark their order completed.":
+    "Les clients peuvent laisser un avis une fois que vous avez marqué leur commande comme terminée.",
+  Published: "Publié",
+  Flagged: "Signalé",
+  Removed: "Supprimé",
+  average: "moyenne",
+  reviews: "avis",
+  review: "avis",
+  flags: "signalements",
+  flag: "signalement",
+  "Flagged reviews": "Avis signalés",
+  Dismiss: "Ignorer",
+  "Remove review": "Supprimer l'avis",
+  "Review removed": "Avis supprimé",
+  "Flag dismissed": "Signalement ignoré",
   Days: "Jours",
   Deactivate: "Désactiver",
   "Default barrel price (USD)": "Prix de baril par défaut (USD)",
@@ -3260,6 +3280,28 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Business updates": "Mises à jour de l’entreprise",
   "Application, verification, and account status":
     "État de la candidature, de la vérification et du compte",
+  "Tracking updates": "Mises à jour de suivi",
+  "Add update": "Ajouter une mise à jour",
+  "What happened (e.g. Departed origin port)":
+    "Ce qui s’est passé (ex. Départ du port d’origine)",
+  "Location (optional)": "Lieu (facultatif)",
+  "Notes (optional)": "Remarques (facultatif)",
+  "Saving…": "Enregistrement…",
+  "Save update": "Enregistrer la mise à jour",
+  "No updates yet.": "Aucune mise à jour pour le moment.",
+  "Please describe what happened.": "Veuillez décrire ce qui s’est passé.",
+  "Could not add update.": "Impossible d’ajouter la mise à jour.",
+  "Automated tracking active": "Suivi automatique actif",
+  "Automated container tracking": "Suivi automatique du conteneur",
+  "Enter the container, booking, or bill of lading number from the carrier to get automatic tracking updates.":
+    "Entrez le numéro de conteneur, de réservation ou de connaissement du transporteur pour obtenir des mises à jour de suivi automatiques.",
+  "Container / booking / BOL number (e.g. MSKU1234567)":
+    "Numéro de conteneur / réservation / connaissement (ex. MSKU1234567)",
+  "Carrier SCAC code (optional)": "Code SCAC du transporteur (facultatif)",
+  "Starting…": "Démarrage…",
+  "Start tracking": "Démarrer le suivi",
+  "Enter a valid tracking number.": "Entrez un numéro de suivi valide.",
+  "Could not start tracking.": "Impossible de démarrer le suivi.",
 };
 
 const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {

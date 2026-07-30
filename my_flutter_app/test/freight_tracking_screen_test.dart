@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/l10n/app_localizations.dart';
 import 'package:my_flutter_app/models/customer_order.dart';
+import 'package:my_flutter_app/models/shipment_tracking_event.dart';
 import 'package:my_flutter_app/providers/language_provider.dart';
 import 'package:my_flutter_app/screens/tracking_screen.dart';
+import 'package:my_flutter_app/services/shipment_tracking_service.dart';
 import 'package:my_flutter_app/theme/app_theme.dart';
 import 'package:provider/provider.dart';
 
@@ -20,6 +22,23 @@ class _FakeTrackingRepository implements CustomerTrackingRepository {
     watchedCustomerUid = customerUid;
     return Stream.value(shipments);
   }
+}
+
+class _FakeTrackingService extends ShipmentTrackingService {
+  @override
+  Stream<List<ShipmentTrackingEvent>> eventsForShipment({
+    required String relatedCollection,
+    required String relatedId,
+  }) => Stream.value(const []);
+
+  @override
+  Future<void> addMilestone({
+    required String relatedCollection,
+    required String relatedId,
+    required String label,
+    String description = '',
+    String location = '',
+  }) async {}
 }
 
 Future<void> _pumpTracking(
@@ -41,6 +60,7 @@ Future<void> _pumpTracking(
           repository: repository,
           customerUidOverride: 'customer-freight',
           focusShipmentId: focusShipmentId,
+          trackingService: _FakeTrackingService(),
         ),
       ),
     ),

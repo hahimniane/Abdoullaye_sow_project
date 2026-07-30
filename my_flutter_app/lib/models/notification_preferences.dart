@@ -7,6 +7,7 @@ class NotificationPreferences {
     this.shipmentActivity = true,
     this.walletActivity = true,
     this.businessActivity = true,
+    this.reviewActivity = true,
     this.supportActivity = true,
     this.supportMessages = true,
     this.supportEscalations = true,
@@ -20,6 +21,7 @@ class NotificationPreferences {
   final bool shipmentActivity;
   final bool walletActivity;
   final bool businessActivity;
+  final bool reviewActivity;
   final bool supportActivity;
   final bool supportMessages;
   final bool supportEscalations;
@@ -37,6 +39,7 @@ class NotificationPreferences {
       shipmentActivity: data['shipmentActivity'] != false,
       walletActivity: data['walletActivity'] != false,
       businessActivity: data['businessActivity'] != false,
+      reviewActivity: data['reviewActivity'] != false,
       supportActivity: data['supportActivity'] != false,
       supportMessages:
           data['supportMessages'] != false && data['supportActivity'] != false,
@@ -58,6 +61,7 @@ class NotificationPreferences {
       'shipmentActivity': shipmentActivity,
       'walletActivity': walletActivity,
       'businessActivity': businessActivity,
+      'reviewActivity': reviewActivity,
       'supportActivity': supportActivity,
       'supportMessages': supportMessages,
       'supportEscalations': supportEscalations,
@@ -73,6 +77,7 @@ class NotificationPreferences {
     bool? shipmentActivity,
     bool? walletActivity,
     bool? businessActivity,
+    bool? reviewActivity,
     bool? supportActivity,
     bool? supportMessages,
     bool? supportEscalations,
@@ -86,6 +91,7 @@ class NotificationPreferences {
       shipmentActivity: shipmentActivity ?? this.shipmentActivity,
       walletActivity: walletActivity ?? this.walletActivity,
       businessActivity: businessActivity ?? this.businessActivity,
+      reviewActivity: reviewActivity ?? this.reviewActivity,
       supportActivity: supportActivity ?? this.supportActivity,
       supportMessages: supportMessages ?? this.supportMessages,
       supportEscalations: supportEscalations ?? this.supportEscalations,

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_flutter_app/screens/review_composer_screen.dart';
 import 'package:my_flutter_app/screens/tracking_screen.dart';
 import 'package:my_flutter_app/services/notification_routing.dart';
 
@@ -56,6 +57,38 @@ void main() {
       });
 
       expect(route?.name, '/orders');
+    });
+
+    test('routes a transport request update to Orders', () {
+      final route = routeForNotificationData({
+        'type': 'transport_request_status',
+      });
+
+      expect(route?.name, '/orders');
+    });
+
+    test('routes a review request to the review composer', () {
+      final route = routeForNotificationData({
+        'type': 'review_request',
+        'relatedCollection': 'parkedCars',
+        'relatedId': 'park-1',
+        'businessId': 'biz-1',
+      });
+
+      expect(route?.name, '/leave-review');
+      final args = route?.arguments as ReviewComposerArguments;
+      expect(args.relatedCollection, 'parkedCars');
+      expect(args.relatedId, 'park-1');
+      expect(args.businessId, 'biz-1');
+    });
+
+    test('does not route a review request missing required fields', () {
+      final route = routeForNotificationData({
+        'type': 'review_request',
+        'relatedCollection': 'parkedCars',
+      });
+
+      expect(route, isNull);
     });
 
     test('routes a wallet refund update to Wallet', () {

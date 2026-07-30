@@ -137,6 +137,7 @@ const businessPermissionOptions = [
   {id: "parking", label: "Parking"},
   {id: "destinations", label: "Services & coverage"},
   {id: "people", label: "People"},
+  {id: "reviews", label: "Reviews"},
   {id: "support", label: "Support"},
   {id: "growth", label: "Growth"},
 ];

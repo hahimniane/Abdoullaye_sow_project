@@ -25,6 +25,26 @@ const {
   buildFeaturingRequestUpdate,
 } = require("./featured_business");
 const {
+  OWNER_UID_FIELDS_BY_COLLECTION: REVIEW_OWNER_UID_FIELDS_BY_COLLECTION,
+  ORDER_TYPE_BY_COLLECTION: REVIEW_ORDER_TYPE_BY_COLLECTION,
+  computeAggregate: computeReviewAggregate,
+  normalizeOrderStatus: normalizeReviewOrderStatus,
+  reviewDocId: businessReviewDocId,
+  statusFieldsByCollection: reviewStatusFieldsByCollection,
+  validateFlagSubmission: validateReviewFlagSubmission,
+  validateReviewSubmission,
+} = require("./business_review");
+const {
+  TRACKING_SECTION_BY_COLLECTION,
+  validateMilestoneSubmission,
+  validateContainerNumber,
+  inferRequestType,
+  milestoneForContainerStatus,
+  carrierEventDocId,
+  parseTrackingRequestResponse,
+  parseContainersFromIncluded,
+} = require("./shipment_tracking");
+const {
   coerceReviewWebsite,
 } = require("./business_profile_validation");
 const {
@@ -113,6 +133,8 @@ const businessProPriceId = defineSecret("BUSINESS_PRO_PRICE_ID");
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const anthropicApiKey = defineSecret("ANTHROPIC_API_KEY");
 const googleMapsApiKey = defineSecret("GOOGLE_MAPS_API_KEY");
+const terminal49ApiKey = defineSecret("TERMINAL49_API_KEY");
+const TERMINAL49_BASE_URL = "https://api.terminal49.com/v2";
 const DEPOSIT_CURRENCY = "usd";
 const DEFAULT_HOLD_MAX_DAYS = 14;
 const PURCHASE_CURRENCY = "usd";
@@ -651,6 +673,12 @@ exports.notifyCarPurchaseStatus = onDocumentUpdated(
           status: after.status || "",
         },
       });
+      await maybeSendReviewRequestNotification({
+        relatedCollection: "carPurchases",
+        relatedId: event.params.purchaseId,
+        after,
+        uid,
+      });
     },
 );
 
@@ -670,6 +698,12 @@ exports.notifyBarrelShipmentStatus = onDocumentUpdated(
           shipmentId: event.params.shipmentId,
           status: after.status || "",
         },
+      });
+      await maybeSendReviewRequestNotification({
+        relatedCollection: "barrelShipments",
+        relatedId: event.params.shipmentId,
+        after,
+        uid,
       });
     },
 );
@@ -730,6 +764,41 @@ exports.notifyParkingReservationStatus = onDocumentUpdated(
           reservationId: event.params.reservationId,
           status: after.status || "",
         },
+      });
+      await maybeSendReviewRequestNotification({
+        relatedCollection: "parkedCars",
+        relatedId: event.params.reservationId,
+        after,
+        uid,
+      });
+    },
+);
+
+// transportRequests had no status-change trigger at all before reviews —
+// added here since it's the review-request notification's trigger point,
+// mirroring the sibling triggers above.
+exports.notifyTransportRequestStatus = onDocumentUpdated(
+    "transportRequests/{requestId}",
+    async (event) => {
+      if (!statusChanged(event)) return;
+      const after = event.data.after.data() || {};
+      const uid = userIdFrom(after, ["customerUid"]);
+      await sendPreferenceNotification({
+        uid,
+        preferenceKey: "shipmentActivity",
+        title: "Transport update",
+        body: `Your car transport request is now ${after.status || "updated"}.`,
+        data: {
+          type: "transport_request_status",
+          requestId: event.params.requestId,
+          status: after.status || "",
+        },
+      });
+      await maybeSendReviewRequestNotification({
+        relatedCollection: "transportRequests",
+        relatedId: event.params.requestId,
+        after,
+        uid,
       });
     },
 );
@@ -1222,6 +1291,677 @@ function setAdminAuditLog(batch, {
   batch.set(ref, payload);
 }
 
+// Lets a customer rate a completed order's business exactly once. The order
+// ownership/completion checks and the aggregate update happen in a single
+// transaction so "one review per order" never races and the business's
+// rating stays consistent with its review documents.
+exports.submitBusinessReview = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const relatedCollection = String(
+          request.data?.relatedCollection || "",
+      ).trim();
+      const relatedId = String(request.data?.relatedId || "").trim();
+      const businessId = String(request.data?.businessId || "").trim();
+      if (
+        !REVIEW_ORDER_TYPE_BY_COLLECTION[relatedCollection] ||
+        !relatedId ||
+        !businessId
+      ) {
+        throw new HttpsError("invalid-argument", "Missing order reference.");
+      }
+      const {missing, rating, comment} = validateReviewSubmission(
+          request.data || {},
+      );
+      if (missing.length > 0) {
+        throw new HttpsError(
+            "invalid-argument",
+            `Please provide ${missing.join(" and ")}.`,
+        );
+      }
+
+      const db = admin.firestore();
+      const orderRef = db.collection(relatedCollection).doc(relatedId);
+      const businessRef = db.collection("businesses").doc(businessId);
+      const reviewRef = businessRef.collection("reviews")
+          .doc(businessReviewDocId(relatedCollection, relatedId));
+
+      let committedAggregate = null;
+      await db.runTransaction(async (tx) => {
+        const [orderSnap, businessSnap, reviewSnap] = await Promise.all([
+          tx.get(orderRef),
+          tx.get(businessRef),
+          tx.get(reviewRef),
+        ]);
+        if (!orderSnap.exists) {
+          throw new HttpsError("not-found", "Order not found.");
+        }
+        if (reviewSnap.exists) {
+          throw new HttpsError(
+              "already-exists",
+              "This order has already been reviewed.",
+          );
+        }
+        const order = orderSnap.data() || {};
+        const ownerUid = userIdFrom(
+            order,
+            REVIEW_OWNER_UID_FIELDS_BY_COLLECTION[relatedCollection],
+        );
+        if (!ownerUid || ownerUid !== uid) {
+          throw new HttpsError(
+              "permission-denied",
+              "This order does not belong to you.",
+          );
+        }
+        if (String(order.businessId || "") !== businessId) {
+          throw new HttpsError("failed-precondition", "Business mismatch.");
+        }
+        const statusRaw = reviewStatusFieldsByCollection(
+            order,
+            relatedCollection,
+        );
+        if (normalizeReviewOrderStatus(statusRaw) !== "completed") {
+          throw new HttpsError(
+              "failed-precondition",
+              "This order is not completed yet.",
+          );
+        }
+        if (!businessSnap.exists) {
+          throw new HttpsError("not-found", "Business not found.");
+        }
+        const business = businessSnap.data() || {};
+        const nextAggregate = computeReviewAggregate({
+          reviewCount: Number(business.reviewCount || 0) + 1,
+          reviewRatingSum: Number(business.reviewRatingSum || 0) + rating,
+        });
+        committedAggregate = nextAggregate;
+
+        tx.set(reviewRef, {
+          businessId,
+          customerUid: uid,
+          customerDisplayName: firstNameLastInitial(order, request.auth),
+          orderType: REVIEW_ORDER_TYPE_BY_COLLECTION[relatedCollection],
+          relatedCollection,
+          relatedId,
+          rating,
+          comment,
+          createdAt: FirestoreFieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+          moderationStatus: "published",
+          flagCount: 0,
+        });
+        tx.set(businessRef, {
+          ...nextAggregate,
+          reviewUpdatedAt: FirestoreFieldValue.serverTimestamp(),
+        }, {merge: true});
+      });
+
+      if (committedAggregate) {
+        await fanOutBusinessReviewAggregateToCars(
+            businessId,
+            committedAggregate,
+        );
+      }
+
+      return {success: true};
+    },
+);
+
+// The customer-console car listing UI reads the public `cars` collection
+// directly with no join to `businesses` (see admin_web's usePublicCars), so
+// the rating badge there needs the aggregate denormalized onto each active
+// car doc. Kept eventually-consistent and best-effort outside the review
+// transaction since Firestore transactions can't touch an unbounded doc set.
+async function fanOutBusinessReviewAggregateToCars(businessId, aggregate) {
+  try {
+    const db = admin.firestore();
+    const carsSnap = await db.collection("cars")
+        .where("businessId", "==", businessId)
+        .where("status", "==", "active")
+        .get();
+    for (let i = 0; i < carsSnap.docs.length; i += 400) {
+      const batch = db.batch();
+      for (const doc of carsSnap.docs.slice(i, i + 400)) {
+        batch.set(doc.ref, {
+          businessReviewAverage: aggregate.reviewAverage,
+          businessReviewCount: aggregate.reviewCount,
+        }, {merge: true});
+      }
+      await batch.commit();
+    }
+  } catch (error) {
+    logger.warn("Review aggregate fan-out to cars failed", {
+      businessId,
+      error: error?.message || String(error),
+    });
+  }
+}
+
+// A first-name + last-initial label, never the customer's full legal name,
+// shown publicly alongside their review.
+function firstNameLastInitial(order, auth) {
+  const source = String(
+      order?.customerName || order?.receiverName || auth?.token?.name || "",
+  ).trim();
+  if (!source) return "Customer";
+  const parts = source.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`;
+}
+
+// Lets a customer or the reviewed business's own staff/owner report a
+// review as inappropriate or false. One flag per user per review (the
+// flagging uid is the flag doc's id), routed to the admin moderation queue.
+exports.flagBusinessReview = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const businessId = String(request.data?.businessId || "").trim();
+      const reviewId = String(request.data?.reviewId || "").trim();
+      if (!businessId || !reviewId) {
+        throw new HttpsError("invalid-argument", "Missing review reference.");
+      }
+      const {missing, reason} = validateReviewFlagSubmission(
+          request.data || {},
+      );
+      if (missing.length > 0) {
+        throw new HttpsError(
+            "invalid-argument",
+            `Please provide ${missing.join(" and ")}.`,
+        );
+      }
+
+      const db = admin.firestore();
+      const reviewRef = db.collection("businesses").doc(businessId)
+          .collection("reviews").doc(reviewId);
+      const flagRef = reviewRef.collection("flags").doc(uid);
+
+      await db.runTransaction(async (tx) => {
+        const [reviewSnap, flagSnap] = await Promise.all([
+          tx.get(reviewRef),
+          tx.get(flagRef),
+        ]);
+        if (!reviewSnap.exists) {
+          throw new HttpsError("not-found", "Review not found.");
+        }
+        if (flagSnap.exists) return;
+        tx.set(flagRef, {
+          uid,
+          reason,
+          createdAt: FirestoreFieldValue.serverTimestamp(),
+        });
+        tx.set(reviewRef, {
+          flagCount: FirestoreFieldValue.increment(1),
+          moderationStatus: "flagged",
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }, {merge: true});
+      });
+
+      return {success: true};
+    },
+);
+
+// Admin-only takedown/dismiss action for a flagged review. "remove" rolls
+// back the business's aggregate in the same transaction so ranking never
+// reflects a review that's no longer visible.
+exports.resolveFlaggedReview = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    async (request) => {
+      const adminUid = requireAuth(request);
+      const adminUser = await getUserProfile(adminUid);
+      requireAdminCapability(
+          adminUser,
+          "marketplace",
+          "Only marketplace admins can moderate reviews",
+      );
+      const businessId = String(request.data?.businessId || "").trim();
+      const reviewId = String(request.data?.reviewId || "").trim();
+      const action = String(request.data?.action || "").trim();
+      if (!businessId || !reviewId) {
+        throw new HttpsError("invalid-argument", "Missing review reference.");
+      }
+      if (action !== "dismiss" && action !== "remove") {
+        throw new HttpsError(
+            "invalid-argument",
+            "action must be \"dismiss\" or \"remove\".",
+        );
+      }
+
+      const db = admin.firestore();
+      const reviewRef = db.collection("businesses").doc(businessId)
+          .collection("reviews").doc(reviewId);
+      const businessRef = db.collection("businesses").doc(businessId);
+
+      let committedAggregate = null;
+      await db.runTransaction(async (tx) => {
+        const reviewSnap = await tx.get(reviewRef);
+        if (!reviewSnap.exists) {
+          throw new HttpsError("not-found", "Review not found.");
+        }
+        const review = reviewSnap.data() || {};
+        if (action === "dismiss") {
+          tx.set(reviewRef, {
+            moderationStatus: "published",
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          }, {merge: true});
+          return;
+        }
+        const businessSnap = await tx.get(businessRef);
+        const business = businessSnap.data() || {};
+        const nextAggregate = computeReviewAggregate({
+          reviewCount: Number(business.reviewCount || 0) - 1,
+          reviewRatingSum:
+            Number(business.reviewRatingSum || 0) - Number(review.rating || 0),
+        });
+        committedAggregate = nextAggregate;
+        tx.set(reviewRef, {
+          moderationStatus: "removed",
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }, {merge: true});
+        tx.set(businessRef, {
+          ...nextAggregate,
+          reviewUpdatedAt: FirestoreFieldValue.serverTimestamp(),
+        }, {merge: true});
+      });
+
+      if (committedAggregate) {
+        await fanOutBusinessReviewAggregateToCars(
+            businessId,
+            committedAggregate,
+        );
+      }
+
+      const batch = db.batch();
+      setAdminAuditLog(batch, {
+        action: `review_${action}`,
+        actorUid: adminUid,
+        targetCollection: "reviews",
+        targetId: reviewId,
+        targetLabel: `${businessId}/${reviewId}`,
+      });
+      await batch.commit();
+
+      return {success: true};
+    },
+);
+
+// Lets business staff (or admins) append a manual tracking update to a
+// shipment's timeline. This is the only tracking path for air freight and
+// for freight carried informally by a traveler (no container/carrier API
+// applies), and it's also usable on sea shipments before or without a
+// container number. Customers see these merged chronologically with any
+// carrier-API events a Terminal49 subscription later appends.
+exports.addShipmentTrackingMilestone = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const relatedCollection = String(
+          request.data?.relatedCollection || "",
+      ).trim();
+      const relatedId = String(request.data?.relatedId || "").trim();
+      const section = TRACKING_SECTION_BY_COLLECTION[relatedCollection];
+      if (!section || !relatedId) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Missing shipment reference.",
+        );
+      }
+      const {missing, label, description, location} =
+        validateMilestoneSubmission(request.data || {});
+      if (missing.length > 0) {
+        throw new HttpsError(
+            "invalid-argument",
+            `Please provide ${missing.join(" and ")}.`,
+        );
+      }
+
+      const db = admin.firestore();
+      const shipmentRef = db.collection(relatedCollection).doc(relatedId);
+      const shipmentSnap = await shipmentRef.get();
+      if (!shipmentSnap.exists) {
+        throw new HttpsError("not-found", "Shipment not found.");
+      }
+      const shipment = shipmentSnap.data() || {};
+      const businessId = String(shipment.businessId || "");
+      if (!businessId) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Shipment has no business.",
+        );
+      }
+      await requireBusinessPermission(uid, businessId, section);
+
+      await shipmentRef.collection("trackingEvents").add({
+        label,
+        description,
+        location,
+        timestamp: FirestoreFieldValue.serverTimestamp(),
+        source: "staff",
+        createdBy: uid,
+      });
+
+      const customerUid = userIdFrom(
+          shipment,
+          REVIEW_OWNER_UID_FIELDS_BY_COLLECTION[relatedCollection] ||
+            ["customerUid"],
+      );
+      await safeSendPreferenceNotification({
+        uid: customerUid,
+        preferenceKey: "shipmentActivity",
+        title: "Shipment update",
+        body: label,
+        data: {
+          type: "shipment_tracking_update",
+          relatedCollection,
+          relatedId,
+        },
+      });
+
+      return {success: true};
+    },
+);
+
+async function terminal49Request(path, {method = "GET", body} = {}) {
+  const apiKey = cleanText(terminal49ApiKey.value(), 200);
+  if (!apiKey) {
+    throw new HttpsError(
+        "failed-precondition",
+        "Container tracking is not configured.",
+    );
+  }
+  const response = await fetch(`${TERMINAL49_BASE_URL}${path}`, {
+    method,
+    headers: {
+      "Content-Type": "application/vnd.api+json",
+      "Authorization": `Token ${apiKey}`,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await response.json().catch(() => ({}));
+  return {ok: response.ok, status: response.status, data};
+}
+
+// Best-effort SCAC lookup for a raw tracking number via Terminal49's beta
+// Infer Tracking Number endpoint. Returns "" (never throws) so callers can
+// fall back to asking staff for the carrier code manually.
+async function inferContainerCarrierScac(number) {
+  try {
+    const {ok, data} = await terminal49Request(
+        "/tracking_requests/infer_number",
+        {method: "POST", body: {number}},
+    );
+    const detection = data?.data?.attributes?.shipping_line_detection;
+    const isAutoSelect = ok && detection?.decision === "auto_select";
+    if (isAutoSelect && detection.selected?.scac) {
+      return String(detection.selected.scac);
+    }
+  } catch (error) {
+    logger.warn("Terminal49 carrier inference failed", {
+      error: String(error),
+    });
+  }
+  return "";
+}
+
+// Lets business staff start automated carrier tracking for a sea shipment:
+// staff enters the container, booking, or bill-of-lading number, we ask
+// Terminal49's free tier to track it, and store the resulting request so the
+// scheduled pollContainerTracking function can pick up carrier milestones.
+// Terminal49's free plan has no webhooks, so this is deliberately poll-based
+// rather than push-based (see pollContainerTracking below).
+exports.subscribeToContainerTracking = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [terminal49ApiKey],
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const relatedCollection = String(
+          request.data?.relatedCollection || "",
+      ).trim();
+      const relatedId = String(request.data?.relatedId || "").trim();
+      const section = TRACKING_SECTION_BY_COLLECTION[relatedCollection];
+      if (!section || !relatedId) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Missing shipment reference.",
+        );
+      }
+      const containerNumber = validateContainerNumber(
+          request.data?.containerNumber,
+      );
+      if (!containerNumber) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Enter a valid container, booking, or bill of lading number.",
+        );
+      }
+      let scac = cleanText(request.data?.scac, 10).toUpperCase();
+
+      const db = admin.firestore();
+      const shipmentRef = db.collection(relatedCollection).doc(relatedId);
+      const shipmentSnap = await shipmentRef.get();
+      if (!shipmentSnap.exists) {
+        throw new HttpsError("not-found", "Shipment not found.");
+      }
+      const shipment = shipmentSnap.data() || {};
+      const businessId = String(shipment.businessId || "");
+      if (!businessId) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Shipment has no business.",
+        );
+      }
+      await requireBusinessPermission(uid, businessId, section);
+      if (shipment.trackingProvider === "carrier_api") {
+        throw new HttpsError(
+            "already-exists",
+            "This shipment is already tracked automatically.",
+        );
+      }
+
+      if (!scac) {
+        scac = await inferContainerCarrierScac(containerNumber);
+        if (!scac) {
+          throw new HttpsError(
+              "invalid-argument",
+              "Could not identify the carrier automatically. " +
+              "Please also enter the carrier's SCAC code.",
+          );
+        }
+      }
+
+      const {ok, data} = await terminal49Request("/tracking_requests", {
+        method: "POST",
+        body: {
+          data: {
+            type: "tracking_request",
+            attributes: {
+              request_type: inferRequestType(containerNumber),
+              request_number: containerNumber,
+              scac,
+            },
+          },
+        },
+      });
+      if (!ok) {
+        logger.error("Terminal49 tracking request failed", {data});
+        const message = data?.errors?.[0]?.detail ||
+          "Could not start tracking that number.";
+        throw new HttpsError("invalid-argument", message);
+      }
+      const parsed = parseTrackingRequestResponse(data);
+      if (!parsed) {
+        throw new HttpsError(
+            "internal",
+            "Unexpected response from carrier tracking.",
+        );
+      }
+
+      const update = {
+        trackingProvider: "carrier_api",
+        containerNumber,
+        carrierScac: scac,
+        externalTrackingId: parsed.id,
+        trackingRequestStatus: parsed.status || "pending",
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      };
+      if (parsed.trackedObjectType === "shipment" && parsed.trackedObjectId) {
+        update.terminal49ShipmentId = parsed.trackedObjectId;
+      }
+      await shipmentRef.update(update);
+
+      await shipmentRef.collection("trackingEvents").add({
+        label: "Automated carrier tracking started",
+        description: `Container ${containerNumber}`,
+        location: "",
+        timestamp: FirestoreFieldValue.serverTimestamp(),
+        source: "staff",
+        createdBy: uid,
+      });
+
+      return {success: true, trackingRequestId: parsed.id};
+    },
+);
+
+// Polls Terminal49 for every shipment with an active carrier-API tracking
+// subscription and appends any new milestones. Terminal49's free tier has
+// no webhooks (only its paid Essential tier does), and carrier data itself
+// only refreshes a few times a day, so a periodic poll is the free-tier
+// equivalent of push updates.
+exports.pollContainerTracking = onSchedule(
+    {
+      schedule: "every 4 hours",
+      timeZone: "America/New_York",
+      timeoutSeconds: 480,
+      secrets: [terminal49ApiKey],
+    },
+    async () => {
+      const db = admin.firestore();
+      for (const relatedCollection of Object.keys(
+          TRACKING_SECTION_BY_COLLECTION,
+      )) {
+        const snapshot = await db.collection(relatedCollection)
+            .where("trackingProvider", "==", "carrier_api")
+            .get();
+        for (const doc of snapshot.docs) {
+          await pollOneCarrierTrackedShipment(
+              db, relatedCollection, doc.id, doc.data() || {},
+          );
+        }
+      }
+    },
+);
+
+async function pollOneCarrierTrackedShipment(
+    db, relatedCollection, relatedId, shipment,
+) {
+  if (["completed", "cancelled"].includes(shipment.status)) return;
+  const shipmentRef = db.collection(relatedCollection).doc(relatedId);
+
+  let terminal49ShipmentId = shipment.terminal49ShipmentId || "";
+  if (!terminal49ShipmentId) {
+    // Tracking request hasn't resolved to a shipment yet - check on it.
+    const {ok, data} = await terminal49Request(
+        `/tracking_requests/${shipment.externalTrackingId}`,
+    );
+    if (!ok) return;
+    const parsed = parseTrackingRequestResponse(data);
+    if (!parsed) return;
+    if (parsed.status === "failed") {
+      await shipmentRef.update({
+        trackingRequestStatus: "failed",
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      return;
+    }
+    if (parsed.trackedObjectType !== "shipment" || !parsed.trackedObjectId) {
+      return;
+    }
+    terminal49ShipmentId = parsed.trackedObjectId;
+    await shipmentRef.update({
+      terminal49ShipmentId,
+      trackingRequestStatus: parsed.status || "tracking",
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    });
+  }
+
+  const {ok, data} = await terminal49Request(
+      `/shipments/${terminal49ShipmentId}?include=containers`,
+  );
+  if (!ok) return;
+  const containers = parseContainersFromIncluded(data);
+  if (containers.length === 0) return;
+
+  const eventsRef = shipmentRef.collection("trackingEvents");
+  let latestShipmentStatus = null;
+  for (const container of containers) {
+    const milestone = milestoneForContainerStatus(container.currentStatus);
+    if (!milestone) continue;
+    const eventId = carrierEventDocId(
+        container.number, container.currentStatus,
+    );
+    try {
+      await eventsRef.doc(eventId).create({
+        label: milestone.label,
+        description: `Container ${container.number}`,
+        location: "",
+        timestamp: FirestoreFieldValue.serverTimestamp(),
+        source: "carrier_api",
+        carrierEventCode: container.currentStatus,
+      });
+      if (milestone.shipmentStatus) {
+        latestShipmentStatus = milestone.shipmentStatus;
+      }
+    } catch (error) {
+      // ALREADY_EXISTS just means we've already recorded this status change.
+      if (error.code !== 6 && error.code !== "already-exists") {
+        logger.error("Failed to write carrier tracking event", {
+          error: String(error), relatedCollection, relatedId,
+        });
+      }
+    }
+  }
+
+  if (latestShipmentStatus && latestShipmentStatus !== shipment.status) {
+    await shipmentRef.update({
+      status: latestShipmentStatus,
+      statusUpdatedAt: FirestoreFieldValue.serverTimestamp(),
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    });
+    const customerUid = userIdFrom(
+        shipment,
+        REVIEW_OWNER_UID_FIELDS_BY_COLLECTION[relatedCollection] ||
+          ["customerUid"],
+    );
+    await safeSendPreferenceNotification({
+      uid: customerUid,
+      preferenceKey: "shipmentActivity",
+      title: "Shipment update",
+      body: `Your shipment is now ${latestShipmentStatus.replace(/_/g, " ")}.`,
+      data: {
+        type: "shipment_tracking_update",
+        relatedCollection,
+        relatedId,
+      },
+    });
+  }
+}
+
 exports.publishFeaturedBusiness = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
@@ -1500,6 +2240,14 @@ function normalizedDestinationDepartureDays(value) {
 function compareDestinationOptions(a, b) {
   const country = a.country.name.localeCompare(b.country.name);
   if (country !== 0) return country;
+  // A well-reviewed business should generally surface ahead of a cheaper
+  // unrated one, but price still matters among similarly-rated options -
+  // ignore noise-level rating differences so this doesn't flip-flop ahead
+  // of price on every recompute. Mirrors _compareDestinationOptions in
+  // lib/services/business_service.dart; keep the two in sync.
+  const rating =
+    Number(b.reviewWeightedScore || 0) - Number(a.reviewWeightedScore || 0);
+  if (Math.abs(rating) > 0.05) return rating;
   // A country row can now carry independent delivery estimates per service
   // (barrel/air/sea), so there is no longer a single "delivery estimate" to
   // sort mixed-service options by; fall back to price and business name.
@@ -2018,6 +2766,11 @@ exports.listActiveBarrelDestinationOptions = onCall(
             businessStatus: "approved",
             freightPickupAvailable: offersFreight && pickupConfig.enabled,
             freightPickupModel: pickupConfig.model,
+            reviewCount: Math.max(0, Math.trunc(Number(
+                business.reviewCount || 0,
+            ))),
+            reviewAverage: Number(business.reviewAverage || 0),
+            reviewWeightedScore: Number(business.reviewWeightedScore || 0),
             country: {
               id: destinationDoc.id,
               name: country.name || destinationDoc.id,
@@ -2103,6 +2856,11 @@ exports.listTransportBusinessOptions = onCall(
             enabledServices: services,
             serviceNote: business.serviceNote || "",
             businessStatus: "approved",
+            reviewCount: Math.max(0, Math.trunc(Number(
+                business.reviewCount || 0,
+            ))),
+            reviewAverage: Number(business.reviewAverage || 0),
+            reviewWeightedScore: Number(business.reviewWeightedScore || 0),
             country: {
               id: destinationDoc.id,
               name: country.name || destinationDoc.id,
@@ -4159,6 +4917,43 @@ function userIdFrom(data, keys) {
     if (value) return value;
   }
   return "";
+}
+
+// Nudges the customer to leave a review once their order reaches the
+// "completed" status, reusing the same sendPreferenceNotification pipeline
+// as every other order-status notification. Failures here must never break
+// the status-change trigger that called this, so errors are swallowed.
+async function maybeSendReviewRequestNotification({
+  relatedCollection,
+  relatedId,
+  after,
+  uid,
+}) {
+  try {
+    const statusRaw = reviewStatusFieldsByCollection(after, relatedCollection);
+    if (normalizeReviewOrderStatus(statusRaw) !== "completed") return;
+    const businessId = String(after?.businessId || "").trim();
+    if (!businessId || !uid) return;
+    await sendPreferenceNotification({
+      uid,
+      preferenceKey: "reviewActivity",
+      title: "How did it go?",
+      body:
+        `Leave a review for ${after.businessName || "your service provider"}.`,
+      data: {
+        type: "review_request",
+        relatedCollection,
+        relatedId,
+        businessId,
+      },
+    });
+  } catch (error) {
+    logger.warn("Review request notification failed", {
+      relatedCollection,
+      relatedId,
+      error: error?.message || String(error),
+    });
+  }
 }
 
 function centsFromDollars(value) {
@@ -7825,6 +8620,9 @@ function parkingOptionFromBusiness({
         business.parkingLongitude,
     ),
     estimatedTotal: dollarsFromCents(estimatedTotalCents),
+    reviewCount: Math.max(0, intOrFallback(business.reviewCount, 0)),
+    reviewAverage: numberOrFallback(business.reviewAverage, 0),
+    reviewWeightedScore: numberOrFallback(business.reviewWeightedScore, 0),
   };
 }
 
@@ -7891,6 +8689,9 @@ async function parkingOptionsForRequest(data) {
     }
     if (a.distanceMiles !== null) return -1;
     if (b.distanceMiles !== null) return 1;
+    const rating = Number(b.reviewWeightedScore || 0) -
+      Number(a.reviewWeightedScore || 0);
+    if (Math.abs(rating) > 0.05) return rating;
     const price = Number(a.estimatedTotal || 0) -
       Number(b.estimatedTotal || 0);
     if (price !== 0) return price;
@@ -18719,6 +19520,12 @@ exports.notifyFreightShipmentStatus = onDocumentUpdated(
           shipmentId: event.params.shipmentId,
           status: after.status || "",
         },
+      });
+      await maybeSendReviewRequestNotification({
+        relatedCollection: "freightShipments",
+        relatedId: event.params.shipmentId,
+        after,
+        uid,
       });
     },
 );

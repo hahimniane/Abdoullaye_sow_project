@@ -142,10 +142,11 @@ export function useBusinessStaff(
   return useBusinessCollection("users", businessId, enabled, max);
 }
 
-export function useBusinessDestinations(
+function useBusinessSubcollection(
+  subcollection: string,
   businessId: string,
   enabled: boolean,
-  max = DEFAULT_MAX_ROWS,
+  max: number,
 ): BusinessRowsResult {
   const [rows, setRows] = useState<FirestoreRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -164,7 +165,7 @@ export function useBusinessDestinations(
     setLoading(true);
     const unsubscribe = onSnapshot(
       query(
-        collection(db, "businesses", scopedBusinessId, "destinationCountries"),
+        collection(db, "businesses", scopedBusinessId, subcollection),
         limit(max),
       ),
       (snapshot) => {
@@ -186,11 +187,27 @@ export function useBusinessDestinations(
     );
 
     return unsubscribe;
-  }, [businessId, enabled, max, refreshToken]);
+  }, [businessId, enabled, max, refreshToken, subcollection]);
 
   const refresh = useCallback(() => {
     setRefreshToken((value) => value + 1);
   }, []);
 
   return { rows, loading, error, refresh };
+}
+
+export function useBusinessDestinations(
+  businessId: string,
+  enabled: boolean,
+  max = DEFAULT_MAX_ROWS,
+): BusinessRowsResult {
+  return useBusinessSubcollection("destinationCountries", businessId, enabled, max);
+}
+
+export function useBusinessReviews(
+  businessId: string,
+  enabled: boolean,
+  max = DEFAULT_MAX_ROWS,
+): BusinessRowsResult {
+  return useBusinessSubcollection("reviews", businessId, enabled, max);
 }

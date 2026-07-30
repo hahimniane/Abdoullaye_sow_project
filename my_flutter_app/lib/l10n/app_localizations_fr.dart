@@ -709,6 +709,67 @@ class AppLocalizationsFr extends AppLocalizations {
   String get orderStatusRefunded => 'Remboursé';
 
   @override
+  String get orderLeaveReviewCta => 'Laisser un avis';
+
+  @override
+  String get orderReviewedBadge => 'Avis laissé';
+
+  @override
+  String get reviewComposerTitle => 'Laisser un avis';
+
+  @override
+  String get reviewRatingLabel => 'Comment évalueriez-vous ce service ?';
+
+  @override
+  String get reviewRatingRequired =>
+      'Veuillez sélectionner une note en étoiles.';
+
+  @override
+  String get reviewCommentHint => 'Parlez-nous de votre expérience';
+
+  @override
+  String get reviewCommentRequired => 'Veuillez écrire un court commentaire.';
+
+  @override
+  String get reviewSubmitButton => 'Envoyer l\'avis';
+
+  @override
+  String get reviewSubmitSuccess => 'Merci pour votre avis !';
+
+  @override
+  String get reviewSubmitFailed =>
+      'Impossible d\'envoyer votre avis. Veuillez réessayer.';
+
+  @override
+  String get reviewAlreadySubmitted =>
+      'Vous avez déjà laissé un avis pour cette commande.';
+
+  @override
+  String get reviewOrderNotCompleted =>
+      'Cette commande n\'est pas encore terminée.';
+
+  @override
+  String get reviewsSectionTitle => 'Avis des clients';
+
+  @override
+  String get reviewsEmpty => 'Aucun avis pour le moment.';
+
+  @override
+  String get reviewFlagButton => 'Signaler';
+
+  @override
+  String get reviewFlagDialogTitle => 'Signaler cet avis';
+
+  @override
+  String get reviewFlagReasonHint => 'Pourquoi signalez-vous cet avis ?';
+
+  @override
+  String get reviewFlagSubmit => 'Envoyer le signalement';
+
+  @override
+  String get reviewFlagSubmitted => 'Merci, nous allons examiner cela.';
+
+  @override
   String get filterParking => 'Voitures garées';
 
   @override
@@ -1560,6 +1621,64 @@ class AppLocalizationsFr extends AppLocalizations {
   String get staffControls => 'Contrôles du personnel';
 
   @override
+  String get trackingUpdatesTitle => 'Suivi des mises à jour';
+
+  @override
+  String get trackingUpdatesEmpty => 'Aucune mise à jour pour le moment.';
+
+  @override
+  String get addTrackingUpdate => 'Ajouter une mise à jour';
+
+  @override
+  String get trackingUpdateAdded => 'Mise à jour de suivi ajoutée.';
+
+  @override
+  String get trackingUpdateLabel => 'Ce qui s\'est passé';
+
+  @override
+  String get trackingUpdateLabelHint => 'ex. Départ du port d\'origine';
+
+  @override
+  String get trackingUpdateLabelRequired =>
+      'Veuillez décrire ce qui s\'est passé.';
+
+  @override
+  String get trackingUpdateLocation => 'Lieu (facultatif)';
+
+  @override
+  String get trackingUpdateNotes => 'Remarques (facultatif)';
+
+  @override
+  String get containerTrackingTitle => 'Suivi automatique du conteneur';
+
+  @override
+  String get containerTrackingDescription =>
+      'Entrez le numéro de conteneur, de réservation ou de connaissement du transporteur pour obtenir des mises à jour de suivi automatiques.';
+
+  @override
+  String get containerNumberLabel =>
+      'Numéro de conteneur / réservation / connaissement';
+
+  @override
+  String get containerNumberHint => 'ex. MSKU1234567';
+
+  @override
+  String get carrierCodeOptionalLabel =>
+      'Code SCAC du transporteur (facultatif)';
+
+  @override
+  String get startTrackingButton => 'Démarrer le suivi';
+
+  @override
+  String get containerNumberRequired => 'Entrez un numéro de suivi valide.';
+
+  @override
+  String get containerTrackingStarted => 'Suivi automatique démarré.';
+
+  @override
+  String get automatedTrackingActive => 'Suivi automatique actif';
+
+  @override
   String get shippingBusiness => 'Entreprise d’expédition';
 
   @override
@@ -1791,13 +1910,6 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get noApprovedDestinationsAvailable =>
       'Aucune destination active d’entreprise approuvée n’est disponible.';
-
-  @override
-  String get carrierTracking => 'Suivi transporteur';
-
-  @override
-  String get couldNotOpenCarrierTracking =>
-      'Impossible d’ouvrir le suivi du transporteur.';
 
   @override
   String get trackingNumberCopiedShort => 'Numéro de suivi copié.';
@@ -3387,6 +3499,9 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get businessActivityNotifications =>
       'Mises à jour de demande d’entreprise';
+
+  @override
+  String get reviewActivityNotifications => 'Demandes d\'avis';
 
   @override
   String get faceId => 'Face ID';

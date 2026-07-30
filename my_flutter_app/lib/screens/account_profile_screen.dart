@@ -135,7 +135,8 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
       if (_preferences.carActivity ||
           _preferences.shipmentActivity ||
           _preferences.walletActivity ||
-          _preferences.businessActivity) {
+          _preferences.businessActivity ||
+          _preferences.reviewActivity) {
         try {
           await PushNotificationService().requestPermissionAndRegister();
         } catch (error) {
@@ -485,6 +486,13 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
                     value: _preferences.businessActivity,
                     onChanged: (value) => _updatePreferences(
                       _preferences.copyWith(businessActivity: value),
+                    ),
+                  ),
+                  _PreferenceSwitch(
+                    title: l10n.reviewActivityNotifications,
+                    value: _preferences.reviewActivity,
+                    onChanged: (value) => _updatePreferences(
+                      _preferences.copyWith(reviewActivity: value),
                     ),
                   ),
                 ],
