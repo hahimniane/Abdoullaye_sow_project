@@ -1362,10 +1362,11 @@ describe("business review Firestore rules", () => {
     );
   });
 
-  it("denies an unfiltered collectionGroup query on reviews to anyone", async () => {
-    const adminDb = firestoreFor("super-admin");
-    await assertFails(adminDb.collectionGroup("reviews").get());
-  });
+  it("denies an unfiltered collectionGroup query on reviews to anyone",
+      async () => {
+        const adminDb = firestoreFor("super-admin");
+        await assertFails(adminDb.collectionGroup("reviews").get());
+      });
 });
 
 describe("car transport quote marketplace Firestore rules", () => {
