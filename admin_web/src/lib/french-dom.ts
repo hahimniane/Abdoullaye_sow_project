@@ -841,10 +841,12 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Close review form": "Fermer le formulaire d’avis",
   "Show reviews": "Afficher les avis",
   "Hide reviews": "Masquer les avis",
+  "The attachment could not be sent.":
+    "La pièce jointe n’a pas pu être envoyée.",
   "Real people, one secure conversation.":
     "De vraies personnes, une conversation sécurisée.",
-  "Ask about one of your Laawol orders and see replies here in real time. Text messages are available on web.":
-    "Posez une question sur l’une de vos commandes Laawol et consultez les réponses ici en temps réel. Les messages texte sont disponibles sur le web.",
+  "Ask about one of your Laawol orders and see replies here in real time, with photos and files.":
+    "Posez une question sur l’une de vos commandes Laawol et consultez les réponses ici en temps réel, avec photos et fichiers.",
   "Start a support request": "Démarrer une demande d’assistance",
   "Support is taking longer to load. Try again.":
     "Le chargement de l’assistance prend plus de temps. Réessayez.",

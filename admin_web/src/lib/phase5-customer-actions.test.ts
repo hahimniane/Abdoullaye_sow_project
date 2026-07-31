@@ -75,7 +75,7 @@ test("phase 5 components use exact callables and ownership-scoped support reads"
   assert.match(support, /"sendSupportMessage"/);
   assert.match(support, /"markSupportCaseRead"/);
   assert.match(support, /"setSupportTyping"/);
-  assert.doesNotMatch(support, /uploadSupportAttachment/);
+  assert.match(support, /"uploadSupportAttachmentMetadata"/);
   assert.match(wallet, /"requestWalletCardRefund"/);
 });
 

@@ -6266,8 +6266,22 @@ button[data-loading="true"]::before {
   min-height: 48px;
 }
 
-.phase5-text-only-note {
-  color: #708683;
+.phase5-attach-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.phase5-attach-row label {
+  align-items: center;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.phase5-attach-row label.is-busy {
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 @media (max-width: 700px) {

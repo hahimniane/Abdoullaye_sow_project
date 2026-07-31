@@ -16,16 +16,21 @@ import {
   where,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
+import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 import {
   ArrowLeft,
+  FileText,
   Headphones,
+  ImagePlus,
   MessageCircle,
+  Paperclip,
   Send,
   ShieldCheck,
 } from "lucide-react";
 
-import { db, functions } from "@/lib/firebase";
+import { db, functions, storage } from "@/lib/firebase";
 import { formatDate, text } from "@/lib/format";
+import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
 import {
   buildOpenSupportCasePayload,
   buildSupportCaseIdPayload,
@@ -134,7 +139,7 @@ export function CustomerSupport({
           <h2>Real people, one secure conversation.</h2>
           <p>
             Ask about one of your Laawol orders and see replies here in real
-            time. Text messages are available on web.
+            time, with photos and files.
           </p>
         </div>
         {references.length > 0 && (
@@ -347,6 +352,8 @@ function SupportThread({
   const [error, setError] = useState("");
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const markedSignature = useRef("");
   const typingTimer = useRef<number | null>(null);
   const typingActive = useRef(false);
@@ -459,6 +466,52 @@ function SupportThread({
     }
   }
 
+  // Uploads to the case's own storage path, then registers it as a message
+  // via the callable (which re-validates path/type/size). Mirrors the
+  // business/admin console's and the Flutter app's attachment flow.
+  async function uploadAttachment(rawFile: File | null | undefined) {
+    if (!rawFile || uploading) return;
+    setUploadError("");
+    setUploading(true);
+    try {
+      const file = await ensureBrowserDisplayableImage(rawFile);
+      const safeName = file.name
+        .replace(/[^A-Za-z0-9._-]+/g, "-")
+        .replace(/-+/g, "-");
+      const path = `support_cases/${supportCase.id}/${uid}/${Date.now()}-${safeName}`;
+      const mimeType = file.type || "application/octet-stream";
+      const messageType = mimeType.startsWith("image/")
+        ? "image"
+        : mimeType.startsWith("video/")
+          ? "video"
+          : mimeType.startsWith("audio/")
+            ? "voice"
+            : "file";
+      const target = storageRef(storage, path);
+      await uploadBytes(target, file, { contentType: mimeType });
+      const url = await getDownloadURL(target);
+      await safeAction(
+        httpsCallable(functions, "uploadSupportAttachmentMetadata")({
+          caseId: supportCase.id,
+          fileUrl: url,
+          filePath: path,
+          fileName: file.name,
+          mimeType,
+          fileSize: file.size,
+          messageType,
+          ...(content.trim() ? {caption: content.trim()} : {}),
+        }),
+      );
+      setContent("");
+    } catch (err) {
+      setUploadError(
+        err instanceof Error ? err.message : "The attachment could not be sent.",
+      );
+    } finally {
+      setUploading(false);
+    }
+  }
+
   const title = useMemo(
     () => text(supportCase.subject, "Support conversation"),
     [supportCase.subject],
@@ -496,6 +549,13 @@ function SupportThread({
         )}
         {messages.map((message) => {
           const mine = text(message.senderId, "") === uid;
+          const metadata = (message.metadata && typeof message.metadata === "object"
+            ? message.metadata
+            : {}) as Record<string, unknown>;
+          const fileUrl = text(metadata.fileUrl, "");
+          const fileName = text(metadata.fileName, "Attachment");
+          const caption = text(metadata.caption, "");
+          const isImage = text(message.messageType, "text") === "image" && Boolean(fileUrl);
           return (
             <article
               className={`phase5-message ${mine ? "mine" : ""}`}
@@ -507,12 +567,24 @@ function SupportThread({
                 </strong>
                 <span>{formatDate(message.createdAt)}</span>
               </div>
-              <p>{text(message.content, "Message")}</p>
+              {isImage ? (
+                <a href={fileUrl} rel="noreferrer" target="_blank">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img alt={fileName} className="bubble-image" src={fileUrl} />
+                </a>
+              ) : fileUrl ? (
+                <a className="bubble-file" href={fileUrl} rel="noreferrer" target="_blank">
+                  <FileText size={14} /> {fileName}
+                </a>
+              ) : null}
+              {isImage && Boolean(caption) && <p>{caption}</p>}
+              {!fileUrl && <p>{text(message.content, "Message")}</p>}
             </article>
           );
         })}
         <div ref={messagesEnd} />
       </div>
+      {uploadError && <div className="error-box">{uploadError}</div>}
       <form className="phase5-message-form" onSubmit={sendMessage}>
         <label>
           <span className="sr-only">Message</span>
@@ -536,9 +608,34 @@ function SupportThread({
           {sending ? "Sending message..." : "Send"}
         </button>
       </form>
-      <small className="phase5-text-only-note">
-        Text chat is available on web. For files or photos, use the mobile app.
-      </small>
+      <div className="phase5-attach-row">
+        <label className={`secondary-button ${uploading ? "is-busy" : ""}`}>
+          <ImagePlus size={14} /> {uploading ? "Sending…" : "Photo"}
+          <input
+            accept="image/*,.heic,.heif"
+            disabled={uploading}
+            hidden
+            onChange={(event) => {
+              void uploadAttachment(event.target.files?.[0]);
+              event.target.value = "";
+            }}
+            type="file"
+          />
+        </label>
+        <label className={`secondary-button ${uploading ? "is-busy" : ""}`}>
+          <Paperclip size={14} /> File
+          <input
+            accept="image/*,.heic,.heif,video/*,audio/*,application/pdf,text/plain,.doc,.docx"
+            disabled={uploading}
+            hidden
+            onChange={(event) => {
+              void uploadAttachment(event.target.files?.[0]);
+              event.target.value = "";
+            }}
+            type="file"
+          />
+        </label>
+      </div>
     </section>
   );
 }
