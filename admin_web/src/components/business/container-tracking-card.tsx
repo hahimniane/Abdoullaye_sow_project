@@ -61,6 +61,9 @@ export function ContainerTrackingCard({
             <div style={{ fontSize: 12, color: "var(--muted)" }}>
               {text(containerNumber)}
             </div>
+            <div style={{ fontSize: 12, color: "#b45309", fontWeight: 700, marginTop: 4 }}>
+              Automated updates are not yet flowing for this carrier account. Add manual updates below in the meantime.
+            </div>
           </div>
         </div>
       </div>

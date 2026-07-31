@@ -1640,6 +1640,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get automatedTrackingActive => 'Automated tracking active';
 
   @override
+  String get automatedTrackingUpdatesPending =>
+      'Automated updates are not yet flowing for this carrier account. Add manual updates below in the meantime.';
+
+  @override
   String get shippingBusiness => 'Shipping business';
 
   @override

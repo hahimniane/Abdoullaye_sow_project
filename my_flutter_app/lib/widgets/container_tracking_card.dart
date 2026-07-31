@@ -107,6 +107,15 @@ class _ContainerTrackingCardState extends State<ContainerTrackingCard> {
                 widget.containerNumber,
                 style: const TextStyle(color: AppColors.muted),
               ),
+              const SizedBox(height: 6),
+              Text(
+                l10n.automatedTrackingUpdatesPending,
+                style: const TextStyle(
+                  color: AppColors.warn,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
         ),

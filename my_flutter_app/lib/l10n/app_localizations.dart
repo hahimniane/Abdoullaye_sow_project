@@ -3110,6 +3110,12 @@ abstract class AppLocalizations {
   /// **'Automated tracking active'**
   String get automatedTrackingActive;
 
+  /// No description provided for @automatedTrackingUpdatesPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Automated updates are not yet flowing for this carrier account. Add manual updates below in the meantime.'**
+  String get automatedTrackingUpdatesPending;
+
   /// No description provided for @shippingBusiness.
   ///
   /// In en, this message translates to:

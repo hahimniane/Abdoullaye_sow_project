@@ -3306,6 +3306,8 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Please describe what happened.": "Veuillez décrire ce qui s’est passé.",
   "Could not add update.": "Impossible d’ajouter la mise à jour.",
   "Automated tracking active": "Suivi automatique actif",
+  "Automated updates are not yet flowing for this carrier account. Add manual updates below in the meantime.":
+    "Les mises à jour automatiques ne sont pas encore actives pour ce compte transporteur. Ajoutez des mises à jour manuelles ci-dessous en attendant.",
   "Automated container tracking": "Suivi automatique du conteneur",
   "Enter the container, booking, or bill of lading number from the carrier to get automatic tracking updates.":
     "Entrez le numéro de conteneur, de réservation ou de connaissement du transporteur pour obtenir des mises à jour de suivi automatiques.",

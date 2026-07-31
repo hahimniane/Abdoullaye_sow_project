@@ -654,6 +654,7 @@
   "containerNumberRequired": "Enter a valid tracking number.",
   "containerTrackingStarted": "Automated tracking started.",
   "automatedTrackingActive": "Automated tracking active",
+  "automatedTrackingUpdatesPending": "Automated updates are not yet flowing for this carrier account. Add manual updates below in the meantime.",
   "shippingBusiness": "Shipping business",
   "currentBusiness": "Current business",
   "newRoute": "New route",

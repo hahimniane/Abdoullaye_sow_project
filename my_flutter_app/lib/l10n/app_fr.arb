@@ -655,6 +655,7 @@
   "containerNumberRequired": "Entrez un numéro de suivi valide.",
   "containerTrackingStarted": "Suivi automatique démarré.",
   "automatedTrackingActive": "Suivi automatique actif",
+  "automatedTrackingUpdatesPending": "Les mises à jour automatiques ne sont pas encore actives pour ce compte transporteur. Ajoutez des mises à jour manuelles ci-dessous en attendant.",
   "shippingBusiness": "Entreprise d’expédition",
   "currentBusiness": "Entreprise actuelle",
   "newRoute": "Nouvel itinéraire",

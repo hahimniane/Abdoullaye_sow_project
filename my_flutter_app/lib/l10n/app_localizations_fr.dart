@@ -1679,6 +1679,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get automatedTrackingActive => 'Suivi automatique actif';
 
   @override
+  String get automatedTrackingUpdatesPending =>
+      'Les mises à jour automatiques ne sont pas encore actives pour ce compte transporteur. Ajoutez des mises à jour manuelles ci-dessous en attendant.';
+
+  @override
   String get shippingBusiness => 'Entreprise d’expédition';
 
   @override
