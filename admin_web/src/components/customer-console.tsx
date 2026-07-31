@@ -34,6 +34,7 @@ import {
   Settings,
   Ship,
   ShieldCheck,
+  Star,
   Truck,
   UserRound,
   WalletCards,
@@ -56,7 +57,10 @@ import { CustomerParkingPools } from "@/components/customer-parking-pools";
 import { CustomerShippingServices } from "@/components/customer-shipping-services";
 import { CustomerSupport } from "@/components/customer-support";
 import { CustomerTracking } from "@/components/customer-tracking";
-import { CustomerTrackingActions } from "@/components/customer-tracking";
+import {
+  ReviewComposerDrawer,
+  useReviewedOrderKeys,
+} from "@/components/customer-review-composer";
 import { CustomerWalletActions } from "@/components/customer-wallet-actions";
 import { OrderDetailDrawer } from "@/components/order-detail-drawer";
 import { isValidE164, isValidPhone, normalizePhone } from "@/lib/phone";
@@ -302,6 +306,7 @@ export function CustomerConsole({
               walletBalance={wallet.balance}
               onOpenCars={() => setActiveTab("cars")}
               onOpenOrders={() => setActiveTab("orders")}
+              uid={firebaseUser.uid}
             />
           )}
           {activeTab === "cars" && (
@@ -327,7 +332,17 @@ export function CustomerConsole({
             <OrdersView
               loading={dataLoading}
               orders={allOrders}
-              trackedShipments={[...shipments.rows, ...freight.rows]}
+              trackedShipments={[
+                ...shipments.rows.map((row) => ({
+                  ...row,
+                  relatedCollection: "barrelShipments",
+                })),
+                ...freight.rows.map((row) => ({
+                  ...row,
+                  relatedCollection: "freightShipments",
+                })),
+              ]}
+              uid={firebaseUser.uid}
             />
           )}
           {activeTab === "wallet" && <WalletView state={wallet} />}
@@ -357,6 +372,7 @@ function CustomerHome({
   walletBalance,
   onOpenCars,
   onOpenOrders,
+  uid,
 }: {
   customerName: string;
   loading: boolean;
@@ -364,6 +380,7 @@ function CustomerHome({
   walletBalance: number;
   onOpenCars: () => void;
   onOpenOrders: () => void;
+  uid: string;
 }) {
   const openOrders = orders.filter(({ row }) => !isFinalStatus(text(row.status, ""))).length;
   return (
@@ -389,7 +406,7 @@ function CustomerHome({
         <Metric label="Wallet balance" value={formatMoney(walletBalance)} />
         <Metric label="Account access" value="Web + mobile" />
       </div>
-      <OrderPanel loading={loading} orders={orders.slice(0, 5)} title="Recent activity" />
+      <OrderPanel loading={loading} orders={orders.slice(0, 5)} title="Recent activity" uid={uid} />
       <section className="info-band customer-parity-note">
         New service requests and web payments are being added service by service. Your existing orders,
         purchases, tracking, wallet, and account remain shared with the mobile app.
@@ -402,22 +419,36 @@ function OrdersView({
   loading,
   orders,
   trackedShipments,
+  uid,
 }: {
   loading: boolean;
   orders: TaggedRow[];
   trackedShipments: FirestoreRow[];
+  uid: string;
 }) {
   return (
     <div className="stack">
-      <OrderPanel loading={loading} orders={orders} title="Orders & tracking" />
-      {!loading && <CustomerTracking records={trackedShipments} />}
+      <OrderPanel loading={loading} orders={orders} title="Orders & tracking" uid={uid} />
+      {!loading && <CustomerTracking records={trackedShipments} uid={uid} />}
     </div>
   );
 }
 
-function OrderPanel({ loading, orders, title }: { loading: boolean; orders: TaggedRow[]; title: string }) {
+function OrderPanel({
+  loading,
+  orders,
+  title,
+  uid,
+}: {
+  loading: boolean;
+  orders: TaggedRow[];
+  title: string;
+  uid: string;
+}) {
   const [selected, setSelected] = useState<TaggedRow | null>(null);
+  const [reviewing, setReviewing] = useState(false);
   const cancelAction = selected ? pendingOrderCancellation(selected) : null;
+  const reviewedKeys = useReviewedOrderKeys(uid);
 
   async function cancelSelectedOrder() {
     if (!selected || !cancelAction) return;
@@ -440,7 +471,10 @@ function OrderPanel({ loading, orders, title }: { loading: boolean; orders: Tagg
                 aria-label="Open order details"
                 className="data-row customer-order-row customer-order-button"
                 key={`${label}-${row.id}`}
-                onClick={() => setSelected(order)}
+                onClick={() => {
+                  setSelected(order);
+                  setReviewing(false);
+                }}
                 type="button"
               >
                 <Icon size={20} />
@@ -459,7 +493,10 @@ function OrderPanel({ loading, orders, title }: { loading: boolean; orders: Tagg
       </section>
       <OrderDetailDrawer
         onCancelOrder={cancelAction ? cancelSelectedOrder : undefined}
-        onClose={() => setSelected(null)}
+        onClose={() => {
+          setSelected(null);
+          setReviewing(false);
+        }}
         open={Boolean(selected)}
         title={selected?.label ?? "Order details"}
       >
@@ -521,14 +558,44 @@ function OrderPanel({ loading, orders, title }: { loading: boolean; orders: Tagg
                 )}
               />
             </div>
-            {["barrelShipments", "freightShipments"].includes(
-              selected.collectionName,
-            ) && <CustomerTrackingActions record={selected.row} />}
+            {isReviewEligibleStatus(
+              text(selected.row.status ?? selected.row.purchaseStatus, ""),
+            ) &&
+              text(selected.row.businessId, "") &&
+              (reviewedKeys.has(`${selected.collectionName}_${selected.row.id}`) ? (
+                <span className="status-pill compact">Review submitted</span>
+              ) : (
+                <button
+                  className="secondary-button"
+                  onClick={() => setReviewing(true)}
+                  type="button"
+                >
+                  <Star size={15} /> Leave a review
+                </button>
+              ))}
           </>
         )}
       </OrderDetailDrawer>
+      {selected && (
+        <ReviewComposerDrawer
+          businessId={text(selected.row.businessId, "")}
+          businessName={text(selected.row.businessName, "")}
+          onClose={() => setReviewing(false)}
+          onSubmitted={() => setReviewing(false)}
+          open={reviewing}
+          orderTitle={text(
+            selected.row.trackingCode ?? selected.row.trackingNumber ?? selected.row.id,
+          )}
+          relatedCollection={selected.collectionName}
+          relatedId={selected.row.id}
+        />
+      )}
     </>
   );
+}
+
+function isReviewEligibleStatus(status: string) {
+  return ["completed", "sold", "paid", "succeeded"].includes(status);
 }
 
 function OrderFact({ label, value }: { label: string; value: string }) {

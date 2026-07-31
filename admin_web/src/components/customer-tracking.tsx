@@ -1,42 +1,28 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  ArrowUpRight,
-  Check,
-  Clipboard,
-  MapPin,
-  PackageSearch,
-  Search,
-} from "lucide-react";
+import { Check, Clipboard, MapPin, PackageSearch, Search, Star } from "lucide-react";
 
 import { formatDate, text } from "@/lib/format";
+import { trackingCodeFor } from "@/lib/phase5-customer-actions";
+import { TrackingUpdatesSection } from "@/components/business/tracking-updates-section";
 import {
-  MAERSK_TRACKING_URL,
-  safeCustomerTrackingUrl,
-  trackingCodeFor,
-} from "@/lib/phase5-customer-actions";
+  ReviewComposerDrawer,
+  useReviewedOrderKeys,
+} from "@/components/customer-review-composer";
 import type { FirestoreRow } from "@/types/admin";
 
-export function CustomerTrackingActions({
-  record,
-}: {
-  record: FirestoreRow;
-}) {
+function CopyTrackingNumber({ code }: { code: string }) {
   const [copying, setCopying] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState("");
-  const trackingCode = trackingCodeFor(record);
-  const externalUrl = safeCustomerTrackingUrl(
-    record.carrierTrackingUrl ?? record.trackingUrl ?? MAERSK_TRACKING_URL,
-  );
 
   async function copyTrackingCode() {
-    if (!trackingCode || copying) return;
+    if (!code || copying) return;
     setCopying(true);
     setCopyError("");
     try {
-      await navigator.clipboard.writeText(trackingCode);
+      await navigator.clipboard.writeText(code);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2_000);
     } catch {
@@ -48,29 +34,20 @@ export function CustomerTrackingActions({
     }
   }
 
+  if (!code) return null;
   return (
     <div className="phase5-tracking-actions">
-      {trackingCode && (
-        <button
-          aria-label="Copy tracking number"
-          className="secondary-button"
-          data-loading={copying}
-          disabled={copying}
-          onClick={() => void copyTrackingCode()}
-          type="button"
-        >
-          {copied ? <Check size={16} /> : <Clipboard size={16} />}
-          {copied ? "Tracking number copied" : "Copy tracking number"}
-        </button>
-      )}
-      <a
-        className="primary-button"
-        href={externalUrl}
-        rel="noreferrer"
-        target="_blank"
+      <button
+        aria-label="Copy tracking number"
+        className="secondary-button"
+        data-loading={copying}
+        disabled={copying}
+        onClick={() => void copyTrackingCode()}
+        type="button"
       >
-        Open carrier tracking <ArrowUpRight size={16} />
-      </a>
+        {copied ? <Check size={16} /> : <Clipboard size={16} />}
+        {copied ? "Tracking number copied" : "Copy tracking number"}
+      </button>
       {copyError && <small className="phase5-inline-error">{copyError}</small>}
     </div>
   );
@@ -78,10 +55,15 @@ export function CustomerTrackingActions({
 
 export function CustomerTracking({
   records,
+  uid,
 }: {
   records: FirestoreRow[];
+  uid: string;
 }) {
   const [search, setSearch] = useState("");
+  const [reviewTarget, setReviewTarget] = useState<FirestoreRow | null>(null);
+  const reviewedKeys = useReviewedOrderKeys(uid);
+
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return records;
@@ -102,7 +84,7 @@ export function CustomerTracking({
           <PackageSearch size={18} />
           <h2>Shipment tracking</h2>
         </div>
-        <p>Follow your Laawol status or continue on the carrier’s secure site.</p>
+        <p>Follow your Laawol status from pickup to delivery.</p>
       </div>
       <label className="phase5-tracking-search">
         <Search size={17} aria-hidden="true" />
@@ -124,6 +106,12 @@ export function CustomerTracking({
               record.destinationCountryName ?? record.destinationCountry,
               "Destination not set",
             );
+            const relatedCollection = text(record.relatedCollection, "") as
+              | "barrelShipments"
+              | "freightShipments";
+            const isCompleted = text(record.status, "") === "completed";
+            const reviewKey = `${relatedCollection}_${record.id}`;
+            const reviewed = reviewedKeys.has(reviewKey);
             return (
               <article className="phase5-tracking-card" key={record.id}>
                 <div className="phase5-tracking-topline">
@@ -141,11 +129,45 @@ export function CustomerTracking({
                   <span>{text(record.businessName, "Service provider")}</span>
                   <span>{formatDate(record.updatedAt ?? record.createdAt)}</span>
                 </div>
-                <CustomerTrackingActions record={record} />
+                <CopyTrackingNumber code={trackingCodeFor(record)} />
+                {relatedCollection && (
+                  <TrackingUpdatesSection
+                    canEdit={false}
+                    relatedCollection={relatedCollection}
+                    relatedId={record.id}
+                  />
+                )}
+                {isCompleted && (
+                  <div style={{ marginTop: 10 }}>
+                    {reviewed ? (
+                      <span className="status-pill compact">Review submitted</span>
+                    ) : (
+                      <button
+                        className="secondary-button"
+                        onClick={() => setReviewTarget(record)}
+                        type="button"
+                      >
+                        <Star size={15} /> Leave a review
+                      </button>
+                    )}
+                  </div>
+                )}
               </article>
             );
           })}
         </div>
+      )}
+      {reviewTarget && (
+        <ReviewComposerDrawer
+          businessId={text(reviewTarget.businessId, "")}
+          businessName={text(reviewTarget.businessName, "")}
+          onClose={() => setReviewTarget(null)}
+          onSubmitted={() => setReviewTarget(null)}
+          open={reviewTarget !== null}
+          orderTitle={trackingCodeFor(reviewTarget) || reviewTarget.id}
+          relatedCollection={text(reviewTarget.relatedCollection, "")}
+          relatedId={reviewTarget.id}
+        />
       )}
     </section>
   );

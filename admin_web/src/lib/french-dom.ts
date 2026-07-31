@@ -820,8 +820,8 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "The tracking number could not be copied. Select and copy it manually.":
     "Le numéro de suivi n’a pas pu être copié. Sélectionnez-le et copiez-le manuellement.",
   "Shipment tracking": "Suivi des expéditions",
-  "Follow your Laawol status or continue on the carrier’s secure site.":
-    "Suivez le statut Laawol ou continuez sur le site sécurisé du transporteur.",
+  "Follow your Laawol status from pickup to delivery.":
+    "Suivez le statut Laawol de la collecte à la livraison.",
   "Search tracking": "Rechercher un suivi",
   "Tracking number, destination, or business":
     "Numéro de suivi, destination ou entreprise",
@@ -829,6 +829,16 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Aucune expédition suivie ne correspond à votre recherche.",
   "Tracking number": "Numéro de suivi",
   "Destination not set": "Destination non définie",
+  "Leave a review": "Laisser un avis",
+  "Review submitted": "Avis envoyé",
+  "Choose a star rating.": "Choisissez une note en étoiles.",
+  "Add a short comment.": "Ajoutez un court commentaire.",
+  "Could not submit your review.": "Impossible d’envoyer votre avis.",
+  "How was your experience with this business?":
+    "Comment s’est passée votre expérience avec cette entreprise ?",
+  "Submitting...": "Envoi en cours...",
+  "Submit review": "Envoyer l’avis",
+  "Close review form": "Fermer le formulaire d’avis",
   "Real people, one secure conversation.":
     "De vraies personnes, une conversation sécurisée.",
   "Ask about one of your Laawol orders and see replies here in real time. Text messages are available on web.":

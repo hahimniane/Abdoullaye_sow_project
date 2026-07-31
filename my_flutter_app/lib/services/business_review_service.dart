@@ -9,13 +9,23 @@ class BusinessReviewService {
     FirebaseFirestore? firestore,
     FirebaseFunctions? functions,
     FirebaseAuth? auth,
-  }) : _firestore = firestore ?? FirebaseFirestore.instance,
-       _functions = functions ?? FirebaseFunctions.instance,
-       _auth = auth ?? FirebaseAuth.instance;
+  }) : _firestoreOverride = firestore,
+       _functionsOverride = functions,
+       _authOverride = auth;
 
-  final FirebaseFirestore _firestore;
-  final FirebaseFunctions _functions;
-  final FirebaseAuth _auth;
+  // Resolved lazily (not in the constructor) so building a
+  // BusinessReviewService never touches Firebase.instance unless one of the
+  // methods below is actually invoked - lets subclasses used in widget tests
+  // override methods without needing Firebase initialized.
+  final FirebaseFirestore? _firestoreOverride;
+  final FirebaseFunctions? _functionsOverride;
+  final FirebaseAuth? _authOverride;
+
+  FirebaseFirestore get _firestore =>
+      _firestoreOverride ?? FirebaseFirestore.instance;
+  FirebaseFunctions get _functions =>
+      _functionsOverride ?? FirebaseFunctions.instance;
+  FirebaseAuth get _auth => _authOverride ?? FirebaseAuth.instance;
 
   Stream<List<BusinessReview>> reviewsForBusiness(String businessId) {
     return _firestore

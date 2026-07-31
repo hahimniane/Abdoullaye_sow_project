@@ -9,14 +9,17 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../models/customer_order.dart';
 import '../providers/auth_provider.dart';
+import '../services/business_review_service.dart';
 import '../services/freight_shipment_service.dart';
 import '../services/shipment_tracking_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/barrel_receipt_generator.dart';
 import '../widgets/app_back_button.dart';
+import '../widgets/async_action_button.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
 import '../widgets/shipment_tracking_section.dart';
+import 'review_composer_screen.dart';
 
 enum _StatusFilter { inProgress, delivered, all }
 
@@ -131,6 +134,7 @@ class TrackingScreen extends StatefulWidget {
     this.customerUidOverride,
     this.freightService,
     this.trackingService,
+    this.reviewService,
     this.focusShipmentId,
   });
 
@@ -139,6 +143,7 @@ class TrackingScreen extends StatefulWidget {
   final String? customerUidOverride;
   final FreightShipmentService? freightService;
   final ShipmentTrackingService? trackingService;
+  final BusinessReviewService? reviewService;
   final String? focusShipmentId;
 
   @override
@@ -154,6 +159,9 @@ class _TrackingScreenState extends State<TrackingScreen> {
   String? _streamCustomerUid;
   Stream<List<CustomerTrackingShipment>>? _shipmentsStream;
   FreightShipmentService? _freightService;
+  late BusinessReviewService _reviewService;
+  StreamSubscription<Set<String>>? _reviewedKeysSubscription;
+  Set<String> _reviewedKeys = const <String>{};
   final Set<String> _balancePayments = <String>{};
   bool _showAllShipments = false;
 
@@ -162,6 +170,12 @@ class _TrackingScreenState extends State<TrackingScreen> {
     super.initState();
     _repository = widget.repository ?? FirestoreCustomerTrackingRepository();
     _freightService = widget.freightService;
+    _reviewService = widget.reviewService ?? BusinessReviewService();
+    _reviewedKeysSubscription = _reviewService
+        .reviewedOrderKeysForCurrentUser()
+        .listen((keys) {
+          if (mounted) setState(() => _reviewedKeys = keys);
+        });
   }
 
   @override
@@ -178,6 +192,22 @@ class _TrackingScreenState extends State<TrackingScreen> {
     if (oldWidget.focusShipmentId != widget.focusShipmentId) {
       _showAllShipments = false;
     }
+  }
+
+  void _openReview(CustomerTrackingShipment shipment) {
+    Navigator.pushNamed(
+      context,
+      '/leave-review',
+      arguments: ReviewComposerArguments(
+        relatedCollection: shipment.isFreight
+            ? freightTrackingCollection
+            : barrelTrackingCollection,
+        relatedId: shipment.id,
+        businessId: shipment.businessId,
+        businessName: shipment.businessName,
+        orderTitle: shipment.trackingCode,
+      ),
+    );
   }
 
   Future<void> _payFreightBalance(CustomerTrackingShipment shipment) async {
@@ -211,6 +241,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
 
   @override
   void dispose() {
+    _reviewedKeysSubscription?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -336,6 +367,9 @@ class _TrackingScreenState extends State<TrackingScreen> {
             CustomerTrackingShipment shipment, {
             bool focused = false,
           }) {
+            final reviewKey =
+                '${shipment.isFreight ? freightTrackingCollection : barrelTrackingCollection}_'
+                '${shipment.id}';
             return _ShipmentCard(
               shipment: shipment,
               focused: focused,
@@ -344,6 +378,10 @@ class _TrackingScreenState extends State<TrackingScreen> {
                   ? () => _payFreightBalance(shipment)
                   : null,
               trackingService: widget.trackingService,
+              reviewed: _reviewedKeys.contains(reviewKey),
+              onLeaveReview: shipment.status == 'completed'
+                  ? () => _openReview(shipment)
+                  : null,
             );
           }
 
@@ -961,6 +999,8 @@ class _ShipmentCard extends StatelessWidget {
     this.balancePaymentBusy = false,
     this.focused = false,
     this.trackingService,
+    this.reviewed = false,
+    this.onLeaveReview,
   });
 
   final CustomerTrackingShipment shipment;
@@ -968,6 +1008,8 @@ class _ShipmentCard extends StatelessWidget {
   final bool balancePaymentBusy;
   final bool focused;
   final ShipmentTrackingService? trackingService;
+  final bool reviewed;
+  final VoidCallback? onLeaveReview;
 
   Future<void> _copyTrackingNumber(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: shipment.trackingCode));
@@ -1162,6 +1204,19 @@ class _ShipmentCard extends StatelessWidget {
                   canEdit: false,
                   trackingService: trackingService,
                 ),
+              ],
+              if (onLeaveReview != null) ...[
+                const SizedBox(height: 12),
+                reviewed
+                    ? _StatusPill(
+                        label: l10n.orderReviewedBadge,
+                        color: AppColors.sage,
+                      )
+                    : AsyncActionButton.outlined(
+                        onPressed: onLeaveReview,
+                        label: l10n.orderLeaveReviewCta,
+                        icon: Icons.star_border_rounded,
+                      ),
               ],
             ],
           ),

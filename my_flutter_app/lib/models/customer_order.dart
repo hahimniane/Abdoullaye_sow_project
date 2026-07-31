@@ -18,6 +18,7 @@ class CustomerTrackingShipment {
     required this.receiverName,
     required this.destinationCountryName,
     required this.businessName,
+    this.businessId = '',
     required this.price,
     required this.status,
     required this.paymentStatus,
@@ -40,6 +41,7 @@ class CustomerTrackingShipment {
   final String receiverName;
   final String destinationCountryName;
   final String businessName;
+  final String businessId;
   final double price;
   final String status;
   final String paymentStatus;
@@ -66,6 +68,7 @@ class CustomerTrackingShipment {
       receiverName: shipment.receiverName,
       destinationCountryName: shipment.destinationCountryName,
       businessName: shipment.businessName,
+      businessId: shipment.businessId,
       price: shipment.price,
       status: shipment.status,
       paymentStatus: shipment.paymentStatus,
@@ -97,6 +100,7 @@ class CustomerTrackingShipment {
       receiverName: text('receiverName'),
       destinationCountryName: text('destinationCountryName'),
       businessName: text('businessName'),
+      businessId: text('businessId'),
       price: (data['price'] as num?)?.toDouble() ?? 0,
       status: text('status', 'pending'),
       paymentStatus: text('paymentStatus', 'not_required'),

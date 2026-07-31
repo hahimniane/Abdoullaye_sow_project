@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/l10n/app_localizations.dart';
 import 'package:my_flutter_app/models/customer_order.dart';
+import 'package:my_flutter_app/models/business_review.dart';
 import 'package:my_flutter_app/models/shipment_tracking_event.dart';
 import 'package:my_flutter_app/providers/language_provider.dart';
 import 'package:my_flutter_app/screens/tracking_screen.dart';
+import 'package:my_flutter_app/services/business_review_service.dart';
 import 'package:my_flutter_app/services/shipment_tracking_service.dart';
 import 'package:my_flutter_app/theme/app_theme.dart';
 import 'package:provider/provider.dart';
@@ -41,6 +43,16 @@ class _FakeTrackingService extends ShipmentTrackingService {
   }) async {}
 }
 
+class _FakeReviewService extends BusinessReviewService {
+  @override
+  Stream<Set<String>> reviewedOrderKeysForCurrentUser() =>
+      Stream.value(const <String>{});
+
+  @override
+  Stream<List<BusinessReview>> reviewsForBusiness(String businessId) =>
+      Stream.value(const []);
+}
+
 Future<void> _pumpTracking(
   WidgetTester tester,
   _FakeTrackingRepository repository, {
@@ -61,6 +73,7 @@ Future<void> _pumpTracking(
           customerUidOverride: 'customer-freight',
           focusShipmentId: focusShipmentId,
           trackingService: _FakeTrackingService(),
+          reviewService: _FakeReviewService(),
         ),
       ),
     ),
