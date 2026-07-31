@@ -8700,6 +8700,7 @@ const workspaceSections = [
   "services",
   "payments",
   "support",
+  "reviews",
 ] as const;
 
 type WorkspaceSection = (typeof workspaceSections)[number];
@@ -8713,6 +8714,7 @@ function workspaceSectionLabel(section: WorkspaceSection) {
     services: "Services",
     payments: "Payments",
     support: "Support",
+    reviews: "Reviews",
   }[section];
 }
 
@@ -9855,6 +9857,11 @@ function BusinessWorkspace({
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+            {section === "reviews" && (
+              <div className="workspace-section">
+                <ReviewsPanel businessId={business.id} />
               </div>
             )}
           </div>
