@@ -15,7 +15,6 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
-import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -36,9 +35,10 @@ import {
   UserCheck,
 } from "lucide-react";
 
-import { db, functions, storage } from "@/lib/firebase";
+import { AttachmentPreview } from "@/components/support/attachment-preview";
+import { db, functions } from "@/lib/firebase";
 import { asDate, formatDate, formatMoney, text } from "@/lib/format";
-import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
+import { uploadSupportAttachmentFile } from "@/lib/support-attachments";
 import type {
   ActionConfirmationOptions,
   ActionRunner,
@@ -795,36 +795,18 @@ function SupportThread({
     setInternalNote("");
   }
 
-  // Upload an attachment to the case's own storage path, then register it as a
-  // message via the callable (which re-validates path/type/size). Mirrors the
-  // Flutter app's flow and the wouri attachment design.
   async function uploadAttachment(rawFile: File | null | undefined) {
     if (!rawFile || uploading) return;
     setUploadError("");
     setUploading(true);
     try {
-      const file = await ensureBrowserDisplayableImage(rawFile);
-      const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/-+/g, "-");
-      const path = `support_cases/${caseId}/${currentUid}/${Date.now()}-${safeName}`;
-      const mimeType = file.type || "application/octet-stream";
-      const messageType = mimeType.startsWith("image/")
-        ? "image"
-        : mimeType.startsWith("video/")
-          ? "video"
-          : mimeType.startsWith("audio/")
-            ? "voice"
-            : "file";
-      const target = storageRef(storage, path);
-      await uploadBytes(target, file, { contentType: mimeType });
-      const url = await getDownloadURL(target);
-      await onCall("Attachment sent", "uploadSupportAttachmentMetadata", {
+      const payload = await uploadSupportAttachmentFile({
         caseId,
-        fileUrl: url,
-        filePath: path,
-        fileName: file.name,
-        mimeType,
-        fileSize: file.size,
-        messageType,
+        uploaderUid: currentUid,
+        file: rawFile,
+      });
+      await onCall("Attachment sent", "uploadSupportAttachmentMetadata", {
+        ...payload,
         ...(reply.trim() ? { caption: reply.trim() } : {}),
       });
       setReply("");
@@ -1193,16 +1175,7 @@ function MessageBubble({
         <span>{senderDisplay}</span>
         <span className={`role-tag role-${role}`}>{roleLabel(role)}</span>
       </div>
-      {isImage ? (
-        <a href={fileUrl} target="_blank" rel="noreferrer">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="bubble-image" src={fileUrl} alt={fileName} />
-        </a>
-      ) : fileUrl ? (
-        <a className="bubble-file" href={fileUrl} target="_blank" rel="noreferrer">
-          <FileText size={14} /> {fileName}
-        </a>
-      ) : null}
+      <AttachmentPreview fileName={fileName} fileUrl={fileUrl} isImage={isImage} />
       {Boolean(text(message.content, "")) && type !== "image" && (
         <span className="bubble-text">{text(message.content, "")}</span>
       )}

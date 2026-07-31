@@ -16,10 +16,8 @@ import {
   where,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
-import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 import {
   ArrowLeft,
-  FileText,
   Headphones,
   ImagePlus,
   MessageCircle,
@@ -28,9 +26,10 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-import { db, functions, storage } from "@/lib/firebase";
+import { AttachmentPreview } from "@/components/support/attachment-preview";
+import { db, functions } from "@/lib/firebase";
 import { formatDate, text } from "@/lib/format";
-import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
+import { uploadSupportAttachmentFile } from "@/lib/support-attachments";
 import {
   buildOpenSupportCasePayload,
   buildSupportCaseIdPayload,
@@ -466,40 +465,20 @@ function SupportThread({
     }
   }
 
-  // Uploads to the case's own storage path, then registers it as a message
-  // via the callable (which re-validates path/type/size). Mirrors the
-  // business/admin console's and the Flutter app's attachment flow.
   async function uploadAttachment(rawFile: File | null | undefined) {
     if (!rawFile || uploading) return;
     setUploadError("");
     setUploading(true);
     try {
-      const file = await ensureBrowserDisplayableImage(rawFile);
-      const safeName = file.name
-        .replace(/[^A-Za-z0-9._-]+/g, "-")
-        .replace(/-+/g, "-");
-      const path = `support_cases/${supportCase.id}/${uid}/${Date.now()}-${safeName}`;
-      const mimeType = file.type || "application/octet-stream";
-      const messageType = mimeType.startsWith("image/")
-        ? "image"
-        : mimeType.startsWith("video/")
-          ? "video"
-          : mimeType.startsWith("audio/")
-            ? "voice"
-            : "file";
-      const target = storageRef(storage, path);
-      await uploadBytes(target, file, { contentType: mimeType });
-      const url = await getDownloadURL(target);
+      const payload = await uploadSupportAttachmentFile({
+        caseId: supportCase.id,
+        uploaderUid: uid,
+        file: rawFile,
+      });
       await safeAction(
         httpsCallable(functions, "uploadSupportAttachmentMetadata")({
-          caseId: supportCase.id,
-          fileUrl: url,
-          filePath: path,
-          fileName: file.name,
-          mimeType,
-          fileSize: file.size,
-          messageType,
-          ...(content.trim() ? {caption: content.trim()} : {}),
+          ...payload,
+          ...(content.trim() ? { caption: content.trim() } : {}),
         }),
       );
       setContent("");
@@ -567,16 +546,11 @@ function SupportThread({
                 </strong>
                 <span>{formatDate(message.createdAt)}</span>
               </div>
-              {isImage ? (
-                <a href={fileUrl} rel="noreferrer" target="_blank">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img alt={fileName} className="bubble-image" src={fileUrl} />
-                </a>
-              ) : fileUrl ? (
-                <a className="bubble-file" href={fileUrl} rel="noreferrer" target="_blank">
-                  <FileText size={14} /> {fileName}
-                </a>
-              ) : null}
+              <AttachmentPreview
+                fileName={fileName}
+                fileUrl={fileUrl}
+                isImage={isImage}
+              />
               {isImage && Boolean(caption) && <p>{caption}</p>}
               {!fileUrl && <p>{text(message.content, "Message")}</p>}
             </article>
