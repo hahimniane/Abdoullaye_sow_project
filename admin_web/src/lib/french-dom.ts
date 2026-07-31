@@ -839,6 +839,8 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Submitting...": "Envoi en cours...",
   "Submit review": "Envoyer l’avis",
   "Close review form": "Fermer le formulaire d’avis",
+  "Show reviews": "Afficher les avis",
+  "Hide reviews": "Masquer les avis",
   "Real people, one secure conversation.":
     "De vraies personnes, une conversation sécurisée.",
   "Ask about one of your Laawol orders and see replies here in real time. Text messages are available on web.":

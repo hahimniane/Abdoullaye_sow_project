@@ -68,6 +68,7 @@ import {
 } from "lucide-react";
 
 import { NotificationBell } from "@/components/notification-bell";
+import { ReviewsPanel } from "@/components/business/reviews-panel";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ToggleRow } from "@/components/toggle-row";
 import { COUNTRY_CATALOG } from "@/lib/country-catalog";
@@ -10974,6 +10975,7 @@ function MarketplaceBusinessCard({
   runAction: ActionRunner;
 }) {
   const statusCounts = countBy(listings, "status");
+  const [showReviews, setShowReviews] = useState(false);
   return (
     <section className="marketplace-business-card">
       <div className="marketplace-business-head">
@@ -11012,6 +11014,15 @@ function MarketplaceBusinessCard({
           <EmptyState text="No listings from this business match the current filters." />
         )}
       </div>
+      <button
+        className="secondary-button"
+        onClick={() => setShowReviews((current) => !current)}
+        style={{ marginTop: 10 }}
+        type="button"
+      >
+        {showReviews ? "Hide reviews" : "Show reviews"}
+      </button>
+      {showReviews && <ReviewsPanel businessId={business.id} />}
     </section>
   );
 }
