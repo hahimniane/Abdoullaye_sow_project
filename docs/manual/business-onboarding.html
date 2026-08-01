@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Laawol · Business Onboarding Guide</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm; }
+  :root{
+    --ink:#0f172a; --muted:#64748b; --rule:#d7e7e5; --brand:#0d9488;
+    --brand-strong:#0b3b38; --paper-soft:#f8fafc; --warn:#92400e; --warn-bg:#fdf4e3;
+  }
+  *{box-sizing:border-box}
+  body{
+    font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    color:var(--ink); margin:0;
+  }
+  h1,h2,h3{line-height:1.25;margin:0 0 .4em}
+  h1{font-size:30px;font-weight:800;letter-spacing:-.02em}
+  h2{
+    font-size:20px;font-weight:800;color:var(--brand-strong);
+    margin-top:1.6em;padding-bottom:.3em;border-bottom:2px solid var(--rule);
+    page-break-after:avoid;
+  }
+  h3{font-size:15.5px;font-weight:700;margin-top:1.4em;page-break-after:avoid}
+  p{margin:0 0 .85em}
+  ul,ol{margin:0 0 .9em;padding-left:1.3em}
+  li{margin-bottom:.35em}
+  code{
+    font:12.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;
+    background:var(--paper-soft);border:1px solid var(--rule);
+    border-radius:4px;padding:1px 5px;
+  }
+  figure{margin:1.1em 0;page-break-inside:avoid}
+  figure img{
+    width:100%;border:1px solid var(--rule);border-radius:8px;display:block;
+  }
+  figure.phone img{width:56%;margin:0 auto}
+  figcaption{
+    font-size:12px;color:var(--muted);margin-top:.5em;text-align:center;
+  }
+  .cover{
+    page-break-after:always;padding-top:70mm;text-align:center;
+  }
+  .cover .mark{
+    display:inline-block;background:var(--brand);color:#fff;font-weight:800;
+    letter-spacing:.16em;font-size:12px;padding:7px 16px;border-radius:999px;
+  }
+  .cover h1{font-size:40px;margin:22px 0 8px}
+  .cover .sub{font-size:16px;color:var(--muted)}
+  .cover .meta{margin-top:44px;font-size:12.5px;color:var(--muted)}
+  .callout{
+    background:var(--paper-soft);border:1px solid var(--rule);
+    border-left:4px solid var(--brand);border-radius:0 8px 8px 0;
+    padding:12px 15px;margin:1em 0;page-break-inside:avoid;
+  }
+  .callout.warn{
+    background:var(--warn-bg);border-color:#f5d9a8;border-left-color:#d97706;
+    color:var(--warn);
+  }
+  .callout p:last-child{margin-bottom:0}
+  .callout strong{color:inherit}
+  table{
+    width:100%;border-collapse:collapse;margin:1em 0;font-size:13px;
+    page-break-inside:avoid;
+  }
+  th,td{border:1px solid var(--rule);padding:7px 10px;text-align:left;vertical-align:top}
+  th{background:var(--paper-soft);font-weight:700;font-size:12px;
+     text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  .toc{page-break-after:always}
+  /* Double-digit markers need room, or 10-15 render clipped as 0., 1., 2. */
+  .toc ol{padding-left:2.2em}
+  .toc li{margin-bottom:.45em;font-size:14.5px}
+  .toc small{color:var(--muted);display:block;font-size:12.5px}
+  .step{
+    display:inline-block;background:var(--brand);color:#fff;font-weight:800;
+    font-size:11px;padding:3px 9px;border-radius:999px;letter-spacing:.06em;
+    vertical-align:middle;margin-right:8px;
+  }
+  .pagebreak{page-break-before:always}
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <span class="mark">LAAWOL DIGITAL</span>
+  <h1>Business Onboarding Guide</h1>
+  <p class="sub">Setting up and running your business on Laawol</p>
+  <p class="meta">
+    Business console · business.laawoldigital.com<br>
+    Version 1.0 · August 2026
+  </p>
+</section>
+
+<section class="toc">
+  <h1>What's in this guide</h1>
+  <ol>
+    <li>Before you start
+      <small>What Laawol does and what you'll need</small></li>
+    <li>Signing in
+      <small>Reaching your dashboard</small></li>
+    <li>Business identity and verification
+      <small>Getting approved to trade</small></li>
+    <li>Choosing your services
+      <small>Turning on only what you offer</small></li>
+    <li>Destinations and pricing
+      <small>Where you ship and what you charge</small></li>
+    <li>Getting paid
+      <small>Payouts, platform fees, and who covers card charges</small></li>
+    <li>Your team
+      <small>Adding staff and limiting what they can reach</small></li>
+    <li>Today — your daily view
+      <small>What needs attention right now</small></li>
+    <li>Vehicle sales
+      <small>Listings and purchases</small></li>
+    <li>Barrels and freight
+      <small>The shipping queues</small></li>
+    <li>Car transport
+      <small>Winning jobs by quoting</small></li>
+    <li>Container tracking
+      <small>Required before a load can move</small></li>
+    <li>Notifications
+      <small>How you find out something happened</small></li>
+    <li>Reviews, support, and growth</li>
+    <li>What your customers see
+      <small>The Laawol mobile app</small></li>
+  </ol>
+</section>
+
+<h2>1 · Before you start</h2>
+<p>
+  Laawol connects customers who want to ship barrels and freight, buy vehicles,
+  move cars, or park them, with the businesses that provide those services. You
+  work from the <strong>business console</strong> in a web browser. Your
+  customers use the Laawol mobile app or the customer website.
+</p>
+<p>Have these ready before you begin:</p>
+<ul>
+  <li>The email address you want to sign in with</li>
+  <li>Your business licence or authority documents as PDFs or photos
+      (up to 20&nbsp;MB each)</li>
+  <li>Your bank details, for the payout account you'll connect</li>
+  <li>The countries you serve and the prices you want to charge</li>
+</ul>
+<div class="callout">
+  <p>
+    <strong>Work through sections 3 to 7 in order.</strong> Each one depends on
+    the one before it: you can't take orders until you're approved, and you
+    can't be paid until your payout account is connected.
+  </p>
+</div>
+
+<h2>2 · Signing in</h2>
+<p>
+  Go to <code>business.laawoldigital.com</code> and sign in with your business
+  email. You'll land on <strong>Today</strong>, your daily summary. Everything
+  else is reached from the sidebar on the left, grouped into
+  <em>Business setup</em>, <em>Vehicle sales</em>,
+  <em>Transport &amp; shipping</em>, and <em>Manage</em>.
+</p>
+<p>
+  The <strong>FR</strong> button in the bottom-right corner switches the whole
+  console to French. Anything you type stays as you typed it.
+</p>
+
+<h2>3 · <span class="step">STEP 1</span>Business identity and verification</h2>
+<p>
+  Open <strong>Business</strong> under Business setup. This is where you tell
+  Laawol who you are and prove you're allowed to trade.
+</p>
+<figure>
+  <img src="screenshots/web-03-business-identity.png" alt="Business identity and verification">
+  <figcaption>Business → identity details and verification documents</figcaption>
+</figure>
+<p>
+  Fill in your legal name, address, and contact details, then upload the
+  documents for the services you intend to offer. You only need the documents
+  that apply to you:
+</p>
+<table>
+  <tr><th>Document</th><th>Needed if you offer</th></tr>
+  <tr><td>Freight or shipping authority</td>
+      <td>Barrel shipping, shared barrels, freight</td></tr>
+  <tr><td>Dealer licence or sales authorisation</td><td>Car sales</td></tr>
+  <tr><td>Transport insurance and authority</td><td>Car transport</td></tr>
+  <tr><td>Parking facility proof</td><td>Car parking</td></tr>
+</table>
+<p>
+  Each file can be up to 20&nbsp;MB. Once uploaded, a document sits at
+  <em>submitted</em> until a Laawol administrator reviews it and marks it
+  <em>verified</em>. Your business status moves from <strong>pending</strong> to
+  <strong>approved</strong> at that point, and the header shows
+  <em>Approved</em> next to your name.
+</p>
+<div class="callout warn">
+  <p>
+    <strong>Until you're approved, customers can't find you.</strong> You can
+    configure everything else in the meantime, but your services won't appear
+    to customers and you can't receive orders.
+  </p>
+</div>
+
+<h2>4 · <span class="step">STEP 2</span>Choosing your services</h2>
+<p>
+  Open <strong>Services &amp; coverage</strong>. Turn on only the services you
+  actually provide — each one you enable adds setup work and exposes you to
+  orders you'd have to fulfil.
+</p>
+<figure>
+  <img src="screenshots/web-04-services-coverage.png" alt="Services and coverage">
+  <figcaption>Services &amp; coverage — four of six services active in this example</figcaption>
+</figure>
+<table>
+  <tr><th>Service</th><th>What it means for you</th></tr>
+  <tr><td>Barrel shipping</td>
+      <td>Customers send full barrels to a destination country you serve</td></tr>
+  <tr><td>Freight</td>
+      <td>Parcel shipping priced by weight, by air or by sea</td></tr>
+  <tr><td>Car sales</td>
+      <td>You list vehicles; customers reserve them with a paid hold</td></tr>
+  <tr><td>Car transport</td>
+      <td>You bid to move a customer's vehicle overseas</td></tr>
+  <tr><td>Car parking</td>
+      <td>You store vehicles at your facility for a daily or monthly rate</td></tr>
+</table>
+<p>
+  Selecting a service reveals only the settings it needs, under
+  <strong>Service rules</strong> — for example paid-hold pricing for car sales,
+  or whether you collect freight from a customer's address. A service shows
+  <em>Not offered</em> until you turn it on.
+</p>
+
+<h2>5 · <span class="step">STEP 3</span>Destinations and pricing</h2>
+<p>
+  Still under Services &amp; coverage, add each country you serve and set your
+  prices per service. Coverage is <strong>per service, per country</strong> —
+  you might ship barrels to Guinea and Senegal but only offer freight to Senegal.
+</p>
+<p>For each destination you set:</p>
+<ul>
+  <li><strong>Barrel shipping</strong> — price per barrel and a delivery
+      estimate range in days</li>
+  <li><strong>Freight</strong> — price per kilogram for air and for sea, plus
+      the departure days you sail or fly</li>
+  <li><strong>Car transport</strong> — whether you cover that country at all</li>
+</ul>
+<div class="callout">
+  <p>
+    <strong>A price of zero means "not offered".</strong> If you leave the sea
+    freight rate at zero, customers won't be offered sea freight to that
+    country — the service simply won't appear for them.
+  </p>
+</div>
+
+<h2>6 · <span class="step">STEP 4</span>Getting paid</h2>
+<p>
+  Laawol collects payment from the customer and passes your share to you. To
+  receive money you must connect a payout account, which you'll be prompted to
+  do from your dashboard. Until payouts are enabled, orders can still arrive but
+  money can't reach you.
+</p>
+<p>Three numbers govern every transaction:</p>
+<table>
+  <tr><th>Term</th><th>What it is</th></tr>
+  <tr><td>Gross received</td><td>What the customer paid in total</td></tr>
+  <tr><td>Platform fee</td>
+      <td>Laawol's commission, set per business and shown on your dashboard</td></tr>
+  <tr><td>Business earnings</td><td>What reaches you after the platform fee</td></tr>
+</table>
+<p>
+  There's also a setting for <strong>who absorbs the card processing fee</strong>
+  — you or Laawol. If you absorb it, payments for your orders are charged
+  directly on your connected account and the processing fee comes out of your
+  share. Your dashboard states which applies under
+  <em>Who pays Stripe's processing fee</em>.
+</p>
+
+<h2>7 · <span class="step">STEP 5</span>Your team</h2>
+<p>
+  Open <strong>People</strong> to invite staff. Each person gets their own
+  sign-in and only sees the sections you allow.
+</p>
+<figure>
+  <img src="screenshots/web-05-people.png" alt="People and permissions">
+  <figcaption>People — a staff member with per-section permissions</figcaption>
+</figure>
+<p>
+  Permissions are per section: Business, Listings, Purchases, Barrels, Freight,
+  Transport, Parking, Services &amp; coverage, People, Reviews, Support, and
+  Growth. Tick only what that person needs and press
+  <strong>Save permissions</strong>. A service you don't offer shows as
+  <em>not yet offered</em> and can't be granted.
+</p>
+<div class="callout">
+  <p>
+    <strong>The owner always has full access.</strong> Staff permissions apply
+    to everyone else, so give warehouse staff the shipping queues without
+    exposing pricing or payouts.
+  </p>
+</div>
+
+<h2 class="pagebreak">8 · Today — your daily view</h2>
+<p>
+  <strong>Today</strong> is where you start each morning. It answers one
+  question: what needs attention right now.
+</p>
+<figure>
+  <img src="screenshots/web-02-today.png" alt="Today dashboard">
+  <figcaption>Today — counters, analytics, operations mix, and earnings</figcaption>
+</figure>
+<ul>
+  <li><strong>Counters</strong> across the top — active listings, open
+      shipments, pending purchases, support requests</li>
+  <li><strong>Operations mix</strong> — every order you have, grouped by status,
+      so a growing "Pending" column tells you work is piling up</li>
+  <li><strong>Business earnings</strong> — gross, fees, your earnings, and money
+      still pending, broken down per service</li>
+  <li><strong>Needs attention</strong> — the specific orders waiting on you</li>
+</ul>
+
+<h2>9 · Vehicle sales</h2>
+<h3>Listings</h3>
+<p>
+  <strong>Listings</strong> holds the vehicles you're selling. Use
+  <em>New listing</em> to add one — make, model, year, condition, mileage,
+  price, and photos. Each listing carries a <strong>rebuilt title</strong>
+  status, which customers see before they reserve.
+</p>
+<figure>
+  <img src="screenshots/web-06-listings.png" alt="Vehicle listings">
+  <figcaption>Listings — status moves through draft, active, reserved, sold</figcaption>
+</figure>
+<p>
+  A listing's status moves <em>draft → active → reserved → sold</em>. Only
+  <strong>active</strong> listings appear to customers. Use <em>Export CSV</em>
+  to take your inventory into a spreadsheet.
+</p>
+<h3>Purchases</h3>
+<p>
+  <strong>Purchases</strong> shows customers who have paid a hold deposit to
+  reserve a vehicle. Review each one and either confirm the sale or release the
+  hold. Deposits appear under hold deposits on your dashboard until resolved.
+</p>
+<figure>
+  <img src="screenshots/web-07-purchases.png" alt="Purchases and holds">
+  <figcaption>Purchases — paid holds awaiting your review</figcaption>
+</figure>
+
+<h2>10 · Barrels and freight</h2>
+<p>
+  These are your shipping queues. Both work the same way: a customer books and
+  pays, the order lands in your queue, and you move it through its statuses as
+  the goods travel.
+</p>
+<figure>
+  <img src="screenshots/web-08-barrels.png" alt="Barrel shipments queue">
+  <figcaption>Barrels — each card carries the tracking code, sender, receiver, and payment state</figcaption>
+</figure>
+<p>
+  Every shipment shows its <strong>tracking code</strong>, sender and receiver,
+  destination, what was paid, and the delivery estimate the customer was quoted.
+  Change <strong>Update status</strong> as the shipment progresses. The customer
+  sees that change in their app immediately.
+</p>
+<figure>
+  <img src="screenshots/web-09-freight.png" alt="Freight queue">
+  <figcaption>Freight — priced by weight, with balance settlement when actual weight differs</figcaption>
+</figure>
+<p>
+  Freight is priced by weight. If the actual weight differs from what the
+  customer declared, the difference is settled as a balance payment before the
+  shipment can move on.
+</p>
+
+<h2>11 · Car transport</h2>
+<p>
+  Car transport is a <strong>bidding marketplace</strong>, not first-come
+  first-served. When a customer requests a vehicle move to a country you cover,
+  the request appears in your <strong>Transport</strong> queue as an opportunity.
+</p>
+<figure>
+  <img src="screenshots/web-10-transport.png" alt="Transport opportunities">
+  <figcaption>Transport — quote opportunities separated from jobs you've won</figcaption>
+</figure>
+<ol>
+  <li>A request arrives and you're notified</li>
+  <li>You <strong>send a quote</strong> — total price, estimated pickup and
+      delivery dates, transport method, and your terms</li>
+  <li><strong>The customer chooses</strong> which quote to accept. You don't
+      claim the job; you win it on price and terms</li>
+  <li>Once selected, it becomes a job you move through
+      <em>pending → scheduled → in transit → delivered</em></li>
+</ol>
+<p>
+  You can revise or withdraw a quote while the customer is still deciding. Each
+  opportunity has a <strong>quote deadline</strong> — miss it and the
+  opportunity closes.
+</p>
+<div class="callout">
+  <p>
+    <strong>"Scheduled" means booked, not moving.</strong> Use it once you've
+    assigned a carrier and fixed a pickup date but the vehicle hasn't left. If
+    that stage doesn't match how you work, go straight to <em>in transit</em>.
+  </p>
+</div>
+
+<h2>12 · Container tracking</h2>
+<p>
+  Anything travelling in a container — barrels, sea freight, and cars — needs a
+  <strong>container number</strong> before you can mark it <em>in transit</em>.
+</p>
+<p>
+  On each shipment card, find <strong>Automated container tracking</strong>.
+  Enter the container, booking, or bill of lading number from your carrier, pick
+  the carrier from the list, and press <strong>Start tracking</strong>. From then
+  on, carrier milestones flow into the shipment automatically and your customer
+  can follow it.
+</p>
+<div class="callout warn">
+  <p>
+    <strong>The system will not let you mark a load "in transit" without it.</strong>
+    This is deliberate: in transit is the moment your customer starts asking
+    where their goods are, and the container number is the only thing that can
+    answer them. Air freight is exempt, since it has no container.
+  </p>
+</div>
+<p>
+  Pick your carrier from the list rather than typing its code. A mistyped
+  carrier code doesn't fail loudly — tracking simply never starts. If your
+  carrier isn't listed, choose <em>Another carrier</em> and enter its four-letter
+  SCAC code.
+</p>
+
+<h2>13 · Notifications</h2>
+<p>
+  The bell in the top-right tells you when something needs you. You'll be
+  notified when:
+</p>
+<ul>
+  <li><strong>A customer pays</strong> for any of your services — barrels,
+      freight, car sales, parking, or transport</li>
+  <li><strong>A new transport request</strong> arrives that you're eligible to
+      quote on</li>
+  <li><strong>A customer messages you</strong> through support</li>
+  <li><strong>Your verification</strong> is reviewed</li>
+</ul>
+<p>
+  Clicking a notification takes you straight to the order it refers to, not just
+  to the section. You can also receive these as push notifications on your phone
+  and by email; adjust that under your notification preferences.
+</p>
+
+<h2>14 · Reviews, support, and growth</h2>
+<h3>Reviews</h3>
+<p>
+  Customers rate you after a completed order. Your average rating and review
+  count appear to customers when they're choosing a business, so this directly
+  affects how much work you win. You can report a review you believe is abusive.
+</p>
+<figure>
+  <img src="screenshots/web-11-reviews.png" alt="Reviews">
+  <figcaption>Reviews — ratings and customer feedback</figcaption>
+</figure>
+<h3>Support</h3>
+<p>
+  <strong>Support</strong> is your conversation with customers about specific
+  orders. Each case is attached to the order it concerns, so you can see what
+  they're referring to without asking.
+</p>
+<figure>
+  <img src="screenshots/web-12-support.png" alt="Support cases">
+  <figcaption>Support — customer cases tied to specific orders</figcaption>
+</figure>
+<h3>Growth</h3>
+<figure>
+  <img src="screenshots/web-13-growth.png" alt="Growth">
+  <figcaption>Growth — plan and advisor</figcaption>
+</figure>
+
+<h2 class="pagebreak">15 · What your customers see</h2>
+<p>
+  Your customers use the Laawol mobile app. Knowing what they see helps you
+  understand what they're describing when they contact you.
+</p>
+<figure class="phone">
+  <img src="screenshots/app-01-home.png" alt="Customer app home">
+  <figcaption>Home — wallet balance and quick actions</figcaption>
+</figure>
+<figure class="phone">
+  <img src="screenshots/app-03-shipping.png" alt="Customer app shipping">
+  <figcaption>Shipping — where customers start a barrel, freight, or transport request</figcaption>
+</figure>
+<figure class="phone">
+  <img src="screenshots/app-05-activity.png" alt="Customer app activity">
+  <figcaption>Activity — every order the customer has placed, with its live status</figcaption>
+</figure>
+<p>
+  The status you set in your queue is the status they see here. When you move a
+  shipment to <em>in transit</em>, their Activity list updates immediately —
+  which is why keeping statuses current cuts down on "where is my order"
+  messages.
+</p>
+
+<h2>Quick reference</h2>
+<table>
+  <tr><th>You want to…</th><th>Go to</th></tr>
+  <tr><td>See what needs attention</td><td>Today</td></tr>
+  <tr><td>Upload a licence or check approval</td><td>Business</td></tr>
+  <tr><td>Turn a service on or off</td><td>Services &amp; coverage</td></tr>
+  <tr><td>Change a country price</td><td>Services &amp; coverage → destinations</td></tr>
+  <tr><td>Add a staff member</td><td>People</td></tr>
+  <tr><td>Add a vehicle for sale</td><td>Listings → New listing</td></tr>
+  <tr><td>Approve a customer's hold</td><td>Purchases</td></tr>
+  <tr><td>Update a shipment's status</td><td>Barrels or Freight</td></tr>
+  <tr><td>Bid on a vehicle move</td><td>Transport → Send quote</td></tr>
+  <tr><td>Start container tracking</td><td>The shipment card in its queue</td></tr>
+  <tr><td>Answer a customer</td><td>Support</td></tr>
+</table>
+
+<div class="callout">
+  <p>
+    <strong>Need help?</strong> Raise a case in <strong>Support</strong> from
+    your console, and the Laawol team will pick it up.
+  </p>
+</div>
+
+</body>
+</html>
