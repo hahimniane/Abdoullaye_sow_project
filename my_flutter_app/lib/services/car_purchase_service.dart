@@ -110,24 +110,29 @@ class CarPurchaseService {
     }
 
     await StripeConfigService.ensureConfigured();
-    await Stripe.instance.initPaymentSheet(
-      paymentSheetParameters: SetupPaymentSheetParameters(
-        paymentIntentClientSecret: clientSecret,
-        merchantDisplayName: 'Laawol',
-        style: ThemeMode.light,
-      ),
-    );
-    await completePaymentFlowSafely(
-      presentPaymentSheet: Stripe.instance.presentPaymentSheet,
-      completeTransaction: () async {
-        await _functions.httpsCallable('completeCarPurchase').call({
-          'purchaseId': purchaseId,
-        });
-      },
-      cancelPendingTransaction: () async {
-        await _functions.httpsCallable('cancelPendingCarPurchase').call({
-          'purchaseId': purchaseId,
-        });
+    await withStripeConnectedAccount(
+      (data['stripeConnectedAccountId'] as String?) ?? '',
+      () async {
+        await Stripe.instance.initPaymentSheet(
+          paymentSheetParameters: SetupPaymentSheetParameters(
+            paymentIntentClientSecret: clientSecret,
+            merchantDisplayName: 'Laawol',
+            style: ThemeMode.light,
+          ),
+        );
+        await completePaymentFlowSafely(
+          presentPaymentSheet: Stripe.instance.presentPaymentSheet,
+          completeTransaction: () async {
+            await _functions.httpsCallable('completeCarPurchase').call({
+              'purchaseId': purchaseId,
+            });
+          },
+          cancelPendingTransaction: () async {
+            await _functions.httpsCallable('cancelPendingCarPurchase').call({
+              'purchaseId': purchaseId,
+            });
+          },
+        );
       },
     );
   }
@@ -161,24 +166,29 @@ class CarPurchaseService {
     }
 
     await StripeConfigService.ensureConfigured();
-    await Stripe.instance.initPaymentSheet(
-      paymentSheetParameters: SetupPaymentSheetParameters(
-        paymentIntentClientSecret: clientSecret,
-        merchantDisplayName: 'Laawol',
-        style: ThemeMode.light,
-      ),
-    );
-    await completePaymentFlowSafely(
-      presentPaymentSheet: Stripe.instance.presentPaymentSheet,
-      completeTransaction: () async {
-        await _functions.httpsCallable('completeCarDepositReservation').call({
-          'purchaseId': purchaseId,
-        });
-      },
-      cancelPendingTransaction: () async {
-        await _functions.httpsCallable('cancelPendingCarPurchase').call({
-          'purchaseId': purchaseId,
-        });
+    await withStripeConnectedAccount(
+      (data['stripeConnectedAccountId'] as String?) ?? '',
+      () async {
+        await Stripe.instance.initPaymentSheet(
+          paymentSheetParameters: SetupPaymentSheetParameters(
+            paymentIntentClientSecret: clientSecret,
+            merchantDisplayName: 'Laawol',
+            style: ThemeMode.light,
+          ),
+        );
+        await completePaymentFlowSafely(
+          presentPaymentSheet: Stripe.instance.presentPaymentSheet,
+          completeTransaction: () async {
+            await _functions
+                .httpsCallable('completeCarDepositReservation')
+                .call({'purchaseId': purchaseId});
+          },
+          cancelPendingTransaction: () async {
+            await _functions.httpsCallable('cancelPendingCarPurchase').call({
+              'purchaseId': purchaseId,
+            });
+          },
+        );
       },
     );
   }
@@ -212,14 +222,19 @@ class CarPurchaseService {
       throw Exception('Extension payment could not be initialized.');
     }
     await StripeConfigService.ensureConfigured();
-    await Stripe.instance.initPaymentSheet(
-      paymentSheetParameters: SetupPaymentSheetParameters(
-        paymentIntentClientSecret: clientSecret,
-        merchantDisplayName: 'Laawol',
-        style: ThemeMode.light,
-      ),
+    await withStripeConnectedAccount(
+      (data['stripeConnectedAccountId'] as String?) ?? '',
+      () async {
+        await Stripe.instance.initPaymentSheet(
+          paymentSheetParameters: SetupPaymentSheetParameters(
+            paymentIntentClientSecret: clientSecret,
+            merchantDisplayName: 'Laawol',
+            style: ThemeMode.light,
+          ),
+        );
+        await Stripe.instance.presentPaymentSheet();
+      },
     );
-    await Stripe.instance.presentPaymentSheet();
     await _functions.httpsCallable('completePaidHoldExtensionPayment').call({
       'purchaseId': purchase.id,
     });

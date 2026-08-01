@@ -123,24 +123,29 @@ class FirebaseParkingService implements ParkingRepository {
         throw Exception('Payment could not be initialized.');
       }
       await StripeConfigService.ensureConfigured();
-      await Stripe.instance.initPaymentSheet(
-        paymentSheetParameters: SetupPaymentSheetParameters(
-          paymentIntentClientSecret: clientSecret,
-          merchantDisplayName: 'Laawol',
-          style: ThemeMode.light,
-        ),
-      );
-      await completePaymentFlowSafely(
-        presentPaymentSheet: Stripe.instance.presentPaymentSheet,
-        completeTransaction: () async {
-          await _functions.httpsCallable('completeParkingReservation').call({
-            'reservationId': reservationId,
-          });
-        },
-        cancelPendingTransaction: () async {
-          await _functions
-              .httpsCallable('cancelPendingParkingReservation')
-              .call({'reservationId': reservationId});
+      await withStripeConnectedAccount(
+        (data['stripeConnectedAccountId'] as String?) ?? '',
+        () async {
+          await Stripe.instance.initPaymentSheet(
+            paymentSheetParameters: SetupPaymentSheetParameters(
+              paymentIntentClientSecret: clientSecret,
+              merchantDisplayName: 'Laawol',
+              style: ThemeMode.light,
+            ),
+          );
+          await completePaymentFlowSafely(
+            presentPaymentSheet: Stripe.instance.presentPaymentSheet,
+            completeTransaction: () async {
+              await _functions.httpsCallable('completeParkingReservation').call(
+                {'reservationId': reservationId},
+              );
+            },
+            cancelPendingTransaction: () async {
+              await _functions
+                  .httpsCallable('cancelPendingParkingReservation')
+                  .call({'reservationId': reservationId});
+            },
+          );
         },
       );
     }

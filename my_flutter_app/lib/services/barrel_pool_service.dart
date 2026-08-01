@@ -26,27 +26,29 @@ class BarrelPoolService {
     }
 
     await StripeConfigService.ensureConfigured();
-    await Stripe.instance.initPaymentSheet(
-      paymentSheetParameters: SetupPaymentSheetParameters(
-        paymentIntentClientSecret: result.clientSecret,
-        merchantDisplayName: 'Laawol',
-        style: ThemeMode.light,
-      ),
-    );
+    await withStripeConnectedAccount(result.stripeConnectedAccountId, () async {
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          paymentIntentClientSecret: result.clientSecret,
+          merchantDisplayName: 'Laawol',
+          style: ThemeMode.light,
+        ),
+      );
 
-    await completePaymentFlowSafely(
-      presentPaymentSheet: Stripe.instance.presentPaymentSheet,
-      completeTransaction: () async {
-        await _functions.httpsCallable('completeBarrelPoolDepositPayment').call(
-          {'poolId': result.poolId},
-        );
-      },
-      cancelPendingTransaction: () async {
-        await _functions.httpsCallable('cancelPendingBarrelPoolDeposit').call({
-          'poolId': result.poolId,
-        });
-      },
-    );
+      await completePaymentFlowSafely(
+        presentPaymentSheet: Stripe.instance.presentPaymentSheet,
+        completeTransaction: () async {
+          await _functions
+              .httpsCallable('completeBarrelPoolDepositPayment')
+              .call({'poolId': result.poolId});
+        },
+        cancelPendingTransaction: () async {
+          await _functions.httpsCallable('cancelPendingBarrelPoolDeposit').call({
+            'poolId': result.poolId,
+          });
+        },
+      );
+    });
 
     return result;
   }
@@ -74,14 +76,16 @@ class BarrelPoolService {
     }
 
     await StripeConfigService.ensureConfigured();
-    await Stripe.instance.initPaymentSheet(
-      paymentSheetParameters: SetupPaymentSheetParameters(
-        paymentIntentClientSecret: result.clientSecret,
-        merchantDisplayName: 'Laawol',
-        style: ThemeMode.light,
-      ),
-    );
-    await Stripe.instance.presentPaymentSheet();
+    await withStripeConnectedAccount(result.stripeConnectedAccountId, () async {
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          paymentIntentClientSecret: result.clientSecret,
+          merchantDisplayName: 'Laawol',
+          style: ThemeMode.light,
+        ),
+      );
+      await Stripe.instance.presentPaymentSheet();
+    });
     await _functions.httpsCallable('completeBarrelPoolBalancePayment').call({
       'requestId': result.requestId,
     });
