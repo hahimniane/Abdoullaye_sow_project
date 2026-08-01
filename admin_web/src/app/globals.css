@@ -8872,6 +8872,10 @@ button[data-loading="true"]::before {
 /* Two across when there is room; the SCAC field is short and pairing them
    keeps the panel from becoming a tall stack of single inputs. */
 .ctrack-fields { display: grid; gap: 10px; grid-template-columns: 1.6fr 1fr; }
+/* Revealed only when the carrier is outside the catalog, so it reads as a
+   follow-up to the picker rather than a second field competing with it. */
+.ctrack-custom-scac { max-width: 220px; }
+.ctrack-custom-scac input { letter-spacing: .16em; text-transform: uppercase; }
 .ctrack-fields input { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 .ctrack-actions { display: flex; justify-content: flex-end; }
 /* Quieter than .error-box, which is a full-width block with its own margin -

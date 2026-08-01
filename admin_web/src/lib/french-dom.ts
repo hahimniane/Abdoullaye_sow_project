@@ -1336,6 +1336,13 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "New parking": "Nouveau stationnement",
   "New transport": "Nouveau transport",
   "New transport request": "Nouvelle demande de transport",
+  // Titles of the business-facing notifications sent when money lands for a
+  // service, so a paid order does not wait for someone to open the console.
+  "Barrel shipment paid": "Expédition de baril payée",
+  "Freight payment received": "Paiement de fret reçu",
+  "Car payment received": "Paiement de véhicule reçu",
+  "Parking payment received": "Paiement de stationnement reçu",
+  "Transport payment received": "Paiement de transport reçu",
   No: "Non",
   "No AI insights yet": "Aucune recommandation IA pour le moment",
   "No destinations yet": "Aucune destination pour le moment",
@@ -3320,6 +3327,16 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Numéro de conteneur / réservation / connaissement",
   "Carrier SCAC code · optional": "Code SCAC du transporteur · facultatif",
   "Carrier SCAC code (optional)": "Code SCAC du transporteur (facultatif)",
+  // The SCAC is now picked from the ocean carrier catalog rather than typed,
+  // with a free-text escape for carriers outside it.
+  "Carrier · optional": "Transporteur · facultatif",
+  "Carrier SCAC code": "Code SCAC du transporteur",
+  "Another carrier — enter the code":
+    "Un autre transporteur — saisissez le code",
+  "No carrier matches your search.":
+    "Aucun transporteur ne correspond à votre recherche.",
+  "Search carrier or code": "Rechercher un transporteur ou un code",
+  "Ocean carrier options": "Options de transporteur maritime",
   "Starting…": "Démarrage…",
   "Start tracking": "Démarrer le suivi",
   "Enter a valid tracking number.": "Entrez un numéro de suivi valide.",

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -79,6 +81,36 @@ class FavoriteCarsService {
         );
   }
 
+  /// Live car documents for [carIds], keyed by id; ids with no surviving car
+  /// are simply absent.
+  ///
+  /// See [mergeFavoriteWithLiveCar] for how the two are combined.
+  ///
+  /// The favourite document is a snapshot taken when the car was saved, so a
+  /// photo, price, or title added afterwards never reaches it - the card keeps
+  /// rendering whatever was true that day, which for a listing saved before it
+  /// was finished means a blank card forever. Re-reading the car fixes that.
+  ///
+  /// Batched with `whereIn` rather than a read per row: a per-tile fetch would
+  /// be O(N) network calls per render of the list.
+  Future<Map<String, Car>> loadCars(List<String> carIds) async {
+    final ids = carIds.where((id) => id.isNotEmpty).toSet().toList();
+    if (ids.isEmpty) return <String, Car>{};
+    final cars = <String, Car>{};
+    // Firestore caps whereIn at 30 values per query.
+    for (var start = 0; start < ids.length; start += 30) {
+      final chunk = ids.sublist(start, math.min(start + 30, ids.length));
+      final snapshot = await _firestore
+          .collection('cars')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+      for (final doc in snapshot.docs) {
+        cars[doc.id] = Car.fromFirestore(doc);
+      }
+    }
+    return cars;
+  }
+
   Future<bool> isFavorite(String carId) async {
     final uid = currentUserId;
     if (uid == null) return false;
@@ -110,4 +142,34 @@ class FavoriteCarsService {
       'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
+}
+
+/// Layers the live car over the snapshot saved when it was favourited.
+///
+/// The favourite document records the car as it looked that day. Anything the
+/// listing gained afterwards - photos, a price, a title - never reaches it, so
+/// a car saved before its listing was finished renders as a blank card
+/// forever. Live values therefore win.
+///
+/// Saved values still fill any gap, and are used wholesale when [live] is null,
+/// so a delisted car degrades to what was last known about it instead of
+/// vanishing from the list or rendering empty.
+FavoriteCarSnapshot mergeFavoriteWithLiveCar(
+  FavoriteCarSnapshot saved,
+  Car? live,
+) {
+  if (live == null) return saved;
+  return FavoriteCarSnapshot(
+    carId: saved.carId,
+    title: live.title.isNotEmpty ? live.title : saved.title,
+    make: live.make.isNotEmpty ? live.make : saved.make,
+    model: live.model.isNotEmpty ? live.model : saved.model,
+    year: live.year.isNotEmpty ? live.year : saved.year,
+    // A live price of 0 means "not priced yet", not "free" - keep whatever was
+    // saved rather than showing $0.00.
+    price: live.price > 0 ? live.price : saved.price,
+    imageUrl: live.imageUrls.isNotEmpty ? live.imageUrls.first : saved.imageUrl,
+    isRebuiltTitle: live.isRebuiltTitle ?? saved.isRebuiltTitle,
+    createdAt: saved.createdAt,
+  );
 }

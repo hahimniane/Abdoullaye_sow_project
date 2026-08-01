@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { httpsCallable } from "firebase/functions";
 import { AlertCircle, Radar, Ship } from "lucide-react";
 
+import { SearchableSelect } from "@/components/searchable-select";
 import { functions } from "@/lib/firebase";
 import { text } from "@/lib/format";
+import {
+  OTHER_CARRIER_VALUE,
+  oceanCarrierOptions,
+} from "@/lib/ocean-carrier-catalog";
 
 // Staff-only card for starting Terminal49 automated container tracking on a
 // sea shipment. New milestones from the carrier appear on the shared
@@ -24,9 +29,18 @@ export function ContainerTrackingCard({
   trackingProvider: string;
 }) {
   const [number, setNumber] = useState("");
-  const [scac, setScac] = useState("");
+  // Carrier picked from the catalog, or the sentinel that reveals free text.
+  const [carrier, setCarrier] = useState("");
+  const [customScac, setCustomScac] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  const carrierOptions = useMemo(
+    () => oceanCarrierOptions("Another carrier — enter the code"),
+    [],
+  );
+  const usingCustomScac = carrier === OTHER_CARRIER_VALUE;
+  const scac = usingCustomScac ? customScac.trim().toUpperCase() : carrier;
 
   async function start() {
     if (number.trim().length < 4) {
@@ -40,7 +54,7 @@ export function ContainerTrackingCard({
         relatedCollection,
         relatedId,
         containerNumber: number.trim(),
-        scac: scac.trim(),
+        scac,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start tracking.");
@@ -101,17 +115,38 @@ export function ContainerTrackingCard({
             value={number}
           />
         </label>
-        <label className="bar-field">
-          <span>Carrier SCAC code · optional</span>
+        {/* Picked, not typed: a mistyped SCAC does not fail loudly - the
+            carrier lookup just never resolves and tracking silently never
+            starts. Optional, because the server infers it from the number
+            first and only asks when that lookup comes back empty. */}
+        <SearchableSelect
+          className="bar-field"
+          emptyMessage="No carrier matches your search."
+          label="Carrier · optional"
+          listLabel="Ocean carrier options"
+          onChange={(value) => {
+            setCarrier(value);
+            if (value !== OTHER_CARRIER_VALUE) setCustomScac("");
+          }}
+          options={carrierOptions}
+          placeholder="Search carrier or code"
+          value={carrier}
+        />
+      </div>
+
+      {usingCustomScac && (
+        <label className="bar-field ctrack-custom-scac">
+          <span>Carrier SCAC code</span>
           <input
             autoComplete="off"
-            onChange={(event) => setScac(event.target.value.toUpperCase())}
+            maxLength={4}
+            onChange={(event) => setCustomScac(event.target.value.toUpperCase())}
             placeholder="MAEU"
             spellCheck={false}
-            value={scac}
+            value={customScac}
           />
         </label>
-      </div>
+      )}
 
       {error && (
         <p className="ctrack-error" role="alert">

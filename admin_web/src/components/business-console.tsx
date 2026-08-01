@@ -85,7 +85,29 @@ const serviceLabels: Record<string, string> = {
 
 const businessSidebarStorageKey = "laawol:business-sidebar-pins";
 
-function tabForNotification(type: string): BusinessTab {
+function tabForNotification(
+  type: string,
+  service = "",
+): BusinessTab {
+  // A paid order can belong to any service, so the payload carries which one -
+  // dropping the business on "today" would make them hunt for the order that
+  // was just paid for.
+  if (type === "business_order_paid") {
+    switch (service) {
+      case "barrels":
+        return "barrels";
+      case "freight":
+        return "freight";
+      case "transport":
+        return "transport";
+      case "parking":
+        return "parking";
+      case "purchases":
+        return "purchases";
+      default:
+        return "today";
+    }
+  }
   switch (type) {
     case "support_message":
     case "support_escalated":
@@ -410,7 +432,9 @@ export function BusinessConsole({
           <NotificationBell
             enabled={Boolean(firebaseUser.uid) && !previewMode}
             onSelect={(data) => {
-              setActiveTab(tabForNotification(data.type ?? ""));
+              setActiveTab(
+                tabForNotification(data.type ?? "", data.service ?? ""),
+              );
               setNotificationFocusId(data.requestId ?? "");
             }}
             uid={firebaseUser.uid}
