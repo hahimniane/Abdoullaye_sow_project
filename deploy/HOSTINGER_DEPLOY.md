@@ -111,8 +111,44 @@ path is rewritten to a security-block address:
 
 ```bash
 cd deploy
-npm run deploy:static:ssh
+NEXT_PUBLIC_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY=<recaptcha-enterprise-site-key> \
+  npm run deploy:static:ssh
 ```
+
+**The App Check site key must be exported, not put in a file.** Preflight reads
+`process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY` directly
+(`preflight.mjs`), and `next build` inlines the same variable into the bundle.
+`admin_web/.env.local` does **not** work here: that is a Next.js build-time
+convention, and preflight is plain Node that never loads it. Without the export
+you get two failures that look like separate problems but are one:
+
+```
+FAIL Admin/business App Check configuration - set NEXT_PUBLIC_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY
+FAIL Admin/business build from source
+```
+
+The second is not a real build failure - `preflight.mjs` short-circuits the
+build on `appCheck.ok`, so `npm run build` never runs. Fix the first and both
+clear. The gate is deliberate: a production console built without App Check
+leaves the Firebase backend unprotected from that origin.
+
+The value is the **reCAPTCHA Enterprise site key** for the web app, from
+Firebase Console → App Check → the web app, or Google Cloud → Security →
+reCAPTCHA Enterprise. It is public - it ships in the page to every visitor - so
+it is not a secret, but it is environment-specific. To recover the one the
+currently deployed console uses:
+
+```bash
+curl -s https://business.laawoldigital.com/ \
+  | grep -oE '/_next/static/chunks/[^"]+\.js' | sort -u \
+  | while read -r u; do
+      curl -s "https://business.laawoldigital.com$u" \
+        | LC_ALL=C grep -aoE '6L[A-Za-z0-9_-]{38,}' | head -1
+    done | head -1
+```
+
+`LC_ALL=C` and `grep -a` matter: the minified chunks contain bytes that make a
+UTF-8 grep abort with "character not in range" and silently find nothing.
 
 Do not replace this with a copied `rsync` command. The script preserves the
 `admin/` and `business/` subfolders during the marketing-site sync; an
@@ -282,6 +318,9 @@ as long as the dashboard is served at the subdomain root.
 
 ```bash
 # Preflight, build-from-source, deploy, and run post-deploy smoke checks.
+# The App Check site key must be exported - .env.local is not read by
+# preflight. See "Deploy (guarded rsync over SSH)" above.
 cd deploy
-npm run deploy:static:ssh
+NEXT_PUBLIC_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY=<recaptcha-enterprise-site-key> \
+  npm run deploy:static:ssh
 ```

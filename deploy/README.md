@@ -41,6 +41,12 @@ The default `preflight`/`preflight:full` check covers the public-site verifier,
 the admin static build, Hostinger FTP env vars, Firebase login/project access,
 the Stripe secret shape, the shared barrel Firestore indexes, and a Firebase
 Functions dry-run so project API blockers are visible before the real deploy.
+
+Export `NEXT_PUBLIC_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY` for any check that
+touches the admin/business build — `admin_web/.env.local` is not read by
+preflight. Missing it fails both the App Check and the "build from source"
+checks, though only the first is a real problem. See
+[HOSTINGER_DEPLOY.md](./HOSTINGER_DEPLOY.md) for the key and how to recover it.
 It does not print secret values and it does not deploy.
 Application secrets are removed from every lint, test, build, emulator,
 dry-run, and deploy child environment after their release-mode checks. Firebase
