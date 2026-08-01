@@ -19,6 +19,31 @@ import '../widgets/language_toggle.dart';
 import '../widgets/support_entry_button.dart';
 import '../theme/app_colors.dart';
 
+/// Statuses this screen can set on a transport request.
+///
+/// `not_started` is the `fulfillmentStatus` the server stamps on a brand-new
+/// request (`functions/index.js`), and `TransportRequest` maps
+/// `fulfillmentStatus` onto `status` - so it is the first value this screen
+/// ever sees for a new request, and omitting it made every new transport
+/// request unopenable.
+const transportStatusOptions = [
+  'not_started',
+  'pending',
+  'in_transit',
+  'completed',
+];
+
+/// The dropdown's items must always contain its current value, or the framework
+/// asserts and the screen renders a red error instead of the request.
+///
+/// A status written by the server or an older build that this screen does not
+/// know about is folded in rather than dropped, so the request stays readable
+/// and can be moved to a known status instead of becoming unopenable.
+List<String> transportStatusChoices(String current) =>
+    transportStatusOptions.contains(current)
+    ? transportStatusOptions
+    : [current, ...transportStatusOptions];
+
 class TransportRequestDetailsScreen extends StatefulWidget {
   const TransportRequestDetailsScreen({super.key, required this.request});
 
@@ -55,7 +80,7 @@ class _TransportRequestDetailsScreenState
 
   StreamSubscription<DocumentSnapshot>? _subscription;
 
-  static const _statusOptions = ['pending', 'in_transit', 'completed'];
+  List<String> get _statusChoices => transportStatusChoices(_statusDraft);
 
   @override
   void initState() {
@@ -472,7 +497,7 @@ class _TransportRequestDetailsScreenState
                           DropdownButtonFormField<String>(
                             key: ValueKey<String>(_statusDraft),
                             initialValue: _statusDraft,
-                            items: _statusOptions
+                            items: _statusChoices
                                 .map(
                                   (status) => DropdownMenuItem<String>(
                                     value: status,
@@ -558,6 +583,8 @@ class _TransportRequestDetailsScreenState
 
   String _statusLabel(String status, AppLocalizations l10n) {
     switch (status) {
+      case 'not_started':
+        return l10n.shipmentStatusNotStarted;
       case 'pending':
         return l10n.shipmentStatusPending;
       case 'in_transit':

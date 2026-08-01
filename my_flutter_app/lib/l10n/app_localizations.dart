@@ -632,6 +632,12 @@ abstract class AppLocalizations {
   /// **'Tracking number copied to clipboard'**
   String get trackingNumberCopied;
 
+  /// No description provided for @shipmentStatusNotStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'Not started'**
+  String get shipmentStatusNotStarted;
+
   /// No description provided for @shipmentStatusPending.
   ///
   /// In en, this message translates to:

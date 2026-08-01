@@ -102,6 +102,9 @@ function tabForNotification(type: string): BusinessTab {
       return "freight";
     case "parking_reservation_status":
       return "parking";
+    case "transport_opportunity":
+    case "transport_request_status":
+      return "transport";
     default:
       return "today";
   }
@@ -176,6 +179,10 @@ export function BusinessConsole({
   const businessId = text(profile.businessId, "");
   const previewMode = Boolean(previewBusiness);
   const [activeTab, setActiveTab] = useState<BusinessTab>("today");
+  // Set when a notification is opened, so the destination panel can scroll to
+  // and highlight the exact record instead of dropping the business into a
+  // list of everything and making them hunt for it.
+  const [notificationFocusId, setNotificationFocusId] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarFilter, setSidebarFilter] = useState("");
   const [pinnedTabs, setPinnedTabs] = useState<BusinessTab[]>(readPinnedTabs);
@@ -402,7 +409,10 @@ export function BusinessConsole({
           </div>
           <NotificationBell
             enabled={Boolean(firebaseUser.uid) && !previewMode}
-            onSelect={(data) => setActiveTab(tabForNotification(data.type ?? ""))}
+            onSelect={(data) => {
+              setActiveTab(tabForNotification(data.type ?? ""));
+              setNotificationFocusId(data.requestId ?? "");
+            }}
             uid={firebaseUser.uid}
           />
           <button
@@ -530,7 +540,11 @@ export function BusinessConsole({
             <FreightPanel businessId={businessId} previewMode={previewMode} />
           )}
           {activeTab === "transport" && (
-            <TransportPanel businessId={businessId} previewMode={previewMode} />
+            <TransportPanel
+              businessId={businessId}
+              focusRequestId={notificationFocusId}
+              previewMode={previewMode}
+            />
           )}
           {activeTab === "parking" && (
             <ParkingPanel

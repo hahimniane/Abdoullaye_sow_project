@@ -1335,6 +1335,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "New listing": "Nouvelle annonce",
   "New parking": "Nouveau stationnement",
   "New transport": "Nouveau transport",
+  "New transport request": "Nouvelle demande de transport",
   No: "Non",
   "No AI insights yet": "Aucune recommandation IA pour le moment",
   "No destinations yet": "Aucune destination pour le moment",

@@ -5773,6 +5773,13 @@ button[data-loading="true"]::before {
   gap: 13px;
   padding: 16px;
 }
+/* The card a notification pointed at. The ring has to survive after the
+   smooth scroll settles, so it stays applied rather than animating away. */
+.transport-opportunity-card.focused {
+  border-color: var(--brand, #0b7a6e);
+  box-shadow: 0 0 0 3px rgba(11, 122, 110, 0.18), 0 8px 22px rgba(11, 59, 56, 0.08);
+  scroll-margin-block: 24px;
+}
 .transport-opportunity-card > header { align-items: flex-start; display: flex; gap: 12px; justify-content: space-between; }
 .transport-opportunity-card > header h3 { color: var(--ink); font-size: 16px; margin: 3px 0 0; }
 .transport-opportunity-route {

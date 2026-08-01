@@ -3309,6 +3309,40 @@ exports.createTransportRequest = onCall(
       });
       await batch.commit();
 
+      // Until now a business only discovered a request by happening to open
+      // the console, and the opportunity expires at quoteDeadlineAt - so a
+      // business that was not looking simply missed the window. Fan out per
+      // provider rather than per request, so each notification carries the one
+      // opportunity that business can actually act on and can deep-link to it.
+      const vehicleLabel = [carYear, carMake, carModel]
+          .map((part) => String(part || "").trim())
+          .filter(Boolean)
+          .join(" ") || "A vehicle";
+      const quoteByDate = quoteDeadlineAt.toDate().toISOString().slice(0, 10);
+      await Promise.all(providers.map((provider) => {
+        const ownerUid = String(provider.business?.ownerUid || "").trim();
+        if (!ownerUid) return null;
+        return safeSendPreferenceNotification({
+          uid: ownerUid,
+          preferenceKey: "businessActivity",
+          title: "New transport request",
+          body:
+            `${vehicleLabel} to ${destinationCountryName}` +
+            `${pickupArea ? ` from ${pickupArea}` : ""}. ` +
+            `Send your quote by ${quoteByDate}.`,
+          data: {
+            type: "transport_opportunity",
+            requestId: requestRef.id,
+            opportunityId: transportMarketplaceDocumentId(
+                requestRef.id,
+                provider.businessId,
+            ),
+            businessId: provider.businessId,
+            trackingCode,
+          },
+        });
+      }));
+
       return {
         id: requestRef.id,
         trackingCode,
@@ -3786,8 +3820,31 @@ exports.updateTransportFulfillmentStatus = onCall(
               `Transport cannot move from ${currentStatus} to ${nextStatus}`,
           );
         }
+        // A car in transit is in a container, and the customer's next question
+        // is always "where is it". Without an identifier there is nothing to
+        // answer with and nothing to hand the carrier tracking API, so the
+        // number is required at the moment the job starts moving - not left
+        // optional to be filled in later, or never.
+        const existingContainer = validateContainerNumber(
+            requestData.containerNumber,
+        );
+        const submittedContainer = validateContainerNumber(
+            data.containerNumber,
+        );
+        const containerNumber = submittedContainer || existingContainer;
+        if (nextStatus === "in_transit" && !containerNumber) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Add the container number before marking this transport " +
+              "in transit",
+              {reason: "container_number_required"},
+          );
+        }
         const now = FirestoreFieldValue.serverTimestamp();
         transaction.update(requestRef, {
+          ...(containerNumber && containerNumber !== existingContainer ?
+            {containerNumber} :
+            {}),
           status: nextStatus,
           fulfillmentStatus: nextStatus,
           statusUpdatedAt: now,

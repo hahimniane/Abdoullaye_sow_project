@@ -15,6 +15,10 @@ import 'request_transport_screen.dart';
 import 'tracking_screen.dart';
 import 'my_purchases_screen.dart';
 import 'orders_screen.dart';
+import 'review_composer_screen.dart';
+import 'business_management_screen.dart';
+import 'business_profile_screen.dart';
+import 'add_staff_screen.dart';
 import 'wallet_screen.dart';
 import 'favorite_cars_screen.dart';
 import 'account_profile_screen.dart';
@@ -70,6 +74,18 @@ Route<dynamic>? _customerTabRoute(RouteSettings settings) {
     case '/orders':
       page = const OrdersScreen(showBackButton: true);
       break;
+    // Pushed from a completed order card (OrdersScreen) and from
+    // TrackingScreen, both of which live inside a tab navigator - so the route
+    // has to be resolvable here, not only in main.dart's root routes table.
+    // Without this case the unknown-route fallback below silently replaced the
+    // review composer with the tab root, which read as "tapping Review takes
+    // me back to Activity".
+    case '/leave-review':
+      final reviewArgs = settings.arguments;
+      if (reviewArgs is ReviewComposerArguments) {
+        page = ReviewComposerScreen(arguments: reviewArgs);
+      }
+      break;
     case '/wallet':
       page = const WalletScreen();
       break;
@@ -81,6 +97,19 @@ Route<dynamic>? _customerTabRoute(RouteSettings settings) {
       break;
     case '/support':
       page = const SupportInboxScreen.customer();
+      break;
+    // Pushed from the Settings tab root, which is itself inside a tab
+    // navigator - same silent-fallback trap as '/leave-review' above.
+    case '/businesses':
+      page = const BusinessManagementScreen();
+      break;
+    case '/business-profile':
+      page = const BusinessProfileScreen();
+      break;
+    // Reachable once '/business-profile' resolves in-tab, since that screen
+    // pushes it.
+    case '/add-staff':
+      page = const AddStaffScreen();
       break;
     case '/support-thread':
       page = SupportThreadScreen(caseId: settings.arguments as String);

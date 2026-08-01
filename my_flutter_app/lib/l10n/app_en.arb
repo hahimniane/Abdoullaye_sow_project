@@ -118,6 +118,7 @@
   },
   "trackingNumber": "Tracking Number",
   "trackingNumberCopied": "Tracking number copied to clipboard",
+  "shipmentStatusNotStarted": "Not started",
   "shipmentStatusPending": "Pending",
   "shipmentStatusInTransit": "In Transit",
   "shipmentStatusCompleted": "Completed",

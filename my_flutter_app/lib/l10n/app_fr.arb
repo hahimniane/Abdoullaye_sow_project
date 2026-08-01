@@ -119,6 +119,7 @@
   },
   "trackingNumber": "Numéro de suivi",
   "trackingNumberCopied": "Numéro de suivi copié dans le presse-papiers",
+  "shipmentStatusNotStarted": "Non démarré",
   "shipmentStatusPending": "En attente",
   "shipmentStatusInTransit": "En transit",
   "shipmentStatusCompleted": "Terminé",

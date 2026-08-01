@@ -1409,15 +1409,38 @@ describe("car transport service callable lifecycle", () => {
             /status|transition|invalid/i,
         );
 
+        // A car in transit is in a container, and the customer's next question
+        // is where it is - so in_transit is refused until the number the
+        // carrier tracking API is keyed on exists.
+        await assert.rejects(
+            () => functions.updateTransportFulfillmentStatus.run({
+              auth: managerA,
+              data: {requestId: created.id, status: "in_transit"},
+            }),
+            /container/i,
+        );
+
         for (const status of ["scheduled", "in_transit", "delivered"]) {
           await functions.updateTransportFulfillmentStatus.run({
             auth: managerA,
-            data: {requestId: created.id, status},
+            data: {
+              requestId: created.id,
+              status,
+              // Supplied once on the move that needs it; it persists on the
+              // request, so "delivered" does not have to repeat it.
+              ...(status === "in_transit" ?
+                {containerNumber: "MSKU1234567"} :
+                {}),
+            },
           });
           const request = await transportRequestData(created.id);
           assert.equal(request.status, status);
           assert.equal(request.fulfillmentStatus, status);
         }
+        assert.equal(
+            (await transportRequestData(created.id)).containerNumber,
+            "MSKU1234567",
+        );
         await assert.rejects(
             () => functions.updateTransportFulfillmentStatus.run({
               auth: managerA,

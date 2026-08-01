@@ -309,6 +309,9 @@ class AppLocalizationsFr extends AppLocalizations {
       'Numéro de suivi copié dans le presse-papiers';
 
   @override
+  String get shipmentStatusNotStarted => 'Non démarré';
+
+  @override
   String get shipmentStatusPending => 'En attente';
 
   @override
