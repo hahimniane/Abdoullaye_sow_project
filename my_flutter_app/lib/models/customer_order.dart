@@ -203,10 +203,18 @@ class CustomerOrder {
     switch (raw) {
       case 'in_transit':
         return OrderStatus.inTransit;
+      // A transport job the business has booked but not yet collected. Without
+      // this it fell through to `pending`, so the customer saw no change when
+      // the business moved the job on - the whole point of the update.
+      case 'scheduled':
+        return OrderStatus.active;
       case 'completed':
       case 'sold':
       case 'paid':
       case 'succeeded':
+      // Terminal state for a transport job; treating it as pending made a
+      // finished delivery look like it had never started.
+      case 'delivered':
         return OrderStatus.completed;
       case 'cancelled':
       case 'canceled':

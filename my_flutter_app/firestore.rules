@@ -543,6 +543,29 @@ service cloud.firestore {
          canManageBusinessSection(request.auth.uid, resource.data.businessId, 'parking'));
     }
 
+    // A load that is "in transit" is inside a container, and the customer's
+    // next question is always "where is it". The container number is the key
+    // the carrier tracking API is built on, so without it the status is one
+    // neither the customer nor support can act on. containerNumber is written
+    // only by subscribeToContainerTracking (Admin SDK, so it bypasses these
+    // rules and is not in any business's allowed key list) - the business
+    // subscribes tracking first, then advances the status. Enforced here
+    // rather than in the console because the console writes these documents
+    // directly, so a UI-only check would be advisory.
+    function containerReadyForTransit(existing, incoming) {
+      return incoming.status != 'in_transit' ||
+        (existing.get('containerNumber', '') is string &&
+         existing.get('containerNumber', '').size() >= 4);
+    }
+
+    // Air freight has no container, so only sea is gated. A shipment with no
+    // mode recorded predates the air/sea split and is left alone rather than
+    // being blocked retroactively.
+    function seaFreightContainerReady(existing, incoming) {
+      return existing.get('mode', '') != 'sea' ||
+        containerReadyForTransit(existing, incoming);
+    }
+
     match /barrelShipments/{shipmentId} {
       allow read: if request.auth != null &&
         (isAdmin(request.auth.uid) ||
@@ -558,6 +581,7 @@ service cloud.firestore {
       allow update: if request.auth != null &&
         canManageBusinessSection(request.auth.uid, resource.data.businessId, 'barrels') &&
         request.resource.data.businessId == resource.data.businessId &&
+        containerReadyForTransit(resource.data, request.resource.data) &&
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['status', 'trackingNumber', 'trackingCode', 'staffNotes', 'statusUpdatedAt', 'updatedAt']);
       allow delete: if request.auth != null &&
@@ -635,6 +659,7 @@ service cloud.firestore {
           !(request.resource.data.status in ['in_transit', 'ready_for_pickup', 'completed']) ||
           resource.data.priceSettlementStatus == 'settled'
         ) &&
+        seaFreightContainerReady(resource.data, request.resource.data) &&
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['status', 'trackingNumber', 'trackingCode', 'staffNotes', 'statusUpdatedAt', 'updatedAt']);
       allow delete: if request.auth != null &&

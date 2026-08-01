@@ -1335,6 +1335,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "New listing": "Nouvelle annonce",
   "New parking": "Nouveau stationnement",
   "New transport": "Nouveau transport",
+  "New transport request": "Nouvelle demande de transport",
   No: "Non",
   "No AI insights yet": "Aucune recommandation IA pour le moment",
   "No destinations yet": "Aucune destination pour le moment",
@@ -3313,6 +3314,11 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Entrez le numéro de conteneur, de réservation ou de connaissement du transporteur pour obtenir des mises à jour de suivi automatiques.",
   "Container / booking / BOL number (e.g. MSKU1234567)":
     "Numéro de conteneur / réservation / connaissement (ex. MSKU1234567)",
+  // The number and SCAC are now labelled fields rather than placeholder-only,
+  // so the label text is what renders once a value is typed in.
+  "Container / booking / BOL number":
+    "Numéro de conteneur / réservation / connaissement",
+  "Carrier SCAC code · optional": "Code SCAC du transporteur · facultatif",
   "Carrier SCAC code (optional)": "Code SCAC du transporteur (facultatif)",
   "Starting…": "Démarrage…",
   "Start tracking": "Démarrer le suivi",

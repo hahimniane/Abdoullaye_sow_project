@@ -5773,6 +5773,13 @@ button[data-loading="true"]::before {
   gap: 13px;
   padding: 16px;
 }
+/* The card a notification pointed at. The ring has to survive after the
+   smooth scroll settles, so it stays applied rather than animating away. */
+.transport-opportunity-card.focused {
+  border-color: var(--brand, #0b7a6e);
+  box-shadow: 0 0 0 3px rgba(11, 122, 110, 0.18), 0 8px 22px rgba(11, 59, 56, 0.08);
+  scroll-margin-block: 24px;
+}
 .transport-opportunity-card > header { align-items: flex-start; display: flex; gap: 12px; justify-content: space-between; }
 .transport-opportunity-card > header h3 { color: var(--ink); font-size: 16px; margin: 3px 0 0; }
 .transport-opportunity-route {
@@ -8823,6 +8830,97 @@ button[data-loading="true"]::before {
 .bar-track { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; font: inherit; font-size: 15.5px; font-weight: 800; color: var(--ink); cursor: pointer; }
 .bar-track:hover { color: var(--brand-strong); }
 .bar-track svg { color: var(--muted); }
+/* ===========================================================================
+   Automated container tracking (staff, on a sea shipment)
+   Sits inside an existing shipment card, so it reads as a distinct inset
+   panel rather than another flat block of form controls.
+   =========================================================================== */
+.ctrack {
+  background:
+    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--brand) 8%, transparent), transparent 60%),
+    var(--paper-soft);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  display: grid;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 16px;
+}
+.ctrack-head { align-items: flex-start; display: flex; gap: 11px; }
+.ctrack-icon {
+  align-items: center;
+  background: color-mix(in srgb, var(--brand) 12%, var(--paper));
+  border-radius: 9px;
+  color: var(--brand);
+  display: flex;
+  flex: 0 0 auto;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+.ctrack-headings { display: grid; gap: 2px; min-width: 0; }
+.ctrack-headings h4 {
+  align-items: center;
+  color: var(--ink);
+  display: flex;
+  font-size: 13.5px;
+  font-weight: 700;
+  gap: 8px;
+  margin: 0;
+}
+.ctrack-headings p { color: var(--muted); font-size: 12.5px; line-height: 1.45; margin: 0; }
+/* Two across when there is room; the SCAC field is short and pairing them
+   keeps the panel from becoming a tall stack of single inputs. */
+.ctrack-fields { display: grid; gap: 10px; grid-template-columns: 1.6fr 1fr; }
+.ctrack-fields input { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.ctrack-actions { display: flex; justify-content: flex-end; }
+/* Quieter than .error-box, which is a full-width block with its own margin -
+   too heavy for a validation message sitting under two inputs. */
+.ctrack-error {
+  align-items: center;
+  background: color-mix(in srgb, #dc2626 8%, transparent);
+  border: 1px solid color-mix(in srgb, #dc2626 22%, transparent);
+  border-radius: 9px;
+  color: #b42318;
+  display: flex;
+  font-size: 12.5px;
+  gap: 8px;
+  line-height: 1.4;
+  margin: 0;
+  padding: 9px 11px;
+}
+.ctrack-error svg { flex: 0 0 auto; }
+.ctrack-live { background: color-mix(in srgb, var(--brand) 6%, var(--paper)); }
+.ctrack-container-number {
+  color: var(--brand-strong);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: .04em;
+  margin: 0;
+}
+.ctrack-pulse {
+  background: var(--brand-mid);
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-mid) 22%, transparent);
+  height: 7px;
+  width: 7px;
+}
+.ctrack-note {
+  background: color-mix(in srgb, #f59e0b 10%, transparent);
+  border-radius: 8px;
+  color: #92400e;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+  padding: 9px 11px;
+}
+@media (max-width: 620px) {
+  .ctrack-fields { grid-template-columns: 1fr; }
+  .ctrack-actions { justify-content: stretch; }
+  .ctrack-actions .lst-btn { justify-content: center; width: 100%; }
+}
+
 .bar-field { display: flex; flex-direction: column; gap: 3px; }
 .bar-field span { font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--muted); }
 .bar-field select, .bar-field input { padding: 8px 10px; border: 1.5px solid var(--rule); border-radius: 10px; font: inherit; font-size: 13px; background: var(--surface, #fff); color: var(--ink); }

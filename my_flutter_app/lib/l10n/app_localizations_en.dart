@@ -302,6 +302,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get trackingNumberCopied => 'Tracking number copied to clipboard';
 
   @override
+  String get shipmentStatusNotStarted => 'Not started';
+
+  @override
   String get shipmentStatusPending => 'Pending';
 
   @override

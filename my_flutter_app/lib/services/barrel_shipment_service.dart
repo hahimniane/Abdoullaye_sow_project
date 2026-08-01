@@ -123,27 +123,32 @@ class BarrelShipmentService {
       }
 
       await StripeConfigService.ensureConfigured();
-      await Stripe.instance.initPaymentSheet(
-        paymentSheetParameters: SetupPaymentSheetParameters(
-          paymentIntentClientSecret: clientSecret,
-          merchantDisplayName: 'Laawol',
-          style: ThemeMode.light,
-        ),
-      );
+      await withStripeConnectedAccount(
+        (data['stripeConnectedAccountId'] as String?) ?? '',
+        () async {
+          await Stripe.instance.initPaymentSheet(
+            paymentSheetParameters: SetupPaymentSheetParameters(
+              paymentIntentClientSecret: clientSecret,
+              merchantDisplayName: 'Laawol',
+              style: ThemeMode.light,
+            ),
+          );
 
-      await completePaymentFlowSafely(
-        presentPaymentSheet: Stripe.instance.presentPaymentSheet,
-        completeTransaction: () async {
-          await _refreshAuthTokenIfAvailable();
-          await _functions.httpsCallable('completeBarrelShipmentPayment').call({
-            'shipmentId': shipmentId,
-          });
-        },
-        cancelPendingTransaction: () async {
-          await _refreshAuthTokenIfAvailable();
-          await _functions.httpsCallable('cancelPendingBarrelShipment').call({
-            'shipmentId': shipmentId,
-          });
+          await completePaymentFlowSafely(
+            presentPaymentSheet: Stripe.instance.presentPaymentSheet,
+            completeTransaction: () async {
+              await _refreshAuthTokenIfAvailable();
+              await _functions
+                  .httpsCallable('completeBarrelShipmentPayment')
+                  .call({'shipmentId': shipmentId});
+            },
+            cancelPendingTransaction: () async {
+              await _refreshAuthTokenIfAvailable();
+              await _functions
+                  .httpsCallable('cancelPendingBarrelShipment')
+                  .call({'shipmentId': shipmentId});
+            },
+          );
         },
       );
     }
@@ -224,27 +229,32 @@ class BarrelShipmentService {
       }
 
       await StripeConfigService.ensureConfigured();
-      await Stripe.instance.initPaymentSheet(
-        paymentSheetParameters: SetupPaymentSheetParameters(
-          paymentIntentClientSecret: clientSecret,
-          merchantDisplayName: 'Laawol',
-          style: ThemeMode.light,
-        ),
-      );
+      await withStripeConnectedAccount(
+        (data['stripeConnectedAccountId'] as String?) ?? '',
+        () async {
+          await Stripe.instance.initPaymentSheet(
+            paymentSheetParameters: SetupPaymentSheetParameters(
+              paymentIntentClientSecret: clientSecret,
+              merchantDisplayName: 'Laawol',
+              style: ThemeMode.light,
+            ),
+          );
 
-      await completePaymentFlowSafely(
-        presentPaymentSheet: Stripe.instance.presentPaymentSheet,
-        completeTransaction: () async {
-          await _refreshAuthTokenIfAvailable();
-          await _functions.httpsCallable('completeBarrelOrderPayment').call({
-            'orderId': orderId,
-          });
-        },
-        cancelPendingTransaction: () async {
-          await _refreshAuthTokenIfAvailable();
-          await _functions.httpsCallable('cancelPendingBarrelOrder').call({
-            'orderId': orderId,
-          });
+          await completePaymentFlowSafely(
+            presentPaymentSheet: Stripe.instance.presentPaymentSheet,
+            completeTransaction: () async {
+              await _refreshAuthTokenIfAvailable();
+              await _functions.httpsCallable('completeBarrelOrderPayment').call(
+                {'orderId': orderId},
+              );
+            },
+            cancelPendingTransaction: () async {
+              await _refreshAuthTokenIfAvailable();
+              await _functions.httpsCallable('cancelPendingBarrelOrder').call({
+                'orderId': orderId,
+              });
+            },
+          );
         },
       );
     }
@@ -368,32 +378,36 @@ class BarrelShipmentService {
     }
 
     await StripeConfigService.ensureConfigured();
-    await Stripe.instance.initPaymentSheet(
-      paymentSheetParameters: SetupPaymentSheetParameters(
-        paymentIntentClientSecret: result.clientSecret,
-        merchantDisplayName: result.businessName.isEmpty
-            ? 'Laawol'
-            : result.businessName,
-        style: ThemeMode.light,
-      ),
-    );
-    await completePaymentFlowSafely(
-      presentPaymentSheet: Stripe.instance.presentPaymentSheet,
-      completeTransaction: () async {
-        await _functions.httpsCallable('completeBarrelDestinationChange').call({
-          'shipmentId': shipmentId,
-          'changeRequestId': result.changeRequestId,
-        });
-      },
-      cancelPendingTransaction: () async {
-        await _functions
-            .httpsCallable('cancelPendingBarrelDestinationChange')
-            .call({
-              'shipmentId': shipmentId,
-              'changeRequestId': result.changeRequestId,
-            });
-      },
-    );
+    await withStripeConnectedAccount(result.stripeConnectedAccountId, () async {
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          paymentIntentClientSecret: result.clientSecret,
+          merchantDisplayName: result.businessName.isEmpty
+              ? 'Laawol'
+              : result.businessName,
+          style: ThemeMode.light,
+        ),
+      );
+      await completePaymentFlowSafely(
+        presentPaymentSheet: Stripe.instance.presentPaymentSheet,
+        completeTransaction: () async {
+          await _functions
+              .httpsCallable('completeBarrelDestinationChange')
+              .call({
+                'shipmentId': shipmentId,
+                'changeRequestId': result.changeRequestId,
+              });
+        },
+        cancelPendingTransaction: () async {
+          await _functions
+              .httpsCallable('cancelPendingBarrelDestinationChange')
+              .call({
+                'shipmentId': shipmentId,
+                'changeRequestId': result.changeRequestId,
+              });
+        },
+      );
+    });
     return result;
   }
 }
@@ -418,6 +432,7 @@ class BarrelDestinationChangeResult {
     required this.changeRequestId,
     required this.clientSecret,
     required this.businessName,
+    this.stripeConnectedAccountId = '',
   });
 
   final String shipmentId;
@@ -431,6 +446,11 @@ class BarrelDestinationChangeResult {
   final String clientSecret;
   final String businessName;
 
+  /// Empty for this flow today - the server creates the destination-change
+  /// intent on the platform account. Kept so the payment sheet stays scoped
+  /// the same way as every other flow if that ever changes.
+  final String stripeConnectedAccountId;
+
   factory BarrelDestinationChangeResult.fromMap(Map<String, dynamic> data) {
     return BarrelDestinationChangeResult(
       shipmentId: (data['shipmentId'] ?? '') as String,
@@ -443,6 +463,8 @@ class BarrelDestinationChangeResult {
       changeRequestId: (data['changeRequestId'] as String?) ?? '',
       clientSecret: (data['clientSecret'] as String?) ?? '',
       businessName: (data['businessName'] as String?) ?? '',
+      stripeConnectedAccountId:
+          (data['stripeConnectedAccountId'] as String?) ?? '',
     );
   }
 }

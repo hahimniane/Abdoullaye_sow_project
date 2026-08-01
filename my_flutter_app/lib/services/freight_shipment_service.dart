@@ -70,24 +70,29 @@ class FreightShipmentService {
         throw Exception('Payment could not be initialized.');
       }
       await StripeConfigService.ensureConfigured();
-      await Stripe.instance.initPaymentSheet(
-        paymentSheetParameters: SetupPaymentSheetParameters(
-          paymentIntentClientSecret: clientSecret,
-          merchantDisplayName: 'Laawol',
-          style: ThemeMode.light,
-        ),
-      );
-      await completePaymentFlowSafely(
-        presentPaymentSheet: Stripe.instance.presentPaymentSheet,
-        completeTransaction: () async {
-          await _functions.httpsCallable('completeFreightShipmentPayment').call(
-            {'shipmentId': shipmentId},
+      await withStripeConnectedAccount(
+        (data['stripeConnectedAccountId'] as String?) ?? '',
+        () async {
+          await Stripe.instance.initPaymentSheet(
+            paymentSheetParameters: SetupPaymentSheetParameters(
+              paymentIntentClientSecret: clientSecret,
+              merchantDisplayName: 'Laawol',
+              style: ThemeMode.light,
+            ),
           );
-        },
-        cancelPendingTransaction: () async {
-          await _functions.httpsCallable('cancelPendingFreightShipment').call({
-            'shipmentId': shipmentId,
-          });
+          await completePaymentFlowSafely(
+            presentPaymentSheet: Stripe.instance.presentPaymentSheet,
+            completeTransaction: () async {
+              await _functions
+                  .httpsCallable('completeFreightShipmentPayment')
+                  .call({'shipmentId': shipmentId});
+            },
+            cancelPendingTransaction: () async {
+              await _functions
+                  .httpsCallable('cancelPendingFreightShipment')
+                  .call({'shipmentId': shipmentId});
+            },
+          );
         },
       );
     }
@@ -151,14 +156,19 @@ class FreightShipmentService {
         throw Exception('Balance payment could not be initialized.');
       }
       await StripeConfigService.ensureConfigured();
-      await Stripe.instance.initPaymentSheet(
-        paymentSheetParameters: SetupPaymentSheetParameters(
-          paymentIntentClientSecret: clientSecret,
-          merchantDisplayName: 'Laawol',
-          style: ThemeMode.light,
-        ),
+      await withStripeConnectedAccount(
+        (data['stripeConnectedAccountId'] as String?) ?? '',
+        () async {
+          await Stripe.instance.initPaymentSheet(
+            paymentSheetParameters: SetupPaymentSheetParameters(
+              paymentIntentClientSecret: clientSecret,
+              merchantDisplayName: 'Laawol',
+              style: ThemeMode.light,
+            ),
+          );
+          await Stripe.instance.presentPaymentSheet();
+        },
       );
-      await Stripe.instance.presentPaymentSheet();
       await _functions.httpsCallable('completeFreightSettlementPayment').call({
         'settlementId': settlementId,
         'attemptId': attemptId,

@@ -145,6 +145,7 @@ class BarrelPoolBalancePaymentResult {
     required this.poolId,
     this.amount = 0,
     this.clientSecret = '',
+    this.stripeConnectedAccountId = '',
     this.simulatedPayment = false,
   });
 
@@ -152,6 +153,10 @@ class BarrelPoolBalancePaymentResult {
   final String poolId;
   final double amount;
   final String clientSecret;
+
+  /// Set only for a direct charge, where the intent lives on the business's
+  /// connected account and the payment sheet must be scoped to it.
+  final String stripeConnectedAccountId;
   final bool simulatedPayment;
 
   factory BarrelPoolBalancePaymentResult.fromMap(Map<String, dynamic> data) {
@@ -160,6 +165,8 @@ class BarrelPoolBalancePaymentResult {
       poolId: (data['poolId'] ?? '') as String,
       amount: (data['amount'] as num?)?.toDouble() ?? 0,
       clientSecret: (data['clientSecret'] ?? '') as String,
+      stripeConnectedAccountId:
+          (data['stripeConnectedAccountId'] ?? '') as String,
       simulatedPayment: data['simulatedPayment'] == true,
     );
   }
@@ -173,6 +180,7 @@ class BarrelPoolResult {
     this.walletAppliedAmount = 0,
     this.cardDepositAmount = 0,
     this.clientSecret = '',
+    this.stripeConnectedAccountId = '',
     this.simulatedPayment = false,
     this.shipmentId = '',
   });
@@ -183,6 +191,10 @@ class BarrelPoolResult {
   final double walletAppliedAmount;
   final double cardDepositAmount;
   final String clientSecret;
+
+  /// Set only for a direct charge, where the intent lives on the business's
+  /// connected account and the payment sheet must be scoped to it.
+  final String stripeConnectedAccountId;
   final bool simulatedPayment;
   final String shipmentId;
 
@@ -195,6 +207,8 @@ class BarrelPoolResult {
           (data['walletAppliedAmount'] as num?)?.toDouble() ?? 0,
       cardDepositAmount: (data['cardDepositAmount'] as num?)?.toDouble() ?? 0,
       clientSecret: (data['clientSecret'] ?? '') as String,
+      stripeConnectedAccountId:
+          (data['stripeConnectedAccountId'] ?? '') as String,
       simulatedPayment: data['simulatedPayment'] == true,
       shipmentId: (data['shipmentId'] ?? '') as String,
     );

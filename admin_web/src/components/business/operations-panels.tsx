@@ -84,6 +84,8 @@ import type { FirestoreRow } from "@/types/admin";
 type PanelProps = {
   businessId: string;
   previewMode?: boolean;
+  /** Request id from an opened notification, scrolled to and highlighted. */
+  focusRequestId?: string;
   businessName?: string;
   businessStatus?: string;
   businessProfileImageUrl?: string;
@@ -3078,7 +3080,7 @@ function transportTone(status: string) {
   }
 }
 
-export function TransportPanel({ businessId, previewMode = false }: PanelProps) {
+export function TransportPanel({ businessId, previewMode = false, focusRequestId = "" }: PanelProps) {
   const enabled = Boolean(businessId && !previewMode);
   const opportunities = useBusinessRows("transportOpportunities", businessId, enabled, 500);
   const businessQuotes = useBusinessRows("transportQuotes", businessId, enabled, 500);
@@ -3089,6 +3091,16 @@ export function TransportPanel({ businessId, previewMode = false }: PanelProps) 
   const [busyId, setBusyId] = useState("");
   const [draft, setDraft] = useState<TransportQuoteDraft>(emptyTransportQuoteDraft);
   const [quoteFormOpen, setQuoteFormOpen] = useState(false);
+  const focusedCardRef = useRef<HTMLElement | null>(null);
+
+  // A notification points at one request. Show the view that contains it and
+  // clear any search that would filter it out, otherwise the deep link lands
+  // on a list where the request is not visible.
+  useEffect(() => {
+    if (!focusRequestId) return;
+    setView("opportunities");
+    setSearch("");
+  }, [focusRequestId]);
 
   const quoteByRequest = useMemo(
     () =>
@@ -3113,6 +3125,14 @@ export function TransportPanel({ businessId, previewMode = false }: PanelProps) 
       ]),
     [opportunities.rows, search],
   );
+
+  // The rows stream in from Firestore, so the target card usually does not
+  // exist on the render that handles the notification - scroll once it does.
+  useEffect(() => {
+    if (!focusRequestId || !focusedCardRef.current) return;
+    focusedCardRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusRequestId, filteredOpportunities]);
+
   const filteredJobs = useMemo(
     () =>
       filterRows(transports.rows, search, [
@@ -3158,21 +3178,31 @@ export function TransportPanel({ businessId, previewMode = false }: PanelProps) 
     setBusyId(row.id);
     setMessage("");
     try {
+      // flowVersion is the field the server actually writes and reads
+      // (functions/index.js). transportMarketplaceVersion was never written by
+      // anything, so this arm was dead and marketplace jobs could fall through
+      // to the legacy direct write below.
       const isMarketplaceJob =
         Boolean(row.selectedQuoteId) ||
         text(row.quoteStatus, "") === "selected" ||
-        Number(row.transportMarketplaceVersion ?? 0) >= 2;
+        Number(row.flowVersion ?? 0) >= 2;
       if (isMarketplaceJob) {
         await httpsCallable(functions, "updateTransportFulfillmentStatus")({
           requestId: row.id,
           status,
         });
       } else {
-        await setDoc(doc(db, "transportRequests", row.id), { businessId, status, updatedAt: serverTimestamp() }, { merge: true });
+        // The mobile app reads `fulfillmentStatus ?? status`, so writing only
+        // `status` here left it showing the stale fulfillmentStatus forever.
+        await setDoc(doc(db, "transportRequests", row.id), { businessId, status, fulfillmentStatus: status, updatedAt: serverTimestamp() }, { merge: true });
       }
       setMessage("Transport updated.");
-    } catch {
-      setMessage("The transport status could not be updated. Try again.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error && error.message
+          ? error.message
+          : "The transport status could not be updated. Try again.",
+      );
     } finally {
       setBusyId("");
     }
@@ -3215,8 +3245,16 @@ export function TransportPanel({ businessId, previewMode = false }: PanelProps) 
       setQuoteFormOpen(false);
       setDraft(emptyTransportQuoteDraft);
       setMessage("Quote sent to the customer.");
-    } catch {
-      setMessage("The quote could not be sent. Check the details and try again.");
+    } catch (error) {
+      // The callable rejects with a specific reason - the request stopped
+      // collecting quotes, the business is not approved, it no longer serves
+      // the destination. Swallowing that and saying "check the details" sends
+      // the business hunting through a form that is not the problem.
+      setMessage(
+        error instanceof Error && error.message
+          ? error.message
+          : "The quote could not be sent. Check the details and try again.",
+      );
     } finally {
       setBusyId("");
     }
@@ -3234,8 +3272,12 @@ export function TransportPanel({ businessId, previewMode = false }: PanelProps) 
     try {
       await httpsCallable(functions, "withdrawTransportQuote")({ requestId });
       setMessage("Quote withdrawn.");
-    } catch {
-      setMessage("The quote could not be withdrawn. Try again.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error && error.message
+          ? error.message
+          : "The quote could not be withdrawn. Try again.",
+      );
     } finally {
       setBusyId("");
     }
@@ -3327,8 +3369,13 @@ export function TransportPanel({ businessId, previewMode = false }: PanelProps) 
               const busyRow =
                 busyId === `quote:${requestId}` ||
                 busyId === `withdraw:${requestId}`;
+              const focused = Boolean(focusRequestId) && focusRequestId === requestId;
               return (
-                <article className="transport-opportunity-card" key={opportunity.id}>
+                <article
+                  className={`transport-opportunity-card${focused ? " focused" : ""}`}
+                  key={opportunity.id}
+                  ref={focused ? focusedCardRef : undefined}
+                >
                   <header>
                     <div>
                       <span className="pur-kind">{text(opportunity.trackingCode, "New request")}</span>

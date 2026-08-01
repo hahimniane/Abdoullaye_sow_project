@@ -3309,6 +3309,40 @@ exports.createTransportRequest = onCall(
       });
       await batch.commit();
 
+      // Until now a business only discovered a request by happening to open
+      // the console, and the opportunity expires at quoteDeadlineAt - so a
+      // business that was not looking simply missed the window. Fan out per
+      // provider rather than per request, so each notification carries the one
+      // opportunity that business can actually act on and can deep-link to it.
+      const vehicleLabel = [carYear, carMake, carModel]
+          .map((part) => String(part || "").trim())
+          .filter(Boolean)
+          .join(" ") || "A vehicle";
+      const quoteByDate = quoteDeadlineAt.toDate().toISOString().slice(0, 10);
+      await Promise.all(providers.map((provider) => {
+        const ownerUid = String(provider.business?.ownerUid || "").trim();
+        if (!ownerUid) return null;
+        return safeSendPreferenceNotification({
+          uid: ownerUid,
+          preferenceKey: "businessActivity",
+          title: "New transport request",
+          body:
+            `${vehicleLabel} to ${destinationCountryName}` +
+            `${pickupArea ? ` from ${pickupArea}` : ""}. ` +
+            `Send your quote by ${quoteByDate}.`,
+          data: {
+            type: "transport_opportunity",
+            requestId: requestRef.id,
+            opportunityId: transportMarketplaceDocumentId(
+                requestRef.id,
+                provider.businessId,
+            ),
+            businessId: provider.businessId,
+            trackingCode,
+          },
+        });
+      }));
+
       return {
         id: requestRef.id,
         trackingCode,
@@ -3786,8 +3820,31 @@ exports.updateTransportFulfillmentStatus = onCall(
               `Transport cannot move from ${currentStatus} to ${nextStatus}`,
           );
         }
+        // A car in transit is in a container, and the customer's next question
+        // is always "where is it". Without an identifier there is nothing to
+        // answer with and nothing to hand the carrier tracking API, so the
+        // number is required at the moment the job starts moving - not left
+        // optional to be filled in later, or never.
+        const existingContainer = validateContainerNumber(
+            requestData.containerNumber,
+        );
+        const submittedContainer = validateContainerNumber(
+            data.containerNumber,
+        );
+        const containerNumber = submittedContainer || existingContainer;
+        if (nextStatus === "in_transit" && !containerNumber) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Add the container number before marking this transport " +
+              "in transit",
+              {reason: "container_number_required"},
+          );
+        }
         const now = FirestoreFieldValue.serverTimestamp();
         transaction.update(requestRef, {
+          ...(containerNumber && containerNumber !== existingContainer ?
+            {containerNumber} :
+            {}),
           status: nextStatus,
           fulfillmentStatus: nextStatus,
           statusUpdatedAt: now,
@@ -8918,6 +8975,9 @@ exports.createParkingReservation = onCall(
           reservationId: reservationRef.id,
           trackingCode,
           clientSecret: paymentIntent.client_secret,
+          stripeConnectedAccountId: clientStripeAccountId(
+              payoutFields.stripeConnectedAccountId,
+          ),
           depositAmount: dollarsFromCents(paymentCents),
           estimatedTotal: dollarsFromCents(totalCents),
         };
@@ -13555,6 +13615,9 @@ exports.createBarrelPool = onCall(
           poolId: poolRef.id,
           trackingCode,
           clientSecret: paymentIntent.client_secret,
+          // Platform-owned: this deposit is created without a Stripe-Account
+          // header, so the client must not scope its payment sheet.
+          stripeConnectedAccountId: clientStripeAccountId(""),
           walletAppliedAmount: dollarsFromCents(walletAppliedCents),
           cardDepositAmount: dollarsFromCents(cardDepositCents),
           depositAmount: dollarsFromCents(depositCents),
@@ -14493,6 +14556,8 @@ exports.requestJoinBarrelPool = onCall(
           walletAppliedAmount: dollarsFromCents(walletAppliedCents),
           cardDepositAmount: dollarsFromCents(cardDepositCents),
           clientSecret: paymentIntent.client_secret,
+          // Platform-owned: created without a Stripe-Account header.
+          stripeConnectedAccountId: clientStripeAccountId(""),
         };
       }
 
@@ -15767,6 +15832,9 @@ exports.createBarrelPoolBalancePaymentIntent = onCall(
         requestId: requestRef.id,
         poolId: actualPoolId,
         clientSecret: paymentIntent.client_secret,
+        stripeConnectedAccountId: clientStripeAccountId(
+            payoutFields.stripeConnectedAccountId,
+        ),
         amount: dollarsFromCents(amountCents),
       };
     },
@@ -16421,6 +16489,18 @@ function stripeAccountIdForRetrieval(data) {
     undefined;
 }
 
+// A direct-charge PaymentIntent is created on the business's connected account
+// (the Stripe-Account header above), so its client_secret only resolves for a
+// caller presenting that same account. Hosted web checkout carries the account
+// in its redirect URL, but a native payment sheet confirms a bare client_secret
+// against whatever account its publishable key points at - the platform. So any
+// response that hands a client_secret to a client must hand back the account it
+// belongs to, and the client must scope Stripe to it before confirming.
+// Empty string means a platform-owned intent that needs no scoping.
+function clientStripeAccountId(connectedAccountId) {
+  return String(connectedAccountId || "");
+}
+
 // Stripe rejects a PaymentIntent if application_fee_amount exceeds amount.
 // The platform fee is normally computed off the full gross price, but some
 // flows let a customer cover part of that gross with wallet credit first,
@@ -17002,6 +17082,9 @@ exports.createBarrelShipmentPaymentIntent = onCall(
         shipmentId: shipmentRef.id,
         trackingCode,
         clientSecret: paymentIntent.client_secret,
+        stripeConnectedAccountId: clientStripeAccountId(
+            payoutFields.stripeConnectedAccountId,
+        ),
         walletAppliedAmount: dollarsFromCents(walletAppliedCents),
         cardChargeAmount: dollarsFromCents(chargeCents),
       };
@@ -17486,6 +17569,9 @@ exports.createBarrelOrderPaymentIntent = onCall(
         shipmentIds: shipmentRefs.map((ref) => ref.id),
         trackingCodes,
         clientSecret: paymentIntent.client_secret,
+        stripeConnectedAccountId: clientStripeAccountId(
+            orderConnectedAccountId,
+        ),
         walletAppliedAmount: dollarsFromCents(walletAppliedCents),
         cardChargeAmount: dollarsFromCents(chargeCents),
       };
@@ -18254,6 +18340,9 @@ exports.createFreightShipmentPaymentIntent = onCall(
         shipmentId: shipmentRef.id,
         trackingCode,
         clientSecret: paymentIntent.client_secret,
+        stripeConnectedAccountId: clientStripeAccountId(
+            payoutFields.stripeConnectedAccountId,
+        ),
         walletAppliedAmount: dollarsFromCents(walletAppliedCents),
         cardChargeAmount: dollarsFromCents(chargeCents),
       };
@@ -19358,6 +19447,9 @@ async function createFreightSettlementPaymentCore({shipmentId, customerUid}) {
         attemptId,
         shipmentId,
         clientSecret: paymentIntent.client_secret,
+        stripeConnectedAccountId: clientStripeAccountId(
+            balanceConnectedAccountId,
+        ),
         cardChargeAmount: dollarsFromCents(balanceDueCents),
       };
     } catch (error) {
@@ -19812,6 +19904,8 @@ exports.changeBarrelShipmentDestination = onCall(
             requiresPayment: true,
             changeRequestId: cleanRequestId,
             clientSecret: paymentIntent.client_secret,
+            // Platform-owned: created without a Stripe-Account header.
+            stripeConnectedAccountId: clientStripeAccountId(""),
             businessName: business.name || DEFAULT_BUSINESS_NAME,
           };
         }
@@ -20455,6 +20549,9 @@ exports.createCarDepositPaymentIntent = onCall(
       return {
         purchaseId: purchaseRef.id,
         clientSecret: paymentIntent.client_secret,
+        stripeConnectedAccountId: clientStripeAccountId(
+            payoutFields.stripeConnectedAccountId,
+        ),
       };
     },
 );
@@ -20950,6 +21047,9 @@ exports.createCarPurchasePaymentIntent = onCall(
       return {
         purchaseId: purchaseRef.id,
         clientSecret: paymentIntent.client_secret,
+        stripeConnectedAccountId: clientStripeAccountId(
+            payoutFields.stripeConnectedAccountId,
+        ),
       };
     },
 );
@@ -21799,7 +21899,13 @@ exports.createPaidHoldExtensionPaymentIntent = onCall(
           extensionPayoutFields.stripeConnectedAccountId,
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
-      return {purchaseId, clientSecret: paymentIntent.client_secret};
+      return {
+        purchaseId,
+        clientSecret: paymentIntent.client_secret,
+        stripeConnectedAccountId: clientStripeAccountId(
+            extensionPayoutFields.stripeConnectedAccountId,
+        ),
+      };
     },
 );
 

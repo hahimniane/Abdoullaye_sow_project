@@ -397,6 +397,43 @@ async function seedFirestore() {
         label: "Departed origin port",
         source: "staff",
       },
+      // Container gate fixtures: a load cannot be marked in transit until the
+      // container number the carrier tracking API is keyed on exists.
+      "barrelShipments/barrel_no_container": {
+        businessId: "biz_a",
+        customerUid: "customer-owner",
+        trackingCode: "BR-NC",
+        status: "pending",
+      },
+      "barrelShipments/barrel_with_container": {
+        businessId: "biz_a",
+        customerUid: "customer-owner",
+        trackingCode: "BR-WC",
+        status: "pending",
+        containerNumber: "MSKU1234567",
+      },
+      "freightShipments/freight_sea_no_container": {
+        businessId: "biz_a",
+        customerUid: "customer-owner",
+        trackingCode: "FR-SEA-NC",
+        mode: "sea",
+        status: "pending",
+      },
+      "freightShipments/freight_sea_with_container": {
+        businessId: "biz_a",
+        customerUid: "customer-owner",
+        trackingCode: "FR-SEA-WC",
+        mode: "sea",
+        status: "pending",
+        containerNumber: "MSKU7654321",
+      },
+      "freightShipments/freight_air_no_container": {
+        businessId: "biz_a",
+        customerUid: "customer-owner",
+        trackingCode: "FR-AIR",
+        mode: "air",
+        status: "pending",
+      },
       "freightShipments/freight_a": {
         businessId: "biz_a",
         customerUid: "customer-owner",
@@ -1066,6 +1103,62 @@ describe("business dashboard Firestore rules", () => {
         await assertFails(ownerDb.doc("cars/car_a_2").set({
           isRebuiltTitle: "unknown",
         }, {merge: true}));
+      });
+
+  it("blocks in-transit on a container load until the container is known",
+      async () => {
+        // "In transit" is the point the customer starts asking where their
+        // load is, and the container number is the only thing that can answer
+        // it. containerNumber is written by subscribeToContainerTracking
+        // (Admin SDK), so the business subscribes tracking first - it is not
+        // in the allowed key list below and cannot be self-asserted here.
+        const barrelStaff = firestoreFor("staff-barrels-a");
+        await assertFails(
+            barrelStaff.doc("barrelShipments/barrel_no_container").set({
+              status: "in_transit",
+            }, {merge: true}),
+        );
+        await assertSucceeds(
+            barrelStaff.doc("barrelShipments/barrel_with_container").set({
+              status: "in_transit",
+            }, {merge: true}),
+        );
+        // Any other status stays reachable - the gate is on in_transit only,
+        // so a business is never stuck unable to progress or cancel a load.
+        await assertSucceeds(
+            barrelStaff.doc("barrelShipments/barrel_no_container").set({
+              status: "cancelled",
+            }, {merge: true}),
+        );
+        // A business must not be able to satisfy the gate by writing the
+        // container number itself; it comes from the tracking subscription.
+        await assertFails(
+            barrelStaff.doc("barrelShipments/barrel_no_container").set({
+              status: "in_transit",
+              containerNumber: "SELF1234567",
+            }, {merge: true}),
+        );
+      });
+
+  it("gates sea freight on a container but leaves air freight alone",
+      async () => {
+        const freightStaff = firestoreFor("staff-freight-a");
+        await assertFails(
+            freightStaff.doc("freightShipments/freight_sea_no_container").set({
+              status: "in_transit",
+            }, {merge: true}),
+        );
+        await assertSucceeds(
+            freightStaff.doc("freightShipments/freight_sea_with_container")
+                .set({status: "in_transit"}, {merge: true}),
+        );
+        // Air freight has no container, so gating it would make air shipments
+        // impossible to progress.
+        await assertSucceeds(
+            freightStaff.doc("freightShipments/freight_air_no_container").set({
+              status: "in_transit",
+            }, {merge: true}),
+        );
       });
 
   it("lets freight staff fulfill only their business without changing money",

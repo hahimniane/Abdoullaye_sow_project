@@ -6,6 +6,9 @@
 const TRACKING_SECTION_BY_COLLECTION = {
   barrelShipments: "barrels",
   freightShipments: "freight",
+  // Cars move in containers on the same vessels, so a transport job gets the
+  // same carrier tracking and milestone feed as a barrel or sea freight load.
+  transportRequests: "transport",
 };
 
 function cleanText(value, maxLength = 1000) {

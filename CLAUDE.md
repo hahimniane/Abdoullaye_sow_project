@@ -12,6 +12,29 @@ Before changing or deploying anything, follow **[docs/ENGINEERING_GUARDRAILS.md]
 - **Reuse before you build:** search for an existing component/data source and reuse or extend it — never fork a partial copy. Shared reference data must be **complete** (a country picker offers every country; a state picker every state). Use the **Canonical sources registry** in the guardrails doc (e.g. `country_catalog.dart` / `country-catalog.ts` for all countries, `us_locations.dart` / `us-locations.ts` for US states). Curated subsets (e.g. barrel destination countries) are the explicit exception.
 - **Localize every user-facing string (both languages):** Flutter — never hardcode copy; add keys to **both** `app_en.arb` and `app_fr.arb`, run `flutter gen-l10n`, use `AppLocalizations`. Web — add an English→French entry to `french-dom.ts` for every new string (incl. `placeholder`/`title`/`aria-label`). Verify it renders in English **and** French. A string only in English is a bug. (Guardrails §5.)
 
+## Specialist agent memory — read before you edit
+
+This repo keeps durable specialist memory in `my_flutter_app/docs/agents/`. The files are tool-neutral: read the relevant one **before** touching its area, and follow it alongside the guardrails above. Do not fork or duplicate their content — edit the file itself.
+
+| Read this first | Before working on |
+| --- | --- |
+| [design-agent.md](my_flutter_app/docs/agents/design-agent.md) | UI/UX polish, visual direction, layout, responsive behavior, theme consistency, copy placement, brand feel |
+| [flutter-architecture-agent.md](my_flutter_app/docs/agents/flutter-architecture-agent.md) | Navigation, Provider state, Firebase integration, localization, shared widgets, app structure, cross-screen consistency |
+| [testing-agent.md](my_flutter_app/docs/agents/testing-agent.md) | Test strategy, regression checks, analyzer/test failures, Firebase/service mocking, release confidence |
+
+**Routing** (mirrors [AGENTS.md](AGENTS.md), which is the source of truth for the full manager workflow):
+
+- UI-only visual polish → design.
+- Shared widget, route, provider, model, service, Firebase, localization, or role-permission change → architecture.
+- Any behavior change, bug fix, validation rule, payment flow, Firebase contract, generated receipt/tracking logic, or release check → testing.
+- Cross-screen behavior change → architecture first for shape/risk, then testing for verification.
+- High-risk user-facing workflow → all three, with disjoint scopes.
+- Tiny, low-risk edits can stay local — but still ask whether the edit teaches a durable memory update.
+
+**Keep the memory current.** When the user teaches a durable preference, or the project gains a durable testing/design/architecture lesson, update the relevant file. Record reusable rules only — not one-off task details.
+
+If you delegate this work to subagents, give each one a bounded task, a clear output format, its memory file, and disjoint files/modules; require the guardrails above of every subagent, and review their output before applying it.
+
 ## Project Overview
 
 This is a Flutter application for a car selling and shipping services business with Firebase backend integration. The app supports three user roles (customer, staff, admin) with distinct navigation flows and features. It includes localization support for English and French.
