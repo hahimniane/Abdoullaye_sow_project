@@ -659,6 +659,24 @@ exports.updateNotificationPreferences = onCall(
 exports.notifyCarPurchaseStatus = onDocumentUpdated(
     "carPurchases/{purchaseId}",
     async (event) => {
+      const paidAfter = event.data.after.data() || {};
+      if (paymentJustSucceeded(event)) {
+        const amount = paidOrderAmountLabel(paidAfter);
+        await notifyBusinessOfPaidOrder({
+          businessId: paidAfter.businessId,
+          title: "Car payment received",
+          body:
+            `${amount ? `${amount} · ` : ""}` +
+            `${[paidAfter.carYear, paidAfter.carMake, paidAfter.carModel]
+                .filter(Boolean).join(" ") || "Vehicle"}`,
+          data: {
+            type: "business_order_paid",
+            service: "purchases",
+            purchaseId: event.params.purchaseId,
+            requestId: event.params.purchaseId,
+          },
+        });
+      }
       if (!statusChanged(event)) return;
       const after = event.data.after.data() || {};
       const uid = userIdFrom(after, ["buyerUid", "customerUid", "uid"]);
@@ -685,6 +703,25 @@ exports.notifyCarPurchaseStatus = onDocumentUpdated(
 exports.notifyBarrelShipmentStatus = onDocumentUpdated(
     "barrelShipments/{shipmentId}",
     async (event) => {
+      const paidAfter = event.data.after.data() || {};
+      if (paymentJustSucceeded(event)) {
+        const amount = paidOrderAmountLabel(paidAfter);
+        await notifyBusinessOfPaidOrder({
+          businessId: paidAfter.businessId,
+          title: "Barrel shipment paid",
+          body:
+            `${amount ? `${amount} · ` : ""}` +
+            `${paidAfter.destinationCountryName || "A barrel"} · ` +
+            `${paidAfter.trackingCode || "new shipment"}`,
+          data: {
+            type: "business_order_paid",
+            service: "barrels",
+            shipmentId: event.params.shipmentId,
+            requestId: event.params.shipmentId,
+            trackingCode: paidAfter.trackingCode || "",
+          },
+        });
+      }
       if (!statusChanged(event)) return;
       const after = event.data.after.data() || {};
       const uid = userIdFrom(after, ["customerUid", "senderUid", "uid"]);
@@ -704,6 +741,35 @@ exports.notifyBarrelShipmentStatus = onDocumentUpdated(
         relatedId: event.params.shipmentId,
         after,
         uid,
+      });
+    },
+);
+
+// Freight had no notification trigger at all, so a paid freight shipment
+// reached the business silently. Payment-only: the customer-facing freight
+// status notifications are a separate concern and are not added here.
+exports.notifyFreightShipmentPaid = onDocumentUpdated(
+    "freightShipments/{shipmentId}",
+    async (event) => {
+      if (!paymentJustSucceeded(event)) return;
+      const after = event.data.after.data() || {};
+      const amount = paidOrderAmountLabel(after);
+      const weight = Number(after.weightKg || 0);
+      await notifyBusinessOfPaidOrder({
+        businessId: after.businessId,
+        title: "Freight payment received",
+        body:
+          `${amount ? `${amount} · ` : ""}` +
+          `${weight > 0 ? `${weight} kg · ` : ""}` +
+          `${after.destinationCountryName || ""} ` +
+          `${after.trackingCode || ""}`.trim(),
+        data: {
+          type: "business_order_paid",
+          service: "freight",
+          shipmentId: event.params.shipmentId,
+          requestId: event.params.shipmentId,
+          trackingCode: after.trackingCode || "",
+        },
       });
     },
 );
@@ -751,6 +817,24 @@ exports.notifyBusinessApplicationStatus = onDocumentUpdated(
 exports.notifyParkingReservationStatus = onDocumentUpdated(
     "parkedCars/{reservationId}",
     async (event) => {
+      const paidAfter = event.data.after.data() || {};
+      if (paymentJustSucceeded(event)) {
+        const amount = paidOrderAmountLabel(paidAfter);
+        await notifyBusinessOfPaidOrder({
+          businessId: paidAfter.businessId,
+          title: "Parking payment received",
+          body:
+            `${amount ? `${amount} · ` : ""}` +
+            `${paidAfter.trackingCode || "New reservation"}`,
+          data: {
+            type: "business_order_paid",
+            service: "parking",
+            reservationId: event.params.reservationId,
+            requestId: event.params.reservationId,
+            trackingCode: paidAfter.trackingCode || "",
+          },
+        });
+      }
       if (!statusChanged(event)) return;
       const after = event.data.after.data() || {};
       const uid = userIdFrom(after, ["customerUid", "ownerUid", "uid"]);
@@ -780,6 +864,26 @@ exports.notifyParkingReservationStatus = onDocumentUpdated(
 exports.notifyTransportRequestStatus = onDocumentUpdated(
     "transportRequests/{requestId}",
     async (event) => {
+      const paidAfter = event.data.after.data() || {};
+      if (paymentJustSucceeded(event)) {
+        const amount = paidOrderAmountLabel(paidAfter);
+        await notifyBusinessOfPaidOrder({
+          // The winning business, not the requester's own businessId field.
+          businessId: paidAfter.selectedBusinessId || paidAfter.businessId,
+          title: "Transport payment received",
+          body:
+            `${amount ? `${amount} · ` : ""}` +
+            `${[paidAfter.carYear, paidAfter.carMake, paidAfter.carModel]
+                .filter(Boolean).join(" ") || "Vehicle"} → ` +
+            `${paidAfter.destinationCountryName || ""}`.trim(),
+          data: {
+            type: "business_order_paid",
+            service: "transport",
+            requestId: event.params.requestId,
+            trackingCode: paidAfter.trackingCode || "",
+          },
+        });
+      }
       if (!statusChanged(event)) return;
       const after = event.data.after.data() || {};
       const uid = userIdFrom(after, ["customerUid"]);
@@ -4966,6 +5070,45 @@ function statusChanged(event) {
   const before = event.data?.before.data() || {};
   const after = event.data?.after.data() || {};
   return String(before.status || "") !== String(after.status || "");
+}
+
+// True only on the transition into a paid state, so a later edit to an already
+// paid order cannot notify a second time.
+function paymentJustSucceeded(event) {
+  const before = String(event.data?.before.data()?.paymentStatus || "");
+  const after = String(event.data?.after.data()?.paymentStatus || "");
+  return after === "succeeded" && before !== "succeeded";
+}
+
+// Tells the business that money has landed for one of its services.
+//
+// Every other notification in this file is addressed to the customer. A
+// business had no way to learn that a paid order had arrived except by opening
+// the console and looking, which means work sits unstarted for as long as
+// nobody happens to check. The owner is the addressee, matching the other
+// business-facing notifications (verification review, etc.).
+async function notifyBusinessOfPaidOrder({businessId, title, body, data}) {
+  const id = String(businessId || "").trim();
+  if (!id) return;
+  const businessDoc = await admin.firestore()
+      .collection("businesses").doc(id).get();
+  const ownerUid = String(businessDoc.data()?.ownerUid || "").trim();
+  if (!ownerUid) return;
+  await safeSendPreferenceNotification({
+    uid: ownerUid,
+    preferenceKey: "businessActivity",
+    title,
+    body,
+    data: {...data, businessId: id},
+  });
+}
+
+function paidOrderAmountLabel(data) {
+  const cents = Number(data?.amountCents || 0);
+  const amount = cents > 0 ?
+    cents / 100 :
+    Number(data?.price || data?.totalAmount || 0);
+  return amount > 0 ? `$${amount.toFixed(2)}` : "";
 }
 
 function userIdFrom(data, keys) {

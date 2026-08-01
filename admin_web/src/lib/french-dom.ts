@@ -1336,6 +1336,13 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "New parking": "Nouveau stationnement",
   "New transport": "Nouveau transport",
   "New transport request": "Nouvelle demande de transport",
+  // Titles of the business-facing notifications sent when money lands for a
+  // service, so a paid order does not wait for someone to open the console.
+  "Barrel shipment paid": "Expédition de baril payée",
+  "Freight payment received": "Paiement de fret reçu",
+  "Car payment received": "Paiement de véhicule reçu",
+  "Parking payment received": "Paiement de stationnement reçu",
+  "Transport payment received": "Paiement de transport reçu",
   No: "Non",
   "No AI insights yet": "Aucune recommandation IA pour le moment",
   "No destinations yet": "Aucune destination pour le moment",
