@@ -217,6 +217,8 @@
     "Shared & partial loads": "Chargements partagés et partiels",
     "Ship a barrel": "Expédier un baril",
     "Ship barrels to destination countries.": "Expédier des barils vers les pays de destination.",
+    "Freight (parcels)": "Fret (colis)",
+    "Ship parcels and boxes by weight, by air or sea.": "Expédier des colis et des cartons au poids, par avion ou par bateau.",
     "Shipping": "Expédition",
     "Shipping, cars, freight, food, and professional services from registered businesses.": "Expédition, voitures, fret, restauration et services professionnels proposés par des entreprises inscrites.",
     "Simple by design": "Simple par conception",
