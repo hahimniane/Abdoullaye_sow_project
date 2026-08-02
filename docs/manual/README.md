@@ -1,6 +1,12 @@
 # Business onboarding manual
 
-`Laawol-Business-Onboarding.pdf` — the guide handed to businesses when they join.
+| File | What it is |
+| --- | --- |
+| [`Laawol-Business-Onboarding.pdf`](Laawol-Business-Onboarding.pdf) | The guide handed to businesses when they join — 16 sections, 21 pages |
+| [`Regenerating-The-Manual.pdf`](Regenerating-The-Manual.pdf) | The same instructions as below, as a PDF |
+| [`business-onboarding.html`](business-onboarding.html) | The guide's source — edit this, then re-render |
+| [`capture-console.mjs`](capture-console.mjs) | Captures each console section |
+| [`capture-extra.mjs`](capture-extra.mjs) | Captures sub-sections that sit below the fold |
 
 ## Regenerating it
 
@@ -21,6 +27,11 @@ rsync -a --exclude 'Cache' --exclude 'Code Cache' --exclude 'GPUCache' \
 
 # 2. Capture every console section
 node docs/manual/capture-console.mjs /tmp/chrome-capture-profile docs/manual/screenshots
+
+# 2b. Capture the sub-sections that sit below the fold. Step 2 shoots the
+#     viewport after clicking a nav item, so it only gets the top of a long
+#     page; "Services & coverage" is four stacked sections.
+node docs/manual/capture-extra.mjs /tmp/chrome-capture-profile docs/manual/screenshots
 
 # 3. Capture the app (needs a booted simulator with the app running)
 xcrun simctl io <UDID> screenshot docs/manual/screenshots/app-01-home.png
@@ -49,5 +60,14 @@ instead: it clicks each sidebar item and captures what renders.
 
 The screenshots are of a populated account. A brand-new business sees empty
 queues, so the guide is written in setup order — approval, verification,
-services, destinations, payouts, staff — and only then shows the operational
-sections using populated data.
+services, office locations, destinations, payouts, staff — and only then shows
+the operational sections using populated data.
+
+Two things are intentionally left out:
+
+- **Car parking** — the capture account doesn't offer it, so the console shows
+  "Not offered". Covered in text only.
+- **Shared barrels** — gated on `appConfig/client.sharedBarrelsEnabled`
+  (`admin_web/src/lib/feature-flags.ts`), which isn't set in production. The
+  feature is off for every business, so documenting it would describe something
+  no reader can reach.

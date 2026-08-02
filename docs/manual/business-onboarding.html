@@ -101,7 +101,9 @@
     <li>Business identity and verification
       <small>Getting approved to trade</small></li>
     <li>Choosing your services
-      <small>Turning on only what you offer</small></li>
+      <small>Turning on only what you offer, and the rules each one needs</small></li>
+    <li>Your office locations
+      <small>Where customers can drop things off</small></li>
     <li>Destinations and pricing
       <small>Where you ship and what you charge</small></li>
     <li>Getting paid
@@ -120,7 +122,8 @@
       <small>Required before a load can move</small></li>
     <li>Notifications
       <small>How you find out something happened</small></li>
-    <li>Reviews, support, and growth</li>
+    <li>Reviews, support, and growth
+      <small>Feedback, customer cases, and your plan</small></li>
     <li>What your customers see
       <small>The Laawol mobile app</small></li>
   </ol>
@@ -143,7 +146,7 @@
 </ul>
 <div class="callout">
   <p>
-    <strong>Work through sections 3 to 7 in order.</strong> Each one depends on
+    <strong>Work through sections 3 to 8 in order.</strong> Each one depends on
     the one before it: you can't take orders until you're approved, and you
     can't be paid until your payout account is connected.
   </p>
@@ -179,7 +182,7 @@
 <table>
   <tr><th>Document</th><th>Needed if you offer</th></tr>
   <tr><td>Freight or shipping authority</td>
-      <td>Barrel shipping, shared barrels, freight</td></tr>
+      <td>Barrel shipping, freight</td></tr>
   <tr><td>Dealer licence or sales authorisation</td><td>Car sales</td></tr>
   <tr><td>Transport insurance and authority</td><td>Car transport</td></tr>
   <tr><td>Parking facility proof</td><td>Car parking</td></tr>
@@ -228,13 +231,54 @@
   or whether you collect freight from a customer's address. A service shows
   <em>Not offered</em> until you turn it on.
 </p>
+<figure>
+  <img src="screenshots/web-14-service-rules.png" alt="Service rules">
+  <figcaption>
+    Service rules — a $500 flat hold fee held for up to 14 days on car sales,
+    and freight pickup switched off
+  </figcaption>
+</figure>
+<p>The two rules you are most likely to change:</p>
+<table>
+  <tr><th>Rule</th><th>What it controls</th></tr>
+  <tr><td>Car sales · paid holds</td>
+      <td>What a customer pays to reserve a vehicle, either a flat fee or a
+          per-day rate, and how many days the hold survives before it lapses</td></tr>
+  <tr><td>Freight · customer pickup</td>
+      <td>With pickup <em>off</em>, customers bring freight to one of your
+          offices. Turn it on to collect from their address and price the
+          collection</td></tr>
+</table>
 
-<h2>5 · <span class="step">STEP 3</span>Destinations and pricing</h2>
+<h2>5 · <span class="step">STEP 3</span>Your office locations</h2>
+<p>
+  Anyone who chooses "bring it to the office" picks from this list, so add
+  <strong>every branch</strong> a customer could physically walk into. A missing
+  branch is a branch no customer can select.
+</p>
+<figure>
+  <img src="screenshots/web-15-office-locations.png" alt="Office locations">
+  <figcaption>Office locations — two active branches customers can drop off at</figcaption>
+</figure>
+<p>
+  Use <strong>Pause</strong> rather than deleting when a branch closes
+  temporarily. Pausing hides it from customers while keeping it attached to the
+  shipments already booked against it; deleting it breaks that link.
+</p>
+
+<h2>6 · <span class="step">STEP 4</span>Destinations and pricing</h2>
 <p>
   Still under Services &amp; coverage, add each country you serve and set your
   prices per service. Coverage is <strong>per service, per country</strong> —
   you might ship barrels to Guinea and Senegal but only offer freight to Senegal.
 </p>
+<figure>
+  <img src="screenshots/web-16-country-coverage.png" alt="Country coverage and route pricing">
+  <figcaption>
+    Country coverage — three destinations, each with its own barrel price, air
+    rate, and delivery window
+  </figcaption>
+</figure>
 <p>For each destination you set:</p>
 <ul>
   <li><strong>Barrel shipping</strong> — price per barrel and a delivery
@@ -251,7 +295,7 @@
   </p>
 </div>
 
-<h2>6 · <span class="step">STEP 4</span>Getting paid</h2>
+<h2>7 · <span class="step">STEP 5</span>Getting paid</h2>
 <p>
   Laawol collects payment from the customer and passes your share to you. To
   receive money you must connect a payout account, which you'll be prompted to
@@ -274,7 +318,7 @@
   <em>Who pays Stripe's processing fee</em>.
 </p>
 
-<h2>7 · <span class="step">STEP 5</span>Your team</h2>
+<h2>8 · <span class="step">STEP 6</span>Your team</h2>
 <p>
   Open <strong>People</strong> to invite staff. Each person gets their own
   sign-in and only sees the sections you allow.
@@ -298,7 +342,7 @@
   </p>
 </div>
 
-<h2 class="pagebreak">8 · Today — your daily view</h2>
+<h2 class="pagebreak">9 · Today — your daily view</h2>
 <p>
   <strong>Today</strong> is where you start each morning. It answers one
   question: what needs attention right now.
@@ -317,7 +361,7 @@
   <li><strong>Needs attention</strong> — the specific orders waiting on you</li>
 </ul>
 
-<h2>9 · Vehicle sales</h2>
+<h2>10 · Vehicle sales</h2>
 <h3>Listings</h3>
 <p>
   <strong>Listings</strong> holds the vehicles you're selling. Use
@@ -345,7 +389,7 @@
   <figcaption>Purchases — paid holds awaiting your review</figcaption>
 </figure>
 
-<h2>10 · Barrels and freight</h2>
+<h2>11 · Barrels and freight</h2>
 <p>
   These are your shipping queues. Both work the same way: a customer books and
   pays, the order lands in your queue, and you move it through its statuses as
@@ -371,7 +415,7 @@
   shipment can move on.
 </p>
 
-<h2>11 · Car transport</h2>
+<h2>12 · Car transport</h2>
 <p>
   Car transport is a <strong>bidding marketplace</strong>, not first-come
   first-served. When a customer requests a vehicle move to a country you cover,
@@ -403,7 +447,7 @@
   </p>
 </div>
 
-<h2>12 · Container tracking</h2>
+<h2>13 · Container tracking</h2>
 <p>
   Anything travelling in a container — barrels, sea freight, and cars — needs a
   <strong>container number</strong> before you can mark it <em>in transit</em>.
@@ -430,7 +474,7 @@
   SCAC code.
 </p>
 
-<h2>13 · Notifications</h2>
+<h2>14 · Notifications</h2>
 <p>
   The bell in the top-right tells you when something needs you. You'll be
   notified when:
@@ -449,7 +493,7 @@
   and by email; adjust that under your notification preferences.
 </p>
 
-<h2>14 · Reviews, support, and growth</h2>
+<h2>15 · Reviews, support, and growth</h2>
 <h3>Reviews</h3>
 <p>
   Customers rate you after a completed order. Your average rating and review
@@ -471,12 +515,31 @@
   <figcaption>Support — customer cases tied to specific orders</figcaption>
 </figure>
 <h3>Growth</h3>
+<p>
+  <strong>Growth</strong> shows which plan you're on and what changes if you
+  move. Every operational tool in this guide — listings, destinations, barrels,
+  purchases, parking, transport, people, and support — is on the
+  <strong>Free</strong> plan. Nothing in your day-to-day work is behind a
+  paywall.
+</p>
 <figure>
-  <img src="screenshots/web-13-growth.png" alt="Growth">
-  <figcaption>Growth — plan and advisor</figcaption>
+  <img src="screenshots/web-17-growth-detail.png" alt="Growth — plan comparison and AI advisor">
+  <figcaption>Growth — the Free plan against Pro, with the advisor locked</figcaption>
 </figure>
+<p><strong>Pro</strong> adds three things on top:</p>
+<ul>
+  <li><strong>The business AI advisor</strong> — it reviews your pricing,
+      listings, and response times and tells you what's costing you work</li>
+  <li><strong>Deeper analytics</strong> beyond the totals on Today</li>
+  <li><strong>Reduced platform fees</strong> as your volume grows, so more of
+      each order reaches you</li>
+</ul>
+<p>
+  On Free, <em>Generate recommendations</em> is visible but the panel below
+  stays empty — that's the advisor waiting on an upgrade, not a fault.
+</p>
 
-<h2 class="pagebreak">15 · What your customers see</h2>
+<h2 class="pagebreak">16 · What your customers see</h2>
 <p>
   Your customers use the Laawol mobile app. Knowing what they see helps you
   understand what they're describing when they contact you.
