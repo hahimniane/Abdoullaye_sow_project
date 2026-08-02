@@ -2,7 +2,7 @@
 
 | File | What it is |
 | --- | --- |
-| [`Laawol-Business-Onboarding.pdf`](Laawol-Business-Onboarding.pdf) | The guide handed to businesses when they join — 17 sections, 27 pages |
+| [`Laawol-Business-Onboarding.pdf`](Laawol-Business-Onboarding.pdf) | The guide handed to businesses when they join — 17 sections, 33 pages |
 | [`Regenerating-The-Manual.pdf`](Regenerating-The-Manual.pdf) | The same instructions as below, as a PDF |
 | [`business-onboarding.html`](business-onboarding.html) | The guide's source — edit this, then re-render |
 | [`capture-console.mjs`](capture-console.mjs) | Captures each console section |
@@ -84,3 +84,19 @@ falls back to the browser's. A throwaway profile negotiates French, so
 `capture-public.mjs` sets the key and reloads before shooting, then asserts
 `documentElement.lang === "en"` and fails loudly rather than writing a French
 screenshot into an English manual.
+
+### The Stripe walkthrough screenshots
+
+`web-23` through `web-31` come from a real end-to-end run: a test business
+(`Test Onboarding Business`, owner `nenenane2+onboarding@gmail.com`) applied
+via the public form, completed Stripe test-mode onboarding, and was
+bypass-approved in the admin console on 2026-08-02. The Stripe pages were
+captured with `watch.mjs` (in the session scratchpad, not committed): it
+polls screenshots and saves a PNG whenever the pixels settle on a new state,
+so a human can click through a flow while every step is captured hands-free.
+Two captures containing a real phone number were deleted rather than shipped;
+the committed personal-details screenshot is the blank form, and the Stripe
+account id in `web-30` is masked.
+
+That business is left in place as a capture fixture — reusing it beats
+re-running the whole application flow next time.

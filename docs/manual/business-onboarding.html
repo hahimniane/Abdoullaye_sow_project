@@ -264,9 +264,15 @@
 <p>
   Each file can be up to 20&nbsp;MB. Once uploaded, a document sits at
   <em>submitted</em> until a Laawol administrator reviews it and marks it
-  <em>verified</em>. Your business status moves from <strong>pending</strong> to
-  <strong>approved</strong> at that point, and the header shows
-  <em>Approved</em> next to your name.
+  <em>verified</em>.
+</p>
+<p>
+  Approval has <strong>two</strong> requirements, and documents are only one of
+  them: your <strong>Stripe payout account</strong> (section 8) must also have
+  finished verification. An administrator physically cannot approve a business
+  whose Stripe setup is incomplete — so if approval seems slow, check the
+  Stripe banner on Today first. Once both are done, the header next to your
+  name changes from <em>Pending</em> to <em>Approved</em>.
 </p>
 <div class="callout warn">
   <p>
@@ -392,37 +398,112 @@
   <em>Who pays Stripe's processing fee</em>.
 </p>
 
-<h3>Connecting your Stripe account</h3>
+<h3>Connecting your Stripe account — the walkthrough</h3>
 <p>
-  Laawol pays you through <strong>Stripe</strong>. The <em>Payouts</em> card sits
-  on your <strong>Today</strong> page, below the earnings summary. Until it's
-  connected, the card shows <em>Set up Stripe to continue</em> — orders can still
-  arrive, but no money can reach you.
+  Laawol pays you through <strong>Stripe</strong>. On a brand-new business,
+  Stripe setup is the very first thing your dashboard asks for — a banner marked
+  <em>Required first step</em> sits above everything else until it's done.
+  Orders can still arrive before then, but no money can reach you, and your
+  business <strong>cannot be approved</strong> until Stripe verification is
+  complete.
 </p>
-<ol>
-  <li>On <strong>Today</strong>, scroll to <strong>Payouts</strong> and choose
-      <strong>Start Stripe registration</strong>.</li>
-  <li>Stripe opens in the same tab and asks for the details it is legally
-      required to collect: your identity, your business's legal and tax details,
-      and the bank account you want paid into.</li>
-  <li>When Stripe is finished it returns you to the console automatically.</li>
-  <li>If the card hasn't caught up, choose <strong>Refresh status</strong>.</li>
-</ol>
+<figure>
+  <img src="screenshots/web-23-fresh-today.png" alt="Fresh dashboard — Set up Stripe to continue">
+  <figcaption>
+    A brand-new business's dashboard — <em>Set up Stripe to continue</em>, with
+    payout setup and charge verification both outstanding
+  </figcaption>
+</figure>
+<p>
+  Choose <strong>Start Stripe registration</strong>. Stripe opens in the same
+  tab and walks you through a short series of screens. Every screen below is
+  from a real run of this flow.
+</p>
+
+<p><strong>1 · Contact details.</strong> Your email and mobile number — Stripe
+texts a verification code to that number, so use a phone you have with you.</p>
+<figure>
+  <img src="screenshots/web-24-stripe-step1.png" alt="Stripe — let's get started">
+  <figcaption>Stripe opens with your contact details. (The "test account" notice
+  appears only in Laawol's test environment.)</figcaption>
+</figure>
+
+<p><strong>2 · Business type.</strong> If you haven't filed paperwork to
+register a company, pick <em>Individual</em> — Stripe's own guidance on the
+page says the same.</p>
+<figure>
+  <img src="screenshots/web-26-stripe-business-type.png" alt="Stripe — business type">
+  <figcaption>Tell us about your business — Individual is right for most sole owners</figcaption>
+</figure>
+
+<p><strong>3 · Personal details.</strong> Your legal name exactly as it appears
+on government records, date of birth, home address, and the last four digits of
+your Social Security number.</p>
+<figure>
+  <img src="screenshots/web-27-stripe-personal.png" alt="Stripe — verify your personal details">
+  <figcaption>Verify your personal details — name, date of birth, home address, SSN last four</figcaption>
+</figure>
+
+<p><strong>4 · Business details.</strong> Your industry and website. If you
+don't have a website, choose <em>Add product description instead</em> and
+describe what you sell.</p>
+<figure>
+  <img src="screenshots/web-28-stripe-industry.png" alt="Stripe — business details">
+  <figcaption>Business details — industry and website</figcaption>
+</figure>
+
+<p><strong>5 · Bank account.</strong> The account your earnings are paid into —
+routing and account number, US accounts only.</p>
+
+<p><strong>6 · Identity document.</strong> If Stripe can't confirm your name
+and SSN automatically, it asks for a photo ID. You can do it on the spot with
+your phone camera, or <em>Skip for now</em> and finish later — but payouts stay
+blocked until it's done.</p>
+<figure>
+  <img src="screenshots/web-29-stripe-identity.png" alt="Stripe — verify your identity">
+  <figcaption>Verify your identity — upload a government-issued ID matching your details</figcaption>
+</figure>
+
 <div class="callout warn">
   <p>
-    <strong>Stripe may not finish in one sitting.</strong> If it needs a document
-    you don't have to hand, the card reads <em>Finish Stripe setup to
+    <strong>Stripe may not finish in one sitting.</strong> If you leave anything
+    incomplete, the console banner changes to <em>Finish Stripe setup to
     continue</em> and the button becomes <strong>Continue Stripe setup</strong>,
-    which picks up where you left off. Your account isn't fully live until both
-    <em>Payouts enabled</em> and <em>Charges verified</em> show green.
+    which reopens Stripe exactly where you left off. Your account isn't fully
+    live until both <em>Payouts enabled</em> and <em>Charges verified</em> show
+    green.
   </p>
 </div>
+<figure>
+  <img src="screenshots/web-30-stripe-finish-banner.png" alt="Finish Stripe setup to continue">
+  <figcaption>
+    Half-finished setup — connected but pending verification, with
+    <em>Continue Stripe setup</em> to resume
+  </figcaption>
+</figure>
+
+<p>
+  When Stripe finishes it returns you to the console automatically. This is what
+  a fully connected Payouts card looks like:
+</p>
 <figure>
   <img src="screenshots/web-18-payouts.png" alt="Payouts card">
   <figcaption>
     Payouts, fully connected — payouts enabled, charges verified, a 10% platform
     fee, and this business absorbing Stripe's processing fee
   </figcaption>
+</figure>
+
+<h3>What approval looks like</h3>
+<p>
+  Once Stripe verification is complete and Laawol has reviewed your documents,
+  an administrator approves the business. Your dashboard header changes from
+  <em>Pending</em> to <strong>Approved</strong> — from that moment customers can
+  see your business and place orders.
+</p>
+<figure>
+  <img src="screenshots/web-31-approved.png" alt="Approved business dashboard">
+  <figcaption>The same dashboard, minutes later — Approved and open for business</figcaption>
 </figure>
 <p>
   You give your bank details to <strong>Stripe</strong>, not to Laawol. Laawol
