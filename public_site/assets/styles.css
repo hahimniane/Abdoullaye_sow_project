@@ -36,6 +36,15 @@ a{color:inherit; text-decoration:none}
 .btn-outline:hover{border-color:var(--teal); background:#fff; transform:translateY(-2px)}
 .btn-ghost{background:transparent; color:var(--ink-soft)}
 .btn-ghost:hover{color:var(--teal-deep)}
+/* Loading state: spinner + no hover motion while a request is in flight.
+   Toggle with classList + aria-busy; the .btn base already uses inline-flex
+   with a gap, so the spinner slots in before the label. */
+.btn.is-loading{pointer-events:none; opacity:.85}
+.btn.is-loading::before{content:""; width:14px; height:14px; flex:0 0 auto;
+  border-radius:50%; border:2px solid currentColor; border-top-color:transparent;
+  animation:btn-spin .7s linear infinite}
+.btn.is-loading:hover{transform:none}
+@keyframes btn-spin{to{transform:rotate(360deg)}}
 
 /* ---------- Header ---------- */
 .site-header{position:sticky; top:0; z-index:50; background:rgba(244,250,248,.82);

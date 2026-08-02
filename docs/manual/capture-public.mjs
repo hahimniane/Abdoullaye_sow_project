@@ -144,5 +144,11 @@ main()
         ws?.close();
       } catch { /* already closed */ }
       chrome.kill("SIGTERM");
-      rmSync(PROFILE, {recursive: true, force: true});
+      // Chrome may still be flushing profile files as it exits; losing the
+      // race just leaves a throwaway dir in /tmp, so don't fail the run on it.
+      setTimeout(() => {
+        try {
+          rmSync(PROFILE, {recursive: true, force: true});
+        } catch { /* still shutting down - /tmp cleanup gets it */ }
+      }, 1500);
     });

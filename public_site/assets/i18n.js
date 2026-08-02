@@ -208,6 +208,7 @@
     "Select a city": "Sélectionnez une ville",
     "Select a country": "Sélectionnez un pays",
     "Send request": "Envoyer la demande",
+    "Sending…": "Envoi…",
     "Send request →": "Envoyer la demande →",
     "Send message": "Envoyer le message",
     "Share a barrel": "Partager un baril",
