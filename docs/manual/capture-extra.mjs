@@ -77,12 +77,42 @@ const scrollToText = (needle, lift = 90) => evaluate(`(() => {
   return true;
 })()`);
 
-// [sidebar label, heading to scroll to (null = top of page), output stem]
+// The payouts panel prints the business's live Stripe account id. It isn't a
+// credential - it's useless without an API key - but this guide is handed to
+// every business that joins, and one business's account id is not the other
+// businesses' concern. Mask it in the DOM before the shot rather than after,
+// so no unmasked copy is ever written to disk.
+const maskAccountIds = () => evaluate(`(() => {
+  let n = 0;
+  const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const hits = [];
+  while (walk.nextNode()) {
+    if (/^\\s*acct_[A-Za-z0-9]+\\s*$/.test(walk.currentNode.nodeValue)) {
+      hits.push(walk.currentNode);
+    }
+  }
+  for (const node of hits) { node.nodeValue = 'acct_••••••••••••••'; n++; }
+  return n;
+})()`);
+
+// nav:     sidebar item to click first
+// then:    optional in-page button to click (opens a dialog, expands a form)
+// heading: text to scroll to, or null to shoot the top of the page
+// name:    output file stem
 const SHOTS = [
-  ["Services & coverage", "Pricing, pickup, and facility details", "14-service-rules"],
-  ["Services & coverage", "Add every physical location", "15-office-locations"],
-  ["Services & coverage", "Service coverage by country", "16-country-coverage"],
-  ["Growth", null, "17-growth-detail"],
+  {nav: "Services & coverage", heading: "Pricing, pickup, and facility details",
+    name: "14-service-rules"},
+  {nav: "Services & coverage", heading: "Add every physical location",
+    name: "15-office-locations"},
+  {nav: "Services & coverage", heading: "Service coverage by country",
+    name: "16-country-coverage"},
+  {nav: "Growth", heading: null, name: "17-growth-detail"},
+  // Payouts sits inside Today, below the operational summary. The extra lift
+  // pulls the panel's own header into frame above the status pills.
+  {nav: "Today", heading: "Who pays Stripe", lift: 300, name: "18-payouts"},
+  // The staff form is a dialog - it does not exist in the DOM until opened.
+  {nav: "People", then: "Invite staff", heading: "Permissions",
+    name: "19-invite-staff"},
 ];
 
 async function main() {
@@ -114,16 +144,25 @@ async function main() {
   await send("Page.navigate", {url});
   await sleep(15000);
 
-  for (const [nav, heading, name] of SHOTS) {
+  for (const {nav, then, heading, lift, name} of SHOTS) {
     if (!await clickNav(nav)) {
       console.log(`  SKIPPED ${name} - nav "${nav}" not found`);
       continue;
     }
     await sleep(5000);
-    if (heading && !await scrollToText(heading)) {
+    if (then) {
+      if (!await clickNav(then)) {
+        console.log(`  SKIPPED ${name} - button "${then}" not found`);
+        continue;
+      }
+      await sleep(2500);
+    }
+    if (heading && !await scrollToText(heading, lift ?? 90)) {
       console.log(`  SKIPPED ${name} - heading "${heading}" not found`);
       continue;
     }
+    const masked = await maskAccountIds();
+    if (masked) console.log(`  masked ${masked} Stripe account id(s)`);
     await sleep(2000);
     await shoot(name);
   }
