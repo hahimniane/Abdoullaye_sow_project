@@ -170,6 +170,8 @@
     "Learn more": "En savoir plus",
     "Let’s bring home closer": "Rapprochons le pays",
     "List your business": "Inscrire votre entreprise",
+    "Do you run a business?": "Vous avez une entreprise ?",
+    "Join the registered businesses serving the diaspora: barrel shipping, freight, cars, transport, and parking. Apply once, choose your services, and be visible after approval.": "Rejoignez les entreprises inscrites qui servent la diaspora : expédition de barils, fret, voitures, transport et stationnement. Postulez une fois, choisissez vos services et soyez visible après approbation.",
     "List your business on Laawol": "Inscrivez votre entreprise sur Laawol",
     "Example route": "Exemple de trajet",
     "Logo or storefront image (optional)": "Logo ou photo de vitrine (facultatif)",
