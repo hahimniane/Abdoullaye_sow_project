@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Laawol · Website Content Study</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm; }
+  :root{
+    --ink:#0f172a; --muted:#64748b; --rule:#d7e7e5; --brand:#0d9488;
+    --brand-strong:#0b3b38; --paper-soft:#f8fafc; --warn:#92400e; --warn-bg:#fdf4e3;
+    --bad:#b91c1c; --bad-bg:#fef2f2; --good:#15803d; --good-bg:#f0fdf4;
+  }
+  *{box-sizing:border-box}
+  body{font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       color:var(--ink);margin:0}
+  h1,h2,h3{line-height:1.25;margin:0 0 .4em}
+  h1{font-size:30px;font-weight:800;letter-spacing:-.02em}
+  h2{font-size:20px;font-weight:800;color:var(--brand-strong);margin-top:1.7em;
+     padding-bottom:.3em;border-bottom:2px solid var(--rule);page-break-after:avoid}
+  h3{font-size:15.5px;font-weight:700;margin-top:1.4em;page-break-after:avoid}
+  p{margin:0 0 .85em}
+  ul,ol{margin:0 0 .9em;padding-left:1.4em}
+  li{margin-bottom:.4em}
+  code{font:12.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;
+       background:var(--paper-soft);border:1px solid var(--rule);
+       border-radius:4px;padding:1px 5px}
+  .cover{page-break-after:always;padding-top:74mm;text-align:center}
+  .cover .mark{display:inline-block;background:var(--brand);color:#fff;
+    font-weight:800;letter-spacing:.16em;font-size:12px;padding:7px 16px;
+    border-radius:999px}
+  .cover h1{font-size:36px;margin:22px 0 8px}
+  .cover .sub{font-size:15.5px;color:var(--muted)}
+  .cover .meta{margin-top:44px;font-size:12.5px;color:var(--muted)}
+  .callout{background:var(--paper-soft);border:1px solid var(--rule);
+    border-left:4px solid var(--brand);border-radius:0 8px 8px 0;
+    padding:12px 15px;margin:1em 0;page-break-inside:avoid}
+  .callout.warn{background:var(--warn-bg);border-color:#f5d9a8;
+    border-left-color:#d97706;color:var(--warn)}
+  .callout p:last-child{margin-bottom:0}
+  table{width:100%;border-collapse:collapse;margin:1em 0;font-size:13px;
+        page-break-inside:avoid}
+  th,td{border:1px solid var(--rule);padding:7px 10px;text-align:left;
+        vertical-align:top}
+  th{background:var(--paper-soft);font-weight:700;font-size:12px;
+     text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  .before{background:var(--bad-bg)}
+  .after{background:var(--good-bg)}
+  .tag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.05em;
+    padding:2px 8px;border-radius:999px;vertical-align:middle;margin-right:6px}
+  .tag.bad{background:var(--bad-bg);color:var(--bad)}
+  .tag.good{background:var(--good-bg);color:var(--good)}
+  blockquote{margin:1em 0;padding:10px 16px;border-left:3px solid var(--rule);
+    color:var(--muted);font-style:italic}
+  .src{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <span class="mark">LAAWOL DIGITAL</span>
+  <h1>Website Content Study</h1>
+  <p class="sub">What the research says, what the site says, and what it should say</p>
+  <p class="meta">Internal · August 2026</p>
+</section>
+
+<h1>The problem in one sentence</h1>
+<p>
+  The site's most-read lines — hero, meta description, footer — are
+  <strong>poetic where they should be concrete, and advertise services Laawol
+  does not offer</strong>. A first-time visitor cannot tell, in ten seconds,
+  what they can actually do here.
+</p>
+
+<h2>1 · What the research says</h2>
+<h3>You have ten seconds</h3>
+<p>
+  Nielsen Norman Group's analysis of over 2&nbsp;billion page visits found
+  visitors typically leave within 10–20 seconds — unless the page communicates
+  a clear value proposition in the first ten, in which case they often stay
+  minutes. The first screen either answers "what can I do here?" or the
+  visitor is gone.
+</p>
+<h3>Concrete beats vague — measurably</h3>
+<p>
+  Packard &amp; Berger's study of concreteness in customer-facing language
+  found that more concrete wording raised purchase intent by up to
+  <strong>12%</strong> and actual purchases by <strong>13–30%</strong>, across
+  channels and languages. The century-old craft rule agrees — Hopkins (1923):
+  platitudes roll off; specific facts land with full weight.
+</p>
+<h3>The working formula</h3>
+<p>
+  Headline = the concrete end-benefit in one sentence. Subheadline = what you
+  offer, for whom, and what makes it trustworthy. Nothing on the first screen
+  that requires interpretation.
+</p>
+
+<h2>2 · What the best comparable platforms do</h2>
+<table>
+  <tr><th>Platform</th><th>Hero headline</th><th>Pattern</th></tr>
+  <tr><td>Taptap Send<br><span class="src">diaspora remittances</span></td>
+      <td>"Send money to Africa, Asia and Latin America"</td>
+      <td>Verb + object + geography. Zero interpretation needed.</td></tr>
+  <tr><td>Send My Bag<br><span class="src">international luggage</span></td>
+      <td>"Fast &amp; affordable luggage and box shipping"</td>
+      <td>Category named plainly; a price-quote form <em>is</em> the
+          subheadline; trust = "20 years · 112,000+ reviews".</td></tr>
+</table>
+<p>
+  Both are diaspora-adjacent, both compete on trust, and neither wastes the
+  headline on brand poetry. The brand feeling lives in second-level copy
+  (Taptap's "Built for the diaspora, by the diaspora") — never in place of the
+  what-we-do statement.
+</p>
+
+<h2>3 · What the site says today — and what's wrong with it</h2>
+
+<h3><span class="tag bad">REMOVE</span>Services Laawol does not offer</h3>
+<p>
+  The boilerplate promises <strong>food, restaurants, home cooks, lawyers, and
+  professional services</strong>. The platform offers none of these — the real
+  catalog is barrel shipping, freight, car sales, car transport, and car
+  parking. This isn't just unclear; a visitor who signs up to find a
+  restaurant discovers the site "lied" to them, and Stanford's web-credibility
+  work is blunt about how fast an overclaim destroys trust. It appears in at
+  least:
+</p>
+<ul>
+  <li>The meta description of the homepage (what Google shows)</li>
+  <li>The hero subheadline ("…expédition, voitures, fret, restauration et aide
+      professionnelle")</li>
+  <li>The footer boilerplate on <strong>every page</strong> ("…shipping, cars,
+      freight, food, and professional services")</li>
+  <li>about.html, app.html, contact.html (…"Cars, barrels, food, and
+      professionals organized together", "Find food", "Find a pro",
+      "African food &amp; restaurants", "home cooks")</li>
+</ul>
+
+<h3><span class="tag bad">REWRITE</span>The hero forces interpretation</h3>
+<blockquote>"Find the right business for the road home."</blockquote>
+<p>
+  It's evocative, but it fails the ten-second test: it names no service, no
+  action, no place. "The road home" only means something once you already know
+  that <em>Laawol</em> is Pular for <em>the road</em> — which a first-time
+  visitor doesn't.
+</p>
+
+<h3><span class="tag good">KEEP — but relocated</span>The tagline itself</h3>
+<p>
+  "Laawol — the road home." is genuinely good <strong>brand</strong> copy —
+  it's the meaning of the name. It belongs in the footer as a signature, with
+  its story attached, not in the H1 doing the explanatory work it can't do.
+</p>
+
+<h3><span class="tag bad">DECIDE</span>Shared barrels on services.html</h3>
+<p>
+  The services page advertises "Barils partagés" while the feature is switched
+  off platform-wide (<code>sharedBarrelsEnabled</code>). Either hide the
+  section until launch or mark it "coming soon" — right now it promises a
+  service no customer can request.
+</p>
+
+<h2>4 · Recommended copy</h2>
+<p>
+  Pattern applied: <em>verb + concrete services + corridor</em> in the
+  headline; <em>who, what, and why trust us</em> in the subheadline; the
+  brand line as a signed-off footer. French first (site's base language),
+  English via the dictionary as usual.
+</p>
+
+<table>
+  <tr><th style="width:18%">Slot</th><th>Current</th><th>Recommended</th></tr>
+  <tr>
+    <td><b>Hero H1</b></td>
+    <td class="before">Trouvez la bonne entreprise pour la route vers le
+        pays.</td>
+    <td class="after"><b>FR:</b> Expédiez des barils, du fret et des voitures
+        entre les États-Unis et l'Afrique de l'Ouest.<br>
+        <b>EN:</b> Ship barrels, freight, and cars between the US and West
+        Africa.</td>
+  </tr>
+  <tr>
+    <td><b>Hero subheadline</b></td>
+    <td class="before">…expédition, voitures, fret, <s>restauration et aide
+        professionnelle</s>…</td>
+    <td class="after"><b>FR:</b> Laawol est une marketplace d'entreprises
+        inscrites et vérifiées : comparez les prix par baril et par kilo,
+        achetez des voitures vérifiées, demandez des devis de transport et
+        suivez chaque commande — avec l'assistance de la plateforme à chaque
+        étape.<br>
+        <b>EN:</b> Laawol is a marketplace of registered, verified businesses:
+        compare per-barrel and per-kilo prices, buy verified cars, request
+        transport quotes, and track every order — with platform support at
+        every step.</td>
+  </tr>
+  <tr>
+    <td><b>Meta description</b></td>
+    <td class="before">…expédition, voitures, fret, <s>restauration et services
+        professionnels</s>…</td>
+    <td class="after"><b>FR:</b> Expédition de barils et de fret, achat et
+        transport de voitures, stationnement — par des entreprises inscrites
+        servant la diaspora entre les États-Unis et l'Afrique de l'Ouest. Prix
+        clairs, suivi, assistance.<br>
+        <b>EN:</b> Barrel and freight shipping, car sales, transport, and
+        parking — from registered businesses serving the diaspora between the
+        US and West Africa. Clear prices, tracking, support.</td>
+  </tr>
+  <tr>
+    <td><b>Footer boilerplate<br>(all pages)</b></td>
+    <td class="before">…shipping, cars, freight, <s>food, and professional
+        services</s>…</td>
+    <td class="after"><b>FR:</b> Une plateforme de confiance pour la diaspora
+        africaine : des entreprises inscrites proposent l'expédition de barils
+        et de fret, la vente, le transport et le stationnement de voitures —
+        avec des prix clairs et un vrai suivi.<br>
+        <b>EN:</b> A trusted platform for the African diaspora: registered
+        businesses offer barrel and freight shipping, car sales, transport,
+        and parking — with clear prices and real tracking.</td>
+  </tr>
+  <tr>
+    <td><b>Footer tagline</b></td>
+    <td class="before">Laawol — la route vers le pays.</td>
+    <td class="after">Keep it, and attach its story:<br>
+        <b>FR:</b> <i>Laawol</i> signifie « le chemin » en pular.
+        Laawol — la route vers le pays.<br>
+        <b>EN:</b> <i>Laawol</i> means "the road" in Pular.
+        Laawol — the road home.</td>
+  </tr>
+  <tr>
+    <td><b>Fictional-service blocks</b></td>
+    <td class="before">"Find food", "Find a pro", "African food &amp;
+        restaurants", "home cooks", "A lawyer or professional",
+        "Cars, barrels, food, and professionals…"</td>
+    <td class="after">Delete everywhere (index, about, app, contact, and the
+        dictionary). If food or professional services ever launch, announce
+        them then — not before.</td>
+  </tr>
+</table>
+
+<div class="callout">
+  <p>
+    <strong>Why this works:</strong> the headline now passes the ten-second
+    test (verb, services, corridor — Taptap Send's exact pattern), every claim
+    matches a service that actually exists in the app, the concrete
+    price-per-barrel/per-kilo language is the kind shown to lift purchases
+    13–30%, and the brand poetry keeps its place — explained, in the footer,
+    where it builds identity instead of costing clarity.
+  </p>
+</div>
+
+<h2>5 · If you do only one thing</h2>
+<p>
+  Remove the fictional services. Unclear copy costs conversions; untrue copy
+  costs trust — and Laawol's entire pitch <em>is</em> trust.
+</p>
+
+</body>
+</html>
