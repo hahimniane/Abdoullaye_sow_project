@@ -176,32 +176,106 @@
      keep the mesh scene and save the megabytes. The mesh stays ON TOP of
      the footage in soft-light blend, grading it into the brand palette so
      the design above still owns the page. --- */
+  // The full journey, as requested: a parcel changes hands, a crew loads the
+  // aircraft, the ship crosses the ocean. Each beat holds a few seconds and
+  // crossfades into the next on a second stacked <video>. The ship clip
+  // doubles as the error fallback: any beat that fails to load is skipped,
+  // and if everything fails the hero simply keeps the mesh.
+  var PLAYLIST = [
+    {src: "assets/hero-colis.mp4", hold: 7000},
+    {src: "assets/hero-airfreight.mp4", hold: 9000},
+    {src: "assets/hero-loop.mp4", hold: 11000},
+  ];
   function injectVideo() {
     var hero = document.querySelector(".hero");
     if (!hero || !document.getElementById("globeCanvas")) return;
     if (hero.querySelector(".hero-video")) return;
-    if (window.innerWidth < 900) return;
+    // Prerendered/hidden documents report width 0 - treat unknown as
+    // desktop and let real phones (which report true width) opt out.
+    var w = window.innerWidth;
+    if (w > 0 && w < 900) return;
     if (navigator.connection && navigator.connection.saveData) return;
-    var video = document.createElement("video");
-    video.className = "hero-video";
-    video.muted = true;
-    video.loop = true;
-    video.autoplay = true;
-    video.playsInline = true;
-    video.setAttribute("muted", "");
-    video.setAttribute("playsinline", "");
-    video.setAttribute("aria-hidden", "true");
-    video.preload = "auto";
-    video.src = "assets/hero-loop.mp4";
-    var fallback = hero.querySelector(".hero-bg");
-    if (fallback) hero.insertBefore(video, fallback.nextSibling);
-    else hero.insertBefore(video, hero.firstChild);
-    // Class flips the composition: mesh becomes a color grade, the drawn
-    // ship/plane bow out (illustration over real footage reads as clutter).
-    video.addEventListener("playing", function () {
-      hero.classList.add("has-video");
-    }, {once: true});
-    video.play && video.play().catch(function () { /* autoplay denied */ });
+
+    function makeVideo() {
+      var v = document.createElement("video");
+      v.className = "hero-video";
+      v.muted = true;
+      v.loop = true;
+      // The autoplay ATTRIBUTE is honored for muted video where a scripted
+      // play() before any user gesture can be rejected - keep both paths.
+      v.autoplay = true;
+      v.playsInline = true;
+      v.setAttribute("muted", "");
+      v.setAttribute("playsinline", "");
+      v.setAttribute("aria-hidden", "true");
+      v.preload = "auto";
+      return v;
+    }
+    var slots = [makeVideo(), makeVideo()];
+    var anchor = hero.querySelector(".hero-bg");
+    slots.forEach(function (v) {
+      if (anchor) hero.insertBefore(v, anchor.nextSibling);
+      else hero.insertBefore(v, hero.firstChild);
+    });
+
+    var visibleSlot = -1; // -1: nothing shown yet
+    var failed = {};
+    var token = 0;         // invalidates events from superseded transitions
+
+    function nextIndex(from) {
+      for (var step = 1; step <= PLAYLIST.length; step++) {
+        var i = (from + step) % PLAYLIST.length;
+        if (!failed[PLAYLIST[i].src]) return i;
+      }
+      return -1;
+    }
+
+    function play(i) {
+      if (i < 0) return; // every clip failed - the mesh carries the hero
+      var my = ++token;
+      var item = PLAYLIST[i];
+      var idle = visibleSlot === 0 ? 1 : 0;
+      var incoming = slots[idle];
+      var done = false;
+      incoming.onplaying = function () {
+        // Loops and rebuffers re-fire "playing" long after a transition;
+        // the token pins this handler to its own transition only.
+        if (my !== token || done) return;
+        done = true;
+        hero.classList.add("has-video");
+        incoming.classList.add("on");
+        if (visibleSlot >= 0) slots[visibleSlot].classList.remove("on");
+        visibleSlot = idle;
+        window.setTimeout(function () {
+          if (my === token) play(nextIndex(i));
+        }, item.hold);
+      };
+      incoming.onerror = function () {
+        if (my !== token || done) return;
+        done = true;
+        failed[item.src] = true;
+        play(nextIndex(i));
+      };
+      if (incoming.src && incoming.src.indexOf(item.src) > -1) {
+        // Same file coming back around - just rewind it.
+        try { incoming.currentTime = 0; } catch (e) { /* not seekable yet */ }
+      } else {
+        incoming.src = item.src;
+      }
+      (function tryPlay(attempted) {
+        var p = incoming.play();
+        if (p && p.catch) p.catch(function () {
+          if (attempted || my !== token) return;
+          document.addEventListener("visibilitychange", function once() {
+            if (document.hidden) return;
+            document.removeEventListener("visibilitychange", once);
+            tryPlay(true);
+          });
+        });
+      })(false);
+    }
+    play(0);
+
   }
 
   function boot() {
