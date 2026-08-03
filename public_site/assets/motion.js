@@ -171,8 +171,42 @@
     hero.appendChild(ship);
   }
 
+  /* --- Real footage on the home hero: a container ship at sea (Pexels
+     2943126, Pexels license - free commercial use). Desktop only: phones
+     keep the mesh scene and save the megabytes. The mesh stays ON TOP of
+     the footage in soft-light blend, grading it into the brand palette so
+     the design above still owns the page. --- */
+  function injectVideo() {
+    var hero = document.querySelector(".hero");
+    if (!hero || !document.getElementById("globeCanvas")) return;
+    if (hero.querySelector(".hero-video")) return;
+    if (window.innerWidth < 900) return;
+    if (navigator.connection && navigator.connection.saveData) return;
+    var video = document.createElement("video");
+    video.className = "hero-video";
+    video.muted = true;
+    video.loop = true;
+    video.autoplay = true;
+    video.playsInline = true;
+    video.setAttribute("muted", "");
+    video.setAttribute("playsinline", "");
+    video.setAttribute("aria-hidden", "true");
+    video.preload = "auto";
+    video.src = "assets/hero-loop.mp4";
+    var fallback = hero.querySelector(".hero-bg");
+    if (fallback) hero.insertBefore(video, fallback.nextSibling);
+    else hero.insertBefore(video, hero.firstChild);
+    // Class flips the composition: mesh becomes a color grade, the drawn
+    // ship/plane bow out (illustration over real footage reads as clutter).
+    video.addEventListener("playing", function () {
+      hero.classList.add("has-video");
+    }, {once: true});
+    video.play && video.play().catch(function () { /* autoplay denied */ });
+  }
+
   function boot() {
     injectMesh();
+    injectVideo();
     injectSea();
     injectGlyphs();
     injectScene();
