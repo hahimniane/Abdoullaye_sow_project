@@ -1046,3 +1046,57 @@ body{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/20
     rgba(244,250,248,.66) 46%, rgba(244,250,248,.16) 100%)}
 .hero.has-video .hero-inner{position:relative; z-index:2}
 @media (prefers-reduced-motion: reduce){ .hero-video{display:none} }
+
+/* --- Laawol assistant (chat.js) --- */
+.lc-root{position:fixed; right:22px; bottom:22px; z-index:90;
+  font-family:var(--font-body)}
+.lc-fab{width:58px; height:58px; border-radius:50%; border:0; cursor:pointer;
+  background:var(--teal); color:#fff; display:flex; align-items:center;
+  justify-content:center; box-shadow:0 14px 34px rgba(13,148,136,.45);
+  transition:transform .25s var(--ease-pro), background .2s ease}
+.lc-fab:hover{transform:translateY(-3px) scale(1.05); background:#0f766e}
+.lc-fab.open{background:var(--teal-deep)}
+.lc-panel{position:absolute; right:0; bottom:74px; width:min(360px, calc(100vw - 44px));
+  background:var(--paper); border:1px solid var(--line); border-radius:18px;
+  box-shadow:var(--shadow-lg); overflow:hidden; display:flex;
+  flex-direction:column; opacity:0; transform:translateY(14px) scale(.98);
+  pointer-events:none; transition:opacity .28s var(--ease-pro),
+  transform .28s var(--ease-pro)}
+.lc-panel.open{opacity:1; transform:none; pointer-events:auto}
+.lc-head{display:flex; align-items:center; justify-content:space-between;
+  padding:14px 16px; background:var(--teal-deep); color:#fff}
+.lc-head b{font-family:var(--font-head); font-size:15.5px; display:block}
+.lc-head small{opacity:.75; font-size:12px}
+.lc-x{background:none; border:0; color:#fff; font-size:24px; line-height:1;
+  cursor:pointer; opacity:.8; padding:2px 6px}
+.lc-x:hover{opacity:1}
+.lc-log{padding:14px; height:320px; overflow-y:auto; display:flex;
+  flex-direction:column; gap:10px; background:var(--bg)}
+.lc-msg{max-width:86%; padding:10px 13px; border-radius:14px; font-size:14px;
+  line-height:1.5}
+.lc-msg.bot{background:#fff; border:1px solid var(--line);
+  border-bottom-left-radius:4px; align-self:flex-start}
+.lc-msg.me{background:var(--teal); color:#fff;
+  border-bottom-right-radius:4px; align-self:flex-end}
+.lc-actions{display:flex; flex-wrap:wrap; gap:7px; margin-top:10px}
+.lc-action{display:inline-block; background:var(--mist); color:var(--teal-deep);
+  font-weight:700; font-size:12.5px; padding:7px 12px; border-radius:999px;
+  border:1px solid rgba(13,148,136,.3)}
+.lc-action:hover{background:var(--teal); color:#fff}
+.lc-chips{display:flex; flex-wrap:wrap; gap:7px}
+.lc-chip{background:#fff; border:1.4px solid var(--line); color:var(--ink-soft);
+  font-size:12.5px; font-weight:600; padding:7px 12px; border-radius:999px;
+  cursor:pointer; transition:border-color .15s ease, color .15s ease}
+.lc-chip:hover{border-color:var(--teal); color:var(--teal-deep)}
+.lc-form{display:flex; gap:8px; padding:12px; border-top:1px solid var(--line);
+  background:var(--paper)}
+.lc-in{flex:1; border:1.5px solid var(--line); border-radius:999px;
+  padding:9px 14px; font:inherit; font-size:14px; background:var(--bg)}
+.lc-in:focus{outline:none; border-color:var(--teal)}
+.lc-send{border:0; background:var(--teal); color:#fff; font-weight:700;
+  font-size:13.5px; padding:9px 16px; border-radius:999px; cursor:pointer}
+.lc-send:hover{background:#0f766e}
+@media (max-width:640px){ .lc-root{right:14px; bottom:14px}
+  .lc-panel{bottom:70px} .lc-log{height:46vh} }
+@media (prefers-reduced-motion: reduce){
+  .lc-panel{transition:none} .lc-fab{transition:none} }
