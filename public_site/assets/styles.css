@@ -912,3 +912,77 @@ html.js-anim .reveal.in { opacity: 1; transform: none; }
 /* Interactive canvas globe (progressive enhancement over the SVG fallback) */
 .globe-canvas{display:none; width:100%; aspect-ratio:1/1; touch-action:none; cursor:grab}
 .globe-stage:has(.globe-canvas[style*="block"]) .globe-fallback{display:none}
+
+/* ================= Motion & atmosphere layer (motion.js) =================
+   Everything below is injected/tagged by assets/motion.js. Decorative only:
+   if motion.js never runs, no page depends on any of this. All movement is
+   transform/opacity, and every animation is disabled under
+   prefers-reduced-motion. */
+
+/* --- Aurora: slow drifting light behind heroes --- */
+.aurora{position:absolute; inset:-20% -10%; z-index:0; pointer-events:none;
+  filter:blur(60px); opacity:.55}
+.aurora i{position:absolute; border-radius:50%; display:block}
+.aurora i:nth-child(1){width:46vw; height:46vw; left:-8%; top:-18%;
+  background:radial-gradient(circle at 30% 30%, rgba(20,184,166,.35), transparent 65%);
+  animation:auroraA 26s ease-in-out infinite alternate}
+.aurora i:nth-child(2){width:38vw; height:38vw; right:-6%; top:-6%;
+  background:radial-gradient(circle at 60% 40%, rgba(245,158,11,.22), transparent 65%);
+  animation:auroraB 34s ease-in-out infinite alternate}
+.aurora i:nth-child(3){width:30vw; height:30vw; left:34%; bottom:-30%;
+  background:radial-gradient(circle at 50% 50%, rgba(30,58,138,.16), transparent 65%);
+  animation:auroraA 30s ease-in-out -12s infinite alternate-reverse}
+@keyframes auroraA{to{transform:translate3d(9vw,6vh,0) scale(1.15)}}
+@keyframes auroraB{to{transform:translate3d(-7vw,8vh,0) scale(.9)}}
+
+/* --- Sea waves: the shipping undertone at the hero's base --- */
+.sea{position:absolute; left:0; right:0; bottom:-2px; z-index:0;
+  pointer-events:none; line-height:0}
+.sea svg{width:200%; height:64px; display:block}
+.sea-1 svg{animation:seaDrift 24s linear infinite}
+.sea-2{opacity:.5}
+.sea-2 svg{animation:seaDrift 38s linear reverse infinite}
+@keyframes seaDrift{to{transform:translateX(-50%)}}
+
+/* --- The corridor: an animated US <-> West Africa journey --- */
+.journey{position:relative; overflow:hidden}
+.journey-svg{width:100%; height:auto; display:block}
+.journey .port{font:700 15px var(--font-head); fill:var(--teal-deep)}
+.journey .port-sub{font:600 11px var(--font-body); fill:var(--muted);
+  letter-spacing:.06em; text-transform:uppercase}
+.journey .lane{fill:none; stroke:var(--teal-mid); stroke-width:2.2;
+  stroke-linecap:round; stroke-dasharray:1 10; opacity:.85}
+.journey .lane-glow{fill:none; stroke:rgba(20,184,166,.18); stroke-width:9;
+  stroke-linecap:round}
+.journey .mover{font-size:20px}
+.journey .node{fill:var(--paper); stroke:var(--teal); stroke-width:2.5}
+.journey .node-core{fill:var(--teal)}
+.journey .pulse{fill:none; stroke:var(--teal-mid); stroke-width:2; opacity:0;
+  animation:portPulse 3.2s ease-out infinite}
+.journey .pulse.p2{animation-delay:1.6s}
+@keyframes portPulse{0%{opacity:.7; r:8}100%{opacity:0; r:26}}
+
+/* --- Button sheen on hover --- */
+.btn{position:relative; overflow:hidden}
+.btn::after{content:""; position:absolute; top:0; bottom:0; left:-80%;
+  width:55%; transform:skewX(-22deg);
+  background:linear-gradient(90deg, transparent, rgba(255,255,255,.34), transparent);
+  transition:left .05s; pointer-events:none; opacity:0}
+.btn:hover::after{left:130%; opacity:1; transition:left .6s var(--ease-pro)}
+
+/* --- Floating glyphs on subpage heads --- */
+.glyphs{position:absolute; inset:0; z-index:0; pointer-events:none;
+  overflow:hidden}
+.glyphs b{position:absolute; font-size:30px; opacity:.14; filter:saturate(.7);
+  animation:glyphFloat 12s ease-in-out infinite alternate}
+.glyphs b:nth-child(2){animation-duration:15s; animation-delay:-4s}
+.glyphs b:nth-child(3){animation-duration:18s; animation-delay:-9s}
+@keyframes glyphFloat{from{transform:translateY(-8px) rotate(-4deg)}
+  to{transform:translateY(14px) rotate(5deg)}}
+
+/* --- Kill switch --- */
+@media (prefers-reduced-motion: reduce){
+  .aurora i, .sea svg, .journey .pulse, .glyphs b,
+  .marquee-track{animation:none !important}
+  .btn::after{display:none}
+}
