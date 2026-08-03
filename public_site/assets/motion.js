@@ -181,10 +181,12 @@
   // crossfades into the next on a second stacked <video>. The ship clip
   // doubles as the error fallback: any beat that fails to load is skipped,
   // and if everything fails the hero simply keeps the mesh.
+  // One cinematic wide shot carries the hero (premium sites don't churn
+  // between clips); the ship aerial is strictly the backup and only plays
+  // if the port clip fails to load.
   var PLAYLIST = [
-    {src: "assets/hero-colis.mp4", hold: 7000},
-    {src: "assets/hero-airfreight.mp4", hold: 9000},
-    {src: "assets/hero-loop.mp4", hold: 11000},
+    {src: "assets/hero-port.mp4", hold: 30000},
+    {src: "assets/hero-loop.mp4", hold: 30000, backupOnly: true},
   ];
   function injectVideo() {
     var hero = document.querySelector(".hero");
@@ -223,9 +225,14 @@
     var token = 0;         // invalidates events from superseded transitions
 
     function nextIndex(from) {
+      var anyPrimaryAlive = PLAYLIST.some(function (p) {
+        return !p.backupOnly && !failed[p.src];
+      });
       for (var step = 1; step <= PLAYLIST.length; step++) {
         var i = (from + step) % PLAYLIST.length;
-        if (!failed[PLAYLIST[i].src]) return i;
+        if (failed[PLAYLIST[i].src]) continue;
+        if (PLAYLIST[i].backupOnly && anyPrimaryAlive) continue;
+        return i;
       }
       return -1;
     }
@@ -247,7 +254,11 @@
         if (visibleSlot >= 0) slots[visibleSlot].classList.remove("on");
         visibleSlot = idle;
         window.setTimeout(function () {
-          if (my === token) play(nextIndex(i));
+          if (my !== token) return;
+          var n = nextIndex(i);
+          // A single surviving clip just keeps native-looping; re-entering
+          // play() would rewind it mid-scene for no reason.
+          if (n !== i && n >= 0) play(n);
         }, item.hold);
       };
       incoming.onerror = function () {
