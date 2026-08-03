@@ -117,11 +117,52 @@
     head.insertBefore(wrap, head.firstChild);
   }
 
+  /* --- Pictorial scene on the home hero: a plane crossing the sky and a
+     container ship sailing the wave line. Drawn flat in brand colors so it
+     matches the globe illustration - photography would fight the UI. --- */
+  var PLANE =
+    '<svg viewBox="0 0 120 46" aria-hidden="true">' +
+    '<line class="trail" x1="0" y1="30" x2="58" y2="30"/>' +
+    '<g fill="#0b3b38">' +
+    '<path d="M62 27c14-3 30-5 40-5l8 3-8 3c-10 0-26-2-40-5z"/>' +
+    '<path d="M88 25l14-11 6 1-12 12z"/>' +
+    '<path d="M88 29l14 11 6-1-12-12z"/>' +
+    '<path d="M64 24l-9-7 5-1 9 7z"/>' +
+    '</g><circle cx="106" cy="27" r="2.4" fill="#14b8a6"/></svg>';
+  var SHIP =
+    '<svg viewBox="0 0 190 74" aria-hidden="true">' +
+    '<g>' +
+    '<path d="M8 48h174l-16 22H20z" fill="#0b3b38"/>' +
+    '<rect x="128" y="24" width="26" height="24" rx="2" fill="#e8f5f2"/>' +
+    '<rect x="132" y="30" width="7" height="5" fill="#0b3b38"/>' +
+    '<rect x="142" y="30" width="7" height="5" fill="#0b3b38"/>' +
+    '<rect x="138" y="12" width="6" height="12" fill="#0b3b38"/>' +
+    '<rect x="24" y="36" width="22" height="12" rx="1" fill="#0d9488"/>' +
+    '<rect x="48" y="36" width="22" height="12" rx="1" fill="#f59e0b"/>' +
+    '<rect x="72" y="36" width="22" height="12" rx="1" fill="#1e3a8a"/>' +
+    '<rect x="96" y="36" width="22" height="12" rx="1" fill="#14b8a6"/>' +
+    '<rect x="36" y="24" width="22" height="12" rx="1" fill="#b45309"/>' +
+    '<rect x="60" y="24" width="22" height="12" rx="1" fill="#0d9488"/>' +
+    '<rect x="84" y="24" width="22" height="12" rx="1" fill="#f59e0b"/>' +
+    "</g></svg>";
+  function injectScene() {
+    var hero = document.querySelector(".hero");
+    if (!hero || !document.getElementById("globeCanvas")) return;
+    if (hero.querySelector(".sky-plane")) return;
+    var plane = el("div", "sky-plane", PLANE);
+    plane.setAttribute("aria-hidden", "true");
+    var ship = el("div", "sea-ship", SHIP);
+    ship.setAttribute("aria-hidden", "true");
+    hero.appendChild(plane);
+    hero.appendChild(ship);
+  }
+
   function boot() {
     injectAurora();
     injectSea();
     injectJourney();
     injectGlyphs();
+    injectScene();
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot, {once: true});
