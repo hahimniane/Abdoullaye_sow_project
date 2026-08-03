@@ -206,6 +206,9 @@
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
+  var API = "https://us-central1-car-selling-flutter-app.cloudfunctions.net/assistantChat";
+  var history = []; // rolling {role, content} turns sent to the backend
+
   var root, panel, log, input, open = false;
 
   function pushBubble(kind, html) {
@@ -236,18 +239,73 @@
     log.appendChild(wrap);
     log.scrollTop = log.scrollHeight;
   }
-  function ask(query, displayText) {
+  function localFallback(query) {
     var L = lang();
-    pushBubble("me", esc(displayText || query));
     var intent = answerFor(query);
-    window.setTimeout(function () {
-      if (intent) {
-        pushBot(intent);
+    if (intent) {
+      pushBot(intent);
+    } else {
+      pushBubble("bot", esc(UI[L].fallback));
+      pushChips();
+    }
+  }
+
+  // Renders an AI reply: text stays text, any approved-domain URL becomes an
+  // action pill instead of a raw link in the middle of a sentence.
+  function pushAi(reply) {
+    var urls = [];
+    var text = reply.replace(/https?:\/\/[^\s)\]]+/g, function (u) {
+      var clean = u.replace(/[.,;!?]+$/, "");
+      if (/laawoldigital\.com/.test(clean) && urls.indexOf(clean) < 0 &&
+          urls.length < 3) urls.push(clean);
+      return "";
+    }).replace(/[ \t]{2,}/g, " ").replace(/\(\s*\)/g, "").trim();
+    var html = esc(text);
+    if (urls.length) {
+      html += '<span class="lc-actions">' + urls.map(function (u) {
+        var label = u.indexOf("customer.") > -1 ?
+          (lang() === "en" ? "Open Laawol online" : "Ouvrir Laawol en ligne") :
+          u.split("/").pop().replace(".html", "") || "laawoldigital.com";
+        return '<a class="lc-action" href="' + u + '">' + esc(label) + "</a>";
+      }).join("") + "</span>";
+    }
+    pushBubble("bot", html);
+  }
+
+  function ask(query, displayText) {
+    pushBubble("me", esc(displayText || query));
+    history.push({role: "user", content: query});
+    if (history.length > 8) history = history.slice(-8);
+
+    var typing = pushBubble("bot lc-typing", "<i></i><i></i><i></i>");
+    var controller = ("AbortController" in window) ? new AbortController() : null;
+    var timer = window.setTimeout(function () {
+      if (controller) controller.abort();
+    }, 15000);
+
+    fetch(API, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({messages: history, lang: lang()}),
+      signal: controller && controller.signal,
+    }).then(function (r) {
+      return r.json().then(function (data) {
+        return {ok: r.ok, data: data};
+      });
+    }).then(function (out) {
+      window.clearTimeout(timer);
+      typing.remove();
+      if (out.ok && out.data && out.data.reply) {
+        history.push({role: "assistant", content: out.data.reply});
+        pushAi(out.data.reply);
       } else {
-        pushBubble("bot", esc(UI[L].fallback));
-        pushChips();
+        localFallback(query);
       }
-    }, 260);
+    }).catch(function () {
+      window.clearTimeout(timer);
+      typing.remove();
+      localFallback(query);
+    });
   }
 
   function build() {
