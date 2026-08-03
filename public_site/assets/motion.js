@@ -18,14 +18,70 @@
     return node;
   }
 
-  /* --- Aurora: drifting light, one per hero/page-head --- */
-  function injectAurora() {
-    document.querySelectorAll(".hero, .page-head").forEach(function (host) {
-      if (host.querySelector(".aurora")) return;
-      var aurora = el("div", "aurora", "<i></i><i></i><i></i>");
-      aurora.setAttribute("aria-hidden", "true");
-      host.insertBefore(aurora, host.firstChild);
+  /* --- Gradient-mesh canvas: the "video" background. Painted at a tiny
+     internal resolution and scaled up by CSS, so the browser's own bilinear
+     smoothing produces the soft, expensive-looking blur for free. Five color
+     fields orbit slowly - dawn over the Atlantic in brand colors. Stripe
+     ships its hero exactly this way (canvas + static fallback); our fallback
+     is the .hero-bg CSS gradient that was already there. --- */
+  var MESH_BLOBS = [
+    // [color, alpha, radius-share, orbit-x, orbit-y, speed, phase]
+    ["19,148,136", .62, .78, .34, .30, .00011, 0.0],
+    ["103,232,249", .55, .62, .40, .34, .00009, 2.1],
+    ["245,158,11", .45, .55, .36, .38, .00013, 4.2],
+    ["5,150,105",  .40, .70, .42, .26, .00007, 1.1],
+    ["153,246,228", .65, .60, .38, .36, .00010, 3.3],
+  ];
+  function attachMesh(host, strength) {
+    if (host.querySelector(".mesh")) return;
+    var wrap = el("div", "mesh");
+    wrap.setAttribute("aria-hidden", "true");
+    var canvas = document.createElement("canvas");
+    wrap.appendChild(canvas);
+    // The static .hero-bg is the no-JS fallback; the mesh must paint OVER it
+    // or the fallback's near-opaque gradient hides the canvas entirely.
+    var fallback = host.querySelector(".hero-bg");
+    if (fallback) host.insertBefore(wrap, fallback.nextSibling);
+    else host.insertBefore(wrap, host.firstChild);
+    var ctx = canvas.getContext("2d");
+    var W = 220, H = 130;
+    canvas.width = W; canvas.height = H;
+    var running = true, visible = true, last = 0;
+    function frame(now) {
+      if (!running) return;
+      if (visible && now - last > 33) { // ~30fps is plenty for this
+        last = now;
+        ctx.clearRect(0, 0, W, H);
+        for (var i = 0; i < MESH_BLOBS.length; i++) {
+          var b = MESH_BLOBS[i];
+          var t = now * b[5] + b[6];
+          var x = W * (0.5 + b[3] * Math.sin(t));
+          var y = H * (0.42 + b[4] * Math.cos(t * 1.27));
+          var r = Math.max(W, H) * b[2];
+          var g = ctx.createRadialGradient(x, y, 0, x, y, r);
+          g.addColorStop(0, "rgba(" + b[0] + "," + (b[1] * strength) + ")");
+          g.addColorStop(1, "rgba(" + b[0] + ",0)");
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, W, H);
+        }
+      }
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+    document.addEventListener("visibilitychange", function () {
+      visible = !document.hidden;
     });
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver(function (entries) {
+        visible = entries[0].isIntersecting && !document.hidden;
+      }).observe(host);
+    }
+  }
+  function injectMesh() {
+    var hero = document.querySelector(".hero");
+    if (hero) attachMesh(hero, 1);
+    var head = document.querySelector(".page-head");
+    if (head) attachMesh(head, .8);
   }
 
   /* --- Sea waves at the base of the home hero --- */
@@ -50,48 +106,6 @@
         "seaDrift 38s linear reverse infinite" : "seaDrift 24s linear infinite");
       hero.appendChild(wrap);
     });
-  }
-
-  /* --- The corridor: New York <-> Conakry · Dakar, goods moving both ways.
-     SMIL animateMotion needs no per-frame JS; city names are proper nouns so
-     the band needs no dictionary entries. --- */
-  var JOURNEY =
-    '<div class="container">' +
-    '<svg class="journey-svg" viewBox="0 0 1100 240" role="img" ' +
-    'aria-label="New York to Conakry and Dakar shipping corridor">' +
-    '<path class="lane-glow" d="M110 150 C 360 30, 740 30, 990 150"/>' +
-    '<path class="lane" id="laneNE" d="M110 150 C 360 30, 740 30, 990 150"/>' +
-    '<path class="lane" id="laneSW" style="opacity:.35" ' +
-    'd="M990 170 C 740 260, 360 260, 110 170" transform="translate(0,-16)"/>' +
-    '<circle class="pulse" cx="110" cy="150" r="8"/>' +
-    '<circle class="pulse p2" cx="990" cy="150" r="8"/>' +
-    '<circle class="node" cx="110" cy="150" r="10"/>' +
-    '<circle class="node-core" cx="110" cy="150" r="4"/>' +
-    '<circle class="node" cx="990" cy="150" r="10"/>' +
-    '<circle class="node-core" cx="990" cy="150" r="4"/>' +
-    '<text class="port" x="110" y="192" text-anchor="middle">New York</text>' +
-    '<text class="port-sub" x="110" y="212" text-anchor="middle">USA</text>' +
-    '<text class="port" x="990" y="192" text-anchor="middle">Conakry · Dakar</text>' +
-    '<text class="port-sub" x="990" y="212" text-anchor="middle">GN · SN · ML · GM</text>' +
-    '<text class="mover">🛢️' +
-    '<animateMotion dur="11s" repeatCount="indefinite" rotate="0">' +
-    '<mpath href="#laneNE"/></animateMotion></text>' +
-    '<text class="mover">📦' +
-    '<animateMotion dur="11s" begin="3.6s" repeatCount="indefinite">' +
-    '<mpath href="#laneNE"/></animateMotion></text>' +
-    '<text class="mover">🚗' +
-    '<animateMotion dur="11s" begin="7.3s" repeatCount="indefinite">' +
-    '<mpath href="#laneNE"/></animateMotion></text>' +
-    "</svg></div>";
-  function injectJourney() {
-    // Home page only - it hosts the globe, so anchor off that.
-    if (!document.getElementById("globeCanvas")) return;
-    if (document.querySelector(".journey")) return;
-    var hero = document.querySelector(".hero");
-    if (!hero || !hero.parentNode) return;
-    var band = el("section", "journey", JOURNEY);
-    band.setAttribute("aria-hidden", "false");
-    hero.parentNode.insertBefore(band, hero.nextSibling);
   }
 
   /* --- Floating glyphs per subpage head --- */
@@ -158,9 +172,8 @@
   }
 
   function boot() {
-    injectAurora();
+    injectMesh();
     injectSea();
-    injectJourney();
     injectGlyphs();
     injectScene();
   }
