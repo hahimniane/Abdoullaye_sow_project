@@ -260,7 +260,11 @@
           urls.length < 3) urls.push(clean);
       return "";
     }).replace(/[ \t]{2,}/g, " ").replace(/\(\s*\)/g, "").trim();
-    var html = esc(text);
+    // Emails must reach the visitor's mail app, so linkify them after
+    // escaping (escaping first keeps the reply text untrusted-safe).
+    var html = esc(text).replace(
+        /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
+        function (m) { return '<a href="mailto:' + m + '">' + m + "</a>"; });
     if (urls.length) {
       html += '<span class="lc-actions">' + urls.map(function (u) {
         var label = u.indexOf("customer.") > -1 ?

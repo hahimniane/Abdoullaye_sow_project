@@ -1110,3 +1110,13 @@ body{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/20
 @keyframes lcDot{0%,60%,100%{transform:translateY(0); opacity:.5}
   30%{transform:translateY(-5px); opacity:1}}
 @media (prefers-reduced-motion: reduce){ .lc-typing i{animation:none} }
+
+/* --- Mail handoff feedback (mailto.js) --- */
+.mailto-note{margin:10px 0 0; font-size:13.5px; color:var(--ink-soft)}
+.mailto-note.warn{background:var(--warn-bg,#fdf4e3); border:1px solid #f5d9a8;
+  border-radius:10px; padding:10px 12px; color:#92400e}
+.mailto-note a{color:inherit; font-weight:700; text-decoration:underline}
+.mailto-copy{margin-left:10px; font:inherit; font-size:12.5px; font-weight:700;
+  border:1px solid currentColor; background:transparent; color:inherit;
+  border-radius:999px; padding:3px 10px; cursor:pointer}
+.mailto-copy:hover{background:rgba(0,0,0,.05)}
