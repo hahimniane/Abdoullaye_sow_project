@@ -38,6 +38,11 @@ class CarCatalog {
   static final CarCatalog instance = CarCatalog._();
 
   bool _isLoaded = false;
+
+  /// Whether [load] has completed. Callers that may run before loading
+  /// finishes should check this instead of catching the assertion - the
+  /// getters throw rather than returning empty when read too early.
+  bool get isLoaded => _isLoaded;
   final Map<String, List<CarModelEntry>> _entriesByBrand = {};
 
   Future<void> load() async {

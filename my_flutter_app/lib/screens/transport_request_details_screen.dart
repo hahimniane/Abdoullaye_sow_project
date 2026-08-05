@@ -159,6 +159,11 @@ class _TransportRequestDetailsScreenState
 
   void _refreshCatalogOptions() {
     final catalog = CarCatalog.instance;
+    // A Firestore snapshot can land before CarCatalog.load() finishes, and the
+    // catalog throws rather than returning empty when read too early. Skipping
+    // this pass is safe: the next snapshot, or the edit sheet's own read, will
+    // populate the options once loading completes.
+    if (!catalog.isLoaded) return;
     _makeOptions = catalog.getMakes();
     if (_selectedMake != null && !_makeOptions.contains(_selectedMake)) {
       _makeOptions.insert(0, _selectedMake!);
