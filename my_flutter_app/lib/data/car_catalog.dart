@@ -61,9 +61,39 @@ class CarCatalog {
     return makes;
   }
 
+  /// Canonical catalog spelling for a make, whatever casing was stored.
+  ///
+  /// Records created before the cascading pickers carry free-text makes and
+  /// models in whatever casing the customer typed ("toyota", "rav4"). An
+  /// exact-key lookup finds nothing for those, leaving an empty dropdown the
+  /// customer cannot change, so resolve to the catalog's own spelling first.
+  /// Returns an empty string when the make is not in the catalog at all.
+  String canonicalMake(String brand) {
+    _assertLoaded();
+    final raw = brand.trim();
+    if (raw.isEmpty) return '';
+    final target = raw.toLowerCase();
+    for (final key in _entriesByBrand.keys) {
+      if (key.toLowerCase() == target) return key;
+    }
+    return '';
+  }
+
+  /// Canonical catalog spelling for a model within a make, or '' if unknown.
+  String canonicalModel(String brand, String model) {
+    final raw = model.trim();
+    if (raw.isEmpty) return '';
+    final target = raw.toLowerCase();
+    for (final option in getModels(brand)) {
+      if (option.toLowerCase() == target) return option;
+    }
+    return '';
+  }
+
   List<String> getModels(String brand) {
     _assertLoaded();
-    final entries = _entriesByBrand[brand] ?? [];
+    final resolved = canonicalMake(brand);
+    final entries = _entriesByBrand[resolved.isEmpty ? brand : resolved] ?? [];
     final models = <String>{};
     for (final entry in entries) {
       if (entry.model.isNotEmpty) {
@@ -77,10 +107,12 @@ class CarCatalog {
 
   List<String> getYears(String brand, String model) {
     _assertLoaded();
-    final entries = _entriesByBrand[brand] ?? [];
+    final resolved = canonicalMake(brand);
+    final entries = _entriesByBrand[resolved.isEmpty ? brand : resolved] ?? [];
+    final target = model.trim().toLowerCase();
     final years = <int>{};
     for (final entry in entries) {
-      if (entry.model == model) {
+      if (entry.model.toLowerCase() == target) {
         final endYear = entry.endYear ?? DateTime.now().year;
         for (int year = entry.startYear; year <= endYear; year++) {
           years.add(year);

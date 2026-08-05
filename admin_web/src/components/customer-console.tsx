@@ -21,7 +21,13 @@ import {
   where,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
-import { getMakes, getModels, getYears } from "@/lib/car-catalog";
+import {
+  canonicalMake,
+  canonicalModel,
+  getMakes,
+  getModels,
+  getYears,
+} from "@/lib/car-catalog";
 import { DESTINATION_COUNTRIES } from "@/lib/destination-countries";
 import { Car, CircleAlert, CircleDollarSign, ClipboardList, Headphones, Home, LogOut, Menu, PackageSearch, Pencil, Settings, ShieldCheck, Ship, Star, Truck, UserRound, WalletCards } from "lucide-react";
 
@@ -1219,8 +1225,12 @@ function TransportEditDrawer({
     pickupAddress: text(row.pickupAddress, ""),
     pickupArea: text(row.pickupArea, ""),
     notes: text(row.notes, ""),
-    carMake: text(row.carMake, ""),
-    carModel: text(row.carModel, ""),
+    // Seed from the catalog's spelling when the stored value only differs by
+    // case, so the dependent pickers populate and saving cleans the record.
+    carMake: canonicalMake(text(row.carMake, "")) || text(row.carMake, ""),
+    carModel:
+      canonicalModel(text(row.carMake, ""), text(row.carModel, "")) ||
+      text(row.carModel, ""),
     carYear: text(row.carYear, ""),
     destinationCountryId: text(row.destinationCountryId, ""),
     requestedTransportMethod: text(row.requestedTransportMethod, "open"),

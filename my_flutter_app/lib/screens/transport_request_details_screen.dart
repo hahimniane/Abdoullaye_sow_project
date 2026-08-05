@@ -807,8 +807,17 @@ class _TransportQuoteSectionState extends State<_TransportQuoteSection> {
     DestinationCountry? country;
     // Free text would let "toyta" and "Toyota " become separate makes, so
     // make/model/year come from the shared catalog, each narrowing the next.
-    String? make = request.carMake.isNotEmpty ? request.carMake : null;
-    String? model = request.carModel.isNotEmpty ? request.carModel : null;
+    // Seed from the catalog's spelling when the stored value only differs by
+    // case, so the dependent pickers populate and saving cleans the record.
+    final canonMake = catalog.canonicalMake(request.carMake);
+    final canonModel =
+        catalog.canonicalModel(request.carMake, request.carModel);
+    String? make = canonMake.isNotEmpty
+        ? canonMake
+        : (request.carMake.isNotEmpty ? request.carMake : null);
+    String? model = canonModel.isNotEmpty
+        ? canonModel
+        : (request.carModel.isNotEmpty ? request.carModel : null);
     String? year = request.carYear.isNotEmpty ? request.carYear : null;
 
     // A stored value from before the catalog must still be selectable, or the
