@@ -241,6 +241,31 @@ If the thing you need is not in this table and is reference data or a reusable
 component, add it as a canonical source **and register it here** so the next
 agent finds it.
 
+### Testing means driving the interface (MANDATORY)
+
+Use the **tester** agent (`.claude/agents/tester.md`) before reporting that
+anything user-facing works. Do not self-certify.
+
+None of the following is a test, and none may be offered as evidence a feature
+works: it compiles, `flutter analyze`/`tsc` is clean, unit tests pass, the
+deploy went green, an endpoint answered a probe, or the UI rendered. A form
+that appears on screen and a form whose save silently fails are the same
+screenshot.
+
+A test drives the real interface as the real role: reach the feature the way a
+user reaches it, perform the action, then verify the effect survived a reload
+and landed where it should. Check the console and network for errors the UI
+swallowed. Test both clients when both are affected.
+
+This rule exists because it was broken. The transport edit drawer was reported
+working while every save failed on a rejected `requestId` envelope, and a
+cancel button was reported done while pointing at a callable name that did not
+exist - both would have been caught by one real click. Unit tests passed for
+both.
+
+"Blocked" and "not verified" are acceptable outcomes and must be stated
+plainly. Reporting a pass you did not observe is not.
+
 ### Scout before you build (MANDATORY first step)
 
 Before writing a component, a picker, a catalog, or a helper, **search the
