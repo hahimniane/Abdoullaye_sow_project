@@ -21,24 +21,7 @@ import {
   where,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
-import {
-  Car,
-  CircleAlert,
-  CircleDollarSign,
-  ClipboardList,
-  Home,
-  Headphones,
-  LogOut,
-  Menu,
-  PackageSearch,
-  Settings,
-  Ship,
-  ShieldCheck,
-  Star,
-  Truck,
-  UserRound,
-  WalletCards,
-} from "lucide-react";
+import { Car, CircleAlert, CircleDollarSign, ClipboardList, Headphones, Home, LogOut, Menu, PackageSearch, Pencil, Settings, ShieldCheck, Ship, Star, Truck, UserRound, WalletCards } from "lucide-react";
 
 import { auth, db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
@@ -447,6 +430,7 @@ function OrderPanel({
 }) {
   const [selected, setSelected] = useState<TaggedRow | null>(null);
   const [reviewing, setReviewing] = useState(false);
+  const [editing, setEditing] = useState(false);
   const cancelAction = selected ? pendingOrderCancellation(selected) : null;
   const reviewedKeys = useReviewedOrderKeys(uid);
 
@@ -558,6 +542,15 @@ function OrderPanel({
                 )}
               />
             </div>
+            {transportEditWindowOpen(selected) && (
+              <button
+                className="secondary-button"
+                onClick={() => setEditing(true)}
+                type="button"
+              >
+                <Pencil size={15} /> Edit request
+              </button>
+            )}
             {isReviewEligibleStatus(
               text(selected.row.status ?? selected.row.purchaseStatus, ""),
             ) &&
@@ -576,6 +569,13 @@ function OrderPanel({
           </>
         )}
       </OrderDetailDrawer>
+      {selected && transportEditWindowOpen(selected) && (
+        <TransportEditDrawer
+          onClose={() => setEditing(false)}
+          open={editing}
+          row={selected.row}
+        />
+      )}
       {selected && (
         <ReviewComposerDrawer
           businessId={text(selected.row.businessId, "")}
@@ -606,6 +606,28 @@ function OrderFact({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+// A car transport request stays editable until the customer selects a quote.
+// No business "accepts" in this marketplace - they quote - so quote selection
+// is the cutoff, not any business-side status.
+function transportEditWindowOpen(order: TaggedRow) {
+  return (
+    order.collectionName === "transportRequests" &&
+    text(order.row.quoteStatus, "") === "collecting"
+  );
+}
+
+// Fields a quote was priced against. Editing one of these makes every quote
+// already given a quote for a different job.
+const TRANSPORT_QUOTED_FIELDS = [
+  "carMake",
+  "carModel",
+  "carYear",
+  "pickupArea",
+  "vehicleOperable",
+  "requestedTransportMethod",
+  "destinationCountryId",
+] as const;
 
 function pendingOrderCancellation(order: TaggedRow) {
   const status = text(
@@ -1153,4 +1175,226 @@ function rowTime(row: FirestoreRow) {
 
 function isFinalStatus(status: string) {
   return ["completed", "cancelled", "refunded", "sold", "delivered"].includes(status.toLowerCase());
+}
+
+
+/**
+ * Lets a customer revise an open transport request from the web console -
+ * the same window and the same warning as the mobile app.
+ *
+ * Only changed fields are sent: the server treats an unchanged resubmission
+ * as a no-op, and posting the whole form back would void every quote on a
+ * save that altered nothing.
+ */
+function TransportEditDrawer({
+  onClose,
+  open,
+  row,
+}: {
+  onClose: () => void;
+  open: boolean;
+  row: Record<string, unknown>;
+}) {
+  const [form, setForm] = useState(() => ({
+    customerPhone: text(row.customerPhone, ""),
+    pickupAddress: text(row.pickupAddress, ""),
+    pickupArea: text(row.pickupArea, ""),
+    notes: text(row.notes, ""),
+    carMake: text(row.carMake, ""),
+    carModel: text(row.carModel, ""),
+    carYear: text(row.carYear, ""),
+    requestedTransportMethod: text(row.requestedTransportMethod, "open"),
+    vehicleOperable: row.vehicleOperable !== false,
+  }));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [confirming, setConfirming] = useState(false);
+
+  const quoteCount = Number(row.quoteCount ?? 0);
+
+  function changedFields() {
+    const patch: Record<string, unknown> = {};
+    const put = (key: string, next: unknown, before: unknown) => {
+      if (String(next ?? "").trim() !== String(before ?? "").trim()) {
+        patch[key] = next;
+      }
+    };
+    put("customerPhone", form.customerPhone.trim(), row.customerPhone);
+    put("pickupAddress", form.pickupAddress.trim(), row.pickupAddress);
+    put("pickupArea", form.pickupArea.trim(), row.pickupArea);
+    put("notes", form.notes.trim(), row.notes);
+    put("carMake", form.carMake.trim(), row.carMake);
+    put("carModel", form.carModel.trim(), row.carModel);
+    put("carYear", form.carYear.trim(), row.carYear);
+    put(
+      "requestedTransportMethod",
+      form.requestedTransportMethod,
+      row.requestedTransportMethod,
+    );
+    if (form.vehicleOperable !== (row.vehicleOperable !== false)) {
+      patch.vehicleOperable = form.vehicleOperable;
+    }
+    return patch;
+  }
+
+  async function save(patch: Record<string, unknown>) {
+    setBusy(true);
+    setError("");
+    try {
+      await httpsCallable(
+        functions,
+        "updateTransportRequestDetails",
+      )({ requestId: row.id, ...patch });
+      setConfirming(false);
+      onClose();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not update this request. Please try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function attemptSave() {
+    const patch = changedFields();
+    if (Object.keys(patch).length === 0) {
+      onClose();
+      return;
+    }
+    const affectsQuotes = TRANSPORT_QUOTED_FIELDS.some((f) => f in patch);
+    // Warn BEFORE saving: the customer watched these quotes arrive, and
+    // clearing them silently would read as losing them.
+    if (affectsQuotes && quoteCount > 0) {
+      setConfirming(true);
+      return;
+    }
+    void save(patch);
+  }
+
+  if (!open) return null;
+
+  return (
+    <OrderDetailDrawer onClose={onClose} open={open} title="Edit your request">
+      <p className="drawer-note">
+        You can change your request until you choose a quote.
+      </p>
+      <div className="settings-form">
+        <label>
+          Phone
+          <input
+            onChange={(e) => setForm({ ...form, customerPhone: e.target.value })}
+            value={form.customerPhone}
+          />
+        </label>
+        <label>
+          Pickup address
+          <input
+            onChange={(e) =>
+              setForm({ ...form, pickupAddress: e.target.value })
+            }
+            value={form.pickupAddress}
+          />
+        </label>
+        <label>
+          Pickup area
+          <input
+            onChange={(e) => setForm({ ...form, pickupArea: e.target.value })}
+            value={form.pickupArea}
+          />
+        </label>
+        <label className="wide-field">
+          Notes
+          <textarea
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            rows={2}
+            value={form.notes}
+          />
+        </label>
+        <label>
+          Make
+          <input
+            onChange={(e) => setForm({ ...form, carMake: e.target.value })}
+            value={form.carMake}
+          />
+        </label>
+        <label>
+          Model
+          <input
+            onChange={(e) => setForm({ ...form, carModel: e.target.value })}
+            value={form.carModel}
+          />
+        </label>
+        <label>
+          Year
+          <input
+            onChange={(e) => setForm({ ...form, carYear: e.target.value })}
+            value={form.carYear}
+          />
+        </label>
+        <label>
+          Transport method
+          <select
+            onChange={(e) =>
+              setForm({ ...form, requestedTransportMethod: e.target.value })
+            }
+            value={form.requestedTransportMethod}
+          >
+            <option value="open">Open</option>
+            <option value="enclosed">Enclosed</option>
+          </select>
+        </label>
+        <label>
+          Vehicle is drivable
+          <select
+            onChange={(e) =>
+              setForm({ ...form, vehicleOperable: e.target.value === "yes" })
+            }
+            value={form.vehicleOperable ? "yes" : "no"}
+          >
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </label>
+      </div>
+      {error && <div className="form-msg err">{error}</div>}
+      {confirming ? (
+        <div className="info-band">
+          <b>This will reset your quotes.</b> Businesses priced their quotes on
+          your current details. Saving clears the {quoteCount} quote
+          {quoteCount === 1 ? "" : "s"} you already have, and businesses will be
+          asked to quote again.
+          <div className="drawer-actions">
+            <button
+              className="secondary-button"
+              disabled={busy}
+              onClick={() => setConfirming(false)}
+              type="button"
+            >
+              Keep editing
+            </button>
+            <button
+              className="primary-button"
+              disabled={busy}
+              onClick={() => void save(changedFields())}
+              type="button"
+            >
+              {busy ? "Saving..." : "Save and reset quotes"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          className="primary-button"
+          disabled={busy}
+          onClick={attemptSave}
+          type="button"
+        >
+          {busy ? "Saving..." : "Save changes"}
+        </button>
+      )}
+    </OrderDetailDrawer>
+  );
 }
