@@ -29,6 +29,60 @@ A change is **not done** until all of the following are true:
 State plainly what you ran and what the result was. If you skipped a step, say
 so. Never report "done" on unverified work.
 
+## 1b. Machine prerequisites (a missing one blocks deploys silently)
+
+Two things must exist on a machine before it can deploy. Neither fails with a
+message that names itself, which is how both have already cost a day.
+
+### Java — required for ANY Cloud Functions deploy
+
+`firebase.json` runs `npm run lint` and `npm test` as a **predeploy** hook, and
+part of that suite drives the Firestore emulator, which is a Java process. With
+no Java on PATH the deploy dies locally, before anything reaches Google:
+
+```
+Error: Process `java -version` has exited with code 1.
+Error: functions predeploy error: Command terminated with non-zero exit code 1
+```
+
+That text arrives several screens into unrelated passing test output, so it
+reads like a flaky test rather than a hard stop. Install it:
+
+```bash
+brew install openjdk
+export PATH="/opt/homebrew/opt/openjdk/bin:$PATH"   # add to your shell profile
+java -version                                        # must print a version
+```
+
+**Why this matters more than it looks:** the failure is per-machine and total.
+Functions stay at whatever revision last deployed successfully while the code,
+the commits, and every local test say the change shipped. Short tracking codes
+were committed, correct, tested, and *not live* for exactly this reason — the
+symptom was a customer-facing code still in the old long format days later.
+
+**So: never treat a function change as shipped because the commit landed.**
+Confirm the deploy printed `Successful update operation` for the specific
+function you changed, then confirm the behaviour in the product.
+
+### The App Check site key — required for any static console deploy
+
+`NEXT_PUBLIC_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY` must be **exported** in the
+deploy command's environment; preflight reads `process.env` directly and
+`admin_web/.env.local` is never consulted. Missing it fails two checks that
+look unrelated (see §2 and the deploy runbook). Recover the deployed value:
+
+```bash
+curl -s https://business.laawoldigital.com/ \
+  | grep -oE '/_next/static/chunks/[^"]+\.js' | sort -u \
+  | while read -r u; do
+      curl -s "https://business.laawoldigital.com$u" \
+        | LC_ALL=C grep -aoE '6L[A-Za-z0-9_-]{38,}' | head -1
+    done | head -1
+```
+
+It is a public key (it ships to every visitor), so keeping it in a local file
+such as `~/.laawol/appcheck.key` is fine and survives session restarts.
+
 ## 2. Deployment gate — non-negotiable
 
 Production deploys go through the preflight, which now enforces:

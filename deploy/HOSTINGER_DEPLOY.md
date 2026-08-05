@@ -77,6 +77,20 @@ ssh -i ~/.ssh/laawol_hostinger -p 65002 \
 
 ---
 
+## 1c. Machine prerequisites
+
+- **Java** — required for any Cloud Functions deploy. `firebase.json` runs the
+  test suite as a predeploy hook and part of it drives the Firestore emulator,
+  which is Java. Without it the deploy fails locally before reaching Google,
+  with `Process 'java -version' has exited with code 1` buried several screens
+  into otherwise-passing test output. `brew install openjdk`, then put
+  `/opt/homebrew/opt/openjdk/bin` on PATH.
+- **App Check site key** — see §4 and ENGINEERING_GUARDRAILS §1b. Must be
+  exported into the deploy command's environment.
+
+Full detail and the recovery command for both: `docs/ENGINEERING_GUARDRAILS.md`
+§1b.
+
 ## 2. Build the admin and business consoles
 
 The marketing site needs **no build** (edit `public_site/` directly). The admin
