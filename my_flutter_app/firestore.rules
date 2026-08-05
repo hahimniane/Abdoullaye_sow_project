@@ -603,9 +603,12 @@ service cloud.firestore {
         request.resource.data.diff(resource.data)
           .affectedKeys()
           .hasOnly([
+            // pickupAddress is deliberately NOT here: the pickup fee was
+            // priced from the address at checkout, and this rule pins the
+            // fee - so a post-payment address change would move the pickup
+            // without moving the price. Address changes go through support.
             'senderName',
             'senderAddress',
-            'pickupAddress',
             'pickupDateTime',
             'receiverName',
             'receiverPhone',
@@ -681,9 +684,12 @@ service cloud.firestore {
         request.resource.data.diff(resource.data)
           .affectedKeys()
           .hasOnly([
+            // pickupAddress is deliberately NOT here: the pickup fee was
+            // priced from the address at checkout, and this rule pins the
+            // fee - so a post-payment address change would move the pickup
+            // without moving the price. Address changes go through support.
             'senderName',
             'senderAddress',
-            'pickupAddress',
             'pickupDateTime',
             'receiverName',
             'receiverPhone',

@@ -9,6 +9,11 @@ const {defineSecret} = require("firebase-functions/params");
 const crypto = require("crypto");
 const {buildTrackingCode} = require("./tracking_code");
 const {classifyTransportEdit} = require("./transport_request_edit");
+const {
+  normalizePickupPlan,
+  resolveServicePickup,
+  computePickupFeeCents,
+} = require("./pickup_plan");
 const admin = require("firebase-admin");
 const {
   FieldValue: FirestoreFieldValue,
@@ -100,10 +105,12 @@ const {
   distancePickupFee,
   boroughPickupFee,
 } = require("./freight_pickup_pricing");
+// Still consumed by the shared-barrel-pool paths, which keep the legacy
+// platform pricing until pools are migrated (explicitly out of scope in
+// docs/PLAN-business-pickup.md).
 const {
   normalizeBarrelPickupPricing,
   barrelBoroughPickupFee,
-  barrelDistancePickupFee,
 } = require("./barrel_pickup_pricing");
 const {
   accountLegalAcceptance,
@@ -8677,6 +8684,7 @@ exports.updateBusinessProfile = onCall(
         freightPickupOriginLat,
         freightPickupOriginLng,
         freightPickupBoroughPrices,
+        pickupPlan,
       } = request.data || {};
       const user = await requireBusinessManager(callerUid, businessId);
       const db = admin.firestore();
@@ -8828,6 +8836,22 @@ exports.updateBusinessProfile = onCall(
         freightPickupBoroughPrices: sanitizeBoroughPrices(
             freightPickupBoroughPrices ?? current.freightPickupBoroughPrices,
         ),
+        ...(pickupPlan === undefined ? {} : (() => {
+          // Reject an incomplete plan outright rather than storing a config
+          // that silently prices pickup at $0 or blocks every customer.
+          const normalized = normalizePickupPlan(pickupPlan, {
+            isNewYork: businessIsNewYork(current),
+          });
+          if (normalized.errors.length) {
+            throw new HttpsError(
+                "invalid-argument",
+                "Pickup settings are incomplete: " +
+                normalized.errors.join(", "),
+                {reason: "pickup_plan_invalid", errors: normalized.errors},
+            );
+          }
+          return {pickupPlan: normalized.plan};
+        })()),
         updatedAt: now,
       }, {merge: true});
 
@@ -8952,8 +8976,9 @@ function parkingEstimateCents({business, start, end, pickupRequested}) {
     days -= weeks * 7;
   }
   total += days * daily;
-  if (pickupRequested && business.parkingPickupAvailable === true) {
-    total += centsFromDollars(business.parkingPickupFee || 0);
+  if (pickupRequested) {
+    const pickupFee = resolveParkingPickupFeeDollars(business);
+    if (pickupFee != null) total += centsFromDollars(pickupFee);
   }
   return Math.max(0, total);
 }
@@ -9658,65 +9683,122 @@ async function googleGeocodePickupAddress(address, key) {
   };
 }
 
-async function computeBarrelPickupFee({pricing, address, key}) {
-  const textBorough = boroughFromAddressText(address);
-  const textBoroughFee = textBorough ?
-    barrelBoroughPickupFee(pricing, textBorough) :
-    null;
-  if (process.env.FUNCTIONS_EMULATOR === "true" && textBoroughFee != null) {
+// ---- Business-owned pickup plans (docs/PLAN-business-pickup.md) ----
+
+// Borough mode only means something inside New York. "In New York" is the
+// business's registered state/address; office locations are not consulted
+// here to keep validation synchronous.
+function businessIsNewYork(business) {
+  const state = String(business?.state || "").trim().toUpperCase();
+  if (state === "NY" || state === "NEW YORK") return true;
+  const haystack = [
+    business?.address,
+    business?.addressLine1,
+    business?.city,
+    business?.parkingAddress,
+    business?.freightPickupOriginAddress,
+  ].map((part) => String(part || "")).join(" | ");
+  return /(,|\b)\s*(NY|New York)\b/i.test(haystack);
+}
+
+// The fee for one pickup under a plan config. The borough and the mileage
+// are ALWAYS derived here, server-side, from the address - whoever supplies
+// the borough chooses the price, so the customer never does.
+async function computePlanPickupFee({config, business, address, key}) {
+  const trimmed = String(address || "").trim();
+  if (!trimmed) {
+    throw new HttpsError("invalid-argument", "A pickup address is required");
+  }
+  if (config.mode === "borough") {
+    let borough = process.env.FUNCTIONS_EMULATOR === "true" ?
+      boroughFromAddressText(trimmed) : "";
+    let formatted = trimmed;
+    if (!borough) {
+      const resolved = await googleGeocodePickupAddress(trimmed, key);
+      borough = resolved.borough;
+      formatted = resolved.address;
+    }
+    const result = computePickupFeeCents(config, {borough: borough || ""});
+    if (!result.ok) {
+      throw new HttpsError(
+          "failed-precondition",
+          "Pickup is not available for this area",
+          {reason: "pickup_out_of_area", borough: borough || ""},
+      );
+    }
     return {
-      address: String(address).trim(),
-      borough: textBorough,
-      serviceArea: textBorough,
+      address: formatted,
+      borough,
+      serviceArea: borough,
       model: "borough",
       distanceMiles: null,
-      fee: textBoroughFee,
+      fee: result.feeCents / 100,
+      feeCents: result.feeCents,
     };
   }
-  const resolved = await googleGeocodePickupAddress(address, key);
-  const boroughFee = resolved.borough ?
-    barrelBoroughPickupFee(pricing, resolved.borough) :
-    null;
-  if (boroughFee != null) {
-    return {
-      address: resolved.address,
-      borough: resolved.borough,
-      serviceArea: resolved.borough,
-      model: "borough",
-      distanceMiles: null,
-      fee: boroughFee,
-    };
+  const origin = config.originLat != null && config.originLng != null ?
+    `${config.originLat},${config.originLng}` :
+    String(config.originAddress ||
+      [business?.address, business?.city, business?.state]
+          .map((part) => String(part || "").trim()).filter(Boolean)
+          .join(", ")).trim();
+  if (!origin) {
+    throw new HttpsError(
+        "failed-precondition",
+        "This business has not set a pickup origin address",
+        {reason: "pickup_origin_missing"},
+    );
   }
   const distanceKm = await googleDrivingDistanceKm({
-    origin: pricing.officeAddress,
-    destination: resolved.address,
+    origin,
+    destination: trimmed,
     key,
   });
   const distanceMiles = distanceKm * 0.621371;
-  const fee = barrelDistancePickupFee(pricing, distanceMiles);
-  if (fee == null) {
+  const result = computePickupFeeCents(config, {miles: distanceMiles});
+  if (!result.ok) {
     throw new HttpsError(
         "failed-precondition",
         "Pickup location is outside the service area",
-        {
-          reason: "barrel_pickup_out_of_range",
-          distanceMiles,
-        },
+        {reason: "pickup_out_of_range", distanceMiles},
     );
   }
   return {
-    address: resolved.address,
+    address: trimmed,
     borough: "",
-    serviceArea: "Distance pickup",
-    model: "distance",
+    serviceArea: config.mode === "flat" ? "Flat-rate area" : "Distance pickup",
+    model: config.mode,
     distanceMiles: Math.round(distanceMiles * 10) / 10,
-    fee,
+    fee: result.feeCents / 100,
+    feeCents: result.feeCents,
   };
 }
 
-// ---- Freight home-pickup pricing (per business) ----
-// Pure config/fee math lives in ./freight_pickup_pricing; the async pieces
-// (Distance Matrix call, typed errors) stay here.
+// Barrel pickup under the business model: the plan or nothing. There is no
+// platform fallback by decision - a business that has not configured pickup
+// simply cannot offer it, and the customer is told so cleanly.
+function requireBarrelPickupConfig(business) {
+  const config = resolveServicePickup(business?.pickupPlan, "barrels");
+  if (!config) {
+    throw new HttpsError(
+        "failed-precondition",
+        "This business does not offer home pickup yet",
+        {reason: "barrel_pickup_unavailable"},
+    );
+  }
+  return config;
+}
+
+// Parking has no pickup address in its flow yet, so only a flat plan fee (or
+// the legacy flat field) is chargeable; other modes read as unavailable.
+function resolveParkingPickupFeeDollars(business) {
+  const config = resolveServicePickup(business?.pickupPlan, "parking");
+  if (config) return config.mode === "flat" ? config.flatFee : null;
+  if (business?.parkingPickupAvailable === true) {
+    return Number(business.parkingPickupFee || 0);
+  }
+  return null;
+}
 
 async function googleDrivingDistanceKm({origin, destination, key}) {
   const params = new URLSearchParams({
@@ -9744,6 +9826,32 @@ async function googleDrivingDistanceKm({origin, destination, key}) {
 // Resolves the freight pickup fee for one request. Pure math for borough;
 // calls the Distance Matrix API for distance. Throws typed HttpsErrors so the
 // client can distinguish "unavailable" from "out of range".
+// Plan config wins over the legacy freightPickup* fields; both feed the same
+// charge path so quoted always equals charged.
+async function computeBusinessFreightPickup({business, pickup, key}) {
+  const planConfig = resolveServicePickup(business?.pickupPlan, "freight");
+  if (planConfig) {
+    const quote = await computePlanPickupFee({
+      config: planConfig,
+      business,
+      address: pickup.address,
+      key,
+    });
+    return {
+      fee: quote.fee,
+      model: quote.model,
+      distanceKm: quote.distanceMiles == null ?
+        null : Math.round(quote.distanceMiles / 0.621371 * 10) / 10,
+      borough: quote.borough || null,
+    };
+  }
+  return computeFreightPickupFee({
+    config: resolveFreightPickupConfig(business),
+    pickup,
+    key,
+  });
+}
+
 async function computeFreightPickupFee({config, pickup, key}) {
   if (!config.enabled) {
     throw new HttpsError(
@@ -9753,7 +9861,21 @@ async function computeFreightPickupFee({config, pickup, key}) {
     );
   }
   if (config.model === "borough") {
-    const borough = String(pickup.borough || "").trim();
+    // The borough is derived from the ADDRESS, never taken from the client -
+    // whoever supplies the borough chooses the price.
+    const boroughAddress = String(pickup.address || "").trim();
+    if (!boroughAddress) {
+      throw new HttpsError(
+          "invalid-argument",
+          "A pickup address is required",
+      );
+    }
+    let borough = process.env.FUNCTIONS_EMULATOR === "true" ?
+      boroughFromAddressText(boroughAddress) : "";
+    if (!borough) {
+      const resolved = await googleGeocodePickupAddress(boroughAddress, key);
+      borough = resolved.borough || "";
+    }
     const fee = boroughPickupFee({config, borough});
     if (fee == null) {
       throw new HttpsError(
@@ -13002,11 +13124,23 @@ exports.quoteBarrelPickup = onCall(
             "A pickup address is required",
         );
       }
-      const pricingDoc = await admin.firestore()
-          .collection("shipmentPricing").doc("barrelPickup").get();
-      const pricing = barrelPickupPricingFromData(pricingDoc.data());
-      const quote = await computeBarrelPickupFee({
-        pricing,
+      // Pickup now belongs to the business, so a quote is per business.
+      const quoteBusinessId = String(request.data?.businessId || "").trim();
+      if (!quoteBusinessId) {
+        return {available: false, reason: "pickup_business_required"};
+      }
+      const quoteBusinessDoc = await admin.firestore()
+          .collection("businesses").doc(quoteBusinessId).get();
+      const quoteBusiness = quoteBusinessDoc.exists ?
+        quoteBusinessDoc.data() : null;
+      const quoteConfig = quoteBusiness ?
+        resolveServicePickup(quoteBusiness.pickupPlan, "barrels") : null;
+      if (!quoteConfig) {
+        return {available: false, reason: "barrel_pickup_unavailable"};
+      }
+      const quote = await computePlanPickupFee({
+        config: quoteConfig,
+        business: quoteBusiness,
         address: pickupAddress,
         key: googleMapsApiKey.value(),
       });
@@ -13054,9 +13188,8 @@ exports.quoteFreightPickup = onCall(
       if (!businessDoc.exists) {
         throw new HttpsError("not-found", "Business not found");
       }
-      const config = resolveFreightPickupConfig(businessDoc.data());
-      const result = await computeFreightPickupFee({
-        config,
+      const result = await computeBusinessFreightPickup({
+        business: businessDoc.data(),
         pickup: {
           address: pickupAddress,
           latitude: nullableNumberInRange(pickupLatitude, -90, 90),
@@ -17243,7 +17376,6 @@ exports.createBarrelShipmentPaymentIntent = onCall(
       const {business, country, shippingFee, deliveryEstimate} =
         businessDestination;
 
-      const pricing = barrelPickupPricingFromData(pricingDoc.data());
       const platformFeePct = barrelPlatformFeePctFromPricing(
           pricingDoc.data(),
           business,
@@ -17257,8 +17389,9 @@ exports.createBarrelShipmentPaymentIntent = onCall(
           officeLocationId,
         });
       const pickup = wantsPickup ?
-        await computeBarrelPickupFee({
-          pricing,
+        await computePlanPickupFee({
+          config: requireBarrelPickupConfig(business),
+          business,
           address: pickupAddress,
           key: googleMapsApiKey.value(),
         }) :
@@ -17513,15 +17646,18 @@ exports.createBarrelOrderPaymentIntent = onCall(
         pricingRef.get(),
         admin.auth().getUser(customerUid),
       ]);
-      const pickupPricing = barrelPickupPricingFromData(pricingDoc.data());
       const pickupQuoteCache = new Map();
-      const pickupQuoteForAddress = async (address) => {
-        const key = String(address || "").trim().toLowerCase();
+      // The fee depends on WHICH business collects, so the cache keys on
+      // business + address, and each line prices under its own plan.
+      const pickupQuoteForAddress = async (businessId, business, address) => {
+        const key =
+          `${businessId}|${String(address || "").trim().toLowerCase()}`;
         if (!pickupQuoteCache.has(key)) {
           pickupQuoteCache.set(
               key,
-              computeBarrelPickupFee({
-                pricing: pickupPricing,
+              computePlanPickupFee({
+                config: requireBarrelPickupConfig(business),
+                business,
                 address,
                 key: googleMapsApiKey.value(),
               }),
@@ -17590,7 +17726,7 @@ exports.createBarrelOrderPaymentIntent = onCall(
           parseFuturePickup(linePickupDateTime) :
           null;
         const linePickup = lineWantsPickup ?
-          await pickupQuoteForAddress(linePickupAddress) :
+          await pickupQuoteForAddress(businessId, business, linePickupAddress) :
           {
             address: formatOfficeLocationAddress(lineOfficeLocation),
             borough: "",
@@ -18473,10 +18609,9 @@ exports.createFreightShipmentPaymentIntent = onCall(
       // Pickup fee comes from the business's chosen model (distance or NY
       // borough). Server recomputes it from scratch so the client can never
       // dictate the price it pays.
-      const pickupConfig = resolveFreightPickupConfig(business);
       const pickup = wantsPickup ?
-        await computeFreightPickupFee({
-          config: pickupConfig,
+        await computeBusinessFreightPickup({
+          business,
           pickup: {
             address: pickupAddress,
             latitude: nullableNumberInRange(pickupLatitude, -90, 90),
