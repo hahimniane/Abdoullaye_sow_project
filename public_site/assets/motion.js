@@ -185,8 +185,8 @@
   // between clips); the ship aerial is strictly the backup and only plays
   // if the port clip fails to load.
   var PLAYLIST = [
-    {src: "assets/hero-ship.mp4", hold: 40000},
-    {src: "assets/hero-sea.mp4", hold: 30000, backupOnly: true},
+    {src: "assets/hero-vessel.mp4", hold: 40000},
+    {src: "assets/hero-ship.mp4", hold: 30000, backupOnly: true},
   ];
   function injectVideo() {
     var hero = document.querySelector(".hero");
