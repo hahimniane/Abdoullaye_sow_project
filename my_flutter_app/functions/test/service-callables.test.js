@@ -47,6 +47,7 @@ async function seedBusiness(id, {
   seaRate = 5,
   serviceAvailability,
   freightPickup,
+  pickupPlan,
   destinationId = COUNTRY_ID,
   destinationName = "Guinea",
 } = {}) {
@@ -65,6 +66,7 @@ async function seedBusiness(id, {
       city: "Bronx",
       addressLine1: "100 Test Avenue",
       ...(freightPickup || {}),
+      ...(pickupPlan ? {state: "NY", pickupPlan} : {}),
       parkingCity: "Bronx",
       parkingAddressLine1: "100 Test Avenue",
       parkingTotalSpaces: 5,
@@ -1849,7 +1851,19 @@ describe("barrel shipping service callable lifecycle", () => {
   it("books pickup from a resolved address without trusting the client zone",
       async () => {
         const businessId = "barrel-any-address-pickup";
-        await seedBusiness(businessId);
+        // Pickup now belongs to the business: without a pickupPlan the
+        // callable refuses with barrel_pickup_unavailable (decision #9).
+        await seedBusiness(businessId, {
+          pickupPlan: {
+            version: 1,
+            shared: {
+              enabled: true,
+              mode: "borough",
+              boroughPrices: {Brooklyn: 108, Bronx: 40},
+            },
+            services: {},
+          },
+        });
         const pickupDateTime = futureIso();
         const created = await functions.createBarrelShipmentPaymentIntent.run({
           auth: {uid: CUSTOMER_UID},
@@ -2101,7 +2115,17 @@ describe("barrel shipping service callable lifecycle", () => {
   it("charges shared pickup once for every independent order line",
       async () => {
         const businessId = "barrel-order-shared-pickup";
-        const businessRef = await seedBusiness(businessId);
+        const businessRef = await seedBusiness(businessId, {
+          pickupPlan: {
+            version: 1,
+            shared: {
+              enabled: true,
+              mode: "borough",
+              boroughPrices: {Brooklyn: 108, Bronx: 40},
+            },
+            services: {},
+          },
+        });
         await businessRef.collection("destinationCountries").doc("gh").set({
           countryId: "gh",
           name: "Ghana",
@@ -2168,7 +2192,17 @@ describe("barrel shipping service callable lifecycle", () => {
   it("preserves independent pickup and drop-off details per order line",
       async () => {
         const businessId = "barrel-order-line-pickups";
-        const businessRef = await seedBusiness(businessId);
+        const businessRef = await seedBusiness(businessId, {
+          pickupPlan: {
+            version: 1,
+            shared: {
+              enabled: true,
+              mode: "borough",
+              boroughPrices: {Brooklyn: 108, Bronx: 40},
+            },
+            services: {},
+          },
+        });
         await businessRef.collection("destinationCountries").doc("gh").set({
           countryId: "gh",
           name: "Ghana",
@@ -2231,7 +2265,7 @@ describe("barrel shipping service callable lifecycle", () => {
               // (no configured office locations, so it falls back to the
               // business's main address) instead of the old shared global
               // pricing-doc placeholder.
-              "100 Test Avenue, Bronx",
+              "100 Test Avenue, Bronx, NY",
             ],
         );
         assert.deepEqual(
