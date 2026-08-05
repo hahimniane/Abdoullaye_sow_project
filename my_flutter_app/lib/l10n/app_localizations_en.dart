@@ -5387,6 +5387,123 @@ class AppLocalizationsEn extends AppLocalizations {
   String get marketplaceDestinationChangeSummary => 'Paid destination change';
 
   @override
+  String get pickupPlanSectionTitle => 'Home pickup · all services';
+
+  @override
+  String get pickupPlanSectionSubtitle =>
+      'One pickup plan applies to every service you offer. Any service can use its own settings below.';
+
+  @override
+  String get pickupPlanOfferToggle => 'Offer home pickup';
+
+  @override
+  String get pickupPlanDisabledHint =>
+      'Customers bring items to your business. Turn pickup on to offer collection from their address, priced by your own plan.';
+
+  @override
+  String get pickupPlanModeLabel => 'Pricing mode';
+
+  @override
+  String get pickupPlanModeFlat => 'Flat fee';
+
+  @override
+  String get pickupPlanModeDistance => 'By distance';
+
+  @override
+  String get pickupPlanModeBorough => 'By borough (NYC)';
+
+  @override
+  String get pickupPlanMaxMiles => 'Max pickup distance (miles)';
+
+  @override
+  String get pickupPlanFlatHint =>
+      'One price for any pickup within your maximum distance. Addresses beyond it are refused, never surcharged.';
+
+  @override
+  String get pickupPlanFlatFee => 'Flat pickup fee (USD)';
+
+  @override
+  String get pickupPlanDistanceHint =>
+      'Fee = base fee + per-mile rate × driving distance, never below your minimum. Addresses beyond your maximum distance are refused.';
+
+  @override
+  String get pickupPlanOriginAddress => 'Pickup origin address';
+
+  @override
+  String get pickupPlanOriginHelper => 'Where your pickups start from';
+
+  @override
+  String get pickupPlanBaseFee => 'Base fee (USD)';
+
+  @override
+  String get pickupPlanPerMile => 'Per mile (USD)';
+
+  @override
+  String get pickupPlanMinFee => 'Minimum fee (USD)';
+
+  @override
+  String get pickupPlanBoroughHint =>
+      'One flat fee per borough you serve. Leave a borough blank to not serve it — the customer\'s address decides which fee applies.';
+
+  @override
+  String get pickupPlanPerServiceHint =>
+      'Per-service pickup: each service uses the shared plan unless you give it custom settings or turn its pickup off.';
+
+  @override
+  String get pickupPlanChoiceInherit => 'Use shared plan';
+
+  @override
+  String get pickupPlanChoiceCustom => 'Custom settings';
+
+  @override
+  String get pickupPlanChoiceOff => 'No pickup';
+
+  @override
+  String get pickupPlanSharedSectionLabel => 'the shared pickup plan';
+
+  @override
+  String get pickupPlanServiceBarrels => 'Barrel shipping';
+
+  @override
+  String get pickupPlanServiceFreight => 'Freight';
+
+  @override
+  String get pickupPlanServiceParking => 'Car parking';
+
+  @override
+  String get pickupPlanServiceCarTransport => 'Car transport';
+
+  @override
+  String pickupPlanErrorCapRequired(Object section) {
+    return 'Enter the maximum pickup distance in miles for $section.';
+  }
+
+  @override
+  String pickupPlanErrorFlatFee(Object section) {
+    return 'Enter the flat pickup fee for $section.';
+  }
+
+  @override
+  String pickupPlanErrorDistanceFees(Object section) {
+    return 'Enter the base, per-mile, and minimum fees for $section.';
+  }
+
+  @override
+  String pickupPlanErrorOrigin(Object section) {
+    return 'Enter the pickup origin address for $section.';
+  }
+
+  @override
+  String pickupPlanErrorBoroughPrice(Object section) {
+    return 'Set a pickup fee for at least one borough for $section.';
+  }
+
+  @override
+  String pickupPlanErrorBoroughRequiresNewYork(Object section) {
+    return 'Pickup by borough is only available to New York businesses ($section).';
+  }
+
+  @override
   String get freightPickupSectionTitle => 'Freight pickup';
 
   @override

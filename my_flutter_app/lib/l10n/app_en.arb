@@ -2310,6 +2310,69 @@
   "sharedBarrelFormLoadFailed": "We couldn’t open the shared-barrel form. Check your connection and try again.",
   "marketplaceBalancePaymentSummary": "Balance payment",
   "marketplaceDestinationChangeSummary": "Paid destination change",
+  "pickupPlanSectionTitle": "Home pickup · all services",
+  "pickupPlanSectionSubtitle": "One pickup plan applies to every service you offer. Any service can use its own settings below.",
+  "pickupPlanOfferToggle": "Offer home pickup",
+  "pickupPlanDisabledHint": "Customers bring items to your business. Turn pickup on to offer collection from their address, priced by your own plan.",
+  "pickupPlanModeLabel": "Pricing mode",
+  "pickupPlanModeFlat": "Flat fee",
+  "pickupPlanModeDistance": "By distance",
+  "pickupPlanModeBorough": "By borough (NYC)",
+  "pickupPlanMaxMiles": "Max pickup distance (miles)",
+  "pickupPlanFlatHint": "One price for any pickup within your maximum distance. Addresses beyond it are refused, never surcharged.",
+  "pickupPlanFlatFee": "Flat pickup fee (USD)",
+  "pickupPlanDistanceHint": "Fee = base fee + per-mile rate × driving distance, never below your minimum. Addresses beyond your maximum distance are refused.",
+  "pickupPlanOriginAddress": "Pickup origin address",
+  "pickupPlanOriginHelper": "Where your pickups start from",
+  "pickupPlanBaseFee": "Base fee (USD)",
+  "pickupPlanPerMile": "Per mile (USD)",
+  "pickupPlanMinFee": "Minimum fee (USD)",
+  "pickupPlanBoroughHint": "One flat fee per borough you serve. Leave a borough blank to not serve it — the customer's address decides which fee applies.",
+  "pickupPlanPerServiceHint": "Per-service pickup: each service uses the shared plan unless you give it custom settings or turn its pickup off.",
+  "pickupPlanChoiceInherit": "Use shared plan",
+  "pickupPlanChoiceCustom": "Custom settings",
+  "pickupPlanChoiceOff": "No pickup",
+  "pickupPlanSharedSectionLabel": "the shared pickup plan",
+  "pickupPlanServiceBarrels": "Barrel shipping",
+  "pickupPlanServiceFreight": "Freight",
+  "pickupPlanServiceParking": "Car parking",
+  "pickupPlanServiceCarTransport": "Car transport",
+  "pickupPlanErrorCapRequired": "Enter the maximum pickup distance in miles for {section}.",
+  "@pickupPlanErrorCapRequired": {
+    "placeholders": {
+      "section": {}
+    }
+  },
+  "pickupPlanErrorFlatFee": "Enter the flat pickup fee for {section}.",
+  "@pickupPlanErrorFlatFee": {
+    "placeholders": {
+      "section": {}
+    }
+  },
+  "pickupPlanErrorDistanceFees": "Enter the base, per-mile, and minimum fees for {section}.",
+  "@pickupPlanErrorDistanceFees": {
+    "placeholders": {
+      "section": {}
+    }
+  },
+  "pickupPlanErrorOrigin": "Enter the pickup origin address for {section}.",
+  "@pickupPlanErrorOrigin": {
+    "placeholders": {
+      "section": {}
+    }
+  },
+  "pickupPlanErrorBoroughPrice": "Set a pickup fee for at least one borough for {section}.",
+  "@pickupPlanErrorBoroughPrice": {
+    "placeholders": {
+      "section": {}
+    }
+  },
+  "pickupPlanErrorBoroughRequiresNewYork": "Pickup by borough is only available to New York businesses ({section}).",
+  "@pickupPlanErrorBoroughRequiresNewYork": {
+    "placeholders": {
+      "section": {}
+    }
+  },
   "freightPickupSectionTitle": "Freight pickup",
   "freightPickupSectionSubtitle": "Offer to collect parcels from your customer's address, and choose how the fee is calculated.",
   "freightPickupOfferToggle": "Offer freight pickup",

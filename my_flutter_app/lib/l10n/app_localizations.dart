@@ -9672,6 +9672,204 @@ abstract class AppLocalizations {
   /// **'Paid destination change'**
   String get marketplaceDestinationChangeSummary;
 
+  /// No description provided for @pickupPlanSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Home pickup · all services'**
+  String get pickupPlanSectionTitle;
+
+  /// No description provided for @pickupPlanSectionSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'One pickup plan applies to every service you offer. Any service can use its own settings below.'**
+  String get pickupPlanSectionSubtitle;
+
+  /// No description provided for @pickupPlanOfferToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Offer home pickup'**
+  String get pickupPlanOfferToggle;
+
+  /// No description provided for @pickupPlanDisabledHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers bring items to your business. Turn pickup on to offer collection from their address, priced by your own plan.'**
+  String get pickupPlanDisabledHint;
+
+  /// No description provided for @pickupPlanModeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Pricing mode'**
+  String get pickupPlanModeLabel;
+
+  /// No description provided for @pickupPlanModeFlat.
+  ///
+  /// In en, this message translates to:
+  /// **'Flat fee'**
+  String get pickupPlanModeFlat;
+
+  /// No description provided for @pickupPlanModeDistance.
+  ///
+  /// In en, this message translates to:
+  /// **'By distance'**
+  String get pickupPlanModeDistance;
+
+  /// No description provided for @pickupPlanModeBorough.
+  ///
+  /// In en, this message translates to:
+  /// **'By borough (NYC)'**
+  String get pickupPlanModeBorough;
+
+  /// No description provided for @pickupPlanMaxMiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Max pickup distance (miles)'**
+  String get pickupPlanMaxMiles;
+
+  /// No description provided for @pickupPlanFlatHint.
+  ///
+  /// In en, this message translates to:
+  /// **'One price for any pickup within your maximum distance. Addresses beyond it are refused, never surcharged.'**
+  String get pickupPlanFlatHint;
+
+  /// No description provided for @pickupPlanFlatFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Flat pickup fee (USD)'**
+  String get pickupPlanFlatFee;
+
+  /// No description provided for @pickupPlanDistanceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Fee = base fee + per-mile rate × driving distance, never below your minimum. Addresses beyond your maximum distance are refused.'**
+  String get pickupPlanDistanceHint;
+
+  /// No description provided for @pickupPlanOriginAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup origin address'**
+  String get pickupPlanOriginAddress;
+
+  /// No description provided for @pickupPlanOriginHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Where your pickups start from'**
+  String get pickupPlanOriginHelper;
+
+  /// No description provided for @pickupPlanBaseFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Base fee (USD)'**
+  String get pickupPlanBaseFee;
+
+  /// No description provided for @pickupPlanPerMile.
+  ///
+  /// In en, this message translates to:
+  /// **'Per mile (USD)'**
+  String get pickupPlanPerMile;
+
+  /// No description provided for @pickupPlanMinFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Minimum fee (USD)'**
+  String get pickupPlanMinFee;
+
+  /// No description provided for @pickupPlanBoroughHint.
+  ///
+  /// In en, this message translates to:
+  /// **'One flat fee per borough you serve. Leave a borough blank to not serve it — the customer\'s address decides which fee applies.'**
+  String get pickupPlanBoroughHint;
+
+  /// No description provided for @pickupPlanPerServiceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Per-service pickup: each service uses the shared plan unless you give it custom settings or turn its pickup off.'**
+  String get pickupPlanPerServiceHint;
+
+  /// No description provided for @pickupPlanChoiceInherit.
+  ///
+  /// In en, this message translates to:
+  /// **'Use shared plan'**
+  String get pickupPlanChoiceInherit;
+
+  /// No description provided for @pickupPlanChoiceCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom settings'**
+  String get pickupPlanChoiceCustom;
+
+  /// No description provided for @pickupPlanChoiceOff.
+  ///
+  /// In en, this message translates to:
+  /// **'No pickup'**
+  String get pickupPlanChoiceOff;
+
+  /// No description provided for @pickupPlanSharedSectionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'the shared pickup plan'**
+  String get pickupPlanSharedSectionLabel;
+
+  /// No description provided for @pickupPlanServiceBarrels.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrel shipping'**
+  String get pickupPlanServiceBarrels;
+
+  /// No description provided for @pickupPlanServiceFreight.
+  ///
+  /// In en, this message translates to:
+  /// **'Freight'**
+  String get pickupPlanServiceFreight;
+
+  /// No description provided for @pickupPlanServiceParking.
+  ///
+  /// In en, this message translates to:
+  /// **'Car parking'**
+  String get pickupPlanServiceParking;
+
+  /// No description provided for @pickupPlanServiceCarTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Car transport'**
+  String get pickupPlanServiceCarTransport;
+
+  /// No description provided for @pickupPlanErrorCapRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the maximum pickup distance in miles for {section}.'**
+  String pickupPlanErrorCapRequired(Object section);
+
+  /// No description provided for @pickupPlanErrorFlatFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the flat pickup fee for {section}.'**
+  String pickupPlanErrorFlatFee(Object section);
+
+  /// No description provided for @pickupPlanErrorDistanceFees.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the base, per-mile, and minimum fees for {section}.'**
+  String pickupPlanErrorDistanceFees(Object section);
+
+  /// No description provided for @pickupPlanErrorOrigin.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the pickup origin address for {section}.'**
+  String pickupPlanErrorOrigin(Object section);
+
+  /// No description provided for @pickupPlanErrorBoroughPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a pickup fee for at least one borough for {section}.'**
+  String pickupPlanErrorBoroughPrice(Object section);
+
+  /// No description provided for @pickupPlanErrorBoroughRequiresNewYork.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup by borough is only available to New York businesses ({section}).'**
+  String pickupPlanErrorBoroughRequiresNewYork(Object section);
+
   /// No description provided for @freightPickupSectionTitle.
   ///
   /// In en, this message translates to:

@@ -5484,6 +5484,124 @@ class AppLocalizationsFr extends AppLocalizations {
       'Modification payante de la destination';
 
   @override
+  String get pickupPlanSectionTitle =>
+      'Collecte à domicile · tous les services';
+
+  @override
+  String get pickupPlanSectionSubtitle =>
+      'Un seul plan de collecte s\'applique à tous les services que vous proposez. Chaque service peut utiliser ses propres réglages ci-dessous.';
+
+  @override
+  String get pickupPlanOfferToggle => 'Proposer la collecte à domicile';
+
+  @override
+  String get pickupPlanDisabledHint =>
+      'Les clients apportent leurs articles à votre entreprise. Activez la collecte pour proposer un enlèvement à leur adresse, tarifé selon votre plan.';
+
+  @override
+  String get pickupPlanModeLabel => 'Mode de tarification';
+
+  @override
+  String get pickupPlanModeFlat => 'Frais fixe';
+
+  @override
+  String get pickupPlanModeDistance => 'Par distance';
+
+  @override
+  String get pickupPlanModeBorough => 'Par arrondissement (NYC)';
+
+  @override
+  String get pickupPlanMaxMiles => 'Distance max de collecte (miles)';
+
+  @override
+  String get pickupPlanFlatHint =>
+      'Un prix unique pour toute collecte dans votre distance maximale. Les adresses au-delà sont refusées, jamais surfacturées.';
+
+  @override
+  String get pickupPlanFlatFee => 'Frais fixes de collecte (USD)';
+
+  @override
+  String get pickupPlanDistanceHint =>
+      'Frais = frais de base + tarif au mile × distance routière, jamais en dessous de votre minimum. Les adresses au-delà de votre distance maximale sont refusées.';
+
+  @override
+  String get pickupPlanOriginAddress => 'Adresse de départ de la collecte';
+
+  @override
+  String get pickupPlanOriginHelper => 'Point de départ de vos collectes';
+
+  @override
+  String get pickupPlanBaseFee => 'Frais de base (USD)';
+
+  @override
+  String get pickupPlanPerMile => 'Par mile (USD)';
+
+  @override
+  String get pickupPlanMinFee => 'Frais minimum (USD)';
+
+  @override
+  String get pickupPlanBoroughHint =>
+      'Un tarif fixe par arrondissement desservi. Laissez un arrondissement vide pour ne pas le desservir — l\'adresse du client détermine le tarif appliqué.';
+
+  @override
+  String get pickupPlanPerServiceHint =>
+      'Collecte par service : chaque service utilise le plan partagé, sauf si vous lui donnez des réglages personnalisés ou désactivez sa collecte.';
+
+  @override
+  String get pickupPlanChoiceInherit => 'Utiliser le plan partagé';
+
+  @override
+  String get pickupPlanChoiceCustom => 'Réglages personnalisés';
+
+  @override
+  String get pickupPlanChoiceOff => 'Pas de collecte';
+
+  @override
+  String get pickupPlanSharedSectionLabel => 'le plan de collecte partagé';
+
+  @override
+  String get pickupPlanServiceBarrels => 'Expédition de barils';
+
+  @override
+  String get pickupPlanServiceFreight => 'Fret';
+
+  @override
+  String get pickupPlanServiceParking => 'Stationnement';
+
+  @override
+  String get pickupPlanServiceCarTransport => 'Transport de voitures';
+
+  @override
+  String pickupPlanErrorCapRequired(Object section) {
+    return 'Saisissez la distance maximale de collecte en miles pour $section.';
+  }
+
+  @override
+  String pickupPlanErrorFlatFee(Object section) {
+    return 'Saisissez le tarif fixe de collecte pour $section.';
+  }
+
+  @override
+  String pickupPlanErrorDistanceFees(Object section) {
+    return 'Saisissez les frais de base, au mile et minimum pour $section.';
+  }
+
+  @override
+  String pickupPlanErrorOrigin(Object section) {
+    return 'Saisissez l\'adresse de départ de la collecte pour $section.';
+  }
+
+  @override
+  String pickupPlanErrorBoroughPrice(Object section) {
+    return 'Définissez un tarif de collecte pour au moins un arrondissement pour $section.';
+  }
+
+  @override
+  String pickupPlanErrorBoroughRequiresNewYork(Object section) {
+    return 'La collecte par arrondissement n\'est disponible que pour les entreprises de New York ($section).';
+  }
+
+  @override
   String get freightPickupSectionTitle => 'Enlèvement du fret';
 
   @override

@@ -757,6 +757,7 @@ class AuthProvider extends ChangeNotifier {
     double? freightPickupOriginLat,
     double? freightPickupOriginLng,
     Map<String, double>? freightPickupBoroughPrices,
+    Map<String, dynamic>? pickupPlan,
   }) async {
     if (_user == null) {
       throw 'Please sign in first.';
@@ -809,6 +810,7 @@ class AuthProvider extends ChangeNotifier {
       'freightPickupOriginLat': ?freightPickupOriginLat,
       'freightPickupOriginLng': ?freightPickupOriginLng,
       'freightPickupBoroughPrices': ?freightPickupBoroughPrices,
+      'pickupPlan': ?pickupPlan,
     });
     await refreshUserProfile();
   }
