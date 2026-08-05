@@ -11,6 +11,51 @@ export const BUSINESS_SERVICE_IDS = [
 
 export type BusinessServiceId = (typeof BUSINESS_SERVICE_IDS)[number];
 
+export const PICKUP_PLAN_SERVICES = [
+  "barrels",
+  "freight",
+  "parking",
+  "carTransport",
+] as const;
+
+export type PickupPlanServiceId = (typeof PICKUP_PLAN_SERVICES)[number];
+
+export const PICKUP_SERVICE_LABELS: Record<PickupPlanServiceId, string> = {
+  barrels: "Barrel shipping",
+  freight: "Freight",
+  parking: "Car parking",
+  carTransport: "Car transport",
+};
+
+export const PICKUP_SERVICE_BY_BUSINESS_SERVICE: Partial<
+  Record<BusinessServiceId, PickupPlanServiceId>
+> = {
+  barrelShipping: "barrels",
+  freight: "freight",
+  carParking: "parking",
+  carTransport: "carTransport",
+};
+
+export type PickupMode = "flat" | "distance" | "borough";
+
+export type PickupConfigDraft = {
+  mode: PickupMode;
+  flatFee: string;
+  baseFee: string;
+  perMileFee: string;
+  minimumFee: string;
+  maxPickupMiles: string;
+  originAddress: string;
+  boroughPrices: Record<string, string>;
+};
+
+export type PickupServiceChoice = "inherit" | "custom" | "off";
+
+export type PickupServiceDraft = {
+  choice: PickupServiceChoice;
+  config: PickupConfigDraft;
+};
+
 export type BusinessServiceSettingsDraft = {
   enabledServices: string[];
   carHoldPricingMode: "flat" | "per_day";
@@ -38,6 +83,9 @@ export type BusinessServiceSettingsDraft = {
   parkingPickupAvailable: boolean;
   parkingPickupFee: string;
   parkingInstructions: string;
+  pickupEnabled: boolean;
+  pickupShared: PickupConfigDraft;
+  pickupServices: Record<PickupPlanServiceId, PickupServiceDraft>;
 };
 
 export const NYC_BOROUGHS = [
@@ -48,10 +96,79 @@ export const NYC_BOROUGHS = [
   "Staten Island",
 ] as const;
 
+function emptyPickupConfigDraft(): PickupConfigDraft {
+  return {
+    mode: "flat",
+    flatFee: "",
+    baseFee: "",
+    perMileFee: "",
+    minimumFee: "",
+    maxPickupMiles: "",
+    originAddress: "",
+    boroughPrices: Object.fromEntries(
+      NYC_BOROUGHS.map((borough) => [borough, ""]),
+    ),
+  };
+}
+
+function feeText(value: unknown): string {
+  const number = Number(value);
+  return Number.isFinite(number) && value !== null && value !== ""
+    ? String(number)
+    : "";
+}
+
+function pickupConfigDraftFrom(raw: unknown): PickupConfigDraft {
+  const source = recordValue(raw);
+  const draft = emptyPickupConfigDraft();
+  const mode = source.mode;
+  if (mode === "flat" || mode === "distance" || mode === "borough") {
+    draft.mode = mode;
+  }
+  draft.flatFee = feeText(source.flatFee);
+  draft.baseFee = feeText(source.baseFee);
+  draft.perMileFee = feeText(source.perMileFee);
+  draft.minimumFee = feeText(source.minimumFee);
+  draft.maxPickupMiles = feeText(source.maxPickupMiles);
+  draft.originAddress = stringValue(source.originAddress);
+  const prices = recordValue(source.boroughPrices);
+  for (const borough of NYC_BOROUGHS) {
+    draft.boroughPrices[borough] = feeText(prices[borough]);
+  }
+  return draft;
+}
+
+function pickupServicesFrom(
+  raw: unknown,
+): Record<PickupPlanServiceId, PickupServiceDraft> {
+  const source = recordValue(raw);
+  return Object.fromEntries(
+    PICKUP_PLAN_SERVICES.map((service) => {
+      const entry = recordValue(source[service]);
+      let choice: PickupServiceChoice = "inherit";
+      if (entry.inherit === false) {
+        choice = entry.enabled === true ? "custom" : "off";
+      }
+      return [
+        service,
+        {
+          choice,
+          config:
+            choice === "custom"
+              ? pickupConfigDraftFrom(entry)
+              : emptyPickupConfigDraft(),
+        },
+      ];
+    }),
+  ) as Record<PickupPlanServiceId, PickupServiceDraft>;
+}
+
 export function businessServiceSettingsFromRow(
   business?: FirestoreRow | null,
 ): BusinessServiceSettingsDraft {
   const boroughPrices = recordValue(business?.freightPickupBoroughPrices);
+  const pickupPlan = recordValue(business?.pickupPlan);
+  const pickupShared = recordValue(pickupPlan.shared);
   return {
     enabledServices: normalizedServices(business?.enabledServices),
     carHoldPricingMode:
@@ -92,6 +209,154 @@ export function businessServiceSettingsFromRow(
     parkingPickupAvailable: business?.parkingPickupAvailable === true,
     parkingPickupFee: numberText(business?.parkingPickupFee),
     parkingInstructions: stringValue(business?.parkingInstructions),
+    pickupEnabled: pickupShared.enabled === true,
+    pickupShared: pickupConfigDraftFrom(pickupShared),
+    pickupServices: pickupServicesFrom(pickupPlan.services),
+  };
+}
+
+function validatePickupConfig(
+  config: PickupConfigDraft,
+  options: { isNewYorkBusiness: boolean; label: string },
+): string | null {
+  const {label} = options;
+  if (config.mode === "borough") {
+    if (!options.isNewYorkBusiness) {
+      return `${label}: pickup by borough is only available to New York businesses.`;
+    }
+    const hasPrice = NYC_BOROUGHS.some(
+      (borough) => config.boroughPrices[borough]?.trim() !== "",
+    );
+    if (!hasPrice) {
+      return `${label}: set a pickup fee for at least one borough.`;
+    }
+    for (const borough of NYC_BOROUGHS) {
+      const text = config.boroughPrices[borough]?.trim() ?? "";
+      if (text === "") continue;
+      const fee = Number(text);
+      if (!Number.isFinite(fee) || fee < 0) {
+        return `${label}: enter a valid fee for ${borough}.`;
+      }
+    }
+    return null;
+  }
+
+  const cap = Number(config.maxPickupMiles);
+  if (!config.maxPickupMiles.trim() || !Number.isFinite(cap) || cap <= 0) {
+    return `${label}: the maximum pickup distance (miles) is required.`;
+  }
+  if (config.mode === "flat") {
+    const fee = Number(config.flatFee);
+    if (!config.flatFee.trim() || !Number.isFinite(fee) || fee < 0) {
+      return `${label}: enter the flat pickup fee.`;
+    }
+    return null;
+  }
+  for (const [field, name] of [
+    ["baseFee", "base fee"],
+    ["perMileFee", "per-mile fee"],
+    ["minimumFee", "minimum fee"],
+  ] as const) {
+    const text = config[field].trim();
+    const fee = Number(text);
+    if (!text || !Number.isFinite(fee) || fee < 0) {
+      return `${label}: enter the ${name}.`;
+    }
+  }
+  if (!config.originAddress.trim()) {
+    return `${label}: enter the pickup origin address.`;
+  }
+  return null;
+}
+
+export function validatePickupPlanDraft(
+  draft: BusinessServiceSettingsDraft,
+  options: { isNewYorkBusiness: boolean },
+): string | null {
+  if (draft.pickupEnabled) {
+    const sharedError = validatePickupConfig(draft.pickupShared, {
+      isNewYorkBusiness: options.isNewYorkBusiness,
+      label: "Shared pickup plan",
+    });
+    if (sharedError) return sharedError;
+  }
+  for (const service of PICKUP_PLAN_SERVICES) {
+    const entry = draft.pickupServices[service];
+    if (entry.choice !== "custom") continue;
+    const error = validatePickupConfig(entry.config, {
+      isNewYorkBusiness: options.isNewYorkBusiness,
+      label: `${PICKUP_SERVICE_LABELS[service]} pickup`,
+    });
+    if (error) return error;
+  }
+  return null;
+}
+
+function pickupConfigPayload(config: PickupConfigDraft) {
+  const payload: Record<string, unknown> = {
+    enabled: true,
+    mode: config.mode,
+  };
+  if (config.mode === "borough") {
+    payload.boroughPrices = Object.fromEntries(
+      NYC_BOROUGHS.flatMap((borough) => {
+        const text = config.boroughPrices[borough]?.trim() ?? "";
+        return text === "" ? [] : [[borough, Number(text)]];
+      }),
+    );
+    return payload;
+  }
+  payload.maxPickupMiles = Number(config.maxPickupMiles);
+  if (config.mode === "flat") {
+    payload.flatFee = Number(config.flatFee);
+  } else {
+    payload.baseFee = Number(config.baseFee);
+    payload.perMileFee = Number(config.perMileFee);
+    payload.minimumFee = Number(config.minimumFee);
+    payload.originAddress = config.originAddress.trim();
+  }
+  if (config.mode === "flat" && config.originAddress.trim()) {
+    payload.originAddress = config.originAddress.trim();
+  }
+  return payload;
+}
+
+export function buildPickupPlanPayload(
+  draft: BusinessServiceSettingsDraft,
+  business?: FirestoreRow | null,
+): Record<string, unknown> | undefined {
+  const hasStoredPlan =
+    business?.pickupPlan && typeof business.pickupPlan === "object";
+  const hasExplicitService = PICKUP_PLAN_SERVICES.some(
+    (service) => draft.pickupServices[service].choice !== "inherit",
+  );
+  // A business that has never configured pickup keeps no plan at all -
+  // sending a disabled plan would be a pointless write.
+  if (!hasStoredPlan && !draft.pickupEnabled && !hasExplicitService) {
+    return undefined;
+  }
+  const services: Record<string, unknown> = {};
+  for (const service of PICKUP_PLAN_SERVICES) {
+    const entry = draft.pickupServices[service];
+    if (entry.choice === "inherit") {
+      // An absent key already inherits; only record the explicit choices.
+      const stored = recordValue(recordValue(business?.pickupPlan).services);
+      if (recordValue(stored[service]).inherit === true) {
+        services[service] = {inherit: true};
+      }
+      continue;
+    }
+    if (entry.choice === "off") {
+      services[service] = {enabled: false};
+      continue;
+    }
+    services[service] = pickupConfigPayload(entry.config);
+  }
+  return {
+    shared: draft.pickupEnabled
+      ? pickupConfigPayload(draft.pickupShared)
+      : {enabled: false},
+    services,
   };
 }
 
@@ -118,18 +383,8 @@ export function validateBusinessServiceSettings(
     }
   }
 
-  if (
-    draft.enabledServices.includes("freight") &&
-    draft.freightPickupAvailable &&
-    draft.freightPickupModel === "borough" &&
-    options.isNewYorkBusiness &&
-    !NYC_BOROUGHS.some(
-      (borough) =>
-        numberValue(draft.freightPickupBoroughPrices[borough]) > 0,
-    )
-  ) {
-    return "Set a pickup fee for at least one borough, or turn off freight pickup.";
-  }
+  const pickupError = validatePickupPlanDraft(draft, options);
+  if (pickupError) return pickupError;
 
   if (draft.enabledServices.includes("carParking")) {
     const totalSpaces = numberValue(draft.parkingTotalSpaces);
@@ -190,8 +445,10 @@ export function buildBusinessServiceSettingsPayload(
   const parkingLocationChanged = parkingLocationFields.some(
     ([current, next]) => stringValue(current) !== next.trim(),
   );
+  const pickupPlan = buildPickupPlanPayload(draft, business);
 
   return {
+    ...(pickupPlan === undefined ? {} : {pickupPlan}),
     enabledServices: normalizedServices(draft.enabledServices),
     carHoldPricingMode: draft.carHoldPricingMode,
     carHoldFlatFee: numberValue(draft.carHoldFlatFee),

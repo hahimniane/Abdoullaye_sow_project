@@ -56,6 +56,30 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "Proposez la collecte à l’adresse du client et calculez les frais de manière cohérente.",
   "Pickup on": "Collecte activée",
   "Pickup off": "Collecte désactivée",
+  "Home pickup · all services": "Collecte à domicile · tous les services",
+  "One pickup plan applies to every service you offer. Any service can use its own settings below.":
+    "Un seul plan de collecte s’applique à tous les services que vous proposez. Chaque service peut utiliser ses propres réglages ci-dessous.",
+  "Customers bring items to your business. Turn pickup on to offer collection from their address, priced by your own plan.":
+    "Les clients apportent leurs articles à votre entreprise. Activez la collecte pour proposer un enlèvement à leur adresse, tarifé selon votre plan.",
+  "Per-service pickup: each service uses the shared plan unless you give it custom settings or turn its pickup off.":
+    "Collecte par service : chaque service utilise le plan partagé, sauf si vous lui donnez des réglages personnalisés ou désactivez sa collecte.",
+  "Use shared plan": "Utiliser le plan partagé",
+  "Custom settings": "Réglages personnalisés",
+  "No pickup": "Pas de collecte",
+  "By borough (NYC)": "Par arrondissement (NYC)",
+  "Maximum pickup distance (miles) — required":
+    "Distance maximale de collecte (miles) — obligatoire",
+  "e.g. 25": "p. ex. 25",
+  "One price for any pickup within your maximum distance. Addresses beyond it are refused, never surcharged.":
+    "Un prix unique pour toute collecte dans votre distance maximale. Les adresses au-delà sont refusées, jamais surfacturées.",
+  "Flat pickup fee (USD)": "Frais fixes de collecte (USD)",
+  "Fee = base fee + per-mile rate × driving distance, never below your minimum. Addresses beyond your maximum distance are refused.":
+    "Frais = frais de base + tarif au mile × distance routière, jamais en dessous de votre minimum. Les adresses au-delà de votre distance maximale sont refusées.",
+  "Where your pickups start from": "Point de départ de vos collectes",
+  "Per mile (USD)": "Par mile (USD)",
+  "One flat fee per borough you serve. Leave a borough blank to not serve it — the customer's address decides which fee applies.":
+    "Un tarif fixe par arrondissement desservi. Laissez un arrondissement vide pour ne pas le desservir — l’adresse du client détermine le tarif appliqué.",
+  "Not served": "Non desservi",
   "Set one flat pickup fee for every borough you serve.":
     "Définissez un tarif de collecte fixe pour chaque arrondissement desservi.",
   "Fee = base fee + per-kilometre rate × driving distance. Zero rates mean free pickup.":
@@ -3342,6 +3366,35 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Enter a valid tracking number.": "Entrez un numéro de suivi valide.",
   "Could not start tracking.": "Impossible de démarrer le suivi.",
 };
+
+// Pickup-plan validation errors are "<section label>: <message>" strings, so
+// the exact-match table needs every combination.
+const PICKUP_ERROR_LABELS: Record<string, string> = {
+  "Shared pickup plan": "Plan de collecte partagé",
+  "Barrel shipping pickup": "Collecte expédition de barils",
+  "Freight pickup": "Collecte fret",
+  "Car parking pickup": "Collecte stationnement",
+  "Car transport pickup": "Collecte transport de voitures",
+};
+const PICKUP_ERROR_MESSAGES: Record<string, string> = {
+  "pickup by borough is only available to New York businesses.":
+    "la collecte par arrondissement n’est disponible que pour les entreprises de New York.",
+  "set a pickup fee for at least one borough.":
+    "définissez un tarif de collecte pour au moins un arrondissement.",
+  "the maximum pickup distance (miles) is required.":
+    "la distance maximale de collecte (miles) est obligatoire.",
+  "enter the flat pickup fee.": "saisissez le tarif fixe de collecte.",
+  "enter the base fee.": "saisissez les frais de base.",
+  "enter the per-mile fee.": "saisissez le tarif au mile.",
+  "enter the minimum fee.": "saisissez les frais minimum.",
+  "enter the pickup origin address.":
+    "saisissez l’adresse de départ de la collecte.",
+};
+for (const [label, frLabel] of Object.entries(PICKUP_ERROR_LABELS)) {
+  for (const [message, frMessage] of Object.entries(PICKUP_ERROR_MESSAGES)) {
+    TEXT_TRANSLATIONS[`${label}: ${message}`] = `${frLabel} : ${frMessage}`;
+  }
+}
 
 const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "Add a photo by URL": "Ajouter une photo par URL",

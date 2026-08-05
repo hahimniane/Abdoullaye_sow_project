@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import {
   buildBusinessServiceSettingsPayload,
   businessServiceSettingsFromRow,
+  buildPickupPlanPayload,
   validateBusinessServiceSettings,
 } from "./business-service-settings.ts";
 import {COUNTRY_CATALOG} from "./country-catalog.ts";
@@ -98,6 +99,125 @@ describe("business service settings workspace", () => {
     );
   });
 
+  it("round-trips a stored pickup plan without changing it", () => {
+    const business = {
+      id: "business-pickup",
+      state: "NY",
+      enabledServices: ["barrelShipping", "freight"],
+      pickupPlan: {
+        version: 1,
+        shared: {
+          enabled: true,
+          mode: "borough",
+          boroughPrices: {Bronx: 40, Brooklyn: 108},
+        },
+        services: {
+          freight: {inherit: true},
+          parking: {
+            inherit: false,
+            enabled: true,
+            mode: "flat",
+            flatFee: 25,
+            maxPickupMiles: 15,
+          },
+          carTransport: {inherit: false, enabled: false},
+        },
+      },
+    };
+    const draft = businessServiceSettingsFromRow(business);
+    assert.equal(draft.pickupEnabled, true);
+    assert.equal(draft.pickupShared.mode, "borough");
+    assert.equal(draft.pickupShared.boroughPrices.Bronx, "40");
+    assert.equal(draft.pickupServices.freight.choice, "inherit");
+    assert.equal(draft.pickupServices.parking.choice, "custom");
+    assert.equal(draft.pickupServices.carTransport.choice, "off");
+
+    const plan = buildPickupPlanPayload(draft, business);
+    assert.deepEqual(plan, {
+      shared: {
+        enabled: true,
+        mode: "borough",
+        boroughPrices: {Bronx: 40, Brooklyn: 108},
+      },
+      services: {
+        freight: {inherit: true},
+        parking: {
+          enabled: true,
+          mode: "flat",
+          flatFee: 25,
+          maxPickupMiles: 15,
+        },
+        carTransport: {enabled: false},
+      },
+    });
+    assert.equal(
+      validateBusinessServiceSettings(draft, {isNewYorkBusiness: true}),
+      null,
+    );
+  });
+
+  it("omits the pickup plan for a business that never configured one", () => {
+    const draft = businessServiceSettingsFromRow({
+      id: "business-no-plan",
+      enabledServices: ["barrelShipping"],
+    });
+    assert.equal(buildPickupPlanPayload(draft, {id: "b"}), undefined);
+    const payload = buildBusinessServiceSettingsPayload(draft, {id: "b"});
+    assert.equal("pickupPlan" in payload, false);
+  });
+
+  it("requires the travel cap and complete fees before saving a plan", () => {
+    const base = businessServiceSettingsFromRow({
+      id: "business-3",
+      enabledServices: ["barrelShipping"],
+    });
+    const missingCap = {
+      ...base,
+      pickupEnabled: true,
+      pickupShared: {...base.pickupShared, mode: "flat" as const, flatFee: "30"},
+    };
+    assert.equal(
+      validateBusinessServiceSettings(missingCap, {isNewYorkBusiness: false}),
+      "Shared pickup plan: the maximum pickup distance (miles) is required.",
+    );
+
+    const boroughOutsideNy = {
+      ...base,
+      pickupEnabled: true,
+      pickupShared: {...base.pickupShared, mode: "borough" as const},
+    };
+    assert.equal(
+      validateBusinessServiceSettings(boroughOutsideNy, {
+        isNewYorkBusiness: false,
+      }),
+      "Shared pickup plan: pickup by borough is only available to New York businesses.",
+    );
+
+    const customServiceIncomplete = {
+      ...base,
+      pickupServices: {
+        ...base.pickupServices,
+        barrels: {
+          choice: "custom" as const,
+          config: {
+            ...base.pickupServices.barrels.config,
+            mode: "distance" as const,
+            maxPickupMiles: "20",
+            baseFee: "10",
+            perMileFee: "2",
+            minimumFee: "15",
+          },
+        },
+      },
+    };
+    assert.equal(
+      validateBusinessServiceSettings(customServiceIncomplete, {
+        isNewYorkBusiness: false,
+      }),
+      "Barrel shipping pickup: enter the pickup origin address.",
+    );
+  });
+
   it("keeps profile details separate and renders settings with coverage", () => {
     const profile = fs.readFileSync(
       path.join(root, "components/business/profile-support-people.tsx"),
@@ -135,7 +255,13 @@ describe("business service settings workspace", () => {
       "Services & coverage",
       "Select a service to reveal only the settings it needs.",
       "Service rules",
-      "Freight · customer pickup",
+      "Home pickup · all services",
+      "One pickup plan applies to every service you offer. Any service can use its own settings below.",
+      "Use shared plan",
+      "Custom settings",
+      "No pickup",
+      "Maximum pickup distance (miles) — required",
+      "Shared pickup plan: the maximum pickup distance (miles) is required.",
       "Car parking · facility",
       "Search or choose a country",
       "Save service settings",

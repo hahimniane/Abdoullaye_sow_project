@@ -48,8 +48,16 @@ import {
   businessServiceSettingsFromRow,
   isNewYorkState,
   NYC_BOROUGHS,
+  PICKUP_PLAN_SERVICES,
+  PICKUP_SERVICE_BY_BUSINESS_SERVICE,
+  PICKUP_SERVICE_LABELS,
   validateBusinessServiceSettings,
+  type BusinessServiceId,
   type BusinessServiceSettingsDraft,
+  type PickupConfigDraft,
+  type PickupMode,
+  type PickupPlanServiceId,
+  type PickupServiceChoice,
 } from "@/lib/business-service-settings";
 import { COUNTRY_CATALOG } from "@/lib/country-catalog";
 import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
@@ -475,14 +483,79 @@ export function BusinessServicesPanel({
     });
   }
 
-  function updateBoroughPrice(borough: string, value: string) {
+  function updatePickupShared(patch: Partial<PickupConfigDraft>) {
     setDraft((current) => ({
       ...current,
-      freightPickupBoroughPrices: {
-        ...current.freightPickupBoroughPrices,
-        [borough]: value,
+      pickupShared: {...current.pickupShared, ...patch},
+    }));
+  }
+
+  function updatePickupSharedBorough(borough: string, value: string) {
+    setDraft((current) => ({
+      ...current,
+      pickupShared: {
+        ...current.pickupShared,
+        boroughPrices: {
+          ...current.pickupShared.boroughPrices,
+          [borough]: value,
+        },
       },
     }));
+  }
+
+  function updatePickupServiceChoice(
+    service: PickupPlanServiceId,
+    choice: PickupServiceChoice,
+  ) {
+    setDraft((current) => ({
+      ...current,
+      pickupServices: {
+        ...current.pickupServices,
+        [service]: {...current.pickupServices[service], choice},
+      },
+    }));
+  }
+
+  function updatePickupServiceConfig(
+    service: PickupPlanServiceId,
+    patch: Partial<PickupConfigDraft>,
+  ) {
+    setDraft((current) => ({
+      ...current,
+      pickupServices: {
+        ...current.pickupServices,
+        [service]: {
+          ...current.pickupServices[service],
+          config: {...current.pickupServices[service].config, ...patch},
+        },
+      },
+    }));
+  }
+
+  function updatePickupServiceBorough(
+    service: PickupPlanServiceId,
+    borough: string,
+    value: string,
+  ) {
+    setDraft((current) => {
+      const entry = current.pickupServices[service];
+      return {
+        ...current,
+        pickupServices: {
+          ...current.pickupServices,
+          [service]: {
+            ...entry,
+            config: {
+              ...entry.config,
+              boroughPrices: {
+                ...entry.config.boroughPrices,
+                [borough]: value,
+              },
+            },
+          },
+        },
+      };
+    });
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -516,8 +589,16 @@ export function BusinessServicesPanel({
   const activeServiceCount = draft.enabledServices.length;
   const activeServiceSummary = `${activeServiceCount} of 6 services active`;
   const offersCarSales = draft.enabledServices.includes("carSales");
-  const offersFreight = draft.enabledServices.includes("freight");
   const offersParking = draft.enabledServices.includes("carParking");
+  const businessIsNewYork = isNewYorkState(business?.state);
+  const enabledPickupServices = PICKUP_PLAN_SERVICES.filter((service) =>
+    draft.enabledServices.some(
+      (id) =>
+        PICKUP_SERVICE_BY_BUSINESS_SERVICE[id as BusinessServiceId] ===
+        service,
+    ),
+  );
+  const offersPickup = enabledPickupServices.length > 0;
   const parkingIsUnitedStates =
     draft.parkingCountry.trim() === "United States";
   const language = currentWebLanguage() === "fr" ? "fr" : "en";
@@ -627,7 +708,7 @@ export function BusinessServicesPanel({
             })}
           </div>
 
-          {(offersCarSales || offersFreight || offersParking) && (
+          {(offersCarSales || offersPickup || offersParking) && (
             <div className="service-settings-summary service-rules-summary">
               <div>
                 <strong>Service rules</strong>
@@ -712,168 +793,91 @@ export function BusinessServicesPanel({
               </article>
             )}
 
-            {offersFreight && (
-              <article className="service-config-card">
+            {offersPickup && (
+              <article className="service-config-card service-config-card-wide">
                 <header className="service-config-card-head">
-                  <span className="service-config-icon"><Plane size={21} /></span>
+                  <span className="service-config-icon"><Truck size={21} /></span>
                   <div>
-                    <strong>Freight · customer pickup</strong>
+                    <strong>Home pickup · all services</strong>
                     <span>
-                      Offer collection from a customer address and calculate
-                      the fee consistently.
+                      One pickup plan applies to every service you offer.
+                      Any service can use its own settings below.
                     </span>
                   </div>
                   <button
-                    aria-pressed={draft.freightPickupAvailable}
-                    className={`service-rule-toggle ${draft.freightPickupAvailable ? "active" : ""}`}
-                    onClick={() =>
-                      update(
-                        "freightPickupAvailable",
-                        !draft.freightPickupAvailable,
-                      )
-                    }
+                    aria-pressed={draft.pickupEnabled}
+                    className={`service-rule-toggle ${draft.pickupEnabled ? "active" : ""}`}
+                    onClick={() => update("pickupEnabled", !draft.pickupEnabled)}
                     type="button"
                   >
-                    {draft.freightPickupAvailable ? "Pickup on" : "Pickup off"}
+                    {draft.pickupEnabled ? "Pickup on" : "Pickup off"}
                   </button>
                 </header>
-                {draft.freightPickupAvailable ? (
+                {draft.pickupEnabled ? (
                   <div className="lst-form-grid service-config-fields">
-                    {isNewYorkState(business?.state) && (
-                      <label className="lst-field wide">
-                        <span>Pickup pricing model</span>
-                        <select
-                          value={draft.freightPickupModel}
-                          onChange={(event) =>
-                            update(
-                              "freightPickupModel",
-                              event.target.value === "borough"
-                                ? "borough"
-                                : "distance",
-                            )
-                          }
-                        >
-                          <option value="distance">By distance</option>
-                          <option value="borough">By borough</option>
-                        </select>
-                      </label>
-                    )}
-                    {draft.freightPickupModel === "borough" &&
-                    isNewYorkState(business?.state) ? (
-                      <>
-                        <p className="service-config-note wide">
-                          Set one flat pickup fee for every borough you serve.
-                        </p>
-                        {NYC_BOROUGHS.map((borough) => (
-                          <label className="lst-field" key={borough}>
-                            <span>{borough} (USD)</span>
-                            <input
-                              inputMode="decimal"
-                              min="0"
-                              onChange={(event) =>
-                                updateBoroughPrice(
-                                  borough,
-                                  event.target.value,
-                                )
-                              }
-                              placeholder="0"
-                              type="number"
-                              value={
-                                draft.freightPickupBoroughPrices[borough] ?? ""
-                              }
-                            />
-                          </label>
-                        ))}
-                      </>
-                    ) : (
-                      <>
-                        <p className="service-config-note wide">
-                          Fee = base fee + per-kilometre rate × driving
-                          distance. Zero rates mean free pickup.
-                        </p>
-                        <label className="lst-field wide">
-                          <span>Pickup origin address</span>
-                          <input
-                            onChange={(event) =>
-                              update(
-                                "freightPickupOriginAddress",
-                                event.target.value,
-                              )
-                            }
-                            placeholder="Defaults to your business address"
-                            value={draft.freightPickupOriginAddress}
-                          />
-                        </label>
-                        <label className="lst-field">
-                          <span>Base fee (USD)</span>
-                          <input
-                            inputMode="decimal"
-                            min="0"
-                            onChange={(event) =>
-                              update(
-                                "freightPickupBaseFee",
-                                event.target.value,
-                              )
-                            }
-                            type="number"
-                            value={draft.freightPickupBaseFee}
-                          />
-                        </label>
-                        <label className="lst-field">
-                          <span>Per km (USD)</span>
-                          <input
-                            inputMode="decimal"
-                            min="0"
-                            onChange={(event) =>
-                              update(
-                                "freightPickupPerKm",
-                                event.target.value,
-                              )
-                            }
-                            type="number"
-                            value={draft.freightPickupPerKm}
-                          />
-                        </label>
-                        <label className="lst-field">
-                          <span>Minimum fee (USD)</span>
-                          <input
-                            inputMode="decimal"
-                            min="0"
-                            onChange={(event) =>
-                              update(
-                                "freightPickupMinFee",
-                                event.target.value,
-                              )
-                            }
-                            type="number"
-                            value={draft.freightPickupMinFee}
-                          />
-                        </label>
-                        <label className="lst-field">
-                          <span>Maximum distance (km)</span>
-                          <input
-                            inputMode="decimal"
-                            min="0"
-                            onChange={(event) =>
-                              update(
-                                "freightPickupMaxKm",
-                                event.target.value,
-                              )
-                            }
-                            placeholder="0 = no limit"
-                            type="number"
-                            value={draft.freightPickupMaxKm}
-                          />
-                        </label>
-                      </>
-                    )}
+                    <PickupConfigEditor
+                      config={draft.pickupShared}
+                      isNewYork={businessIsNewYork}
+                      onBorough={updatePickupSharedBorough}
+                      onChange={updatePickupShared}
+                    />
                   </div>
                 ) : (
                   <p className="service-config-empty">
-                    Customers bring freight to your business. Turn pickup on to
-                    configure collection pricing.
+                    Customers bring items to your business. Turn pickup on to
+                    offer collection from their address, priced by your own
+                    plan.
                   </p>
                 )}
+                <div className="lst-form-grid service-config-fields">
+                  <p className="service-config-note wide">
+                    Per-service pickup: each service uses the shared plan
+                    unless you give it custom settings or turn its pickup off.
+                  </p>
+                  {enabledPickupServices.map((service) => {
+                    const entry = draft.pickupServices[service];
+                    return (
+                      <div className="lst-form-grid wide" key={service}>
+                        <label className="lst-field">
+                          <span>{PICKUP_SERVICE_LABELS[service]}</span>
+                          <select
+                            onChange={(event) =>
+                              updatePickupServiceChoice(
+                                service,
+                                event.target.value === "custom"
+                                  ? "custom"
+                                  : event.target.value === "off"
+                                    ? "off"
+                                    : "inherit",
+                              )
+                            }
+                            value={entry.choice}
+                          >
+                            <option value="inherit">Use shared plan</option>
+                            <option value="custom">Custom settings</option>
+                            <option value="off">No pickup</option>
+                          </select>
+                        </label>
+                        {entry.choice === "custom" && (
+                          <PickupConfigEditor
+                            config={entry.config}
+                            isNewYork={businessIsNewYork}
+                            onBorough={(borough, value) =>
+                              updatePickupServiceBorough(
+                                service,
+                                borough,
+                                value,
+                              )
+                            }
+                            onChange={(patch) =>
+                              updatePickupServiceConfig(service, patch)
+                            }
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </article>
             )}
 
@@ -890,21 +894,6 @@ export function BusinessServicesPanel({
                       together.
                     </span>
                   </div>
-                  <button
-                    aria-pressed={draft.parkingPickupAvailable}
-                    className={`service-rule-toggle ${draft.parkingPickupAvailable ? "active" : ""}`}
-                    onClick={() =>
-                      update(
-                        "parkingPickupAvailable",
-                        !draft.parkingPickupAvailable,
-                      )
-                    }
-                    type="button"
-                  >
-                    {draft.parkingPickupAvailable
-                      ? "Vehicle pickup on"
-                      : "Vehicle pickup off"}
-                  </button>
                 </header>
                 <div className="lst-form-grid service-config-fields">
                   <label className="lst-field wide">
@@ -1056,20 +1045,6 @@ export function BusinessServicesPanel({
                       value={draft.parkingMonthlyRate}
                     />
                   </label>
-                  {draft.parkingPickupAvailable && (
-                    <label className="lst-field">
-                      <span>Vehicle pickup fee (USD)</span>
-                      <input
-                        inputMode="decimal"
-                        min="0"
-                        onChange={(event) =>
-                          update("parkingPickupFee", event.target.value)
-                        }
-                        type="number"
-                        value={draft.parkingPickupFee}
-                      />
-                    </label>
-                  )}
                   <label className="lst-field wide">
                     <span>Parking instructions</span>
                     <textarea
@@ -1088,6 +1063,138 @@ export function BusinessServicesPanel({
         </fieldset>
       </form>
     </section>
+  );
+}
+
+function PickupConfigEditor({
+  config,
+  isNewYork,
+  onBorough,
+  onChange,
+}: {
+  config: PickupConfigDraft;
+  isNewYork: boolean;
+  onBorough: (borough: string, value: string) => void;
+  onChange: (patch: Partial<PickupConfigDraft>) => void;
+}) {
+  return (
+    <>
+      <label className="lst-field">
+        <span>Pricing mode</span>
+        <select
+          onChange={(event) =>
+            onChange({mode: event.target.value as PickupMode})
+          }
+          value={config.mode}
+        >
+          <option value="flat">Flat fee</option>
+          <option value="distance">By distance</option>
+          {isNewYork && <option value="borough">By borough (NYC)</option>}
+        </select>
+      </label>
+      {config.mode !== "borough" && (
+        <label className="lst-field">
+          <span>Maximum pickup distance (miles) — required</span>
+          <input
+            inputMode="decimal"
+            min="0"
+            onChange={(event) =>
+              onChange({maxPickupMiles: event.target.value})
+            }
+            placeholder="e.g. 25"
+            type="number"
+            value={config.maxPickupMiles}
+          />
+        </label>
+      )}
+      {config.mode === "flat" && (
+        <>
+          <p className="service-config-note wide">
+            One price for any pickup within your maximum distance. Addresses
+            beyond it are refused, never surcharged.
+          </p>
+          <label className="lst-field">
+            <span>Flat pickup fee (USD)</span>
+            <input
+              inputMode="decimal"
+              min="0"
+              onChange={(event) => onChange({flatFee: event.target.value})}
+              type="number"
+              value={config.flatFee}
+            />
+          </label>
+        </>
+      )}
+      {config.mode === "distance" && (
+        <>
+          <p className="service-config-note wide">
+            Fee = base fee + per-mile rate × driving distance, never below
+            your minimum. Addresses beyond your maximum distance are refused.
+          </p>
+          <label className="lst-field wide">
+            <span>Pickup origin address</span>
+            <input
+              onChange={(event) =>
+                onChange({originAddress: event.target.value})
+              }
+              placeholder="Where your pickups start from"
+              value={config.originAddress}
+            />
+          </label>
+          <label className="lst-field">
+            <span>Base fee (USD)</span>
+            <input
+              inputMode="decimal"
+              min="0"
+              onChange={(event) => onChange({baseFee: event.target.value})}
+              type="number"
+              value={config.baseFee}
+            />
+          </label>
+          <label className="lst-field">
+            <span>Per mile (USD)</span>
+            <input
+              inputMode="decimal"
+              min="0"
+              onChange={(event) => onChange({perMileFee: event.target.value})}
+              type="number"
+              value={config.perMileFee}
+            />
+          </label>
+          <label className="lst-field">
+            <span>Minimum fee (USD)</span>
+            <input
+              inputMode="decimal"
+              min="0"
+              onChange={(event) => onChange({minimumFee: event.target.value})}
+              type="number"
+              value={config.minimumFee}
+            />
+          </label>
+        </>
+      )}
+      {config.mode === "borough" && (
+        <>
+          <p className="service-config-note wide">
+            One flat fee per borough you serve. Leave a borough blank to not
+            serve it — the customer&apos;s address decides which fee applies.
+          </p>
+          {NYC_BOROUGHS.map((borough) => (
+            <label className="lst-field" key={borough}>
+              <span>{borough} (USD)</span>
+              <input
+                inputMode="decimal"
+                min="0"
+                onChange={(event) => onBorough(borough, event.target.value)}
+                placeholder="Not served"
+                type="number"
+                value={config.boroughPrices[borough] ?? ""}
+              />
+            </label>
+          ))}
+        </>
+      )}
+    </>
   );
 }
 
