@@ -63,19 +63,17 @@ class TransportService {
         .httpsCallable('updateTransportRequestDetails')
         .call<Map<String, dynamic>>({
           'requestId': requestId,
-          if (destinationCountryId != null)
-            'destinationCountryId': destinationCountryId,
-          if (carMake != null) 'carMake': carMake,
-          if (carModel != null) 'carModel': carModel,
-          if (carYear != null) 'carYear': carYear,
-          if (customerPhone != null) 'customerPhone': customerPhone,
-          if (pickupArea != null) 'pickupArea': pickupArea,
-          if (pickupAddress != null) 'pickupAddress': pickupAddress,
-          if (notes != null) 'notes': notes,
-          if (vehicleOperable != null) 'vehicleOperable': vehicleOperable,
-          if (requestedTransportMethod != null)
-            'requestedTransportMethod': requestedTransportMethod,
-          if (flexibleDates != null) 'flexibleDates': flexibleDates,
+          'destinationCountryId': ?destinationCountryId,
+          'carMake': ?carMake,
+          'carModel': ?carModel,
+          'carYear': ?carYear,
+          'customerPhone': ?customerPhone,
+          'pickupArea': ?pickupArea,
+          'pickupAddress': ?pickupAddress,
+          'notes': ?notes,
+          'vehicleOperable': ?vehicleOperable,
+          'requestedTransportMethod': ?requestedTransportMethod,
+          'flexibleDates': ?flexibleDates,
           if (preferredDate != null)
             'preferredDate': preferredDate.toIso8601String(),
         });
