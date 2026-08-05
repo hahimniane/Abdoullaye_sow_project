@@ -21,6 +21,8 @@ import {
   where,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
+import { getMakes, getModels, getYears } from "@/lib/car-catalog";
+import { DESTINATION_COUNTRIES } from "@/lib/destination-countries";
 import { Car, CircleAlert, CircleDollarSign, ClipboardList, Headphones, Home, LogOut, Menu, PackageSearch, Pencil, Settings, ShieldCheck, Ship, Star, Truck, UserRound, WalletCards } from "lucide-react";
 
 import { auth, db, functions } from "@/lib/firebase";
@@ -1208,14 +1210,32 @@ function TransportEditDrawer({
     carMake: text(row.carMake, ""),
     carModel: text(row.carModel, ""),
     carYear: text(row.carYear, ""),
+    destinationCountryId: text(row.destinationCountryId, ""),
     requestedTransportMethod: text(row.requestedTransportMethod, "open"),
     vehicleOperable: row.vehicleOperable !== false,
   }));
+  // Pickup fields only make sense once the customer says they want pickup,
+  // so they stay hidden until then rather than sitting there unexplained.
+  const [wantsPickup, setWantsPickup] = useState(
+    () => text(row.pickupAddress, "").trim() !== "",
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState(false);
 
   const quoteCount = Number(row.quoteCount ?? 0);
+
+  const withCurrent = (options: string[], current: string) =>
+    current && !options.includes(current) ? [current, ...options] : options;
+  const carMakeOptions = withCurrent(getMakes(), form.carMake);
+  const carModelOptions = withCurrent(
+    form.carMake ? getModels(form.carMake) : [],
+    form.carModel,
+  );
+  const carYearOptions = withCurrent(
+    form.carMake && form.carModel ? getYears(form.carMake, form.carModel) : [],
+    form.carYear,
+  );
 
   function changedFields() {
     const patch: Record<string, unknown> = {};
@@ -1225,7 +1245,16 @@ function TransportEditDrawer({
       }
     };
     put("customerPhone", form.customerPhone.trim(), row.customerPhone);
-    put("pickupAddress", form.pickupAddress.trim(), row.pickupAddress);
+    put(
+      "pickupAddress",
+      wantsPickup ? form.pickupAddress.trim() : "",
+      row.pickupAddress,
+    );
+    put(
+      "destinationCountryId",
+      form.destinationCountryId,
+      row.destinationCountryId,
+    );
     put("pickupArea", form.pickupArea.trim(), row.pickupArea);
     put("notes", form.notes.trim(), row.notes);
     put("carMake", form.carMake.trim(), row.carMake);
@@ -1295,20 +1324,48 @@ function TransportEditDrawer({
           />
         </label>
         <label>
-          Pickup address
-          <input
-            onChange={(e) =>
-              setForm({ ...form, pickupAddress: e.target.value })
-            }
-            value={form.pickupAddress}
-          />
+          Do you need pickup?
+          <select
+            onChange={(e) => setWantsPickup(e.target.value === "yes")}
+            value={wantsPickup ? "yes" : "no"}
+          >
+            <option value="no">No, I will drop the vehicle off</option>
+            <option value="yes">Yes, collect it from an address</option>
+          </select>
         </label>
+        {wantsPickup && (
+          <label>
+            Pickup address
+            <input
+              onChange={(e) =>
+                setForm({ ...form, pickupAddress: e.target.value })
+              }
+              value={form.pickupAddress}
+            />
+          </label>
+        )}
         <label>
           Pickup area
           <input
             onChange={(e) => setForm({ ...form, pickupArea: e.target.value })}
             value={form.pickupArea}
           />
+        </label>
+        <label>
+          Destination
+          <select
+            onChange={(e) =>
+              setForm({ ...form, destinationCountryId: e.target.value })
+            }
+            value={form.destinationCountryId}
+          >
+            {!form.destinationCountryId && <option value="">Select a country</option>}
+            {DESTINATION_COUNTRIES.map((country) => (
+              <option key={country.id} value={country.id}>
+                {country.name}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="wide-field">
           Notes
@@ -1320,24 +1377,58 @@ function TransportEditDrawer({
         </label>
         <label>
           Make
-          <input
-            onChange={(e) => setForm({ ...form, carMake: e.target.value })}
+          <select
+            onChange={(e) =>
+              // Model and year belong to the previous make, so clear them
+              // rather than leave an impossible combination behind.
+              setForm({
+                ...form,
+                carMake: e.target.value,
+                carModel: "",
+                carYear: "",
+              })
+            }
             value={form.carMake}
-          />
+          >
+            {!form.carMake && <option value="">Select a make</option>}
+            {carMakeOptions.map((make) => (
+              <option key={make} value={make}>
+                {make}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           Model
-          <input
-            onChange={(e) => setForm({ ...form, carModel: e.target.value })}
+          <select
+            disabled={!form.carMake}
+            onChange={(e) =>
+              setForm({ ...form, carModel: e.target.value, carYear: "" })
+            }
             value={form.carModel}
-          />
+          >
+            {!form.carModel && <option value="">Select a model</option>}
+            {carModelOptions.map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           Year
-          <input
+          <select
+            disabled={!form.carModel}
             onChange={(e) => setForm({ ...form, carYear: e.target.value })}
             value={form.carYear}
-          />
+          >
+            {!form.carYear && <option value="">Select a year</option>}
+            {carYearOptions.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           Transport method

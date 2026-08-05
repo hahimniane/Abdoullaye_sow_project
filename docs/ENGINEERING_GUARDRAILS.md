@@ -241,6 +241,37 @@ If the thing you need is not in this table and is reference data or a reusable
 component, add it as a canonical source **and register it here** so the next
 agent finds it.
 
+### Form input rules (apply on BOTH clients)
+
+These apply to every customer- and business-facing form, in the mobile app and
+in the consoles. A form that follows them on one client and not the other is a
+bug, not a difference in taste.
+
+1. **If a canonical source exists, the input is a picker — never free text.**
+   Make/model/year, countries, states, and cities all have catalogs in the
+   registry above. Free text re-introduces "toyta", "Toyota " and "TOYOTA" as
+   three different makes and quietly breaks search, filters, and matching.
+   Cascading pickers must clear their dependents: changing the make clears the
+   model and year, or the form keeps an impossible combination.
+
+2. **A stored value that is not in the catalog must still be shown.** Records
+   predate catalogs. Fold the current value into the options rather than
+   rendering an empty picker, which silently looks like data loss and, on a
+   Flutter `DropdownButton`, throws when the value is not among its items.
+
+3. **Ask before you reveal.** Optional flows — pickup being the standard case —
+   start with the question ("Do you need pickup?"), and the dependent fields
+   appear only after the answer. Showing a pickup address to someone dropping
+   off themselves invites them to fill in a field that changes their price.
+   When the answer flips back to no, clear the dependent values; do not submit
+   an address for a request with no pickup.
+
+4. **Every field the backend accepts should be reachable in the UI.** If a
+   callable supports editing a field, the form exposes it. A capability that
+   ships server-side and never appears on screen reads to the user as a missing
+   feature — this happened with the transport destination, which the server
+   could re-match from the day it shipped while neither client offered it.
+
 ## 5. Localization — translate every user-facing string
 
 This product ships in **English and French**. A string that is only in English
