@@ -46,7 +46,14 @@
     },
   };
 
+  // The address lives in data-mailto, NOT in action. A form whose action is
+  // "mailto:" is treated by Chrome as an insecure target, which disables
+  // autofill for every field on it ("This form is not secure"). Reading the
+  // address from a data attribute keeps the handoff and gets autofill back.
+  // The action fallback stays for any form not yet migrated.
   function addressFrom(form) {
+    var direct = (form.getAttribute("data-mailto") || "").trim();
+    if (direct) return direct;
     var action = form.getAttribute("action") || "";
     return action.indexOf("mailto:") === 0 ?
       action.slice(7).split("?")[0] : "";
@@ -134,12 +141,13 @@
     });
   }
 
+  var SELECTOR = "form[data-mailto], form[action^='mailto:']";
   function boot() {
-    document.querySelectorAll("form[action^='mailto:']").forEach(wireForm);
-    // content.js rewrites the action from the CMS after load; re-scan so a
-    // form that only becomes a mailto form later is still wired.
+    document.querySelectorAll(SELECTOR).forEach(wireForm);
+    // content.js fills the address from the CMS after load; re-scan so a form
+    // that only gains its address later is still wired.
     window.setTimeout(function () {
-      document.querySelectorAll("form[action^='mailto:']").forEach(wireForm);
+      document.querySelectorAll(SELECTOR).forEach(wireForm);
     }, 1200);
   }
 

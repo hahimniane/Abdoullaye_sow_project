@@ -7,6 +7,7 @@ const {
 } = require("firebase-functions/v2/firestore");
 const {defineSecret} = require("firebase-functions/params");
 const crypto = require("crypto");
+const {buildTrackingCode} = require("./tracking_code");
 const admin = require("firebase-admin");
 const {
   FieldValue: FirestoreFieldValue,
@@ -8656,9 +8657,10 @@ exports.updateBusinessProfile = onCall(
 
 async function generateTrackingCode(prefix, collectionPath) {
   const db = admin.firestore();
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const code = `${prefix}-${Date.now().toString(36).toUpperCase()}-${random}`;
+  // Short, human-readable codes (BS-K7M4P2). Existing long codes are left
+  // untouched - they are printed on receipts - and still resolve on lookup.
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const code = buildTrackingCode(prefix, (max) => crypto.randomInt(max));
     const existing = await db
         .collection(collectionPath)
         .where("trackingCode", "==", code)
