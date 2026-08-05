@@ -695,13 +695,17 @@ class _TransportQuoteSectionState extends State<_TransportQuoteSection> {
   /// "accepts" here - they quote - so quote selection is the real cutoff.
   bool _canCustomerEdit(AuthProvider auth) {
     final request = widget.request;
-    // Mirrors assertCollectingTransportRequest on the server: showing the
-    // action on a request the callable would refuse is worse than hiding it.
+    // Mirrors assertCollectingTransportRequest on the server, with one
+    // deliberate difference: the server checks the raw `status` field, but
+    // this model maps `status` to `fulfillmentStatus ?? status`, so it never
+    // reads back as 'quote_requested' and comparing it hid the action
+    // entirely. quoteStatus is stored raw, and for v2 records it only leaves
+    // 'collecting' when status leaves 'quote_requested' - so the pair below
+    // expresses the same window without depending on the mapped field.
     return request.customerUid != null &&
         request.customerUid == auth.user?.uid &&
         request.flowVersion == 2 &&
-        request.quoteStatus == 'collecting' &&
-        request.status == 'quote_requested';
+        request.quoteStatus == 'collecting';
   }
 
   /// Fields a business priced its quote against. Changing any of these makes

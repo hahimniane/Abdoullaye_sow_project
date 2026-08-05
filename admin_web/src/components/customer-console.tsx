@@ -644,7 +644,7 @@ function pendingOrderCancellation(order: TaggedRow) {
   if (order.collectionName === "transportRequests") {
     return transportEditWindowOpen(order)
       ? {
-          callable: "cancelTransportRequest",
+          callable: "cancelTransportQuoteRequest",
           payload: { requestId: order.row.id },
         }
       : null;
