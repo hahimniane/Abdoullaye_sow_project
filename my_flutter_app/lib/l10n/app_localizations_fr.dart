@@ -5904,4 +5904,57 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get invitationVerificationEmailFailed =>
       'Impossible d’envoyer l’e-mail de vérification. Veuillez réessayer.';
+
+  @override
+  String get editTransportRequest => 'Modifier la demande';
+
+  @override
+  String get editTransportRequestTitle => 'Modifier votre demande';
+
+  @override
+  String get editTransportRequestSubtitle =>
+      'Vous pouvez modifier votre demande tant que vous n’avez pas choisi de devis.';
+
+  @override
+  String get transportEditContactSection => 'Contact et enlèvement';
+
+  @override
+  String get transportEditVehicleSection => 'Véhicule et destination';
+
+  @override
+  String get transportEditQuoteWarningTitle => 'Vos devis seront réinitialisés';
+
+  @override
+  String get transportEditQuoteWarningMessage =>
+      'Les entreprises ont chiffré leurs devis selon vos informations actuelles. Modifier le véhicule, la zone d’enlèvement, le mode de transport ou la destination efface les devis reçus, et les entreprises devront chiffrer à nouveau.';
+
+  @override
+  String get transportEditKeepEditing => 'Continuer la modification';
+
+  @override
+  String get transportEditSaveAnyway => 'Enregistrer et réinitialiser';
+
+  @override
+  String get transportEditSaved => 'Demande mise à jour';
+
+  @override
+  String get transportEditSavedRequote =>
+      'Demande mise à jour. Les entreprises enverront de nouveaux devis.';
+
+  @override
+  String get transportEditNoChanges => 'Aucune modification';
+
+  @override
+  String get couldNotUpdateTransportRequest =>
+      'Impossible de mettre à jour cette demande. Veuillez réessayer.';
+
+  @override
+  String get transportEditDestinationMoved =>
+      'Votre demande est désormais envoyée aux entreprises qui desservent la nouvelle destination.';
+
+  @override
+  String get notes => 'Remarques';
+
+  @override
+  String get vehicleOperable => 'Le véhicule roule';
 }

@@ -394,7 +394,7 @@
   "saleRecorded": "Sale information saved.",
   "requiredField": "This field is required",
   "soldCars": "Sold Cars",
-  "markAsSold": "Mark as Sold",
+  "markAsSold": "Mark as sold",
   "sold": "Sold",
   "carMileage": "Mileage",
   "rebuiltTitle": "Rebuilt title",
@@ -407,7 +407,7 @@
   "carFeaturesHint": "Features (comma separated)",
   "carImagesHint": "Image URLs (comma separated)",
   "contactName": "Contact Name",
-  "contactPhone": "Contact Phone",
+  "contactPhone": "Contact phone",
   "contactEmail": "Contact Email",
   "saveCar": "Save Car",
   "updateCar": "Update Car",
@@ -498,7 +498,7 @@
   "purchaseComplete": "Payment received. This car is now purchased.",
   "checkoutUnavailable": "We could not start checkout right now. Please try again in a moment.",
   "carAlreadyReserved": "This car already has an active reservation.",
-  "carNoLongerAvailable": "This car is no longer available.",
+  "carNoLongerAvailable": "This car is no longer available",
   "destinationCountry": "Destination Country",
   "destinationCountriesUnavailable": "Destination options are not available right now. Please try again in a moment.",
   "sendBarrels": "Send Barrels",
@@ -1002,8 +1002,8 @@
   "vehicleSuccessfullyParked": "Vehicle has been successfully parked",
   "termsAndConditions": "Terms & Conditions",
   "parkingReceiptTerms": "• This receipt serves as proof of parking\n• Vehicle will be stored securely\n• Contact us for any inquiries\n• Valid until vehicle is retrieved",
-  "peopleAndAccess": "People and access",
-  "peopleAndAccessSubtitle": "Manage platform managers, business teams, and customer accounts.",
+  "peopleAndAccess": "People & access",
+  "peopleAndAccessSubtitle": "Manage marketplace identities, invitations, and account security.",
   "platformManagers": "Platform managers",
   "platformManagersCount": "{count} people with full platform access",
   "@platformManagersCount": {
@@ -1435,7 +1435,6 @@
   "favoriteRemoved": "Favorite removed",
   "addToFavorites": "Add to favorites",
   "removeFromFavorites": "Remove from favorites",
-  "carNoLongerAvailable": "This car is no longer available",
   "enterValidPaidHoldPricing": "Enter valid paid hold pricing.",
   "useBusinessPaidHoldPricing": "Use business paid hold pricing",
   "useBusinessPaidHoldPricingSubtitle": "Turn off to override hold fee for this car.",
@@ -1450,7 +1449,11 @@
     }
   },
   "freightEstimatePaidTracking": "Estimate paid. Tracking: {trackingCode}",
-  "@freightEstimatePaidTracking": {"placeholders": {"trackingCode": {}}},
+  "@freightEstimatePaidTracking": {
+    "placeholders": {
+      "trackingCode": {}
+    }
+  },
   "fillSenderReceiverPhone": "Fill sender, receiver, and phone.",
   "enterParcelWeightKg": "Enter the parcel weight in kg.",
   "noFreightBusinessesYet": "No freight businesses yet",
@@ -1461,22 +1464,34 @@
   "freightDeliveryEstimateDays": "Delivery: {minimum}-{maximum} days",
   "@freightDeliveryEstimateDays": {
     "placeholders": {
-      "minimum": {"type": "int"},
-      "maximum": {"type": "int"}
+      "minimum": {
+        "type": "int"
+      },
+      "maximum": {
+        "type": "int"
+      }
     }
   },
   "freightAirDeliveryEstimateDays": "Air delivery: {minimum}-{maximum} days",
   "@freightAirDeliveryEstimateDays": {
     "placeholders": {
-      "minimum": {"type": "int"},
-      "maximum": {"type": "int"}
+      "minimum": {
+        "type": "int"
+      },
+      "maximum": {
+        "type": "int"
+      }
     }
   },
   "freightSeaDeliveryEstimateDays": "Sea delivery: {minimum}-{maximum} days",
   "@freightSeaDeliveryEstimateDays": {
     "placeholders": {
-      "minimum": {"type": "int"},
-      "maximum": {"type": "int"}
+      "minimum": {
+        "type": "int"
+      },
+      "maximum": {
+        "type": "int"
+      }
     }
   },
   "searchBusinessOrCountry": "Search a business or country",
@@ -1517,16 +1532,28 @@
   "freightOrderDetails": "Freight order",
   "freightNextStep": "Next step",
   "freightNextDropOffAtProvider": "Drop off your parcel at {businessName}. The business will confirm the weight after drop-off.",
-  "@freightNextDropOffAtProvider": {"placeholders": {"businessName": {}}},
+  "@freightNextDropOffAtProvider": {
+    "placeholders": {
+      "businessName": {}
+    }
+  },
   "freightNextDropOffAtBusiness": "Drop off your parcel at the business location. The business will confirm the weight after drop-off.",
   "freightNextWeightReview": "The business is confirming the final weight. We will show any balance or refund here.",
   "freightNextInTransit": "Your parcel is on the way. Keep this tracking code for updates.",
   "freightNextReadyForPickup": "Your parcel is ready for pickup.",
   "freightNextCompleted": "This freight order is complete.",
   "paidEstimateAmount": "Paid estimate: {amount}",
-  "@paidEstimateAmount": {"placeholders": {"amount": {}}},
+  "@paidEstimateAmount": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
   "estimatedWeightValue": "Estimated weight: {weight}",
-  "@estimatedWeightValue": {"placeholders": {"weight": {}}},
+  "@estimatedWeightValue": {
+    "placeholders": {
+      "weight": {}
+    }
+  },
   "freightNoActionUntilWeightConfirmed": "After drop-off, no action is needed until the business confirms the weight.",
   "viewAllShipments": "View all shipments",
   "shipmentStillSyncing": "This shipment is still syncing. You can view all shipments or try again shortly.",
@@ -1535,9 +1562,17 @@
   "finalTotal": "Final total",
   "additionalPaymentRequired": "Additional payment required",
   "payBalanceAmount": "Pay balance of {amount}",
-  "@payBalanceAmount": {"placeholders": {"amount": {}}},
+  "@payBalanceAmount": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
   "refundDueAmount": "Refund due: {amount}",
-  "@refundDueAmount": {"placeholders": {"amount": {}}},
+  "@refundDueAmount": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
   "refundProcessing": "Refund processing",
   "refundCompleted": "Refund completed",
   "freightSettled": "Settled",
@@ -1549,9 +1584,17 @@
   "bookAndPay": "Book & pay",
   "freightDropOffNote": "Drop your parcel at the business location. Pickup coming soon.",
   "freightDropOffAddress": "Drop-off: {address}",
-  "@freightDropOffAddress": {"placeholders": {"address": {}}},
+  "@freightDropOffAddress": {
+    "placeholders": {
+      "address": {}
+    }
+  },
   "freightBusinessPhone": "Business phone: {phone}",
-  "@freightBusinessPhone": {"placeholders": {"phone": {}}},
+  "@freightBusinessPhone": {
+    "placeholders": {
+      "phone": {}
+    }
+  },
   "airFreight": "Air freight",
   "seaFreight": "Sea freight",
   "pricePerKg": "{price} / kg",
@@ -1642,8 +1685,6 @@
   "theCar": "The car",
   "contactAndPickup": "Contact & pickup",
   "businessDestination": "Business · destination",
-  "vinOptional": "VIN (optional)",
-  "contactPhone": "Contact phone",
   "pickupAddressOptional": "Pickup address (optional)",
   "notesForBusinessOptional": "Notes for the business (optional)",
   "enterOwnerName": "Enter the owner name",
@@ -1738,7 +1779,6 @@
       "forfeitures": {}
     }
   },
-  "markAsSold": "Mark as sold",
   "customerDidNotCome": "Customer did not come",
   "approveExtension": "Approve extension",
   "rejectExtension": "Reject extension",
@@ -1782,7 +1822,6 @@
   "accountProfileUnavailable": "The connection is slow. We could not safely load your account role.",
   "accountProfileMissing": "Your account profile is missing. Contact Laawol support.",
   "accountProfileRetryHelp": "Retry without signing out or losing your session.",
-  "availableBalance": "Available balance",
   "addMoney": "Add money",
   "myOrders": "My orders",
   "goodMorning": "Good morning",
@@ -1816,7 +1855,6 @@
   "shipmentEstimate": "Shipment estimate",
   "addProfilePicture": "Add profile picture",
   "registerBusinessInstead": "Register your business instead",
-  "registerYourBusiness": "Register your business",
   "businessApprovalSetupNote": "You can set up destinations, cars, and staff immediately. Customers will only see your business after platform approval.",
   "businessProfilePicture": "Business profile picture",
   "businessProfilePictureHelper": "Upload a logo or storefront image customers can recognize.",
@@ -1857,7 +1895,6 @@
   "clear": "Clear",
   "signInToSaveBarrelShipment": "Sign in or create an account so we can securely save this barrel shipment and show it in tracking.",
   "editDestinationPickupHelp": "Use Edit on each destination row to add or change that destination's pickup details.",
-  "dropOffOffice": "Drop-off office",
   "businessesShippingToCountry": "Businesses shipping to this country",
   "fixedPickupPriceForBorough": "Fixed pickup price for this borough",
   "finalPriceConfirmedByStaff": "Final price will be confirmed by staff.",
@@ -1870,8 +1907,12 @@
   "barrelDestinationSummary": "{barrelCount, plural, =1{1 barrel} other{{barrelCount} barrels}} to {destinationCount, plural, =1{1 destination} other{{destinationCount} destinations}}.",
   "@barrelDestinationSummary": {
     "placeholders": {
-      "barrelCount": {"type": "int"},
-      "destinationCount": {"type": "int"}
+      "barrelCount": {
+        "type": "int"
+      },
+      "destinationCount": {
+        "type": "int"
+      }
     }
   },
   "addAnotherDestination": "Add another destination",
@@ -1879,7 +1920,9 @@
   "destinationNumber": "Destination {number}",
   "@destinationNumber": {
     "placeholders": {
-      "number": {"type": "int"}
+      "number": {
+        "type": "int"
+      }
     }
   },
   "saveDestination": "Save destination",
@@ -1887,14 +1930,18 @@
   "holdPerDayDescription": "{days, plural, =1{1-day hold} other{{days}-day hold}} at {amount} per day",
   "@holdPerDayDescription": {
     "placeholders": {
-      "days": {"type": "int"},
+      "days": {
+        "type": "int"
+      },
       "amount": {}
     }
   },
   "holdFlatFeeDescription": "Flat hold fee for up to {days} days",
   "@holdFlatFeeDescription": {
     "placeholders": {
-      "days": {"type": "int"}
+      "days": {
+        "type": "int"
+      }
     }
   },
   "pleaseChooseBusiness": "Please choose a business",
@@ -1910,8 +1957,6 @@
   "choosePickupDateAndTime": "Choose pickup date and time",
   "amountDueNow": "Amount due now",
   "estimatedCost": "Estimated cost",
-  "platformDashboard": "Platform dashboard",
-  "platformDashboardSubtitle": "Applications, businesses, operations, refunds, and marketplace health.",
   "supportCenter": "Support center",
   "supportCases": "Support cases",
   "supportInbox": "Support inbox",
@@ -2186,7 +2231,11 @@
   "holdUntil": "Hold until",
   "marketplaceResponsibilityTitle": "Understand who provides this service",
   "marketplaceProviderResponsibilityBody": "{providerNames} is an independent business responsible for the item or service, including fulfillment, condition, delivery timing, and performance.",
-  "@marketplaceProviderResponsibilityBody": {"placeholders": {"providerNames": {}}},
+  "@marketplaceProviderResponsibilityBody": {
+    "placeholders": {
+      "providerNames": {}
+    }
+  },
   "marketplacePaymentFlowBody": "Laawol helps you find businesses, collects and processes your payment, may deduct a disclosed platform fee, and may transfer the business payout later. Laawol can assist with tracking, support, refunds, and disputes.",
   "marketplaceNoGuaranteeBody": "Laawol is not the seller, carrier, or service provider and does not guarantee the business’s delivery date or performance. This does not limit rights that cannot legally be waived.",
   "freightAutoChargeDisclosureBody": "The weight you enter is an estimate. If the business confirms a different weight after pickup, Laawol will try to automatically charge the card you use today for any additional amount due. If that charge doesn’t go through, you’ll need to open the app to complete payment before your shipment can continue. If your shipment weighs less, you’ll be refunded automatically.",
@@ -2195,195 +2244,236 @@
   "accountLegalAcceptance": "I agree to Laawol’s Terms of Service and Privacy Policy, including its marketplace role.",
   "accountLegalAcceptanceRequired": "Please accept the Terms of Service and Privacy Policy to continue.",
   "businessResponsibilityAcceptance": "I understand that my business is independently responsible for its listings, prices, goods, services, fulfillment, delivery timing, permits, and customer obligations.",
-  "businessResponsibilityRequired": "Confirm the business responsibility statement to submit your application."
-  ,"verifyPhoneToContinueTitle": "Verify your phone to continue"
-  ,"verifyPhoneToContinueBody": "Shared barrels are available only to customers with a verified phone number. We’ll send a code to the number in your account."
-  ,"verifyPhone": "Verify phone"
-  ,"notNow": "Not now"
-  ,"phoneVerificationTitle": "Phone verification"
-  ,"phoneVerificationExplanation": "Confirm or update the mobile number for your account. We’ll text you a one-time verification code."
-  ,"phoneVerificationCountryCodeHelp": "Choose the country code, then enter the mobile number."
-  ,"phoneVerificationCodeSentTitle": "Code sent"
-  ,"phoneVerificationCodeSent": "Enter the 6-digit code sent to {phone}."
-  ,"@phoneVerificationCodeSent": {"placeholders": {"phone": {}}}
-  ,"phoneVerificationCode": "Verification code"
-  ,"phoneVerificationSendCode": "Send verification code"
-  ,"phoneVerificationSendingCode": "Sending code..."
-  ,"phoneVerificationVerifying": "Verifying..."
-  ,"phoneVerificationResending": "Resending..."
-  ,"phoneVerificationResent": "A new code was sent."
-  ,"phoneVerificationResend": "Resend code"
-  ,"phoneVerificationResendIn": "Resend code in {seconds}s"
-  ,"@phoneVerificationResendIn": {"placeholders": {"seconds": {"type": "int"}}}
-  ,"phoneVerificationChangeNumber": "Change number"
-  ,"phoneVerificationSmsNotice": "Standard SMS and data rates may apply. The code is used only to verify that this phone belongs to you."
-  ,"phoneVerificationInvalidPhone": "Enter a valid international phone number beginning with + and the country code."
-  ,"phoneVerificationEnterCode": "Enter the 6-digit code."
-  ,"phoneVerificationInvalidCode": "That code is incorrect. Check it and try again."
-  ,"phoneVerificationExpiredCode": "That code expired. Request a new code and try again."
-  ,"phoneVerificationTooManyAttempts": "Too many verification attempts. Please wait and try again later."
-  ,"phoneVerificationNetworkError": "Check your connection and try again."
-  ,"phoneVerificationRequestTimedOut": "We didn’t receive a response. Check your connection and try again."
-  ,"phoneVerificationPhoneInUse": "That phone number is already linked to another account."
-  ,"phoneVerificationRecentLogin": "For security, sign out, sign back in, and verify your phone again."
-  ,"phoneVerificationAppCheck": "App security check failed. Register this debug device in Firebase App Check, then reopen the app."
-  ,"phoneVerificationGenericError": "We couldn’t verify your phone. Please try again."
-  ,"phoneVerificationSyncPending": "Your code was accepted, but we couldn’t finish updating your profile. Try finishing verification again—another SMS is not required."
-  ,"phoneVerificationFinish": "Finish verification"
-  ,"phoneVerificationFinishing": "Finishing verification..."
-  ,"phoneVerificationSavePhoneFirst": "Save this phone number before verifying it."
-  ,"phoneVerificationSaveAndVerify": "Save and verify"
-  ,"phoneVerificationSavingNumber": "Saving number..."
-  ,"phoneVerificationEditedStatus": "This number has not been saved or verified."
-  ,"phoneVerificationUnverifiedHelp": "Verify this number to use protected account features."
-  ,"phoneVerificationVerifiedHelp": "This number matches the phone securely verified on your account."
-  ,"phoneVerificationSuccess": "Your phone number is verified."
-  ,"phoneVerificationSuccessTitle": "Phone verified"
-  ,"phoneVerificationReturnToSharedBarrels": "Return to shared barrels"
-  ,"phoneVerificationVerified": "Phone verified"
-  ,"phoneVerificationNotVerified": "Phone not verified"
-  ,"phoneCountryCode": "Country code"
-  ,"selectCountryCode": "Select country code"
-  ,"phoneCountrySearchHint": "Search country or code"
-  ,"noCountryCodesFound": "No country codes found"
-  ,"sharedBarrelActionFailed": "We couldn’t complete that shared-barrel action. Please try again."
-  ,"sharedBarrelsLoadFailed": "Check your connection and try again. Your information is safe."
-  ,"sharedBarrelFormLoadFailed": "We couldn’t open the shared-barrel form. Check your connection and try again."
-  ,"marketplaceBalancePaymentSummary": "Balance payment"
-  ,"marketplaceDestinationChangeSummary": "Paid destination change"
-  ,"freightPickupSectionTitle": "Freight pickup"
-  ,"freightPickupSectionSubtitle": "Offer to collect parcels from your customer's address, and choose how the fee is calculated."
-  ,"freightPickupOfferToggle": "Offer freight pickup"
-  ,"freightPickupModelDistance": "By distance"
-  ,"freightPickupModelBorough": "By borough"
-  ,"freightPickupDistanceHint": "Fee = base fee + per-km rate × driving distance from your address. Leave rates at 0 to offer free pickup."
-  ,"freightPickupOriginAddress": "Pickup origin address"
-  ,"freightPickupOriginAddressHelper": "Where your drivers start from. Defaults to your business address."
-  ,"freightPickupBaseFee": "Base fee"
-  ,"freightPickupPerKm": "Per km"
-  ,"freightPickupMinFee": "Minimum fee"
-  ,"freightPickupMaxKm": "Max distance (km)"
-  ,"freightPickupBoroughHint": "Set a flat pickup fee for each New York City borough you serve. Leave blank for boroughs you don't cover."
-  ,"freightPickupBoroughPriceRequired": "Set a pickup fee for at least one borough, or turn off freight pickup."
-  ,"freightPickupCustomerToggle": "Pick up from my address"
-  ,"freightPickupAddressLabel": "Pickup address"
-  ,"freightPickupBoroughLabel": "Borough"
-  ,"freightPickupDateTimeLabel": "Pickup date & time"
-  ,"freightPickupChooseDateTime": "Choose date & time"
-  ,"freightPickupFeeLabel": "Pickup fee"
-  ,"freightPickupCalculating": "Calculating pickup fee…"
-  ,"freightPickupEnterDetailsForFee": "Enter your pickup details to see the fee."
-  ,"freightPickupSelectDateTime": "Please choose a pickup date and time."
-  ,"freightPickupUnavailableCustomer": "This business doesn't offer pickup right now."
-  ,"freightPickupOutOfRangeCustomer": "Your address is outside this business's pickup area."
-  ,"freightPickupQuoteFailed": "We couldn't calculate the pickup fee. Check the address and try again."
-  ,"freightPickupDistanceAway": "{distanceKm} km away"
-  ,"@freightPickupDistanceAway": { "placeholders": { "distanceKm": { "type": "String" } } }
-  ,"freightPickupFreeLabel": "Free pickup"
-  ,"freightAirDepartureDays": "Air freight departure days"
-  ,"freightSeaDepartureDays": "Sea freight departure days"
-  ,"freightDepartureDaysHelper": "Optional. Choose the regular days this service departs."
-  ,"mondayShort": "Mon"
-  ,"tuesdayShort": "Tue"
-  ,"wednesdayShort": "Wed"
-  ,"thursdayShort": "Thu"
-  ,"fridayShort": "Fri"
-  ,"saturdayShort": "Sat"
-  ,"sundayShort": "Sun"
-  ,"regularDepartureDays": "Regular departures: {days}"
-  ,"@regularDepartureDays": { "placeholders": { "days": { "type": "String" } } }
-  ,"peopleAndAccess": "People & access"
-  ,"peopleAndAccessSubtitle": "Manage marketplace identities, invitations, and account security."
-  ,"allPeople": "All people"
-  ,"platformAdministrators": "Platform administrators"
-  ,"businessOwners": "Business owners"
-  ,"pendingInvitations": "Pending invitations"
-  ,"missingProfiles": "Missing profiles"
-  ,"suspendedAccounts": "Suspended accounts"
-  ,"people": "People"
-  ,"invitePerson": "Invite person"
-  ,"searchPeopleHint": "Search exact email, phone, or user ID"
-  ,"clearSearch": "Clear search"
-  ,"loadMorePeople": "Load more people"
-  ,"peopleCouldNotLoad": "People could not be loaded"
-  ,"tryAgain": "Try again"
-  ,"notProvided": "Not provided"
-  ,"noPeopleFound": "No people found"
-  ,"noPeopleFoundHelp": "Try another filter or search for an exact email, phone number, or user ID."
-  ,"peopleAccessRestricted": "People access is restricted"
-  ,"peopleAccessRestrictedHelp": "Your administrator role does not include permission to view marketplace people."
-  ,"you": "You"
-  ,"platformAdministrator": "Platform administrator"
-  ,"businessStaffMember": "Business staff member"
-  ,"pendingInvitation": "Pending invitation"
-  ,"missingProfile": "Missing profile"
-  ,"invitationPending": "Invitation pending"
-  ,"deletionPending": "Deletion pending"
-  ,"authenticationMissing": "Authentication missing"
-  ,"identityAndAccess": "Identity & access"
-  ,"emailVerification": "Email verification"
-  ,"verified": "Verified"
-  ,"notVerified": "Not verified"
-  ,"businessAccess": "Business access"
-  ,"businessPermissions": "Business permissions"
-  ,"businessPermissionsHelp": "Grant only the tools this person needs. You can adjust access later."
-  ,"noAssignedPermissions": "No assigned permissions"
-  ,"cannotChangeOwnAccess": "For safety, you cannot change your own access from this screen."
-  ,"accountActions": "Account actions"
-  ,"suspendAccount": "Suspend account"
-  ,"suspendAccountConfirm": "This person will immediately lose access and all active sessions will be revoked."
-  ,"restoreAccount": "Restore account"
-  ,"restoreAccountConfirm": "This person will be allowed to sign in again."
-  ,"accountSuspended": "Account suspended"
-  ,"accountRestored": "Account restored"
-  ,"revokeSessions": "Revoke active sessions"
-  ,"sessionsRevoked": "Active sessions revoked"
-  ,"sendPasswordReset": "Send password reset"
-  ,"passwordResetSent": "Password reset requested"
-  ,"sendVerificationEmail": "Send verification email"
-  ,"verificationEmailSent": "Verification email requested"
-  ,"transferOwnership": "Transfer business ownership"
-  ,"transferOwnershipConfirm": "This staff member will become the business owner and the current owner will become staff."
-  ,"ownershipTransferred": "Business ownership transferred"
-  ,"resendInvitation": "Resend invitation"
-  ,"invitationResent": "Invitation resent"
-  ,"cancelInvitation": "Cancel invitation"
-  ,"cancelInvitationConfirm": "This invitation will no longer be usable."
-  ,"invitationCancelled": "Invitation cancelled"
-  ,"reviewDeletionRequest": "Review account deletion"
-  ,"deletionBlocked": "Deletion is blocked"
-  ,"deletionBlockedByRecords": "{count} active or legally retained record(s) must be resolved before this account can be deleted."
-  ,"@deletionBlockedByRecords": { "placeholders": { "count": { "type": "int" } } }
-  ,"finalizeAccountDeletion": "Finalize account deletion"
-  ,"finalizeAccountDeletionConfirm": "This permanently removes access after the server confirms there are no blocking records. This cannot be undone."
-  ,"accountDeletionFinalized": "Account deletion finalized"
-  ,"adminApprovedDeletion": "Deletion reviewed and approved by a platform administrator."
-  ,"invitePlatformAdministrator": "Invite platform administrator"
-  ,"invitePlatformAdministratorHelp": "Choose a limited administrator role. Super-admin access is never granted by invitation."
-  ,"inviteBusinessPersonnel": "Invite business personnel"
-  ,"inviteBusinessPersonnelHelp": "Select the business and the exact tools this person can use."
-  ,"sendInvitation": "Send invitation"
-  ,"invitationSent": "Invitation sent"
-  ,"adminRole": "Administrator role"
-  ,"superAdministrator": "Super administrator"
-  ,"operationsManager": "Operations manager"
-  ,"financeManager": "Finance manager"
-  ,"supportAdministrator": "Support administrator"
-  ,"contentManager": "Content manager"
-  ,"businessOwner": "Business owner"
-  ,"profile": "Profile"
-  ,"listings": "Listings"
-  ,"barrels": "Barrels"
-  ,"freight": "Freight"
-  ,"transport": "Transport"
-  ,"parking": "Parking"
-  ,"destinations": "Destinations"
-  ,"growth": "Growth"
-  ,"invitationProfileSetupTitle": "Finish setting up your invited access"
-  ,"invitationProfileSetupHelp": "Verify this email address, then return here to activate the role you were invited to."
-  ,"verifyInvitedEmail": "Send verification email"
-  ,"sendingVerificationEmail": "Sending verification email…"
-  ,"iVerifiedContinue": "I verified — continue"
-  ,"invitationVerificationEmailSent": "Verification email sent. Check your inbox, then return here."
-  ,"invitationVerificationEmailFailed": "The verification email could not be sent. Please try again."
+  "businessResponsibilityRequired": "Confirm the business responsibility statement to submit your application.",
+  "verifyPhoneToContinueTitle": "Verify your phone to continue",
+  "verifyPhoneToContinueBody": "Shared barrels are available only to customers with a verified phone number. We’ll send a code to the number in your account.",
+  "verifyPhone": "Verify phone",
+  "notNow": "Not now",
+  "phoneVerificationTitle": "Phone verification",
+  "phoneVerificationExplanation": "Confirm or update the mobile number for your account. We’ll text you a one-time verification code.",
+  "phoneVerificationCountryCodeHelp": "Choose the country code, then enter the mobile number.",
+  "phoneVerificationCodeSentTitle": "Code sent",
+  "phoneVerificationCodeSent": "Enter the 6-digit code sent to {phone}.",
+  "@phoneVerificationCodeSent": {
+    "placeholders": {
+      "phone": {}
+    }
+  },
+  "phoneVerificationCode": "Verification code",
+  "phoneVerificationSendCode": "Send verification code",
+  "phoneVerificationSendingCode": "Sending code...",
+  "phoneVerificationVerifying": "Verifying...",
+  "phoneVerificationResending": "Resending...",
+  "phoneVerificationResent": "A new code was sent.",
+  "phoneVerificationResend": "Resend code",
+  "phoneVerificationResendIn": "Resend code in {seconds}s",
+  "@phoneVerificationResendIn": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "phoneVerificationChangeNumber": "Change number",
+  "phoneVerificationSmsNotice": "Standard SMS and data rates may apply. The code is used only to verify that this phone belongs to you.",
+  "phoneVerificationInvalidPhone": "Enter a valid international phone number beginning with + and the country code.",
+  "phoneVerificationEnterCode": "Enter the 6-digit code.",
+  "phoneVerificationInvalidCode": "That code is incorrect. Check it and try again.",
+  "phoneVerificationExpiredCode": "That code expired. Request a new code and try again.",
+  "phoneVerificationTooManyAttempts": "Too many verification attempts. Please wait and try again later.",
+  "phoneVerificationNetworkError": "Check your connection and try again.",
+  "phoneVerificationRequestTimedOut": "We didn’t receive a response. Check your connection and try again.",
+  "phoneVerificationPhoneInUse": "That phone number is already linked to another account.",
+  "phoneVerificationRecentLogin": "For security, sign out, sign back in, and verify your phone again.",
+  "phoneVerificationAppCheck": "App security check failed. Register this debug device in Firebase App Check, then reopen the app.",
+  "phoneVerificationGenericError": "We couldn’t verify your phone. Please try again.",
+  "phoneVerificationSyncPending": "Your code was accepted, but we couldn’t finish updating your profile. Try finishing verification again—another SMS is not required.",
+  "phoneVerificationFinish": "Finish verification",
+  "phoneVerificationFinishing": "Finishing verification...",
+  "phoneVerificationSavePhoneFirst": "Save this phone number before verifying it.",
+  "phoneVerificationSaveAndVerify": "Save and verify",
+  "phoneVerificationSavingNumber": "Saving number...",
+  "phoneVerificationEditedStatus": "This number has not been saved or verified.",
+  "phoneVerificationUnverifiedHelp": "Verify this number to use protected account features.",
+  "phoneVerificationVerifiedHelp": "This number matches the phone securely verified on your account.",
+  "phoneVerificationSuccess": "Your phone number is verified.",
+  "phoneVerificationSuccessTitle": "Phone verified",
+  "phoneVerificationReturnToSharedBarrels": "Return to shared barrels",
+  "phoneVerificationVerified": "Phone verified",
+  "phoneVerificationNotVerified": "Phone not verified",
+  "phoneCountryCode": "Country code",
+  "selectCountryCode": "Select country code",
+  "phoneCountrySearchHint": "Search country or code",
+  "noCountryCodesFound": "No country codes found",
+  "sharedBarrelActionFailed": "We couldn’t complete that shared-barrel action. Please try again.",
+  "sharedBarrelsLoadFailed": "Check your connection and try again. Your information is safe.",
+  "sharedBarrelFormLoadFailed": "We couldn’t open the shared-barrel form. Check your connection and try again.",
+  "marketplaceBalancePaymentSummary": "Balance payment",
+  "marketplaceDestinationChangeSummary": "Paid destination change",
+  "freightPickupSectionTitle": "Freight pickup",
+  "freightPickupSectionSubtitle": "Offer to collect parcels from your customer's address, and choose how the fee is calculated.",
+  "freightPickupOfferToggle": "Offer freight pickup",
+  "freightPickupModelDistance": "By distance",
+  "freightPickupModelBorough": "By borough",
+  "freightPickupDistanceHint": "Fee = base fee + per-km rate × driving distance from your address. Leave rates at 0 to offer free pickup.",
+  "freightPickupOriginAddress": "Pickup origin address",
+  "freightPickupOriginAddressHelper": "Where your drivers start from. Defaults to your business address.",
+  "freightPickupBaseFee": "Base fee",
+  "freightPickupPerKm": "Per km",
+  "freightPickupMinFee": "Minimum fee",
+  "freightPickupMaxKm": "Max distance (km)",
+  "freightPickupBoroughHint": "Set a flat pickup fee for each New York City borough you serve. Leave blank for boroughs you don't cover.",
+  "freightPickupBoroughPriceRequired": "Set a pickup fee for at least one borough, or turn off freight pickup.",
+  "freightPickupCustomerToggle": "Pick up from my address",
+  "freightPickupAddressLabel": "Pickup address",
+  "freightPickupBoroughLabel": "Borough",
+  "freightPickupDateTimeLabel": "Pickup date & time",
+  "freightPickupChooseDateTime": "Choose date & time",
+  "freightPickupFeeLabel": "Pickup fee",
+  "freightPickupCalculating": "Calculating pickup fee…",
+  "freightPickupEnterDetailsForFee": "Enter your pickup details to see the fee.",
+  "freightPickupSelectDateTime": "Please choose a pickup date and time.",
+  "freightPickupUnavailableCustomer": "This business doesn't offer pickup right now.",
+  "freightPickupOutOfRangeCustomer": "Your address is outside this business's pickup area.",
+  "freightPickupQuoteFailed": "We couldn't calculate the pickup fee. Check the address and try again.",
+  "freightPickupDistanceAway": "{distanceKm} km away",
+  "@freightPickupDistanceAway": {
+    "placeholders": {
+      "distanceKm": {
+        "type": "String"
+      }
+    }
+  },
+  "freightPickupFreeLabel": "Free pickup",
+  "freightAirDepartureDays": "Air freight departure days",
+  "freightSeaDepartureDays": "Sea freight departure days",
+  "freightDepartureDaysHelper": "Optional. Choose the regular days this service departs.",
+  "mondayShort": "Mon",
+  "tuesdayShort": "Tue",
+  "wednesdayShort": "Wed",
+  "thursdayShort": "Thu",
+  "fridayShort": "Fri",
+  "saturdayShort": "Sat",
+  "sundayShort": "Sun",
+  "regularDepartureDays": "Regular departures: {days}",
+  "@regularDepartureDays": {
+    "placeholders": {
+      "days": {
+        "type": "String"
+      }
+    }
+  },
+  "allPeople": "All people",
+  "platformAdministrators": "Platform administrators",
+  "businessOwners": "Business owners",
+  "pendingInvitations": "Pending invitations",
+  "missingProfiles": "Missing profiles",
+  "suspendedAccounts": "Suspended accounts",
+  "people": "People",
+  "invitePerson": "Invite person",
+  "searchPeopleHint": "Search exact email, phone, or user ID",
+  "clearSearch": "Clear search",
+  "loadMorePeople": "Load more people",
+  "peopleCouldNotLoad": "People could not be loaded",
+  "tryAgain": "Try again",
+  "notProvided": "Not provided",
+  "noPeopleFound": "No people found",
+  "noPeopleFoundHelp": "Try another filter or search for an exact email, phone number, or user ID.",
+  "peopleAccessRestricted": "People access is restricted",
+  "peopleAccessRestrictedHelp": "Your administrator role does not include permission to view marketplace people.",
+  "you": "You",
+  "platformAdministrator": "Platform administrator",
+  "businessStaffMember": "Business staff member",
+  "pendingInvitation": "Pending invitation",
+  "missingProfile": "Missing profile",
+  "invitationPending": "Invitation pending",
+  "deletionPending": "Deletion pending",
+  "authenticationMissing": "Authentication missing",
+  "identityAndAccess": "Identity & access",
+  "emailVerification": "Email verification",
+  "verified": "Verified",
+  "notVerified": "Not verified",
+  "businessAccess": "Business access",
+  "businessPermissions": "Business permissions",
+  "businessPermissionsHelp": "Grant only the tools this person needs. You can adjust access later.",
+  "noAssignedPermissions": "No assigned permissions",
+  "cannotChangeOwnAccess": "For safety, you cannot change your own access from this screen.",
+  "accountActions": "Account actions",
+  "suspendAccount": "Suspend account",
+  "suspendAccountConfirm": "This person will immediately lose access and all active sessions will be revoked.",
+  "restoreAccount": "Restore account",
+  "restoreAccountConfirm": "This person will be allowed to sign in again.",
+  "accountSuspended": "Account suspended",
+  "accountRestored": "Account restored",
+  "revokeSessions": "Revoke active sessions",
+  "sessionsRevoked": "Active sessions revoked",
+  "sendPasswordReset": "Send password reset",
+  "passwordResetSent": "Password reset requested",
+  "sendVerificationEmail": "Send verification email",
+  "verificationEmailSent": "Verification email requested",
+  "transferOwnership": "Transfer business ownership",
+  "transferOwnershipConfirm": "This staff member will become the business owner and the current owner will become staff.",
+  "ownershipTransferred": "Business ownership transferred",
+  "resendInvitation": "Resend invitation",
+  "invitationResent": "Invitation resent",
+  "cancelInvitation": "Cancel invitation",
+  "cancelInvitationConfirm": "This invitation will no longer be usable.",
+  "invitationCancelled": "Invitation cancelled",
+  "reviewDeletionRequest": "Review account deletion",
+  "deletionBlocked": "Deletion is blocked",
+  "deletionBlockedByRecords": "{count} active or legally retained record(s) must be resolved before this account can be deleted.",
+  "@deletionBlockedByRecords": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "finalizeAccountDeletion": "Finalize account deletion",
+  "finalizeAccountDeletionConfirm": "This permanently removes access after the server confirms there are no blocking records. This cannot be undone.",
+  "accountDeletionFinalized": "Account deletion finalized",
+  "adminApprovedDeletion": "Deletion reviewed and approved by a platform administrator.",
+  "invitePlatformAdministrator": "Invite platform administrator",
+  "invitePlatformAdministratorHelp": "Choose a limited administrator role. Super-admin access is never granted by invitation.",
+  "inviteBusinessPersonnel": "Invite business personnel",
+  "inviteBusinessPersonnelHelp": "Select the business and the exact tools this person can use.",
+  "sendInvitation": "Send invitation",
+  "invitationSent": "Invitation sent",
+  "adminRole": "Administrator role",
+  "superAdministrator": "Super administrator",
+  "operationsManager": "Operations manager",
+  "financeManager": "Finance manager",
+  "supportAdministrator": "Support administrator",
+  "contentManager": "Content manager",
+  "profile": "Profile",
+  "listings": "Listings",
+  "barrels": "Barrels",
+  "freight": "Freight",
+  "transport": "Transport",
+  "parking": "Parking",
+  "destinations": "Destinations",
+  "growth": "Growth",
+  "invitationProfileSetupTitle": "Finish setting up your invited access",
+  "invitationProfileSetupHelp": "Verify this email address, then return here to activate the role you were invited to.",
+  "verifyInvitedEmail": "Send verification email",
+  "sendingVerificationEmail": "Sending verification email…",
+  "iVerifiedContinue": "I verified — continue",
+  "invitationVerificationEmailSent": "Verification email sent. Check your inbox, then return here.",
+  "invitationVerificationEmailFailed": "The verification email could not be sent. Please try again.",
+  "editTransportRequest": "Edit request",
+  "editTransportRequestTitle": "Edit your request",
+  "editTransportRequestSubtitle": "You can change your request until you choose a quote.",
+  "transportEditContactSection": "Contact and pickup",
+  "transportEditVehicleSection": "Vehicle and destination",
+  "transportEditQuoteWarningTitle": "This will reset your quotes",
+  "transportEditQuoteWarningMessage": "Businesses priced their quotes on your current details. Changing the vehicle, pickup area, transport method or destination clears the quotes you already have, and businesses will be asked to quote again.",
+  "transportEditKeepEditing": "Keep editing",
+  "transportEditSaveAnyway": "Save and reset quotes",
+  "transportEditSaved": "Request updated",
+  "transportEditSavedRequote": "Request updated. Businesses will send new quotes.",
+  "transportEditNoChanges": "Nothing changed",
+  "couldNotUpdateTransportRequest": "Could not update this request. Please try again.",
+  "transportEditDestinationMoved": "Your request now goes to businesses serving the new destination.",
+  "notes": "Notes",
+  "vehicleOperable": "Vehicle is drivable"
 }

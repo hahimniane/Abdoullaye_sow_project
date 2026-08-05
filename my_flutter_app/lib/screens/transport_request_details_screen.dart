@@ -611,6 +611,7 @@ class _TransportQuoteSectionState extends State<_TransportQuoteSection> {
   String _selectingQuoteId = '';
   String _error = '';
   bool _cancelling = false;
+  bool _savingEdit = false;
 
   Future<void> _selectQuote(TransportQuote quote) async {
     final l10n = AppLocalizations.of(context)!;
@@ -686,6 +687,226 @@ class _TransportQuoteSectionState extends State<_TransportQuoteSection> {
     } finally {
       if (mounted) setState(() => _cancelling = false);
     }
+  }
+
+  /// The customer may revise the request until they pick a quote. No business
+  /// "accepts" here - they quote - so quote selection is the real cutoff.
+  bool _canCustomerEdit(AuthProvider auth) {
+    final request = widget.request;
+    return request.customerUid != null &&
+        request.customerUid == auth.user?.uid &&
+        request.quoteStatus == 'collecting';
+  }
+
+  /// Fields a business priced its quote against. Changing any of these makes
+  /// the quotes in hand quotes for a different job.
+  bool _isQuoteAffecting(Map<String, Object?> patch) {
+    const quoted = {
+      'carMake',
+      'carModel',
+      'carYear',
+      'pickupArea',
+      'vehicleOperable',
+      'requestedTransportMethod',
+      'destinationCountryId',
+    };
+    return patch.keys.any(quoted.contains);
+  }
+
+  Future<void> _saveEdit(Map<String, Object?> patch) async {
+    final l10n = AppLocalizations.of(context)!;
+    if (patch.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(l10n.transportEditNoChanges)));
+      return;
+    }
+
+    // Warn before saving, not after: the customer has watched these quotes
+    // arrive, and clearing them silently would read as losing them.
+    if (_isQuoteAffecting(patch) && widget.request.quoteCount > 0) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(l10n.transportEditQuoteWarningTitle),
+          content: Text(l10n.transportEditQuoteWarningMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(l10n.transportEditKeepEditing),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(l10n.transportEditSaveAnyway),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true || !mounted) return;
+    }
+
+    setState(() {
+      _savingEdit = true;
+      _error = '';
+    });
+    try {
+      final result = await _service.updateRequestDetails(
+        requestId: widget.request.id,
+        destinationCountryId: patch['destinationCountryId'] as String?,
+        carMake: patch['carMake'] as String?,
+        carModel: patch['carModel'] as String?,
+        carYear: patch['carYear'] as String?,
+        customerPhone: patch['customerPhone'] as String?,
+        pickupArea: patch['pickupArea'] as String?,
+        pickupAddress: patch['pickupAddress'] as String?,
+        notes: patch['notes'] as String?,
+        vehicleOperable: patch['vehicleOperable'] as bool?,
+        requestedTransportMethod: patch['requestedTransportMethod'] as String?,
+        flexibleDates: patch['flexibleDates'] as bool?,
+      );
+      if (!mounted) return;
+      final message = !result.updated
+          ? l10n.transportEditNoChanges
+          : result.destinationChanged
+              ? l10n.transportEditDestinationMoved
+              : result.requoteRequired
+                  ? l10n.transportEditSavedRequote
+                  : l10n.transportEditSaved;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = l10n.couldNotUpdateTransportRequest);
+    } finally {
+      if (mounted) setState(() => _savingEdit = false);
+    }
+  }
+
+  Future<void> _openEditSheet() async {
+    final l10n = AppLocalizations.of(context)!;
+    final request = widget.request;
+    final phone = TextEditingController(text: request.customerPhone);
+    final pickupAddress = TextEditingController(text: request.pickupAddress);
+    final notes = TextEditingController(text: request.notes);
+    final pickupArea = TextEditingController(text: request.pickupArea);
+    var operable = request.vehicleOperable;
+    var method = request.requestedTransportMethod;
+
+    final patch = await showModalBottomSheet<Map<String, Object?>>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
+        ),
+        child: StatefulBuilder(
+          builder: (sheetContext, setSheetState) => SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  l10n.editTransportRequestTitle,
+                  style: Theme.of(sheetContext).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  l10n.editTransportRequestSubtitle,
+                  style: Theme.of(sheetContext).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 18),
+                Text(l10n.transportEditContactSection,
+                    style: Theme.of(sheetContext).textTheme.labelLarge),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: phone,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(labelText: l10n.phoneNumber),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: pickupAddress,
+                  decoration: InputDecoration(labelText: l10n.pickupAddress),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: notes,
+                  maxLines: 2,
+                  decoration: InputDecoration(labelText: l10n.notes),
+                ),
+                const SizedBox(height: 18),
+                Text(l10n.transportEditVehicleSection,
+                    style: Theme.of(sheetContext).textTheme.labelLarge),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: pickupArea,
+                  decoration: InputDecoration(labelText: l10n.pickupArea),
+                ),
+                const SizedBox(height: 10),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: operable,
+                  title: Text(l10n.vehicleOperable),
+                  onChanged: (value) =>
+                      setSheetState(() => operable = value),
+                ),
+                DropdownButtonFormField<String>(
+                  initialValue: method.isEmpty ? 'open' : method,
+                  decoration:
+                      InputDecoration(labelText: l10n.transportMethod),
+                  items: const [
+                    DropdownMenuItem(value: 'open', child: Text('Open')),
+                    DropdownMenuItem(
+                        value: 'enclosed', child: Text('Enclosed')),
+                  ],
+                  onChanged: (value) =>
+                      setSheetState(() => method = value ?? method),
+                ),
+                const SizedBox(height: 20),
+                FilledButton(
+                  onPressed: () {
+                    // Send only what changed - a full resubmission would
+                    // otherwise look like an edit and void every quote.
+                    final result = <String, Object?>{};
+                    void put(String key, Object? next, Object? before) {
+                      if (next.toString().trim() !=
+                          before.toString().trim()) {
+                        result[key] = next;
+                      }
+                    }
+
+                    put('customerPhone', phone.text.trim(),
+                        request.customerPhone);
+                    put('pickupAddress', pickupAddress.text.trim(),
+                        request.pickupAddress);
+                    put('notes', notes.text.trim(), request.notes);
+                    put('pickupArea', pickupArea.text.trim(),
+                        request.pickupArea);
+                    if (operable != request.vehicleOperable) {
+                      result['vehicleOperable'] = operable;
+                    }
+                    if (method != request.requestedTransportMethod) {
+                      result['requestedTransportMethod'] = method;
+                    }
+                    Navigator.of(sheetContext).pop(result);
+                  },
+                  child: Text(l10n.save),
+                ),
+                const SizedBox(height: 10),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    phone.dispose();
+    pickupAddress.dispose();
+    notes.dispose();
+    pickupArea.dispose();
+    if (patch != null && mounted) await _saveEdit(patch);
   }
 
   @override
@@ -783,10 +1004,27 @@ class _TransportQuoteSectionState extends State<_TransportQuoteSection> {
                 ],
               ],
               const SizedBox(height: 14),
+              // Editing stays available for as long as quotes are being
+              // collected - the window closes when a quote is selected.
+              if (_canCustomerEdit(context.read<AuthProvider>())) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.tonalIcon(
+                    onPressed: _savingEdit || _cancelling ||
+                            _selectingQuoteId.isNotEmpty
+                        ? null
+                        : _openEditSheet,
+                    icon: const Icon(Icons.edit_outlined),
+                    label: Text(l10n.editTransportRequest),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
-                  onPressed: _cancelling || _selectingQuoteId.isNotEmpty
+                  onPressed: _cancelling || _savingEdit ||
+                          _selectingQuoteId.isNotEmpty
                       ? null
                       : _cancelRequest,
                   child: Text(

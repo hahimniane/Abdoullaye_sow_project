@@ -5805,4 +5805,57 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get invitationVerificationEmailFailed =>
       'The verification email could not be sent. Please try again.';
+
+  @override
+  String get editTransportRequest => 'Edit request';
+
+  @override
+  String get editTransportRequestTitle => 'Edit your request';
+
+  @override
+  String get editTransportRequestSubtitle =>
+      'You can change your request until you choose a quote.';
+
+  @override
+  String get transportEditContactSection => 'Contact and pickup';
+
+  @override
+  String get transportEditVehicleSection => 'Vehicle and destination';
+
+  @override
+  String get transportEditQuoteWarningTitle => 'This will reset your quotes';
+
+  @override
+  String get transportEditQuoteWarningMessage =>
+      'Businesses priced their quotes on your current details. Changing the vehicle, pickup area, transport method or destination clears the quotes you already have, and businesses will be asked to quote again.';
+
+  @override
+  String get transportEditKeepEditing => 'Keep editing';
+
+  @override
+  String get transportEditSaveAnyway => 'Save and reset quotes';
+
+  @override
+  String get transportEditSaved => 'Request updated';
+
+  @override
+  String get transportEditSavedRequote =>
+      'Request updated. Businesses will send new quotes.';
+
+  @override
+  String get transportEditNoChanges => 'Nothing changed';
+
+  @override
+  String get couldNotUpdateTransportRequest =>
+      'Could not update this request. Please try again.';
+
+  @override
+  String get transportEditDestinationMoved =>
+      'Your request now goes to businesses serving the new destination.';
+
+  @override
+  String get notes => 'Notes';
+
+  @override
+  String get vehicleOperable => 'Vehicle is drivable';
 }

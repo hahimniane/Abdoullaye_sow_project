@@ -408,7 +408,7 @@
   "carFeaturesHint": "Caractéristiques (séparées par des virgules)",
   "carImagesHint": "URL d'images (séparées par des virgules)",
   "contactName": "Nom du contact",
-  "contactPhone": "Téléphone du contact",
+  "contactPhone": "Téléphone de contact",
   "contactEmail": "Email du contact",
   "saveCar": "Enregistrer la voiture",
   "updateCar": "Mettre à jour la voiture",
@@ -499,7 +499,7 @@
   "purchaseComplete": "Paiement reçu. Cette voiture est maintenant achetée.",
   "checkoutUnavailable": "Nous n'avons pas pu lancer le paiement pour le moment. Veuillez réessayer dans un instant.",
   "carAlreadyReserved": "Cette voiture a déjà une réservation active.",
-  "carNoLongerAvailable": "Cette voiture n'est plus disponible.",
+  "carNoLongerAvailable": "Cette voiture n’est plus disponible",
   "destinationCountry": "Pays de destination",
   "destinationCountriesUnavailable": "Les options de destination ne sont pas disponibles pour le moment. Veuillez réessayer dans un instant.",
   "sendBarrels": "Envoyer des barils",
@@ -748,8 +748,8 @@
   "activeShort": "Actifs",
   "pickupShort": "Ramassage",
   "doneShort": "Terminés",
-  "platformDashboard": "Tableau de bord de la plateforme",
-  "platformDashboardSubtitle": "Demandes, entreprises, opérations, remboursements et état de la plateforme.",
+  "platformDashboard": "Tableau de bord plateforme",
+  "platformDashboardSubtitle": "Demandes, entreprises, opérations, remboursements et santé de la marketplace.",
   "pendingBusinesses": "Entreprises en attente",
   "approvedBusinesses": "Entreprises approuvées",
   "customers": "Clients",
@@ -1004,7 +1004,7 @@
   "termsAndConditions": "Conditions générales",
   "parkingReceiptTerms": "• Ce reçu sert de preuve de stationnement\n• Le véhicule sera gardé en sécurité\n• Contactez-nous pour toute question\n• Valable jusqu’à la récupération du véhicule",
   "peopleAndAccess": "Personnes et accès",
-  "peopleAndAccessSubtitle": "Gérez les responsables de plateforme, les équipes d’entreprise et les comptes clients.",
+  "peopleAndAccessSubtitle": "Gérez les identités, les invitations et la sécurité des comptes de la place de marché.",
   "platformManagers": "Responsables de plateforme",
   "platformManagersCount": "{count} personnes avec un accès complet à la plateforme",
   "@platformManagersCount": {
@@ -1027,7 +1027,7 @@
   },
   "noEmail": "Aucun e-mail",
   "platformManager": "Responsable de plateforme",
-  "businessOwner": "Propriétaire d’entreprise",
+  "businessOwner": "Propriétaire de l’entreprise",
   "unassignedBusiness": "Entreprise non attribuée",
   "currentDestinationShipping": "Expédition actuelle vers la destination : {amount}.",
   "@currentDestinationShipping": {
@@ -1198,7 +1198,7 @@
   "signInToTrackShipments": "Connectez-vous pour voir vos demandes d’envoi de barils, vos reçus et le statut de collecte.",
   "shipmentsLoadError": "Nous ne pouvons pas charger vos demandes d’envoi pour le moment. Veuillez réessayer bientôt.",
   "shipmentsAppearAfterPayment": "Vos demandes d’envoi de barils apparaîtront ici une fois le paiement terminé.",
-  "registerYourBusiness": "Inscrire votre entreprise",
+  "registerYourBusiness": "Enregistrer votre entreprise",
   "submittingApplication": "Envoi de la demande",
   "submitBusinessApplication": "Envoyer la demande d’entreprise",
   "businessApplicationSubmittedSetup": "Demande d’entreprise envoyée. Vous pouvez maintenant configurer votre tableau de bord.",
@@ -1436,7 +1436,6 @@
   "favoriteRemoved": "Favori supprimé",
   "addToFavorites": "Ajouter aux favoris",
   "removeFromFavorites": "Retirer des favoris",
-  "carNoLongerAvailable": "Cette voiture n’est plus disponible",
   "enterValidPaidHoldPricing": "Entrez un tarif de blocage payant valide.",
   "useBusinessPaidHoldPricing": "Utiliser le tarif de blocage de l’entreprise",
   "useBusinessPaidHoldPricingSubtitle": "Désactivez cette option pour définir un tarif de blocage propre à cette voiture.",
@@ -1451,7 +1450,11 @@
     }
   },
   "freightEstimatePaidTracking": "Estimation payée. Suivi : {trackingCode}",
-  "@freightEstimatePaidTracking": {"placeholders": {"trackingCode": {}}},
+  "@freightEstimatePaidTracking": {
+    "placeholders": {
+      "trackingCode": {}
+    }
+  },
   "fillSenderReceiverPhone": "Renseignez l’expéditeur, le destinataire et le téléphone.",
   "enterParcelWeightKg": "Entrez le poids du colis en kg.",
   "noFreightBusinessesYet": "Aucune entreprise de fret pour le moment",
@@ -1462,22 +1465,34 @@
   "freightDeliveryEstimateDays": "Livraison : {minimum}-{maximum} jours",
   "@freightDeliveryEstimateDays": {
     "placeholders": {
-      "minimum": {"type": "int"},
-      "maximum": {"type": "int"}
+      "minimum": {
+        "type": "int"
+      },
+      "maximum": {
+        "type": "int"
+      }
     }
   },
   "freightAirDeliveryEstimateDays": "Livraison aérienne : {minimum}-{maximum} jours",
   "@freightAirDeliveryEstimateDays": {
     "placeholders": {
-      "minimum": {"type": "int"},
-      "maximum": {"type": "int"}
+      "minimum": {
+        "type": "int"
+      },
+      "maximum": {
+        "type": "int"
+      }
     }
   },
   "freightSeaDeliveryEstimateDays": "Livraison maritime : {minimum}-{maximum} jours",
   "@freightSeaDeliveryEstimateDays": {
     "placeholders": {
-      "minimum": {"type": "int"},
-      "maximum": {"type": "int"}
+      "minimum": {
+        "type": "int"
+      },
+      "maximum": {
+        "type": "int"
+      }
     }
   },
   "searchBusinessOrCountry": "Rechercher une entreprise ou un pays",
@@ -1518,16 +1533,28 @@
   "freightOrderDetails": "Commande de fret",
   "freightNextStep": "Prochaine étape",
   "freightNextDropOffAtProvider": "Déposez votre colis chez {businessName}. L’entreprise confirmera le poids après le dépôt.",
-  "@freightNextDropOffAtProvider": {"placeholders": {"businessName": {}}},
+  "@freightNextDropOffAtProvider": {
+    "placeholders": {
+      "businessName": {}
+    }
+  },
   "freightNextDropOffAtBusiness": "Déposez votre colis à l’adresse de l’entreprise. L’entreprise confirmera le poids après le dépôt.",
   "freightNextWeightReview": "L’entreprise confirme le poids final. Tout solde ou remboursement apparaîtra ici.",
   "freightNextInTransit": "Votre colis est en route. Gardez ce numéro de suivi pour les mises à jour.",
   "freightNextReadyForPickup": "Votre colis est prêt à être récupéré.",
   "freightNextCompleted": "Cette commande de fret est terminée.",
   "paidEstimateAmount": "Estimation payée : {amount}",
-  "@paidEstimateAmount": {"placeholders": {"amount": {}}},
+  "@paidEstimateAmount": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
   "estimatedWeightValue": "Poids estimé : {weight}",
-  "@estimatedWeightValue": {"placeholders": {"weight": {}}},
+  "@estimatedWeightValue": {
+    "placeholders": {
+      "weight": {}
+    }
+  },
   "freightNoActionUntilWeightConfirmed": "Après le dépôt, aucune action n’est nécessaire avant la confirmation du poids par l’entreprise.",
   "viewAllShipments": "Voir toutes les expéditions",
   "shipmentStillSyncing": "Cette expédition est encore en synchronisation. Vous pouvez voir toutes les expéditions ou réessayer bientôt.",
@@ -1536,9 +1563,17 @@
   "finalTotal": "Total final",
   "additionalPaymentRequired": "Paiement supplémentaire requis",
   "payBalanceAmount": "Payer le solde de {amount}",
-  "@payBalanceAmount": {"placeholders": {"amount": {}}},
+  "@payBalanceAmount": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
   "refundDueAmount": "Remboursement dû : {amount}",
-  "@refundDueAmount": {"placeholders": {"amount": {}}},
+  "@refundDueAmount": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
   "refundProcessing": "Remboursement en cours",
   "refundCompleted": "Remboursement effectué",
   "freightSettled": "Paiement finalisé",
@@ -1550,9 +1585,17 @@
   "bookAndPay": "Réserver et payer",
   "freightDropOffNote": "Déposez votre colis à l’adresse de l’entreprise. Le ramassage arrive bientôt.",
   "freightDropOffAddress": "Dépôt : {address}",
-  "@freightDropOffAddress": {"placeholders": {"address": {}}},
+  "@freightDropOffAddress": {
+    "placeholders": {
+      "address": {}
+    }
+  },
   "freightBusinessPhone": "Téléphone de l’entreprise : {phone}",
-  "@freightBusinessPhone": {"placeholders": {"phone": {}}},
+  "@freightBusinessPhone": {
+    "placeholders": {
+      "phone": {}
+    }
+  },
   "airFreight": "Fret aérien",
   "seaFreight": "Fret maritime",
   "pricePerKg": "{price} / kg",
@@ -1643,8 +1686,6 @@
   "theCar": "La voiture",
   "contactAndPickup": "Contact et ramassage",
   "businessDestination": "Entreprise · destination",
-  "vinOptional": "VIN (facultatif)",
-  "contactPhone": "Téléphone de contact",
   "pickupAddressOptional": "Adresse de ramassage (facultatif)",
   "notesForBusinessOptional": "Notes pour l’entreprise (facultatif)",
   "enterOwnerName": "Entrez le nom du propriétaire",
@@ -1739,7 +1780,6 @@
       "forfeitures": {}
     }
   },
-  "markAsSold": "Marquer comme vendu",
   "customerDidNotCome": "Le client n’est pas venu",
   "approveExtension": "Approuver la prolongation",
   "rejectExtension": "Rejeter la prolongation",
@@ -1783,7 +1823,6 @@
   "accountProfileUnavailable": "La connexion est lente. Nous n’avons pas pu charger votre rôle de compte en toute sécurité.",
   "accountProfileMissing": "Le profil de votre compte est introuvable. Contactez l’assistance Laawol.",
   "accountProfileRetryHelp": "Réessayez sans vous déconnecter ni perdre votre session.",
-  "availableBalance": "Solde disponible",
   "addMoney": "Ajouter de l’argent",
   "myOrders": "Mes commandes",
   "goodMorning": "Bonjour",
@@ -1817,7 +1856,6 @@
   "shipmentEstimate": "Estimation de l’expédition",
   "addProfilePicture": "Ajouter une photo de profil",
   "registerBusinessInstead": "Enregistrer votre entreprise à la place",
-  "registerYourBusiness": "Enregistrer votre entreprise",
   "businessApprovalSetupNote": "Vous pouvez configurer les destinations, voitures et employés immédiatement. Les clients verront votre entreprise seulement après l’approbation de la plateforme.",
   "businessProfilePicture": "Photo de profil de l’entreprise",
   "businessProfilePictureHelper": "Téléversez un logo ou une image de vitrine que les clients peuvent reconnaître.",
@@ -1858,7 +1896,6 @@
   "clear": "Effacer",
   "signInToSaveBarrelShipment": "Connectez-vous ou créez un compte afin que nous puissions enregistrer cette expédition de barils en sécurité et l’afficher dans le suivi.",
   "editDestinationPickupHelp": "Utilisez Modifier sur chaque ligne de destination pour ajouter ou changer les détails de ramassage de cette destination.",
-  "dropOffOffice": "Bureau de dépôt",
   "businessesShippingToCountry": "Entreprises expédiant vers ce pays",
   "fixedPickupPriceForBorough": "Prix de ramassage fixe pour cet arrondissement",
   "finalPriceConfirmedByStaff": "Le prix final sera confirmé par l’équipe.",
@@ -1871,8 +1908,12 @@
   "barrelDestinationSummary": "{barrelCount, plural, =1{1 baril} other{{barrelCount} barils}} vers {destinationCount, plural, =1{1 destination} other{{destinationCount} destinations}}.",
   "@barrelDestinationSummary": {
     "placeholders": {
-      "barrelCount": {"type": "int"},
-      "destinationCount": {"type": "int"}
+      "barrelCount": {
+        "type": "int"
+      },
+      "destinationCount": {
+        "type": "int"
+      }
     }
   },
   "addAnotherDestination": "Ajouter une autre destination",
@@ -1880,7 +1921,9 @@
   "destinationNumber": "Destination {number}",
   "@destinationNumber": {
     "placeholders": {
-      "number": {"type": "int"}
+      "number": {
+        "type": "int"
+      }
     }
   },
   "saveDestination": "Enregistrer la destination",
@@ -1888,14 +1931,18 @@
   "holdPerDayDescription": "{days, plural, =1{Maintien pendant 1 jour} other{Maintien pendant {days} jours}} à {amount} par jour",
   "@holdPerDayDescription": {
     "placeholders": {
-      "days": {"type": "int"},
+      "days": {
+        "type": "int"
+      },
       "amount": {}
     }
   },
   "holdFlatFeeDescription": "Frais fixes de maintien jusqu’à {days} jours",
   "@holdFlatFeeDescription": {
     "placeholders": {
-      "days": {"type": "int"}
+      "days": {
+        "type": "int"
+      }
     }
   },
   "pleaseChooseBusiness": "Veuillez choisir une entreprise",
@@ -1911,8 +1958,6 @@
   "choosePickupDateAndTime": "Choisir la date et l’heure de ramassage",
   "amountDueNow": "Montant dû maintenant",
   "estimatedCost": "Coût estimé",
-  "platformDashboard": "Tableau de bord plateforme",
-  "platformDashboardSubtitle": "Demandes, entreprises, opérations, remboursements et santé de la marketplace.",
   "supportCenter": "Centre de support",
   "supportCases": "Dossiers de support",
   "supportInbox": "Boîte de support",
@@ -2187,7 +2232,11 @@
   "holdUntil": "Réserver jusqu’au",
   "marketplaceResponsibilityTitle": "Comprendre qui fournit ce service",
   "marketplaceProviderResponsibilityBody": "{providerNames} est une entreprise indépendante responsable du bien ou du service, notamment de son exécution, de son état, du délai de livraison et de la qualité de sa prestation.",
-  "@marketplaceProviderResponsibilityBody": {"placeholders": {"providerNames": {}}},
+  "@marketplaceProviderResponsibilityBody": {
+    "placeholders": {
+      "providerNames": {}
+    }
+  },
   "marketplacePaymentFlowBody": "Laawol vous aide à trouver des entreprises, encaisse et traite votre paiement, peut déduire des frais de plateforme indiqués et peut transférer ultérieurement la rémunération de l’entreprise. Laawol peut aider au suivi, à l’assistance, aux remboursements et aux litiges.",
   "marketplaceNoGuaranteeBody": "Laawol n’est ni le vendeur, ni le transporteur, ni le prestataire et ne garantit ni la date de livraison ni la prestation de l’entreprise. Cela ne limite pas les droits auxquels la loi ne permet pas de renoncer.",
   "freightAutoChargeDisclosureBody": "Le poids que vous indiquez est une estimation. Si l’entreprise confirme un poids différent après la prise en charge, Laawol tentera de facturer automatiquement la carte utilisée aujourd’hui pour tout montant supplémentaire dû. Si cette charge échoue, vous devrez ouvrir l’application pour finaliser le paiement avant que votre expédition puisse continuer. Si votre expédition pèse moins, vous serez automatiquement remboursé.",
@@ -2196,195 +2245,236 @@
   "accountLegalAcceptance": "J’accepte les Conditions d’utilisation et la Politique de confidentialité de Laawol, y compris son rôle de place de marché.",
   "accountLegalAcceptanceRequired": "Veuillez accepter les Conditions d’utilisation et la Politique de confidentialité pour continuer.",
   "businessResponsibilityAcceptance": "Je comprends que mon entreprise est indépendamment responsable de ses annonces, prix, biens, services, exécution, délais de livraison, autorisations et obligations envers les clients.",
-  "businessResponsibilityRequired": "Confirmez la déclaration de responsabilité de l’entreprise pour envoyer votre demande."
-  ,"verifyPhoneToContinueTitle": "Vérifiez votre téléphone pour continuer"
-  ,"verifyPhoneToContinueBody": "Les barils partagés sont réservés aux clients dont le numéro de téléphone est vérifié. Nous enverrons un code au numéro associé à votre compte."
-  ,"verifyPhone": "Vérifier le téléphone"
-  ,"notNow": "Pas maintenant"
-  ,"phoneVerificationTitle": "Vérification du téléphone"
-  ,"phoneVerificationExplanation": "Confirmez ou modifiez le numéro de portable de votre compte. Nous vous enverrons un code de vérification à usage unique par SMS."
-  ,"phoneVerificationCountryCodeHelp": "Choisissez l’indicatif du pays, puis saisissez le numéro mobile."
-  ,"phoneVerificationCodeSentTitle": "Code envoyé"
-  ,"phoneVerificationCodeSent": "Saisissez le code à 6 chiffres envoyé au {phone}."
-  ,"@phoneVerificationCodeSent": {"placeholders": {"phone": {}}}
-  ,"phoneVerificationCode": "Code de vérification"
-  ,"phoneVerificationSendCode": "Envoyer le code de vérification"
-  ,"phoneVerificationSendingCode": "Envoi du code..."
-  ,"phoneVerificationVerifying": "Vérification..."
-  ,"phoneVerificationResending": "Nouvel envoi..."
-  ,"phoneVerificationResent": "Un nouveau code a été envoyé."
-  ,"phoneVerificationResend": "Renvoyer le code"
-  ,"phoneVerificationResendIn": "Renvoyer le code dans {seconds} s"
-  ,"@phoneVerificationResendIn": {"placeholders": {"seconds": {"type": "int"}}}
-  ,"phoneVerificationChangeNumber": "Changer de numéro"
-  ,"phoneVerificationSmsNotice": "Les frais SMS et de données habituels peuvent s’appliquer. Le code sert uniquement à vérifier que ce téléphone vous appartient."
-  ,"phoneVerificationInvalidPhone": "Saisissez un numéro international valide commençant par + et l’indicatif du pays."
-  ,"phoneVerificationEnterCode": "Saisissez le code à 6 chiffres."
-  ,"phoneVerificationInvalidCode": "Ce code est incorrect. Vérifiez-le et réessayez."
-  ,"phoneVerificationExpiredCode": "Ce code a expiré. Demandez un nouveau code et réessayez."
-  ,"phoneVerificationTooManyAttempts": "Trop de tentatives de vérification. Attendez avant de réessayer."
-  ,"phoneVerificationNetworkError": "Vérifiez votre connexion et réessayez."
-  ,"phoneVerificationRequestTimedOut": "Nous n’avons reçu aucune réponse. Vérifiez votre connexion et réessayez."
-  ,"phoneVerificationPhoneInUse": "Ce numéro de téléphone est déjà associé à un autre compte."
-  ,"phoneVerificationRecentLogin": "Pour des raisons de sécurité, déconnectez-vous, reconnectez-vous, puis vérifiez à nouveau votre téléphone."
-  ,"phoneVerificationAppCheck": "Le contrôle de sécurité de l’app a échoué. Enregistrez cet appareil de débogage dans Firebase App Check, puis rouvrez l’app."
-  ,"phoneVerificationGenericError": "Nous n’avons pas pu vérifier votre téléphone. Réessayez."
-  ,"phoneVerificationSyncPending": "Votre code a été accepté, mais nous n’avons pas pu terminer la mise à jour de votre profil. Terminez à nouveau la vérification ; aucun autre SMS n’est nécessaire."
-  ,"phoneVerificationFinish": "Terminer la vérification"
-  ,"phoneVerificationFinishing": "Finalisation de la vérification..."
-  ,"phoneVerificationSavePhoneFirst": "Enregistrez ce numéro avant de le vérifier."
-  ,"phoneVerificationSaveAndVerify": "Enregistrer et vérifier"
-  ,"phoneVerificationSavingNumber": "Enregistrement du numéro..."
-  ,"phoneVerificationEditedStatus": "Ce numéro n’est ni enregistré ni vérifié."
-  ,"phoneVerificationUnverifiedHelp": "Vérifiez ce numéro pour utiliser les fonctions protégées du compte."
-  ,"phoneVerificationVerifiedHelp": "Ce numéro correspond au téléphone vérifié de manière sécurisée sur votre compte."
-  ,"phoneVerificationSuccess": "Votre numéro de téléphone est vérifié."
-  ,"phoneVerificationSuccessTitle": "Téléphone vérifié"
-  ,"phoneVerificationReturnToSharedBarrels": "Retourner aux barils partagés"
-  ,"phoneVerificationVerified": "Téléphone vérifié"
-  ,"phoneVerificationNotVerified": "Téléphone non vérifié"
-  ,"phoneCountryCode": "Indicatif du pays"
-  ,"selectCountryCode": "Sélectionner l’indicatif du pays"
-  ,"phoneCountrySearchHint": "Rechercher un pays ou un indicatif"
-  ,"noCountryCodesFound": "Aucun indicatif trouvé"
-  ,"sharedBarrelActionFailed": "Nous n’avons pas pu terminer cette action de baril partagé. Réessayez."
-  ,"sharedBarrelsLoadFailed": "Vérifiez votre connexion et réessayez. Vos informations sont en sécurité."
-  ,"sharedBarrelFormLoadFailed": "Nous n’avons pas pu ouvrir le formulaire de baril partagé. Vérifiez votre connexion et réessayez."
-  ,"marketplaceBalancePaymentSummary": "Paiement du solde"
-  ,"marketplaceDestinationChangeSummary": "Modification payante de la destination"
-  ,"freightPickupSectionTitle": "Enlèvement du fret"
-  ,"freightPickupSectionSubtitle": "Proposez de récupérer les colis à l'adresse de votre client et choisissez le mode de calcul des frais."
-  ,"freightPickupOfferToggle": "Proposer l'enlèvement du fret"
-  ,"freightPickupModelDistance": "Par distance"
-  ,"freightPickupModelBorough": "Par arrondissement"
-  ,"freightPickupDistanceHint": "Frais = frais de base + tarif au km × distance de conduite depuis votre adresse. Laissez les tarifs à 0 pour un enlèvement gratuit."
-  ,"freightPickupOriginAddress": "Adresse de départ de l'enlèvement"
-  ,"freightPickupOriginAddressHelper": "Point de départ de vos chauffeurs. Par défaut, l'adresse de votre entreprise."
-  ,"freightPickupBaseFee": "Frais de base"
-  ,"freightPickupPerKm": "Par km"
-  ,"freightPickupMinFee": "Frais minimum"
-  ,"freightPickupMaxKm": "Distance max (km)"
-  ,"freightPickupBoroughHint": "Définissez un tarif d'enlèvement fixe pour chaque arrondissement de New York que vous desservez. Laissez vide ceux que vous ne couvrez pas."
-  ,"freightPickupBoroughPriceRequired": "Définissez un tarif d'enlèvement pour au moins un arrondissement, ou désactivez l'enlèvement du fret."
-  ,"freightPickupCustomerToggle": "Enlèvement à mon adresse"
-  ,"freightPickupAddressLabel": "Adresse d'enlèvement"
-  ,"freightPickupBoroughLabel": "Arrondissement"
-  ,"freightPickupDateTimeLabel": "Date et heure d'enlèvement"
-  ,"freightPickupChooseDateTime": "Choisir la date et l'heure"
-  ,"freightPickupFeeLabel": "Frais d'enlèvement"
-  ,"freightPickupCalculating": "Calcul des frais d'enlèvement…"
-  ,"freightPickupEnterDetailsForFee": "Saisissez vos détails d'enlèvement pour voir les frais."
-  ,"freightPickupSelectDateTime": "Veuillez choisir une date et une heure d'enlèvement."
-  ,"freightPickupUnavailableCustomer": "Cette entreprise ne propose pas l'enlèvement pour le moment."
-  ,"freightPickupOutOfRangeCustomer": "Votre adresse est en dehors de la zone d'enlèvement de cette entreprise."
-  ,"freightPickupQuoteFailed": "Nous n'avons pas pu calculer les frais d'enlèvement. Vérifiez l'adresse et réessayez."
-  ,"freightPickupDistanceAway": "à {distanceKm} km"
-  ,"@freightPickupDistanceAway": { "placeholders": { "distanceKm": { "type": "String" } } }
-  ,"freightPickupFreeLabel": "Enlèvement gratuit"
-  ,"freightAirDepartureDays": "Jours de départ du fret aérien"
-  ,"freightSeaDepartureDays": "Jours de départ du fret maritime"
-  ,"freightDepartureDaysHelper": "Facultatif. Choisissez les jours de départ habituels de ce service."
-  ,"mondayShort": "Lun"
-  ,"tuesdayShort": "Mar"
-  ,"wednesdayShort": "Mer"
-  ,"thursdayShort": "Jeu"
-  ,"fridayShort": "Ven"
-  ,"saturdayShort": "Sam"
-  ,"sundayShort": "Dim"
-  ,"regularDepartureDays": "Départs habituels : {days}"
-  ,"@regularDepartureDays": { "placeholders": { "days": { "type": "String" } } }
-  ,"peopleAndAccess": "Personnes et accès"
-  ,"peopleAndAccessSubtitle": "Gérez les identités, les invitations et la sécurité des comptes de la place de marché."
-  ,"allPeople": "Toutes les personnes"
-  ,"platformAdministrators": "Administrateurs de la plateforme"
-  ,"businessOwners": "Propriétaires d’entreprise"
-  ,"pendingInvitations": "Invitations en attente"
-  ,"missingProfiles": "Profils manquants"
-  ,"suspendedAccounts": "Comptes suspendus"
-  ,"people": "Personnes"
-  ,"invitePerson": "Inviter une personne"
-  ,"searchPeopleHint": "Rechercher un e-mail, téléphone ou identifiant exact"
-  ,"clearSearch": "Effacer la recherche"
-  ,"loadMorePeople": "Afficher plus de personnes"
-  ,"peopleCouldNotLoad": "Impossible de charger les personnes"
-  ,"tryAgain": "Réessayer"
-  ,"notProvided": "Non renseigné"
-  ,"noPeopleFound": "Aucune personne trouvée"
-  ,"noPeopleFoundHelp": "Essayez un autre filtre ou recherchez une adresse e-mail, un numéro de téléphone ou un identifiant exact."
-  ,"peopleAccessRestricted": "L’accès aux personnes est limité"
-  ,"peopleAccessRestrictedHelp": "Votre rôle d’administrateur ne permet pas de consulter les personnes de la place de marché."
-  ,"you": "Vous"
-  ,"platformAdministrator": "Administrateur de la plateforme"
-  ,"businessStaffMember": "Membre du personnel de l’entreprise"
-  ,"pendingInvitation": "Invitation en attente"
-  ,"missingProfile": "Profil manquant"
-  ,"invitationPending": "Invitation en attente"
-  ,"deletionPending": "Suppression en attente"
-  ,"authenticationMissing": "Authentification manquante"
-  ,"identityAndAccess": "Identité et accès"
-  ,"emailVerification": "Vérification de l’e-mail"
-  ,"verified": "Vérifié"
-  ,"notVerified": "Non vérifié"
-  ,"businessAccess": "Accès à l’entreprise"
-  ,"businessPermissions": "Autorisations de l’entreprise"
-  ,"businessPermissionsHelp": "Accordez uniquement les outils nécessaires. Vous pourrez modifier l’accès ultérieurement."
-  ,"noAssignedPermissions": "Aucune autorisation attribuée"
-  ,"cannotChangeOwnAccess": "Pour votre sécurité, vous ne pouvez pas modifier votre propre accès depuis cet écran."
-  ,"accountActions": "Actions sur le compte"
-  ,"suspendAccount": "Suspendre le compte"
-  ,"suspendAccountConfirm": "Cette personne perdra immédiatement l’accès et toutes ses sessions actives seront révoquées."
-  ,"restoreAccount": "Rétablir le compte"
-  ,"restoreAccountConfirm": "Cette personne pourra de nouveau se connecter."
-  ,"accountSuspended": "Compte suspendu"
-  ,"accountRestored": "Compte rétabli"
-  ,"revokeSessions": "Révoquer les sessions actives"
-  ,"sessionsRevoked": "Sessions actives révoquées"
-  ,"sendPasswordReset": "Envoyer la réinitialisation du mot de passe"
-  ,"passwordResetSent": "Réinitialisation du mot de passe demandée"
-  ,"sendVerificationEmail": "Envoyer l’e-mail de vérification"
-  ,"verificationEmailSent": "E-mail de vérification demandé"
-  ,"transferOwnership": "Transférer la propriété de l’entreprise"
-  ,"transferOwnershipConfirm": "Ce membre du personnel deviendra propriétaire et le propriétaire actuel deviendra membre du personnel."
-  ,"ownershipTransferred": "Propriété de l’entreprise transférée"
-  ,"resendInvitation": "Renvoyer l’invitation"
-  ,"invitationResent": "Invitation renvoyée"
-  ,"cancelInvitation": "Annuler l’invitation"
-  ,"cancelInvitationConfirm": "Cette invitation ne pourra plus être utilisée."
-  ,"invitationCancelled": "Invitation annulée"
-  ,"reviewDeletionRequest": "Examiner la suppression du compte"
-  ,"deletionBlocked": "La suppression est bloquée"
-  ,"deletionBlockedByRecords": "{count} dossier(s) actif(s) ou conservé(s) légalement doivent être résolus avant la suppression de ce compte."
-  ,"@deletionBlockedByRecords": { "placeholders": { "count": { "type": "int" } } }
-  ,"finalizeAccountDeletion": "Finaliser la suppression du compte"
-  ,"finalizeAccountDeletionConfirm": "Cette action supprime définitivement l’accès après confirmation par le serveur qu’aucun dossier ne bloque la suppression. Elle est irréversible."
-  ,"accountDeletionFinalized": "Suppression du compte finalisée"
-  ,"adminApprovedDeletion": "Suppression examinée et approuvée par un administrateur de la plateforme."
-  ,"invitePlatformAdministrator": "Inviter un administrateur de la plateforme"
-  ,"invitePlatformAdministratorHelp": "Choisissez un rôle d’administrateur limité. L’accès super administrateur n’est jamais accordé par invitation."
-  ,"inviteBusinessPersonnel": "Inviter du personnel d’entreprise"
-  ,"inviteBusinessPersonnelHelp": "Sélectionnez l’entreprise et les outils précis que cette personne peut utiliser."
-  ,"sendInvitation": "Envoyer l’invitation"
-  ,"invitationSent": "Invitation envoyée"
-  ,"adminRole": "Rôle d’administrateur"
-  ,"superAdministrator": "Super administrateur"
-  ,"operationsManager": "Responsable des opérations"
-  ,"financeManager": "Responsable financier"
-  ,"supportAdministrator": "Administrateur du support"
-  ,"contentManager": "Responsable du contenu"
-  ,"businessOwner": "Propriétaire de l’entreprise"
-  ,"profile": "Profil"
-  ,"listings": "Annonces"
-  ,"barrels": "Barils"
-  ,"freight": "Fret"
-  ,"transport": "Transport"
-  ,"parking": "Stationnement"
-  ,"destinations": "Destinations"
-  ,"growth": "Croissance"
-  ,"invitationProfileSetupTitle": "Terminez la configuration de votre accès invité"
-  ,"invitationProfileSetupHelp": "Vérifiez cette adresse e-mail, puis revenez ici pour activer le rôle auquel vous avez été invité."
-  ,"verifyInvitedEmail": "Envoyer l’e-mail de vérification"
-  ,"sendingVerificationEmail": "Envoi de l’e-mail de vérification…"
-  ,"iVerifiedContinue": "J’ai vérifié — continuer"
-  ,"invitationVerificationEmailSent": "E-mail de vérification envoyé. Consultez votre boîte de réception, puis revenez ici."
-  ,"invitationVerificationEmailFailed": "Impossible d’envoyer l’e-mail de vérification. Veuillez réessayer."
+  "businessResponsibilityRequired": "Confirmez la déclaration de responsabilité de l’entreprise pour envoyer votre demande.",
+  "verifyPhoneToContinueTitle": "Vérifiez votre téléphone pour continuer",
+  "verifyPhoneToContinueBody": "Les barils partagés sont réservés aux clients dont le numéro de téléphone est vérifié. Nous enverrons un code au numéro associé à votre compte.",
+  "verifyPhone": "Vérifier le téléphone",
+  "notNow": "Pas maintenant",
+  "phoneVerificationTitle": "Vérification du téléphone",
+  "phoneVerificationExplanation": "Confirmez ou modifiez le numéro de portable de votre compte. Nous vous enverrons un code de vérification à usage unique par SMS.",
+  "phoneVerificationCountryCodeHelp": "Choisissez l’indicatif du pays, puis saisissez le numéro mobile.",
+  "phoneVerificationCodeSentTitle": "Code envoyé",
+  "phoneVerificationCodeSent": "Saisissez le code à 6 chiffres envoyé au {phone}.",
+  "@phoneVerificationCodeSent": {
+    "placeholders": {
+      "phone": {}
+    }
+  },
+  "phoneVerificationCode": "Code de vérification",
+  "phoneVerificationSendCode": "Envoyer le code de vérification",
+  "phoneVerificationSendingCode": "Envoi du code...",
+  "phoneVerificationVerifying": "Vérification...",
+  "phoneVerificationResending": "Nouvel envoi...",
+  "phoneVerificationResent": "Un nouveau code a été envoyé.",
+  "phoneVerificationResend": "Renvoyer le code",
+  "phoneVerificationResendIn": "Renvoyer le code dans {seconds} s",
+  "@phoneVerificationResendIn": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "phoneVerificationChangeNumber": "Changer de numéro",
+  "phoneVerificationSmsNotice": "Les frais SMS et de données habituels peuvent s’appliquer. Le code sert uniquement à vérifier que ce téléphone vous appartient.",
+  "phoneVerificationInvalidPhone": "Saisissez un numéro international valide commençant par + et l’indicatif du pays.",
+  "phoneVerificationEnterCode": "Saisissez le code à 6 chiffres.",
+  "phoneVerificationInvalidCode": "Ce code est incorrect. Vérifiez-le et réessayez.",
+  "phoneVerificationExpiredCode": "Ce code a expiré. Demandez un nouveau code et réessayez.",
+  "phoneVerificationTooManyAttempts": "Trop de tentatives de vérification. Attendez avant de réessayer.",
+  "phoneVerificationNetworkError": "Vérifiez votre connexion et réessayez.",
+  "phoneVerificationRequestTimedOut": "Nous n’avons reçu aucune réponse. Vérifiez votre connexion et réessayez.",
+  "phoneVerificationPhoneInUse": "Ce numéro de téléphone est déjà associé à un autre compte.",
+  "phoneVerificationRecentLogin": "Pour des raisons de sécurité, déconnectez-vous, reconnectez-vous, puis vérifiez à nouveau votre téléphone.",
+  "phoneVerificationAppCheck": "Le contrôle de sécurité de l’app a échoué. Enregistrez cet appareil de débogage dans Firebase App Check, puis rouvrez l’app.",
+  "phoneVerificationGenericError": "Nous n’avons pas pu vérifier votre téléphone. Réessayez.",
+  "phoneVerificationSyncPending": "Votre code a été accepté, mais nous n’avons pas pu terminer la mise à jour de votre profil. Terminez à nouveau la vérification ; aucun autre SMS n’est nécessaire.",
+  "phoneVerificationFinish": "Terminer la vérification",
+  "phoneVerificationFinishing": "Finalisation de la vérification...",
+  "phoneVerificationSavePhoneFirst": "Enregistrez ce numéro avant de le vérifier.",
+  "phoneVerificationSaveAndVerify": "Enregistrer et vérifier",
+  "phoneVerificationSavingNumber": "Enregistrement du numéro...",
+  "phoneVerificationEditedStatus": "Ce numéro n’est ni enregistré ni vérifié.",
+  "phoneVerificationUnverifiedHelp": "Vérifiez ce numéro pour utiliser les fonctions protégées du compte.",
+  "phoneVerificationVerifiedHelp": "Ce numéro correspond au téléphone vérifié de manière sécurisée sur votre compte.",
+  "phoneVerificationSuccess": "Votre numéro de téléphone est vérifié.",
+  "phoneVerificationSuccessTitle": "Téléphone vérifié",
+  "phoneVerificationReturnToSharedBarrels": "Retourner aux barils partagés",
+  "phoneVerificationVerified": "Téléphone vérifié",
+  "phoneVerificationNotVerified": "Téléphone non vérifié",
+  "phoneCountryCode": "Indicatif du pays",
+  "selectCountryCode": "Sélectionner l’indicatif du pays",
+  "phoneCountrySearchHint": "Rechercher un pays ou un indicatif",
+  "noCountryCodesFound": "Aucun indicatif trouvé",
+  "sharedBarrelActionFailed": "Nous n’avons pas pu terminer cette action de baril partagé. Réessayez.",
+  "sharedBarrelsLoadFailed": "Vérifiez votre connexion et réessayez. Vos informations sont en sécurité.",
+  "sharedBarrelFormLoadFailed": "Nous n’avons pas pu ouvrir le formulaire de baril partagé. Vérifiez votre connexion et réessayez.",
+  "marketplaceBalancePaymentSummary": "Paiement du solde",
+  "marketplaceDestinationChangeSummary": "Modification payante de la destination",
+  "freightPickupSectionTitle": "Enlèvement du fret",
+  "freightPickupSectionSubtitle": "Proposez de récupérer les colis à l'adresse de votre client et choisissez le mode de calcul des frais.",
+  "freightPickupOfferToggle": "Proposer l'enlèvement du fret",
+  "freightPickupModelDistance": "Par distance",
+  "freightPickupModelBorough": "Par arrondissement",
+  "freightPickupDistanceHint": "Frais = frais de base + tarif au km × distance de conduite depuis votre adresse. Laissez les tarifs à 0 pour un enlèvement gratuit.",
+  "freightPickupOriginAddress": "Adresse de départ de l'enlèvement",
+  "freightPickupOriginAddressHelper": "Point de départ de vos chauffeurs. Par défaut, l'adresse de votre entreprise.",
+  "freightPickupBaseFee": "Frais de base",
+  "freightPickupPerKm": "Par km",
+  "freightPickupMinFee": "Frais minimum",
+  "freightPickupMaxKm": "Distance max (km)",
+  "freightPickupBoroughHint": "Définissez un tarif d'enlèvement fixe pour chaque arrondissement de New York que vous desservez. Laissez vide ceux que vous ne couvrez pas.",
+  "freightPickupBoroughPriceRequired": "Définissez un tarif d'enlèvement pour au moins un arrondissement, ou désactivez l'enlèvement du fret.",
+  "freightPickupCustomerToggle": "Enlèvement à mon adresse",
+  "freightPickupAddressLabel": "Adresse d'enlèvement",
+  "freightPickupBoroughLabel": "Arrondissement",
+  "freightPickupDateTimeLabel": "Date et heure d'enlèvement",
+  "freightPickupChooseDateTime": "Choisir la date et l'heure",
+  "freightPickupFeeLabel": "Frais d'enlèvement",
+  "freightPickupCalculating": "Calcul des frais d'enlèvement…",
+  "freightPickupEnterDetailsForFee": "Saisissez vos détails d'enlèvement pour voir les frais.",
+  "freightPickupSelectDateTime": "Veuillez choisir une date et une heure d'enlèvement.",
+  "freightPickupUnavailableCustomer": "Cette entreprise ne propose pas l'enlèvement pour le moment.",
+  "freightPickupOutOfRangeCustomer": "Votre adresse est en dehors de la zone d'enlèvement de cette entreprise.",
+  "freightPickupQuoteFailed": "Nous n'avons pas pu calculer les frais d'enlèvement. Vérifiez l'adresse et réessayez.",
+  "freightPickupDistanceAway": "à {distanceKm} km",
+  "@freightPickupDistanceAway": {
+    "placeholders": {
+      "distanceKm": {
+        "type": "String"
+      }
+    }
+  },
+  "freightPickupFreeLabel": "Enlèvement gratuit",
+  "freightAirDepartureDays": "Jours de départ du fret aérien",
+  "freightSeaDepartureDays": "Jours de départ du fret maritime",
+  "freightDepartureDaysHelper": "Facultatif. Choisissez les jours de départ habituels de ce service.",
+  "mondayShort": "Lun",
+  "tuesdayShort": "Mar",
+  "wednesdayShort": "Mer",
+  "thursdayShort": "Jeu",
+  "fridayShort": "Ven",
+  "saturdayShort": "Sam",
+  "sundayShort": "Dim",
+  "regularDepartureDays": "Départs habituels : {days}",
+  "@regularDepartureDays": {
+    "placeholders": {
+      "days": {
+        "type": "String"
+      }
+    }
+  },
+  "allPeople": "Toutes les personnes",
+  "platformAdministrators": "Administrateurs de la plateforme",
+  "businessOwners": "Propriétaires d’entreprise",
+  "pendingInvitations": "Invitations en attente",
+  "missingProfiles": "Profils manquants",
+  "suspendedAccounts": "Comptes suspendus",
+  "people": "Personnes",
+  "invitePerson": "Inviter une personne",
+  "searchPeopleHint": "Rechercher un e-mail, téléphone ou identifiant exact",
+  "clearSearch": "Effacer la recherche",
+  "loadMorePeople": "Afficher plus de personnes",
+  "peopleCouldNotLoad": "Impossible de charger les personnes",
+  "tryAgain": "Réessayer",
+  "notProvided": "Non renseigné",
+  "noPeopleFound": "Aucune personne trouvée",
+  "noPeopleFoundHelp": "Essayez un autre filtre ou recherchez une adresse e-mail, un numéro de téléphone ou un identifiant exact.",
+  "peopleAccessRestricted": "L’accès aux personnes est limité",
+  "peopleAccessRestrictedHelp": "Votre rôle d’administrateur ne permet pas de consulter les personnes de la place de marché.",
+  "you": "Vous",
+  "platformAdministrator": "Administrateur de la plateforme",
+  "businessStaffMember": "Membre du personnel de l’entreprise",
+  "pendingInvitation": "Invitation en attente",
+  "missingProfile": "Profil manquant",
+  "invitationPending": "Invitation en attente",
+  "deletionPending": "Suppression en attente",
+  "authenticationMissing": "Authentification manquante",
+  "identityAndAccess": "Identité et accès",
+  "emailVerification": "Vérification de l’e-mail",
+  "verified": "Vérifié",
+  "notVerified": "Non vérifié",
+  "businessAccess": "Accès à l’entreprise",
+  "businessPermissions": "Autorisations de l’entreprise",
+  "businessPermissionsHelp": "Accordez uniquement les outils nécessaires. Vous pourrez modifier l’accès ultérieurement.",
+  "noAssignedPermissions": "Aucune autorisation attribuée",
+  "cannotChangeOwnAccess": "Pour votre sécurité, vous ne pouvez pas modifier votre propre accès depuis cet écran.",
+  "accountActions": "Actions sur le compte",
+  "suspendAccount": "Suspendre le compte",
+  "suspendAccountConfirm": "Cette personne perdra immédiatement l’accès et toutes ses sessions actives seront révoquées.",
+  "restoreAccount": "Rétablir le compte",
+  "restoreAccountConfirm": "Cette personne pourra de nouveau se connecter.",
+  "accountSuspended": "Compte suspendu",
+  "accountRestored": "Compte rétabli",
+  "revokeSessions": "Révoquer les sessions actives",
+  "sessionsRevoked": "Sessions actives révoquées",
+  "sendPasswordReset": "Envoyer la réinitialisation du mot de passe",
+  "passwordResetSent": "Réinitialisation du mot de passe demandée",
+  "sendVerificationEmail": "Envoyer l’e-mail de vérification",
+  "verificationEmailSent": "E-mail de vérification demandé",
+  "transferOwnership": "Transférer la propriété de l’entreprise",
+  "transferOwnershipConfirm": "Ce membre du personnel deviendra propriétaire et le propriétaire actuel deviendra membre du personnel.",
+  "ownershipTransferred": "Propriété de l’entreprise transférée",
+  "resendInvitation": "Renvoyer l’invitation",
+  "invitationResent": "Invitation renvoyée",
+  "cancelInvitation": "Annuler l’invitation",
+  "cancelInvitationConfirm": "Cette invitation ne pourra plus être utilisée.",
+  "invitationCancelled": "Invitation annulée",
+  "reviewDeletionRequest": "Examiner la suppression du compte",
+  "deletionBlocked": "La suppression est bloquée",
+  "deletionBlockedByRecords": "{count} dossier(s) actif(s) ou conservé(s) légalement doivent être résolus avant la suppression de ce compte.",
+  "@deletionBlockedByRecords": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "finalizeAccountDeletion": "Finaliser la suppression du compte",
+  "finalizeAccountDeletionConfirm": "Cette action supprime définitivement l’accès après confirmation par le serveur qu’aucun dossier ne bloque la suppression. Elle est irréversible.",
+  "accountDeletionFinalized": "Suppression du compte finalisée",
+  "adminApprovedDeletion": "Suppression examinée et approuvée par un administrateur de la plateforme.",
+  "invitePlatformAdministrator": "Inviter un administrateur de la plateforme",
+  "invitePlatformAdministratorHelp": "Choisissez un rôle d’administrateur limité. L’accès super administrateur n’est jamais accordé par invitation.",
+  "inviteBusinessPersonnel": "Inviter du personnel d’entreprise",
+  "inviteBusinessPersonnelHelp": "Sélectionnez l’entreprise et les outils précis que cette personne peut utiliser.",
+  "sendInvitation": "Envoyer l’invitation",
+  "invitationSent": "Invitation envoyée",
+  "adminRole": "Rôle d’administrateur",
+  "superAdministrator": "Super administrateur",
+  "operationsManager": "Responsable des opérations",
+  "financeManager": "Responsable financier",
+  "supportAdministrator": "Administrateur du support",
+  "contentManager": "Responsable du contenu",
+  "profile": "Profil",
+  "listings": "Annonces",
+  "barrels": "Barils",
+  "freight": "Fret",
+  "transport": "Transport",
+  "parking": "Stationnement",
+  "destinations": "Destinations",
+  "growth": "Croissance",
+  "invitationProfileSetupTitle": "Terminez la configuration de votre accès invité",
+  "invitationProfileSetupHelp": "Vérifiez cette adresse e-mail, puis revenez ici pour activer le rôle auquel vous avez été invité.",
+  "verifyInvitedEmail": "Envoyer l’e-mail de vérification",
+  "sendingVerificationEmail": "Envoi de l’e-mail de vérification…",
+  "iVerifiedContinue": "J’ai vérifié — continuer",
+  "invitationVerificationEmailSent": "E-mail de vérification envoyé. Consultez votre boîte de réception, puis revenez ici.",
+  "invitationVerificationEmailFailed": "Impossible d’envoyer l’e-mail de vérification. Veuillez réessayer.",
+  "editTransportRequest": "Modifier la demande",
+  "editTransportRequestTitle": "Modifier votre demande",
+  "editTransportRequestSubtitle": "Vous pouvez modifier votre demande tant que vous n’avez pas choisi de devis.",
+  "transportEditContactSection": "Contact et enlèvement",
+  "transportEditVehicleSection": "Véhicule et destination",
+  "transportEditQuoteWarningTitle": "Vos devis seront réinitialisés",
+  "transportEditQuoteWarningMessage": "Les entreprises ont chiffré leurs devis selon vos informations actuelles. Modifier le véhicule, la zone d’enlèvement, le mode de transport ou la destination efface les devis reçus, et les entreprises devront chiffrer à nouveau.",
+  "transportEditKeepEditing": "Continuer la modification",
+  "transportEditSaveAnyway": "Enregistrer et réinitialiser",
+  "transportEditSaved": "Demande mise à jour",
+  "transportEditSavedRequote": "Demande mise à jour. Les entreprises enverront de nouveaux devis.",
+  "transportEditNoChanges": "Aucune modification",
+  "couldNotUpdateTransportRequest": "Impossible de mettre à jour cette demande. Veuillez réessayer.",
+  "transportEditDestinationMoved": "Votre demande est désormais envoyée aux entreprises qui desservent la nouvelle destination.",
+  "notes": "Remarques",
+  "vehicleOperable": "Le véhicule roule"
 }

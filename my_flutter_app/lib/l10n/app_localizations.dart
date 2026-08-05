@@ -10445,6 +10445,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The verification email could not be sent. Please try again.'**
   String get invitationVerificationEmailFailed;
+
+  /// No description provided for @editTransportRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit request'**
+  String get editTransportRequest;
+
+  /// No description provided for @editTransportRequestTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit your request'**
+  String get editTransportRequestTitle;
+
+  /// No description provided for @editTransportRequestSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'You can change your request until you choose a quote.'**
+  String get editTransportRequestSubtitle;
+
+  /// No description provided for @transportEditContactSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact and pickup'**
+  String get transportEditContactSection;
+
+  /// No description provided for @transportEditVehicleSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle and destination'**
+  String get transportEditVehicleSection;
+
+  /// No description provided for @transportEditQuoteWarningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This will reset your quotes'**
+  String get transportEditQuoteWarningTitle;
+
+  /// No description provided for @transportEditQuoteWarningMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Businesses priced their quotes on your current details. Changing the vehicle, pickup area, transport method or destination clears the quotes you already have, and businesses will be asked to quote again.'**
+  String get transportEditQuoteWarningMessage;
+
+  /// No description provided for @transportEditKeepEditing.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep editing'**
+  String get transportEditKeepEditing;
+
+  /// No description provided for @transportEditSaveAnyway.
+  ///
+  /// In en, this message translates to:
+  /// **'Save and reset quotes'**
+  String get transportEditSaveAnyway;
+
+  /// No description provided for @transportEditSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Request updated'**
+  String get transportEditSaved;
+
+  /// No description provided for @transportEditSavedRequote.
+  ///
+  /// In en, this message translates to:
+  /// **'Request updated. Businesses will send new quotes.'**
+  String get transportEditSavedRequote;
+
+  /// No description provided for @transportEditNoChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing changed'**
+  String get transportEditNoChanges;
+
+  /// No description provided for @couldNotUpdateTransportRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update this request. Please try again.'**
+  String get couldNotUpdateTransportRequest;
+
+  /// No description provided for @transportEditDestinationMoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Your request now goes to businesses serving the new destination.'**
+  String get transportEditDestinationMoved;
+
+  /// No description provided for @notes.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get notes;
+
+  /// No description provided for @vehicleOperable.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle is drivable'**
+  String get vehicleOperable;
 }
 
 class _AppLocalizationsDelegate
