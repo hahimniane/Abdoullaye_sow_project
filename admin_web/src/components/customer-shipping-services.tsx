@@ -38,6 +38,13 @@ import { ServiceRequestForm } from "@/components/service-request-form";
 import { SearchableSelect } from "@/components/searchable-select";
 import { confirmImportantAction } from "@/lib/action-confirmation";
 import {
+  canonicalMake,
+  canonicalModel,
+  getMakes,
+  getModels,
+  getYears,
+} from "@/lib/car-catalog";
+import {
   barrelDestinationCountries,
   barrelOrderTotals,
   barrelPickupPricingFromData,
@@ -3279,32 +3286,61 @@ function TransportRequestForm({
                   <div className="customer-form-grid customer-shipping-form-grid">
                     <label>
                       Car make
-                      <input
-                        onChange={(event) => setCarMake(event.target.value)}
-                        placeholder="For example, Toyota"
+                      {/* Cascading catalog pickers, never free text: typed
+                          makes re-introduce "toyta"/"Toyota " as separate
+                          values and break search, matching and quoting. */}
+                      <select
+                        onChange={(event) => {
+                          // Model and year belong to the previous make.
+                          setCarMake(event.target.value);
+                          setCarModel("");
+                          setCarYear("");
+                        }}
                         required
-                        value={carMake}
-                      />
+                        value={canonicalMake(carMake) || carMake}
+                      >
+                        <option value="">Select a make</option>
+                        {getMakes().map((make) => (
+                          <option key={make} value={make}>
+                            {make}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                     <label>
                       Car model
-                      <input
-                        onChange={(event) => setCarModel(event.target.value)}
-                        placeholder="For example, RAV4"
+                      <select
+                        disabled={!carMake}
+                        onChange={(event) => {
+                          setCarModel(event.target.value);
+                          setCarYear("");
+                        }}
                         required
-                        value={carModel}
-                      />
+                        value={canonicalModel(carMake, carModel) || carModel}
+                      >
+                        <option value="">Select a model</option>
+                        {getModels(carMake).map((model) => (
+                          <option key={model} value={model}>
+                            {model}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                     <label>
                       Car year
-                      <input
-                        max={currentYear + 1}
-                        min={1900}
+                      <select
+                        disabled={!carModel}
                         onChange={(event) => setCarYear(event.target.value)}
                         required
-                        type="number"
                         value={carYear}
-                      />
+                      >
+                        <option value="">Select a year</option>
+                        {getYears(carMake, carModel).map((year) => (
+                          <option key={year} value={year}>
+                            {year}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                     <label>
                       VIN number (optional)

@@ -76,7 +76,7 @@ import {
   type DestinationServiceAvailability,
 } from "@/lib/destination-pricing";
 import { currentLanguage, formatDate, formatMoney, text } from "@/lib/format";
-import { getMakes, getModels, getYears } from "@/lib/car-catalog";
+import { canonicalMake, canonicalModel, getMakes, getModels, getYears } from "@/lib/car-catalog";
 import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
 import { US_STATE_OPTIONS, citiesForState, withSelected } from "@/lib/us-locations";
 import type { FirestoreRow } from "@/types/admin";
@@ -3733,14 +3733,25 @@ export function ParkingPanel({
                 <label className="lst-field wide"><span>Owner name</span>
                   <input value={draft.ownerName} onChange={(event) => setDraft((value) => ({ ...value, ownerName: event.target.value }))} placeholder="Customer name" />
                 </label>
+                {/* Catalog pickers, not free text - this file already uses
+                    them for listings; the parking form was the last holdout. */}
                 <label className="lst-field"><span>Make</span>
-                  <input value={draft.carMake} onChange={(event) => setDraft((value) => ({ ...value, carMake: event.target.value }))} placeholder="Toyota" />
+                  <select value={canonicalMake(draft.carMake) || draft.carMake} onChange={(event) => setDraft((value) => ({ ...value, carMake: event.target.value, carModel: "", carYear: "" }))}>
+                    <option value="">Select a make</option>
+                    {getMakes().map((make) => (<option key={make} value={make}>{make}</option>))}
+                  </select>
                 </label>
                 <label className="lst-field"><span>Model</span>
-                  <input value={draft.carModel} onChange={(event) => setDraft((value) => ({ ...value, carModel: event.target.value }))} placeholder="Camry" />
+                  <select disabled={!draft.carMake} value={canonicalModel(draft.carMake, draft.carModel) || draft.carModel} onChange={(event) => setDraft((value) => ({ ...value, carModel: event.target.value, carYear: "" }))}>
+                    <option value="">Select a model</option>
+                    {getModels(draft.carMake).map((model) => (<option key={model} value={model}>{model}</option>))}
+                  </select>
                 </label>
                 <label className="lst-field"><span>Year</span>
-                  <input inputMode="numeric" value={draft.carYear} onChange={(event) => setDraft((value) => ({ ...value, carYear: event.target.value }))} placeholder="2019" />
+                  <select disabled={!draft.carModel} value={draft.carYear} onChange={(event) => setDraft((value) => ({ ...value, carYear: event.target.value }))}>
+                    <option value="">Select a year</option>
+                    {getYears(draft.carMake, draft.carModel).map((year) => (<option key={year} value={year}>{year}</option>))}
+                  </select>
                 </label>
                 <label className="lst-field"><span>VIN</span>
                   <input value={draft.vinNumber} onChange={(event) => setDraft((value) => ({ ...value, vinNumber: event.target.value }))} placeholder="17 characters" />
