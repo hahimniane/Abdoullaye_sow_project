@@ -2476,5 +2476,6 @@
   "couldNotUpdateTransportRequest": "Impossible de mettre à jour cette demande. Veuillez réessayer.",
   "transportEditDestinationMoved": "Votre demande est désormais envoyée aux entreprises qui desservent la nouvelle destination.",
   "notes": "Remarques",
-  "vehicleOperable": "Le véhicule roule"
+  "vehicleOperable": "Le véhicule roule",
+  "transportEditNeedsPickup": "J’ai besoin d’un enlèvement à une adresse"
 }

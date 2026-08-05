@@ -10541,6 +10541,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Vehicle is drivable'**
   String get vehicleOperable;
+
+  /// No description provided for @transportEditNeedsPickup.
+  ///
+  /// In en, this message translates to:
+  /// **'I need pickup from an address'**
+  String get transportEditNeedsPickup;
 }
 
 class _AppLocalizationsDelegate

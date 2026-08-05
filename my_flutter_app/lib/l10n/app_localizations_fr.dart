@@ -5957,4 +5957,8 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get vehicleOperable => 'Le véhicule roule';
+
+  @override
+  String get transportEditNeedsPickup =>
+      'J’ai besoin d’un enlèvement à une adresse';
 }

@@ -5858,4 +5858,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get vehicleOperable => 'Vehicle is drivable';
+
+  @override
+  String get transportEditNeedsPickup => 'I need pickup from an address';
 }

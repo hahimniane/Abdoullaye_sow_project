@@ -7,11 +7,13 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../data/car_catalog.dart';
+import '../models/destination_country.dart';
 import '../l10n/app_localizations.dart';
 import '../models/transport_request.dart';
 import '../models/transport_quote.dart';
 import '../providers/auth_provider.dart';
 import '../services/transport_service.dart';
+import '../widgets/destination_country_field.dart';
 import '../utils/transport_receipt_generator.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
@@ -788,12 +790,31 @@ class _TransportQuoteSectionState extends State<_TransportQuoteSection> {
   Future<void> _openEditSheet() async {
     final l10n = AppLocalizations.of(context)!;
     final request = widget.request;
+    final catalog = CarCatalog.instance;
     final phone = TextEditingController(text: request.customerPhone);
     final pickupAddress = TextEditingController(text: request.pickupAddress);
     final notes = TextEditingController(text: request.notes);
     final pickupArea = TextEditingController(text: request.pickupArea);
     var operable = request.vehicleOperable;
     var method = request.requestedTransportMethod;
+    // Pickup fields stay hidden until the customer says they want pickup -
+    // an address on a drop-off request is a field that changes their price.
+    var wantsPickup = request.pickupAddress.trim().isNotEmpty;
+    DestinationCountry? country;
+    // Free text would let "toyta" and "Toyota " become separate makes, so
+    // make/model/year come from the shared catalog, each narrowing the next.
+    String? make = request.carMake.isNotEmpty ? request.carMake : null;
+    String? model = request.carModel.isNotEmpty ? request.carModel : null;
+    String? year = request.carYear.isNotEmpty ? request.carYear : null;
+
+    // A stored value from before the catalog must still be selectable, or the
+    // dropdown renders empty and DropdownButton asserts on an unknown value.
+    List<String> withCurrent(List<String> options, String? current) {
+      if (current == null || current.isEmpty || options.contains(current)) {
+        return options;
+      }
+      return [current, ...options];
+    }
 
     final patch = await showModalBottomSheet<Map<String, Object?>>(
       context: context,
@@ -806,102 +827,189 @@ class _TransportQuoteSectionState extends State<_TransportQuoteSection> {
           bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
         ),
         child: StatefulBuilder(
-          builder: (sheetContext, setSheetState) => SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  l10n.editTransportRequestTitle,
-                  style: Theme.of(sheetContext).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  l10n.editTransportRequestSubtitle,
-                  style: Theme.of(sheetContext).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 18),
-                Text(l10n.transportEditContactSection,
-                    style: Theme.of(sheetContext).textTheme.labelLarge),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: phone,
-                  keyboardType: TextInputType.phone,
-                  decoration: InputDecoration(labelText: l10n.phoneNumber),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: pickupAddress,
-                  decoration: InputDecoration(labelText: l10n.pickupAddress),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: notes,
-                  maxLines: 2,
-                  decoration: InputDecoration(labelText: l10n.notes),
-                ),
-                const SizedBox(height: 18),
-                Text(l10n.transportEditVehicleSection,
-                    style: Theme.of(sheetContext).textTheme.labelLarge),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: pickupArea,
-                  decoration: InputDecoration(labelText: l10n.pickupArea),
-                ),
-                const SizedBox(height: 10),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: operable,
-                  title: Text(l10n.vehicleOperable),
-                  onChanged: (value) =>
-                      setSheetState(() => operable = value),
-                ),
-                DropdownButtonFormField<String>(
-                  initialValue: method.isEmpty ? 'open' : method,
-                  decoration:
-                      InputDecoration(labelText: l10n.transportMethod),
-                  items: const [
-                    DropdownMenuItem(value: 'open', child: Text('Open')),
-                    DropdownMenuItem(
-                        value: 'enclosed', child: Text('Enclosed')),
+          builder: (sheetContext, setSheetState) {
+            final makes = withCurrent(catalog.getMakes(), make);
+            final models = withCurrent(
+              make == null ? const [] : catalog.getModels(make!),
+              model,
+            );
+            final years = withCurrent(
+              make == null || model == null
+                  ? const []
+                  : catalog.getYears(make!, model!),
+              year,
+            );
+            return SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    l10n.editTransportRequestTitle,
+                    style: Theme.of(sheetContext).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    l10n.editTransportRequestSubtitle,
+                    style: Theme.of(sheetContext).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 18),
+                  Text(l10n.transportEditContactSection,
+                      style: Theme.of(sheetContext).textTheme.labelLarge),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: phone,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(labelText: l10n.phoneNumber),
+                  ),
+                  const SizedBox(height: 10),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: wantsPickup,
+                    title: Text(l10n.transportEditNeedsPickup),
+                    onChanged: (value) =>
+                        setSheetState(() => wantsPickup = value),
+                  ),
+                  if (wantsPickup) ...[
+                    TextField(
+                      controller: pickupAddress,
+                      decoration:
+                          InputDecoration(labelText: l10n.pickupAddress),
+                    ),
+                    const SizedBox(height: 10),
                   ],
-                  onChanged: (value) =>
-                      setSheetState(() => method = value ?? method),
-                ),
-                const SizedBox(height: 20),
-                FilledButton(
-                  onPressed: () {
-                    // Send only what changed - a full resubmission would
-                    // otherwise look like an edit and void every quote.
-                    final result = <String, Object?>{};
-                    void put(String key, Object? next, Object? before) {
-                      if (next.toString().trim() !=
-                          before.toString().trim()) {
-                        result[key] = next;
+                  TextField(
+                    controller: pickupArea,
+                    decoration: InputDecoration(labelText: l10n.pickupArea),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: notes,
+                    maxLines: 2,
+                    decoration: InputDecoration(labelText: l10n.notes),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(l10n.transportEditVehicleSection,
+                      style: Theme.of(sheetContext).textTheme.labelLarge),
+                  const SizedBox(height: 8),
+                  DestinationCountryField(
+                    value: country,
+                    label: l10n.destinationCountry,
+                    requiredMessage: l10n.requiredField,
+                    onChanged: (value) =>
+                        setSheetState(() => country = value),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: make,
+                    isExpanded: true,
+                    decoration: InputDecoration(labelText: l10n.carMake),
+                    items: [
+                      for (final option in makes)
+                        DropdownMenuItem(value: option, child: Text(option)),
+                    ],
+                    // Model and year belong to the old make; keeping them
+                    // would save a combination that does not exist.
+                    onChanged: (value) => setSheetState(() {
+                      make = value;
+                      model = null;
+                      year = null;
+                    }),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: model,
+                    isExpanded: true,
+                    decoration: InputDecoration(labelText: l10n.carModel),
+                    items: [
+                      for (final option in models)
+                        DropdownMenuItem(value: option, child: Text(option)),
+                    ],
+                    onChanged: make == null
+                        ? null
+                        : (value) => setSheetState(() {
+                              model = value;
+                              year = null;
+                            }),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: year,
+                    isExpanded: true,
+                    decoration: InputDecoration(labelText: l10n.carYear),
+                    items: [
+                      for (final option in years)
+                        DropdownMenuItem(value: option, child: Text(option)),
+                    ],
+                    onChanged: model == null
+                        ? null
+                        : (value) => setSheetState(() => year = value),
+                  ),
+                  const SizedBox(height: 10),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: operable,
+                    title: Text(l10n.vehicleOperable),
+                    onChanged: (value) =>
+                        setSheetState(() => operable = value),
+                  ),
+                  DropdownButtonFormField<String>(
+                    initialValue: method.isEmpty ? 'open' : method,
+                    decoration:
+                        InputDecoration(labelText: l10n.transportMethod),
+                    items: const [
+                      DropdownMenuItem(value: 'open', child: Text('Open')),
+                      DropdownMenuItem(
+                          value: 'enclosed', child: Text('Enclosed')),
+                    ],
+                    onChanged: (value) =>
+                        setSheetState(() => method = value ?? method),
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton(
+                    onPressed: () {
+                      // Send only what changed - a full resubmission would
+                      // look like an edit and void every quote.
+                      final result = <String, Object?>{};
+                      void put(String key, Object? next, Object? before) {
+                        if (next.toString().trim() !=
+                            before.toString().trim()) {
+                          result[key] = next;
+                        }
                       }
-                    }
 
-                    put('customerPhone', phone.text.trim(),
-                        request.customerPhone);
-                    put('pickupAddress', pickupAddress.text.trim(),
-                        request.pickupAddress);
-                    put('notes', notes.text.trim(), request.notes);
-                    put('pickupArea', pickupArea.text.trim(),
-                        request.pickupArea);
-                    if (operable != request.vehicleOperable) {
-                      result['vehicleOperable'] = operable;
-                    }
-                    if (method != request.requestedTransportMethod) {
-                      result['requestedTransportMethod'] = method;
-                    }
-                    Navigator.of(sheetContext).pop(result);
-                  },
-                  child: Text(l10n.save),
-                ),
-                const SizedBox(height: 10),
-              ],
-            ),
-          ),
+                      put('customerPhone', phone.text.trim(),
+                          request.customerPhone);
+                      put(
+                        'pickupAddress',
+                        wantsPickup ? pickupAddress.text.trim() : '',
+                        request.pickupAddress,
+                      );
+                      put('notes', notes.text.trim(), request.notes);
+                      put('pickupArea', pickupArea.text.trim(),
+                          request.pickupArea);
+                      put('carMake', make ?? '', request.carMake);
+                      put('carModel', model ?? '', request.carModel);
+                      put('carYear', year ?? '', request.carYear);
+                      if (country != null) {
+                        put('destinationCountryId', country!.id,
+                            request.destinationCountryId);
+                      }
+                      if (operable != request.vehicleOperable) {
+                        result['vehicleOperable'] = operable;
+                      }
+                      if (method != request.requestedTransportMethod) {
+                        result['requestedTransportMethod'] = method;
+                      }
+                      Navigator.of(sheetContext).pop(result);
+                    },
+                    child: Text(l10n.save),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );

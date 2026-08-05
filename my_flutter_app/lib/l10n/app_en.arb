@@ -2475,5 +2475,6 @@
   "couldNotUpdateTransportRequest": "Could not update this request. Please try again.",
   "transportEditDestinationMoved": "Your request now goes to businesses serving the new destination.",
   "notes": "Notes",
-  "vehicleOperable": "Vehicle is drivable"
+  "vehicleOperable": "Vehicle is drivable",
+  "transportEditNeedsPickup": "I need pickup from an address"
 }
