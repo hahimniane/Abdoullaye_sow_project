@@ -37,6 +37,58 @@ class TransportService {
         .toList();
   }
 
+  /// Revises an open request. The window closes when the customer selects a
+  /// quote - in this marketplace no business "accepts", they quote.
+  ///
+  /// Only pass what actually changed: the server treats an unchanged
+  /// resubmission as a no-op, and editing a field a quote was priced against
+  /// (vehicle, pickup area, method, operability, destination) voids the quotes
+  /// in hand so businesses can re-quote.
+  Future<TransportEditResult> updateRequestDetails({
+    required String requestId,
+    String? destinationCountryId,
+    String? carMake,
+    String? carModel,
+    String? carYear,
+    String? customerPhone,
+    String? pickupArea,
+    String? pickupAddress,
+    String? notes,
+    bool? vehicleOperable,
+    String? requestedTransportMethod,
+    bool? flexibleDates,
+    DateTime? preferredDate,
+  }) async {
+    final response = await _functions
+        .httpsCallable('updateTransportRequestDetails')
+        .call<Map<String, dynamic>>({
+          'requestId': requestId,
+          if (destinationCountryId != null)
+            'destinationCountryId': destinationCountryId,
+          if (carMake != null) 'carMake': carMake,
+          if (carModel != null) 'carModel': carModel,
+          if (carYear != null) 'carYear': carYear,
+          if (customerPhone != null) 'customerPhone': customerPhone,
+          if (pickupArea != null) 'pickupArea': pickupArea,
+          if (pickupAddress != null) 'pickupAddress': pickupAddress,
+          if (notes != null) 'notes': notes,
+          if (vehicleOperable != null) 'vehicleOperable': vehicleOperable,
+          if (requestedTransportMethod != null)
+            'requestedTransportMethod': requestedTransportMethod,
+          if (flexibleDates != null) 'flexibleDates': flexibleDates,
+          if (preferredDate != null)
+            'preferredDate': preferredDate.toIso8601String(),
+        });
+    final data = response.data;
+    return TransportEditResult(
+      updated: data['updated'] == true,
+      requoteRequired: data['requoteRequired'] == true,
+      destinationChanged: data['destinationChanged'] == true,
+      eligibleBusinessCount:
+          (data['eligibleBusinessCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+
   /// Submits one marketplace request to every eligible business serving the
   /// selected destination. The customer chooses a provider after quotes arrive.
   Future<TransportRequestResult> createRequest({
@@ -120,4 +172,20 @@ class TransportRequestResult {
 
   final String id;
   final String trackingCode;
+}
+
+/// Outcome of a customer edit, so the UI can explain what the change did:
+/// whether quotes were reset and how many businesses now see the request.
+class TransportEditResult {
+  const TransportEditResult({
+    required this.updated,
+    required this.requoteRequired,
+    required this.destinationChanged,
+    required this.eligibleBusinessCount,
+  });
+
+  final bool updated;
+  final bool requoteRequired;
+  final bool destinationChanged;
+  final int eligibleBusinessCount;
 }
