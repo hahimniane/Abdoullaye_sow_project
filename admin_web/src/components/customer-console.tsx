@@ -637,6 +637,18 @@ const TRANSPORT_QUOTED_FIELDS = [
 ] as const;
 
 function pendingOrderCancellation(order: TaggedRow) {
+  // A marketplace transport request sits at "quote_requested", not "pending",
+  // so the generic status gate below never matched it and the web console
+  // offered no way to cancel - while the app did. Same callable, same window
+  // (collecting quotes) as cancelTransportRequest enforces server-side.
+  if (order.collectionName === "transportRequests") {
+    return transportEditWindowOpen(order)
+      ? {
+          callable: "cancelTransportRequest",
+          payload: { requestId: order.row.id },
+        }
+      : null;
+  }
   const status = text(
     order.row.paymentStatus ?? order.row.purchaseStatus ?? order.row.status,
     "",

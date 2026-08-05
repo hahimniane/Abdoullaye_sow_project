@@ -44,6 +44,11 @@ const QUOTED_FIELDS = Object.freeze([
 
 const EDITABLE_FIELDS = Object.freeze([...CONTACT_FIELDS, ...QUOTED_FIELDS]);
 
+// Addressing/transport keys that ride along in the callable payload. They are
+// not edits and must not be reported as rejected fields - callers legitimately
+// send {requestId, ...patch}.
+const ENVELOPE_FIELDS = Object.freeze(["requestId"]);
+
 /**
  * Values that mean "not provided" and so should not overwrite anything.
  *
@@ -74,6 +79,7 @@ function classifyTransportEdit(current, patch) {
   const changedQuotedFields = [];
 
   Object.keys(source).forEach((key) => {
+    if (ENVELOPE_FIELDS.includes(key)) return;
     if (!EDITABLE_FIELDS.includes(key)) {
       // Price, status, businessId and friends are never customer-writable;
       // report them rather than silently dropping them.
@@ -117,6 +123,7 @@ function equalish(a, b) {
 
 module.exports = {
   CONTACT_FIELDS,
+  ENVELOPE_FIELDS,
   QUOTED_FIELDS,
   EDITABLE_FIELDS,
   classifyTransportEdit,

@@ -55,6 +55,17 @@ describe("classifying a customer transport edit", () => {
     assert.equal(result.requoteRequired, true);
   });
 
+  it("ignores the callable envelope rather than rejecting it", () => {
+    // Clients send {requestId, ...patch}; treating requestId as an edit made
+    // every save fail with "These fields cannot be edited: requestId".
+    const result = classifyTransportEdit(REQUEST, {
+      requestId: "abc123",
+      notes: "Gate code 4432",
+    });
+    assert.deepEqual(result.rejected, []);
+    assert.deepEqual(result.changes, {notes: "Gate code 4432"});
+  });
+
   it("rejects fields a customer must never write", () => {
     const result = classifyTransportEdit(REQUEST, {
       price: 1,

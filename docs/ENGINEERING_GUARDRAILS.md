@@ -241,6 +241,46 @@ If the thing you need is not in this table and is reference data or a reusable
 component, add it as a canonical source **and register it here** so the next
 agent finds it.
 
+### Scout before you build (MANDATORY first step)
+
+Before writing a component, a picker, a catalog, or a helper, **search the
+codebase for it first**. Most of what a new feature needs already exists — the
+registry above lists the reference data, and `lib/widgets/` and
+`src/components/` hold the shared UI. Reuse it, or extend it without changing
+behaviour for its existing callers.
+
+Building a parallel version is not a shortcut, it is a defect: a second
+country list drifts from the first, a free-text field re-introduces the dirty
+data the shared picker was written to prevent, and the bug then has to be
+fixed twice. This has already happened here — a transport edit form shipped
+with free-text make/model and no country selector while
+`DestinationCountryField` and `CarCatalog` were sitting in the same repo, one
+of them already imported by that very screen.
+
+If reuse genuinely does not fit, say why in the commit message. "I did not
+look" is not a reason.
+
+### Both clients, every time (MANDATORY)
+
+Laawol ships a Flutter app and web consoles against one backend. Before you
+start, decide whether the change is user-facing on both — it almost always is —
+and if so, **implement it on both in the same piece of work**.
+
+This applies to fixes as much as features. A customer who can edit a request on
+the web but not in the app, or cancel in the app but not on the web, has hit a
+bug, and it reads as the product being unfinished. Both of those exact gaps
+have occurred here.
+
+Practical checks before calling a change done:
+- Does the mobile screen and the console panel for this flow both exist? Both
+  are updated.
+- Does a new callable get exposed in both clients, or is one half unreachable?
+- Do the two forms accept the same fields, use the same pickers, and enforce
+  the same window?
+
+State the parity decision in the commit message: which clients were touched,
+and if only one, why the other genuinely does not apply.
+
 ### Form input rules (apply on BOTH clients)
 
 These apply to every customer- and business-facing form, in the mobile app and
