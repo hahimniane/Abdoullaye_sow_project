@@ -8,6 +8,7 @@ const {
 const {defineSecret} = require("firebase-functions/params");
 const crypto = require("crypto");
 const {buildTrackingCode} = require("./tracking_code");
+const {classifyTransportEdit} = require("./transport_request_edit");
 const admin = require("firebase-admin");
 const {
   FieldValue: FirestoreFieldValue,
@@ -3457,6 +3458,222 @@ exports.createTransportRequest = onCall(
       };
     },
 );
+
+// A customer may revise an open transport request until they select a quote -
+// that selection is the moment a price is committed, and in this marketplace
+// no business "accepts" a request, it only quotes.
+//
+// Contact-only edits leave existing quotes standing. Editing anything a quote
+// was priced against voids those quotes and asks the businesses again, because
+// a quote given for a different vehicle or country is not a quote for this
+// job. Changing the destination goes further: eligibility is derived from the
+// destination country, so the request is re-matched and only businesses that
+// serve the new country ever see it.
+exports.updateTransportRequestDetails = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const requestId = requireTransportDocumentId(
+          request.data?.requestId,
+          "Transport request",
+      );
+      const db = admin.firestore();
+      const requestRef = db.collection("transportRequests").doc(requestId);
+
+      // Re-matching reads every approved business, which is not allowed
+      // inside a transaction after a write, so resolve providers up front
+      // when the destination is changing.
+      const preview = await requestRef.get();
+      if (!preview.exists) {
+        throw new HttpsError("not-found", "Transport request not found");
+      }
+      if (preview.data().customerUid !== uid) {
+        throw new HttpsError(
+            "permission-denied",
+            "Only the customer can edit this transport request",
+        );
+      }
+      const previewEdit = classifyTransportEdit(preview.data(), request.data);
+      let providers = null;
+      if (previewEdit.destinationChanged) {
+        providers = await eligibleTransportProviders(
+            db,
+            String(previewEdit.changes.destinationCountryId),
+        );
+        if (providers.length === 0) {
+          throw new HttpsError(
+              "failed-precondition",
+              "No approved businesses currently serve this destination",
+          );
+        }
+        if (providers.length > MAX_TRANSPORT_QUOTE_PROVIDERS) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Too many transport providers matched this request",
+          );
+        }
+      }
+
+      const outcome = await db.runTransaction(async (transaction) => {
+        const requestDoc = await transaction.get(requestRef);
+        if (!requestDoc.exists) {
+          throw new HttpsError("not-found", "Transport request not found");
+        }
+        const data = requestDoc.data();
+        if (data.customerUid !== uid) {
+          throw new HttpsError(
+              "permission-denied",
+              "Only the customer can edit this transport request",
+          );
+        }
+        // Closes the window at quote selection, and rejects v1 records and
+        // expired requests for the same reasons quoting does.
+        assertCollectingTransportRequest(data);
+
+        const edit = classifyTransportEdit(data, request.data);
+        if (edit.rejected.length > 0) {
+          throw new HttpsError(
+              "invalid-argument",
+              `These fields cannot be edited: ${edit.rejected.join(", ")}`,
+          );
+        }
+        if (Object.keys(edit.changes).length === 0) {
+          return {updated: false, requoteRequired: false, notify: []};
+        }
+
+        const now = FirestoreFieldValue.serverTimestamp();
+        const patch = {...edit.changes, updatedAt: now};
+
+        const previousBusinessIds =
+          Array.isArray(data.eligibleBusinessIds) ?
+            data.eligibleBusinessIds :
+            [];
+        let nextBusinessIds = previousBusinessIds;
+
+        if (edit.destinationChanged && providers) {
+          nextBusinessIds = providers.map((p) => p.businessId);
+          patch.destinationCountryName = String(
+              providers[0].country.name ||
+              edit.changes.destinationCountryId,
+          ).trim();
+          patch.eligibleBusinessIds = nextBusinessIds;
+          patch.eligibleBusinessCount = nextBusinessIds.length;
+        }
+
+        if (edit.requoteRequired) {
+          // Every quote in hand was priced against the old request.
+          patch.quoteCount = 0;
+          previousBusinessIds.forEach((businessId) => {
+            const quoteRef = db.collection("transportQuotes").doc(
+                transportMarketplaceDocumentId(requestId, businessId),
+            );
+            transaction.set(quoteRef, {
+              status: "voided",
+              voidedReason: "customer_edited_request",
+              updatedAt: now,
+            }, {merge: true});
+          });
+          // Retire opportunities for businesses that no longer qualify, and
+          // refresh the rest so the console shows the edited request.
+          previousBusinessIds.forEach((businessId) => {
+            const ref = db.collection("transportOpportunities").doc(
+                transportMarketplaceDocumentId(requestId, businessId),
+            );
+            if (!nextBusinessIds.includes(businessId)) {
+              transaction.set(ref, {
+                status: "withdrawn",
+                withdrawnReason: "destination_changed",
+                updatedAt: now,
+              }, {merge: true});
+              return;
+            }
+            transaction.set(ref, {
+              ...opportunityMirror(patch, data),
+              status: "open",
+              updatedAt: now,
+            }, {merge: true});
+          });
+          // And open one for each newly matched business.
+          nextBusinessIds
+              .filter((businessId) => !previousBusinessIds.includes(businessId))
+              .forEach((businessId) => {
+                const provider = (providers || []).find(
+                    (p) => p.businessId === businessId,
+                );
+                const opportunityId =
+                  transportMarketplaceDocumentId(requestId, businessId);
+                transaction.set(
+                    db.collection("transportOpportunities").doc(opportunityId),
+                    {
+                      flowVersion: 2,
+                      requestId,
+                      opportunityId,
+                      trackingCode: data.trackingCode || "",
+                      businessId,
+                      businessName: String(
+                          provider?.business?.name || businessId,
+                      ).trim(),
+                      ...opportunityMirror(patch, data),
+                      status: "open",
+                      expiresAt: data.quoteDeadlineAt || null,
+                      createdAt: now,
+                      updatedAt: now,
+                    },
+                );
+              });
+        }
+
+        transaction.update(requestRef, patch);
+        return {
+          updated: true,
+          requoteRequired: edit.requoteRequired,
+          destinationChanged: edit.destinationChanged,
+          eligibleBusinessCount: nextBusinessIds.length,
+          notify: edit.requoteRequired ?
+            (providers || []).map((p) => p.business?.ownerUid).filter(Boolean) :
+            [],
+        };
+      });
+
+      // Businesses newly matched by a destination change would otherwise never
+      // learn the request exists - the same reasoning as the fan-out on create.
+      await Promise.all((outcome.notify || []).map((ownerUid) =>
+        safeSendPreferenceNotification({
+          uid: ownerUid,
+          preferenceKey: "businessActivity",
+          title: "Transport request updated",
+          body: "A customer changed a request you can quote on. " +
+            "Review the new details and send a quote.",
+          data: {type: "transport_opportunity", requestId},
+        }),
+      ));
+
+      return {
+        updated: outcome.updated,
+        requoteRequired: outcome.requoteRequired || false,
+        destinationChanged: outcome.destinationChanged || false,
+        eligibleBusinessCount: outcome.eligibleBusinessCount || 0,
+      };
+    },
+);
+
+// The fields an opportunity mirrors from its request, so a business sees the
+// edited details without re-reading the request document.
+function opportunityMirror(patch, previous) {
+  const pick = (key) => (patch[key] !== undefined ? patch[key] : previous[key]);
+  return {
+    destinationCountryId: pick("destinationCountryId"),
+    destinationCountryName: pick("destinationCountryName"),
+    carMake: pick("carMake"),
+    carModel: pick("carModel"),
+    carYear: pick("carYear"),
+    pickupArea: pick("pickupArea"),
+    vehicleOperable: pick("vehicleOperable"),
+    requestedTransportMethod: pick("requestedTransportMethod"),
+    flexibleDates: pick("flexibleDates"),
+    preferredDate: pick("preferredDate") || null,
+  };
+}
 
 exports.submitTransportQuote = onCall(
     {

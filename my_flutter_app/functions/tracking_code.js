@@ -57,9 +57,8 @@ function normalizeTrackingCode(input) {
   if (!stripped) return "";
   // Legacy codes carry two segments and a base36 timestamp; leave anything
   // that is not exactly prefix + short body alone so old codes still match.
-  const match = stripped.match(
-      new RegExp(`^([A-Z]{2})([${TRACKING_ALPHABET}]{${TRACKING_CODE_LENGTH}})$`),
-  );
+  const body = `[${TRACKING_ALPHABET}]{${TRACKING_CODE_LENGTH}}`;
+  const match = stripped.match(new RegExp(`^([A-Z]{2})(${body})$`));
   return match ? `${match[1]}-${match[2]}` : stripped;
 }
 
