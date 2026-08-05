@@ -693,9 +693,13 @@ class _TransportQuoteSectionState extends State<_TransportQuoteSection> {
   /// "accepts" here - they quote - so quote selection is the real cutoff.
   bool _canCustomerEdit(AuthProvider auth) {
     final request = widget.request;
+    // Mirrors assertCollectingTransportRequest on the server: showing the
+    // action on a request the callable would refuse is worse than hiding it.
     return request.customerUid != null &&
         request.customerUid == auth.user?.uid &&
-        request.quoteStatus == 'collecting';
+        request.flowVersion == 2 &&
+        request.quoteStatus == 'collecting' &&
+        request.status == 'quote_requested';
   }
 
   /// Fields a business priced its quote against. Changing any of these makes

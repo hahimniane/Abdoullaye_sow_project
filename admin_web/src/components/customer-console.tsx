@@ -613,7 +613,12 @@ function OrderFact({ label, value }: { label: string; value: string }) {
 function transportEditWindowOpen(order: TaggedRow) {
   return (
     order.collectionName === "transportRequests" &&
-    text(order.row.quoteStatus, "") === "collecting"
+    // Must match the server's own precondition, or the button appears on a
+    // request the callable will refuse: marketplace flow, still collecting,
+    // and not yet past the quote deadline.
+    Number(order.row.flowVersion ?? 1) === 2 &&
+    text(order.row.quoteStatus, "") === "collecting" &&
+    text(order.row.status, "") === "quote_requested"
   );
 }
 
