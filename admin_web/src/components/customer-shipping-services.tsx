@@ -4,7 +4,6 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
   collection,
   doc,
-  getDoc,
   onSnapshot,
   query,
   where,
@@ -47,7 +46,6 @@ import {
 import {
   barrelDestinationCountries,
   barrelOrderTotals,
-  barrelPickupPricingFromData,
   barrelProvidersForCountry,
   barrelShipmentEstimate,
   buildBarrelOrderPayload,
@@ -58,15 +56,13 @@ import {
   freightShippingEstimate,
   freightSettlementIsPayable,
   localDateTimeInputValue,
-  DEFAULT_BARREL_PICKUP_PRICING,
-  NYC_PICKUP_BOROUGHS,
   nycBoroughFromAddress,
   pickupDetailsAreComplete,
   shippingOptionIsEligible,
   shippingCountryDisplayName,
   shippingProviderRate,
-  type BarrelPickupPricing,
   type BarrelPickupQuote,
+  type BarrelPickupQuoteResult,
   type PickupDetails,
 } from "@/lib/customer-shipping";
 import { marketplaceDisclosure } from "@/lib/disclosures";
@@ -594,11 +590,11 @@ function BarrelShipmentForm({
     address: "",
     borough: "",
   });
-  const [pickupPricing, setPickupPricing] =
-    useState<BarrelPickupPricing | null>(null);
-  const [pickupPricingLoading, setPickupPricingLoading] = useState(true);
-  const [pickupPricingError, setPickupPricingError] = useState("");
-  const [pickupPricingReloadKey, setPickupPricingReloadKey] = useState(0);
+  const [pickupQuote, setPickupQuote] = useState<BarrelPickupQuote | null>(
+    null,
+  );
+  const [pickupQuoteLoading, setPickupQuoteLoading] = useState(false);
+  const [pickupQuoteError, setPickupQuoteError] = useState("");
   const [useWalletBalance, setUseWalletBalance] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -643,7 +639,8 @@ function BarrelShipmentForm({
     ? barrelShipmentEstimate({
         country: destination.country,
         pickupBorough: pickup.borough,
-        pickupPricing,
+        pickupPricing: null,
+        pickupQuote: pickupQuote?.fee,
         pickupRequested: pickup.requested,
         quantity,
       })
@@ -668,43 +665,47 @@ function BarrelShipmentForm({
     destination?.businessAddress ??
     "the business office";
 
+  // The business's plan prices pickup on the server; re-quote whenever the
+  // provider changes so one business's fee never shows against another.
   useEffect(() => {
-    let active = true;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    setPickupPricingLoading(true);
-    setPickupPricingError("");
-    const timeout = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(
-        () => reject(new Error("Pickup pricing request timed out.")),
-        15_000,
+    setPickupQuote(null);
+    setPickupQuoteError("");
+  }, [destinationOptionId]);
+
+  async function quotePickup(addressOverride?: string) {
+    const pickupAddress = (addressOverride ?? pickup.address).trim();
+    if (!pickupAddress || !destination) return;
+    setPickupQuoteLoading(true);
+    setPickupQuoteError("");
+    setPickupQuote(null);
+    try {
+      const quote = await callFunction<BarrelPickupQuoteResult>(
+        "quoteBarrelPickup",
+        {
+          businessId: destination.businessId,
+          pickupAddress,
+        },
       );
-    });
-    void Promise.race([
-      getDoc(doc(db, "shipmentPricing", "barrelPickup")),
-      timeout,
-    ])
-      .then((snapshot) => {
-        if (active) {
-          setPickupPricing(barrelPickupPricingFromData(snapshot.data()));
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setPickupPricing(null);
-          setPickupPricingError(
-            "Pickup pricing could not be loaded. Try again or choose office drop-off.",
-          );
-        }
-      })
-      .finally(() => {
-        if (timeoutId) clearTimeout(timeoutId);
-        if (active) setPickupPricingLoading(false);
-      });
-    return () => {
-      active = false;
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [pickupPricingReloadKey]);
+      if (quote.available) {
+        setPickup((current) => ({
+          ...current,
+          address: quote.normalizedAddress,
+          borough: quote.borough,
+        }));
+        setPickupQuote(quote);
+      } else {
+        setPickupQuoteError(
+          "This business does not offer home pickup yet. Choose office drop-off or another provider.",
+        );
+      }
+    } catch {
+      setPickupQuoteError(
+        "Pickup is not available for this address. Check the address or choose office drop-off.",
+      );
+    } finally {
+      setPickupQuoteLoading(false);
+    }
+  }
 
   const valid =
     Boolean(
@@ -718,7 +719,7 @@ function BarrelShipmentForm({
     phoneValidation.valid &&
     pickupDetailsAreComplete(pickup) &&
     (!pickup.requested ||
-      (!pickupPricingLoading && !pickupPricingError && pickupFee !== null)) &&
+      (!pickupQuoteLoading && !pickupQuoteError && pickupFee !== null)) &&
     accepted;
 
   async function submit() {
@@ -1040,42 +1041,32 @@ function BarrelShipmentForm({
                 </label>
               )}
               <PickupFields
-                lockDetectedBorough
                 officeAddress={officeAddress}
                 officeLocations={officeLocations.locations}
                 officeLocationsLoading={officeLocations.loading}
                 selectedOfficeLocationId={officeLocationId}
                 onOfficeLocationChange={setOfficeLocationId}
+                onAddressBlur={() => void quotePickup()}
+                onAddressSelected={(suggestion) =>
+                  void quotePickup(
+                    suggestion.formattedAddress || suggestion.description,
+                  )
+                }
+                onPickupChanged={() => {
+                  setPickupQuote(null);
+                  setPickupQuoteError("");
+                }}
                 pickup={pickup}
                 setPickup={setPickup}
                 suggestionsEnabled={authenticated}
               />
-              {pickup.requested && pickupPricingLoading && (
-                <div
-                  aria-live="polite"
-                  className="customer-inline-note customer-form-span"
-                >
-                  <span className="loading-spinner" />
-                  Loading pickup pricing...
-                </div>
-              )}
-              {pickup.requested && pickupPricingError && (
-                <div
-                  className="customer-inline-note customer-form-span error"
-                  role="alert"
-                >
-                  <span>{pickupPricingError}</span>
-                  <button
-                    className="secondary-button"
-                    disabled={pickupPricingLoading}
-                    onClick={() =>
-                      setPickupPricingReloadKey((current) => current + 1)
-                    }
-                    type="button"
-                  >
-                    Retry pickup pricing
-                  </button>
-                </div>
+              {pickup.requested && (
+                <PickupAvailability
+                  error={pickupQuoteError}
+                  onRetry={() => void quotePickup()}
+                  quote={pickupQuote}
+                  quoting={pickupQuoteLoading}
+                />
               )}
               {pricing && (
                 <ShippingPriceSummary
@@ -1100,8 +1091,8 @@ function BarrelShipmentForm({
                   note={
                     pickup.requested
                       ? estimatedTotal === null
-                        ? "Enter a valid New York City pickup address to see the complete total."
-                        : "Pickup pricing is based on the selected New York City borough."
+                        ? "Enter a valid pickup address to see the complete total."
+                        : "Pickup pricing is confirmed from the pickup address."
                       : (
                           <>
                             <span>Bring the barrel to</span> {officeAddress}.
@@ -1193,11 +1184,6 @@ function BarrelOrderForm({
   const [sharedPickupQuote, setSharedPickupQuote] =
     useState<BarrelPickupQuote | null>(null);
   const [differentPickups, setDifferentPickups] = useState(false);
-  const [pickupPricing, setPickupPricing] =
-    useState<BarrelPickupPricing | null>(null);
-  const [pickupPricingLoading, setPickupPricingLoading] = useState(true);
-  const [pickupPricingError, setPickupPricingError] = useState("");
-  const [pickupPricingReloadKey, setPickupPricingReloadKey] = useState(0);
   const [quotingPickupId, setQuotingPickupId] = useState("");
   const [pickupQuoteError, setPickupQuoteError] = useState("");
   const [useWalletBalance, setUseWalletBalance] = useState(false);
@@ -1325,44 +1311,6 @@ function BarrelOrderForm({
   );
   const valid = readyForReview && accepted;
 
-  useEffect(() => {
-    let active = true;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    setPickupPricingLoading(true);
-    setPickupPricingError("");
-    const timeout = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(
-        () => reject(new Error("Pickup pricing request timed out.")),
-        15_000,
-      );
-    });
-    void Promise.race([
-      getDoc(doc(db, "shipmentPricing", "barrelPickup")),
-      timeout,
-    ])
-      .then((snapshot) => {
-        if (active) {
-          setPickupPricing(barrelPickupPricingFromData(snapshot.data()));
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setPickupPricing(null);
-          setPickupPricingError(
-            "Pickup pricing could not be loaded. Try again or choose office drop-off.",
-          );
-        }
-      })
-      .finally(() => {
-        if (timeoutId) clearTimeout(timeoutId);
-        if (active) setPickupPricingLoading(false);
-      });
-    return () => {
-      active = false;
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [pickupPricingReloadKey]);
-
   function resetEditor() {
     setEditingIndex(null);
     setDestinationCountryId("");
@@ -1424,16 +1372,28 @@ function BarrelOrderForm({
   async function requestPickupQuote(
     pickup: PickupDetails,
     id: string,
+    businessId: string,
     addressOverride?: string,
   ) {
     const pickupAddress = (addressOverride ?? pickup.address).trim();
-    if (!pickupAddress || quotingPickupId) return null;
+    if (!pickupAddress || !businessId || quotingPickupId) return null;
     setQuotingPickupId(id);
     setPickupQuoteError("");
     try {
-      return await callFunction<BarrelPickupQuote>("quoteBarrelPickup", {
-        pickupAddress,
-      });
+      const quote = await callFunction<BarrelPickupQuoteResult>(
+        "quoteBarrelPickup",
+        {
+          businessId,
+          pickupAddress,
+        },
+      );
+      if (!quote.available) {
+        setPickupQuoteError(
+          "This business does not offer home pickup yet. Choose office drop-off or another provider.",
+        );
+        return null;
+      }
+      return quote;
     } catch {
       setPickupQuoteError(
         "We couldn’t check pickup availability. Check the address and try again.",
@@ -1445,9 +1405,14 @@ function BarrelOrderForm({
   }
 
   async function quoteSharedPickup(addressOverride?: string) {
+    // A shared pickup is priced per line business on the server; the first
+    // line's business gives the representative quote shown here.
+    const sharedBusinessId =
+      lines[0]?.option.businessId ?? destination?.businessId ?? "";
     const quote = await requestPickupQuote(
       sharedPickup,
       "shared",
+      sharedBusinessId,
       addressOverride,
     );
     if (!quote) return;
@@ -1465,6 +1430,7 @@ function BarrelOrderForm({
     const quote = await requestPickupQuote(
       line.pickup,
       lineId,
+      line.option.businessId,
       addressOverride,
     );
     if (!quote) return;
@@ -1931,7 +1897,6 @@ function BarrelOrderForm({
               <div className="customer-form-grid customer-shipping-form-grid">
                 <PickupFields
                   idSuffix="shared-order"
-                  lockDetectedBorough
                   officeAddress={sharedOfficeAddress}
                   officeLocations={sharedOfficeLocations.locations}
                   officeLocationsLoading={sharedOfficeLocations.loading}
@@ -2008,27 +1973,6 @@ function BarrelOrderForm({
                     }
                   />
                 ))}
-              </div>
-            )}
-            {pickupPricingLoading && (
-              <div className="customer-inline-note" aria-live="polite">
-                <span className="loading-spinner" />
-                Loading pickup pricing...
-              </div>
-            )}
-            {pickupPricingError && (
-              <div className="customer-inline-note error" role="alert">
-                <span>{pickupPricingError}</span>
-                <button
-                  className="secondary-button"
-                  disabled={pickupPricingLoading}
-                  onClick={() =>
-                    setPickupPricingReloadKey((current) => current + 1)
-                  }
-                  type="button"
-                >
-                  Retry pickup pricing
-                </button>
               </div>
             )}
             <ShippingPriceSummary
@@ -2132,7 +2076,6 @@ function BarrelOrderLinePickup({
       <div className="customer-form-grid customer-shipping-form-grid">
         <PickupFields
           idSuffix={line.id}
-          lockDetectedBorough
           officeAddress={officeAddress}
           officeLocations={officeLocations.locations}
           officeLocationsLoading={officeLocations.loading}
@@ -2354,8 +2297,6 @@ function FreightShipmentForm({
   ]);
 
   const pickupAllowed = destination?.freightPickupAvailable !== false;
-  const pickupUsesBoroughPricing =
-    destination?.freightPickupModel === "borough";
   const quoteReady =
     !pickup.requested ||
     (pickupAllowed &&
@@ -2374,12 +2315,7 @@ function FreightShipmentForm({
     accepted;
 
   async function requestQuote() {
-    if (
-      quoting ||
-      !destination ||
-      !pickup.address.trim() ||
-      (pickupUsesBoroughPricing && !pickup.borough.trim())
-    ) {
+    if (quoting || !destination || !pickup.address.trim()) {
       return;
     }
     setQuoting(true);
@@ -2691,7 +2627,6 @@ function FreightShipmentForm({
             <PickupFields
               disabled={Boolean(destination && !pickupAllowed)}
               idSuffix="freight"
-              lockDetectedBorough={!pickupUsesBoroughPricing}
               officeAddress={officeAddress}
               officeLocations={officeLocations.locations}
               officeLocationsLoading={officeLocations.loading}
@@ -2726,11 +2661,7 @@ function FreightShipmentForm({
                   <button
                     className="secondary-button"
                     data-loading={quoting}
-                    disabled={
-                      quoting ||
-                      !pickup.address.trim() ||
-                      (pickupUsesBoroughPricing && !pickup.borough.trim())
-                    }
+                    disabled={quoting || !pickup.address.trim()}
                     onClick={() => void requestQuote()}
                     type="button"
                   >
@@ -4055,7 +3986,6 @@ function ShippingPriceSummary({
 function PickupFields({
   disabled = false,
   idSuffix = "default",
-  lockDetectedBorough = false,
   officeAddress = "the business office",
   officeLocations = [],
   officeLocationsLoading = false,
@@ -4070,7 +4000,6 @@ function PickupFields({
 }: {
   disabled?: boolean;
   idSuffix?: string;
-  lockDetectedBorough?: boolean;
   officeAddress?: string;
   officeLocations?: OfficeLocationOption[];
   officeLocationsLoading?: boolean;
@@ -4184,31 +4113,12 @@ function PickupFields({
             }}
             value={pickup.address}
           />
-          {lockDetectedBorough && pickup.borough ? (
+          {pickup.borough ? (
             <div className="customer-detected-borough">
               <small>Service area</small>
               <strong>{pickup.borough}</strong>
               <span>Confirmed from the pickup address.</span>
             </div>
-          ) : !lockDetectedBorough ? (
-            <label>
-              Pickup borough
-              <select
-                onChange={(event) => {
-                  setPickup({ ...pickup, borough: event.target.value });
-                  onPickupChanged?.();
-                }}
-                required
-                value={pickup.borough}
-              >
-                <option value="">Select borough</option>
-                {NYC_PICKUP_BOROUGHS.map((borough) => (
-                  <option key={borough} value={borough}>
-                    {borough}
-                  </option>
-                ))}
-              </select>
-            </label>
           ) : null}
           <label>
             Pickup date and time

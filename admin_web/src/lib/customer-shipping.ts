@@ -31,11 +31,17 @@ export type BarrelPickupQuote = {
   normalizedAddress: string;
   serviceArea: string;
   borough: string;
-  model: "borough" | "distance";
+  model: "flat" | "borough" | "distance";
   distanceMiles: number | null;
   fee: number;
   currency: string;
 };
+
+/** What quoteBarrelPickup actually returns: a quote, or a refusal when the
+ * business has not configured pickup (pickup belongs to the business now). */
+export type BarrelPickupQuoteResult =
+  | BarrelPickupQuote
+  | { available: false; reason: string };
 
 export const DEFAULT_BARREL_PICKUP_PRICING: BarrelPickupPricing = {
   officeAddress: "Bronx, NY",

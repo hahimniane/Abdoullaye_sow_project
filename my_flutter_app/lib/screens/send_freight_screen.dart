@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../data/nyc_boroughs.dart';
 import '../l10n/app_localizations.dart';
 import '../models/business_destination_option.dart';
 import '../models/business_service.dart';
@@ -51,9 +50,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
 
   // Freight home-pickup state for the selected business.
   bool _pickupOffered = false;
-  String _pickupModel = 'distance';
   bool _pickupRequested = false;
-  String? _pickupBorough;
   DateTime? _pickupDateTime;
   double? _pickupFee;
   double? _pickupDistanceKm;
@@ -155,9 +152,6 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     }
     if (_pickupDateTime == null) return true;
     if (_pickupAddressController.text.trim().isEmpty) return true;
-    if (_pickupModel == 'borough' && (_pickupBorough ?? '').isEmpty) {
-      return true;
-    }
     return false;
   }
 
@@ -173,7 +167,6 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       // Pickup availability + model are resolved server-side and travel with
       // the option, so no extra (rule-blocked) business read is needed here.
       _pickupOffered = o.freightPickupAvailable;
-      _pickupModel = o.freightPickupModel;
     });
   }
 
@@ -181,9 +174,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     _pickupDebounce?.cancel();
     _pickupQuoteId++;
     _pickupOffered = false;
-    _pickupModel = 'distance';
     _pickupRequested = false;
-    _pickupBorough = null;
     _pickupDateTime = null;
     _pickupFee = null;
     _pickupDistanceKm = null;
@@ -196,8 +187,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   void _schedulePickupQuote() {
     _pickupDebounce?.cancel();
     final address = _pickupAddressController.text.trim();
-    final needsBorough = _pickupModel == 'borough';
-    if (address.isEmpty || (needsBorough && (_pickupBorough ?? '').isEmpty)) {
+    if (address.isEmpty) {
       setState(() {
         _pickupFee = null;
         _pickupDistanceKm = null;
@@ -222,10 +212,11 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     final l10n = AppLocalizations.of(context)!;
     final quoteId = ++_pickupQuoteId;
     try {
+      // The server derives the borough from the geocoded address; the client
+      // never chooses it (whoever supplies the borough chooses the price).
       final quote = await _freightService.quoteFreightPickup(
         businessId: option.businessId,
         pickupAddress: _pickupAddressController.text.trim(),
-        pickupBorough: _pickupModel == 'borough' ? _pickupBorough : null,
       );
       if (!mounted || quoteId != _pickupQuoteId) return;
       setState(() {
@@ -319,8 +310,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       return;
     }
     if (_pickupRequested) {
-      if (_pickupAddressController.text.trim().isEmpty ||
-          (_pickupModel == 'borough' && (_pickupBorough ?? '').isEmpty)) {
+      if (_pickupAddressController.text.trim().isEmpty) {
         _snack(l10n.freightPickupEnterDetailsForFee);
         return;
       }
@@ -369,9 +359,6 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         pickupRequested: _pickupRequested,
         pickupAddress: _pickupRequested
             ? _pickupAddressController.text.trim()
-            : null,
-        pickupBorough: _pickupRequested && _pickupModel == 'borough'
-            ? _pickupBorough
             : null,
         pickupDateTime: _pickupRequested
             ? _pickupDateTime!.toUtc().toIso8601String()
@@ -719,27 +706,6 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                   prefixIcon: const Icon(Icons.location_on_outlined),
                 ),
               ),
-              if (_pickupModel == 'borough') ...[
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  key: ValueKey('borough-${_selected?.businessId}'),
-                  initialValue: _pickupBorough,
-                  decoration: InputDecoration(
-                    labelText: l10n.freightPickupBoroughLabel,
-                    prefixIcon: const Icon(Icons.location_city_outlined),
-                  ),
-                  items: [
-                    for (final borough in kNycBoroughs)
-                      DropdownMenuItem(value: borough, child: Text(borough)),
-                  ],
-                  onChanged: _busy
-                      ? null
-                      : (value) {
-                          setState(() => _pickupBorough = value);
-                          _schedulePickupQuote();
-                        },
-                ),
-              ],
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: _busy ? null : _pickPickupDateTime,
