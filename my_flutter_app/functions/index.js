@@ -7117,6 +7117,13 @@ async function reconcileStripePaymentEvent(event, connectedAccountId) {
       stripeLastEventId: event.id,
       stripeLastEventCreated: Number(event.created || 0),
       stripeReconciledAt: FirestoreFieldValue.serverTimestamp(),
+      // Bind the intent that settled this record. Hosted-checkout records
+      // start life without one, and validation only tolerates an EMPTY
+      // stored id - binding here restores the strict match for every
+      // event that follows.
+      ...(target.config?.intentField && String(intent?.id || "") && {
+        [target.config.intentField]: String(intent.id),
+      }),
       ...(event.type === "checkout.session.completed" && {
         checkoutSessionId: String(event.data.object.id || ""),
         checkoutStatus: "completed",

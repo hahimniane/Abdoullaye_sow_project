@@ -17,6 +17,30 @@ const {
 
 const CASES = [
   {
+    // A business-entered walk-up paid by hosted checkout: the record is
+    // written BEFORE Stripe mints the PaymentIntent, so it has no stored
+    // intent id. This exact shape was unreconcilable for both webhook and
+    // sweep ("Stripe payment does not match the payment document") until an
+    // empty stored id was allowed to mean "not yet bound".
+    paymentType: "business_parking_entry",
+    metadata: {
+      reservationId: "walkup_1",
+      businessId: "business_1",
+    },
+    path: "parkedCars/walkup_1",
+    type: "business_parking_entry",
+    document: {
+      id: "walkup_1",
+      data: {
+        businessId: "business_1",
+        amountDueCents: 5000,
+        currency: "usd",
+        paymentStatus: "pending",
+        checkoutSessionId: "cs_test_1",
+      },
+    },
+  },
+  {
     paymentType: "parking_deposit",
     metadata: {
       reservationId: "park_1",
@@ -319,6 +343,31 @@ describe("payment metadata routing", () => {
     });
   }
 
+  it("still rejects a bound record whose intent id differs", () => {
+    // The empty-means-unbound tolerance must not weaken the strict match:
+    // a record that HAS an intent id only settles for that exact intent.
+    const walkup = CASES.find(
+        (item) => item.paymentType === "business_parking_entry",
+    );
+    const intent = intentFor(walkup);
+    const target = routePaymentIntentMetadata(intent.metadata);
+    assert.throws(
+        () => assertReconciliationMatch({
+          target,
+          intent,
+          document: {
+            ...walkup.document,
+            data: {
+              ...walkup.document.data,
+              stripePaymentIntentId: "pi_someone_else",
+            },
+          },
+        }),
+        (error) => error instanceof PaymentReconciliationError &&
+          error.code === "document-mismatch",
+    );
+  });
+
   it("rejects unknown and incomplete metadata", () => {
     assert.throws(
         () => routePaymentIntentMetadata({paymentType: "mystery"}),
@@ -333,7 +382,9 @@ describe("payment metadata routing", () => {
   });
 
   it("rejects customer, amount, intent, and metadata target mismatches", () => {
-    const testCase = CASES[0];
+    const testCase = CASES.find(
+        (item) => item.paymentType === "parking_deposit",
+    );
     const intent = intentFor(testCase);
     const target = routePaymentIntentMetadata(intent.metadata);
     const badDocument = {
@@ -508,7 +559,9 @@ describe("payment reconciliation state machine", () => {
   });
 
   it("builds a convergent domain patch after validation", () => {
-    const testCase = CASES[0];
+    const testCase = CASES.find(
+        (item) => item.paymentType === "parking_deposit",
+    );
     const intent = intentFor(testCase);
     const target = routePaymentIntentMetadata(intent.metadata);
     const result = buildReconciliationDecision({

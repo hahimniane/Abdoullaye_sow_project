@@ -450,7 +450,15 @@ function reconciliationMismatches({target, intent, document}) {
         actual: ids,
       });
     }
-  } else {
+  } else if (clean(data[config.intentField])) {
+    // A stored id must match exactly. But an EMPTY stored id means the
+    // intent was never bound to the document - hosted Checkout mints the
+    // PaymentIntent only when the customer opens the page, after the record
+    // was written - and that is "not yet bound", not "different payment".
+    // Treating it as a mismatch made every link-paid parking entry
+    // unreconcilable by webhook and sweep alike. Identity is still enforced:
+    // the intent's own signed metadata routed to exactly this document, and
+    // amount and currency must match above.
     pushMismatch(
         mismatches,
         config.intentField,
