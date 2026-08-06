@@ -76,6 +76,24 @@ describe("tool definitions", () => {
     assert.equal(tool.input_schema.properties.businessId, undefined);
   });
 
+  it("cancel_parking_payment_link maps to the callable and needs an id", () => {
+    const tool = BUSINESS_ASSISTANT_TOOLS
+        .find((entry) => entry.name === "cancel_parking_payment_link");
+    assert.ok(tool, "the cancel tool must exist");
+    assert.deepEqual(tool.input_schema.required, ["entryId"]);
+    assert.equal(tool.input_schema.properties.businessId, undefined);
+    assert.equal(
+        ACTION_TOOL_MAP.cancel_parking_payment_link.callable,
+        "cancelBusinessParkingPaymentLink",
+    );
+    assert.equal(
+        ACTION_TOOL_MAP.cancel_parking_payment_link.section, "parking",
+    );
+    // Cancelling a link is never a read - it must go through confirmation.
+    assert.equal(isActionTool("cancel_parking_payment_link"), true);
+    assert.equal(isReadTool("cancel_parking_payment_link"), false);
+  });
+
   it("add_tracking_update only allows real trackable collections", () => {
     const tool = BUSINESS_ASSISTANT_TOOLS
         .find((entry) => entry.name === "add_tracking_update");

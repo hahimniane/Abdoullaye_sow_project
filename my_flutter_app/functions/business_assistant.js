@@ -105,6 +105,11 @@ const ACTION_TOOL_MAP = Object.freeze({
     section: "parking",
     title: "Check a parking payment with Stripe",
   },
+  cancel_parking_payment_link: {
+    callable: "cancelBusinessParkingPaymentLink",
+    section: "parking",
+    title: "Cancel a parking payment link",
+  },
   add_tracking_update: {
     callable: "addShipmentTrackingMilestone",
     section: "tracking",
@@ -170,6 +175,24 @@ const ACTION_TOOLS = Object.freeze([
       "Propose checking a payment-link parking entry against Stripe right " +
       "now. If Stripe shows the customer paid, the entry is settled and a " +
       "receipt goes out. Use list_parked_cars first to find the entry id.",
+    input_schema: {
+      type: "object",
+      properties: {
+        entryId: {type: "string", description: "The parkedCars document id"},
+      },
+      required: ["entryId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "cancel_parking_payment_link",
+    description:
+      "Propose cancelling an unpaid parking payment link so the customer " +
+      "can no longer pay with it. A payment link stays valid until the " +
+      "customer pays it or it is cancelled here, so this is how a lot " +
+      "retires a link for a car that left or was settled another way. " +
+      "Refused for entries that are already paid. Use list_parked_cars " +
+      "first to find the entry id.",
     input_schema: {
       type: "object",
       properties: {
