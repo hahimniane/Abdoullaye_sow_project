@@ -29,7 +29,7 @@ import {
   getYears,
 } from "@/lib/car-catalog";
 import { DESTINATION_COUNTRIES } from "@/lib/destination-countries";
-import { Car, CircleAlert, CircleDollarSign, ClipboardList, Headphones, Home, LogOut, Menu, PackageSearch, Pencil, Settings, ShieldCheck, Ship, Star, Truck, UserRound, WalletCards } from "lucide-react";
+import { Car, CircleAlert, CircleDollarSign, ClipboardList, Headphones, Home, LogOut, Menu, PackageSearch, Pencil, Settings, ShieldCheck, Ship, Star, Truck, UserRound } from "lucide-react";
 
 import { auth, db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
@@ -52,7 +52,6 @@ import {
   ReviewComposerDrawer,
   useReviewedOrderKeys,
 } from "@/components/customer-review-composer";
-import { CustomerWalletActions } from "@/components/customer-wallet-actions";
 import { OrderDetailDrawer } from "@/components/order-detail-drawer";
 import { isValidE164, isValidPhone, normalizePhone } from "@/lib/phone";
 import { phoneVerificationErrorMessage } from "@/lib/phone-verification";
@@ -64,7 +63,6 @@ type CustomerTab =
   | "parkingPools"
   | "cars"
   | "orders"
-  | "wallet"
   | "support"
   | "profile";
 
@@ -116,8 +114,6 @@ const tabs: Array<{
 
 function tabForNotification(type: string): CustomerTab {
   switch (type) {
-    case "wallet_refund_status":
-      return "wallet";
     case "support_message":
     case "support_escalated":
       return "support";
@@ -152,22 +148,7 @@ export function CustomerConsole({
   const parking = useCustomerParkingRecords(firebaseUser.uid);
   const purchases = useCustomerCarPurchases(firebaseUser.uid);
   const cars = usePublicCars(activeTab === "cars");
-  // The wallet is retired (docs/PLAN-2026-08-backlog.md #3). It is still
-  // watched so that anyone who has money left on file keeps a way to claim
-  // it back to their card - hiding the section would strand real money.
-  const wallet = useWallet(firebaseUser.uid, true);
-  const hasWalletMoney = wallet.balance > 0 || wallet.pendingRefund > 0;
-  const visibleTabs = hasWalletMoney
-    ? [
-        ...tabs,
-        {
-          id: "wallet" as CustomerTab,
-          label: "Wallet (closing)",
-          description: "Claim your remaining balance",
-          icon: WalletCards,
-        },
-      ]
-    : tabs;
+
 
   const allOrders = useMemo(
     () => [
@@ -258,7 +239,7 @@ export function CustomerConsole({
 
       <main className={`workspace customer-workspace ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
         <nav className="sidebar customer-sidebar" aria-label="Customer sections">
-          {visibleTabs.map((tab) => {
+          {tabs.map((tab) => {
             const Icon = tab.icon;
             const label =
               tab.id === "parkingPools" && !sharedBarrelsEnabled
@@ -349,7 +330,6 @@ export function CustomerConsole({
               uid={firebaseUser.uid}
             />
           )}
-          {activeTab === "wallet" && <WalletView state={wallet} />}
           {activeTab === "support" && (
             <CustomerSupport
               references={allOrders.map(({ collectionName, label, row }) => ({
@@ -410,7 +390,7 @@ function CustomerHome({
       <OrderPanel loading={loading} orders={orders.slice(0, 5)} title="Recent activity" uid={uid} />
       <section className="info-band customer-parity-note">
         New service requests and web payments are being added service by service. Your existing orders,
-        purchases, tracking, wallet, and account remain shared with the mobile app.
+        purchases, tracking, and account remain shared with the mobile app.
       </section>
     </div>
   );
@@ -697,43 +677,6 @@ function pendingOrderCancellation(order: TaggedRow) {
     default:
       return null;
   }
-}
-
-function WalletView({ state }: { state: WalletState }) {
-  return (
-    <div className="stack">
-      <div className="metric-grid">
-        <Metric label="Available balance" value={formatMoney(state.balance, state.currency)} />
-        <Metric label="Transactions" value={state.loading ? "…" : String(state.transactions.length)} />
-      </div>
-      <section className="panel">
-        <div className="panel-header"><div><WalletCards size={18} /><h2>Wallet activity</h2></div></div>
-        <div className="customer-inline-note">
-          The wallet is being retired and can no longer be used to pay.
-          Request your remaining balance below and it will be returned to
-          your card.
-        </div>
-        {state.loading && <div className="empty-state">Loading wallet...</div>}
-        {state.error && <div className="error-box">Wallet could not be loaded. {state.error}</div>}
-        {!state.loading && state.transactions.length === 0 && (
-          <div className="empty-state">No wallet transactions yet.</div>
-        )}
-        <div className="row-list">
-          {state.transactions.map((transaction) => (
-            <div className="data-row" key={transaction.id}>
-              <div><strong>{text(transaction.description ?? transaction.type, "Wallet transaction")}</strong><small>{formatDate(transaction.createdAt)}</small></div>
-              <strong>{formatMoney(transaction.amount, state.currency)}</strong>
-            </div>
-          ))}
-        </div>
-      </section>
-      <CustomerWalletActions
-        balance={state.balance}
-        currency={state.currency}
-        pendingRefund={state.pendingRefund}
-      />
-    </div>
-  );
 }
 
 function ProfileView({ firebaseUser, profile }: { firebaseUser: User; profile: UserProfile }) {
@@ -1146,47 +1089,6 @@ export function usePublicCars(enabled: boolean): CustomerCollection {
     }, (error) => setState({ rows: [], loading: false, error: error.message }));
   }, [enabled]);
   return state;
-}
-
-type WalletState = {
-  balance: number;
-  currency: string;
-  pendingRefund: number;
-  transactions: FirestoreRow[];
-  loading: boolean;
-  error: string;
-};
-
-function useWallet(uid: string, enabled: boolean): WalletState {
-  const [wallet, setWallet] = useState({
-    balance: 0,
-    currency: "USD",
-    pendingRefund: 0,
-    error: "",
-  });
-  const [transactions, setTransactions] = useState<FirestoreRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  useEffect(() => {
-    if (!enabled) return undefined;
-    setLoading(true);
-    const unsubscribeWallet = onSnapshot(doc(db, "wallets", uid), (snapshot) => {
-      const data = snapshot.data();
-      setWallet({
-        balance: Number(data?.balance ?? 0),
-        currency: text(data?.currency, "USD"),
-        pendingRefund: Number(data?.pendingRefund ?? 0),
-        error: "",
-      });
-      setLoading(false);
-    }, (error) => { setWallet((current) => ({ ...current, error: error.message })); setLoading(false); });
-    const transactionQuery = query(collection(db, "wallets", uid, "transactions"), orderBy("createdAt", "desc"), limit(100));
-    const unsubscribeTransactions = onSnapshot(transactionQuery, (snapshot) => {
-      setTransactions(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-      setLoading(false);
-    }, (error) => { setWallet((current) => ({ ...current, error: error.message })); setLoading(false); });
-    return () => { unsubscribeWallet(); unsubscribeTransactions(); };
-  }, [enabled, uid]);
-  return { ...wallet, transactions, loading };
 }
 
 type TaggedRow = {

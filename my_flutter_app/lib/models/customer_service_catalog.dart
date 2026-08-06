@@ -65,12 +65,6 @@ const customerServiceCatalog = <CustomerService>[
     icon: Icons.route_outlined,
     route: '/tracking',
   ),
-  CustomerService(
-    id: 'wallet',
-    label: 'Wallet',
-    icon: Icons.account_balance_wallet_outlined,
-    route: '/wallet',
-  ),
 ];
 
 const defaultPinnedServiceIds = <String>['cars', 'barrel', 'tracking'];

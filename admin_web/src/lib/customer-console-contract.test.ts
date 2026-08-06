@@ -13,9 +13,11 @@ test("customer activity listeners are ownership scoped", () => {
   assert.match(source, /where\(ownerField, "==", uid\)/);
 });
 
-test("customer console reads wallet data only below the signed-in UID", () => {
-  assert.match(source, /doc\(db, "wallets", uid\)/);
-  assert.match(source, /collection\(db, "wallets", uid, "transactions"\)/);
+test("the customer console no longer touches wallets at all", () => {
+  // The wallet is removed (docs/PLAN-2026-08-backlog.md #3) - the platform
+  // holds no customer money, so the console must not read or show a balance.
+  assert.doesNotMatch(source, /"wallets"/);
+  assert.doesNotMatch(source, /WalletView|useWallet|CustomerWalletActions/);
 });
 
 test("customer marketplace only requests active public listings", () => {
