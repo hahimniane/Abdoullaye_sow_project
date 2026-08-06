@@ -33,6 +33,7 @@ import {
 } from "@/components/address-autocomplete";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
+import { RecipientNameField } from "@/components/recipient-name-field";
 import { ServiceRequestForm } from "@/components/service-request-form";
 import { SearchableSelect } from "@/components/searchable-select";
 import { confirmImportantAction } from "@/lib/action-confirmation";
@@ -1009,14 +1010,16 @@ function BarrelShipmentForm({
                   value={senderName}
                 />
               </label>
-              <label>
-                Receiver name
-                <input
-                  onChange={(event) => setReceiverName(event.target.value)}
-                  required
-                  value={receiverName}
-                />
-              </label>
+              <RecipientNameField
+                id="barrel-receiver-name"
+                onChange={setReceiverName}
+                onSelect={(recipient) => {
+                  setReceiverPhone(recipient.phone);
+                  setReceiverPhoneIsWhatsappOnly(recipient.whatsappOnly);
+                  setReceiverPhoneTouched(true);
+                }}
+                value={receiverName}
+              />
               <CustomerPhoneField
                 error={phoneError}
                 id="barrel-receiver-phone"
@@ -1782,14 +1785,16 @@ function BarrelOrderForm({
             )}
             {destination && (
               <div className="customer-form-grid customer-shipping-form-grid">
-                <label>
-                  Receiver name
-                  <input
-                    onChange={(event) => setReceiverName(event.target.value)}
-                    required
-                    value={receiverName}
-                  />
-                </label>
+                <RecipientNameField
+                  id="barrel-order-receiver-name"
+                  onChange={setReceiverName}
+                  onSelect={(recipient) => {
+                    setReceiverPhone(recipient.phone);
+                    setReceiverPhoneIsWhatsappOnly(recipient.whatsappOnly);
+                    setReceiverPhoneTouched(true);
+                  }}
+                  value={receiverName}
+                />
                 <CustomerPhoneField
                   error={phoneError}
                   id="barrel-order-receiver-phone"
@@ -2565,14 +2570,16 @@ function FreightShipmentForm({
                 value={destinationOptionId}
               />
             )}
-            <label>
-              Receiver name
-              <input
-                onChange={(event) => setReceiverName(event.target.value)}
-                required
-                value={receiverName}
-              />
-            </label>
+            <RecipientNameField
+              id="freight-receiver-name"
+              onChange={setReceiverName}
+              onSelect={(recipient) => {
+                setReceiverPhone(recipient.phone);
+                setReceiverPhoneIsWhatsappOnly(recipient.whatsappOnly);
+                setReceiverPhoneTouched(true);
+              }}
+              value={receiverName}
+            />
             <CustomerPhoneField
               error={phoneError}
               id="freight-receiver-phone"
