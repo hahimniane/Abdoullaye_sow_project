@@ -65,6 +65,9 @@ const TEST_USER_CLAIMS = {
   "staff-support-a": {
     role: "staff", businessId: "biz_a", businessPermissions: ["support"],
   },
+  "staff-parking-a": {
+    role: "staff", businessId: "biz_a", businessPermissions: ["parking"],
+  },
   "staff-missing-permissions-a": {role: "staff", businessId: "biz_a"},
   "staff-empty-permissions-a": {
     role: "staff", businessId: "biz_a", businessPermissions: [],
@@ -276,6 +279,12 @@ async function seedFirestore() {
         businessId: "biz_a",
         businessName: "Business A",
         businessPermissions: ["support"],
+      },
+      "users/staff-parking-a": {
+        role: "staff",
+        businessId: "biz_a",
+        businessName: "Business A",
+        businessPermissions: ["parking"],
       },
       "users/staff-missing-permissions-a": {
         role: "staff",
@@ -846,6 +855,56 @@ describe("business dashboard Firestore rules", () => {
     await assertSucceeds(ownerDb.doc("parkedCars/park_a").get());
     await assertFails(ownerDb.doc("parkedCars/park_b").get());
   });
+
+  // Business-entered parking (docs/PLAN-2026-08-backlog.md item 5): a
+  // walk-up customer deliberately has no account, so the record carries no
+  // customerUid. The rules must still let the lot create and read it, and
+  // must still keep it scoped to the business and the parking section.
+  it("lets the parking section create a walk-up entry with no customerUid",
+      async () => {
+        const entry = {
+          businessId: "biz_a",
+          trackingCode: "PK-WALKUP1",
+          source: "business",
+          customerName: "Walk-up Customer",
+          customerPhone: "+19175550134",
+          paymentMethod: "direct",
+          status: "reserved",
+          paymentStatus: "awaiting_direct_payment",
+        };
+
+        await assertSucceeds(
+            firestoreFor("staff-parking-a")
+                .doc("parkedCars/park_walkup_staff").set(entry),
+        );
+        await assertSucceeds(
+            firestoreFor("owner-a")
+                .doc("parkedCars/park_walkup_owner").set(entry),
+        );
+        await assertSucceeds(
+            firestoreFor("owner-a").doc("parkedCars/park_walkup_staff").get(),
+        );
+        await assertSucceeds(
+            firestoreFor("staff-parking-a")
+                .doc("parkedCars/park_walkup_staff")
+                .set({paymentStatus: "paid"}, {merge: true}),
+        );
+
+        // Still scoped: another business, staff without the parking
+        // section, and a signed-in stranger all stay out.
+        await assertFails(
+            firestoreFor("owner-b")
+                .doc("parkedCars/park_walkup_foreign").set(entry),
+        );
+        await assertFails(
+            firestoreFor("staff-listings-a")
+                .doc("parkedCars/park_walkup_denied").set(entry),
+        );
+        await assertFails(
+            firestoreFor("customer-stranger")
+                .doc("parkedCars/park_walkup_staff").get(),
+        );
+      });
 
   it("returns every posted car for a scoped listings query", async () => {
     const ownerDb = firestoreFor("owner-a");
