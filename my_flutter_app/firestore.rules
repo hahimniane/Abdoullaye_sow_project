@@ -1037,6 +1037,15 @@ service cloud.firestore {
         hasAdminCapability(request.auth.uid, 'finance');
     }
 
+    // A single revision counter customers subscribe to so that a business
+    // turning a service (or pickup) off reaches open customer screens
+    // without a reload. It carries no business data - only a bump - and is
+    // written by trusted server code, never by a client.
+    match /publicCatalog/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /wallets/{userId} {
       allow read: if request.auth != null &&
         (request.auth.uid == userId || isAdmin(request.auth.uid));

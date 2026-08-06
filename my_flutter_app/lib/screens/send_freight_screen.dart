@@ -57,6 +57,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   bool _pickupQuoting = false;
   String? _pickupError;
   Timer? _pickupDebounce;
+  StreamSubscription<List<BusinessDestinationOption>>? _optionsSub;
   // Which of the business's office locations to drop off at (when the
   // business has more than one and pickup isn't requested).
   String _officeLocationId = '';
@@ -71,6 +72,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   @override
   void dispose() {
     _pickupDebounce?.cancel();
+    _optionsSub?.cancel();
     _searchController.dispose();
     _senderController.dispose();
     _receiverController.dispose();
@@ -87,34 +89,65 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         _loadFailed = false;
       });
     }
-    try {
-      final all = await _businessService.activeDestinationOptions().first;
-      final options =
-          all
-              .where(
-                (o) =>
-                    hasBusinessService(
-                      o.enabledServices,
-                      BusinessServiceKey.freight,
-                    ) &&
-                    o.country.isActive &&
-                    o.country.hasAnyFreightRate,
-              )
-              .toList()
-            ..sort((a, b) => a.businessName.compareTo(b.businessName));
-      if (!mounted) return;
-      setState(() {
-        _options = options;
-        _loading = false;
-        _loadFailed = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _loadFailed = true;
-      });
+    // A subscription, not a one-shot read: a business switching freight or
+    // pickup off must reach this screen without the customer restarting it.
+    await _optionsSub?.cancel();
+    _optionsSub = _businessService.activeDestinationOptions().listen(
+      (all) {
+        final options =
+            all
+                .where(
+                  (o) =>
+                      hasBusinessService(
+                        o.enabledServices,
+                        BusinessServiceKey.freight,
+                      ) &&
+                      o.country.isActive &&
+                      o.country.hasAnyFreightRate,
+                )
+                .toList()
+              ..sort((a, b) => a.businessName.compareTo(b.businessName));
+        if (!mounted) return;
+        setState(() {
+          _options = options;
+          _loading = false;
+          _loadFailed = false;
+          _refreshSelectionFrom(options);
+        });
+      },
+      onError: (_) {
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _loadFailed = true;
+        });
+      },
+    );
+  }
+
+  /// Re-points the open selection at the freshly loaded option so a business
+  /// that turned pickup off (or stopped serving the route) takes effect on a
+  /// screen the customer is already looking at.
+  void _refreshSelectionFrom(List<BusinessDestinationOption> options) {
+    final selected = _selected;
+    if (selected == null) return;
+    final fresh = options
+        .where((o) => o.id == selected.id)
+        .cast<BusinessDestinationOption?>()
+        .firstWhere((o) => o != null, orElse: () => null);
+    if (fresh == null) {
+      // This business no longer serves the route at all.
+      _selected = null;
+      _resetPickup();
+      return;
     }
+    _selected = fresh;
+    if (!fresh.freightPickupAvailable && _pickupRequested) {
+      _pickupRequested = false;
+      _pickupFee = null;
+      _pickupError = null;
+    }
+    _pickupOffered = fresh.freightPickupAvailable;
   }
 
   List<BusinessDestinationOption> get _filtered {

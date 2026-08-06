@@ -8922,6 +8922,8 @@ exports.updateBusinessProfile = onCall(
         postalCode: profile.postalCode,
       });
 
+      await bumpPublicCatalogVersion();
+
       return {
         success: true,
         businessId,
@@ -8930,6 +8932,28 @@ exports.updateBusinessProfile = onCall(
       };
     },
 );
+
+/**
+ * Bumps the revision customers subscribe to so a change a business just made
+ * - a service switched off, pickup disabled, a price changed - reaches open
+ * customer screens without them reloading the page.
+ *
+ * The document holds no business data, only a counter, so it is safe to make
+ * world-readable. Failures are swallowed: a missed bump costs freshness, and
+ * must never fail the save that triggered it.
+ *
+ * @return {!Promise<void>} Resolves once the bump is attempted.
+ */
+async function bumpPublicCatalogVersion() {
+  try {
+    await admin.firestore().collection("publicCatalog").doc("services").set({
+      revision: FirestoreFieldValue.increment(1),
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    }, {merge: true});
+  } catch (error) {
+    console.warn("publicCatalog bump failed", error);
+  }
+}
 
 async function generateTrackingCode(prefix, collectionPath) {
   const db = admin.firestore();
@@ -12887,6 +12911,7 @@ exports.updateDestinationCoverage = onCall(
         }),
       });
       await batch.commit();
+      await bumpPublicCatalogVersion();
 
       return {
         success: true,
