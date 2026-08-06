@@ -10,6 +10,24 @@ import '../models/marketplace_disclosure_acceptance.dart';
 import 'payment_flow_safety.dart';
 import 'stripe_config_service.dart';
 
+/// Result of quoteBarrelPickup: a priced quote, or a refusal when the
+/// business has not configured home pickup.
+class BarrelPickupQuote {
+  const BarrelPickupQuote({
+    required this.available,
+    this.fee = 0,
+    this.borough = '',
+    this.normalizedAddress = '',
+    this.reason = '',
+  });
+
+  final bool available;
+  final double fee;
+  final String borough;
+  final String normalizedAddress;
+  final String reason;
+}
+
 class BarrelAddressSuggestion {
   const BarrelAddressSuggestion({
     required this.description,
@@ -74,6 +92,32 @@ class BarrelShipmentService {
         )
         .where((item) => item.description.isNotEmpty)
         .toList();
+  }
+
+  /// Asks the server what this business charges to pick up from an address.
+  /// Pickup belongs to the business: the geocoded address decides the fee,
+  /// and a business without a configured plan is a refusal, not a default.
+  Future<BarrelPickupQuote> quoteBarrelPickup({
+    required String businessId,
+    required String pickupAddress,
+  }) async {
+    final response = await _functions.httpsCallable('quoteBarrelPickup').call({
+      'businessId': businessId,
+      'pickupAddress': pickupAddress.trim(),
+    });
+    final data = Map<String, dynamic>.from(response.data as Map);
+    if (data['available'] != true) {
+      return BarrelPickupQuote(
+        available: false,
+        reason: data['reason']?.toString() ?? '',
+      );
+    }
+    return BarrelPickupQuote(
+      available: true,
+      fee: (data['fee'] as num?)?.toDouble() ?? 0,
+      borough: data['borough']?.toString() ?? '',
+      normalizedAddress: data['normalizedAddress']?.toString() ?? '',
+    );
   }
 
   Future<BarrelShipment> payForShipment({

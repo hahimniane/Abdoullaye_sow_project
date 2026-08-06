@@ -5387,6 +5387,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get marketplaceDestinationChangeSummary => 'Paid destination change';
 
   @override
+  String get pickupBusinessUnavailable =>
+      'This business does not offer home pickup yet. Choose office drop-off or another provider.';
+
+  @override
+  String get pickupAddressQuoteFailed =>
+      'Pickup is not available for this address. Check the address or choose office drop-off.';
+
+  @override
   String get pickupPlanSectionTitle => 'Home pickup · all services';
 
   @override

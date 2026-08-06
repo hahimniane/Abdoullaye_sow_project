@@ -39,9 +39,10 @@ import {
   type BusinessVerificationSummary,
   type BusinessStripeVerification,
 } from "@/lib/business-verification";
-import type {
-  ActionConfirmationOptions,
-  ActionRunner,
+import {
+  confirmImportantAction,
+  type ActionConfirmationOptions,
+  type ActionRunner,
 } from "@/lib/action-confirmation";
 import {
   buildBusinessServiceSettingsPayload,
@@ -248,7 +249,7 @@ export function BusinessProfilePanel({
   const [draft, setDraft] = useState<ProfileDraft>(() => profileDraftFromBusiness(business));
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [documentFilesById, setDocumentFilesById] = useState<Record<string, File | null>>({});
-  const {busy, busyLabel, error, run} = useActionFeedback(runAction, toast);
+  const {busy, busyLabel, error, success, run} = useActionFeedback(runAction, toast);
 
   useEffect(() => {
     setDraft(profileDraftFromBusiness(business));
@@ -374,6 +375,7 @@ export function BusinessProfilePanel({
       </header>
 
       {error && <div className="error-box">{error}</div>}
+      {success && !error && <div className="success-box">{success}</div>}
       {!businessId && <div className="error-box">Business account is not configured.</div>}
 
       <form className="bp-card" id="business-profile-form" onSubmit={submit}>
@@ -441,7 +443,7 @@ export function BusinessServicesPanel({
   const [draft, setDraft] = useState<BusinessServiceSettingsDraft>(() =>
     businessServiceSettingsFromRow(business),
   );
-  const {busy, busyLabel, error, run} = useActionFeedback(runAction, toast);
+  const {busy, busyLabel, error, success, run} = useActionFeedback(runAction, toast);
   const sharedBarrelsEnabled = useSharedBarrelsEnabled();
   const visibleServiceOptions = sharedBarrelsEnabled
     ? serviceOptions
@@ -655,6 +657,7 @@ export function BusinessServicesPanel({
       </header>
 
       {error && <div className="error-box">{error}</div>}
+      {success && !error && <div className="success-box">{success}</div>}
       {!canManage && (
         <div className="customer-inline-note">
           You can review these settings. Only the business owner can change
@@ -662,9 +665,13 @@ export function BusinessServicesPanel({
         </div>
       )}
 
+      {/* noValidate: native browser validation on hidden/other sections
+          (e.g. parking min=1) blocks submit with only a transient bubble;
+          validateBusinessServiceSettings surfaces real, visible errors. */}
       <form
         className="service-settings-form"
         id="business-service-settings-form"
+        noValidate
         onSubmit={submit}
       >
         <div className="service-settings-summary">
@@ -1385,7 +1392,7 @@ export function BusinessSupportPanel({
   const [responseById, setResponseById] = useState<Record<string, string>>({});
   const [statusById, setStatusById] = useState<Record<string, string>>({});
   const [formOpen, setFormOpen] = useState(false);
-  const {busy, busyLabel, error, run} = useActionFeedback(runAction, toast);
+  const {busy, busyLabel, error, success, run} = useActionFeedback(runAction, toast);
 
   function update(patch: Partial<SupportDraft>) {
     setDraft((current) => ({...current, ...patch}));
@@ -1559,7 +1566,7 @@ export function BusinessPeoplePanel({
 }: BusinessPeoplePanelProps) {
   const [draft, setDraft] = useState<StaffDraft>(emptyStaffDraft);
   const [formOpen, setFormOpen] = useState(false);
-  const {busy, busyLabel, error, run} = useActionFeedback(runAction, toast);
+  const {busy, busyLabel, error, success, run} = useActionFeedback(runAction, toast);
   const businessName = text(business?.name, businessId || "this business");
 
   function update(patch: Partial<StaffDraft>) {
@@ -1824,6 +1831,7 @@ function useActionFeedback(runAction?: ActionRunner, toast?: ToastCallback) {
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   async function run(
     label: string,
@@ -1834,15 +1842,33 @@ function useActionFeedback(runAction?: ActionRunner, toast?: ToastCallback) {
     setBusy(true);
     setBusyLabel(label);
     setError("");
+    setSuccess("");
     try {
       if (runAction) {
+        // runAction owns confirmation and feedback (and returns silently on
+        // a cancelled confirm), so no local success banner here.
         await runAction(label, action, options);
       } else {
+        if (
+          options?.confirm &&
+          !confirmImportantAction(options.confirm, options.confirmFr)
+        ) {
+          return;
+        }
         await action();
         toast?.("success", label);
+        // A panel without a toast host still owes the user visible proof
+        // the save happened - silent success looks identical to a hang.
+        setSuccess(label);
       }
     } catch (rawError) {
-      const message = rawError instanceof Error ? rawError.message : String(rawError);
+      let message = rawError instanceof Error ? rawError.message : String(rawError);
+      if (/unauthenticated/i.test(message)) {
+        // Raw callable text; the usual cause is a failed App Check token
+        // (e.g. reCAPTCHA blocked at load), which a reload repairs.
+        message =
+          "Your session could not be verified. Reload the page and try again.";
+      }
       setError(message);
       toast?.("error", message);
     } finally {
@@ -1851,7 +1877,7 @@ function useActionFeedback(runAction?: ActionRunner, toast?: ToastCallback) {
     }
   }
 
-  return {busy, busyLabel, error, run};
+  return {busy, busyLabel, error, success, run};
 }
 
 function optionalBusinessText(value: unknown) {

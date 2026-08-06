@@ -1902,6 +1902,15 @@ button[data-loading="true"]::before {
   margin: 0;
 }
 
+.success-box {
+  background: rgba(13, 148, 136, 0.1);
+  border: 1px solid rgba(13, 148, 136, 0.28);
+  border-radius: 8px;
+  color: #0b5e56;
+  margin: 0;
+  padding: 12px;
+}
+
 .stripe-setup-banner {
   align-items: flex-start;
   background: linear-gradient(135deg, rgba(236, 253, 245, 0.95), rgba(255, 251, 235, 0.92));

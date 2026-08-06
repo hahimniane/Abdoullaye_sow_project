@@ -9672,6 +9672,18 @@ abstract class AppLocalizations {
   /// **'Paid destination change'**
   String get marketplaceDestinationChangeSummary;
 
+  /// No description provided for @pickupBusinessUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This business does not offer home pickup yet. Choose office drop-off or another provider.'**
+  String get pickupBusinessUnavailable;
+
+  /// No description provided for @pickupAddressQuoteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup is not available for this address. Check the address or choose office drop-off.'**
+  String get pickupAddressQuoteFailed;
+
   /// No description provided for @pickupPlanSectionTitle.
   ///
   /// In en, this message translates to:

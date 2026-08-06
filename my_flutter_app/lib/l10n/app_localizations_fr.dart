@@ -5484,6 +5484,14 @@ class AppLocalizationsFr extends AppLocalizations {
       'Modification payante de la destination';
 
   @override
+  String get pickupBusinessUnavailable =>
+      'Cette entreprise ne propose pas encore la collecte à domicile. Choisissez le dépôt au bureau ou un autre prestataire.';
+
+  @override
+  String get pickupAddressQuoteFailed =>
+      'La collecte n\'est pas disponible pour cette adresse. Vérifiez l\'adresse ou choisissez le dépôt au bureau.';
+
+  @override
   String get pickupPlanSectionTitle =>
       'Collecte à domicile · tous les services';
 

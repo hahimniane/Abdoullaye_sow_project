@@ -2311,6 +2311,8 @@
   "sharedBarrelFormLoadFailed": "Nous n’avons pas pu ouvrir le formulaire de baril partagé. Vérifiez votre connexion et réessayez.",
   "marketplaceBalancePaymentSummary": "Paiement du solde",
   "marketplaceDestinationChangeSummary": "Modification payante de la destination",
+  "pickupBusinessUnavailable": "Cette entreprise ne propose pas encore la collecte à domicile. Choisissez le dépôt au bureau ou un autre prestataire.",
+  "pickupAddressQuoteFailed": "La collecte n'est pas disponible pour cette adresse. Vérifiez l'adresse ou choisissez le dépôt au bureau.",
   "pickupPlanSectionTitle": "Collecte à domicile · tous les services",
   "pickupPlanSectionSubtitle": "Un seul plan de collecte s'applique à tous les services que vous proposez. Chaque service peut utiliser ses propres réglages ci-dessous.",
   "pickupPlanOfferToggle": "Proposer la collecte à domicile",

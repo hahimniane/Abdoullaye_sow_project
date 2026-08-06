@@ -56,9 +56,15 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
   // the first destination's business — the common single-business order.
   String _sharedOfficeLocationId = '';
   bool _isSubmitting = false;
-  bool _pricingLoaded = false;
   String _pickupBorough = 'Bronx';
   DateTime? _pickupDateTime;
+  // Server-quoted shared pickup fee (per line). Null = not quoted yet, which
+  // keeps the pay button disabled - the client never invents a fee.
+  double? _sharedPickupQuotedFee;
+  bool _sharedPickupQuoting = false;
+  String? _sharedPickupQuoteError;
+  Timer? _sharedPickupDebounce;
+  int _sharedPickupQuoteId = 0;
   bool _useWalletBalance = false;
   double _walletBalance = 0;
   bool _prefilledSenderName = false;
@@ -87,12 +93,12 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
     if (!mounted) return;
     setState(() {
       _pickupPricing = pricing;
-      _pricingLoaded = true;
     });
   }
 
   @override
   void dispose() {
+    _sharedPickupDebounce?.cancel();
     _heroController.dispose();
     _senderNameController.dispose();
     _pickupAddressController.dispose();
@@ -109,25 +115,88 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
   bool get _usesDifferentPickupDetails =>
       _canUseDifferentPickupDetails && _useDifferentPickupDetails;
   double get _sharedPickupFee =>
-      _pickupRequested ? _pickupPricing.pickupFeeForBorough(_pickupBorough) : 0;
+      _pickupRequested ? (_sharedPickupQuotedFee ?? 0) : 0;
   double get _pickupFee => _usesDifferentPickupDetails
       ? _orderLines.fold(0, (total, line) => total + line.pickupFee)
       : _sharedPickupFee * _billableLineCount;
   double get _estimatedTotal => _shippingFee + _pickupFee;
   bool get _needsPriceReview =>
-      !_pricingLoaded ||
       _shippingFee <= 0 ||
       (_usesDifferentPickupDetails
           ? _orderLines.any(
               (line) => line.pickupRequested && line.pickupFee <= 0,
             )
-          : (_pickupRequested && _sharedPickupFee <= 0));
+          : (_pickupRequested &&
+                (_sharedPickupQuoting ||
+                    _sharedPickupQuoteError != null ||
+                    _sharedPickupQuotedFee == null)));
   bool get _canPay => _orderLines.isNotEmpty && !_needsPriceReview;
 
   void _handlePickupAddressChanged(String address) {
     final borough = _NycAddressSuggestions.detectBorough(address);
     if (borough != null && borough != _pickupBorough) {
       setState(() => _pickupBorough = borough);
+    }
+    _scheduleSharedPickupQuote();
+  }
+
+  /// Debounced server quote for the shared pickup address. The business's
+  /// plan prices the pickup; the client only displays the result.
+  void _scheduleSharedPickupQuote() {
+    _sharedPickupDebounce?.cancel();
+    _sharedPickupQuoteId++;
+    final address = _pickupAddressController.text.trim();
+    if (!_pickupRequested || _usesDifferentPickupDetails || address.isEmpty) {
+      setState(() {
+        _sharedPickupQuotedFee = null;
+        _sharedPickupQuoting = false;
+        _sharedPickupQuoteError = null;
+      });
+      return;
+    }
+    setState(() {
+      _sharedPickupQuoting = true;
+      _sharedPickupQuoteError = null;
+      _sharedPickupQuotedFee = null;
+    });
+    _sharedPickupDebounce = Timer(
+      const Duration(milliseconds: 700),
+      _requestSharedPickupQuote,
+    );
+  }
+
+  Future<void> _requestSharedPickupQuote() async {
+    final businessId = _orderLines.isNotEmpty
+        ? _orderLines.first.business.businessId
+        : '';
+    final address = _pickupAddressController.text.trim();
+    final l10n = AppLocalizations.of(context)!;
+    if (businessId.isEmpty || address.isEmpty) {
+      setState(() => _sharedPickupQuoting = false);
+      return;
+    }
+    final quoteId = ++_sharedPickupQuoteId;
+    try {
+      final quote = await _shipmentService.quoteBarrelPickup(
+        businessId: businessId,
+        pickupAddress: address,
+      );
+      if (!mounted || quoteId != _sharedPickupQuoteId) return;
+      setState(() {
+        _sharedPickupQuoting = false;
+        if (quote.available) {
+          _sharedPickupQuotedFee = quote.fee;
+          if (quote.borough.isNotEmpty) _pickupBorough = quote.borough;
+        } else {
+          _sharedPickupQuoteError = l10n.pickupBusinessUnavailable;
+        }
+      });
+    } catch (_) {
+      if (!mounted || quoteId != _sharedPickupQuoteId) return;
+      setState(() {
+        _sharedPickupQuoting = false;
+        _sharedPickupQuoteError = l10n.pickupAddressQuoteFailed;
+      });
     }
   }
 
@@ -156,6 +225,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
         _useDifferentPickupDetails = false;
       }
     });
+    _scheduleSharedPickupQuote();
   }
 
   void _removeDestinationLine(int index) {
@@ -165,6 +235,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
         _useDifferentPickupDetails = false;
       }
     });
+    _scheduleSharedPickupQuote();
   }
 
   Future<void> _submit() async {
@@ -649,6 +720,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                             setState(
                                               () => _pickupRequested = value,
                                             );
+                                            _scheduleSharedPickupQuote();
                                             _formKey.currentState?.validate();
                                           },
                                         ),
@@ -683,16 +755,50 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                                           return l10n
                                                               .pleaseEnterPickupAddress;
                                                         }
-                                                        if (_NycAddressSuggestions.detectBorough(
-                                                              value,
-                                                            ) ==
-                                                            null) {
-                                                          return l10n
-                                                              .pleaseIncludeNycBoroughZip;
-                                                        }
+                                                        // The server quote
+                                                        // decides coverage;
+                                                        // no NYC-only rule.
                                                         return null;
                                                       },
                                                     ),
+                                                    if (_sharedPickupQuoting) ...[
+                                                      const SizedBox(
+                                                        height: 8,
+                                                      ),
+                                                      Row(
+                                                        children: [
+                                                          const SizedBox(
+                                                            width: 14,
+                                                            height: 14,
+                                                            child:
+                                                                CircularProgressIndicator(
+                                                                  strokeWidth:
+                                                                      2,
+                                                                ),
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 8,
+                                                          ),
+                                                          Text(
+                                                            l10n.freightPickupCalculating,
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ] else if (_sharedPickupQuoteError !=
+                                                        null) ...[
+                                                      const SizedBox(
+                                                        height: 8,
+                                                      ),
+                                                      Text(
+                                                        _sharedPickupQuoteError!,
+                                                        style: const TextStyle(
+                                                          color: AppColors
+                                                              .brandRed,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                        ),
+                                                      ),
+                                                    ],
                                                     const SizedBox(height: 14),
                                                     _PickupDateTimeTile(
                                                       value: _pickupDateTime,
@@ -2691,11 +2797,24 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
   String _pickupBorough = 'Bronx';
   DateTime? _pickupDateTime;
   String _officeLocationId = '';
+  // Server-quoted per-line pickup fee. Null = not quoted; the sheet refuses
+  // to save a pickup line without a server price.
+  double? _quotedPickupFee;
+  bool _pickupQuoting = false;
+  String? _pickupQuoteError;
+  Timer? _pickupQuoteDebounce;
+  int _pickupQuoteId = 0;
 
   @override
   void initState() {
     super.initState();
     final initial = widget.initial;
+    _quotedPickupFee =
+        (widget.initial?.hasPickupOverride ?? false) &&
+            (widget.initial?.pickupRequested ?? false) &&
+            (widget.initial?.pickupFee ?? 0) > 0
+        ? widget.initial!.pickupFee
+        : null;
     _receiverNameController = TextEditingController(
       text: initial?.receiverName ?? '',
     );
@@ -2720,6 +2839,7 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
 
   @override
   void dispose() {
+    _pickupQuoteDebounce?.cancel();
     _receiverNameController.dispose();
     _receiverPhoneController.dispose();
     _pickupAddressController.dispose();
@@ -2733,13 +2853,74 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
 
   double get _lineFee => (_country?.barrelShippingPrice ?? 0) * _quantity;
   double get _pickupFee => widget.collectPickupDetails && _pickupRequested
-      ? widget.pickupPricing.pickupFeeForBorough(_pickupBorough)
+      ? (_quotedPickupFee ?? 0)
       : 0;
 
   void _handlePickupAddressChanged(String address) {
     final borough = _NycAddressSuggestions.detectBorough(address);
     if (borough != null && borough != _pickupBorough) {
       setState(() => _pickupBorough = borough);
+    }
+    _schedulePickupQuote();
+  }
+
+  /// Debounced server quote against this line's business.
+  void _schedulePickupQuote() {
+    _pickupQuoteDebounce?.cancel();
+    _pickupQuoteId++;
+    final address = _pickupAddressController.text.trim();
+    if (!widget.collectPickupDetails ||
+        !_pickupRequested ||
+        _business == null ||
+        address.isEmpty) {
+      setState(() {
+        _quotedPickupFee = null;
+        _pickupQuoting = false;
+        _pickupQuoteError = null;
+      });
+      return;
+    }
+    setState(() {
+      _pickupQuoting = true;
+      _pickupQuoteError = null;
+      _quotedPickupFee = null;
+    });
+    _pickupQuoteDebounce = Timer(
+      const Duration(milliseconds: 700),
+      _requestPickupQuote,
+    );
+  }
+
+  Future<void> _requestPickupQuote() async {
+    final business = _business;
+    final address = _pickupAddressController.text.trim();
+    if (business == null || address.isEmpty) {
+      setState(() => _pickupQuoting = false);
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final quoteId = ++_pickupQuoteId;
+    try {
+      final quote = await widget.shipmentService.quoteBarrelPickup(
+        businessId: business.businessId,
+        pickupAddress: address,
+      );
+      if (!mounted || quoteId != _pickupQuoteId) return;
+      setState(() {
+        _pickupQuoting = false;
+        if (quote.available) {
+          _quotedPickupFee = quote.fee;
+          if (quote.borough.isNotEmpty) _pickupBorough = quote.borough;
+        } else {
+          _pickupQuoteError = l10n.pickupBusinessUnavailable;
+        }
+      });
+    } catch (_) {
+      if (!mounted || quoteId != _pickupQuoteId) return;
+      setState(() {
+        _pickupQuoting = false;
+        _pickupQuoteError = l10n.pickupAddressQuoteFailed;
+      });
     }
   }
 
@@ -2802,6 +2983,18 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
     final country = _country;
     final business = _business;
     if (country == null || business == null) return;
+    if (widget.collectPickupDetails &&
+        _pickupRequested &&
+        (_pickupQuoting || _quotedPickupFee == null)) {
+      // No server price, no save - the client never invents a pickup fee.
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_pickupQuoteError ?? l10n.pickupAddressQuoteFailed),
+        ),
+      );
+      return;
+    }
     Navigator.of(context).pop(
       BarrelOrderLine(
         country: country,
@@ -2904,10 +3097,15 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                         _BusinessOptionSelector(
                           countryId: _country!.id,
                           value: _business,
-                          onChanged: (option) => setState(() {
-                            _business = option;
-                            _officeLocationId = '';
-                          }),
+                          onChanged: (option) {
+                            setState(() {
+                              _business = option;
+                              _officeLocationId = '';
+                            });
+                            // A different business means a different pickup
+                            // plan, so the old quote no longer applies.
+                            _schedulePickupQuote();
+                          },
                         ),
                       ],
                       const SizedBox(height: 14),
@@ -2994,6 +3192,7 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                           officeAddress: widget.pickupPricing.officeAddress,
                           onChanged: (value) {
                             setState(() => _pickupRequested = value);
+                            _schedulePickupQuote();
                             _formKey.currentState?.validate();
                           },
                         ),
@@ -3016,16 +3215,36 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                                             value.trim().isEmpty) {
                                           return l10n.pleaseEnterPickupAddress;
                                         }
-                                        if (_NycAddressSuggestions.detectBorough(
-                                              value,
-                                            ) ==
-                                            null) {
-                                          return l10n
-                                              .pleaseIncludeNycBoroughZip;
-                                        }
+                                        // The server quote decides coverage;
+                                        // no NYC-only rule.
                                         return null;
                                       },
                                     ),
+                                    if (_pickupQuoting) ...[
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          const SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(l10n.freightPickupCalculating),
+                                        ],
+                                      ),
+                                    ] else if (_pickupQuoteError != null) ...[
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        _pickupQuoteError!,
+                                        style: const TextStyle(
+                                          color: AppColors.brandRed,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
                                     const SizedBox(height: 14),
                                     _PickupDateTimeTile(
                                       value: _pickupDateTime,

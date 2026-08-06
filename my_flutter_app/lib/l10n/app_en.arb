@@ -2310,6 +2310,8 @@
   "sharedBarrelFormLoadFailed": "We couldn’t open the shared-barrel form. Check your connection and try again.",
   "marketplaceBalancePaymentSummary": "Balance payment",
   "marketplaceDestinationChangeSummary": "Paid destination change",
+  "pickupBusinessUnavailable": "This business does not offer home pickup yet. Choose office drop-off or another provider.",
+  "pickupAddressQuoteFailed": "Pickup is not available for this address. Check the address or choose office drop-off.",
   "pickupPlanSectionTitle": "Home pickup · all services",
   "pickupPlanSectionSubtitle": "One pickup plan applies to every service you offer. Any service can use its own settings below.",
   "pickupPlanOfferToggle": "Offer home pickup",
