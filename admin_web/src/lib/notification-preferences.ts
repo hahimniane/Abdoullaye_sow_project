@@ -60,11 +60,6 @@ export const notificationPreferenceFields: Array<{
     hint: "Barrel and freight shipment status",
   },
   {
-    key: "walletActivity",
-    label: "Wallet updates",
-    hint: "Refund and balance changes",
-  },
-  {
     key: "businessActivity",
     label: "Business updates",
     hint: "Application, verification, and account status",

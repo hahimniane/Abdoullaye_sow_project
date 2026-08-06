@@ -639,6 +639,13 @@ function BarrelShipmentForm({
     () => barrelProvidersForCountry(options, destinationCountryId),
     [destinationCountryId, options],
   );
+  // Only one business serves this country: choosing from a list of one is
+  // busywork, and freight already behaves this way (item 6).
+  useEffect(() => {
+    if (!destinationOptionId && providers.length === 1) {
+      setDestinationOptionId(providers[0].id);
+    }
+  }, [destinationOptionId, providers]);
   const selectedCountry = countries.find(
     (country) => country.id === destinationCountryId,
   );
@@ -1204,6 +1211,13 @@ function BarrelOrderForm({
     () => barrelProvidersForCountry(options, destinationCountryId),
     [destinationCountryId, options],
   );
+  // Only one business serves this country: choosing from a list of one is
+  // busywork, and freight already behaves this way (item 6).
+  useEffect(() => {
+    if (!destinationOptionId && providers.length === 1) {
+      setDestinationOptionId(providers[0].id);
+    }
+  }, [destinationOptionId, providers]);
   const selectedCountry = countries.find(
     (country) => country.id === destinationCountryId,
   );
