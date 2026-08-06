@@ -60,7 +60,6 @@ import {
   BUSINESS_PARKING_ENTRY_MESSAGES,
   BUSINESS_PARKING_RECEIVED_VIA_OPTIONS,
   businessParkingAmountDue,
-  businessParkingEntryMessage,
   businessParkingEntryPayload,
   businessParkingEntryResult,
   businessParkingPaymentLabel,
@@ -3696,7 +3695,9 @@ export function ParkingPanel({
     const errors = validateBusinessParkingEntryDraft(entryDraft, businessId);
     setEntryErrors(errors);
     if (errors.length > 0) {
-      setEntryMessage(businessParkingEntryMessage(errors));
+      // The list below the form already names every one of these; repeating
+      // them in the banner just doubles the same paragraph.
+      setEntryMessage("");
       return;
     }
     setEntryBusy(true);
