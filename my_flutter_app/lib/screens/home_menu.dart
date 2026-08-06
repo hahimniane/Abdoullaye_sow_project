@@ -14,6 +14,7 @@ import '../widgets/async_action_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_colors.dart';
+import '../utils/business_parking_localization.dart';
 import '../utils/business_permissions.dart';
 
 enum ServiceCategory { all, parking, barrels, freight, transport, sales }
@@ -637,9 +638,20 @@ class _ActivitySection extends StatelessWidget {
           )
         else
           ...records.map((record) {
+            final paymentNote =
+                record.category == ServiceCategory.parking &&
+                    record.payload is ParkedCar &&
+                    (record.payload as ParkedCar).isBusinessEntered
+                ? businessParkingPaymentStatusLabel(
+                    l10n,
+                    (record.payload as ParkedCar).paymentFields,
+                  )
+                : '';
             final card = _RecordCard(
               title: record.title,
-              subtitle: record.subtitle,
+              subtitle: paymentNote.isEmpty
+                  ? record.subtitle
+                  : '${record.subtitle} • $paymentNote',
               date: record.date,
               categoryLabel: _categoryLabel(record.category, l10n),
               categoryIcon: _categoryIcon(record.category),

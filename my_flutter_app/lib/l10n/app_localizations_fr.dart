@@ -6110,4 +6110,181 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get addressCountryLabel => 'Pays';
+
+  @override
+  String get recordAParkedCar => 'Enregistrer une voiture stationnée';
+
+  @override
+  String get recordTheCar => 'Enregistrer la voiture';
+
+  @override
+  String get recordingParkedCar => 'Enregistrement en cours...';
+
+  @override
+  String get parkedCarRecorded => 'Voiture stationnée enregistrée';
+
+  @override
+  String get printReceiptOnly => 'Imprimer un reçu seulement';
+
+  @override
+  String get howDoesThisParkingGetPaid =>
+      'Comment ce stationnement est-il payé ?';
+
+  @override
+  String get customerPaysUsDirectly =>
+      'Le client nous paie directement (Zelle/espèces)';
+
+  @override
+  String get sendTheCustomerAPaymentLink =>
+      'Envoyer un lien de paiement au client';
+
+  @override
+  String get directPaymentExplainer =>
+      'Nous enregistrons ce que le client vous doit et ne prenons aucune commission. Vous le marquez comme reçu à l’arrivée de l’argent.';
+
+  @override
+  String get paymentLinkExplainer =>
+      'Nous facturons le client pour vous et vous versons le reste.';
+
+  @override
+  String get paymentLinkShareHint =>
+      'Envoyez ce lien au client pour qu’il puisse payer. Il reste valide jusqu’à son utilisation.';
+
+  @override
+  String get directPaymentResultHint =>
+      'Le client paie votre entreprise directement. Nous enregistrons le montant sans jamais le facturer. Marquez le paiement comme reçu à l’arrivée de l’argent.';
+
+  @override
+  String get paymentLinkLabel => 'Lien de paiement';
+
+  @override
+  String get copyPaymentLink => 'Copier le lien de paiement';
+
+  @override
+  String get paymentLinkCopied => 'Lien de paiement copié';
+
+  @override
+  String get amountDue => 'Montant dû';
+
+  @override
+  String get amountRecorded => 'Montant enregistré';
+
+  @override
+  String get paymentStatusLabel => 'Statut du paiement';
+
+  @override
+  String get receivedVia => 'Reçu par';
+
+  @override
+  String get markPaymentReceived => 'Marquer le paiement comme reçu';
+
+  @override
+  String get markPaymentReceivedTitle => 'Enregistrer ce paiement ?';
+
+  @override
+  String get markPaymentReceivedMessage =>
+      'Enregistrer ce stationnement comme payé à votre entreprise ? Cette action est irréversible ici.';
+
+  @override
+  String get paymentRecorded => 'Paiement enregistré.';
+
+  @override
+  String get parkingAlreadyMarkedPaid =>
+      'Ce stationnement était déjà marqué comme payé.';
+
+  @override
+  String get paymentCouldNotBeRecorded =>
+      'Le paiement n’a pas pu être enregistré.';
+
+  @override
+  String get carCouldNotBeRecorded => 'La voiture n’a pas pu être enregistrée.';
+
+  @override
+  String get paymentLinkCopyFailed =>
+      'Le lien de paiement n’a pas pu être copié. Sélectionnez-le et copiez-le manuellement.';
+
+  @override
+  String get awaitingPaymentToTheBusiness =>
+      'En attente du paiement à l’entreprise';
+
+  @override
+  String get paidToTheBusiness => 'Payé à l’entreprise';
+
+  @override
+  String get paymentLinkSent => 'Lien de paiement envoyé';
+
+  @override
+  String get paymentLinkPaid => 'Lien de paiement payé';
+
+  @override
+  String get nothingToCollect => 'Rien à encaisser';
+
+  @override
+  String get receivedViaZelle => 'Virement Zelle';
+
+  @override
+  String get receivedViaCash => 'Paiement en espèces';
+
+  @override
+  String get receivedViaCashApp => 'Cash App';
+
+  @override
+  String get receivedViaVenmo => 'Venmo';
+
+  @override
+  String get receivedViaCheck => 'Chèque papier';
+
+  @override
+  String get receivedViaCardInPerson => 'Carte en personne';
+
+  @override
+  String get receivedViaOther => 'Une autre méthode';
+
+  @override
+  String get parkingErrorBusinessRequired =>
+      'Choisissez une entreprise avant d’enregistrer une voiture.';
+
+  @override
+  String get parkingErrorCustomerName => 'Saisissez le nom du client.';
+
+  @override
+  String get parkingErrorCustomerPhone =>
+      'Saisissez le numéro de téléphone du client.';
+
+  @override
+  String get parkingErrorCustomerEmail => 'Saisissez une adresse email valide.';
+
+  @override
+  String get parkingErrorPaymentLinkContact =>
+      'Un lien de paiement nécessite un numéro de téléphone ou une adresse email.';
+
+  @override
+  String get parkingErrorCarMake => 'Sélectionnez la marque de la voiture.';
+
+  @override
+  String get parkingErrorCarModel => 'Sélectionnez le modèle de la voiture.';
+
+  @override
+  String get parkingErrorCarYear => 'Sélectionnez l’année de la voiture.';
+
+  @override
+  String get parkingErrorCarYearInvalid =>
+      'Sélectionnez une année de voiture valide.';
+
+  @override
+  String get parkingErrorStartDate =>
+      'Choisissez le jour d’arrivée de la voiture.';
+
+  @override
+  String get parkingErrorEndDate =>
+      'Choisissez le jour de départ de la voiture.';
+
+  @override
+  String get parkingErrorEndBeforeStart =>
+      'La date de fin ne peut pas précéder la date de début.';
+
+  @override
+  String parkedCarRecordedWithCode(Object trackingCode) {
+    return 'Voiture stationnée enregistrée. Numéro de suivi : $trackingCode';
+  }
 }

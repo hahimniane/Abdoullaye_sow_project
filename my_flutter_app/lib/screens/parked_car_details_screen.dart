@@ -11,15 +11,28 @@ import '../models/parked_car.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../data/car_catalog.dart';
+import '../services/business_parking_entry.dart';
 import '../theme/app_colors.dart';
+import '../utils/action_confirmation.dart';
+import '../utils/business_parking_localization.dart';
+import '../utils/business_permissions.dart';
 import '../utils/parking_status_options.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/async_action_button.dart';
 
 class ParkedCarDetailsScreen extends StatefulWidget {
   final ParkedCar parkedCar;
 
-  const ParkedCarDetailsScreen({super.key, required this.parkedCar});
+  /// Injectable so a widget test can drive "mark payment received" without
+  /// Firebase.
+  final BusinessParkingService? businessParkingService;
+
+  const ParkedCarDetailsScreen({
+    super.key,
+    required this.parkedCar,
+    this.businessParkingService,
+  });
 
   @override
   State<ParkedCarDetailsScreen> createState() => _ParkedCarDetailsScreenState();
@@ -45,6 +58,14 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
   List<String> _yearOptions = [];
   bool _isCatalogLoading = true;
 
+  /// Server-owned payment state for a walk-up the lot entered itself. Held in
+  /// state rather than read straight off the widget so marking a payment
+  /// received updates the card without a round trip through the list screen.
+  late Map<String, dynamic> _paymentFields;
+  late final BusinessParkingService _businessParkingService;
+  String _receivedVia = businessParkingReceivedViaValues.first;
+  bool _isMarkingPaid = false;
+
   @override
   void initState() {
     super.initState();
@@ -54,6 +75,9 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     _costPerDayController = TextEditingController();
     _vinController = TextEditingController(text: widget.parkedCar.vinNumber);
     _trackingCode = widget.parkedCar.trackingCode;
+    _paymentFields = Map<String, dynamic>.from(widget.parkedCar.paymentFields);
+    _businessParkingService =
+        widget.businessParkingService ?? BusinessParkingService();
     _persistedStatus = widget.parkedCar.status;
     _statusDraft = _persistedStatus;
     _parkingStartDate = widget.parkedCar.parkingDate;
@@ -588,6 +612,10 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     final authProvider = context.watch<AuthProvider>();
     final bool isAdmin = authProvider.isAdmin;
     final bool canEdit = isAdmin && _persistedStatus != 'completed';
+    // Marking money received is a parking-permission action, not an admin one:
+    // the lot's own staff are the people who take the Zelle.
+    final bool canRecordPayment =
+        isAdmin || authProvider.hasBusinessPermission(BusinessPermission.parking);
 
     return Scaffold(
       body: Container(
@@ -682,6 +710,10 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                           _buildInfoCard(canEdit),
                           const SizedBox(height: 24),
                           _buildBillingCard(l10n, canEdit),
+                          if (isBusinessEnteredParking(_paymentFields)) ...[
+                            const SizedBox(height: 24),
+                            _buildBusinessPaymentCard(l10n, canRecordPayment),
+                          ],
                           const SizedBox(height: 24),
                           Row(
                             children: [
@@ -845,6 +877,155 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
             ),
             onTap: canEdit ? _selectStartDate : null,
           ),
+        ],
+      ),
+    );
+  }
+
+  /// Records that the customer paid the lot off-platform.
+  ///
+  /// The platform never held this money - it recorded what was owed - so this
+  /// only moves the record's payment status. It is idempotent server-side, and
+  /// `alreadyPaid` comes back as a success rather than an error so two staff
+  /// marking the same walk-up at once cannot double-record it.
+  Future<void> _markPaymentReceived() async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await confirmMajorAction(
+      context,
+      title: l10n.markPaymentReceivedTitle,
+      message: l10n.markPaymentReceivedMessage,
+      confirmLabel: l10n.markPaymentReceived,
+      icon: Icons.payments_outlined,
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() => _isMarkingPaid = true);
+    try {
+      final result = await _businessParkingService.markPaid(
+        entryId: widget.parkedCar.id,
+        receivedVia: _receivedVia,
+      );
+      if (!mounted) return;
+      setState(() {
+        _paymentFields = <String, dynamic>{
+          ..._paymentFields,
+          'paymentStatus': 'paid',
+          'directPaymentReceived': true,
+          'directPaymentMethod': _receivedVia,
+        };
+      });
+      showSuccessSnackBar(
+        context,
+        result.alreadyPaid ? l10n.parkingAlreadyMarkedPaid : l10n.paymentRecorded,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      showErrorSnackBar(context, l10n.paymentCouldNotBeRecorded);
+    } finally {
+      if (mounted) setState(() => _isMarkingPaid = false);
+    }
+  }
+
+  Future<void> _copyCheckoutUrl(String url) async {
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      await Clipboard.setData(ClipboardData(text: url));
+      if (mounted) showSuccessSnackBar(context, l10n.paymentLinkCopied);
+    } catch (_) {
+      if (mounted) showErrorSnackBar(context, l10n.paymentLinkCopyFailed);
+    }
+  }
+
+  /// The payment card for a walk-up the lot entered itself. Absent entirely
+  /// for a customer's own booking, whose payment the platform owns.
+  Widget _buildBusinessPaymentCard(AppLocalizations l10n, bool canRecordPayment) {
+    final currency = NumberFormat.simpleCurrency(
+      locale: Localizations.localeOf(context).toString(),
+      name: 'USD',
+    );
+    final checkoutUrl = (_paymentFields['checkoutUrl'] ?? '').toString();
+    final awaitingDirect = canMarkBusinessParkingPaid(_paymentFields);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.paymentStatusLabel,
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            businessParkingPaymentStatusLabel(l10n, _paymentFields),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            l10n.amountRecorded,
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            currency.format(businessParkingAmountDue(_paymentFields)),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          if (checkoutUrl.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              l10n.paymentLinkLabel,
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 4),
+            SelectableText(
+              checkoutUrl,
+              style: const TextStyle(fontSize: 12.5),
+            ),
+            const SizedBox(height: 8),
+            AsyncActionButton.outlined(
+              onPressed: () => _copyCheckoutUrl(checkoutUrl),
+              icon: Icons.copy,
+              label: l10n.copyPaymentLink,
+            ),
+          ],
+          if (awaitingDirect && canRecordPayment) ...[
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              key: ValueKey<String>(_receivedVia),
+              initialValue: _receivedVia,
+              decoration: InputDecoration(labelText: l10n.receivedVia),
+              isExpanded: true,
+              items: businessParkingReceivedViaValues
+                  .map(
+                    (value) => DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(
+                        businessParkingReceivedViaLabel(l10n, value),
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: _isMarkingPaid
+                  ? null
+                  : (value) {
+                      if (value == null) return;
+                      setState(() => _receivedVia = value);
+                    },
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: AsyncActionButton.filled(
+                onPressed: _isMarkingPaid ? null : _markPaymentReceived,
+                icon: Icons.payments_outlined,
+                label: l10n.markPaymentReceived,
+              ),
+            ),
+          ],
         ],
       ),
     );

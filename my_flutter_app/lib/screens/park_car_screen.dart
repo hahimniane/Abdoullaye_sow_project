@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'dart:io';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import '../models/business_profile.dart';
@@ -15,11 +17,13 @@ import '../providers/auth_provider.dart';
 import '../screens/vin_scanner_screen.dart';
 import '../services/vin_catalog_matcher.dart';
 import '../services/vin_decoder_service.dart';
+import '../services/business_parking_entry.dart';
 import '../services/parking_service.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
 import '../data/business_location_catalog.dart';
 import '../data/car_catalog.dart';
+import '../utils/business_parking_localization.dart';
 import '../utils/tracking_code_generator.dart';
 import '../utils/vin_utils.dart';
 import '../theme/app_colors.dart';
@@ -30,9 +34,17 @@ import '../widgets/country_phone_field.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
 
 class ParkCarScreen extends StatefulWidget {
-  const ParkCarScreen({super.key, this.parkingRepository});
+  const ParkCarScreen({
+    super.key,
+    this.parkingRepository,
+    this.businessParkingService,
+  });
 
   final ParkingRepository? parkingRepository;
+
+  /// Injectable so a widget test can drive the walk-up flow without Firebase,
+  /// the same seam `parkingRepository` already provides.
+  final BusinessParkingService? businessParkingService;
 
   @override
   State<ParkCarScreen> createState() => _ParkCarScreenState();
@@ -44,6 +56,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   final _phoneController = TextEditingController();
   final _parkingCityController = TextEditingController();
   final _vinController = TextEditingController();
+  final _emailController = TextEditingController();
 
   String? _selectedMake;
   String? _selectedModel;
@@ -66,6 +79,11 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   ParkingBusinessOption? _selectedParkingOption;
   int _customerStep = 0; // 0 where/when · 1 choose · 2 car · 3 review
   late final ParkingRepository _parkingRepository;
+  late final BusinessParkingService _businessParkingService;
+  BusinessParkingPaymentMethod _paymentMethod =
+      BusinessParkingPaymentMethod.direct;
+  bool _isRecordingEntry = false;
+  BusinessParkingEntryResult? _entryResult;
   final VinDecoderService _vinDecoderService = NhtsaVinDecoderService();
   DecodedVehicleInfo? _decodedVehicleInfo;
 
@@ -73,6 +91,8 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   void initState() {
     super.initState();
     _parkingRepository = widget.parkingRepository ?? FirebaseParkingService();
+    _businessParkingService =
+        widget.businessParkingService ?? BusinessParkingService();
     _loadCatalog();
   }
 
@@ -98,6 +118,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     _phoneController.dispose();
     _parkingCityController.dispose();
     _vinController.dispose();
+    _emailController.dispose();
     super.dispose();
   }
 
@@ -757,6 +778,214 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     return _buildBusinessParkingIntake(context);
   }
 
+
+  /// The day the car leaves. Separate from the arrival picker because the
+  /// window is what the server prices - a parking entry with no end date has
+  /// no amount, and the lot would be recording nothing.
+  Future<void> _selectBusinessEndDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedEndDateTime.isBefore(_selectedDateTime)
+          ? _selectedDateTime
+          : _selectedEndDateTime,
+      firstDate: DateTime(_selectedDateTime.year, _selectedDateTime.month,
+          _selectedDateTime.day),
+      lastDate: DateTime.now().add(const Duration(days: 730)),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _selectedEndDateTime = DateTime(picked.year, picked.month, picked.day, 17);
+    });
+  }
+
+  BusinessParkingEntryDraft _walkUpDraft(AuthProvider auth) {
+    return BusinessParkingEntryDraft(
+      businessId: auth.isAdmin
+          ? BusinessProfile.defaultBusinessId
+          : auth.businessId ?? BusinessProfile.defaultBusinessId,
+      customerName: _nameController.text,
+      customerPhone: _phoneController.text,
+      customerEmail: _emailController.text,
+      carMake: _selectedMake ?? '',
+      carModel: _selectedModel ?? '',
+      carYear: _selectedYear ?? '',
+      vinNumber: _vinController.text,
+      startDate: _selectedDateTime,
+      endDate: _selectedEndDateTime,
+      paymentMethod: _paymentMethod,
+    );
+  }
+
+  /// Records a walk-up through `createBusinessParkingEntry`.
+  ///
+  /// Deliberately not a direct Firestore write like the receipt-only path
+  /// below: the callable is what prices the window from the business's own
+  /// rates, checks a space is actually free, issues the PK tracking code and -
+  /// on the payment-link path only - applies the platform's cut from the
+  /// existing commission machinery.
+  Future<void> _recordWalkUpParking() async {
+    final l10n = AppLocalizations.of(context)!;
+    if (!_formKey.currentState!.validate()) return;
+
+    final draft = _walkUpDraft(context.read<AuthProvider>());
+    final errors = validateBusinessParkingEntry(draft);
+    if (errors.isNotEmpty) {
+      showErrorSnackBar(context, businessParkingErrorSummary(l10n, errors));
+      return;
+    }
+
+    setState(() => _isRecordingEntry = true);
+    try {
+      final result = await _businessParkingService.createEntry(draft);
+      if (!mounted) return;
+      setState(() => _entryResult = result);
+      showSuccessSnackBar(
+        context,
+        l10n.parkedCarRecordedWithCode(result.trackingCode),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      showErrorSnackBar(
+        context,
+        error is FirebaseFunctionsException && (error.message ?? '').isNotEmpty
+            ? error.message!
+            : l10n.carCouldNotBeRecorded,
+      );
+    } finally {
+      if (mounted) setState(() => _isRecordingEntry = false);
+    }
+  }
+
+  Future<void> _copyCheckoutUrl(String url) async {
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      await Clipboard.setData(ClipboardData(text: url));
+      if (mounted) showSuccessSnackBar(context, l10n.paymentLinkCopied);
+    } catch (_) {
+      if (mounted) showErrorSnackBar(context, l10n.paymentLinkCopyFailed);
+    }
+  }
+
+  /// The payment question, asked in plain words rather than in the wire
+  /// values the server uses.
+  Widget _buildPaymentMethodChoice(AppLocalizations l10n) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 6),
+          Text(
+            l10n.howDoesThisParkingGetPaid,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: Colors.grey.shade800,
+            ),
+          ),
+          RadioGroup<BusinessParkingPaymentMethod>(
+            groupValue: _paymentMethod,
+            onChanged: (value) {
+              if (value == null) return;
+              setState(() => _paymentMethod = value);
+            },
+            child: Column(
+              children: [
+                RadioListTile<BusinessParkingPaymentMethod>(
+                  value: BusinessParkingPaymentMethod.direct,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    l10n.customerPaysUsDirectly,
+                    style: const TextStyle(fontSize: 15),
+                  ),
+                ),
+                RadioListTile<BusinessParkingPaymentMethod>(
+                  value: BusinessParkingPaymentMethod.paymentLink,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    l10n.sendTheCustomerAPaymentLink,
+                    style: const TextStyle(fontSize: 15),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Text(
+              _paymentMethod == BusinessParkingPaymentMethod.direct
+                  ? l10n.directPaymentExplainer
+                  : l10n.paymentLinkExplainer,
+              style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// What the lot needs after the entry exists: the code to write on the
+  /// windscreen, the amount, and - on the link path - something to send.
+  Widget _buildEntryResultPanel(AppLocalizations l10n) {
+    final result = _entryResult!;
+    final currency = NumberFormat.simpleCurrency(
+      locale: Localizations.localeOf(context).toString(),
+      name: 'USD',
+    );
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F5E9),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF28A745)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.parkedCarRecorded,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 10),
+          Text('${l10n.trackingNumber}: ${result.trackingCode}'),
+          const SizedBox(height: 4),
+          Text('${l10n.amountDue}: ${currency.format(result.amountDue)}'),
+          const SizedBox(height: 10),
+          if (result.isPaymentLink) ...[
+            Text(
+              l10n.paymentLinkShareHint,
+              style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
+            ),
+            const SizedBox(height: 8),
+            SelectableText(
+              result.checkoutUrl,
+              style: const TextStyle(fontSize: 12.5),
+            ),
+            const SizedBox(height: 8),
+            AsyncActionButton.outlined(
+              onPressed: result.checkoutUrl.isEmpty
+                  ? null
+                  : () => _copyCheckoutUrl(result.checkoutUrl),
+              icon: Icons.copy,
+              label: l10n.copyPaymentLink,
+            ),
+          ] else
+            Text(
+              l10n.directPaymentResultHint,
+              style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBusinessParkingIntake(BuildContext context) {
     return Scaffold(
       body: Container(
@@ -772,7 +1001,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                     const AppBackButton(onDarkBackground: true),
                     Expanded(
                       child: Text(
-                        AppLocalizations.of(context)!.parkACar,
+                        AppLocalizations.of(context)!.recordAParkedCar,
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -875,6 +1104,10 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                           key: _formKey,
                           child: Column(
                             children: [
+                              if (_entryResult != null)
+                                _buildEntryResultPanel(
+                                  AppLocalizations.of(context)!,
+                                ),
                               _RoundedTextField(
                                 controller: _nameController,
                                 label: AppLocalizations.of(context)!.name,
@@ -886,6 +1119,30 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                   }
                                   return null;
                                 },
+                              ),
+                              const SizedBox(height: 16),
+                              CountryPhoneField(
+                                controller: _phoneController,
+                                labelText: AppLocalizations.of(
+                                  context,
+                                )!.phoneNumber,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return AppLocalizations.of(
+                                      context,
+                                    )!.parkingErrorCustomerPhone;
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              // Optional - until a payment link has to reach
+                              // someone; the shared validator enforces that.
+                              _RoundedTextField(
+                                controller: _emailController,
+                                label: AppLocalizations.of(
+                                  context,
+                                )!.customerEmailOptional,
                               ),
                               const SizedBox(height: 16),
                               if (_isCatalogLoading)
@@ -1107,7 +1364,77 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                 ),
                               ),
 
-                              const SizedBox(height: 32),
+                              const SizedBox(height: 16),
+
+                              // End date - the window is what the server
+                              // prices, so it is asked for, never defaulted.
+                              GestureDetector(
+                                onTap: _selectBusinessEndDate,
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 16,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(
+                                      color: Colors.grey.shade300,
+                                    ),
+                                    borderRadius: BorderRadius.circular(12),
+                                    color: Colors.grey.shade50,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.event_available,
+                                        color: Colors.grey.shade600,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              AppLocalizations.of(
+                                                context,
+                                              )!.parkingEndDate,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey.shade600,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              DateFormat.yMMMd(
+                                                Localizations.localeOf(
+                                                  context,
+                                                ).toLanguageTag(),
+                                              ).format(_selectedEndDateTime),
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Icon(
+                                        Icons.arrow_drop_down,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(height: 16),
+                              _buildPaymentMethodChoice(
+                                AppLocalizations.of(context)!,
+                              ),
+
+                              const SizedBox(height: 24),
                               SizedBox(
                                 width: double.infinity,
                                 height: 56,
@@ -1121,31 +1448,52 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                     elevation: 0,
                                     splashFactory: NoSplash.splashFactory,
                                   ),
-                                  onPressed: _isLoading
+                                  onPressed: _isRecordingEntry
                                       ? null
-                                      : _saveAndPrintReceipt,
-                                  child: _isLoading
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor:
-                                                AlwaysStoppedAnimation<Color>(
-                                                  Colors.white,
-                                                ),
-                                          ),
+                                      : _recordWalkUpParking,
+                                  child: _isRecordingEntry
+                                      ? Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            const SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child:
+                                                  CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                    valueColor:
+                                                        AlwaysStoppedAnimation<
+                                                          Color
+                                                        >(Colors.white),
+                                                  ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              AppLocalizations.of(
+                                                context,
+                                              )!.recordingParkedCar,
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
                                         )
                                       : Row(
                                           mainAxisAlignment:
                                               MainAxisAlignment.center,
                                           children: [
-                                            const Icon(Icons.print, size: 20),
+                                            const Icon(
+                                              Icons.local_parking,
+                                              size: 20,
+                                            ),
                                             const SizedBox(width: 8),
                                             Text(
                                               AppLocalizations.of(
                                                 context,
-                                              )!.printReceipt,
+                                              )!.recordTheCar,
                                               style: const TextStyle(
                                                 fontSize: 16,
                                                 fontWeight: FontWeight.w600,
@@ -1154,6 +1502,23 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                             ),
                                           ],
                                         ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              // The paper-only path a lot already had. Kept
+                              // because it works when the business has no
+                              // parking rates configured yet, which the
+                              // callable correctly refuses to price.
+                              SizedBox(
+                                width: double.infinity,
+                                child: AsyncActionButton.outlined(
+                                  onPressed: (_isLoading || _isRecordingEntry)
+                                      ? null
+                                      : _saveAndPrintReceipt,
+                                  icon: Icons.print,
+                                  label: AppLocalizations.of(
+                                    context,
+                                  )!.printReceiptOnly,
                                 ),
                               ),
                             ],

@@ -10799,6 +10799,318 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Country'**
   String get addressCountryLabel;
+
+  /// No description provided for @recordAParkedCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Record a parked car'**
+  String get recordAParkedCar;
+
+  /// No description provided for @recordTheCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Record the car'**
+  String get recordTheCar;
+
+  /// No description provided for @recordingParkedCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Recording...'**
+  String get recordingParkedCar;
+
+  /// No description provided for @parkedCarRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Parked car recorded'**
+  String get parkedCarRecorded;
+
+  /// No description provided for @printReceiptOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Print a receipt only'**
+  String get printReceiptOnly;
+
+  /// No description provided for @howDoesThisParkingGetPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'How does this parking get paid?'**
+  String get howDoesThisParkingGetPaid;
+
+  /// No description provided for @customerPaysUsDirectly.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer pays us directly (Zelle/cash)'**
+  String get customerPaysUsDirectly;
+
+  /// No description provided for @sendTheCustomerAPaymentLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Send the customer a payment link'**
+  String get sendTheCustomerAPaymentLink;
+
+  /// No description provided for @directPaymentExplainer.
+  ///
+  /// In en, this message translates to:
+  /// **'We record what the customer owes you and take no cut. You mark it received when the money arrives.'**
+  String get directPaymentExplainer;
+
+  /// No description provided for @paymentLinkExplainer.
+  ///
+  /// In en, this message translates to:
+  /// **'We bill the customer for you and send you the rest.'**
+  String get paymentLinkExplainer;
+
+  /// No description provided for @paymentLinkShareHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Send this link to the customer so they can pay. It stays valid until they use it.'**
+  String get paymentLinkShareHint;
+
+  /// No description provided for @directPaymentResultHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The customer pays your business directly. We record the amount and never bill it. Mark the payment received once the money arrives.'**
+  String get directPaymentResultHint;
+
+  /// No description provided for @paymentLinkLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment link'**
+  String get paymentLinkLabel;
+
+  /// No description provided for @copyPaymentLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy payment link'**
+  String get copyPaymentLink;
+
+  /// No description provided for @paymentLinkCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment link copied'**
+  String get paymentLinkCopied;
+
+  /// No description provided for @amountDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount due'**
+  String get amountDue;
+
+  /// No description provided for @amountRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount recorded'**
+  String get amountRecorded;
+
+  /// No description provided for @paymentStatusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment status'**
+  String get paymentStatusLabel;
+
+  /// No description provided for @receivedVia.
+  ///
+  /// In en, this message translates to:
+  /// **'Received via'**
+  String get receivedVia;
+
+  /// No description provided for @markPaymentReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark payment received'**
+  String get markPaymentReceived;
+
+  /// No description provided for @markPaymentReceivedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Record this payment?'**
+  String get markPaymentReceivedTitle;
+
+  /// No description provided for @markPaymentReceivedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Record this parking as paid to your business? This cannot be undone here.'**
+  String get markPaymentReceivedMessage;
+
+  /// No description provided for @paymentRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment recorded.'**
+  String get paymentRecorded;
+
+  /// No description provided for @parkingAlreadyMarkedPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'This parking was already marked paid.'**
+  String get parkingAlreadyMarkedPaid;
+
+  /// No description provided for @paymentCouldNotBeRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment could not be recorded.'**
+  String get paymentCouldNotBeRecorded;
+
+  /// No description provided for @carCouldNotBeRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'The car could not be recorded.'**
+  String get carCouldNotBeRecorded;
+
+  /// No description provided for @paymentLinkCopyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment link could not be copied. Select and copy it manually.'**
+  String get paymentLinkCopyFailed;
+
+  /// No description provided for @awaitingPaymentToTheBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting payment to the business'**
+  String get awaitingPaymentToTheBusiness;
+
+  /// No description provided for @paidToTheBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid to the business'**
+  String get paidToTheBusiness;
+
+  /// No description provided for @paymentLinkSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment link sent'**
+  String get paymentLinkSent;
+
+  /// No description provided for @paymentLinkPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment link paid'**
+  String get paymentLinkPaid;
+
+  /// No description provided for @nothingToCollect.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to collect'**
+  String get nothingToCollect;
+
+  /// No description provided for @receivedViaZelle.
+  ///
+  /// In en, this message translates to:
+  /// **'Zelle transfer'**
+  String get receivedViaZelle;
+
+  /// No description provided for @receivedViaCash.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash payment'**
+  String get receivedViaCash;
+
+  /// No description provided for @receivedViaCashApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash App'**
+  String get receivedViaCashApp;
+
+  /// No description provided for @receivedViaVenmo.
+  ///
+  /// In en, this message translates to:
+  /// **'Venmo'**
+  String get receivedViaVenmo;
+
+  /// No description provided for @receivedViaCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Paper check'**
+  String get receivedViaCheck;
+
+  /// No description provided for @receivedViaCardInPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'Card in person'**
+  String get receivedViaCardInPerson;
+
+  /// No description provided for @receivedViaOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Another method'**
+  String get receivedViaOther;
+
+  /// No description provided for @parkingErrorBusinessRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a business before recording a car.'**
+  String get parkingErrorBusinessRequired;
+
+  /// No description provided for @parkingErrorCustomerName.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the customer\'s name.'**
+  String get parkingErrorCustomerName;
+
+  /// No description provided for @parkingErrorCustomerPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the customer\'s phone number.'**
+  String get parkingErrorCustomerPhone;
+
+  /// No description provided for @parkingErrorCustomerEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid email address.'**
+  String get parkingErrorCustomerEmail;
+
+  /// No description provided for @parkingErrorPaymentLinkContact.
+  ///
+  /// In en, this message translates to:
+  /// **'A payment link needs a phone number or an email address.'**
+  String get parkingErrorPaymentLinkContact;
+
+  /// No description provided for @parkingErrorCarMake.
+  ///
+  /// In en, this message translates to:
+  /// **'Select the car make.'**
+  String get parkingErrorCarMake;
+
+  /// No description provided for @parkingErrorCarModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Select the car model.'**
+  String get parkingErrorCarModel;
+
+  /// No description provided for @parkingErrorCarYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Select the car year.'**
+  String get parkingErrorCarYear;
+
+  /// No description provided for @parkingErrorCarYearInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a valid car year.'**
+  String get parkingErrorCarYearInvalid;
+
+  /// No description provided for @parkingErrorStartDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the day the car arrives.'**
+  String get parkingErrorStartDate;
+
+  /// No description provided for @parkingErrorEndDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the day the car leaves.'**
+  String get parkingErrorEndDate;
+
+  /// No description provided for @parkingErrorEndBeforeStart.
+  ///
+  /// In en, this message translates to:
+  /// **'The end date cannot be before the start date.'**
+  String get parkingErrorEndBeforeStart;
+
+  /// No description provided for @parkedCarRecordedWithCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Parked car recorded. Tracking number: {trackingCode}'**
+  String parkedCarRecordedWithCode(Object trackingCode);
 }
 
 class _AppLocalizationsDelegate

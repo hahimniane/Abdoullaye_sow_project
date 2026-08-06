@@ -6008,4 +6008,172 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get addressCountryLabel => 'Country';
+
+  @override
+  String get recordAParkedCar => 'Record a parked car';
+
+  @override
+  String get recordTheCar => 'Record the car';
+
+  @override
+  String get recordingParkedCar => 'Recording...';
+
+  @override
+  String get parkedCarRecorded => 'Parked car recorded';
+
+  @override
+  String get printReceiptOnly => 'Print a receipt only';
+
+  @override
+  String get howDoesThisParkingGetPaid => 'How does this parking get paid?';
+
+  @override
+  String get customerPaysUsDirectly => 'Customer pays us directly (Zelle/cash)';
+
+  @override
+  String get sendTheCustomerAPaymentLink => 'Send the customer a payment link';
+
+  @override
+  String get directPaymentExplainer =>
+      'We record what the customer owes you and take no cut. You mark it received when the money arrives.';
+
+  @override
+  String get paymentLinkExplainer =>
+      'We bill the customer for you and send you the rest.';
+
+  @override
+  String get paymentLinkShareHint =>
+      'Send this link to the customer so they can pay. It stays valid until they use it.';
+
+  @override
+  String get directPaymentResultHint =>
+      'The customer pays your business directly. We record the amount and never bill it. Mark the payment received once the money arrives.';
+
+  @override
+  String get paymentLinkLabel => 'Payment link';
+
+  @override
+  String get copyPaymentLink => 'Copy payment link';
+
+  @override
+  String get paymentLinkCopied => 'Payment link copied';
+
+  @override
+  String get amountDue => 'Amount due';
+
+  @override
+  String get amountRecorded => 'Amount recorded';
+
+  @override
+  String get paymentStatusLabel => 'Payment status';
+
+  @override
+  String get receivedVia => 'Received via';
+
+  @override
+  String get markPaymentReceived => 'Mark payment received';
+
+  @override
+  String get markPaymentReceivedTitle => 'Record this payment?';
+
+  @override
+  String get markPaymentReceivedMessage =>
+      'Record this parking as paid to your business? This cannot be undone here.';
+
+  @override
+  String get paymentRecorded => 'Payment recorded.';
+
+  @override
+  String get parkingAlreadyMarkedPaid =>
+      'This parking was already marked paid.';
+
+  @override
+  String get paymentCouldNotBeRecorded => 'The payment could not be recorded.';
+
+  @override
+  String get carCouldNotBeRecorded => 'The car could not be recorded.';
+
+  @override
+  String get paymentLinkCopyFailed =>
+      'The payment link could not be copied. Select and copy it manually.';
+
+  @override
+  String get awaitingPaymentToTheBusiness => 'Awaiting payment to the business';
+
+  @override
+  String get paidToTheBusiness => 'Paid to the business';
+
+  @override
+  String get paymentLinkSent => 'Payment link sent';
+
+  @override
+  String get paymentLinkPaid => 'Payment link paid';
+
+  @override
+  String get nothingToCollect => 'Nothing to collect';
+
+  @override
+  String get receivedViaZelle => 'Zelle transfer';
+
+  @override
+  String get receivedViaCash => 'Cash payment';
+
+  @override
+  String get receivedViaCashApp => 'Cash App';
+
+  @override
+  String get receivedViaVenmo => 'Venmo';
+
+  @override
+  String get receivedViaCheck => 'Paper check';
+
+  @override
+  String get receivedViaCardInPerson => 'Card in person';
+
+  @override
+  String get receivedViaOther => 'Another method';
+
+  @override
+  String get parkingErrorBusinessRequired =>
+      'Choose a business before recording a car.';
+
+  @override
+  String get parkingErrorCustomerName => 'Enter the customer\'s name.';
+
+  @override
+  String get parkingErrorCustomerPhone => 'Enter the customer\'s phone number.';
+
+  @override
+  String get parkingErrorCustomerEmail => 'Enter a valid email address.';
+
+  @override
+  String get parkingErrorPaymentLinkContact =>
+      'A payment link needs a phone number or an email address.';
+
+  @override
+  String get parkingErrorCarMake => 'Select the car make.';
+
+  @override
+  String get parkingErrorCarModel => 'Select the car model.';
+
+  @override
+  String get parkingErrorCarYear => 'Select the car year.';
+
+  @override
+  String get parkingErrorCarYearInvalid => 'Select a valid car year.';
+
+  @override
+  String get parkingErrorStartDate => 'Choose the day the car arrives.';
+
+  @override
+  String get parkingErrorEndDate => 'Choose the day the car leaves.';
+
+  @override
+  String get parkingErrorEndBeforeStart =>
+      'The end date cannot be before the start date.';
+
+  @override
+  String parkedCarRecordedWithCode(Object trackingCode) {
+    return 'Parked car recorded. Tracking number: $trackingCode';
+  }
 }
