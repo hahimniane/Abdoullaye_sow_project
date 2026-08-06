@@ -91,17 +91,15 @@ void main() {
     final accountSource = File(
       'lib/screens/account_profile_screen.dart',
     ).readAsStringSync();
-    final walletSource = File(
-      'lib/screens/wallet_screen.dart',
-    ).readAsStringSync();
-
-    expect(shellSource, contains("Navigator.of(context).pushNamed('/wallet')"));
     expect(
       shellSource,
       contains("Navigator.of(context).pushNamed('/account-profile')"),
     );
     expect(accountSource, contains('AppBackButton(onPressed: _close)'));
-    expect(walletSource, contains('_WalletHeader(onBack: _back)'));
+    // The wallet screen and its /wallet route are gone with the wallet
+    // itself (docs/PLAN-2026-08-backlog.md #3) - guard that they stay gone.
+    expect(File('lib/screens/wallet_screen.dart').existsSync(), isFalse);
+    expect(shellSource, isNot(contains("pushNamed('/wallet')")));
   });
 
   test('freight orders pass their shipment id into focused tracking', () {
