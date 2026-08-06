@@ -11190,6 +11190,18 @@ abstract class AppLocalizations {
   /// **'The end date cannot be before the start date.'**
   String get parkingErrorEndBeforeStart;
 
+  /// No description provided for @notPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Not paid'**
+  String get notPaid;
+
+  /// No description provided for @parkingPaymentLinkAlreadyUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'This link was already used to pay. Nothing further is owed.'**
+  String get parkingPaymentLinkAlreadyUsed;
+
   /// No description provided for @parkedCarRecordedWithCode.
   ///
   /// In en, this message translates to:

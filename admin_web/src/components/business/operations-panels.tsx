@@ -3599,11 +3599,6 @@ export function ParkingPanel({
   );
   const activeCount = parkedCars.rows.filter((row) => text(row.status, "active") === "active").length;
 
-  function openNew() {
-    setDraft(emptyParkingDraft);
-    setMessage("");
-    setFormOpen(true);
-  }
   function closeForm() {
     setDraft(emptyParkingDraft);
     setFormOpen(false);
@@ -3626,6 +3621,20 @@ export function ParkingPanel({
 
   async function saveParking() {
     if (!businessId) throw new Error("Business ID is required.");
+    // Hiding the Edit button is the affordance; this is the guard. A paid
+    // record's amount has already been charged, split and paid out.
+    if (draft.id) {
+      const existing = parkedCars.rows.find((row) => row.id === draft.id);
+      if (existing && businessParkingPaymentTone(existing) === "paid") {
+        throw new Error("This parking has been paid for and can no longer be edited.");
+      }
+      // The amount on a link entry is baked into the Stripe session the
+      // customer already holds; changing it here would bill one price and
+      // show another.
+      if (existing && text(existing.paymentMethod, "") === "payment_link") {
+        throw new Error("The amount on a payment-link parking cannot be changed. Cancel it and record a new one.");
+      }
+    }
     if (!draft.ownerName.trim()) throw new Error("Owner name is required.");
     if (!draft.carMake.trim() || !draft.carModel.trim() || !draft.carYear.trim()) {
       throw new Error("Car make, model, and year are required.");
@@ -3793,7 +3802,11 @@ export function ParkingPanel({
         </div>
         <div className="lst-head-actions">
           <StatusText busy={busy} message={message} />
-          <button className="lst-btn ghost" type="button" onClick={openNew}><Pencil size={15} /> New parking</button>
+          {/* "New parking" used to sit here. It wrote a parkedCars document
+              straight from the browser: no server-issued tracking code, no
+              amount due, no space check, no payment plan - a record the
+              payment system could not settle. "Record a parked car" goes
+              through createBusinessParkingEntry and does all of it. */}
           <button className="lst-add" type="button" onClick={openEntry}><Plus size={17} /> Record a parked car</button>
         </div>
       </header>
@@ -3906,7 +3919,15 @@ export function ParkingPanel({
                     {rowBusy ? "Recording..." : "Mark payment received"}
                   </button>
                 )}
-                <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => editParking(row)}><Pencil size={14} /> Edit</button>
+                {/* A paid record is settled money: the amount was charged,
+                    the platform fee taken and the payout sent. Editing it
+                    here would rewrite the price of a completed sale with no
+                    server check and no audit trail, so it is not offered. */}
+                {businessParkingPaymentTone(row) === "paid" ? (
+                  <span className="lst-hint">Paid records cannot be edited</span>
+                ) : (
+                  <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => editParking(row)}><Pencil size={14} /> Edit</button>
+                )}
               </div>
             </article>
           );
@@ -3919,7 +3940,7 @@ export function ParkingPanel({
         }}>
           <div className="lst-modal" style={{ maxWidth: 560 }} onClick={(event) => event.stopPropagation()}>
             <header className="lst-modal-head">
-              <h3>{draft.id ? "Edit parking" : "New parking"}</h3>
+              <h3>Edit parking</h3>
               <button className="lst-icon-btn" type="button" disabled={busy} onClick={closeForm} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">

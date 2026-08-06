@@ -2614,6 +2614,8 @@
   "parkingErrorStartDate": "Choose the day the car arrives.",
   "parkingErrorEndDate": "Choose the day the car leaves.",
   "parkingErrorEndBeforeStart": "The end date cannot be before the start date.",
+  "notPaid": "Not paid",
+  "parkingPaymentLinkAlreadyUsed": "This link was already used to pay. Nothing further is owed.",
   "parkedCarRecordedWithCode": "Parked car recorded. Tracking number: {trackingCode}",
   "@parkedCarRecordedWithCode": {
     "placeholders": {

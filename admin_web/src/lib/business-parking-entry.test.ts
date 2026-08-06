@@ -276,3 +276,25 @@ test("a paid card shows a badge and stops offering the used payment link", () =>
   assert.match(linkBlock, /businessParkingPaymentTone\(row\) === "paid" \?/);
   assert.match(linkBlock, /This link was already used to pay/);
 });
+
+test("the browser-write parking form cannot create records or edit paid ones", () => {
+  // "New parking" wrote a parkedCars doc straight from the client: it faked a
+  // PC-xxxxxx tracking code, set no amountDueCents and no payment plan, and
+  // skipped the space check - producing rows the payment system could never
+  // settle. Creation must go through createBusinessParkingEntry only.
+  // The label only survives inside the comment explaining its removal.
+  assert.ok(!/> New parking</.test(panelSource), "the New parking button must not come back");
+  assert.ok(!/"New parking"/.test(panelSource.replace(/\/\*[\s\S]*?\*\//g, "")), "no New parking title outside the comment");
+  assert.ok(!/function openNew\(\)[\s\S]{0,120}setFormOpen\(true\)/.test(
+    panelSource.slice(panelSource.indexOf("const activeCount = parkedCars.rows")),
+  ), "the parking panel must not reopen a blank create form");
+
+  // A paid record's money has moved; editing rewrites a completed sale.
+  const save = panelSource.slice(panelSource.indexOf("async function saveParking("), panelSource.indexOf("async function saveParking(") + 1400);
+  assert.match(save, /businessParkingPaymentTone\(existing\) === "paid"/);
+  assert.match(save, /can no longer be edited/);
+  // And a link entry's amount is already baked into the customer's session.
+  assert.match(save, /payment_link/);
+  assert.match(save, /cannot be changed/);
+  assert.match(panelSource, /Paid records cannot be edited/);
+});

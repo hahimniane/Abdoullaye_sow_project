@@ -6332,6 +6332,13 @@ class AppLocalizationsFr extends AppLocalizations {
       'La date de fin ne peut pas précéder la date de début.';
 
   @override
+  String get notPaid => 'Non payé';
+
+  @override
+  String get parkingPaymentLinkAlreadyUsed =>
+      'Ce lien a déjà servi au paiement. Plus rien n’est dû.';
+
+  @override
   String parkedCarRecordedWithCode(Object trackingCode) {
     return 'Voiture stationnée enregistrée. Numéro de suivi : $trackingCode';
   }

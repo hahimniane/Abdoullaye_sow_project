@@ -12,6 +12,7 @@ import '../providers/auth_provider.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/async_action_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/business_parking_payment_badge.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_colors.dart';
 import '../utils/business_parking_localization.dart';
@@ -677,6 +678,14 @@ class _ActivitySection extends StatelessWidget {
               date: record.date,
               categoryLabel: _categoryLabel(record.category, l10n),
               categoryIcon: _categoryIcon(record.category),
+              // Only a parked car carries a payment badge; the widget itself
+              // returns nothing for a customer booking, a cancelled record or
+              // an entry with nothing to collect.
+              paymentFields:
+                  record.category == ServiceCategory.parking &&
+                      record.payload is ParkedCar
+                  ? (record.payload as ParkedCar).paymentFields
+                  : null,
             );
 
             void Function()? onTap;
@@ -740,6 +749,7 @@ class _RecordCard extends StatelessWidget {
     required this.date,
     required this.categoryLabel,
     required this.categoryIcon,
+    this.paymentFields,
   });
 
   final String title;
@@ -747,6 +757,10 @@ class _RecordCard extends StatelessWidget {
   final DateTime date;
   final String categoryLabel;
   final IconData categoryIcon;
+
+  /// Raw parked-car fields, or null for a record that has no payment state of
+  /// its own to show.
+  final Map<String, dynamic>? paymentFields;
 
   @override
   Widget build(BuildContext context) {
@@ -766,32 +780,54 @@ class _RecordCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.parchment,
-                        border: Border.all(color: AppColors.rule),
-                      ),
-                      child: Row(
+                    // The category chip and the payment badge wrap rather than
+                    // overflow: two chips plus a date do not fit one line on a
+                    // narrow phone.
+                    Expanded(
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          Icon(categoryIcon, color: AppColors.cobalt, size: 16),
-                          const SizedBox(width: 6),
-                          Text(
-                            categoryLabel,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.ink,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.parchment,
+                              border: Border.all(color: AppColors.rule),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  categoryIcon,
+                                  color: AppColors.cobalt,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  categoryLabel,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.ink,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
+                          if (paymentFields != null)
+                            BusinessParkingPaymentBadge(
+                              paymentFields: paymentFields!,
+                            ),
                         ],
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 8),
                     Text(
                       formatter.format(date),
                       style: TextStyle(

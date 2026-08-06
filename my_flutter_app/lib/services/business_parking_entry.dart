@@ -284,6 +284,45 @@ bool canMarkBusinessParkingPaid(Map<String, dynamic> row) {
   return _trimmed(row['paymentStatus'], 40) == 'awaiting_direct_payment';
 }
 
+/// How a business-entered row's payment should read at a glance.
+///
+/// Mirrors the console's `businessParkingPaymentTone`, which returns
+/// "paid" | "awaiting" | "none".
+enum BusinessParkingPaymentTone {
+  /// The money is in. Show a green badge.
+  paid,
+
+  /// The lot is still owed. Show an amber badge.
+  awaiting,
+
+  /// Nothing to say: a customer's own booking, a cancelled record, or an
+  /// entry with nothing to collect. Show no badge at all rather than an
+  /// "unpaid" one that would send staff chasing money nobody owes.
+  none,
+}
+
+/// Paid, still owed, or nothing to show - the whole badge decision, with no
+/// widgets in it so `test/business_parking_payment_tone_test.dart` can drive
+/// every branch directly.
+///
+/// A cancelled record is [BusinessParkingPaymentTone.none] whatever its
+/// payment status: the space was released, so neither "paid" nor "not paid"
+/// is an instruction to anyone.
+BusinessParkingPaymentTone businessParkingPaymentTone(
+  Map<String, dynamic> row,
+) {
+  if (!isBusinessEnteredParking(row)) return BusinessParkingPaymentTone.none;
+  if (_trimmed(row['status'], 40).toLowerCase() == 'cancelled') {
+    return BusinessParkingPaymentTone.none;
+  }
+  final paymentStatus = _trimmed(row['paymentStatus'], 40).toLowerCase();
+  if (paymentStatus == 'succeeded' || paymentStatus == 'paid') {
+    return BusinessParkingPaymentTone.paid;
+  }
+  if (paymentStatus == 'not_required') return BusinessParkingPaymentTone.none;
+  return BusinessParkingPaymentTone.awaiting;
+}
+
 /// What a business-entered row recorded, in dollars. A direct entry is
 /// recorded and never billed, so this is what the lot is owed - not what the
 /// platform collected.

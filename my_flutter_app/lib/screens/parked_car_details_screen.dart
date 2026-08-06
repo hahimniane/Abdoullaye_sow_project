@@ -20,6 +20,7 @@ import '../utils/parking_status_options.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/async_action_button.dart';
+import '../widgets/business_parking_payment_badge.dart';
 
 class ParkedCarDetailsScreen extends StatefulWidget {
   final ParkedCar parkedCar;
@@ -693,6 +694,18 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
+                                    // Paid / Not paid, in the header rather
+                                    // than among the detail rows, so the state
+                                    // is readable at a glance.
+                                    if (businessParkingPaymentTone(
+                                          _paymentFields,
+                                        ) !=
+                                        BusinessParkingPaymentTone.none) ...[
+                                      const SizedBox(height: 8),
+                                      BusinessParkingPaymentBadge(
+                                        paymentFields: _paymentFields,
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -945,6 +958,12 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     );
     final checkoutUrl = (_paymentFields['checkoutUrl'] ?? '').toString();
     final awaitingDirect = canMarkBusinessParkingPaid(_paymentFields);
+    // A settled link is a dead end: Stripe answers it with an
+    // already-completed page, which the owner read as a broken link. Say the
+    // money is in instead of offering the link again.
+    final isPaid =
+        businessParkingPaymentTone(_paymentFields) ==
+        BusinessParkingPaymentTone.paid;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -974,7 +993,13 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
             currency.format(businessParkingAmountDue(_paymentFields)),
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
-          if (checkoutUrl.isNotEmpty) ...[
+          if (checkoutUrl.isNotEmpty && isPaid) ...[
+            const SizedBox(height: 12),
+            Text(
+              l10n.parkingPaymentLinkAlreadyUsed,
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+            ),
+          ] else if (checkoutUrl.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(
               l10n.paymentLinkLabel,
