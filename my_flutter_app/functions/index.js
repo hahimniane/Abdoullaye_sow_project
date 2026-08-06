@@ -6564,7 +6564,7 @@ exports.createCustomerCheckoutSession = onCall(
         } catch (error) {
           logger.warn("Could not prepare a Stripe customer for checkout", {
             recordId,
-            message: error.message,
+            detail: error.message,
           });
         }
       }
@@ -6718,7 +6718,7 @@ exports.refreshBusinessStripeAccountStatus = onCall(
         logger.error("Could not refresh business Stripe account status", {
           businessId,
           stripeAccountId,
-          message: error.message,
+          detail: error.message,
         });
         throw new HttpsError(
             "failed-precondition",
@@ -7281,7 +7281,7 @@ exports.confirmCustomerCheckoutSession = onCall(
         logger.error("Customer Checkout return recovery failed", {
           orderType,
           recordId,
-          message: error.message,
+          detail: error.message,
         });
         throw new HttpsError(
             "internal",
@@ -7310,7 +7310,7 @@ exports.handleBusinessProStripeWebhook = onRequest(
       try {
         verifyStripeWebhookSignature(req, stripeWebhookSecret.value());
       } catch (error) {
-        logger.warn("Rejected Stripe webhook", {message: error.message});
+        logger.warn("Rejected Stripe webhook", {detail: error.message});
         res.status(400).send("Invalid Stripe signature");
         return;
       }
@@ -7408,7 +7408,7 @@ exports.handleBusinessProStripeWebhook = onRequest(
         }
         logger.error("Business Pro webhook failed", {
           type: event.type,
-          message: error.message,
+          detail: error.message,
         });
         res.status(500).send("Webhook handling failed");
       }
@@ -7571,7 +7571,7 @@ exports.reconcileStaleStripePayments = onSchedule(
                 logger.error("Checkout session lookup failed", {
                   scanId: scan.id,
                   documentPath: snapshot.ref.path,
-                  message: error.message,
+                  detail: error.message,
                 });
                 continue;
               }
@@ -7595,7 +7595,7 @@ exports.reconcileStaleStripePayments = onSchedule(
               logger.error("Stale payment reconciliation failed", {
                 scanId: scan.id,
                 documentPath: snapshot.ref.path,
-                message: error.message,
+                detail: error.message,
               });
               await recordPaymentReconciliationFailure(
                   scan,
@@ -10102,7 +10102,7 @@ async function smsWalkUpParkingCustomer({to, body}) {
     }
     return true;
   } catch (error) {
-    logger.warn("Walk-up parking SMS failed", {message: error.message});
+    logger.warn("Walk-up parking SMS failed", {detail: error.message});
     return false;
   }
 }
@@ -10126,7 +10126,7 @@ async function emailWalkUpParkingCustomer({to, subject, text}) {
     });
     return true;
   } catch (error) {
-    logger.warn("Walk-up parking email failed", {message: error.message});
+    logger.warn("Walk-up parking email failed", {detail: error.message});
     return false;
   }
 }
@@ -18041,7 +18041,7 @@ async function issueBusinessPayoutTransfer({
       documentPath: ref.path,
       orderId: data.orderId || "",
       businessId,
-      message: error.message,
+      detail: error.message,
     });
     await ref.update({
       [payoutStatusField]: "failed",
@@ -19616,7 +19616,7 @@ exports.createFreightShipmentPaymentIntent = onCall(
       } catch (error) {
         logger.warn("Could not prepare a Stripe customer for freight", {
           shipmentId: shipmentRef.id,
-          message: error.message,
+          detail: error.message,
         });
       }
 
@@ -20074,7 +20074,7 @@ async function processFreightSettlementRefund({settlementRef, shipmentRef}) {
   } catch (error) {
     logger.error("Freight settlement refund failed", {
       settlementPath: settlementRef.path,
-      message: error.message,
+      detail: error.message,
     });
     await Promise.all([
       settlementRef.set({
@@ -20465,7 +20465,7 @@ async function attemptAutomaticFreightBalanceCharge({shipmentId, customerUid}) {
   } catch (error) {
     logger.warn("Could not prepare automatic freight balance charge", {
       shipmentId,
-      message: error.message,
+      detail: error.message,
     });
     await notifyFreightBalanceDue({
       shipmentId, shipment, autoChargeAttempted: true,
@@ -20496,7 +20496,7 @@ async function attemptAutomaticFreightBalanceCharge({shipmentId, customerUid}) {
   } catch (error) {
     logger.warn("Automatic freight balance charge did not go through", {
       shipmentId,
-      message: error.message,
+      detail: error.message,
     });
   }
 
@@ -24915,7 +24915,7 @@ exports.assistantChat = onRequest(
         return res.status(503)
             .json({fallback: true, error: "No AI key configured"});
       } catch (error) {
-        logger.error("assistantChat failed", {message: error.message});
+        logger.error("assistantChat failed", {detail: error.message});
         return res.status(502)
             .json({fallback: true, error: "Assistant unavailable"});
       }
