@@ -11,7 +11,8 @@ export type BusinessTab =
   | "people"
   | "reviews"
   | "cases"
-  | "growth";
+  | "growth"
+  | "assistant";
 
 export type BusinessSidebarGroupId =
   | "overview"
@@ -49,6 +50,7 @@ export const businessSidebarTabs: BusinessSidebarTab[] = [
   {id: "reviews", label: "Reviews", description: "Ratings and customer feedback", group: "manage", permission: "reviews"},
   {id: "cases", label: "Support", description: "Customers and help", group: "manage", permission: "support"},
   {id: "growth", label: "Growth", description: "Plan and advisor", group: "manage", permission: "growth"},
+  {id: "assistant", label: "Assistant", description: "Chat help for daily operations", group: "manage"},
 ];
 
 const groupLabels: Record<BusinessSidebarGroupId, string> = {

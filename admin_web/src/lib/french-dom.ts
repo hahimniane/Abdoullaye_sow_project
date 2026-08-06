@@ -3459,6 +3459,31 @@ Object.assign(TEXT_TRANSLATIONS, {
     "La date de fin ne peut pas précéder la date de début.",
 });
 
+// Business assistant chat panel (assistant-panel.tsx). "Assistant" is spelled
+// the same in both languages, so it is deliberately absent - an identity entry
+// would break the convergence guarantee this file's test enforces.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Chat help for daily operations":
+    "Aide par chat pour les opérations quotidiennes",
+  Declined: "Refusé",
+  "What the assistant can do": "Ce que l’assistant peut faire",
+  "Check which cars are parked and their payment status.":
+    "Vérifiez quelles voitures sont stationnées et le statut de leur paiement.",
+  "Record a walk-up parking entry for a customer.":
+    "Enregistrez un stationnement sans réservation pour un client.",
+  "Mark a parking as paid or re-check a payment link.":
+    "Marquez un stationnement comme payé ou revérifiez un lien de paiement.",
+  "Add tracking updates to a shipment.":
+    "Ajoutez des mises à jour de suivi à une expédition.",
+  "Every change is shown here for your confirmation before it runs.":
+    "Chaque modification est affichée ici pour votre confirmation avant d’être exécutée.",
+  "The assistant is typing...": "L’assistant écrit...",
+  "The assistant could not reply. Try again.":
+    "L’assistant n’a pas pu répondre. Réessayez.",
+  "The assistant is unavailable in preview mode.":
+    "L’assistant est indisponible en mode aperçu.",
+});
+
 const PICKUP_ERROR_LABELS: Record<string, string> = {
   "Shared pickup plan": "Plan de collecte partagé",
   "Barrel shipping pickup": "Collecte expédition de barils",
@@ -3506,6 +3531,8 @@ const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
     "Expliquez ce qui est inclus, les hypothèses de délai et les éventuelles conditions.",
   "Filter business sections": "Filtrer les sections entreprise",
   "Filter services...": "Filtrer les services...",
+  "Message the assistant": "Écrivez à l’assistant",
+  "Message the assistant...": "Écrivez à l’assistant...",
   "No-show note (optional)": "Note d’absence (facultatif)",
   "Phone number": "Numéro de téléphone",
   Pin: "Épingler",

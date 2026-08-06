@@ -11642,3 +11642,22 @@ button[data-loading="true"]::before {
   from { background: rgba(13, 148, 136, 0.12); }
   to { background: transparent; }
 }
+
+/* ===== Business assistant chat (assistant-panel.tsx) ===== */
+.assistant-chat { display: flex; flex-direction: column; gap: 10px; min-height: 320px; max-height: 60vh; overflow-y: auto; border: 1px solid var(--rule); border-radius: 14px; padding: 14px; background: var(--paper); }
+.assistant-hint { margin: auto; text-align: center; color: var(--muted); display: flex; flex-direction: column; gap: 8px; align-items: center; max-width: 460px; }
+.assistant-hint strong { color: var(--ink); font-size: 14px; }
+.assistant-hint ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.assistant-hint small { font-size: 12px; }
+.assistant-typing .bubble-text { color: var(--muted); font-style: italic; }
+.assistant-error { align-self: stretch; }
+.assistant-action-card { align-self: flex-start; max-width: 88%; border: 1px solid var(--rule); border-left: 3px solid var(--brand); border-radius: 12px; padding: 10px 12px; background: #f8fafc; display: flex; flex-direction: column; gap: 8px; }
+.assistant-action-card strong { font-size: 14px; color: var(--ink); }
+.assistant-action-params { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; }
+.assistant-action-params > div { display: contents; }
+.assistant-action-params dt { color: var(--muted); }
+.assistant-action-params dd { margin: 0; color: var(--ink); word-break: break-word; }
+.assistant-action-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.assistant-action-card .status-pill { align-self: flex-start; }
+.assistant-composer { margin-top: 12px; }
+.assistant-composer textarea { min-height: 60px; }
