@@ -9926,6 +9926,90 @@ async function completeBusinessParkingEntryPayment(target) {
   });
 }
 
+/**
+ * Asks Stripe, right now, whether a parking payment link was paid.
+ *
+ * A business must never be left staring at "Payment link sent" for a car the
+ * customer already paid for. Webhooks can be delayed, misconfigured, or
+ * silently ignored, so this gives the lot a way to settle the question on
+ * demand instead of waiting on one arriving.
+ *
+ * It reuses the SAME completion path as the webhook, so a record settled this
+ * way is indistinguishable from one settled automatically - including the
+ * payout - and running it twice is harmless.
+ */
+exports.refreshBusinessParkingPayment = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const entryId = cleanText(request.data?.entryId, 180);
+      if (!entryId) {
+        throw new HttpsError("invalid-argument", "Parking entry is required");
+      }
+      const db = admin.firestore();
+      const entryRef = db.collection("parkedCars").doc(entryId);
+      const snapshot = await entryRef.get();
+      if (!snapshot.exists) {
+        throw new HttpsError("not-found", "Parking entry not found");
+      }
+      const entry = snapshot.data() || {};
+      await requireBusinessPermission(
+          uid,
+          String(entry.businessId || ""),
+          "parking",
+      );
+      if (entry.paymentMethod !== "payment_link") {
+        throw new HttpsError(
+            "failed-precondition",
+            "This entry is not paid by payment link",
+            {reason: "not_a_payment_link"},
+        );
+      }
+      if (entry.paymentStatus === "succeeded") {
+        return {paid: true, alreadyRecorded: true, paymentStatus: "succeeded"};
+      }
+      const sessionId = String(entry.checkoutSessionId || "").trim();
+      if (!sessionId) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This entry has no checkout session to check",
+            {reason: "missing_checkout_session"},
+        );
+      }
+
+      const session = await retrieveStripeCheckoutSession(
+          sessionId,
+          entry.stripeConnectedAccountId || undefined,
+      );
+      const paid = session?.payment_status === "paid";
+      logger.info("Parking payment refresh", {
+        entryId,
+        sessionId,
+        sessionStatus: session?.status || "",
+        paymentStatus: session?.payment_status || "",
+        // Whether our metadata survived onto the intent is exactly what
+        // decides if the webhook could ever have reconciled this.
+        intentPaymentType: session?.payment_intent?.metadata?.paymentType || "",
+      });
+      if (!paid) {
+        return {
+          paid: false,
+          paymentStatus: entry.paymentStatus || "pending",
+          sessionStatus: session?.status || "open",
+        };
+      }
+      await completeBusinessParkingEntryPayment({
+        path: entryRef.path,
+        id: entryId,
+      });
+      return {paid: true, alreadyRecorded: false, paymentStatus: "succeeded"};
+    },
+);
+
 exports.markBusinessParkingPaid = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
