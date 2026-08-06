@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/nyc_boroughs.dart';
 import '../l10n/app_localizations.dart';
@@ -528,6 +529,11 @@ class PickupPlanEditorState extends State<PickupPlanEditor> {
       controller: controller,
       enabled: widget.canEdit,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      // Digits and at most one decimal point - letters typed here used to
+      // pass through and silently fail validation later.
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*$')),
+      ],
       decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
     );
   }
