@@ -1,3 +1,9 @@
+import {
+  EMPTY_STRUCTURED_ADDRESS,
+  type StructuredAddress,
+  composeAddressLine,
+} from "./address-fields.ts";
+
 export type MarketplaceDisclosurePayload = {
   accepted: true;
   version: string;
@@ -6,10 +12,56 @@ export type MarketplaceDisclosurePayload = {
 
 export type PickupDetails = {
   requested: boolean;
+  // The composed single line. Quoting, checkout, and the business's copy of
+  // the order all read this, so it is kept in sync with the parts below on
+  // every edit and always carries the apartment.
   address: string;
   borough: string;
   dateTime?: string;
+  // Separate, customer-editable parts (backlog item 1). Optional because a
+  // pickup captured before this change has only the composed line.
+  streetLine?: string;
+  apartment?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
 };
+
+/**
+ * The named parts behind a pickup address. A pickup saved before addresses
+ * were split has only the composed line, so it becomes the street line and
+ * the customer can break it apart by hand.
+ */
+export function pickupStructuredAddress(
+  pickup: PickupDetails,
+): StructuredAddress {
+  return {
+    ...EMPTY_STRUCTURED_ADDRESS,
+    streetLine: pickup.streetLine ?? pickup.address,
+    apartment: pickup.apartment ?? "",
+    city: pickup.city ?? "",
+    state: pickup.state ?? "",
+    postalCode: pickup.postalCode ?? "",
+    country: pickup.country ?? "",
+  };
+}
+
+/**
+ * Writes edited parts back onto a pickup, recomposing the single line the
+ * callables receive. Recomposing on every edit is what keeps the apartment
+ * from being dropped between the form and checkout.
+ */
+export function applyStructuredAddress(
+  pickup: PickupDetails,
+  parts: StructuredAddress,
+): PickupDetails {
+  return {
+    ...pickup,
+    ...parts,
+    address: composeAddressLine(parts),
+  };
+}
 
 export const NYC_PICKUP_BOROUGHS = [
   "Bronx",

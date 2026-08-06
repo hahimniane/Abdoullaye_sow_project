@@ -945,13 +945,15 @@ test("shipping UI uses the canonical server option, quote, request, and checkout
     "listTransportBusinessOptions",
     "createTransportRequest",
   ].forEach((callable) => assert.match(source, new RegExp(`"${callable}"`)));
-  // Address entry is the shared AddressAutocomplete component (also used by
-  // the business console), which itself calls suggestPickupAddresses.
-  assert.match(source, /<AddressAutocomplete/);
+  // Address entry is the shared StructuredAddressFields component, which
+  // wraps AddressAutocomplete (also used on its own by the business console)
+  // and splits the chosen suggestion across named fields.
+  assert.match(source, /<StructuredAddressFields/);
   assert.match(
     source,
-    /import\s*\{[\s\S]*AddressAutocomplete[\s\S]*\}\s*from\s*"@\/components\/address-autocomplete"/,
+    /import\s*\{[\s\S]*StructuredAddressFields[\s\S]*\}\s*from\s*"@\/components\/address-autocomplete"/,
   );
+  assert.doesNotMatch(source, /<AddressAutocomplete/);
   const addressAutocompleteSource = readFileSync(
     new URL("../components/address-autocomplete.tsx", import.meta.url),
     "utf8",

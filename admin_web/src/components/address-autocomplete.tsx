@@ -4,7 +4,14 @@ import { useEffect, useState } from "react";
 import { httpsCallable } from "firebase/functions";
 import { MapPin } from "lucide-react";
 
+import { COUNTRY_NAMES } from "@/lib/country-catalog";
 import { functions } from "@/lib/firebase";
+import { US_STATE_OPTIONS, withSelected } from "@/lib/us-locations";
+import {
+  type StructuredAddress,
+  structuredAddressFromLine,
+  structuredAddressFromSuggestion,
+} from "@/lib/address-fields";
 
 const CALL_TIMEOUT_MS = 30_000;
 
@@ -15,6 +22,17 @@ export type AddressSuggestion = {
   formattedAddress?: string;
   latitude?: number;
   longitude?: number;
+  // Named parts from suggestPickupAddresses. Optional so a client build that
+  // is newer than the deployed callable degrades to the single line instead
+  // of rendering an empty form.
+  streetLine?: string;
+  apartment?: string;
+  city?: string;
+  state?: string;
+  stateCode?: string;
+  postalCode?: string;
+  country?: string;
+  countryCode?: string;
 };
 
 async function suggestPickupAddresses(input: string) {
@@ -238,5 +256,170 @@ export function AddressAutocomplete({
         </small>
       )}
     </div>
+  );
+}
+
+const US_COUNTRY_NAME = "United States";
+
+// The customer's address as separate, editable fields (backlog item 1).
+//
+// Choosing a suggestion fills each field instead of pasting one opaque string
+// the customer cannot correct, and the apartment/unit is its own field that a
+// suggestion never overwrites - Google autocompletes buildings, not units, so
+// its subpremise is nearly always empty. Nothing here forces the customer to
+// accept a suggestion: the street box is a plain text input, and every other
+// field stays editable after a suggestion lands.
+export function StructuredAddressFields({
+  disabled = false,
+  idPrefix,
+  onBlur,
+  onChange,
+  required = true,
+  streetLabel = "Street address",
+  suggestionsEnabled,
+  value,
+}: {
+  disabled?: boolean;
+  idPrefix: string;
+  onBlur?: () => void;
+  // The chosen suggestion travels with the change so a caller can apply
+  // server-derived extras (the pickup borough) in the same state update
+  // instead of a second, racing one.
+  onChange: (value: StructuredAddress, suggestion?: AddressSuggestion) => void;
+  required?: boolean;
+  streetLabel?: string;
+  suggestionsEnabled: boolean;
+  value: StructuredAddress;
+}) {
+  // A US address gets the canonical state picker; anywhere else has no
+  // canonical region catalog, so the field stays typed (and is pre-filled from
+  // the suggestion).
+  const isUnitedStates = value.country.trim() === US_COUNTRY_NAME;
+  const stateOptions = withSelected(
+    US_STATE_OPTIONS.map((option) => option.code),
+    value.state.trim(),
+  );
+
+  return (
+    <>
+      <AddressAutocomplete
+        id={`${idPrefix}-street`}
+        label={streetLabel}
+        onBlur={onBlur}
+        onChange={(streetLine) =>
+          onChange(structuredAddressFromLine(streetLine, value))
+        }
+        onSelect={(suggestion) =>
+          onChange(structuredAddressFromSuggestion(suggestion, value), suggestion)
+        }
+        required={required}
+        suggestionsEnabled={suggestionsEnabled}
+        value={value.streetLine}
+      />
+      <label
+        className="customer-form-span"
+        htmlFor={`${idPrefix}-apartment`}
+      >
+        Apartment, suite, or unit (optional)
+        <input
+          autoComplete="address-line2"
+          disabled={disabled}
+          id={`${idPrefix}-apartment`}
+          onBlur={onBlur}
+          onChange={(event) =>
+            onChange({ ...value, apartment: event.target.value })
+          }
+          placeholder="Apt 4B"
+          type="text"
+          value={value.apartment}
+        />
+        <small>
+          Apartment numbers are rarely in the suggestion — add yours here.
+        </small>
+      </label>
+      <label htmlFor={`${idPrefix}-city`}>
+        City
+        <input
+          autoComplete="address-level2"
+          disabled={disabled}
+          id={`${idPrefix}-city`}
+          onBlur={onBlur}
+          onChange={(event) => onChange({ ...value, city: event.target.value })}
+          type="text"
+          value={value.city}
+        />
+      </label>
+      <label htmlFor={`${idPrefix}-state`}>
+        State or region
+        {isUnitedStates ? (
+          <select
+            disabled={disabled}
+            id={`${idPrefix}-state`}
+            onBlur={onBlur}
+            onChange={(event) =>
+              onChange({ ...value, state: event.target.value })
+            }
+            value={value.state.trim()}
+          >
+            <option value="">Select a state</option>
+            {stateOptions.map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            autoComplete="address-level1"
+            disabled={disabled}
+            id={`${idPrefix}-state`}
+            onBlur={onBlur}
+            onChange={(event) =>
+              onChange({ ...value, state: event.target.value })
+            }
+            type="text"
+            value={value.state}
+          />
+        )}
+      </label>
+      <label htmlFor={`${idPrefix}-postal-code`}>
+        ZIP or postal code
+        <input
+          autoComplete="postal-code"
+          disabled={disabled}
+          id={`${idPrefix}-postal-code`}
+          inputMode="numeric"
+          onBlur={onBlur}
+          onChange={(event) =>
+            onChange({ ...value, postalCode: event.target.value })
+          }
+          type="text"
+          value={value.postalCode}
+        />
+      </label>
+      <label htmlFor={`${idPrefix}-country`}>
+        Country
+        <select
+          disabled={disabled}
+          id={`${idPrefix}-country`}
+          onBlur={onBlur}
+          onChange={(event) =>
+            onChange({ ...value, country: event.target.value })
+          }
+          value={value.country.trim()}
+        >
+          <option value="">Select a country</option>
+          {/* Canonical 249-country catalog; a stored value outside it is
+              folded in so the picker never renders blank. */}
+          {withSelected([...COUNTRY_NAMES], value.country.trim()).map(
+            (country) => (
+              <option key={country} value={country}>
+                {country}
+              </option>
+            ),
+          )}
+        </select>
+      </label>
+    </>
   );
 }

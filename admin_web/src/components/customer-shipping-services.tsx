@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 
 import {
-  AddressAutocomplete,
+  StructuredAddressFields,
   type AddressSuggestion,
 } from "@/components/address-autocomplete";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
@@ -44,6 +44,12 @@ import {
   getYears,
 } from "@/lib/car-catalog";
 import {
+  EMPTY_STRUCTURED_ADDRESS,
+  composeAddressLine,
+  type StructuredAddress,
+} from "@/lib/address-fields";
+import {
+  applyStructuredAddress,
   barrelDestinationCountries,
   barrelOrderTotals,
   barrelProvidersForCountry,
@@ -58,6 +64,7 @@ import {
   localDateTimeInputValue,
   nycBoroughFromAddress,
   pickupDetailsAreComplete,
+  pickupStructuredAddress,
   shippingOptionIsEligible,
   shippingCountryDisplayName,
   shippingProviderRate,
@@ -2907,7 +2914,13 @@ function TransportRequestForm({
   const [ownerName, setOwnerName] = useState(text(profile.fullName, ""));
   const [customerPhone, setCustomerPhone] = useState(text(profile.phone, ""));
   const [pickupArea, setPickupArea] = useState("");
-  const [pickupAddress, setPickupAddress] = useState("");
+  // Car transport takes an optional exact address. It is split into the same
+  // named fields as every other customer address so the apartment/unit is
+  // captured instead of being lost in one opaque suggestion string.
+  const [pickupAddressParts, setPickupAddressParts] = useState<StructuredAddress>(
+    EMPTY_STRUCTURED_ADDRESS,
+  );
+  const pickupAddress = composeAddressLine(pickupAddressParts);
   const [destinationCountryId, setDestinationCountryId] = useState("");
   const [carMake, setCarMake] = useState("");
   const [carModel, setCarModel] = useState("");
@@ -2970,7 +2983,7 @@ function TransportRequestForm({
 
   function clearForm() {
     setPickupArea("");
-    setPickupAddress("");
+    setPickupAddressParts(EMPTY_STRUCTURED_ADDRESS);
     setDestinationCountryId("");
     setCarMake("");
     setCarModel("");
@@ -3118,18 +3131,13 @@ function TransportRequestForm({
                       placeholder="Search or choose a country"
                       value={destinationCountryId}
                     />
-                    <AddressAutocomplete
-                      id="customer-transport-pickup"
-                      label="Exact pickup address (optional)"
-                      onChange={setPickupAddress}
-                      onSelect={(suggestion) =>
-                        setPickupAddress(
-                          suggestion.formattedAddress || suggestion.description,
-                        )
-                      }
+                    <StructuredAddressFields
+                      idPrefix="customer-transport-pickup"
+                      onChange={setPickupAddressParts}
                       required={false}
+                      streetLabel="Exact pickup street address (optional)"
                       suggestionsEnabled
-                      value={pickupAddress}
+                      value={pickupAddressParts}
                     />
                   </div>
                   {pickupArea.trim().length >= 2 &&
@@ -4026,33 +4034,27 @@ function PickupFields({
       </fieldset>
       {pickup.requested && (
         <>
-          <AddressAutocomplete
-            id={`customer-pickup-address-${idSuffix}`}
+          <StructuredAddressFields
+            disabled={disabled}
+            idPrefix={`customer-pickup-address-${idSuffix}`}
             onBlur={onAddressBlur}
-            suggestionsEnabled={suggestionsEnabled}
-            onChange={(address) => {
+            onChange={(parts, suggestion) => {
+              const applied = applyStructuredAddress(pickup, parts);
               setPickup({
-                ...pickup,
-                address,
-                borough: nycBoroughFromAddress(address) || "",
-              });
-              onPickupChanged?.();
-            }}
-            onSelect={(suggestion) => {
-              const address =
-                suggestion.formattedAddress || suggestion.description;
-              setPickup({
-                ...pickup,
-                address,
+                ...applied,
+                // The server-derived borough beats the text sniff when the
+                // customer picked a suggestion; typing falls back to the sniff.
                 borough:
-                  suggestion.borough ||
-                  nycBoroughFromAddress(address) ||
+                  suggestion?.borough ||
+                  nycBoroughFromAddress(applied.address) ||
                   "",
               });
               onPickupChanged?.();
-              onAddressSelected?.(suggestion);
+              if (suggestion) onAddressSelected?.(suggestion);
             }}
-            value={pickup.address}
+            streetLabel="Pickup street address"
+            suggestionsEnabled={suggestionsEnabled}
+            value={pickupStructuredAddress(pickup)}
           />
           {pickup.borough ? (
             <div className="customer-detected-borough">

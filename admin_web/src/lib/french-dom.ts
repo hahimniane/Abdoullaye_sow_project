@@ -271,6 +271,18 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "Ajoutez chaque destination, entreprise, destinataire et quantité de barils à une seule commande.",
   "Add to order": "Ajouter à la commande",
   "Address suggestions": "Suggestions d’adresses",
+  // Split customer address fields (docs/PLAN-2026-08-backlog.md item 1).
+  "Street address": "Adresse (rue)",
+  "Pickup street address": "Adresse de collecte (rue)",
+  "Exact pickup street address (optional)":
+    "Adresse exacte de collecte (facultatif)",
+  "Apartment, suite, or unit (optional)":
+    "Appartement, bureau ou unité (facultatif)",
+  "Apartment numbers are rarely in the suggestion — add yours here.":
+    "Les numéros d’appartement figurent rarement dans la suggestion — ajoutez le vôtre ici.",
+  "ZIP or postal code": "Code postal",
+  "Select a state": "Sélectionnez un État",
+  "Select a country": "Sélectionnez un pays",
   "locations available — choose one":
     "lieux disponibles — choisissez-en un",
   "Address suggestions are unavailable. Enter the complete address to continue.":
@@ -3398,6 +3410,7 @@ for (const [label, frLabel] of Object.entries(PICKUP_ERROR_LABELS)) {
 
 const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "Add a photo by URL": "Ajouter une photo par URL",
+  "Apt 4B": "App. 4B",
   "Choose quote request": "Choisir une demande de devis",
   "City, state or province, postal code":
     "Ville, État ou province, code postal",

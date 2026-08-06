@@ -25,7 +25,10 @@ test("car transport customer journey matches by route without requiring a busine
   assert.ok(start > 0 && end > start);
   assert.match(form, /label="Destination country"/);
   assert.match(form, /Pickup area/);
-  assert.match(form, /label="Exact pickup address \(optional\)"/);
+  // The exact address is now split across named fields (street, apartment,
+  // city, state, ZIP, country) rather than one opaque suggestion string.
+  assert.match(form, /streetLabel="Exact pickup street address \(optional\)"/);
+  assert.match(form, /<StructuredAddressFields/);
   assert.match(form, /destinationCountryId: destinationCountry\?\.id/);
   assert.match(form, /destinationCountryName: destinationCountry\?\.name/);
   assert.match(form, /pickupArea: pickupArea\.trim\(\)/);
