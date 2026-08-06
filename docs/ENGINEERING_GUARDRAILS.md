@@ -109,6 +109,22 @@ the log rather than assuming.
 
 Before calling a mobile callable failure a product bug, check this first.
 
+### Never run two function deploys at once
+
+Each `firebase deploy --only functions:x` runs the predeploy hook, which
+starts the Firestore and Auth emulators on fixed ports. A second deploy
+launched while the first is still running fails with
+
+```
+Error: Could not start Authentication Emulator, port taken.
+Error: functions predeploy error: Command terminated with non-zero exit code 1
+```
+
+and **zero test failures** — so it reads like a mysterious broken build when
+nothing is wrong with the code. Deploy functions strictly one at a time, and
+wait for the previous command to exit before starting the next.
+
+
 ## 2. Deployment gate — non-negotiable
 
 Production deploys go through the preflight, which now enforces:
