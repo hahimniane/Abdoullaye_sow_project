@@ -68,118 +68,234 @@
       "collectionGroup": "parkedCars",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "paymentStatus", "order": "ASCENDING"},
-        {"fieldPath": "updatedAt", "order": "ASCENDING"}
+        {
+          "fieldPath": "paymentStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "participants",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        {"fieldPath": "paymentStatus", "order": "ASCENDING"},
-        {"fieldPath": "updatedAt", "order": "ASCENDING"}
+        {
+          "fieldPath": "paymentStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "barrelPoolBalanceRequests",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "paymentStatus", "order": "ASCENDING"},
-        {"fieldPath": "updatedAt", "order": "ASCENDING"}
+        {
+          "fieldPath": "paymentStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "barrelShipments",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "paymentStatus", "order": "ASCENDING"},
-        {"fieldPath": "updatedAt", "order": "ASCENDING"}
+        {
+          "fieldPath": "paymentStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "barrelOrders",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "paymentStatus", "order": "ASCENDING"},
-        {"fieldPath": "updatedAt", "order": "ASCENDING"}
+        {
+          "fieldPath": "paymentStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "freightShipments",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "paymentStatus", "order": "ASCENDING"},
-        {"fieldPath": "updatedAt", "order": "ASCENDING"}
+        {
+          "fieldPath": "paymentStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "paymentAttempts",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        {"fieldPath": "paymentStatus", "order": "ASCENDING"},
-        {"fieldPath": "updatedAt", "order": "ASCENDING"}
+        {
+          "fieldPath": "paymentStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "carPurchases",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "paymentStatus", "order": "ASCENDING"},
-        {"fieldPath": "updatedAt", "order": "ASCENDING"}
+        {
+          "fieldPath": "paymentStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "carPurchases",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "extensionPaymentStatus", "order": "ASCENDING"},
-        {"fieldPath": "updatedAt", "order": "ASCENDING"}
+        {
+          "fieldPath": "extensionPaymentStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "carPurchases",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "paymentType", "order": "ASCENDING"},
-        {"fieldPath": "purchaseStatus", "order": "ASCENDING"},
-        {"fieldPath": "holdExpiresAt", "order": "ASCENDING"}
+        {
+          "fieldPath": "paymentType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "purchaseStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "holdExpiresAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "transportOpportunities",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "businessId", "order": "ASCENDING"},
-        {"fieldPath": "status", "order": "ASCENDING"},
-        {"fieldPath": "expiresAt", "order": "ASCENDING"}
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "expiresAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "transportQuotes",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "businessId", "order": "ASCENDING"},
-        {"fieldPath": "status", "order": "ASCENDING"},
-        {"fieldPath": "updatedAt", "order": "DESCENDING"}
+        {
+          "fieldPath": "businessId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "transportQuotes",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "requestId", "order": "ASCENDING"},
-        {"fieldPath": "status", "order": "ASCENDING"},
-        {"fieldPath": "amountCents", "order": "ASCENDING"}
+        {
+          "fieldPath": "requestId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "amountCents",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "accessInvitations",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "targetUid", "order": "ASCENDING"},
-        {"fieldPath": "email", "order": "ASCENDING"},
-        {"fieldPath": "status", "order": "ASCENDING"},
-        {"fieldPath": "expiresAt", "order": "DESCENDING"}
+        {
+          "fieldPath": "targetUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "email",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "expiresAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "barrelShipments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "destinationAdjustmentPaymentStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "ASCENDING"
+        }
       ]
     }
   ],
