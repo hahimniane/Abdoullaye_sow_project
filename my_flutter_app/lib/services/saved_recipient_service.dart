@@ -47,11 +47,13 @@ class SavedRecipient {
   bool matches(String query) {
     final q = query.trim().toLowerCase();
     if (q.isEmpty) return true;
-    return name.toLowerCase().contains(q) ||
-        phone.replaceAll(RegExp(r'\D'), '').contains(q.replaceAll(
-          RegExp(r'\D'),
-          '',
-        ));
+    if (name.toLowerCase().contains(q)) return true;
+    // Only compare digits when the query HAS digits: a letters-only query
+    // strips to "", and contains("") is true for every recipient, which made
+    // typing a name match everyone.
+    final queryDigits = q.replaceAll(RegExp(r'\D'), '');
+    if (queryDigits.isEmpty) return false;
+    return phone.replaceAll(RegExp(r'\D'), '').contains(queryDigits);
   }
 }
 
