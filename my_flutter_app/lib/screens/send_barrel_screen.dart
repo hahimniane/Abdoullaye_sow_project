@@ -1188,6 +1188,13 @@ class _BusinessOptionSelector extends StatelessWidget {
             value != null && options.any((option) => option.id == value!.id)
             ? value
             : null;
+        // One business serves this country: choosing from a list of one is
+        // busywork, so make the choice for them.
+        if (selectedOption == null && options.length == 1) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            onChanged(options.first);
+          });
+        }
 
         return FormField<BusinessDestinationOption>(
           key: ValueKey('business-options-$countryId-${selectedOption?.id}'),
