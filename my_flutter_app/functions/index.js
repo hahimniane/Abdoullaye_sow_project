@@ -131,6 +131,7 @@ const {
   customerCheckoutReturnEventId,
   customerCheckoutReturnVerification,
   customerCheckoutReturnUrls,
+  normalizedConsoleUrl,
   paymentIntentIdFromClientSecret,
   requireCustomerCheckoutAction,
 } = require("./customer_checkout");
@@ -138,6 +139,14 @@ const {
   publicOpenBarrelOption,
   publicParkingOption,
 } = require("./public_service_options");
+const {
+  BUSINESS_PARKING_PAYMENT_TYPE,
+  buildBusinessParkingEntryRecord,
+  businessParkingPaidUpdate,
+  businessParkingPaymentPlan,
+  directPaymentPayoutFields,
+  normalizeBusinessParkingEntry,
+} = require("./business_parking_entry");
 const {
   sendFirebasePasswordSetupEmail,
 } = require("./firebase_auth_email");
@@ -4587,8 +4596,13 @@ async function createStripeCustomerCheckoutSession(params) {
     body.set(`payment_intent_data[metadata][${key}]`, String(value));
   });
   return stripeFormRequest("/checkout/sessions", body, {
-    idempotencyKey:
-      checkoutSessionIdempotencyKey(params.originalPaymentIntentId),
+    // Retrying a customer checkout re-creates the session for the SAME
+    // PaymentIntent, so that intent is the natural idempotency seed. A flow
+    // that opens with a hosted session and has no earlier intent (business
+    // parking payment links) passes its own stable seed instead.
+    idempotencyKey: checkoutSessionIdempotencyKey(
+        params.idempotencySeed || params.originalPaymentIntentId,
+    ),
     ...(params.connectedAccountId && {
       headers: {"Stripe-Account": params.connectedAccountId},
     }),
@@ -6781,6 +6795,21 @@ const PAYMENT_COMPLETION_EXPORTS = Object.freeze({
   hold_extension: "completePaidHoldExtensionPayment",
 });
 
+// Every entry above runs a CUSTOMER callable as the paying customer. A
+// business-entered parking payment link has no customer account to run as
+// (that is the point of the feature), so its completion is a server-side
+// handler instead. Both maps are consulted by runPaymentCompletion.
+const PAYMENT_COMPLETION_HANDLERS = Object.freeze({
+  [BUSINESS_PARKING_PAYMENT_TYPE]: completeBusinessParkingEntryPayment,
+});
+
+function isReconcilablePaymentType(paymentType) {
+  return Boolean(
+      PAYMENT_COMPLETION_EXPORTS[paymentType] ||
+      PAYMENT_COMPLETION_HANDLERS[paymentType],
+  );
+}
+
 const PAYMENT_CANCELLATION_EXPORTS = Object.freeze({
   parking_deposit: "cancelPendingParkingReservation",
   barrel_pool_deposit: "cancelPendingBarrelPoolDeposit",
@@ -6934,6 +6963,11 @@ async function loadAndValidatePaymentTarget({event, intent}) {
 }
 
 async function runPaymentCompletion(target) {
+  const handler = PAYMENT_COMPLETION_HANDLERS[target.paymentType];
+  if (handler) {
+    await handler(target);
+    return;
+  }
   const exportName = PAYMENT_COMPLETION_EXPORTS[target.paymentType];
   const callable = exports[exportName];
   if (!callable || typeof callable.run !== "function") {
@@ -7047,7 +7081,7 @@ async function bindCheckoutPaymentIntent(event) {
 async function reconcileStripePaymentEvent(event, connectedAccountId) {
   const intent = await paymentIntentForStripeEvent(event, connectedAccountId);
   const paymentType = String(intent?.metadata?.paymentType || "").trim();
-  if (!intent || !PAYMENT_COMPLETION_EXPORTS[paymentType]) return false;
+  if (!intent || !isReconcilablePaymentType(paymentType)) return false;
   const {target, decision, superseded} = await loadAndValidatePaymentTarget({
     event,
     intent,
@@ -9603,6 +9637,360 @@ exports.cancelPendingParkingReservation = onCall(
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
       return {success: true, reservationId: cleanReservationId};
+    },
+);
+
+// --- Business-entered parking (docs/PLAN-2026-08-backlog.md item 5) -------
+//
+// Everything above requires a signed-in customer whose card is charged on
+// the spot. A lot also takes walk-ups, and the owner settled that no
+// customer account may be required for one. The decision logic - which
+// statuses and amounts each payment method produces, what is recorded
+// versus billed, and the idempotent "payment received" transition - lives
+// in ./business_parking_entry so it is unit-testable without Firestore or
+// Stripe. Everything here is the glue.
+
+const BUSINESS_PARKING_ENTRY_ERRORS = Object.freeze({
+  business_required: "A business is required",
+  payment_method_invalid:
+    "Choose how this car is paid for: direct payment or a payment link",
+  customer_name_required: "The customer's name is required",
+  customer_phone_required: "The customer's phone number is required",
+  customer_email_invalid: "That email address is not valid",
+  payment_link_contact_required:
+    "A phone number or email is required to send a payment link",
+  car_make_required: "The vehicle make is required",
+  car_model_required: "The vehicle model is required",
+  car_year_required: "The vehicle year is required",
+  car_year_invalid: "That vehicle year is not valid",
+  start_date_required: "A parking start date is required",
+  end_date_required: "A parking end date is required",
+  end_date_before_start_date:
+    "The parking end date must be on or after the start date",
+});
+
+const BUSINESS_PARKING_PAID_REFUSALS = Object.freeze({
+  not_a_business_entry:
+    "This parking record was not entered by the business",
+  payment_link_is_stripe_owned:
+    "This entry is paid through its payment link - Stripe records that " +
+    "payment, so it cannot be marked received by hand",
+  entry_cancelled: "This parking entry was cancelled",
+  not_awaiting_direct_payment:
+    "This parking entry is not waiting on a direct payment",
+});
+
+function businessParkingEntryMessage(errors) {
+  const detail = errors
+      .map((code) => BUSINESS_PARKING_ENTRY_ERRORS[code] || code)
+      .join(". ");
+  return detail || "This parking entry is incomplete";
+}
+
+// Where Stripe sends the walk-up customer after the hosted Checkout page.
+// Deliberately the console's home page with a marker query rather than the
+// customer return route: that route confirms a session as the signed-in
+// customer, and this customer has no account. The record's payment status is
+// settled server-side by the Stripe webhook / stale-payment reconciliation.
+function businessParkingReturnUrls(trackingCode) {
+  const base = normalizedConsoleUrl(process.env.CUSTOMER_CONSOLE_URL);
+  const query = new URLSearchParams({parking: String(trackingCode || "")});
+  return {
+    successUrl: `${base}/?${query.toString()}&status=paid`,
+    cancelUrl: `${base}/?${query.toString()}&status=cancel`,
+  };
+}
+
+exports.createBusinessParkingEntry = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const {input, errors} = normalizeBusinessParkingEntry(request.data);
+      if (errors.length > 0) {
+        throw new HttpsError(
+            "invalid-argument",
+            businessParkingEntryMessage(errors),
+        );
+      }
+      await requireBusinessPermission(uid, input.businessId, "parking");
+
+      const db = admin.firestore();
+      const businessRef = db.collection("businesses").doc(input.businessId);
+      const entryRef = db.collection("parkedCars").doc();
+      const trackingCode = await generateTrackingCode("PK", "parkedCars");
+      let plan;
+      let payoutFields;
+      await db.runTransaction(async (transaction) => {
+        const businessDoc = await transaction.get(businessRef);
+        if (!businessDoc.exists) {
+          throw new HttpsError("not-found", "Business not found");
+        }
+        const business = businessDoc.data() || {};
+        if (!businessOffersParking(business)) {
+          throw new HttpsError(
+              "failed-precondition",
+              "This business is not set up to take parking",
+          );
+        }
+        const reservations = await transaction.get(
+            db.collection("parkedCars")
+                .where("businessId", "==", input.businessId)
+                .limit(500),
+        );
+        // Same option/pricing path the customer gets - parkingEstimateCents
+        // runs inside parkingOptionFromBusiness, so a walk-up is never
+        // quoted off a second, drifting price model.
+        const option = parkingOptionFromBusiness({
+          businessId: input.businessId,
+          business,
+          reservations: reservations.docs.map((reservation) =>
+            reservation.data() || {},
+          ),
+          start: input.startDate,
+          end: input.endDate,
+          pickupRequested: false,
+          customerLatitude: null,
+          customerLongitude: null,
+        });
+        if (option.availableSpaces <= 0) {
+          throw new HttpsError(
+              "failed-precondition",
+              "No parking spaces are available for those dates",
+          );
+        }
+        plan = businessParkingPaymentPlan({
+          paymentMethod: input.paymentMethod,
+          totalCents: centsFromDollars(option.estimatedTotal),
+          simulatePayments: SIMULATE_PAYMENTS,
+        });
+
+        if (plan.takesPlatformCut) {
+          // The platform's cut is a platform-admin decision
+          // (shipmentPricing/serviceFees.parkingPlatformFeePct, with the
+          // per-business override) - never a number invented here.
+          const pricingDoc = await transaction.get(
+              db.collection("shipmentPricing").doc("serviceFees"),
+          );
+          const platformFeePct = servicePlatformFeePctForBusiness(
+              pricingDoc.data(),
+              business,
+              ["parkingPlatformFeePct"],
+          );
+          payoutFields = servicePayoutFields({
+            grossCents: plan.amountDueCents,
+            platformFeePct,
+            connectReady: !!business.stripeAccountId &&
+              business.payoutsEnabled === true,
+            business,
+          });
+        } else {
+          payoutFields = directPaymentPayoutFields(plan.amountDueCents);
+        }
+
+        const now = FirestoreFieldValue.serverTimestamp();
+        transaction.set(entryRef, {
+          ...buildBusinessParkingEntryRecord({
+            trackingCode,
+            input,
+            plan,
+            option,
+            currency: SHIPMENT_CURRENCY,
+          }),
+          parkingDate: FirestoreTimestamp.fromDate(input.startDate),
+          parkingEndDate: FirestoreTimestamp.fromDate(input.endDate),
+          enteredByUid: uid,
+          ...payoutFields,
+          createdAt: now,
+          updatedAt: now,
+        });
+      });
+
+      const response = {
+        success: true,
+        entryId: entryRef.id,
+        reservationId: entryRef.id,
+        trackingCode,
+        paymentMethod: plan.paymentMethod,
+        amountDue: plan.amountDue,
+        amountDueCents: plan.amountDueCents,
+        status: plan.status,
+        paymentStatus: plan.paymentStatus,
+        platformFeeCents: payoutFields.platformFeeCents,
+      };
+      if (!plan.createsStripeObject) {
+        return {
+          ...response,
+          ...(plan.billedByPlatform && SIMULATE_PAYMENTS &&
+            {simulatedPayment: true}),
+        };
+      }
+
+      let session;
+      try {
+        session = await createStripeCustomerCheckoutSession({
+          amount: plan.amountDueCents,
+          currency: SHIPMENT_CURRENCY,
+          customerEmail: input.customerEmail,
+          productName: "Laawol parking",
+          recordId: entryRef.id,
+          idempotencySeed: `business-parking-entry:${entryRef.id}`,
+          connectedAccountId: payoutFields.stripeChargeType === "direct" ?
+            payoutFields.stripeConnectedAccountId || undefined :
+            undefined,
+          applicationFeeAmount:
+            payoutFields.stripeChargeType === "direct" ?
+              clampedApplicationFeeAmount(
+                  payoutFields.platformFeeCents,
+                  plan.amountDueCents,
+              ) :
+              undefined,
+          metadata: {
+            paymentType: BUSINESS_PARKING_PAYMENT_TYPE,
+            reservationId: entryRef.id,
+            businessId: input.businessId,
+            trackingCode,
+          },
+          ...businessParkingReturnUrls(trackingCode),
+        });
+      } catch (error) {
+        await entryRef.update({
+          status: "cancelled",
+          paymentStatus: "failed",
+          cancellationReason: "business_parking_payment_link_failed",
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+        throw error;
+      }
+
+      const sessionPaymentIntentId = String(session.payment_intent || "")
+          .trim();
+      await entryRef.update({
+        checkoutSessionId: String(session.id || ""),
+        checkoutUrl: String(session.url || ""),
+        checkoutStatus: "open",
+        // Stripe may only mint the PaymentIntent once the customer opens the
+        // page; the checkout.session.* webhook binds it either way.
+        ...(sessionPaymentIntentId.startsWith("pi_") && {
+          stripePaymentIntentId: sessionPaymentIntentId,
+        }),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+
+      return {
+        ...response,
+        checkoutSessionId: String(session.id || ""),
+        checkoutUrl: String(session.url || ""),
+      };
+    },
+);
+
+// Completion for a business parking payment link. Unlike every other
+// payment type there is no customer callable to replay as the payer, so the
+// reconciliation runs this instead: settle the record, then hand the
+// business its share through the same payout machinery as the customer
+// path. Idempotent - issueBusinessPayoutTransfer returns early once paid.
+async function completeBusinessParkingEntryPayment(target) {
+  const ref = admin.firestore().doc(target.path);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) {
+    throw new Error(`Payment target not found: ${target.path}`);
+  }
+  const entry = snapshot.data() || {};
+  await ref.update({
+    status: "reserved",
+    paymentStatus: "succeeded",
+    checkoutStatus: "completed",
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  });
+  await issueBusinessPayoutTransfer({
+    ref,
+    data: {...entry, status: "reserved", paymentStatus: "succeeded"},
+    serviceType: "business_parking_entry",
+  });
+}
+
+exports.markBusinessParkingPaid = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const entryId = cleanText(
+          request.data?.entryId || request.data?.reservationId,
+          180,
+      );
+      if (!entryId) {
+        throw new HttpsError("invalid-argument", "Parking entry is required");
+      }
+      const receivedVia = cleanText(request.data?.receivedVia, 40);
+      const note = cleanText(request.data?.note, 500);
+
+      const db = admin.firestore();
+      const entryRef = db.collection("parkedCars").doc(entryId);
+      const existing = await entryRef.get();
+      if (!existing.exists) {
+        throw new HttpsError("not-found", "Parking entry not found");
+      }
+      await requireBusinessPermission(
+          uid,
+          String(existing.data()?.businessId || ""),
+          "parking",
+      );
+
+      // Re-read inside the transaction: two staff marking the same walk-up
+      // paid at once must apply the payment once, not twice.
+      const result = await db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(entryRef);
+        if (!snapshot.exists) {
+          throw new HttpsError("not-found", "Parking entry not found");
+        }
+        const entry = snapshot.data() || {};
+        const decision = businessParkingPaidUpdate({
+          entry,
+          receivedVia,
+          note,
+          markedByUid: uid,
+        });
+        if (!decision.ok) {
+          throw new HttpsError(
+              "failed-precondition",
+              BUSINESS_PARKING_PAID_REFUSALS[decision.reason] ||
+                "This parking payment cannot be marked received",
+          );
+        }
+        if (decision.alreadyPaid) {
+          return {
+            alreadyPaid: true,
+            amountPaidCents: decision.amountPaidCents,
+            trackingCode: String(entry.trackingCode || ""),
+          };
+        }
+        transaction.update(entryRef, {
+          ...decision.update,
+          directPaymentReceivedAt: FirestoreFieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+        return {
+          alreadyPaid: false,
+          amountPaidCents: decision.amountPaidCents,
+          trackingCode: String(entry.trackingCode || ""),
+        };
+      });
+
+      return {
+        success: true,
+        entryId,
+        trackingCode: result.trackingCode,
+        alreadyPaid: result.alreadyPaid,
+        amountPaid: dollarsFromCents(result.amountPaidCents),
+        amountPaidCents: result.amountPaidCents,
+        paymentStatus: "paid",
+      };
     },
 );
 

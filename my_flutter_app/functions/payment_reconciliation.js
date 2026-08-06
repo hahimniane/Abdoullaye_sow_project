@@ -28,6 +28,27 @@ const PAYMENT_ROUTES = Object.freeze({
     cancelledDomainStatus: "cancelled",
     operationKeys: ["reservationId"],
   }),
+  // A business-entered walk-up car whose customer was sent a Stripe payment
+  // link (docs/PLAN-2026-08-backlog.md item 5). No customer account exists
+  // for it - deliberately - so the business that entered the car is the
+  // identity every Stripe event for it is checked against.
+  business_parking_entry: Object.freeze({
+    kind: "business_parking_entry",
+    identityKeys: ["reservationId"],
+    collection: "parkedCars",
+    documentIdKey: "reservationId",
+    customerMetadataKey: "businessId",
+    customerField: "businessId",
+    businessField: "businessId",
+    amountCentsField: "amountDueCents",
+    currencyField: "currency",
+    intentField: "stripePaymentIntentId",
+    paymentStatusField: "paymentStatus",
+    domainStatusField: "status",
+    succeededDomainStatus: "reserved",
+    cancelledDomainStatus: "cancelled",
+    operationKeys: ["reservationId"],
+  }),
   barrel_pool_deposit: Object.freeze({
     kind: "shared_barrel_deposit",
     identityKeys: ["poolId", "participantUid"],
