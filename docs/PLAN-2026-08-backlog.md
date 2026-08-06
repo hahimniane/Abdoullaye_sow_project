@@ -135,12 +135,31 @@ and verified in the product. Nothing is SHIPPED until a tester drives it.
 
 ### Known defects found along the way (not in the owner's list)
 
-- **Error snackbars render teal, not red** (mobile). `showErrorSnackBar` sets
-  `AppColors.brandRed` but the theme overrides it, so failures look like
-  successes. Fix before trusting any "it showed no error" report.
-- Pickup number fields accept arbitrary text (no input formatter).
+- ~~Error snackbars render teal, not red~~ — FIXED 2026-08-06. The shared
+  `showErrorSnackBar` already used `errorRed`; one raw `SnackBar` in the
+  platform-admin dashboard still used `brandRed` (the teal alias) and now
+  does not.
+- ~~Pickup number fields accept arbitrary text~~ — FIXED 2026-08-06, digits
+  and one decimal point only.
 - Business 1's `state` holds "United States" instead of a state, which is why
   borough pricing can never appear for it. Data fix, not code.
+- ~~Choosing a transport carrier notified nobody~~ — FIXED 2026-08-06; the
+  winner and the passed-over bidders now both get a notification.
+
+### Open owner decision: transport has no payment step
+
+`selectTransportQuote` records `totalCents` and flips the request to
+`pending`, and that is the end of it — there is no Stripe route for car
+transport at all (`payment_reconciliation.js` covers parking, barrel pools,
+barrel shipments and orders; freight has its own estimate → weigh → balance
+settlement). So today the customer and the carrier settle the transport
+money entirely off-platform, and the platform takes no cut on it.
+
+Two questions only the owner can answer: should transport be billed through
+the platform like parking and barrels, and if so does the platform take a
+commission on it? Everything needed to build it already exists (the
+commission machinery, the connected-account payouts, the reconciliation
+sweep) — this is a business decision, not a technical blocker.
 
 Every item ships on BOTH web and mobile, and is tester-verified on the real
 interface before it is called done (docs/ENGINEERING_GUARDRAILS.md).
