@@ -787,7 +787,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                                         _sharedPickupQuoteError!,
                                                         style: const TextStyle(
                                                           color: AppColors
-                                                              .brandRed,
+                                                              .errorRed,
                                                           fontWeight:
                                                               FontWeight.w700,
                                                         ),
@@ -2722,7 +2722,7 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                                       Text(
                                         _pickupQuoteError!,
                                         style: const TextStyle(
-                                          color: AppColors.brandRed,
+                                          color: AppColors.errorRed,
                                           fontWeight: FontWeight.w700,
                                         ),
                                       ),

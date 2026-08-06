@@ -41,7 +41,10 @@ void showErrorSnackBar(
   (messenger ?? ScaffoldMessenger.of(context)).showSnackBar(
     SnackBar(
       content: Text(message),
-      backgroundColor: AppColors.brandRed,
+      // errorRed, NOT brandRed: brandRed is an alias for cobalt (teal), so
+      // every failure rendered in the same colour as a success and testers
+      // reasonably read "no error appeared".
+      backgroundColor: AppColors.errorRed,
       behavior: SnackBarBehavior.floating,
     ),
   );
