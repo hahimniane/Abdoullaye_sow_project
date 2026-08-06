@@ -7,6 +7,7 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 import '../models/barrel_shipment.dart';
 import '../models/barrel_order.dart';
 import '../models/marketplace_disclosure_acceptance.dart';
+import '../models/structured_address.dart';
 import 'payment_flow_safety.dart';
 import 'stripe_config_service.dart';
 
@@ -37,6 +38,12 @@ class BarrelAddressSuggestion {
     this.formattedAddress,
     this.latitude,
     this.longitude,
+    this.streetLine,
+    this.apartment,
+    this.city,
+    this.state,
+    this.stateCode,
+    this.country,
   });
 
   final String description;
@@ -46,6 +53,15 @@ class BarrelAddressSuggestion {
   final String? formattedAddress;
   final double? latitude;
   final double? longitude;
+  // Named parts from suggestPickupAddresses. Nullable so an app build newer
+  // than the deployed callable degrades to the single line instead of
+  // emptying the form.
+  final String? streetLine;
+  final String? apartment;
+  final String? city;
+  final String? state;
+  final String? stateCode;
+  final String? country;
 
   factory BarrelAddressSuggestion.fromMap(Map<String, dynamic> data) {
     return BarrelAddressSuggestion(
@@ -56,6 +72,42 @@ class BarrelAddressSuggestion {
       formattedAddress: data['formattedAddress'] as String?,
       latitude: (data['latitude'] as num?)?.toDouble(),
       longitude: (data['longitude'] as num?)?.toDouble(),
+      streetLine: data['streetLine'] as String?,
+      apartment: data['apartment'] as String?,
+      city: data['city'] as String?,
+      state: data['state'] as String?,
+      stateCode: data['stateCode'] as String?,
+      country: data['country'] as String?,
+    );
+  }
+
+  /// Populates the form's separate fields from this suggestion.
+  ///
+  /// An apartment the customer already typed in [current] wins: Google
+  /// autocompletes buildings, not units, so its subpremise is nearly always
+  /// empty and letting it win would silently erase the unit number — the
+  /// exact bug this replaces.
+  StructuredAddress toStructuredAddress({
+    StructuredAddress current = StructuredAddress.empty,
+  }) {
+    String part(String? value) => StructuredAddress.cleanPart(value);
+    return StructuredAddress(
+      // An older callable sends only the line; it becomes the street field so
+      // the customer can break it apart by hand rather than facing a blank
+      // form.
+      streetLine: part(streetLine).isNotEmpty
+          ? part(streetLine)
+          : (part(formattedAddress).isNotEmpty
+                ? part(formattedAddress)
+                : part(description)),
+      apartment: part(current.apartment).isNotEmpty
+          ? current.apartment
+          : part(apartment),
+      city: part(city).isNotEmpty ? part(city) : part(borough),
+      // The abbreviation is what belongs on an envelope and in the state box.
+      state: part(stateCode).isNotEmpty ? part(stateCode) : part(state),
+      postalCode: part(postalCode),
+      country: part(country),
     );
   }
 }
