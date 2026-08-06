@@ -124,6 +124,21 @@ and **zero test failures** — so it reads like a mysterious broken build when
 nothing is wrong with the code. Deploy functions strictly one at a time, and
 wait for the previous command to exit before starting the next.
 
+The same clash happens between a deploy and **anything else running the
+emulator suite** — a parallel agent running `npm test`, or a bare
+`node --test` against a live emulator. The deploy dies with
+
+```
+⚠  firestore: Fatal error occurred:
+Error: functions predeploy error: Command terminated with non-zero exit code 1
+```
+
+again with zero failing tests. Before deploying, check the ports are free:
+
+```bash
+lsof -ti :8080 :9099    # empty means no emulator is running
+```
+
 
 ## 2. Deployment gate — non-negotiable
 
