@@ -9,6 +9,8 @@ import '../l10n/app_localizations.dart';
 import '../models/business_destination_option.dart';
 import '../models/business_service.dart';
 import '../models/office_location.dart';
+import '../models/structured_address.dart';
+import '../services/barrel_shipment_service.dart';
 import '../services/business_service.dart';
 import '../services/freight_shipment_service.dart';
 import '../services/office_location_service.dart';
@@ -19,6 +21,7 @@ import '../widgets/marketplace_transaction_disclosure.dart';
 import '../widgets/office_location_picker.dart';
 import '../widgets/rating_summary_badge.dart';
 import '../widgets/recipient_name_field.dart';
+import '../widgets/structured_address_fields.dart';
 
 /// Customer screen to send a parcel/box by freight, priced by weight,
 /// by air or sea. Search-first: find a business + destination, then book.
@@ -32,13 +35,20 @@ class SendFreightScreen extends StatefulWidget {
 class _SendFreightScreenState extends State<SendFreightScreen> {
   final _businessService = BusinessService();
   final _freightService = FreightShipmentService();
+  // `suggestPickupAddresses` is one callable for every pickup address, not a
+  // barrel-only one, so this reuses the existing client instead of adding a
+  // second copy of the same call.
+  final _addressSuggestionService = BarrelShipmentService();
 
   final _searchController = TextEditingController();
   final _senderController = TextEditingController();
   final _receiverController = TextEditingController();
   final _phoneController = TextEditingController();
   final _weightController = TextEditingController();
+  // Street line only. The rest of the address lives in _pickupAddress; the
+  // composed line is what reaches the pricing and checkout callables.
   final _pickupAddressController = TextEditingController();
+  StructuredAddress _pickupAddress = StructuredAddress.empty;
 
   List<BusinessDestinationOption> _options = const [];
   BusinessDestinationOption? _selected;
@@ -185,7 +195,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       return true;
     }
     if (_pickupDateTime == null) return true;
-    if (_pickupAddressController.text.trim().isEmpty) return true;
+    if (_pickupAddress.composeLine().isEmpty) return true;
     return false;
   }
 
@@ -215,12 +225,13 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     _pickupQuoting = false;
     _pickupError = null;
     _pickupAddressController.clear();
+    _pickupAddress = StructuredAddress.empty;
     _officeLocationId = '';
   }
 
   void _schedulePickupQuote() {
     _pickupDebounce?.cancel();
-    final address = _pickupAddressController.text.trim();
+    final address = _pickupAddress.composeLine();
     if (address.isEmpty) {
       setState(() {
         _pickupFee = null;
@@ -250,7 +261,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       // never chooses it (whoever supplies the borough chooses the price).
       final quote = await _freightService.quoteFreightPickup(
         businessId: option.businessId,
-        pickupAddress: _pickupAddressController.text.trim(),
+        pickupAddress: _pickupAddress.composeLine(),
       );
       if (!mounted || quoteId != _pickupQuoteId) return;
       setState(() {
@@ -344,7 +355,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       return;
     }
     if (_pickupRequested) {
-      if (_pickupAddressController.text.trim().isEmpty) {
+      if (_pickupAddress.composeLine().isEmpty) {
         _snack(l10n.freightPickupEnterDetailsForFee);
         return;
       }
@@ -391,9 +402,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         mode: _mode,
         weightKg: _weightKg,
         pickupRequested: _pickupRequested,
-        pickupAddress: _pickupRequested
-            ? _pickupAddressController.text.trim()
-            : null,
+        pickupAddress: _pickupRequested ? _pickupAddress.composeLine() : null,
         pickupDateTime: _pickupRequested
             ? _pickupDateTime!.toUtc().toIso8601String()
             : null,
@@ -731,14 +740,17 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
               secondary: const Icon(Icons.home_outlined),
             ),
             if (_pickupRequested) ...[
-              TextField(
+              StructuredAddressFields(
                 controller: _pickupAddressController,
+                value: _pickupAddress,
                 enabled: !_busy,
-                onChanged: (_) => _schedulePickupQuote(),
-                decoration: InputDecoration(
-                  labelText: l10n.freightPickupAddressLabel,
-                  prefixIcon: const Icon(Icons.location_on_outlined),
-                ),
+                streetLabel: l10n.freightPickupAddressLabel,
+                fetchSuggestions:
+                    _addressSuggestionService.addressSuggestions,
+                onChanged: (address, _) {
+                  setState(() => _pickupAddress = address);
+                  _schedulePickupQuote();
+                },
               ),
               const SizedBox(height: 12),
               OutlinedButton.icon(
