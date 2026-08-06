@@ -159,6 +159,13 @@ const businessProPriceId = defineSecret("BUSINESS_PRO_PRICE_ID");
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const anthropicApiKey = defineSecret("ANTHROPIC_API_KEY");
 const deepseekApiKey = defineSecret("DEEPSEEK_API_KEY");
+// Twilio for SMS to walk-up parking customers (owner-approved 2026-08-06).
+// The values are set by the platform admin via
+// `firebase functions:secrets:set`; until real credentials are in place the
+// helper treats them as unconfigured and quietly skips SMS.
+const twilioAccountSid = defineSecret("TWILIO_ACCOUNT_SID");
+const twilioAuthToken = defineSecret("TWILIO_AUTH_TOKEN");
+const twilioFromNumber = defineSecret("TWILIO_FROM_NUMBER");
 const googleMapsApiKey = defineSecret("GOOGLE_MAPS_API_KEY");
 const terminal49ApiKey = defineSecret("TERMINAL49_API_KEY");
 const TERMINAL49_BASE_URL = "https://api.terminal49.com/v2";
@@ -7287,7 +7294,13 @@ exports.confirmCustomerCheckoutSession = onCall(
 exports.handleBusinessProStripeWebhook = onRequest(
     {
       cors: false,
-      secrets: [stripeWebhookSecret, stripeSecretKey],
+      secrets: [
+        stripeWebhookSecret,
+        stripeSecretKey,
+        twilioAccountSid,
+        twilioAuthToken,
+        twilioFromNumber,
+      ],
     },
     async (req, res) => {
       if (req.method !== "POST") {
@@ -7504,7 +7517,12 @@ exports.reconcileStaleStripePayments = onSchedule(
       schedule: "every 10 minutes",
       timeZone: "America/New_York",
       timeoutSeconds: 540,
-      secrets: [stripeSecretKey],
+      secrets: [
+        stripeSecretKey,
+        twilioAccountSid,
+        twilioAuthToken,
+        twilioFromNumber,
+      ],
     },
     async () => {
       const db = admin.firestore();
@@ -9750,7 +9768,12 @@ exports.createBusinessParkingEntry = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
-      secrets: [stripeSecretKey],
+      secrets: [
+        stripeSecretKey,
+        twilioAccountSid,
+        twilioAuthToken,
+        twilioFromNumber,
+      ],
     },
     async (request) => {
       const uid = requireAuth(request);
@@ -9938,6 +9961,13 @@ exports.createBusinessParkingEntry = onCall(
           `$${plan.amountDue.toFixed(2)}. Pay securely here: ` +
           `${String(session.url || "")}`,
       });
+      const linkTexted = await smsWalkUpParkingCustomer({
+        to: input.customerPhone,
+        body:
+          `${entryBusinessName || "Your parking provider"}: parking ` +
+          `${trackingCode}, $${plan.amountDue.toFixed(2)} due. Pay here: ` +
+          `${String(session.url || "")}`,
+      });
       if (linkEmailed) {
         await entryRef.update({
           paymentLinkEmailedTo: String(input.customerEmail || "")
@@ -9951,6 +9981,7 @@ exports.createBusinessParkingEntry = onCall(
         checkoutSessionId: String(session.id || ""),
         checkoutUrl: String(session.url || ""),
         paymentLinkEmailed: linkEmailed,
+        paymentLinkTexted: linkTexted,
       };
     },
 );
@@ -9992,6 +10023,13 @@ async function completeBusinessParkingEntryPayment(target) {
         `your payment of $${(amountCents / 100).toFixed(2)} for parking ` +
         `${entry.trackingCode || ""}. Keep this email as your receipt.`,
     });
+    await smsWalkUpParkingCustomer({
+      to: entry.customerPhone,
+      body:
+        `${entry.businessName || "Your parking provider"}: payment of ` +
+        `$${(amountCents / 100).toFixed(2)} received for parking ` +
+        `${entry.trackingCode || ""}. This is your receipt.`,
+    });
   }
 }
 
@@ -10007,6 +10045,68 @@ async function completeBusinessParkingEntryPayment(target) {
  * @param {{to: *, subject: string, text: string}} input Recipient and copy.
  * @return {!Promise<boolean>} True when a send was actually queued.
  */
+/**
+ * Texts a walk-up parking customer via Twilio.
+ *
+ * Same contract as the email helper: never throws into the payment path,
+ * returns whether a send was actually attempted. Unconfigured credentials
+ * (empty or placeholder values) mean SMS is simply off.
+ *
+ * @param {{to: *, body: string}} input Phone as typed and the message.
+ * @return {!Promise<boolean>} True when Twilio accepted the message.
+ */
+async function smsWalkUpParkingCustomer({to, body}) {
+  const digits = String(to || "").replace(/[^\d+]/g, "");
+  if (digits.replace(/\D/g, "").length < 8) return false;
+  let sid = "";
+  let token = "";
+  let from = "";
+  try {
+    sid = String(twilioAccountSid.value() || "").trim();
+    token = String(twilioAuthToken.value() || "").trim();
+    from = String(twilioFromNumber.value() || "").trim();
+  } catch (error) {
+    // Secret not bound to this function - treat as unconfigured.
+    logger.info("Walk-up parking SMS skipped: secrets unavailable");
+    return false;
+  }
+  if (!sid.startsWith("AC") || !token || !from) {
+    logger.info("Walk-up parking SMS skipped: Twilio not configured");
+    return false;
+  }
+  try {
+    const params = new URLSearchParams({
+      To: digits.startsWith("+") ? digits : `+1${digits}`,
+      From: from,
+      Body: body,
+    });
+    const response = await fetch(
+        `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": "Basic " +
+              Buffer.from(`${sid}:${token}`).toString("base64"),
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: params.toString(),
+        },
+    );
+    if (!response.ok) {
+      const detail = await response.text();
+      logger.warn("Walk-up parking SMS rejected", {
+        status: response.status,
+        detail: detail.slice(0, 300),
+      });
+      return false;
+    }
+    return true;
+  } catch (error) {
+    logger.warn("Walk-up parking SMS failed", {message: error.message});
+    return false;
+  }
+}
+
 async function emailWalkUpParkingCustomer({to, subject, text}) {
   const email = String(to || "").trim().toLowerCase();
   if (!email.includes("@")) return false;
@@ -10047,7 +10147,12 @@ exports.refreshBusinessParkingPayment = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
-      secrets: [stripeSecretKey],
+      secrets: [
+        stripeSecretKey,
+        twilioAccountSid,
+        twilioAuthToken,
+        twilioFromNumber,
+      ],
     },
     async (request) => {
       const uid = requireAuth(request);
