@@ -103,7 +103,6 @@ test("barrel payload matches the mobile callable and omits pickup details when d
           address: "ignored",
           borough: "ignored",
         },
-        useWalletBalance: true,
       },
       disclosure,
     ),
@@ -115,7 +114,6 @@ test("barrel payload matches the mobile callable and omits pickup details when d
       businessId: "business-1",
       quantity: 2,
       pickupRequested: false,
-      useWalletBalance: true,
       marketplaceDisclosure: disclosure,
     },
   );
@@ -137,7 +135,6 @@ test("barrel payload preserves an arbitrary pickup address without inventing a p
           borough: "",
           dateTime: "2030-01-02T15:00:00.000Z",
         },
-        useWalletBalance: false,
       },
       disclosure,
     ),
@@ -152,7 +149,6 @@ test("barrel payload preserves an arbitrary pickup address without inventing a p
       pickupAddress: "500 Market Street, Newark, NJ 07105",
       pickupBorough: "",
       pickupDateTime: "2030-01-02T15:00:00.000Z",
-      useWalletBalance: false,
       marketplaceDisclosure: disclosure,
     },
   );
@@ -175,7 +171,6 @@ test("freight payload preserves the server-authoritative mode, weight, and picku
           borough: " Bronx ",
           dateTime: "2030-01-02T15:00:00.000Z",
         },
-        useWalletBalance: false,
       },
       disclosure,
     ),
@@ -191,7 +186,6 @@ test("freight payload preserves the server-authoritative mode, weight, and picku
       pickupAddress: "123 Main St",
       pickupBorough: "Bronx",
       pickupDateTime: "2030-01-02T15:00:00.000Z",
-      useWalletBalance: false,
       marketplaceDisclosure: disclosure,
     },
   );
@@ -708,7 +702,6 @@ test("shared pickup stays top-level while every destination remains an independe
           dateTime: "2030-01-02T15:00:00.000Z",
         },
         useDifferentPickupDetails: false,
-        useWalletBalance: true,
       },
       disclosure,
     ),
@@ -734,7 +727,6 @@ test("shared pickup stays top-level while every destination remains an independe
       pickupAddress: "500 Market Street, Newark, NJ 07105",
       pickupBorough: "",
       pickupDateTime: "2030-01-02T15:00:00.000Z",
-      useWalletBalance: true,
       marketplaceDisclosure: disclosure,
     },
   );
@@ -773,7 +765,6 @@ test("different pickup details serialize per line without shared pickup keys", (
           },
         ],
         useDifferentPickupDetails: true,
-        useWalletBalance: false,
       },
       disclosure,
     ),
@@ -802,7 +793,6 @@ test("different pickup details serialize per line without shared pickup keys", (
           pickupBorough: "Office drop-off",
         },
       ],
-      useWalletBalance: false,
       marketplaceDisclosure: disclosure,
     },
   );
@@ -1017,7 +1007,9 @@ test("pickup address entry automatically exposes an accessible searchable sugges
   }
 });
 
-test("barrel wallet choice keeps a compact checkbox and contained localized copy", () => {
+test("the retired wallet is offered nowhere in the shipping flows", () => {
+  // The platform no longer holds customer money (docs/PLAN-2026-08-backlog.md
+  // #3), so no flow may offer to spend a balance or send the old flag.
   const source = readFileSync(
     new URL("../components/customer-shipping-services.tsx", import.meta.url),
     "utf8",
@@ -1027,29 +1019,18 @@ test("barrel wallet choice keeps a compact checkbox and contained localized copy
     "utf8",
   );
 
-  assert.match(
-    source,
-    /<label className="customer-choice-row">[\s\S]*type="checkbox"[\s\S]*<strong>Use wallet balance<\/strong>[\s\S]*<small>Available balance will be applied first\.<\/small>/,
-  );
+  assert.doesNotMatch(source, /useWalletBalance/);
+  assert.doesNotMatch(source, /wallet balance/i);
+
+  // The shared choice-row styling still has to hold up for the checkboxes
+  // that remain (the marketplace disclosure).
   assert.doesNotMatch(
     styles,
     /\.customer-barrel-stage\s*>\s*label input\s*\{/,
   );
   assert.match(
     styles,
-    /\.customer-barrel-stage\s*>\s*label\s*>\s*input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\)/,
-  );
-  assert.match(
-    styles,
     /\.customer-choice-row > input\s*\{[\s\S]*height: 18px;[\s\S]*min-height: 0;[\s\S]*width: 18px;/,
-  );
-  assert.equal(
-    translateValue("Use wallet balance", "fr"),
-    "Utiliser le solde du portefeuille",
-  );
-  assert.equal(
-    translateValue("Available balance will be applied first.", "fr"),
-    "Le solde disponible sera appliqué en premier.",
   );
 });
 

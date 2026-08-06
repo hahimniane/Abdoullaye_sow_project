@@ -65,7 +65,6 @@ export type BarrelShipmentFields = {
   // Which of the business's office locations to drop off at, when the
   // business has more than one and the customer chose "bring to office".
   officeLocationId?: string;
-  useWalletBalance: boolean;
 };
 
 export type BarrelOrderLineFields = {
@@ -83,7 +82,6 @@ export type BarrelOrderFields = {
   lines: BarrelOrderLineFields[];
   sharedPickup?: PickupDetails;
   useDifferentPickupDetails: boolean;
-  useWalletBalance: boolean;
 };
 
 export type FreightShipmentFields = {
@@ -96,7 +94,6 @@ export type FreightShipmentFields = {
   weightKg: number;
   pickup: PickupDetails;
   officeLocationId?: string;
-  useWalletBalance: boolean;
 };
 
 export type TransportRequestFields = {
@@ -528,7 +525,6 @@ export function buildBarrelOrderPayload(
     ...(!fields.useDifferentPickupDetails &&
       fields.sharedPickup &&
       pickupPayload(fields.sharedPickup)),
-    useWalletBalance: fields.useWalletBalance,
     marketplaceDisclosure: disclosure,
   };
 }
@@ -609,7 +605,6 @@ export function buildBarrelShipmentPayload(
     ...pickupPayload(fields.pickup),
     ...(!fields.pickup.requested &&
       fields.officeLocationId && { officeLocationId: fields.officeLocationId }),
-    useWalletBalance: fields.useWalletBalance,
     marketplaceDisclosure: disclosure,
   };
 }
@@ -629,7 +624,6 @@ export function buildFreightShipmentPayload(
     ...pickupPayload(fields.pickup),
     ...(!fields.pickup.requested &&
       fields.officeLocationId && { officeLocationId: fields.officeLocationId }),
-    useWalletBalance: fields.useWalletBalance,
     marketplaceDisclosure: disclosure,
   };
 }

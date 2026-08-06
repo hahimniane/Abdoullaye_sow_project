@@ -595,7 +595,6 @@ function BarrelShipmentForm({
   );
   const [pickupQuoteLoading, setPickupQuoteLoading] = useState(false);
   const [pickupQuoteError, setPickupQuoteError] = useState("");
-  const [useWalletBalance, setUseWalletBalance] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -748,7 +747,6 @@ function BarrelShipmentForm({
               }),
             },
             officeLocationId,
-            useWalletBalance,
           },
           marketplaceDisclosure(accepted),
         ),
@@ -829,12 +827,6 @@ function BarrelShipmentForm({
             label="Pickup"
             value={pickup.requested ? pickup.address : "Drop off"}
           />
-          {authenticated && (
-            <ReviewDetail
-              label="Wallet"
-              value={useWalletBalance ? "Use available balance" : "Do not use"}
-            />
-          )}
           <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
         </ReviewGrid>
       }
@@ -1110,23 +1102,6 @@ function BarrelShipmentForm({
                   }
                 />
               )}
-              {authenticated && (
-                <label className="customer-choice-row customer-form-span">
-                  <input
-                    checked={useWalletBalance}
-                    onChange={(event) =>
-                      setUseWalletBalance(event.target.checked)
-                    }
-                    type="checkbox"
-                  />
-                  <span>
-                    <strong>Use my available wallet balance</strong>
-                    <small>
-                      Any remaining amount continues to secure payment.
-                    </small>
-                  </span>
-                </label>
-              )}
               <div className="customer-form-span">
                 <DisclosureCheckbox
                   accepted={accepted}
@@ -1186,7 +1161,6 @@ function BarrelOrderForm({
   const [differentPickups, setDifferentPickups] = useState(false);
   const [quotingPickupId, setQuotingPickupId] = useState("");
   const [pickupQuoteError, setPickupQuoteError] = useState("");
-  const [useWalletBalance, setUseWalletBalance] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -1494,7 +1468,6 @@ function BarrelOrderForm({
               },
             }),
             useDifferentPickupDetails: usesDifferentPickups,
-            useWalletBalance,
           },
           marketplaceDisclosure(accepted),
         ),
@@ -1569,12 +1542,6 @@ function BarrelOrderForm({
             label="Estimated total"
             value={formatMoney(totals.total)}
           />
-          {authenticated && (
-            <ReviewDetail
-              label="Wallet"
-              value={useWalletBalance ? "Use available balance" : "Do not use"}
-            />
-          )}
           <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
         </ReviewGrid>
       }
@@ -2007,21 +1974,6 @@ function BarrelOrderForm({
               total={pickupReady ? formatMoney(totals.total) : "—"}
               totalLabel={pickupReady ? "Estimated total" : "Total pending"}
             />
-            {authenticated && (
-              <label className="customer-choice-row">
-                <input
-                  checked={useWalletBalance}
-                  onChange={(event) =>
-                    setUseWalletBalance(event.target.checked)
-                  }
-                  type="checkbox"
-                />
-                <span>
-                  <strong>Use wallet balance</strong>
-                  <small>Available balance will be applied first.</small>
-                </span>
-              </label>
-            )}
           </section>
         )}
       </div>
@@ -2199,7 +2151,6 @@ function FreightShipmentForm({
     useState<AddressSuggestion | null>(null);
   const [quote, setQuote] = useState<FreightQuote | null>(null);
   const [quoting, setQuoting] = useState(false);
-  const [useWalletBalance, setUseWalletBalance] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -2386,7 +2337,6 @@ function FreightShipmentForm({
               }),
             },
             officeLocationId,
-            useWalletBalance,
           },
           marketplaceDisclosure(accepted),
         ),
@@ -2717,21 +2667,6 @@ function FreightShipmentForm({
                   pricing.total === null ? "Shipping subtotal" : "Estimated total"
                 }
               />
-            )}
-            {authenticated && (
-              <label className="customer-choice-row customer-form-span">
-                <input
-                  checked={useWalletBalance}
-                  onChange={(event) =>
-                    setUseWalletBalance(event.target.checked)
-                  }
-                  type="checkbox"
-                />
-                <span>
-                  <strong>Use my available wallet balance</strong>
-                  <small>Any remaining amount continues to secure payment.</small>
-                </span>
-              </label>
             )}
             <div className="customer-form-span">
               <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />

@@ -1009,7 +1009,6 @@ function PoolRequestForm({
   const [totalShares, setTotalShares] = useState("2");
   const [sharesClaimed, setSharesClaimed] = useState("1");
   const [joinDeadline, setJoinDeadline] = useState("");
-  const [useWalletBalance, setUseWalletBalance] = useState(false);
   const [contentsAttested, setContentsAttested] = useState(false);
   const [prohibitedItemsAcknowledged, setProhibitedItemsAcknowledged] =
     useState(false);
@@ -1115,7 +1114,6 @@ function PoolRequestForm({
         pickupRequested: false,
         pickupAddress: "",
         pickupBorough: "",
-        useWalletBalance,
         sharesClaimed: claimed,
         marketplaceDisclosure: marketplaceDisclosure(accepted),
       };
@@ -1189,11 +1187,7 @@ function PoolRequestForm({
             />
             <Detail
               label="Payment"
-              value={
-                useWalletBalance
-                  ? "Use wallet first, then card"
-                  : "Secure card payment"
-              }
+              value="Secure card payment"
             />
           </dl>
           <div className="customer-attestation-summary">
@@ -1361,16 +1355,6 @@ function PoolRequestForm({
                 ),
               )}
             </select>
-          </label>
-        )}
-        {authenticated && (
-          <label className="customer-choice-row customer-form-span">
-            <input
-              checked={useWalletBalance}
-              onChange={(event) => setUseWalletBalance(event.target.checked)}
-              type="checkbox"
-            />
-            Use my available wallet balance first
           </label>
         )}
         <div className="customer-attestation-group customer-form-span">

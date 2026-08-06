@@ -110,7 +110,6 @@ const tabs: Array<{
   { id: "parkingPools", label: "Parking & shared barrels", description: "Reserve space or join a pool", icon: PackageSearch },
   { id: "cars", label: "Browse cars", description: "Listings from approved businesses", icon: Car },
   { id: "orders", label: "Orders & tracking", description: "Shipping and vehicle services", icon: ClipboardList },
-  { id: "wallet", label: "Wallet", description: "Balance and transactions", icon: WalletCards },
   { id: "support", label: "Support", description: "Messages about your orders", icon: Headphones },
   { id: "profile", label: "Profile", description: "Account and security", icon: UserRound },
 ];
@@ -153,7 +152,22 @@ export function CustomerConsole({
   const parking = useCustomerParkingRecords(firebaseUser.uid);
   const purchases = useCustomerCarPurchases(firebaseUser.uid);
   const cars = usePublicCars(activeTab === "cars");
-  const wallet = useWallet(firebaseUser.uid, activeTab === "wallet" || activeTab === "home");
+  // The wallet is retired (docs/PLAN-2026-08-backlog.md #3). It is still
+  // watched so that anyone who has money left on file keeps a way to claim
+  // it back to their card - hiding the section would strand real money.
+  const wallet = useWallet(firebaseUser.uid, true);
+  const hasWalletMoney = wallet.balance > 0 || wallet.pendingRefund > 0;
+  const visibleTabs = hasWalletMoney
+    ? [
+        ...tabs,
+        {
+          id: "wallet" as CustomerTab,
+          label: "Wallet (closing)",
+          description: "Claim your remaining balance",
+          icon: WalletCards,
+        },
+      ]
+    : tabs;
 
   const allOrders = useMemo(
     () => [
@@ -244,7 +258,7 @@ export function CustomerConsole({
 
       <main className={`workspace customer-workspace ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
         <nav className="sidebar customer-sidebar" aria-label="Customer sections">
-          {tabs.map((tab) => {
+          {visibleTabs.map((tab) => {
             const Icon = tab.icon;
             const label =
               tab.id === "parkingPools" && !sharedBarrelsEnabled
@@ -294,7 +308,6 @@ export function CustomerConsole({
               customerName={text(profile.fullName, "there")}
               loading={dataLoading}
               orders={allOrders}
-              walletBalance={wallet.balance}
               onOpenCars={() => setActiveTab("cars")}
               onOpenOrders={() => setActiveTab("orders")}
               uid={firebaseUser.uid}
@@ -360,7 +373,6 @@ function CustomerHome({
   customerName,
   loading,
   orders,
-  walletBalance,
   onOpenCars,
   onOpenOrders,
   uid,
@@ -368,7 +380,6 @@ function CustomerHome({
   customerName: string;
   loading: boolean;
   orders: TaggedRow[];
-  walletBalance: number;
   onOpenCars: () => void;
   onOpenOrders: () => void;
   uid: string;
@@ -394,7 +405,6 @@ function CustomerHome({
       <div className="metric-grid">
         <Metric label="Open orders" value={loading ? "…" : String(openOrders)} />
         <Metric label="All activity" value={loading ? "…" : String(orders.length)} />
-        <Metric label="Wallet balance" value={formatMoney(walletBalance)} />
         <Metric label="Account access" value="Web + mobile" />
       </div>
       <OrderPanel loading={loading} orders={orders.slice(0, 5)} title="Recent activity" uid={uid} />
@@ -698,6 +708,11 @@ function WalletView({ state }: { state: WalletState }) {
       </div>
       <section className="panel">
         <div className="panel-header"><div><WalletCards size={18} /><h2>Wallet activity</h2></div></div>
+        <div className="customer-inline-note">
+          The wallet is being retired and can no longer be used to pay.
+          Request your remaining balance below and it will be returned to
+          your card.
+        </div>
         {state.loading && <div className="empty-state">Loading wallet...</div>}
         {state.error && <div className="error-box">Wallet could not be loaded. {state.error}</div>}
         {!state.loading && state.transactions.length === 0 && (
