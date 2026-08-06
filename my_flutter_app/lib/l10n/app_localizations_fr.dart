@@ -4317,6 +4317,54 @@ class AppLocalizationsFr extends AppLocalizations {
       'Impossible d’ouvrir la console entreprise. Visitez business.laawoldigital.com dans votre navigateur.';
 
   @override
+  String get businessAssistantTitle => 'Assistant';
+
+  @override
+  String get businessAssistantOpen => 'Demander à l’assistant';
+
+  @override
+  String get businessAssistantEmptyTitle =>
+      'Comment puis-je aider aujourd’hui ?';
+
+  @override
+  String get businessAssistantEmptyHint =>
+      'Je peux répondre à vos questions sur vos opérations et enregistrer du travail pour vous. Essayez de me demander de :';
+
+  @override
+  String get businessAssistantCapabilityParkedCars =>
+      'Vérifier quelles voitures sont stationnées en ce moment';
+
+  @override
+  String get businessAssistantCapabilityWalkUp =>
+      'Enregistrer un stationnement sans réservation';
+
+  @override
+  String get businessAssistantCapabilityTracking =>
+      'Ajouter une mise à jour de suivi d’expédition';
+
+  @override
+  String get businessAssistantInputHint => 'Écrire à l’assistant...';
+
+  @override
+  String get businessAssistantSend => 'Envoyer';
+
+  @override
+  String get businessAssistantConfirm => 'Confirmer';
+
+  @override
+  String get businessAssistantCancel => 'Annuler';
+
+  @override
+  String get businessAssistantConfirmed => 'Confirmée';
+
+  @override
+  String get businessAssistantDeclined => 'Refusée';
+
+  @override
+  String get businessAssistantError =>
+      'Une erreur est survenue. Veuillez réessayer.';
+
+  @override
   String get businessChangesRequestedBanner =>
       'Un administrateur de la plateforme a demandé des modifications. Vous pouvez continuer la configuration pendant que l’entreprise reste masquée aux clients.';
 

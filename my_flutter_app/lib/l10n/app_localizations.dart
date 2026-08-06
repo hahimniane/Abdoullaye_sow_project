@@ -7616,6 +7616,90 @@ abstract class AppLocalizations {
   /// **'Could not open the business console. Visit business.laawoldigital.com in your browser.'**
   String get businessConsoleOpenFailed;
 
+  /// No description provided for @businessAssistantTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Assistant'**
+  String get businessAssistantTitle;
+
+  /// No description provided for @businessAssistantOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask the assistant'**
+  String get businessAssistantOpen;
+
+  /// No description provided for @businessAssistantEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How can I help today?'**
+  String get businessAssistantEmptyTitle;
+
+  /// No description provided for @businessAssistantEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'I can answer questions about your operations and record work for you. Try asking me to:'**
+  String get businessAssistantEmptyHint;
+
+  /// No description provided for @businessAssistantCapabilityParkedCars.
+  ///
+  /// In en, this message translates to:
+  /// **'Check which cars are parked right now'**
+  String get businessAssistantCapabilityParkedCars;
+
+  /// No description provided for @businessAssistantCapabilityWalkUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Record a walk-up parking entry'**
+  String get businessAssistantCapabilityWalkUp;
+
+  /// No description provided for @businessAssistantCapabilityTracking.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a shipment tracking update'**
+  String get businessAssistantCapabilityTracking;
+
+  /// No description provided for @businessAssistantInputHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Message the assistant...'**
+  String get businessAssistantInputHint;
+
+  /// No description provided for @businessAssistantSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get businessAssistantSend;
+
+  /// No description provided for @businessAssistantConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get businessAssistantConfirm;
+
+  /// No description provided for @businessAssistantCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get businessAssistantCancel;
+
+  /// No description provided for @businessAssistantConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed'**
+  String get businessAssistantConfirmed;
+
+  /// No description provided for @businessAssistantDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'Declined'**
+  String get businessAssistantDeclined;
+
+  /// No description provided for @businessAssistantError.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Please try again.'**
+  String get businessAssistantError;
+
   /// No description provided for @businessChangesRequestedBanner.
   ///
   /// In en, this message translates to:

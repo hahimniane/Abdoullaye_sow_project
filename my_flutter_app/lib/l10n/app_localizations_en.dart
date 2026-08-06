@@ -4227,6 +4227,53 @@ class AppLocalizationsEn extends AppLocalizations {
       'Could not open the business console. Visit business.laawoldigital.com in your browser.';
 
   @override
+  String get businessAssistantTitle => 'Assistant';
+
+  @override
+  String get businessAssistantOpen => 'Ask the assistant';
+
+  @override
+  String get businessAssistantEmptyTitle => 'How can I help today?';
+
+  @override
+  String get businessAssistantEmptyHint =>
+      'I can answer questions about your operations and record work for you. Try asking me to:';
+
+  @override
+  String get businessAssistantCapabilityParkedCars =>
+      'Check which cars are parked right now';
+
+  @override
+  String get businessAssistantCapabilityWalkUp =>
+      'Record a walk-up parking entry';
+
+  @override
+  String get businessAssistantCapabilityTracking =>
+      'Add a shipment tracking update';
+
+  @override
+  String get businessAssistantInputHint => 'Message the assistant...';
+
+  @override
+  String get businessAssistantSend => 'Send';
+
+  @override
+  String get businessAssistantConfirm => 'Confirm';
+
+  @override
+  String get businessAssistantCancel => 'Cancel';
+
+  @override
+  String get businessAssistantConfirmed => 'Confirmed';
+
+  @override
+  String get businessAssistantDeclined => 'Declined';
+
+  @override
+  String get businessAssistantError =>
+      'Something went wrong. Please try again.';
+
+  @override
   String get businessChangesRequestedBanner =>
       'A platform admin requested changes. You can keep editing your setup while the business stays hidden from customers.';
 

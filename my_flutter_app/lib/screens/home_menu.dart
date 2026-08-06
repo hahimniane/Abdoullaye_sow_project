@@ -16,6 +16,7 @@ import '../l10n/app_localizations.dart';
 import '../theme/app_colors.dart';
 import '../utils/business_parking_localization.dart';
 import '../utils/business_permissions.dart';
+import 'business_assistant_screen.dart';
 
 enum ServiceCategory { all, parking, barrels, freight, transport, sales }
 
@@ -495,6 +496,27 @@ class _ServicesSection extends StatelessWidget {
               },
             ),
           ),
+          if ((auth.businessId ?? '').isNotEmpty) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                key: const Key('open-business-assistant'),
+                icon: const Icon(Icons.support_agent),
+                label: Text(l10n.businessAssistantOpen),
+                onPressed: () {
+                  final businessId = auth.businessId ?? '';
+                  if (businessId.isEmpty) return;
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) =>
+                          BusinessAssistantScreen(businessId: businessId),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ],
       ),
     );
