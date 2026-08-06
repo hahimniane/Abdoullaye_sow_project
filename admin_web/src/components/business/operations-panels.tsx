@@ -56,6 +56,22 @@ import {
   withSelectedDestinationCountry,
 } from "@/lib/destination-countries";
 import { confirmImportantAction } from "@/lib/action-confirmation";
+import {
+  BUSINESS_PARKING_ENTRY_MESSAGES,
+  BUSINESS_PARKING_RECEIVED_VIA_OPTIONS,
+  businessParkingAmountDue,
+  businessParkingEntryMessage,
+  businessParkingEntryPayload,
+  businessParkingEntryResult,
+  businessParkingPaymentLabel,
+  canMarkBusinessParkingPaid,
+  emptyBusinessParkingEntryDraft,
+  isBusinessEnteredParking,
+  validateBusinessParkingEntryDraft,
+  type BusinessParkingEntryDraft,
+  type BusinessParkingEntryError,
+  type BusinessParkingEntryResult,
+} from "@/lib/business-parking-entry";
 import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import {
   sharedBarrelDeadlineIso,
@@ -3559,8 +3575,21 @@ export function ParkingPanel({
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  // "Record a parked car" — the walk-up flow. Unlike the manual record above
+  // it goes through createBusinessParkingEntry, so the price, the tracking
+  // code, the space availability check and the platform's cut all come from
+  // the same server path a customer booking uses.
+  const [entryOpen, setEntryOpen] = useState(false);
+  const [entryDraft, setEntryDraft] = useState<BusinessParkingEntryDraft>(emptyBusinessParkingEntryDraft);
+  const [entryErrors, setEntryErrors] = useState<BusinessParkingEntryError[]>([]);
+  const [entryBusy, setEntryBusy] = useState(false);
+  const [entryMessage, setEntryMessage] = useState("");
+  const [entryResult, setEntryResult] = useState<BusinessParkingEntryResult | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [receivedVia, setReceivedVia] = useState<Record<string, string>>({});
+  const [paidBusyId, setPaidBusyId] = useState("");
   const searched = useMemo(
-    () => filterRows(parkedCars.rows, search, ["trackingCode", "ownerName", "carMake", "carModel", "carYear", "vinNumber", "status"]),
+    () => filterRows(parkedCars.rows, search, ["trackingCode", "ownerName", "customerName", "carMake", "carModel", "carYear", "vinNumber", "status"]),
     [parkedCars.rows, search],
   );
   const filteredRows = useMemo(
@@ -3645,6 +3674,83 @@ export function ParkingPanel({
     );
   }
 
+  function openEntry() {
+    setEntryDraft(emptyBusinessParkingEntryDraft);
+    setEntryErrors([]);
+    setEntryMessage("");
+    setEntryResult(null);
+    setLinkCopied(false);
+    setEntryOpen(true);
+  }
+
+  function closeEntry() {
+    setEntryOpen(false);
+    setEntryDraft(emptyBusinessParkingEntryDraft);
+    setEntryErrors([]);
+    setEntryMessage("");
+    setEntryResult(null);
+    setLinkCopied(false);
+  }
+
+  async function submitEntry() {
+    const errors = validateBusinessParkingEntryDraft(entryDraft, businessId);
+    setEntryErrors(errors);
+    if (errors.length > 0) {
+      setEntryMessage(businessParkingEntryMessage(errors));
+      return;
+    }
+    setEntryBusy(true);
+    setEntryMessage("");
+    try {
+      const response = await httpsCallable(
+        functions,
+        "createBusinessParkingEntry",
+      )(businessParkingEntryPayload(entryDraft, businessId));
+      setEntryResult(businessParkingEntryResult(response.data));
+    } catch (error) {
+      setEntryMessage(error instanceof Error ? error.message : "The car could not be recorded.");
+    } finally {
+      setEntryBusy(false);
+    }
+  }
+
+  async function copyCheckoutUrl(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      setEntryMessage("The payment link could not be copied. Select and copy it manually.");
+    }
+  }
+
+  // Money that has changed hands off-platform cannot be un-marked from here,
+  // so it goes through the shared confirmation like every other irreversible
+  // action — and it is awaited, which several older call sites in this file
+  // are not.
+  async function markPaid(row: FirestoreRow) {
+    const method = receivedVia[row.id] || "zelle";
+    const confirmed = await confirmImportantAction(
+      "Record this parking as paid to the business? This cannot be undone here.",
+      "Enregistrer ce stationnement comme payé à l’entreprise ? Cette action est irréversible ici.",
+    );
+    if (!confirmed) return;
+    setPaidBusyId(row.id);
+    setMessage("");
+    try {
+      const response = await httpsCallable(functions, "markBusinessParkingPaid")({
+        entryId: row.id,
+        receivedVia: method,
+      });
+      const data = (response.data ?? {}) as {alreadyPaid?: boolean};
+      setMessage(data.alreadyPaid ? "This parking was already marked paid." : "Payment recorded.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The payment could not be recorded.");
+    } finally {
+      setPaidBusyId("");
+    }
+  }
+
   return (
     <section className="lst">
       <header className="lst-head">
@@ -3654,7 +3760,8 @@ export function ParkingPanel({
         </div>
         <div className="lst-head-actions">
           <StatusText busy={busy} message={message} />
-          <button className="lst-add" type="button" onClick={openNew}><Plus size={17} /> New parking</button>
+          <button className="lst-btn ghost" type="button" onClick={openNew}><Pencil size={15} /> New parking</button>
+          <button className="lst-add" type="button" onClick={openEntry}><Plus size={17} /> Record a parked car</button>
         </div>
       </header>
 
@@ -3679,7 +3786,7 @@ export function ParkingPanel({
           <div className="lst-empty-icon"><ParkingCircle size={30} /></div>
           <h3>No parked cars yet</h3>
           <p>Add a car you're storing to start a parking record.</p>
-          <button className="lst-add" type="button" onClick={openNew}><Plus size={17} /> New parking</button>
+          <button className="lst-add" type="button" onClick={openEntry}><Plus size={17} /> Record a parked car</button>
         </div>
       )}
       {!parkedCars.loading && parkedCars.rows.length > 0 && filteredRows.length === 0 && (
@@ -3689,6 +3796,9 @@ export function ParkingPanel({
       <div className="pur-grid">
         {filteredRows.map((row) => {
           const status = text(row.status, "active");
+          const businessEntered = isBusinessEnteredParking(row);
+          const awaitingDirect = canMarkBusinessParkingPaid(row);
+          const rowBusy = paidBusyId === row.id;
           return (
             <article className="pur-card" key={row.id}>
               <div className="pur-head">
@@ -3699,18 +3809,44 @@ export function ParkingPanel({
                 <span className={`lst-badge ${status === "active" ? "warn" : status === "completed" ? "ok" : "muted"}`}>{statusLabel(status)}</span>
               </div>
               <div className="pur-info">
-                <div><span>Owner</span><b>{text(row.ownerName, "—")}</b></div>
+                <div><span>Owner</span><b>{text(row.customerName ?? row.ownerName, "—")}</b></div>
                 <div><span>VIN</span><b>{text(row.vinNumber, "—")}</b></div>
                 <div><span>Parked</span><b>{formatDate(row.parkingDate ?? row.createdAt)}</b></div>
-                <div><span>Total cost</span><b>{formatMoney(row.totalCost)}</b></div>
+                {/* The platform records what a direct entry owes; it never
+                    bills it, so the amount is labelled as recorded, not paid. */}
+                <div><span>{businessEntered ? "Amount recorded" : "Total cost"}</span><b>{formatMoney(businessEntered ? businessParkingAmountDue(row) : row.totalCost)}</b></div>
+                {businessEntered && <div><span>Payment status</span><b>{businessParkingPaymentLabel(row)}</b></div>}
                 {Boolean(row.parkingEndDate) && <div><span>Ended</span><b>{formatDate(row.parkingEndDate)}</b></div>}
               </div>
+              {businessEntered && text(row.paymentMethod, "") === "payment_link" && Boolean(text(row.checkoutUrl, "")) && (
+                <div className="pur-info">
+                  <div style={{gridColumn: "1 / -1", minWidth: 0}}>
+                    <span>Payment link</span>
+                    <button className="lst-btn ghost" type="button" onClick={() => copyCheckoutUrl(text(row.checkoutUrl, ""))} title="Copy payment link">
+                      <Copy size={14} /> Copy payment link
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="pur-actions">
                 <label className="bar-field"><span>Update status</span>
                   <select value={status} disabled={busy} onChange={(event) => runPanelAction(setBusy, setMessage, "Parking status updated.", () => updateParkingStatus(row, event.target.value))}>
                     {parkingStatuses.map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}
                   </select>
                 </label>
+                {awaitingDirect && (
+                  <label className="bar-field"><span>Received via</span>
+                    <select value={receivedVia[row.id] || "zelle"} disabled={rowBusy} onChange={(event) => setReceivedVia((current) => ({...current, [row.id]: event.target.value}))}>
+                      {BUSINESS_PARKING_RECEIVED_VIA_OPTIONS.map((option) => (<option key={option.value} value={option.value}>{option.label}</option>))}
+                    </select>
+                  </label>
+                )}
+                {awaitingDirect && (
+                  <button className="lst-btn" type="button" disabled={rowBusy} aria-busy={rowBusy} onClick={() => markPaid(row)}>
+                    {rowBusy ? <RefreshCw className="spin" size={14} /> : <CircleDollarSign size={14} />}
+                    {rowBusy ? "Recording..." : "Mark payment received"}
+                  </button>
+                )}
                 <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => editParking(row)}><Pencil size={14} /> Edit</button>
               </div>
             </article>
@@ -3775,6 +3911,121 @@ export function ParkingPanel({
                 {busy ? <RefreshCw className="spin" size={16} /> : <Save size={16} />}
                 {busy ? "Saving..." : draft.id ? "Save changes" : "Create parking"}
               </button>
+            </footer>
+          </div>
+        </div>
+      )}
+
+      {entryOpen && (
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={() => {
+          if (!entryBusy) closeEntry();
+        }}>
+          <div className="lst-modal" style={{ maxWidth: 640 }} onClick={(event) => event.stopPropagation()}>
+            <header className="lst-modal-head">
+              <h3>{entryResult ? "Parked car recorded" : "Record a parked car"}</h3>
+              <button className="lst-icon-btn" type="button" disabled={entryBusy} onClick={closeEntry} aria-label="Close"><X size={18} /></button>
+            </header>
+
+            {entryResult ? (
+              <div className="lst-modal-body">
+                <div className="pur-info">
+                  <div><span>Tracking code</span><b>{entryResult.trackingCode || "—"}</b></div>
+                  <div><span>Amount due</span><b>{formatMoney(entryResult.amountDue)}</b></div>
+                </div>
+                {entryResult.paymentMethod === "payment_link" ? (
+                  <>
+                    <p className="lst-hint">Send this link to the customer so they can pay. It stays valid until they use it.</p>
+                    <div className="lst-form-grid">
+                      <label className="lst-field wide"><span>Payment link</span>
+                        <input readOnly value={entryResult.checkoutUrl} onFocus={(event) => event.currentTarget.select()} />
+                      </label>
+                    </div>
+                    <button className="lst-btn ghost" type="button" disabled={!entryResult.checkoutUrl} onClick={() => copyCheckoutUrl(entryResult.checkoutUrl)}>
+                      <Copy size={15} /> {linkCopied ? "Link copied" : "Copy payment link"}
+                    </button>
+                  </>
+                ) : (
+                  <p className="lst-hint">The customer pays your business directly. We record the amount and never bill it. Use Mark payment received once the money arrives.</p>
+                )}
+                {entryMessage && <div className="lst-form-error" role="alert">{entryMessage}</div>}
+              </div>
+            ) : (
+              <div className="lst-modal-body">
+                {entryMessage && <div className="lst-form-error" role="alert">{entryMessage}</div>}
+                <div className="lst-form-grid">
+                  <label className="lst-field wide"><span>Customer name</span>
+                    <input value={entryDraft.customerName} onChange={(event) => setEntryDraft((value) => ({...value, customerName: event.target.value}))} placeholder="Customer name" />
+                  </label>
+                  <label className="lst-field"><span>Customer phone</span>
+                    <input value={entryDraft.customerPhone} onChange={(event) => setEntryDraft((value) => ({...value, customerPhone: event.target.value}))} placeholder="Phone number" />
+                  </label>
+                  <label className="lst-field"><span>Customer email (optional)</span>
+                    <input value={entryDraft.customerEmail} onChange={(event) => setEntryDraft((value) => ({...value, customerEmail: event.target.value}))} placeholder="Email address" />
+                  </label>
+                  {/* Catalog pickers, never free text — a typed make breaks
+                      search, filters and every later match on this record. */}
+                  <label className="lst-field"><span>Make</span>
+                    <select value={canonicalMake(entryDraft.carMake) || entryDraft.carMake} onChange={(event) => setEntryDraft((value) => ({...value, carMake: event.target.value, carModel: "", carYear: ""}))}>
+                      <option value="">Select a make</option>
+                      {getMakes().map((make) => (<option key={make} value={make}>{make}</option>))}
+                    </select>
+                  </label>
+                  <label className="lst-field"><span>Model</span>
+                    <select disabled={!entryDraft.carMake} value={canonicalModel(entryDraft.carMake, entryDraft.carModel) || entryDraft.carModel} onChange={(event) => setEntryDraft((value) => ({...value, carModel: event.target.value, carYear: ""}))}>
+                      <option value="">Select a model</option>
+                      {getModels(entryDraft.carMake).map((model) => (<option key={model} value={model}>{model}</option>))}
+                    </select>
+                  </label>
+                  <label className="lst-field"><span>Year</span>
+                    <select disabled={!entryDraft.carModel} value={entryDraft.carYear} onChange={(event) => setEntryDraft((value) => ({...value, carYear: event.target.value}))}>
+                      <option value="">Select a year</option>
+                      {getYears(entryDraft.carMake, entryDraft.carModel).map((year) => (<option key={year} value={year}>{year}</option>))}
+                    </select>
+                  </label>
+                  <label className="lst-field"><span>VIN (optional)</span>
+                    <input value={entryDraft.vinNumber} onChange={(event) => setEntryDraft((value) => ({...value, vinNumber: event.target.value}))} placeholder="17 characters" />
+                  </label>
+                  <label className="lst-field"><span>Start date</span>
+                    <input type="date" value={entryDraft.startDate} onChange={(event) => setEntryDraft((value) => ({...value, startDate: event.target.value}))} />
+                  </label>
+                  <label className="lst-field"><span>End date</span>
+                    <input type="date" value={entryDraft.endDate} onChange={(event) => setEntryDraft((value) => ({...value, endDate: event.target.value}))} />
+                  </label>
+                </div>
+
+                <fieldset className="lst-fieldset">
+                  <legend>How does this parking get paid?</legend>
+                  <label className="lst-radio">
+                    <input type="radio" name="parking-payment-method" value="direct" checked={entryDraft.paymentMethod === "direct"} onChange={() => setEntryDraft((value) => ({...value, paymentMethod: "direct"}))} />
+                    <span>Customer pays us directly (Zelle/cash)</span>
+                  </label>
+                  <label className="lst-radio">
+                    <input type="radio" name="parking-payment-method" value="payment_link" checked={entryDraft.paymentMethod === "payment_link"} onChange={() => setEntryDraft((value) => ({...value, paymentMethod: "payment_link"}))} />
+                    <span>Send the customer a payment link</span>
+                  </label>
+                  <p className="lst-hint">
+                    {entryDraft.paymentMethod === "direct"
+                      ? "We record what the customer owes you and take no cut. You mark it received when the money arrives."
+                      : "We bill the customer for you and send you the rest."}
+                  </p>
+                </fieldset>
+
+                {entryErrors.length > 0 && (
+                  <ul className="lst-form-error" role="alert">
+                    {entryErrors.map((code) => (<li key={code}>{BUSINESS_PARKING_ENTRY_MESSAGES[code]}</li>))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            <footer className="lst-modal-foot">
+              <button className="lst-btn ghost" type="button" disabled={entryBusy} onClick={closeEntry}>{entryResult ? "Done" : "Cancel"}</button>
+              {!entryResult && (
+                <button className="lst-add" type="button" disabled={entryBusy} aria-busy={entryBusy} onClick={submitEntry}>
+                  {entryBusy ? <RefreshCw className="spin" size={16} /> : <Save size={16} />}
+                  {entryBusy ? "Recording..." : "Record the car"}
+                </button>
+              )}
             </footer>
           </div>
         </div>

@@ -5297,6 +5297,17 @@ button[data-loading="true"]::before {
   padding: 11px 13px;
 }
 .lst-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* A plain either/or question inside a console form (parking payment method).
+   Radios rather than a select: the two answers mean different things to the
+   customer's money and both have to be readable at a glance. */
+.lst-fieldset { border: 1.5px solid var(--rule); border-radius: 14px; padding: 14px 16px; margin-top: 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.lst-fieldset legend { font-size: 13px; font-weight: 800; color: var(--ink); padding: 0 6px; }
+.lst-radio { display: flex; align-items: flex-start; gap: 10px; font-size: 14.5px; color: var(--ink); cursor: pointer; line-height: 1.35; }
+.lst-radio input { width: 18px; height: 18px; margin-top: 1px; accent-color: var(--brand); cursor: pointer; flex: 0 0 auto; }
+.lst-hint { font-size: 13px; color: var(--muted); line-height: 1.45; margin: 6px 0 0; }
+.lst-modal-body > .lst-hint { margin-bottom: 12px; }
+
 .lst-field { display: flex; flex-direction: column; gap: 6px; }
 .lst-field.wide { grid-column: 1 / -1; }
 .lst-field span,

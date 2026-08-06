@@ -3381,6 +3381,84 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
 
 // Pickup-plan validation errors are "<section label>: <message>" strings, so
 // the exact-match table needs every combination.
+// Business-entered parking (docs/PLAN-2026-08-backlog.md item 5). Proper
+// nouns that are written the same in both languages - Zelle, Venmo, Cash App -
+// are deliberately absent: an identity entry translates to itself and would
+// break the convergence guarantee this file's test enforces.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Record a parked car": "Enregistrer une voiture stationnée",
+  "Record the car": "Enregistrer la voiture",
+  "Parked car recorded": "Voiture stationnée enregistrée",
+  "Recording...": "Enregistrement en cours...",
+  "Amount due": "Montant dû",
+  "Amount recorded": "Montant enregistré",
+  "Payment status": "Statut du paiement",
+  "Payment link": "Lien de paiement",
+  "Copy payment link": "Copier le lien de paiement",
+  "Link copied": "Lien copié",
+  "Received via": "Reçu par",
+  "Mark payment received": "Marquer le paiement comme reçu",
+  "Payment recorded.": "Paiement enregistré.",
+  "This parking was already marked paid.":
+    "Ce stationnement était déjà marqué comme payé.",
+  "The payment could not be recorded.":
+    "Le paiement n’a pas pu être enregistré.",
+  "The car could not be recorded.": "La voiture n’a pas pu être enregistrée.",
+  "The payment link could not be copied. Select and copy it manually.":
+    "Le lien de paiement n’a pas pu être copié. Sélectionnez-le et copiez-le manuellement.",
+  "Done": "Terminé",
+  "Customer email (optional)": "Email du client (facultatif)",
+  "VIN (optional)": "VIN (facultatif)",
+  "Select a make": "Sélectionnez une marque",
+  "Select a model": "Sélectionnez un modèle",
+  "Select a year": "Sélectionnez une année",
+  "How does this parking get paid?":
+    "Comment ce stationnement est-il payé ?",
+  "Customer pays us directly (Zelle/cash)":
+    "Le client nous paie directement (Zelle/espèces)",
+  "Send the customer a payment link":
+    "Envoyer un lien de paiement au client",
+  "We record what the customer owes you and take no cut. You mark it received when the money arrives.":
+    "Nous enregistrons ce que le client vous doit et ne prenons aucune commission. Vous le marquez comme reçu à l’arrivée de l’argent.",
+  "We bill the customer for you and send you the rest.":
+    "Nous facturons le client pour vous et vous versons le reste.",
+  "Send this link to the customer so they can pay. It stays valid until they use it.":
+    "Envoyez ce lien au client pour qu’il puisse payer. Il reste valide jusqu’à son utilisation.",
+  "The customer pays your business directly. We record the amount and never bill it. Use Mark payment received once the money arrives.":
+    "Le client paie votre entreprise directement. Nous enregistrons le montant sans jamais le facturer. Utilisez Marquer le paiement comme reçu à l’arrivée de l’argent.",
+  "Awaiting payment to the business": "En attente du paiement à l’entreprise",
+  "Paid to the business": "Payé à l’entreprise",
+  "Payment link sent": "Lien de paiement envoyé",
+  "Payment link paid": "Lien de paiement payé",
+  "Nothing to collect": "Rien à encaisser",
+  "Zelle transfer": "Virement Zelle",
+  "Cash payment": "Paiement en espèces",
+  "Paper check": "Chèque papier",
+  "Card in person": "Carte en personne",
+  "Another method": "Une autre méthode",
+  "Choose a business before recording a car.":
+    "Choisissez une entreprise avant d’enregistrer une voiture.",
+  "Enter the customer's name.": "Saisissez le nom du client.",
+  "Enter the customer's phone number.":
+    "Saisissez le numéro de téléphone du client.",
+  "Enter a valid email address.": "Saisissez une adresse email valide.",
+  "A payment link needs a phone number or an email address.":
+    "Un lien de paiement nécessite un numéro de téléphone ou une adresse email.",
+  "Choose how this parking gets paid.":
+    "Choisissez comment ce stationnement est payé.",
+  "Select the car make.": "Sélectionnez la marque de la voiture.",
+  "Select the car model.": "Sélectionnez le modèle de la voiture.",
+  "Select the car year.": "Sélectionnez l’année de la voiture.",
+  "Select a valid car year.":
+    "Sélectionnez une année de voiture valide.",
+  "Choose the day the car arrives.":
+    "Choisissez le jour d’arrivée de la voiture.",
+  "Choose the day the car leaves.":
+    "Choisissez le jour de départ de la voiture.",
+  "The end date cannot be before the start date.":
+    "La date de fin ne peut pas précéder la date de début.",
+});
+
 const PICKUP_ERROR_LABELS: Record<string, string> = {
   "Shared pickup plan": "Plan de collecte partagé",
   "Barrel shipping pickup": "Collecte expédition de barils",
@@ -3409,14 +3487,18 @@ for (const [label, frLabel] of Object.entries(PICKUP_ERROR_LABELS)) {
 }
 
 const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
+  "17 characters": "17 caractères",
   "Add a photo by URL": "Ajouter une photo par URL",
   "Apt 4B": "App. 4B",
   "Choose quote request": "Choisir une demande de devis",
   "City, state or province, postal code":
     "Ville, État ou province, code postal",
   "Collapse navigation": "Réduire la navigation",
+  "Copy payment link": "Copier le lien de paiement",
   "Copy tracking code": "Copier le code de suivi",
+  "Customer name": "Nom du client",
   "Delivery status": "Statut de livraison",
+  "Email address": "Adresse courriel",
   "Explain missing documents, expiry issues, or why a document is not applicable.":
     "Expliquez les documents manquants, les problèmes d’expiration ou pourquoi un document est sans objet.",
   "Expand navigation": "Développer la navigation",
@@ -3425,6 +3507,7 @@ const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "Filter business sections": "Filtrer les sections entreprise",
   "Filter services...": "Filtrer les services...",
   "No-show note (optional)": "Note d’absence (facultatif)",
+  "Phone number": "Numéro de téléphone",
   Pin: "Épingler",
   "Search car, buyer, phone, status…":
     "Rechercher voiture, acheteur, téléphone, statut…",
