@@ -3763,6 +3763,34 @@ export function ParkingPanel({
     }
   }
 
+  async function cancelPaymentLink(row: FirestoreRow) {
+    const confirmed = await confirmImportantAction(
+      "Cancel this payment link? The customer will no longer be able to pay with it.",
+      "Annuler ce lien de paiement ? Le client ne pourra plus payer avec.",
+    );
+    if (!confirmed) return;
+    setPaidBusyId(row.id);
+    setMessage("");
+    try {
+      const response = await httpsCallable(
+        functions,
+        "cancelBusinessParkingPaymentLink",
+      )({entryId: row.id});
+      const data = (response.data ?? {}) as { alreadyCancelled?: boolean };
+      setMessage(
+        data.alreadyCancelled
+          ? "This payment link was already cancelled."
+          : "Payment link cancelled.",
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "The payment link could not be cancelled.",
+      );
+    } finally {
+      setPaidBusyId("");
+    }
+  }
+
   async function checkLinkPayment(row: FirestoreRow) {
     setPaidBusyId(row.id);
     setMessage("");
@@ -3897,6 +3925,19 @@ export function ParkingPanel({
                       <RefreshCw size={14} />
                       {paidBusyId === row.id ? "Checking..." : "Check payment status"}
                     </button>
+                    {/* The other half of the rule: a link stays good until
+                        the customer pays it or the lot kills it here. */}
+                    {businessParkingPaymentTone(row) !== "paid" && !row.paymentLinkCancelledAt && (
+                      <button
+                        className="lst-btn ghost"
+                        type="button"
+                        disabled={paidBusyId === row.id}
+                        onClick={() => void cancelPaymentLink(row)}
+                        title="Cancel payment link"
+                      >
+                        <X size={14} /> Cancel payment link
+                      </button>
+                    )}
                   </div>
                 </div>
               )}

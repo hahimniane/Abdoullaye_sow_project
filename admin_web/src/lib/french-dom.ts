@@ -3478,6 +3478,11 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Every change is shown here for your confirmation before it runs.":
     "Chaque modification est affichée ici pour votre confirmation avant d’être exécutée.",
   "The assistant is typing...": "L’assistant écrit...",
+  "Cancel payment link": "Annuler le lien de paiement",
+  "Payment link cancelled.": "Lien de paiement annulé.",
+  "This payment link was already cancelled.": "Ce lien de paiement était déjà annulé.",
+  "The payment link could not be cancelled.": "Le lien de paiement n’a pas pu être annulé.",
+  "Paid records cannot be edited": "Les enregistrements payés ne peuvent pas être modifiés",
   // Server-returned assistant errors reach the bubble verbatim, so they need
   // entries here too or a French user reads an English failure.
   "The assistant is not configured yet": "L’assistant n’est pas encore configuré",
