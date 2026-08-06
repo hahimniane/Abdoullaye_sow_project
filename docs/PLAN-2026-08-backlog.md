@@ -47,6 +47,19 @@ business-direct methods, see #5), never a platform-held balance.
   - the customer is sent a Stripe payment link so the platform bills them.
   To send the link, the business supplies the customer's phone/email.
 
+### Settled details (owner, 2026-08-06)
+
+- **The platform's cut is a platform-admin decision, and only exists on the
+  Stripe-billed path.** It runs through the EXISTING commission machinery —
+  `shipmentPricing/serviceFees.parkingPlatformFeePct`, resolved by
+  `servicePlatformFeePctForBusiness` with the per-business override, editable
+  in the admin console. No new fee mechanism.
+- **Direct/Zelle: record the amount, never bill it.** The lot keeps a record
+  of what is owed and marks it received; the platform takes no cut and
+  creates no Stripe object.
+- **No customer account is required.** A walk-up customer must not be blocked
+  at the door: the entry lives under the business with its tracking code.
+
 ## 6. Auto-select the only available business
 
 In air freight (and anywhere else this pattern appears): when a chosen
