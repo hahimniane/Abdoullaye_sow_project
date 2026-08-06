@@ -40,6 +40,17 @@ describe("classifying a customer transport edit", () => {
     assert.equal(result.destinationChanged, false);
   });
 
+  it("flags a pickup address change as requiring fresh quotes", () => {
+    // Each business prices pickup from the exact address, so moving it
+    // reprices the job - quotes in hand were for a different collection.
+    const result = classifyTransportEdit(REQUEST, {
+      pickupAddress: "980 Far Away Rd",
+    });
+    assert.equal(result.requoteRequired, true);
+    assert.deepEqual(result.changedQuotedFields, ["pickupAddress"]);
+    assert.equal(result.destinationChanged, false);
+  });
+
   it("flags a vehicle change as requiring fresh quotes", () => {
     const result = classifyTransportEdit(REQUEST, {carModel: "Corolla"});
     assert.equal(result.requoteRequired, true);

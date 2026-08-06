@@ -11,12 +11,17 @@
  * Two classes of field, because businesses price against what the request
  * says:
  *
- *   CONTACT   - phone, notes, dates, pickup address. Changing these cannot
- *               make a quote wrong, so quotes in hand survive.
- *   QUOTED    - vehicle, pickup area, transport method, operability, and the
- *               destination country. Changing any of these means every quote
- *               already given was priced for a different job, so those quotes
- *               are voided and businesses are asked again.
+ *   CONTACT   - phone, notes, dates. Changing these cannot make a quote
+ *               wrong, so quotes in hand survive.
+ *   QUOTED    - vehicle, pickup address and area, transport method,
+ *               operability, and the destination country. Changing any of
+ *               these means every quote already given was priced for a
+ *               different job, so those quotes are voided and businesses are
+ *               asked again.
+ *
+ * The pickup address is quote-affecting: each business's pickup plan prices
+ * the collection from that exact address (docs/PLAN-business-pickup.md), so
+ * moving the address moves the fee.
  *
  * Destination is the sharpest case: eligibility is derived from the
  * destination country, so a change there can move the request to an entirely
@@ -27,7 +32,6 @@
 const CONTACT_FIELDS = Object.freeze([
   "customerPhone",
   "notes",
-  "pickupAddress",
   "preferredDate",
   "flexibleDates",
 ]);
@@ -36,6 +40,7 @@ const QUOTED_FIELDS = Object.freeze([
   "carMake",
   "carModel",
   "carYear",
+  "pickupAddress",
   "pickupArea",
   "vehicleOperable",
   "requestedTransportMethod",

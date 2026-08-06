@@ -3686,6 +3686,7 @@ exports.submitTransportQuote = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
+      secrets: [googleMapsApiKey],
     },
     async (request) => {
       const uid = requireAuth(request);
@@ -3730,6 +3731,18 @@ exports.submitTransportQuote = onCall(
         db.collection("transportOpportunities").doc(marketplaceId);
       const quoteRef = db.collection("transportQuotes").doc(marketplaceId);
       const businessRef = db.collection("businesses").doc(businessId);
+
+      // Car transport pickup is charged separately on top of the job quote
+      // (docs/PLAN-business-pickup.md #7), priced by THIS business's plan
+      // against the request's address. Geocoding cannot run inside a
+      // transaction, so price first and re-check the address inside it.
+      const pickup = await computeTransportQuotePickup({
+        db,
+        requestRef,
+        businessRef,
+        key: googleMapsApiKey.value(),
+      });
+
       const result = await db.runTransaction(async (transaction) => {
         const [requestDoc, opportunityDoc, existingQuote, businessDoc] =
           await Promise.all([
@@ -3746,6 +3759,15 @@ exports.submitTransportQuote = onCall(
         }
         const requestData = requestDoc.data();
         assertCollectingTransportRequest(requestData);
+        if (String(requestData.pickupAddress || "").trim() !==
+            pickup.quotedAddress) {
+          // The customer moved the pickup while this quote was being priced.
+          throw new HttpsError(
+              "failed-precondition",
+              "The pickup address changed. Review it and quote again.",
+              {reason: "transport_pickup_address_changed"},
+          );
+        }
         if (!opportunityDoc.exists ||
             opportunityDoc.data().businessId !== businessId) {
           throw new HttpsError(
@@ -3781,6 +3803,14 @@ exports.submitTransportQuote = onCall(
           businessName:
             String(provider.business.name || businessId).trim(),
           amountCents,
+          // Pickup is quoted separately from the transport job itself, so
+          // the customer sees both lines and pays the sum.
+          pickupFeeCents: pickup.feeCents,
+          pickupIncluded: pickup.priced,
+          pickupModel: pickup.model,
+          pickupBorough: pickup.borough,
+          pickupDistanceMiles: pickup.distanceMiles,
+          totalCents: amountCents + pickup.feeCents,
           currency,
           transportMethod,
           estimatedPickupDate: quoteDates.estimatedPickupDate,
@@ -3975,8 +4005,13 @@ exports.selectTransportQuote = onCall(
             String(provider.business.name || businessId).trim(),
           selectedAmountCents: quote.amountCents,
           amountCents: quote.amountCents,
+          // Pickup is a separate line on the quote; the customer owes both.
+          pickupFeeCents: Number(quote.pickupFeeCents || 0),
+          totalCents: quote.amountCents + Number(quote.pickupFeeCents || 0),
           currency: quote.currency,
-          price: dollarsFromCents(quote.amountCents),
+          price: dollarsFromCents(
+              quote.amountCents + Number(quote.pickupFeeCents || 0),
+          ),
           transportMethod: quote.transportMethod,
           estimatedPickupDate: quote.estimatedPickupDate || null,
           estimatedDeliveryDate: quote.estimatedDeliveryDate || null,
@@ -9771,6 +9806,56 @@ async function computePlanPickupFee({config, business, address, key}) {
     distanceMiles: Math.round(distanceMiles * 10) / 10,
     fee: result.feeCents / 100,
     feeCents: result.feeCents,
+  };
+}
+
+/**
+ * Prices the pickup leg of one car transport quote from the quoting
+ * business's own plan (docs/PLAN-business-pickup.md #7).
+ *
+ * A business with no carTransport pickup config is NOT blocked - it simply
+ * quotes pickup inside its own price, as it always has, and no separate fee
+ * is added. A business that HAS a plan but cannot serve the address is
+ * refused here rather than quoting a collection it does not make.
+ *
+ * @param {{db: !Object, requestRef: !Object, businessRef: !Object,
+ *   key: string}} params Firestore handles and the Maps key.
+ * @return {!Promise<{feeCents: number, priced: boolean, model: ?string,
+ *   borough: string, distanceMiles: ?number, quotedAddress: string}>} The
+ *   pickup line for this quote.
+ */
+async function computeTransportQuotePickup({db, requestRef, businessRef, key}) {
+  const [requestDoc, businessDoc] = await Promise.all([
+    requestRef.get(),
+    businessRef.get(),
+  ]);
+  const quotedAddress =
+    String(requestDoc.data()?.pickupAddress || "").trim();
+  const config = businessDoc.exists ?
+    resolveServicePickup(businessDoc.data().pickupPlan, "carTransport") : null;
+  if (!config || !quotedAddress) {
+    return {
+      feeCents: 0,
+      priced: false,
+      model: null,
+      borough: "",
+      distanceMiles: null,
+      quotedAddress,
+    };
+  }
+  const quote = await computePlanPickupFee({
+    config,
+    business: businessDoc.data(),
+    address: quotedAddress,
+    key,
+  });
+  return {
+    feeCents: quote.feeCents,
+    priced: true,
+    model: quote.model,
+    borough: quote.borough,
+    distanceMiles: quote.distanceMiles,
+    quotedAddress,
   };
 }
 
