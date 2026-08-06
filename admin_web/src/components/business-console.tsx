@@ -217,7 +217,7 @@ export function BusinessConsole({
 
   const handleSignOut = useCallback(async () => {
     if (
-      confirmImportantAction(
+      await confirmImportantAction(
         "Sign out? You will need to sign in again to continue.",
         "Se déconnecter ? Vous devrez vous reconnecter pour continuer.",
       )

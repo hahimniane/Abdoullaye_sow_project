@@ -2613,14 +2613,11 @@ export function AdminConsole() {
       action: () => Promise<unknown>,
       options: ActionConfirmationOptions = {},
     ) => {
-      if (
-        options.confirm &&
-        !confirmImportantAction(options.confirm, options.confirmFr)
-      ) {
-        return;
-      }
-      const id = actionSequence.current + 1;
-      actionSequence.current = id;
+      // Resolve the trigger before confirming: the confirmation dialog takes
+      // focus while it is open, so reading document.activeElement afterwards
+      // would find the dialog's own button instead of the control the user
+      // pressed.
+      //
       // Enter-to-submit from a text field leaves document.activeElement on
       // the input, not the button - fall back to the submit button inside
       // that same form so loading/disabled state doesn't silently no-op for
@@ -2635,6 +2632,14 @@ export function AdminConsole() {
               | HTMLButtonElement
               | null)) :
           null;
+      if (
+        options.confirm &&
+        !(await confirmImportantAction(options.confirm, options.confirmFr))
+      ) {
+        return;
+      }
+      const id = actionSequence.current + 1;
+      actionSequence.current = id;
       const triggerWasDisabled = trigger?.disabled ?? false;
       if (trigger) {
         trigger.dataset.loading = "true";
@@ -2674,7 +2679,7 @@ export function AdminConsole() {
       return;
     }
     if (
-      confirmImportantAction(
+      await confirmImportantAction(
         "Sign out? You will need to sign in again to continue.",
         "Se déconnecter ? Vous devrez vous reconnecter pour continuer.",
       )

@@ -2288,6 +2288,12 @@ function FreightShipmentForm({
       setSelectionNotice(
         "That business is not available for this freight mode. Choose another business.",
       );
+      return;
+    }
+    // Only one business serves this destination: choosing from a list of
+    // one is busywork, so make the choice for them.
+    if (!destinationOptionId && providerOptions.length === 1) {
+      setDestinationOptionId(providerOptions[0].id);
     }
   }, [
     countries,
@@ -3535,7 +3541,7 @@ function CustomerTransportQuotes({
 
   async function selectQuote(quote: TransportQuote) {
     if (!activeRequest || busyAction) return;
-    const confirmed = confirmImportantAction(
+    const confirmed = await confirmImportantAction(
       "Choose this carrier and quoted total?",
       "Choisir ce transporteur et ce montant ?",
     );
@@ -3556,7 +3562,7 @@ function CustomerTransportQuotes({
 
   async function cancelRequest() {
     if (!activeRequest || busyAction) return;
-    const confirmed = confirmImportantAction(
+    const confirmed = await confirmImportantAction(
       "Cancel this quote request? Businesses will no longer be able to submit or revise quotes.",
       "Annuler cette demande de devis ? Les entreprises ne pourront plus envoyer ni réviser de devis.",
     );

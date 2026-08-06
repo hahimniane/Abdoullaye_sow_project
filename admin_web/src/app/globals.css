@@ -11533,3 +11533,75 @@ button[data-loading="true"]::before {
   .people-invite-fields { grid-template-columns: minmax(0,1fr); }
   .people-invite-fields label:first-child { grid-column: auto; }
 }
+
+/* Action confirmation dialog — the in-page replacement for window.confirm.
+   Sits above every other overlay (listings modal 200, account drawer 40,
+   toast host 1000) because it can be raised from inside any of them. */
+.action-confirm-overlay {
+  align-items: center;
+  backdrop-filter: blur(3px);
+  background: rgba(8, 47, 45, 0.5);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 3000;
+}
+
+.action-confirm {
+  background: var(--paper);
+  border-radius: 20px;
+  box-shadow: 0 40px 90px rgba(8, 47, 45, 0.42);
+  display: grid;
+  gap: 16px;
+  grid-template-columns: auto minmax(0, 1fr);
+  max-width: 460px;
+  padding: 24px;
+  width: 100%;
+}
+
+.action-confirm-mark {
+  align-items: center;
+  background: #fef3c7;
+  border-radius: 12px;
+  color: var(--warning);
+  display: flex;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+
+.action-confirm-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.action-confirm-copy h2 {
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.action-confirm-copy p {
+  color: var(--muted);
+  font-size: 14.5px;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.action-confirm-actions {
+  display: flex;
+  gap: 10px;
+  grid-column: 2;
+  justify-content: flex-end;
+}
+
+@media (max-width: 480px) {
+  .action-confirm { grid-template-columns: minmax(0, 1fr); }
+  .action-confirm-mark { display: none; }
+  .action-confirm-actions { flex-direction: column-reverse; grid-column: 1; }
+  .action-confirm-actions button { width: 100%; }
+}
