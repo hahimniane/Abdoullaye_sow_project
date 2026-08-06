@@ -10257,8 +10257,12 @@ exports.createBusinessParkingEntry = onCall(
       const paymentLinkToken = crypto.randomBytes(24).toString("base64url");
       await entryRef.update({
         paymentLinkToken,
+        // What the console copies and what a customer should ever see. The
+        // raw Stripe URL is kept separately for support/debugging only.
+        paymentLinkUrl: parkingPaymentLinkUrl(paymentLinkToken),
         checkoutSessionId: String(session.id || ""),
-        checkoutUrl: String(session.url || ""),
+        stripeCheckoutUrl: String(session.url || ""),
+        checkoutUrl: parkingPaymentLinkUrl(paymentLinkToken),
         checkoutStatus: "open",
         // Stripe may only mint the PaymentIntent once the customer opens the
         // page; the checkout.session.* webhook binds it either way.
@@ -10417,7 +10421,10 @@ exports.parkingPaymentLink = onRequest(
         });
         await entryRef.update({
           checkoutSessionId: String(session.id || ""),
-          checkoutUrl: String(session.url || ""),
+          // Never overwrite checkoutUrl with the Stripe session here: that
+          // is the field the console copies, and it must stay the durable
+          // link rather than the session that is about to expire.
+          stripeCheckoutUrl: String(session.url || ""),
           checkoutStatus: "open",
           paymentLinkMintCount: mintCount,
           paymentLinkRefreshedAt: FirestoreFieldValue.serverTimestamp(),
