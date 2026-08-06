@@ -13,9 +13,7 @@ import 'package:my_flutter_app/widgets/structured_address_fields.dart';
 
 const _apartmentLabel = 'Apartment, suite, or unit (optional)';
 const _cityLabel = 'City';
-const _stateLabel = 'State or region';
 const _postalLabel = 'ZIP or postal code';
-const _countryLabel = 'Country';
 
 class _Host extends StatefulWidget {
   const _Host({required this.suggestions});
@@ -99,9 +97,7 @@ void main() {
     await tester.enterText(find.byType(TextFormField).first, '3184 Webster Ave');
     await tester.enterText(_field(_apartmentLabel), 'Apt 4B');
     await tester.enterText(_field(_cityLabel), 'Bronx');
-    await tester.enterText(_field(_stateLabel), 'NY');
     await tester.enterText(_field(_postalLabel), '10467');
-    await tester.enterText(_field(_countryLabel), 'United States');
     await _drainSuggestionDebounce(tester);
 
     // State and ZIP are one segment, and the apartment sits right after the
@@ -109,8 +105,26 @@ void main() {
     // admin_web/src/lib/address-fields.ts.
     expect(
       _state(tester).address.composeLine(),
-      '3184 Webster Ave, Apt 4B, Bronx, NY 10467, United States',
+      '3184 Webster Ave, Apt 4B, Bronx, 10467',
     );
+  });
+
+  testWidgets('state and country are catalog pickers, not free text', (
+    tester,
+  ) async {
+    // The web console uses catalogs for these. Free text here would let the
+    // same customer store "NY" on one device and "New York" on the other.
+    await tester.pumpWidget(const _Host(suggestions: [_suggestion]));
+    expect(find.byType(DropdownButtonFormField<String>), findsNWidgets(2));
+
+    final source = File(
+      'lib/widgets/structured_address_fields.dart',
+    ).readAsStringSync();
+    // Sourced from the app's own catalogs, not a second hardcoded list.
+    expect(source, contains('usStateOptions('));
+    expect(source, contains('CountryCatalog.all'));
+    // Long names must not overflow the row.
+    expect(source, contains('isExpanded: true'));
   });
 
   testWidgets('a free-typed street line alone still produces a usable line', (

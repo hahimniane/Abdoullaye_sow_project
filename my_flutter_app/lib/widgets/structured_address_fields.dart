@@ -7,6 +7,8 @@ import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../l10n/app_localizations.dart';
+import '../data/country_catalog.dart';
+import '../data/us_locations.dart';
 import '../models/structured_address.dart';
 import '../services/barrel_shipment_service.dart';
 import '../theme/app_colors.dart';
@@ -353,6 +355,36 @@ class _StructuredAddressFieldsState extends State<StructuredAddressFields> {
     );
   }
 
+  /// A dropdown over a known catalog that still honours whatever is already
+  /// stored: a legacy or geocoded value outside the catalog is offered as its
+  /// own option rather than silently blanked.
+  Widget _catalogField({
+    required String label,
+    required String value,
+    required List<String> options,
+    required StructuredAddress Function(String) apply,
+  }) {
+    final trimmed = value.trim();
+    final all = <String>[
+      if (trimmed.isNotEmpty && !options.contains(trimmed)) trimmed,
+      ...options,
+    ];
+    return DropdownButtonFormField<String>(
+      // Long names ("United States Minor Outlying Islands") overflow without
+      // this and paint a debug stripe over the field.
+      isExpanded: true,
+      initialValue: trimmed.isEmpty ? null : trimmed,
+      decoration: InputDecoration(labelText: label),
+      items: [
+        for (final option in all)
+          DropdownMenuItem(value: option, child: Text(option)),
+      ],
+      onChanged: widget.enabled
+          ? (selected) => widget.onChanged(apply(selected ?? ''), null)
+          : null,
+    );
+  }
+
   Widget _partField({
     required TextEditingController controller,
     required String label,
@@ -474,9 +506,13 @@ class _StructuredAddressFieldsState extends State<StructuredAddressFields> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: _partField(
-                controller: _stateController,
+              // A picker, not free text: the web console uses catalogs for
+              // these, and "NY" typed on one device against "New York" picked
+              // on the other is the same customer with two addresses.
+              child: _catalogField(
                 label: l10n.addressStateLabel,
+                value: widget.value.state,
+                options: usStateOptions(widget.value.state),
                 apply: (value) => widget.value.copyWith(state: value),
               ),
             ),
@@ -494,9 +530,12 @@ class _StructuredAddressFieldsState extends State<StructuredAddressFields> {
           ],
         ),
         const SizedBox(height: 12),
-        _partField(
-          controller: _countryController,
+        _catalogField(
           label: l10n.addressCountryLabel,
+          value: widget.value.country,
+          options: [
+            for (final country in CountryCatalog.all) country.name,
+          ],
           apply: (value) => widget.value.copyWith(country: value),
         ),
         if (widget.showLocateMe) ...[
