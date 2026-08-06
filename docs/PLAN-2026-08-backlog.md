@@ -163,3 +163,38 @@ sweep) — this is a business decision, not a technical blocker.
 
 Every item ships on BOTH web and mobile, and is tester-verified on the real
 interface before it is called done (docs/ENGINEERING_GUARDRAILS.md).
+
+### Parking payment links are durable (2026-08-06)
+
+A Stripe Checkout Session expires **24 hours** after it is minted; that
+ceiling is the API maximum, not a setting. So a link a lot texted on Monday
+was dead by Wednesday, while the owner's rule is that a link stays good
+until the customer pays it or the lot cancels it.
+
+The customer now receives a Laawol URL, not a Stripe one:
+
+- `parkingPaymentLink?t=<token>` — stable for the life of the record. Each
+  visit reuses the stored Stripe session if it is still alive, otherwise
+  mints a replacement with the same amount and fee split. Paid records show
+  "Already paid"; cancelled ones show "Link cancelled".
+- `cancelBusinessParkingPaymentLink` — the lot's half of the rule. Expires
+  the open Stripe session too, so a customer sitting on an already-open
+  checkout tab cannot complete a payment that was just cancelled.
+- `paymentLinkUrl` on the record is what the console copies;
+  `stripeCheckoutUrl` keeps the raw session for support only.
+
+Verified live: a bad token renders "Link not found"; the unpaid $35 entry
+303s to a working Stripe session; the paid Audi renders "Already paid".
+
+### Also fixed 2026-08-06
+
+- **"New parking" removed from the business console.** It wrote a
+  `parkedCars` document straight from the browser — faked `PC-xxxxxx`
+  tracking code, no `amountDueCents`, no payment plan, no space check — so
+  it produced records the payment system could not settle. Creation goes
+  through `createBusinessParkingEntry` only.
+- **Paid parking records can no longer be edited**, in the UI and in the
+  save path. Editing rewrote the price of a completed sale with no server
+  check and no audit trail. The amount on a payment-link entry is refused
+  too: the customer's Stripe session already carries it.
+- **Paid vs unpaid is now a badge**, green/amber, on both clients.
