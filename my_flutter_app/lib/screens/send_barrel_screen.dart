@@ -27,6 +27,7 @@ import '../widgets/business_reviews_sheet.dart';
 import '../widgets/rating_summary_badge.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/recipient_name_field.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/destination_country_field.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
@@ -3116,10 +3117,16 @@ class _DestinationEditorSheetState extends State<_DestinationEditorSheet> {
                         ),
                       ],
                       const SizedBox(height: 14),
-                      BarrelTextFormField(
-                        label: l10n.receiverName,
+                      RecipientNameField(
                         controller: _receiverNameController,
-                        icon: Icons.person_pin_outlined,
+                        labelText: l10n.receiverName,
+                        onRecipientSelected: (recipient) {
+                          setState(() {
+                            _receiverPhoneController.text = recipient.phone;
+                            _receiverPhoneIsWhatsappOnly =
+                                recipient.whatsappOnly;
+                          });
+                        },
                         validator: (value) =>
                             (value == null || value.trim().isEmpty)
                             ? l10n.pleaseEnterReceiverName

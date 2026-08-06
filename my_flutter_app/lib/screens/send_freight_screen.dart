@@ -18,6 +18,7 @@ import '../widgets/country_phone_field.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
 import '../widgets/office_location_picker.dart';
 import '../widgets/rating_summary_badge.dart';
+import '../widgets/recipient_name_field.dart';
 
 /// Customer screen to send a parcel/box by freight, priced by weight,
 /// by air or sea. Search-first: find a business + destination, then book.
@@ -894,9 +895,15 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
           decoration: InputDecoration(labelText: l10n.senderName),
         ),
         const SizedBox(height: 14),
-        TextField(
+        RecipientNameField(
           controller: _receiverController,
-          decoration: InputDecoration(labelText: l10n.receiverName),
+          labelText: l10n.receiverName,
+          onRecipientSelected: (recipient) {
+            setState(() {
+              _phoneController.text = recipient.phone;
+              _receiverPhoneIsWhatsappOnly = recipient.whatsappOnly;
+            });
+          },
         ),
         const SizedBox(height: 14),
         CountryPhoneField(
