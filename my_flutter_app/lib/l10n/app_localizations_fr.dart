@@ -6087,4 +6087,27 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get transportEditNeedsPickup =>
       'J’ai besoin d’un enlèvement à une adresse';
+
+  @override
+  String get addressApartmentLabel =>
+      'Appartement, suite ou unité (facultatif)';
+
+  @override
+  String get addressApartmentHint => 'App. 4B';
+
+  @override
+  String get addressApartmentHelper =>
+      'Les numéros d’appartement figurent rarement dans la suggestion — ajoutez le vôtre ici.';
+
+  @override
+  String get addressCityLabel => 'Ville';
+
+  @override
+  String get addressStateLabel => 'État ou région';
+
+  @override
+  String get addressPostalCodeLabel => 'Code postal ou ZIP';
+
+  @override
+  String get addressCountryLabel => 'Pays';
 }

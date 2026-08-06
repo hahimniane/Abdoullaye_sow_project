@@ -2512,5 +2512,12 @@
   "transportEditDestinationMoved": "Votre demande est désormais envoyée aux entreprises qui desservent la nouvelle destination.",
   "notes": "Remarques",
   "vehicleOperable": "Le véhicule roule",
-  "transportEditNeedsPickup": "J’ai besoin d’un enlèvement à une adresse"
+  "transportEditNeedsPickup": "J’ai besoin d’un enlèvement à une adresse",
+  "addressApartmentLabel": "Appartement, suite ou unité (facultatif)",
+  "addressApartmentHint": "App. 4B",
+  "addressApartmentHelper": "Les numéros d’appartement figurent rarement dans la suggestion — ajoutez le vôtre ici.",
+  "addressCityLabel": "Ville",
+  "addressStateLabel": "État ou région",
+  "addressPostalCodeLabel": "Code postal ou ZIP",
+  "addressCountryLabel": "Pays"
 }

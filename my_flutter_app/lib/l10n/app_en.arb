@@ -2541,5 +2541,12 @@
   "transportEditDestinationMoved": "Your request now goes to businesses serving the new destination.",
   "notes": "Notes",
   "vehicleOperable": "Vehicle is drivable",
-  "transportEditNeedsPickup": "I need pickup from an address"
+  "transportEditNeedsPickup": "I need pickup from an address",
+  "addressApartmentLabel": "Apartment, suite, or unit (optional)",
+  "addressApartmentHint": "Apt 4B",
+  "addressApartmentHelper": "Apartment numbers are rarely in the suggestion — add yours here.",
+  "addressCityLabel": "City",
+  "addressStateLabel": "State or region",
+  "addressPostalCodeLabel": "ZIP or postal code",
+  "addressCountryLabel": "Country"
 }

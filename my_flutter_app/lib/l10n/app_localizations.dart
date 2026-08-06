@@ -10757,6 +10757,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'I need pickup from an address'**
   String get transportEditNeedsPickup;
+
+  /// No description provided for @addressApartmentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Apartment, suite, or unit (optional)'**
+  String get addressApartmentLabel;
+
+  /// No description provided for @addressApartmentHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Apt 4B'**
+  String get addressApartmentHint;
+
+  /// No description provided for @addressApartmentHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Apartment numbers are rarely in the suggestion — add yours here.'**
+  String get addressApartmentHelper;
+
+  /// No description provided for @addressCityLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'City'**
+  String get addressCityLabel;
+
+  /// No description provided for @addressStateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'State or region'**
+  String get addressStateLabel;
+
+  /// No description provided for @addressPostalCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'ZIP or postal code'**
+  String get addressPostalCodeLabel;
+
+  /// No description provided for @addressCountryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Country'**
+  String get addressCountryLabel;
 }
 
 class _AppLocalizationsDelegate

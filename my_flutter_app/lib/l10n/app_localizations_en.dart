@@ -5986,4 +5986,26 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get transportEditNeedsPickup => 'I need pickup from an address';
+
+  @override
+  String get addressApartmentLabel => 'Apartment, suite, or unit (optional)';
+
+  @override
+  String get addressApartmentHint => 'Apt 4B';
+
+  @override
+  String get addressApartmentHelper =>
+      'Apartment numbers are rarely in the suggestion — add yours here.';
+
+  @override
+  String get addressCityLabel => 'City';
+
+  @override
+  String get addressStateLabel => 'State or region';
+
+  @override
+  String get addressPostalCodeLabel => 'ZIP or postal code';
+
+  @override
+  String get addressCountryLabel => 'Country';
 }
