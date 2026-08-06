@@ -102,6 +102,27 @@ describe("tool definitions", () => {
         ["barrelShipments", "freightShipments", "transportRequests"],
     );
   });
+
+  it("every collection it can update, it can also list", () => {
+    // Otherwise the assistant is told to find a shipment id first and has
+    // no tool that returns one - it would have to guess, which the system
+    // prompt forbids, so the action becomes unreachable.
+    const tool = BUSINESS_ASSISTANT_TOOLS
+        .find((entry) => entry.name === "add_tracking_update");
+    const listByCollection = {
+      barrelShipments: "list_barrel_shipments",
+      freightShipments: "list_freight_shipments",
+      transportRequests: "list_transport_requests",
+    };
+    const names = new Set(BUSINESS_ASSISTANT_TOOLS.map((entry) => entry.name));
+    for (const collection of
+      tool.input_schema.properties.relatedCollection.enum) {
+      const listTool = listByCollection[collection];
+      assert.ok(listTool, `${collection} has no list tool mapped`);
+      assert.ok(names.has(listTool), `${listTool} is missing from the tools`);
+      assert.equal(isReadTool(listTool), true);
+    }
+  });
 });
 
 describe("assistantSystemPrompt", () => {

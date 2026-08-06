@@ -63,6 +63,22 @@ const READ_TOOLS = Object.freeze([
     },
   },
   {
+    name: "list_freight_shipments",
+    description:
+      "List this business's freight (parcel/box) shipments, newest first. " +
+      "Returns id, tracking code, sender and receiver, destination, weight, " +
+      "status, and whether a balance is still owed after weighing. Use it " +
+      "before proposing add_tracking_update for a freight shipment.",
+    input_schema: {
+      type: "object",
+      properties: {
+        status: {type: "string", description: "Optional status filter"},
+        limit: {type: "integer", description: "Max rows, default 20, max 50"},
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: "list_transport_requests",
     description:
       "List this business's car transport requests, newest first. Returns " +
@@ -436,6 +452,26 @@ function shapeBarrelShipmentRow(id, row) {
   };
 }
 
+function shapeFreightShipmentRow(id, row) {
+  return {
+    id,
+    trackingCode: cleanString(row.trackingCode, 40),
+    senderName: cleanString(row.senderName, 120),
+    receiverName: cleanString(row.receiverName, 120),
+    destination: cleanString(row.destinationCountryName, 80),
+    mode: cleanString(row.mode, 20),
+    weightKg: Number(row.verifiedWeightKg || row.weightKg ||
+      row.estimatedWeightKg || 0),
+    status: cleanString(row.status, 40),
+    paymentStatus: cleanString(row.paymentStatus, 40),
+    // The single most common freight question a lot has: does this one
+    // still owe money after it was weighed?
+    balanceDueCents: Number(row.balanceDueCents || 0),
+    balancePaymentStatus: cleanString(row.balancePaymentStatus, 40),
+    createdAt: toIso(row.createdAt),
+  };
+}
+
 function shapeTransportRequestRow(id, row) {
   return {
     id,
@@ -482,6 +518,7 @@ module.exports = {
   buildProposedAction,
   shapeParkedCarRow,
   shapeBarrelShipmentRow,
+  shapeFreightShipmentRow,
   shapeTransportRequestRow,
   shapeBusinessProfile,
   clampLimit,

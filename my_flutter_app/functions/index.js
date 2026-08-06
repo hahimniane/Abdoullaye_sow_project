@@ -162,6 +162,7 @@ const {
   buildProposedAction,
   shapeParkedCarRow,
   shapeBarrelShipmentRow,
+  shapeFreightShipmentRow,
   shapeTransportRequestRow,
   shapeBusinessProfile,
   clampLimit,
@@ -7813,6 +7814,19 @@ async function runBusinessAssistantReadTool(db, businessId, business, toolUse) {
           .get();
       let rows = snapshot.docs
           .map((doc) => shapeBarrelShipmentRow(doc.id, doc.data() || {}));
+      const status = cleanText(input.status, 40);
+      if (status) rows = rows.filter((row) => row.status === status);
+      rows.sort((a, b) =>
+        String(b.createdAt).localeCompare(String(a.createdAt)));
+      return rows.slice(0, clampLimit(input.limit));
+    }
+    case "list_freight_shipments": {
+      const snapshot = await db.collection("freightShipments")
+          .where("businessId", "==", businessId)
+          .limit(200)
+          .get();
+      let rows = snapshot.docs
+          .map((doc) => shapeFreightShipmentRow(doc.id, doc.data() || {}));
       const status = cleanText(input.status, 40);
       if (status) rows = rows.filter((row) => row.status === status);
       rows.sort((a, b) =>
