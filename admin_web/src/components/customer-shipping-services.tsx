@@ -440,6 +440,31 @@ export function CustomerShippingServices({
     };
   }, [optionsReloadKey]);
 
+  // These catalogs come from callables, which answer once - so a business
+  // switching a service or pickup off stayed visible until the customer
+  // reloaded the page (docs/PLAN-2026-08-backlog.md #2). The server bumps
+  // publicCatalog/services on every such change; re-ask whenever it does.
+  // The document carries no business data, only a revision counter.
+  useEffect(() => {
+    let first = true;
+    return onSnapshot(
+      doc(db, "publicCatalog", "services"),
+      () => {
+        // The listener fires immediately with the current value; the initial
+        // load above already covers that, so only later bumps matter.
+        if (first) {
+          first = false;
+          return;
+        }
+        setOptionsReloadKey((current) => current + 1);
+      },
+      () => {
+        // A customer who cannot read the signal simply keeps the behaviour
+        // they have today rather than seeing an error for a freshness hint.
+      },
+    );
+  }, []);
+
   const barrelOptions = useMemo(
     () =>
       destinationOptions.filter((option) =>
