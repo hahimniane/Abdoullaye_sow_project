@@ -128,6 +128,8 @@ function tabForNotification(
       return "parking";
     case "transport_opportunity":
     case "transport_request_status":
+    case "transport_quote_won":
+    case "transport_quote_lost":
       return "transport";
     default:
       return "today";

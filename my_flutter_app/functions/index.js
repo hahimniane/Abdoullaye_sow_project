@@ -4081,10 +4081,54 @@ exports.selectTransportQuote = onCall(
           businessId,
           amountCents: quote.amountCents,
           alreadySelected: false,
+          eligibleBusinessIds,
+          trackingCode: String(requestData.trackingCode || ""),
         };
       });
 
-      return {success: true, requestId, ...selected};
+      // Until this existed, winning a job was silent: the customer picked a
+      // carrier and nobody told the carrier. Businesses only found out if
+      // somebody happened to open the transport panel. The losing bidders
+      // get one line too so they stop holding the slot.
+      if (!selected.alreadySelected) {
+        const eligible = Array.isArray(selected.eligibleBusinessIds) ?
+          selected.eligibleBusinessIds : [];
+        const ownerDocs = await Promise.all(eligible.map((id) =>
+          db.collection("businesses").doc(id).get().catch(() => null),
+        ));
+        await Promise.all(ownerDocs.map((doc, index) => {
+          if (!doc || !doc.exists) return null;
+          const ownerUid = String(doc.data()?.ownerUid || "").trim();
+          if (!ownerUid) return null;
+          const won = eligible[index] === selected.businessId;
+          return safeSendPreferenceNotification({
+            uid: ownerUid,
+            preferenceKey: "businessActivity",
+            title: won ?
+              "Your transport quote was accepted" :
+              "Transport quote not selected",
+            body: won ?
+              "The customer chose your quote. Open the job to arrange " +
+              "pickup and start posting tracking updates." :
+              "The customer chose another carrier for this request.",
+            data: {
+              type: won ? "transport_quote_won" : "transport_quote_lost",
+              requestId,
+              businessId: eligible[index],
+              trackingCode: selected.trackingCode || "",
+            },
+          });
+        }));
+      }
+
+      return {
+        success: true,
+        requestId,
+        quoteId: selected.quoteId,
+        businessId: selected.businessId,
+        amountCents: selected.amountCents,
+        alreadySelected: selected.alreadySelected,
+      };
     },
 );
 
