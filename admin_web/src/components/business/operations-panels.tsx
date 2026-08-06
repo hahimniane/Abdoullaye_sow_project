@@ -2103,7 +2103,7 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
     confirm?: string,
     confirmFr?: string,
   ) {
-    if (confirm && !confirmImportantAction(confirm, confirmFr)) return;
+    if (confirm && !(await confirmImportantAction(confirm, confirmFr))) return;
     setBusyId(id);
     setMessage("");
     try {
@@ -2175,7 +2175,7 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
     });
     closeAdjustPool();
   }
-  function submitPoolAdjustment() {
+  async function submitPoolAdjustment() {
     try {
       if (!adjustingPool) throw new Error("Choose a shared barrel pool.");
       const totalShares = Number(adjustDraft.totalShares);
@@ -2193,10 +2193,10 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
       setMessage(error instanceof Error ? error.message : "Update failed.");
       return;
     }
-    if (!confirmImportantAction(
+    if (!(await confirmImportantAction(
       "Save this shared-barrel capacity adjustment?",
       "Enregistrer cet ajustement de capacité du baril partagé ?",
-    )) return;
+    ))) return;
     void run(
       `pool-adjust-${adjustingPool.id}`,
       "Pool capacity adjusted.",
@@ -2221,7 +2221,7 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
     });
     closeRollPool();
   }
-  function submitPoolRollover() {
+  async function submitPoolRollover() {
     try {
       if (!rollingPool) throw new Error("Choose a shared barrel pool.");
       const maxJoiners = Number(rollDraft.maxJoiners);
@@ -2236,10 +2236,10 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
       setMessage(error instanceof Error ? error.message : "Update failed.");
       return;
     }
-    if (!confirmImportantAction(
+    if (!(await confirmImportantAction(
       "Roll this pool into business-held matching?",
       "Basculer ce baril vers la mise en relation gérée par l’entreprise ?",
-    )) return;
+    ))) return;
     void run(
       `pool-roll-${rollingPool.id}`,
       "Pool rolled into business-held matching.",
@@ -2321,10 +2321,10 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
     if (poolCreateInFlight.current) return;
     poolCreateInFlight.current = true;
     if (
-      !confirmImportantAction(
+      !(await confirmImportantAction(
         "Open this shared barrel pool?",
         "Ouvrir ce baril partagé ?",
-      )
+      ))
     ) {
       poolCreateInFlight.current = false;
       return;
@@ -2958,10 +2958,10 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
       setMessage("Fulfillment is locked until the verified weight is settled.");
       return;
     }
-    if (["completed", "cancelled"].includes(status) && !confirmImportantAction(
+    if (["completed", "cancelled"].includes(status) && !(await confirmImportantAction(
       `Change this freight shipment to ${statusLabel(status)}?`,
       `Passer cette expédition de fret au statut ${statusLabel(status)} ?`,
-    )) return;
+    ))) return;
     setBusyId(row.id);
     setMessage("");
     try {
@@ -2994,10 +2994,10 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
       : difference > 0
         ? `Customer owes ${formatMoney(difference)}`
         : `Refund customer ${formatMoney(-difference)}`;
-    if (!confirmImportantAction(
+    if (!(await confirmImportantAction(
       `Confirm ${verifiedWeightKg.toLocaleString()} kg as the final weight? ${adjustment}. Financial adjustments may begin immediately.`,
       `Confirmer ${verifiedWeightKg.toLocaleString()} kg comme poids final ? ${difference > 0 ? `Le client doit payer ${formatMoney(difference)}` : difference < 0 ? `Rembourser ${formatMoney(-difference)} au client` : "Aucun changement de prix"}. Les ajustements financiers peuvent commencer immédiatement.`,
-    )) return;
+    ))) return;
     setBusyId(row.id);
     setMessage("");
     try {
@@ -3277,7 +3277,7 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
 
   async function withdrawQuote(opportunity: FirestoreRow) {
     const requestId = text(opportunity.requestId, opportunity.id);
-    const confirmed = confirmImportantAction(
+    const confirmed = await confirmImportantAction(
       "Withdraw this quote? The customer will no longer be able to select it.",
       "Retirer ce devis ? Le client ne pourra plus le sélectionner.",
     );
@@ -4086,7 +4086,7 @@ export function PurchasesPanel({ businessId, previewMode = false }: PanelProps) 
     confirm?: string,
     confirmFr?: string,
   ) {
-    if (confirm && !confirmImportantAction(confirm, confirmFr)) return;
+    if (confirm && !(await confirmImportantAction(confirm, confirmFr))) return;
     setBusyId(purchaseId);
     setMessage("");
     try {
