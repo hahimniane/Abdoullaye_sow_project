@@ -7451,6 +7451,21 @@ button[data-loading="true"]::before {
   box-shadow: none !important;
 }
 
+/* Receiver-name input that offers remembered recipients. Laid out like the
+   plain form labels it replaced, but positioned so the suggestion list can
+   overlay the fields below it. */
+.customer-recipient-field {
+  display: grid;
+  gap: 6px;
+  position: relative;
+}
+
+.customer-recipient-field > label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .customer-address-suggestions {
   background: #fff;
   border: 1px solid var(--rule);

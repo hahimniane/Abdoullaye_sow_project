@@ -390,6 +390,7 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Save your parking request": "Enregistrez votre demande de stationnement",
   "Save your shared-barrel request":
     "Enregistrez votre demande de baril partagé",
+  "Saved recipients": "Destinataires enregistrés",
   "Securing your account and restoring the request...":
     "Sécurisation de votre compte et restauration de la demande...",
   "Sign in or create a free account to save this request and continue. Your details will stay here.":
