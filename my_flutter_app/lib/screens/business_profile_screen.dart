@@ -447,7 +447,8 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
   Future<void> _save(BusinessProfile business) async {
     final l10n = AppLocalizations.of(context)!;
     final sectionErrors = <_BusinessProfileSectionKey, String>{};
-    if (!_formKey.currentState!.validate()) {
+    final formState = _formKey.currentState;
+    if (formState != null && !formState.validate()) {
       sectionErrors[_BusinessProfileSectionKey.details] =
           l10n.businessProfileDetailsSectionError;
     }
@@ -645,9 +646,17 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                   business.enabledServices,
                   BusinessServiceKey.carTransport,
                 );
-            return ListView(
+            // NOT a ListView: this screen's children own user-typed state
+            // (the Form itself, and the pickup editor's controllers). A lazy
+            // list disposes them once they scroll out of view, which made
+            // _formKey.currentState null by the time the Save button at the
+            // bottom was reachable - Save then threw on its first line and
+            // died silently - and silently discarded typed pickup edits.
+            return SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 128),
-              children: [
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                 Row(
                   children: [
                     Expanded(
@@ -809,7 +818,8 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                 ],
                 const SizedBox(height: 18),
                 TeamPanel(businessId: business.id, canAddStaff: canEdit),
-              ],
+                ],
+              ),
             );
           },
         ),
@@ -2074,6 +2084,9 @@ class _BusinessProfileDropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     return DropdownButtonFormField<String>(
       key: ValueKey<String>('$label-$value-${values.join('|')}'),
+      // Long option labels ("United States Minor Outlying Islands") overflow
+      // the row without this, which paints a debug stripe over the field.
+      isExpanded: true,
       initialValue: value != null && values.contains(value) ? value : null,
       decoration: InputDecoration(
         labelText: label,
