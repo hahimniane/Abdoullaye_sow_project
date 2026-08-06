@@ -150,6 +150,19 @@ const {
 const {
   sendFirebasePasswordSetupEmail,
 } = require("./firebase_auth_email");
+const {
+  BUSINESS_ASSISTANT_TOOLS,
+  isReadTool,
+  isActionTool,
+  assistantSystemPrompt,
+  normalizeAssistantTranscript,
+  buildProposedAction,
+  shapeParkedCarRow,
+  shapeBarrelShipmentRow,
+  shapeTransportRequestRow,
+  shapeBusinessProfile,
+  clampLimit,
+} = require("./business_assistant");
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
@@ -7714,6 +7727,218 @@ exports.generateBusinessInsights = onCall(
         success: true,
         insightId: insightRef.id,
         ...payload,
+      };
+    },
+);
+
+const BUSINESS_ASSISTANT_MODEL = "claude-opus-5";
+const BUSINESS_ASSISTANT_MAX_MODEL_CALLS = 5;
+
+// Executes one READ tool for the business assistant. Action tools never come
+// through here - they are returned to the client as proposals instead.
+async function runBusinessAssistantReadTool(db, businessId, business, toolUse) {
+  const input = toolUse.input && typeof toolUse.input === "object" ?
+    toolUse.input : {};
+  switch (toolUse.name) {
+    case "get_business_overview":
+      return buildBusinessAdvisorSummary(db, businessId);
+    case "get_business_profile":
+      return shapeBusinessProfile(business);
+    case "list_parked_cars": {
+      const snapshot = await db.collection("parkedCars")
+          .where("businessId", "==", businessId)
+          .limit(200)
+          .get();
+      let rows = snapshot.docs
+          .map((doc) => shapeParkedCarRow(doc.id, doc.data() || {}));
+      const paymentStatus = cleanText(input.paymentStatus, 40);
+      if (paymentStatus) {
+        rows = rows.filter((row) => row.paymentStatus === paymentStatus);
+      }
+      rows.sort((a, b) =>
+        String(b.startDate).localeCompare(String(a.startDate)));
+      return rows.slice(0, clampLimit(input.limit));
+    }
+    case "list_barrel_shipments": {
+      const snapshot = await db.collection("barrelShipments")
+          .where("businessId", "==", businessId)
+          .limit(200)
+          .get();
+      let rows = snapshot.docs
+          .map((doc) => shapeBarrelShipmentRow(doc.id, doc.data() || {}));
+      const status = cleanText(input.status, 40);
+      if (status) rows = rows.filter((row) => row.status === status);
+      rows.sort((a, b) =>
+        String(b.createdAt).localeCompare(String(a.createdAt)));
+      return rows.slice(0, clampLimit(input.limit));
+    }
+    case "list_transport_requests": {
+      const snapshot = await db.collection("transportRequests")
+          .where("businessId", "==", businessId)
+          .limit(200)
+          .get();
+      let rows = snapshot.docs
+          .map((doc) => shapeTransportRequestRow(doc.id, doc.data() || {}));
+      const status = cleanText(input.status, 40);
+      if (status) rows = rows.filter((row) => row.status === status);
+      rows.sort((a, b) =>
+        String(b.createdAt).localeCompare(String(a.createdAt)));
+      return rows.slice(0, clampLimit(input.limit));
+    }
+    default:
+      throw new Error(`Unknown read tool: ${toolUse.name}`);
+  }
+}
+
+// Item #5 (AI half): an assistant for business staff that can look at the
+// business's own data and PROPOSE actions. Every action is executed by the
+// client - after the human confirms - through the existing callable named in
+// the proposal, so permission checks and validation stay exactly where they
+// already are. This function itself only requires business membership.
+exports.businessAssistantChat = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [anthropicApiKey],
+      timeoutSeconds: 180,
+      maxInstances: 5,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const businessId = cleanText(request.data?.businessId, 120);
+      if (!businessId) {
+        throw new HttpsError("invalid-argument", "Business is required");
+      }
+      await requireBusinessManager(uid, businessId);
+
+      const db = admin.firestore();
+      const businessDoc = await db.collection("businesses")
+          .doc(businessId).get();
+      if (!businessDoc.exists) {
+        throw new HttpsError("not-found", "Business not found");
+      }
+      const business = businessDoc.data() || {};
+
+      const {messages, error} =
+        normalizeAssistantTranscript(request.data?.messages);
+      if (error) {
+        throw new HttpsError(
+            "invalid-argument",
+            "messages must be a non-empty transcript ending with a user turn",
+        );
+      }
+
+      const apiKey = cleanText(anthropicApiKey.value(), 240);
+      if (!apiKey.startsWith("sk-ant-")) {
+        throw new HttpsError(
+            "failed-precondition",
+            "The assistant is not configured yet",
+        );
+      }
+
+      const system = assistantSystemPrompt({
+        businessName: business.name || businessId,
+        enabledServices: business.enabledServices,
+      });
+      const model = cleanText(business.aiAssistantModel, 120) ||
+        BUSINESS_ASSISTANT_MODEL;
+
+      for (let call = 0; call < BUSINESS_ASSISTANT_MAX_MODEL_CALLS; call++) {
+        const response = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            max_tokens: 1500,
+            system,
+            tools: BUSINESS_ASSISTANT_TOOLS,
+            messages,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          logger.error("businessAssistantChat model call failed", {
+            detail: data.error?.message || "unknown",
+            status: response.status,
+          });
+          throw new HttpsError("internal", "The assistant is unavailable");
+        }
+
+        const content = Array.isArray(data.content) ? data.content : [];
+        const reply = content
+            .filter((block) => block?.type === "text")
+            .map((block) => block.text || "")
+            .join("\n")
+            .trim();
+        messages.push({role: "assistant", content});
+
+        if (data.stop_reason !== "tool_use") {
+          return {reply, transcript: messages, proposedAction: null};
+        }
+
+        const toolUses = content.filter((block) =>
+          block?.type === "tool_use");
+        const actionUse = toolUses.find((block) => isActionTool(block.name));
+        if (actionUse) {
+          // Stop here: the client renders a confirmation card and, on
+          // approval, calls the named callable itself. The other pending
+          // tool calls (if any) get error results so the transcript stays
+          // valid when the conversation continues.
+          const proposedAction = buildProposedAction({
+            toolUse: actionUse,
+            businessId,
+          });
+          return {reply, transcript: messages, proposedAction};
+        }
+
+        const toolResults = [];
+        for (const toolUse of toolUses) {
+          if (!isReadTool(toolUse.name)) {
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: toolUse.id,
+              content: "Unknown tool",
+              is_error: true,
+            });
+            continue;
+          }
+          try {
+            const result = await runBusinessAssistantReadTool(
+                db, businessId, business, toolUse,
+            );
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: toolUse.id,
+              content: JSON.stringify(result).slice(0, 6000),
+            });
+          } catch (toolError) {
+            logger.warn("businessAssistantChat read tool failed", {
+              tool: toolUse.name,
+              detail: toolError.message,
+            });
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: toolUse.id,
+              content: "This lookup failed - tell the user you could not " +
+                "load that data right now.",
+              is_error: true,
+            });
+          }
+        }
+        messages.push({role: "user", content: toolResults});
+      }
+
+      // The model kept calling tools past the cap - return what we have so
+      // the conversation can continue instead of erroring out.
+      return {
+        reply: "I had to stop before finishing that - please ask me to " +
+          "continue.",
+        transcript: messages,
+        proposedAction: null,
       };
     },
 );

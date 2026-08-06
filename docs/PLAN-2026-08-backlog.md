@@ -80,13 +80,28 @@ and verified in the product. Nothing is SHIPPED until a tester drives it.
 
 | # | Item | Built | Deployed | Verified | What is actually left |
 |---|------|-------|----------|----------|----------------------|
-| 1 | Address split fields | server + web + mobile | server NO | no | deploy `suggestPickupAddresses`; see it on a device |
-| 2 | Live business updates | server + mobile | yes | no | **web console still one-shot** |
-| 3 | Remove wallet | server + web + mobile | yes | no | admin refund UI is now dead weight |
-| 4 | Tracking + notif links | pre-existing server + mobile | n/a | no | **web tracking view + web deep-links** |
-| 5 | Business parking + AI | parking backend in flight | no | no | parking UI both clients; the whole AI half |
-| 6 | Auto-select sole business | web freight + mobile barrels | yes | no | web barrel flows unchecked |
-| 7 | Remember recipients | server + mobile | yes | no | **web autocomplete missing** |
+| 1 | Address split fields | server + web + mobile | yes | partial | mobile customer-side re-test (needs customer sign-in on simulator) |
+| 2 | Live business updates | server + web + mobile | yes | mobile yes | tester pass on web live refresh |
+| 3 | Remove wallet | server + web + mobile | yes | yes | done (owner approved deleting balances) |
+| 4 | Tracking + notif links | server + web + mobile | yes | no | tester pass on web deep-links (needs a fresh notification) |
+| 5 | Business parking + AI | parking DONE end-to-end; AI backend built (`businessAssistantChat` + business_assistant.js, 20 unit tests) | parking yes; AI deploying | parking yes (sweep auto-settled 3 paid entries) | AI chat UI both clients (in flight via agents), then tester |
+| 6 | Auto-select sole business | web freight + barrels + mobile barrels | yes | no | tester pass on web barrel flows |
+| 7 | Remember recipients | server + web + mobile | yes | no | tester pass on web autocomplete |
+
+### Item 5 AI half — how it works (built 2026-08-06)
+
+- `functions/business_assistant.js`: tool definitions + transcript
+  validation. READ tools (overview, parked cars, barrels, transports,
+  profile) execute server-side; ACTION tools are **proposals only**.
+- `businessAssistantChat` callable: auth + `requireBusinessManager`, runs
+  Claude with tools; when the model wants an action it returns
+  `proposedAction {toolUseId, callable, params}` and stops.
+- The client shows a confirmation card; on Confirm it calls the mapped
+  existing callable itself (`createBusinessParkingEntry`,
+  `markBusinessParkingPaid`, `refreshBusinessParkingPayment`,
+  `addShipmentTrackingMilestone`) under the staff member's own auth, so
+  the assistant can only do what a human already can, and every action is
+  human-confirmed. businessId is injected server-side into every proposal.
 
 ### Order of work, and why
 
