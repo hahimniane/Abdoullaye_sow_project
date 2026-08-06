@@ -18,6 +18,10 @@ const {
   buildSavedRecipient,
   mergeSavedRecipient,
 } = require("./saved_recipients");
+const {
+  addressComponentsFromPlace,
+  composeAddressLine,
+} = require("./address_components");
 const admin = require("firebase-admin");
 const {
   FieldValue: FirestoreFieldValue,
@@ -9676,23 +9680,35 @@ function pickupSuggestionFromPlace(place) {
   const components = place.address_components || [];
   const streetNumber = addressComponent(components, "street_number");
   const route = addressComponent(components, "route");
-  const postalCode = addressComponent(components, "postal_code");
   const borough = boroughFromComponents(components);
   if (!streetNumber || !route) return null;
 
-  const street = `${streetNumber.long_name} ${route.long_name}`;
-  const zip = postalCode?.long_name || "";
+  // Named parts so the client can populate separate fields (street, city,
+  // state, ZIP, country) instead of one opaque string the customer cannot
+  // correct. `apartment` is usually "" - Places autocompletes buildings, not
+  // units - which is exactly why the customer gets their own optional
+  // apartment field on top of this.
+  const parts = addressComponentsFromPlace(place);
   const description = String(place.formatted_address || "").trim() ||
-    [street, borough, zip].filter(Boolean).join(", ");
+    composeAddressLine({...parts, city: parts.city || borough || ""});
 
   return {
     description,
     placeId: place.place_id || "",
     borough: borough || "",
-    postalCode: zip,
+    postalCode: parts.postalCode,
     formattedAddress: description,
     latitude: place.geometry?.location?.lat ?? null,
     longitude: place.geometry?.location?.lng ?? null,
+    streetNumber: parts.streetNumber,
+    route: parts.route,
+    streetLine: parts.streetLine,
+    apartment: parts.apartment,
+    city: parts.city,
+    state: parts.state,
+    stateCode: parts.stateCode,
+    country: parts.country,
+    countryCode: parts.countryCode,
   };
 }
 
