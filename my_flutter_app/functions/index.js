@@ -141,6 +141,9 @@ const {
 } = require("./public_service_options");
 const {
   BUSINESS_PARKING_PAYMENT_TYPE,
+  PARKING_LINK_STATES,
+  parkingPaymentLinkState,
+  parkingCheckoutSessionReusable,
   buildBusinessParkingEntryRecord,
   businessParkingPaidUpdate,
   businessParkingPaymentPlan,
@@ -10031,6 +10034,40 @@ function businessParkingEntryMessage(errors) {
 // customer return route: that route confirms a session as the signed-in
 // customer, and this customer has no account. The record's payment status is
 // settled server-side by the Stripe webhook / stale-payment reconciliation.
+// The link the customer receives is ours, not Stripe's. A Stripe Checkout
+// Session expires 24 hours after it is created and that ceiling is not
+// configurable, so a link texted on Monday is dead on Wednesday - while the
+// owner's rule is that a link stays good until it is paid or the lot kills
+// it. This URL is stable for the life of the record; each visit resolves to
+// a live Stripe session, or to a plain page saying it is already paid or
+// cancelled.
+function parkingPaymentLinkUrl(token) {
+  const configured = String(process.env.PARKING_LINK_BASE_URL || "").trim();
+  const base = configured ||
+    "https://us-central1-car-selling-flutter-app.cloudfunctions.net/" +
+      "parkingPaymentLink";
+  return `${base}?t=${encodeURIComponent(token)}`;
+}
+
+function parkingPaymentLinkPage({title, message}) {
+  const escape = (value) => String(value || "").replace(/[&<>"]/g, (char) => (
+    {"&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;"}[char]
+  ));
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
+    `<meta name="viewport" content="width=device-width,initial-scale=1">` +
+    `<title>${escape(title)}</title><style>` +
+    `body{margin:0;min-height:100vh;display:flex;align-items:center;` +
+    `justify-content:center;background:#f6f7f6;` +
+    `font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;` +
+    `color:#12211f;padding:24px}` +
+    `main{background:#fff;border-radius:14px;padding:32px;max-width:420px;` +
+    `box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center}` +
+    `h1{font-size:20px;margin:0 0 10px}p{margin:0;color:#5b6b68;` +
+    `line-height:1.5}</style></head><body><main>` +
+    `<h1>${escape(title)}</h1><p>${escape(message)}</p>` +
+    `</main></body></html>`;
+}
+
 function businessParkingReturnUrls(trackingCode) {
   const base = normalizedConsoleUrl(process.env.CUSTOMER_CONSOLE_URL);
   const query = new URLSearchParams({parking: String(trackingCode || "")});
@@ -10214,7 +10251,12 @@ exports.createBusinessParkingEntry = onCall(
 
       const sessionPaymentIntentId = String(session.payment_intent || "")
           .trim();
+      // The customer is given this token, never the Stripe URL: Stripe's
+      // session dies in 24 hours and the owner's rule is that a link lives
+      // until it is paid or cancelled. parkingPaymentLink resolves it.
+      const paymentLinkToken = crypto.randomBytes(24).toString("base64url");
       await entryRef.update({
+        paymentLinkToken,
         checkoutSessionId: String(session.id || ""),
         checkoutUrl: String(session.url || ""),
         checkoutStatus: "open",
@@ -10228,6 +10270,7 @@ exports.createBusinessParkingEntry = onCall(
 
       // The business types the customer's email so the link reaches them
       // without anyone copy-pasting; the copy button stays as the fallback.
+      const durableUrl = parkingPaymentLinkUrl(paymentLinkToken);
       const linkEmailed = await emailWalkUpParkingCustomer({
         to: input.customerEmail,
         subject: `Parking payment for ${trackingCode}`,
@@ -10235,14 +10278,14 @@ exports.createBusinessParkingEntry = onCall(
           `${entryBusinessName || "Your parking provider"} has parked your ` +
           `vehicle (${trackingCode}). Amount due: ` +
           `$${plan.amountDue.toFixed(2)}. Pay securely here: ` +
-          `${String(session.url || "")}`,
+          `${durableUrl}`,
       });
       const linkTexted = await smsWalkUpParkingCustomer({
         to: input.customerPhone,
         body:
           `${entryBusinessName || "Your parking provider"}: parking ` +
           `${trackingCode}, $${plan.amountDue.toFixed(2)} due. Pay here: ` +
-          `${String(session.url || "")}`,
+          `${durableUrl}`,
       });
       if (linkEmailed) {
         await entryRef.update({
@@ -10255,10 +10298,203 @@ exports.createBusinessParkingEntry = onCall(
       return {
         ...response,
         checkoutSessionId: String(session.id || ""),
-        checkoutUrl: String(session.url || ""),
+        // checkoutUrl stays for anything already reading it, but the durable
+        // link is what should be handed to a customer.
+        checkoutUrl: durableUrl,
+        stripeCheckoutUrl: String(session.url || ""),
+        paymentLinkUrl: durableUrl,
         paymentLinkEmailed: linkEmailed,
         paymentLinkTexted: linkTexted,
       };
+    },
+);
+
+// The durable payment link. A Stripe Checkout Session expires 24 hours
+// after it is minted (the API maximum), so the link a lot texts on Monday
+// is dead by Wednesday. This endpoint is what the customer actually
+// receives: it is stable for the life of the record and mints a fresh
+// Stripe session on each visit, so the link stays good until the customer
+// pays it or the business cancels it - exactly the two ends the owner
+// specified.
+exports.parkingPaymentLink = onRequest(
+    {
+      cors: false,
+      secrets: [stripeSecretKey],
+      maxInstances: 10,
+    },
+    async (req, res) => {
+      res.set("Cache-Control", "no-store");
+      const token = String(req.query?.t || "").trim();
+      if (!token || token.length < 16) {
+        return res.status(404).send(parkingPaymentLinkPage({
+          title: "Link not found",
+          message: "This payment link is not valid. Ask the parking " +
+            "business to send you a new one.",
+        }));
+      }
+
+      const db = admin.firestore();
+      const matches = await db.collection("parkedCars")
+          .where("paymentLinkToken", "==", token)
+          .limit(1)
+          .get();
+      if (matches.empty) {
+        return res.status(404).send(parkingPaymentLinkPage({
+          title: "Link not found",
+          message: "This payment link is not valid. Ask the parking " +
+            "business to send you a new one.",
+        }));
+      }
+      const entryRef = matches.docs[0].ref;
+      const entry = matches.docs[0].data() || {};
+      const state = parkingPaymentLinkState(entry);
+
+      if (state === PARKING_LINK_STATES.PAID) {
+        return res.status(200).send(parkingPaymentLinkPage({
+          title: "Already paid",
+          message: `Parking ${String(entry.trackingCode || "")} is paid in ` +
+            "full. Nothing further is owed.",
+        }));
+      }
+      if (state === PARKING_LINK_STATES.CANCELLED) {
+        return res.status(200).send(parkingPaymentLinkPage({
+          title: "Link cancelled",
+          message: "The parking business cancelled this payment link. " +
+            "Contact them if you think this is a mistake.",
+        }));
+      }
+      if (state !== PARKING_LINK_STATES.PAYABLE) {
+        return res.status(200).send(parkingPaymentLinkPage({
+          title: "Nothing to pay",
+          message: "There is no payment outstanding on this parking.",
+        }));
+      }
+
+      const connectedAccountId = String(entry.stripeConnectedAccountId || "")
+          .trim() || undefined;
+      try {
+        const existingSessionId = String(entry.checkoutSessionId || "").trim();
+        if (existingSessionId) {
+          const existing = await retrieveStripeCheckoutSession(
+              existingSessionId, connectedAccountId,
+          ).catch(() => null);
+          if (parkingCheckoutSessionReusable({
+            session: existing,
+            nowMs: Date.now(),
+          })) {
+            return res.redirect(303, String(existing.url || ""));
+          }
+        }
+
+        // The stored session is spent or expired: mint a replacement for the
+        // same record, same amount, same fee split. The mint counter keeps
+        // the idempotency key stable per attempt without ever handing back a
+        // session that has already died.
+        const mintCount = Number(entry.paymentLinkMintCount || 0) + 1;
+        const amountCents = Number(entry.amountDueCents || 0);
+        const session = await createStripeCustomerCheckoutSession({
+          amount: amountCents,
+          currency: SHIPMENT_CURRENCY,
+          customerEmail: String(entry.customerEmail || "") || undefined,
+          productName: "Laawol parking",
+          recordId: entryRef.id,
+          idempotencySeed: `business-parking-entry:${entryRef.id}:${mintCount}`,
+          connectedAccountId,
+          applicationFeeAmount:
+            String(entry.stripeChargeType || "") === "direct" ?
+              clampedApplicationFeeAmount(
+                  Number(entry.platformFeeCents || 0),
+                  amountCents,
+              ) :
+              undefined,
+          metadata: {
+            paymentType: BUSINESS_PARKING_PAYMENT_TYPE,
+            reservationId: entryRef.id,
+            businessId: String(entry.businessId || ""),
+            trackingCode: String(entry.trackingCode || ""),
+          },
+          ...businessParkingReturnUrls(entry.trackingCode),
+        });
+        await entryRef.update({
+          checkoutSessionId: String(session.id || ""),
+          checkoutUrl: String(session.url || ""),
+          checkoutStatus: "open",
+          paymentLinkMintCount: mintCount,
+          paymentLinkRefreshedAt: FirestoreFieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+        return res.redirect(303, String(session.url || ""));
+      } catch (error) {
+        logger.error("parkingPaymentLink could not open a session", {
+          detail: error.message,
+          entryId: entryRef.id,
+        });
+        return res.status(500).send(parkingPaymentLinkPage({
+          title: "Payment is temporarily unavailable",
+          message: "Something went wrong opening the payment page. " +
+            "Please try again in a moment.",
+        }));
+      }
+    },
+);
+
+// "Unless the business nullifies it" - the other end of the owner's rule.
+exports.cancelBusinessParkingPaymentLink = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const entryId = cleanText(
+          request.data?.entryId || request.data?.reservationId, 180,
+      );
+      if (!entryId) {
+        throw new HttpsError("invalid-argument", "Parking entry is required");
+      }
+      const db = admin.firestore();
+      const entryRef = db.collection("parkedCars").doc(entryId);
+      const snapshot = await entryRef.get();
+      if (!snapshot.exists) {
+        throw new HttpsError("not-found", "Parking entry not found");
+      }
+      const entry = snapshot.data() || {};
+      await requireBusinessPermission(
+          uid, String(entry.businessId || ""), "parking",
+      );
+
+      const state = parkingPaymentLinkState(entry);
+      if (state === PARKING_LINK_STATES.PAID) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This parking has already been paid for",
+        );
+      }
+      if (state === PARKING_LINK_STATES.CANCELLED) {
+        return {success: true, alreadyCancelled: true};
+      }
+
+      // Expire the live Stripe session too, so a customer mid-checkout on an
+      // already-open tab cannot complete a payment the lot just cancelled.
+      const sessionId = String(entry.checkoutSessionId || "").trim();
+      if (sessionId) {
+        await expireStripeCheckoutSession(
+            sessionId,
+            String(entry.stripeConnectedAccountId || "").trim() || undefined,
+        ).catch((error) => {
+          logger.warn("Could not expire the parking checkout session", {
+            detail: error.message, entryId,
+          });
+        });
+      }
+      await entryRef.update({
+        paymentLinkCancelledAt: FirestoreFieldValue.serverTimestamp(),
+        paymentLinkCancelledByUid: uid,
+        checkoutStatus: "cancelled",
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      return {success: true, alreadyCancelled: false};
     },
 );
 

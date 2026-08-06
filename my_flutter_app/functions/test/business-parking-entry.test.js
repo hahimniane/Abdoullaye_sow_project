@@ -593,3 +593,93 @@ describe("marking a direct payment received", () => {
     assert.equal(result.update.amountPaid, 0);
   });
 });
+
+describe("durable payment links", () => {
+  const {
+    PARKING_LINK_STATES,
+    parkingPaymentLinkState,
+    parkingCheckoutSessionReusable,
+  } = require("../business_parking_entry");
+
+  it("a paid entry stops being payable", () => {
+    assert.equal(
+        parkingPaymentLinkState({
+          paymentMethod: "payment_link", paymentStatus: "succeeded",
+          amountDueCents: 3500,
+        }),
+        PARKING_LINK_STATES.PAID,
+    );
+  });
+
+  it("the lot can nullify a link, and a cancelled car nullifies it too", () => {
+    assert.equal(
+        parkingPaymentLinkState({
+          paymentMethod: "payment_link", paymentStatus: "pending",
+          amountDueCents: 3500, paymentLinkCancelledAt: "2026-08-06T00:00:00Z",
+        }),
+        PARKING_LINK_STATES.CANCELLED,
+    );
+    assert.equal(
+        parkingPaymentLinkState({
+          paymentMethod: "payment_link", paymentStatus: "pending",
+          amountDueCents: 3500, status: "cancelled",
+        }),
+        PARKING_LINK_STATES.CANCELLED,
+    );
+  });
+
+  it("an unpaid link stays payable no matter how old it is", () => {
+    assert.equal(
+        parkingPaymentLinkState({
+          paymentMethod: "payment_link", paymentStatus: "pending",
+          amountDueCents: 3500,
+        }),
+        PARKING_LINK_STATES.PAYABLE,
+    );
+  });
+
+  it("direct entries and zero-amount rows have no link to serve", () => {
+    assert.equal(
+        parkingPaymentLinkState({
+          paymentMethod: "direct", paymentStatus: "awaiting_direct_payment",
+          amountDueCents: 3500,
+        }),
+        PARKING_LINK_STATES.UNAVAILABLE,
+    );
+    assert.equal(
+        parkingPaymentLinkState({
+          paymentMethod: "payment_link", paymentStatus: "pending",
+          amountDueCents: 0,
+        }),
+        PARKING_LINK_STATES.UNAVAILABLE,
+    );
+  });
+
+  it("reuses a live session and replaces a dead or paid one", () => {
+    const now = 1786000000000;
+    const future = Math.floor(now / 1000) + 3600;
+    const past = Math.floor(now / 1000) - 10;
+    assert.equal(parkingCheckoutSessionReusable({
+      session: {status: "open", payment_status: "unpaid", expires_at: future},
+      nowMs: now,
+    }), true);
+    assert.equal(parkingCheckoutSessionReusable({
+      session: {status: "open", payment_status: "unpaid", expires_at: past},
+      nowMs: now,
+    }), false);
+    assert.equal(parkingCheckoutSessionReusable({
+      session: {status: "complete", payment_status: "paid", expires_at: future},
+      nowMs: now,
+    }), false);
+    assert.equal(parkingCheckoutSessionReusable({session: null, nowMs: now}),
+        false);
+    // Expiring within the minute counts as dead.
+    assert.equal(parkingCheckoutSessionReusable({
+      session: {
+        status: "open", payment_status: "unpaid",
+        expires_at: Math.floor(now / 1000) + 30,
+      },
+      nowMs: now,
+    }), false);
+  });
+});

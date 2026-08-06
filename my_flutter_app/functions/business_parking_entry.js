@@ -436,7 +436,64 @@ function businessParkingPaidUpdate({
   };
 }
 
+// A Stripe Checkout Session dies 24 hours after it is minted - that is the
+// API maximum, not a setting we chose. The owner's rule is the opposite: a
+// payment link stays good until the customer pays it or the lot cancels it.
+// So the link the customer actually receives is ours, and it resolves to a
+// fresh Stripe session on every visit. This decides what a visit should do.
+const PARKING_LINK_STATES = Object.freeze({
+  PAID: "paid",
+  CANCELLED: "cancelled",
+  PAYABLE: "payable",
+  UNAVAILABLE: "unavailable",
+});
+
+/**
+ * What a visit to a durable parking payment link should produce.
+ * @param {Object} entry A parkedCars document.
+ * @return {string} One of PARKING_LINK_STATES.
+ */
+function parkingPaymentLinkState(entry) {
+  const record = entry && typeof entry === "object" ? entry : {};
+  if (text(record.paymentMethod, 40) !== "payment_link") {
+    return PARKING_LINK_STATES.UNAVAILABLE;
+  }
+  const paymentStatus = text(record.paymentStatus, 40);
+  if (paymentStatus === "succeeded" || paymentStatus === "paid") {
+    return PARKING_LINK_STATES.PAID;
+  }
+  if (record.paymentLinkCancelledAt) return PARKING_LINK_STATES.CANCELLED;
+  if (text(record.status, 40) === "cancelled") {
+    return PARKING_LINK_STATES.CANCELLED;
+  }
+  const amountDueCents = Number(record.amountDueCents || 0);
+  if (!Number.isFinite(amountDueCents) || amountDueCents <= 0) {
+    return PARKING_LINK_STATES.UNAVAILABLE;
+  }
+  return PARKING_LINK_STATES.PAYABLE;
+}
+
+/**
+ * Whether a stored Checkout Session can still be handed to the customer, or
+ * whether the visit needs a freshly minted one.
+ * @param {Object} args session fields plus the current time in ms.
+ * @return {boolean} True when the stored session is still usable.
+ */
+function parkingCheckoutSessionReusable({session, nowMs}) {
+  const record = session && typeof session === "object" ? session : {};
+  if (String(record.status || "") !== "open") return false;
+  if (String(record.payment_status || "") === "paid") return false;
+  const expiresAt = Number(record.expires_at || 0);
+  if (!Number.isFinite(expiresAt) || expiresAt <= 0) return false;
+  // One minute of headroom: a session that expires while the customer is
+  // typing their card number is worse than minting a new one.
+  return expiresAt * 1000 > Number(nowMs || 0) + 60000;
+}
+
 module.exports = {
+  PARKING_LINK_STATES,
+  parkingPaymentLinkState,
+  parkingCheckoutSessionReusable,
   BUSINESS_PARKING_DIRECT_METHODS,
   BUSINESS_PARKING_PAYMENT_METHODS,
   BUSINESS_PARKING_PAYMENT_STATUS,
