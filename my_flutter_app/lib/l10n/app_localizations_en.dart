@@ -6227,6 +6227,23 @@ class AppLocalizationsEn extends AppLocalizations {
       'This link was already used to pay. Nothing further is owed.';
 
   @override
+  String get cancelPaymentLink => 'Cancel payment link';
+
+  @override
+  String get cancelPaymentLinkConfirm =>
+      'Cancel this payment link? The customer will no longer be able to pay with it.';
+
+  @override
+  String get paymentLinkCancelled => 'Payment link cancelled.';
+
+  @override
+  String get parkingPaymentLinkCancelled => 'This payment link was cancelled.';
+
+  @override
+  String get paymentLinkCouldNotBeCancelled =>
+      'The payment link could not be cancelled.';
+
+  @override
   String parkedCarRecordedWithCode(Object trackingCode) {
     return 'Parked car recorded. Tracking number: $trackingCode';
   }

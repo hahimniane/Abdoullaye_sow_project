@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -939,6 +940,56 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     }
   }
 
+  /// Kills a payment link the customer has not used.
+  ///
+  /// The other half of the owner's rule: a link stays valid until the
+  /// customer pays it or the lot cancels it. `alreadyCancelled` comes back as
+  /// a success, and the callable's own `failed-precondition` message ("This
+  /// parking has already been paid for") is shown rather than replaced, since
+  /// it says something this screen's copy cannot.
+  Future<void> _cancelPaymentLink() async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await confirmMajorAction(
+      context,
+      title: l10n.cancelPaymentLink,
+      message: l10n.cancelPaymentLinkConfirm,
+      confirmLabel: l10n.cancelPaymentLink,
+      icon: Icons.link_off,
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+
+    try {
+      final result = await _businessParkingService.cancelPaymentLink(
+        entryId: widget.parkedCar.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _paymentFields = <String, dynamic>{
+          ..._paymentFields,
+          'paymentLinkCancelledAt': DateTime.now().toIso8601String(),
+          'checkoutStatus': 'cancelled',
+        };
+      });
+      showSuccessSnackBar(
+        context,
+        result.alreadyCancelled
+            ? l10n.parkingPaymentLinkCancelled
+            : l10n.paymentLinkCancelled,
+      );
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      final message = (error.message ?? '').trim();
+      showErrorSnackBar(
+        context,
+        message.isEmpty ? l10n.paymentLinkCouldNotBeCancelled : message,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      showErrorSnackBar(context, l10n.paymentLinkCouldNotBeCancelled);
+    }
+  }
+
   Future<void> _copyCheckoutUrl(String url) async {
     final l10n = AppLocalizations.of(context)!;
     try {
@@ -964,6 +1015,14 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     final isPaid =
         businessParkingPaymentTone(_paymentFields) ==
         BusinessParkingPaymentTone.paid;
+    // A cancelled link is just as dead, and for the same reason: offering it
+    // again would send the customer to a page that cannot take their money.
+    final linkCancelled = isBusinessParkingPaymentLinkCancelled(_paymentFields);
+    // Cancelling is a parking-permission action for the same reason marking a
+    // payment received is - and the callable enforces the permission anyway.
+    final canCancelLink =
+        canRecordPayment &&
+        canCancelBusinessParkingPaymentLink(_paymentFields);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -999,6 +1058,12 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
               l10n.parkingPaymentLinkAlreadyUsed,
               style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
             ),
+          ] else if (checkoutUrl.isNotEmpty && linkCancelled) ...[
+            const SizedBox(height: 12),
+            Text(
+              l10n.parkingPaymentLinkCancelled,
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+            ),
           ] else if (checkoutUrl.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(
@@ -1011,10 +1076,23 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
               style: const TextStyle(fontSize: 12.5),
             ),
             const SizedBox(height: 8),
-            AsyncActionButton.outlined(
-              onPressed: () => _copyCheckoutUrl(checkoutUrl),
-              icon: Icons.copy,
-              label: l10n.copyPaymentLink,
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                AsyncActionButton.outlined(
+                  onPressed: () => _copyCheckoutUrl(checkoutUrl),
+                  icon: Icons.copy,
+                  label: l10n.copyPaymentLink,
+                ),
+                if (canCancelLink)
+                  AsyncActionButton.outlined(
+                    key: const ValueKey<String>('parking-cancel-payment-link'),
+                    onPressed: _cancelPaymentLink,
+                    icon: Icons.link_off,
+                    label: l10n.cancelPaymentLink,
+                  ),
+              ],
             ),
           ],
           if (awaitingDirect && canRecordPayment) ...[

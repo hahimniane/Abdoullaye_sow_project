@@ -11202,6 +11202,36 @@ abstract class AppLocalizations {
   /// **'This link was already used to pay. Nothing further is owed.'**
   String get parkingPaymentLinkAlreadyUsed;
 
+  /// No description provided for @cancelPaymentLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel payment link'**
+  String get cancelPaymentLink;
+
+  /// No description provided for @cancelPaymentLinkConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel this payment link? The customer will no longer be able to pay with it.'**
+  String get cancelPaymentLinkConfirm;
+
+  /// No description provided for @paymentLinkCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment link cancelled.'**
+  String get paymentLinkCancelled;
+
+  /// No description provided for @parkingPaymentLinkCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'This payment link was cancelled.'**
+  String get parkingPaymentLinkCancelled;
+
+  /// No description provided for @paymentLinkCouldNotBeCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment link could not be cancelled.'**
+  String get paymentLinkCouldNotBeCancelled;
+
   /// No description provided for @parkedCarRecordedWithCode.
   ///
   /// In en, this message translates to:

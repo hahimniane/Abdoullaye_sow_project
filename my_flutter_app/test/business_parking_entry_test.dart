@@ -362,6 +362,11 @@ void main() {
         'parkingErrorStartDate',
         'parkingErrorEndDate',
         'parkingErrorEndBeforeStart',
+        'cancelPaymentLink',
+        'cancelPaymentLinkConfirm',
+        'paymentLinkCancelled',
+        'parkingPaymentLinkCancelled',
+        'paymentLinkCouldNotBeCancelled',
       ];
       for (final key in keys) {
         expect(en[key], isNotNull, reason: 'app_en.arb is missing $key');

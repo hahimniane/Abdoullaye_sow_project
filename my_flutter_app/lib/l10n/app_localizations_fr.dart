@@ -6339,6 +6339,23 @@ class AppLocalizationsFr extends AppLocalizations {
       'Ce lien a déjà servi au paiement. Plus rien n’est dû.';
 
   @override
+  String get cancelPaymentLink => 'Annuler le lien de paiement';
+
+  @override
+  String get cancelPaymentLinkConfirm =>
+      'Annuler ce lien de paiement ? Le client ne pourra plus payer avec.';
+
+  @override
+  String get paymentLinkCancelled => 'Lien de paiement annulé.';
+
+  @override
+  String get parkingPaymentLinkCancelled => 'Ce lien de paiement a été annulé.';
+
+  @override
+  String get paymentLinkCouldNotBeCancelled =>
+      'Le lien de paiement n’a pas pu être annulé.';
+
+  @override
   String parkedCarRecordedWithCode(Object trackingCode) {
     return 'Voiture stationnée enregistrée. Numéro de suivi : $trackingCode';
   }

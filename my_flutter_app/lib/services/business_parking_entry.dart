@@ -269,6 +269,27 @@ class BusinessParkingPaidResult {
   final String trackingCode;
 }
 
+/// The outcome of cancelling a payment link. Like `alreadyPaid`,
+/// `alreadyCancelled` is a success: two staff killing the same link at once
+/// must not read as a failure.
+class BusinessParkingCancelLinkResult {
+  const BusinessParkingCancelLinkResult({
+    required this.success,
+    required this.alreadyCancelled,
+  });
+
+  factory BusinessParkingCancelLinkResult.fromCallable(Object? data) {
+    final row = data is Map ? data : const <Object?, Object?>{};
+    return BusinessParkingCancelLinkResult(
+      success: row['success'] != false,
+      alreadyCancelled: row['alreadyCancelled'] == true,
+    );
+  }
+
+  final bool success;
+  final bool alreadyCancelled;
+}
+
 /// Is this a walk-up the lot entered itself, rather than a customer booking?
 bool isBusinessEnteredParking(Map<String, dynamic> row) =>
     _trimmed(row['source'], 40) == 'business' ||
@@ -283,6 +304,14 @@ bool canMarkBusinessParkingPaid(Map<String, dynamic> row) {
   if (_trimmed(row['status'], 40) == 'cancelled') return false;
   return _trimmed(row['paymentStatus'], 40) == 'awaiting_direct_payment';
 }
+
+/// Has the lot already nullified this payment link?
+///
+/// The server stamps `paymentLinkCancelledAt`; the field's presence is the
+/// whole signal, so a timestamp, a string or a sentinel written by an
+/// optimistic client all read the same.
+bool isBusinessParkingPaymentLinkCancelled(Map<String, dynamic> row) =>
+    row['paymentLinkCancelledAt'] != null;
 
 /// How a business-entered row's payment should read at a glance.
 ///
@@ -323,6 +352,32 @@ BusinessParkingPaymentTone businessParkingPaymentTone(
   return BusinessParkingPaymentTone.awaiting;
 }
 
+/// Whether "Cancel payment link" applies.
+///
+/// The owner's rule is that a parking payment link stays good until the
+/// customer pays it or the lot kills it, so the lot needs the second half of
+/// that rule in front of it - but only while it still means something.
+/// Mirrors the server's `parkingPaymentLinkState` refusals so the action is
+/// absent rather than present-and-rejected: a paid entry is settled money,
+/// and an already-cancelled one has nothing left to cancel.
+///
+/// A stored `checkoutUrl` is what makes a record a payment link here, the
+/// same signal the details card already branches on - a direct entry never
+/// has one.
+bool canCancelBusinessParkingPaymentLink(Map<String, dynamic> row) {
+  if (!isBusinessEnteredParking(row)) return false;
+  if (_trimmed(row['checkoutUrl'], 2048).isEmpty) return false;
+  if (isBusinessParkingPaymentLinkCancelled(row)) return false;
+  if (businessParkingPaymentTone(row) == BusinessParkingPaymentTone.paid) {
+    return false;
+  }
+  // The tone reads a cancelled *record* as "nothing to say" whatever its
+  // payment status, so ask the payment status itself as well - the server
+  // still calls a succeeded payment paid and would refuse.
+  final paymentStatus = _trimmed(row['paymentStatus'], 40).toLowerCase();
+  return paymentStatus != 'succeeded' && paymentStatus != 'paid';
+}
+
 /// What a business-entered row recorded, in dollars. A direct entry is
 /// recorded and never billed, so this is what the lot is owed - not what the
 /// platform collected.
@@ -333,7 +388,7 @@ double businessParkingAmountDue(Map<String, dynamic> row) {
   return (dollars ?? 0).toDouble();
 }
 
-/// The two callables, behind an injectable [FirebaseFunctions] so widget tests
+/// The callables, behind an injectable [FirebaseFunctions] so widget tests
 /// can drive the screens without a network - the same shape
 /// `FirebaseParkingService` already uses.
 class BusinessParkingService {
@@ -364,5 +419,17 @@ class BusinessParkingService {
               : 'other',
         });
     return BusinessParkingPaidResult.fromCallable(response.data);
+  }
+
+  /// Kills a payment link the customer has not used. The callable refuses a
+  /// paid entry with `failed-precondition`, which the caller surfaces rather
+  /// than swallows.
+  Future<BusinessParkingCancelLinkResult> cancelPaymentLink({
+    required String entryId,
+  }) async {
+    final response = await _functions
+        .httpsCallable('cancelBusinessParkingPaymentLink')
+        .call<Object?>(<String, dynamic>{'entryId': entryId});
+    return BusinessParkingCancelLinkResult.fromCallable(response.data);
   }
 }

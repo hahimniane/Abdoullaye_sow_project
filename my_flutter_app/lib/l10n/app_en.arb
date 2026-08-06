@@ -2616,6 +2616,11 @@
   "parkingErrorEndBeforeStart": "The end date cannot be before the start date.",
   "notPaid": "Not paid",
   "parkingPaymentLinkAlreadyUsed": "This link was already used to pay. Nothing further is owed.",
+  "cancelPaymentLink": "Cancel payment link",
+  "cancelPaymentLinkConfirm": "Cancel this payment link? The customer will no longer be able to pay with it.",
+  "paymentLinkCancelled": "Payment link cancelled.",
+  "parkingPaymentLinkCancelled": "This payment link was cancelled.",
+  "paymentLinkCouldNotBeCancelled": "The payment link could not be cancelled.",
   "parkedCarRecordedWithCode": "Parked car recorded. Tracking number: {trackingCode}",
   "@parkedCarRecordedWithCode": {
     "placeholders": {

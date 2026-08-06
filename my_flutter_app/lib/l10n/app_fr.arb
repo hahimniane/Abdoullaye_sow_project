@@ -2587,6 +2587,11 @@
   "parkingErrorEndBeforeStart": "La date de fin ne peut pas précéder la date de début.",
   "notPaid": "Non payé",
   "parkingPaymentLinkAlreadyUsed": "Ce lien a déjà servi au paiement. Plus rien n’est dû.",
+  "cancelPaymentLink": "Annuler le lien de paiement",
+  "cancelPaymentLinkConfirm": "Annuler ce lien de paiement ? Le client ne pourra plus payer avec.",
+  "paymentLinkCancelled": "Lien de paiement annulé.",
+  "parkingPaymentLinkCancelled": "Ce lien de paiement a été annulé.",
+  "paymentLinkCouldNotBeCancelled": "Le lien de paiement n’a pas pu être annulé.",
   "parkedCarRecordedWithCode": "Voiture stationnée enregistrée. Numéro de suivi : {trackingCode}",
   "@parkedCarRecordedWithCode": {
     "placeholders": {
