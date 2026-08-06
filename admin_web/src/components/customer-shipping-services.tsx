@@ -387,6 +387,28 @@ export function CustomerShippingServices({
   const [transportOptionsError, setTransportOptionsError] = useState("");
   const [optionsReloadKey, setOptionsReloadKey] = useState(0);
 
+  // The catalogs come from callables that answer once, so a business turning
+  // a service or pickup off could not reach an open page (backlog item 2).
+  // The server bumps publicCatalog/services on every such change; skipping
+  // the snapshot that merely delivers the current value, each later bump
+  // re-asks the callables.
+  useEffect(() => {
+    let first = true;
+    return onSnapshot(
+      doc(db, "publicCatalog", "services"),
+      () => {
+        if (first) {
+          first = false;
+          return;
+        }
+        setOptionsReloadKey((current) => current + 1);
+      },
+      () => {
+        // A read failure only costs live freshness; the page still works.
+      },
+    );
+  }, []);
+
   useEffect(() => {
     let active = true;
 
