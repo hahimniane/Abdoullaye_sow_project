@@ -39,10 +39,9 @@ import {
   type BusinessVerificationSummary,
   type BusinessStripeVerification,
 } from "@/lib/business-verification";
-import {
-  confirmImportantAction,
-  type ActionConfirmationOptions,
-  type ActionRunner,
+import type {
+  ActionConfirmationOptions,
+  ActionRunner,
 } from "@/lib/action-confirmation";
 import {
   buildBusinessServiceSettingsPayload,
@@ -1849,12 +1848,10 @@ function useActionFeedback(runAction?: ActionRunner, toast?: ToastCallback) {
         // a cancelled confirm), so no local success banner here.
         await runAction(label, action, options);
       } else {
-        if (
-          options?.confirm &&
-          !confirmImportantAction(options.confirm, options.confirmFr)
-        ) {
-          return;
-        }
+        // Deliberately NOT window.confirm here: a native modal blocks the
+        // main thread on submit (it froze the tab under automation and
+        // reads as a hang). The options-provided confirm text is unused in
+        // this path until a non-blocking dialog exists.
         await action();
         toast?.("success", label);
         // A panel without a toast host still owes the user visible proof
