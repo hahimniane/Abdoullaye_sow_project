@@ -93,6 +93,11 @@ describe("payment runtime configuration", () => {
     assert.deepEqual(JSON.parse(output), [
       "STRIPE_WEBHOOK_SECRET",
       "STRIPE_SECRET_KEY",
+      // Twilio: the webhook sends the customer their SMS receipt when a
+      // payment settles, so it needs the sender credentials bound.
+      "TWILIO_ACCOUNT_SID",
+      "TWILIO_AUTH_TOKEN",
+      "TWILIO_FROM_NUMBER",
     ]);
 
     const source = fs.readFileSync(
