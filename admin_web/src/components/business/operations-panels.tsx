@@ -3909,7 +3909,10 @@ export function ParkingPanel({
                     {businessParkingPaymentTone(row) === "paid" ? (
                       <em className="lst-hint">This link was already used to pay. Nothing further is owed.</em>
                     ) : (
-                      <button className="lst-btn ghost" type="button" onClick={() => copyCheckoutUrl(text(row.checkoutUrl, ""))} title="Copy payment link">
+                      // paymentLinkUrl is the durable Laawol link; a Stripe
+                      // session URL dies within 24 hours, so it is only the
+                      // fallback for records created before this existed.
+                      <button className="lst-btn ghost" type="button" onClick={() => copyCheckoutUrl(text(row.paymentLinkUrl ?? row.checkoutUrl, ""))} title="Copy payment link">
                         <Copy size={14} /> Copy payment link
                       </button>
                     )}
