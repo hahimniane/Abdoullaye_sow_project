@@ -39,8 +39,23 @@ export function CustomerPhoneField({
     inferred?.code ?? initialCountryCode,
   );
   useEffect(() => {
-    if (!value.trim()) setCountryCode(initialCountryCode);
-  }, [initialCountryCode, value]);
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setCountryCode(initialCountryCode);
+      return;
+    }
+    // A value set from outside the field - picking a saved recipient, loading
+    // an existing record - can belong to a different country than the one
+    // showing. Typing never lands here: the input always composes the value
+    // with the calling code already selected, so it always agrees.
+    const normalizedValue = trimmed.replace(/[\s().-]/g, "");
+    if (!normalizedValue.startsWith("+")) return;
+    const digitsOnly = normalizedValue.slice(1).replace(/\D/g, "");
+    const selected = callingCodeOptionForCountry(countryCode);
+    if (selected && digitsOnly.startsWith(selected.callingCode)) return;
+    const next = callingCodeOptionForPhone(trimmed, initialCountryCode);
+    if (next && next.code !== countryCode) setCountryCode(next.code);
+  }, [countryCode, initialCountryCode, value]);
   const option =
     callingCodeOptionForCountry(countryCode) ??
     inferred ??
