@@ -141,8 +141,12 @@ and verified in the product. Nothing is SHIPPED until a tester drives it.
   does not.
 - ~~Pickup number fields accept arbitrary text~~ — FIXED 2026-08-06, digits
   and one decimal point only.
-- Business 1's `state` holds "United States" instead of a state, which is why
-  borough pricing can never appear for it. Data fix, not code.
+- ~~Business 1's `state` holds "United States"~~ — FIXED 2026-08-06 (data,
+  not code): set to `NY`. `businessIsNewYorkBased` matches only `NY` /
+  `NEW YORK`, so the country name sitting in the state field silently
+  disabled borough pickup pricing. The profile form normalizes US states but
+  deliberately passes an unrecognized value through unchanged (non-US
+  addresses put a province there), so it neither caused nor blocks this.
 - ~~Choosing a transport carrier notified nobody~~ — FIXED 2026-08-06; the
   winner and the passed-over bidders now both get a notification.
 
