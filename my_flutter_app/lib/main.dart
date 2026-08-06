@@ -45,7 +45,6 @@ import 'screens/phone_verification_screen.dart';
 import 'screens/business_management_screen.dart';
 import 'screens/business_profile_screen.dart';
 import 'screens/business_registration_screen.dart';
-import 'screens/wallet_screen.dart';
 import 'screens/favorite_cars_screen.dart';
 import 'screens/support_inbox_screen.dart';
 import 'screens/support_thread_screen.dart';
@@ -238,7 +237,6 @@ class MyApp extends StatelessWidget {
                   returnToSharedBarrels: args?.returnToSharedBarrels ?? false,
                 );
               },
-              '/wallet': (context) => const WalletScreen(),
               '/favorite-cars': (context) => const FavoriteCarsScreen(),
               '/businesses': (context) => const BusinessManagementScreen(),
               '/business-profile': (context) => const BusinessProfileScreen(),

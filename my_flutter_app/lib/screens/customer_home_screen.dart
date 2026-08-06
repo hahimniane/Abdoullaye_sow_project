@@ -19,7 +19,6 @@ import 'review_composer_screen.dart';
 import 'business_management_screen.dart';
 import 'business_profile_screen.dart';
 import 'add_staff_screen.dart';
-import 'wallet_screen.dart';
 import 'favorite_cars_screen.dart';
 import 'account_profile_screen.dart';
 import 'destination_countries_screen.dart';
@@ -85,9 +84,6 @@ Route<dynamic>? _customerTabRoute(RouteSettings settings) {
       if (reviewArgs is ReviewComposerArguments) {
         page = ReviewComposerScreen(arguments: reviewArgs);
       }
-      break;
-    case '/wallet':
-      page = const WalletScreen();
       break;
     case '/favorite-cars':
       page = const FavoriteCarsScreen();
@@ -173,7 +169,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       default:
         return Builder(
           builder: (context) => SettingsScreen(
-            onOpenWallet: () => Navigator.of(context).pushNamed('/wallet'),
             onOpenAccountProfile: () =>
                 Navigator.of(context).pushNamed('/account-profile'),
           ),

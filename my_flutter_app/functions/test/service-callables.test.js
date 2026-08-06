@@ -479,8 +479,11 @@ describe("freight service callable lifecycle", () => {
     );
   });
 
-  it("applies wallet funds once and makes cancellation reversal idempotent",
+  it("ignores any wallet balance now that the platform holds no money",
       async () => {
+        // The wallet is retired (docs/PLAN-2026-08-backlog.md #3). A balance
+        // left on file must never be spent: the card is charged in full and
+        // the stored balance is untouched, so it can be returned deliberately.
         const businessId = "freight-wallet-business";
         await seedBusiness(businessId);
         await db.collection("wallets").doc(CUSTOMER_UID).set({
@@ -498,36 +501,12 @@ describe("freight service callable lifecycle", () => {
           }),
         });
         const paidShipment = await freightData(paid.shipmentId);
-        assert.equal(paidShipment.walletAppliedCents, 2500);
-        assert.equal(paidShipment.cardChargeAmountCents, 2500);
-        const walletAfterDebit = await db.collection("wallets")
+        assert.equal(paidShipment.walletAppliedCents, 0);
+        // Full price on the card - 10kg sea at 5/kg.
+        assert.equal(paidShipment.cardChargeAmountCents, 5000);
+        const walletAfter = await db.collection("wallets")
             .doc(CUSTOMER_UID).get();
-        assert.equal(walletAfterDebit.get("balanceCents"), 0);
-
-        const pendingRef = db.collection("freightShipments").doc();
-        await pendingRef.set({
-          customerUid: CUSTOMER_UID,
-          businessId,
-          businessName: "Freight Wallet Business",
-          trackingCode: "FR-CANCEL-WALLET",
-          paymentStatus: "pending",
-          status: "pending_payment",
-          walletAppliedCents: 2500,
-        });
-        await functions.cancelPendingFreightShipment.run({
-          auth: {uid: CUSTOMER_UID},
-          data: {shipmentId: pendingRef.id},
-        });
-        await functions.cancelPendingFreightShipment.run({
-          auth: {uid: CUSTOMER_UID},
-          data: {shipmentId: pendingRef.id},
-        });
-        const cancelled = await pendingRef.get();
-        const walletAfterCancel = await db.collection("wallets")
-            .doc(CUSTOMER_UID).get();
-        assert.equal(cancelled.get("paymentStatus"), "cancelled");
-        assert.equal(cancelled.get("walletAppliedReversed"), true);
-        assert.equal(walletAfterCancel.get("balanceCents"), 2500);
+        assert.equal(walletAfter.get("balanceCents"), 2500);
       });
 
   it("rejects invalid freight inputs and unavailable configurations",
@@ -769,8 +748,11 @@ describe("freight service callable lifecycle", () => {
         assert.equal(shipment.balancePaymentStatus, "succeeded");
       });
 
-  it("refunds a lighter parcel card-first and restores wallet exactly once",
+  it("refunds a lighter parcel entirely to the card, never to a wallet",
       async () => {
+        // With the wallet retired nothing is ever paid from a balance, so an
+        // overpayment must come back the way it went out - on the card - and
+        // must not be parked as platform-held credit.
         const businessId = "freight-refund-settlement-business";
         await seedBusiness(businessId);
         const manager = await seedFreightManager(businessId);
@@ -795,17 +777,11 @@ describe("freight service callable lifecycle", () => {
         assert.equal(confirmed.refundDue, 112.5);
         const settlement = await db.collection("freightSettlements")
             .doc(confirmed.settlementId).get();
-        assert.equal(settlement.get("cardRefundedCents"), 10000);
-        assert.equal(settlement.get("walletRefundedCents"), 1250);
-        let wallet = await db.collection("wallets").doc(CUSTOMER_UID).get();
-        assert.equal(wallet.get("balanceCents"), 1250);
-
-        await functions.confirmFreightShipmentWeight.run({
-          auth: manager,
-          data: {shipmentId: booking.shipmentId, verifiedWeightKg: 1},
-        });
-        wallet = await db.collection("wallets").doc(CUSTOMER_UID).get();
-        assert.equal(wallet.get("balanceCents"), 1250);
+        assert.equal(settlement.get("cardRefundedCents"), 11250);
+        // No wallet leg at all - the field is simply never written.
+        assert.equal(settlement.get("walletRefundedCents") || 0, 0);
+        const wallet = await db.collection("wallets").doc(CUSTOMER_UID).get();
+        assert.equal(wallet.get("balanceCents"), 2500);
       });
 
   it("denies weight confirmation without the business freight permission",

@@ -975,25 +975,6 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                               () => sharedLiabilityAccepted = value ?? false,
                             ),
                     ),
-                    SwitchListTile(
-                      value: useWalletBalance,
-                      onChanged: busy
-                          ? null
-                          : (value) =>
-                                setSheetState(() => useWalletBalance = value),
-                      title: Text(
-                        copy(
-                          'Use wallet balance for deposit',
-                          'Utiliser le solde du portefeuille pour l’acompte',
-                        ),
-                      ),
-                      subtitle: Text(
-                        copy(
-                          'Any available wallet credit will reduce the card amount.',
-                          'Le crédit disponible réduira le montant à payer par carte.',
-                        ),
-                      ),
-                    ),
                     const SizedBox(height: 16),
                     FilledButton.icon(
                       onPressed: busy ? null : submit,
@@ -1446,25 +1427,6 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
                           : (value) => setSheetState(
                               () => sharedLiabilityAccepted = value ?? false,
                             ),
-                    ),
-                    SwitchListTile(
-                      value: useWalletBalance,
-                      onChanged: busy
-                          ? null
-                          : (value) =>
-                                setSheetState(() => useWalletBalance = value),
-                      title: Text(
-                        copy(
-                          'Use wallet balance for deposit',
-                          'Utiliser le solde du portefeuille pour l’acompte',
-                        ),
-                      ),
-                      subtitle: Text(
-                        copy(
-                          'Any available wallet credit will reduce the card amount.',
-                          'Le crédit disponible réduira le montant à payer par carte.',
-                        ),
-                      ),
                     ),
                     const SizedBox(height: 16),
                     FilledButton.icon(

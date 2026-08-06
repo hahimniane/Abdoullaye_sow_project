@@ -5819,55 +5819,24 @@ async function creditWallet({
   });
 }
 
-async function debitWallet({
-  transaction,
-  customerUid,
-  amountCents,
-  shipmentId,
-  trackingCode,
-  reason,
-  businessId,
-  businessName,
-}) {
-  if (amountCents <= 0) return 0;
-  const db = admin.firestore();
-  const walletRef = db.collection("wallets").doc(customerUid);
-  const walletDoc = await transaction.get(walletRef);
-  const wallet = walletDoc.exists ? walletDoc.data() : {};
-  const balanceCents = Number(wallet.balanceCents || 0);
-  const appliedCents = Math.max(
-      0,
-      Math.min(
-          amountCents,
-          Number.isFinite(balanceCents) ? balanceCents : 0,
-      ),
-  );
-  if (appliedCents <= 0) return 0;
-
-  const debitRef = walletRef.collection("transactions").doc();
-  const now = FirestoreFieldValue.serverTimestamp();
-  transaction.set(walletRef, {
-    customerUid,
-    currency: SHIPMENT_CURRENCY,
-    balanceCents: FirestoreFieldValue.increment(-appliedCents),
-    balance: FirestoreFieldValue.increment(
-        -dollarsFromCents(appliedCents),
-    ),
-    updatedAt: now,
-  }, {merge: true});
-  transaction.set(debitRef, {
-    type: "debit",
-    reason,
-    amountCents: appliedCents,
-    amount: dollarsFromCents(appliedCents),
-    currency: SHIPMENT_CURRENCY,
-    shipmentId,
-    trackingCode,
-    businessId: businessId || "",
-    businessName: businessName || "",
-    createdAt: now,
-  });
-  return appliedCents;
+/**
+ * The wallet is retired: the platform no longer holds customer money
+ * (docs/PLAN-2026-08-backlog.md #3).
+ *
+ * This is deliberately a no-op that always applies zero rather than a
+ * deletion of the wallet machinery. Returning 0 means every charge is taken
+ * in full by card, and because every creditWallet call is guarded by
+ * `walletAppliedCents > 0` (they exist only to reverse a debit), no money
+ * flows back into a wallet either. Both directions close with one change.
+ *
+ * Existing balances are intentionally left in place, untouched: any money
+ * already on file is owed to a real customer and must be reconciled and
+ * returned deliberately, not silently erased by a refactor.
+ *
+ * @return {!Promise<number>} Always 0 - no wallet balance is ever applied.
+ */
+async function debitWallet() {
+  return 0;
 }
 
 exports.requestWalletCardRefund = onCall(

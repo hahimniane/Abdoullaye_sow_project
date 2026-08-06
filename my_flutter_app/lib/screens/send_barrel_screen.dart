@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
@@ -66,8 +65,6 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
   String? _sharedPickupQuoteError;
   Timer? _sharedPickupDebounce;
   int _sharedPickupQuoteId = 0;
-  bool _useWalletBalance = false;
-  double _walletBalance = 0;
   bool _prefilledSenderName = false;
   late final AnimationController _heroController;
 
@@ -318,7 +315,6 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
         pickupDateTime: _usesDifferentPickupDetails
             ? null
             : (_pickupRequested ? _pickupDateTime : null),
-        useWalletBalance: _useWalletBalance,
         marketplaceAcceptance: marketplaceAcceptance,
       );
       final receiptOpened = await runBestEffortPostPaymentAction(
@@ -353,7 +349,6 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
           _useDifferentPickupDetails = false;
           _pickupDateTime = null;
           _pickupBorough = 'Bronx';
-          _useWalletBalance = false;
         });
       }
     } catch (e) {
@@ -657,24 +652,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
                                         pickupFee: _pickupFee,
                                         lineCount: _billableLineCount,
                                         total: _estimatedTotal,
-                                        useWalletBalance: _useWalletBalance,
-                                        walletBalance: _walletBalance,
                                         needsReview: _needsPriceReview,
-                                      ),
-                                      _WalletPaymentOption(
-                                        total: _estimatedTotal,
-                                        selected: _useWalletBalance,
-                                        onBalanceChanged: (balance) {
-                                          if (_walletBalance == balance) return;
-                                          setState(() {
-                                            _walletBalance = balance;
-                                          });
-                                        },
-                                        onChanged: (value) {
-                                          setState(
-                                            () => _useWalletBalance = value,
-                                          );
-                                        },
                                       ),
                                     ],
                                   ],
@@ -2313,8 +2291,6 @@ class _PriceEstimateCard extends StatelessWidget {
     required this.pickupFee,
     required this.lineCount,
     required this.total,
-    required this.useWalletBalance,
-    required this.walletBalance,
     required this.needsReview,
   });
 
@@ -2322,18 +2298,13 @@ class _PriceEstimateCard extends StatelessWidget {
   final double pickupFee;
   final int lineCount;
   final double total;
-  final bool useWalletBalance;
-  final double walletBalance;
   final bool needsReview;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final currency = NumberFormat.simpleCurrency();
-    final walletApplied = useWalletBalance
-        ? walletBalance.clamp(0, total).toDouble()
-        : 0.0;
-    final amountDue = (total - walletApplied).clamp(0, double.infinity);
+    final amountDue = total;
 
     Widget row(String label, String value) {
       return Padding(
@@ -2398,7 +2369,7 @@ class _PriceEstimateCard extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  useWalletBalance ? l10n.amountDueNow : l10n.estimatedCost,
+                  l10n.estimatedCost,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
@@ -2464,13 +2435,6 @@ class _PriceEstimateCard extends StatelessWidget {
                     ],
                   ),
                 ],
-                if (useWalletBalance) ...[
-                  const Divider(height: 18),
-                  row(l10n.originalEstimatedCost, currency.format(total)),
-                  row(l10n.walletCredit, '-${currency.format(walletApplied)}'),
-                  const Divider(height: 18),
-                  row(l10n.cardPaymentDue, currency.format(amountDue)),
-                ],
               ],
             ),
           ),
@@ -2486,128 +2450,6 @@ class _PriceEstimateCard extends StatelessWidget {
           ],
         ],
       ),
-    );
-  }
-}
-
-class _WalletPaymentOption extends StatelessWidget {
-  const _WalletPaymentOption({
-    required this.total,
-    required this.selected,
-    required this.onBalanceChanged,
-    required this.onChanged,
-  });
-
-  final double total;
-  final bool selected;
-  final ValueChanged<double> onBalanceChanged;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final auth = context.watch<AuthProvider>();
-    final user = auth.user;
-    if (user == null || total <= 0 || auth.hasBusinessDashboardAccess) {
-      return const SizedBox.shrink();
-    }
-
-    final currency = NumberFormat.simpleCurrency();
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('wallets')
-          .doc(user.uid)
-          .snapshots(),
-      builder: (context, snapshot) {
-        final data = snapshot.data?.data() as Map<String, dynamic>?;
-        final balance =
-            (data?['balance'] as num?)?.toDouble() ??
-            (((data?['balanceCents'] as num?)?.toDouble() ?? 0) / 100);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (context.mounted) onBalanceChanged(balance);
-        });
-        if (balance <= 0) {
-          if (selected) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (context.mounted) onChanged(false);
-            });
-          }
-          return const SizedBox.shrink();
-        }
-
-        final applied = balance > total ? total : balance;
-        final cardRemainder = (total - applied).clamp(0, double.infinity);
-        return Padding(
-          padding: const EdgeInsets.only(top: 12),
-          child: InkWell(
-            onTap: () => onChanged(!selected),
-            borderRadius: BorderRadius.circular(8),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: selected
-                    ? AppColors.cobalt.withValues(alpha: 0.1)
-                    : AppColors.paper,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: selected ? AppColors.cobalt : AppColors.rule,
-                  width: selected ? 1.5 : 1,
-                ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Checkbox(
-                    value: selected,
-                    onChanged: (value) => onChanged(value ?? false),
-                    activeColor: AppColors.cobalt,
-                  ),
-                  const SizedBox(width: 6),
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: AppColors.cobalt.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.account_balance_wallet_outlined,
-                      color: AppColors.cobaltDeep,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l10n.useWalletCredit,
-                          style: const TextStyle(
-                            color: AppColors.ink,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          selected
-                              ? '${currency.format(applied)} from wallet • ${currency.format(cardRemainder)} remaining'
-                              : '${currency.format(balance)} available',
-                          style: const TextStyle(
-                            color: AppColors.muted,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 }
