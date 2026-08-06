@@ -7081,7 +7081,20 @@ async function bindCheckoutPaymentIntent(event) {
 async function reconcileStripePaymentEvent(event, connectedAccountId) {
   const intent = await paymentIntentForStripeEvent(event, connectedAccountId);
   const paymentType = String(intent?.metadata?.paymentType || "").trim();
-  if (!intent || !isReconcilablePaymentType(paymentType)) return false;
+  if (!intent || !isReconcilablePaymentType(paymentType)) {
+    // Say so. A silently ignored payment event is indistinguishable from a
+    // handled one in the logs, which cost a long investigation into why a
+    // paid parking entry never flipped to paid.
+    logger.info("Stripe payment event not reconcilable", {
+      eventType: event?.type || "",
+      paymentIntentId: intent?.id || "",
+      paymentType: paymentType || "(none)",
+      reason: intent ?
+        (paymentType ? "unknown_payment_type" : "missing_payment_type") :
+        "no_payment_intent",
+    });
+    return false;
+  }
   const {target, decision, superseded} = await loadAndValidatePaymentTarget({
     event,
     intent,
