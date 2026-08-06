@@ -3752,6 +3752,36 @@ export function ParkingPanel({
     }
   }
 
+  async function checkLinkPayment(row: FirestoreRow) {
+    setPaidBusyId(row.id);
+    setMessage("");
+    try {
+      const response = await httpsCallable(
+        functions,
+        "refreshBusinessParkingPayment",
+      )({entryId: row.id});
+      const data = (response.data ?? {}) as {
+        paid?: boolean;
+        alreadyRecorded?: boolean;
+      };
+      setMessage(
+        data.paid
+          ? data.alreadyRecorded
+            ? "Already recorded as paid."
+            : "Payment confirmed with Stripe and recorded."
+          : "Stripe has not received this payment yet.",
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "The payment status could not be checked.",
+      );
+    } finally {
+      setPaidBusyId("");
+    }
+  }
+
   return (
     <section className="lst">
       <header className="lst-head">
@@ -3825,6 +3855,18 @@ export function ParkingPanel({
                     <span>Payment link</span>
                     <button className="lst-btn ghost" type="button" onClick={() => copyCheckoutUrl(text(row.checkoutUrl, ""))} title="Copy payment link">
                       <Copy size={14} /> Copy payment link
+                    </button>
+                    {/* A webhook can be late or lost; the lot should never be
+                        stuck guessing whether a car has been paid for. */}
+                    <button
+                      className="lst-btn ghost"
+                      type="button"
+                      disabled={paidBusyId === row.id}
+                      onClick={() => void checkLinkPayment(row)}
+                      title="Check payment status"
+                    >
+                      <RefreshCw size={14} />
+                      {paidBusyId === row.id ? "Checking..." : "Check payment status"}
                     </button>
                   </div>
                 </div>

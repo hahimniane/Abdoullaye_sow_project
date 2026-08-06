@@ -7406,7 +7406,14 @@ exports.handleBusinessProStripeWebhook = onRequest(
 exports.stripeCheckoutWebhook = exports.handleBusinessProStripeWebhook;
 
 const STALE_PAYMENT_SCANS = Object.freeze([
-  {id: "parking", collection: "parkedCars", intent: "stripePaymentIntentId"},
+  {
+    id: "parking",
+    collection: "parkedCars",
+    intent: "stripePaymentIntentId",
+    // Business-entered walk-ups are paid by hosted checkout, so the
+    // session is the only handle until an intent exists.
+    session: "checkoutSessionId",
+  },
   {
     id: "shared_barrel_deposits",
     collectionGroup: "participants",
@@ -7525,7 +7532,32 @@ exports.reconcileStaleStripePayments = onSchedule(
           for (const snapshot of page.docs) {
             checked += 1;
             const staleData = snapshot.data() || {};
-            const intentId = stalePaymentIntentId(scan, staleData);
+            let intentId = stalePaymentIntentId(scan, staleData);
+            if (!intentId && scan.session) {
+              // A hosted-checkout entry only knows its session until the
+              // payment binds an intent to it. Without this the sweep skips
+              // it forever and the record stays "payment link sent" even
+              // though the customer paid.
+              const sessionId = String(staleData[scan.session] || "").trim();
+              if (!sessionId) continue;
+              try {
+                const session = await retrieveStripeCheckoutSession(
+                    sessionId,
+                    stalePaymentConnectedAccountId(scan, staleData),
+                );
+                if (session?.payment_status !== "paid") continue;
+                intentId = typeof session.payment_intent === "string" ?
+                  session.payment_intent :
+                  String(session.payment_intent?.id || "");
+              } catch (error) {
+                logger.error("Checkout session lookup failed", {
+                  scanId: scan.id,
+                  documentPath: snapshot.ref.path,
+                  message: error.message,
+                });
+                continue;
+              }
+            }
             if (!intentId || intentId.startsWith("simulated_")) continue;
             try {
               const intent = await retrieveStripePaymentIntent(
@@ -9737,12 +9769,14 @@ exports.createBusinessParkingEntry = onCall(
       const trackingCode = await generateTrackingCode("PK", "parkedCars");
       let plan;
       let payoutFields;
+      let entryBusinessName = "";
       await db.runTransaction(async (transaction) => {
         const businessDoc = await transaction.get(businessRef);
         if (!businessDoc.exists) {
           throw new HttpsError("not-found", "Business not found");
         }
         const business = businessDoc.data() || {};
+        entryBusinessName = String(business.name || "").trim();
         if (!businessOffersParking(business)) {
           throw new HttpsError(
               "failed-precondition",
@@ -9893,10 +9927,30 @@ exports.createBusinessParkingEntry = onCall(
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
 
+      // The business types the customer's email so the link reaches them
+      // without anyone copy-pasting; the copy button stays as the fallback.
+      const linkEmailed = await emailWalkUpParkingCustomer({
+        to: input.customerEmail,
+        subject: `Parking payment for ${trackingCode}`,
+        text:
+          `${entryBusinessName || "Your parking provider"} has parked your ` +
+          `vehicle (${trackingCode}). Amount due: ` +
+          `$${plan.amountDue.toFixed(2)}. Pay securely here: ` +
+          `${String(session.url || "")}`,
+      });
+      if (linkEmailed) {
+        await entryRef.update({
+          paymentLinkEmailedTo: String(input.customerEmail || "")
+              .trim().toLowerCase(),
+          paymentLinkEmailedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+      }
+
       return {
         ...response,
         checkoutSessionId: String(session.id || ""),
         checkoutUrl: String(session.url || ""),
+        paymentLinkEmailed: linkEmailed,
       };
     },
 );
@@ -9913,6 +9967,7 @@ async function completeBusinessParkingEntryPayment(target) {
     throw new Error(`Payment target not found: ${target.path}`);
   }
   const entry = snapshot.data() || {};
+  const firstSettlement = entry.paymentStatus !== "succeeded";
   await ref.update({
     status: "reserved",
     paymentStatus: "succeeded",
@@ -9924,6 +9979,56 @@ async function completeBusinessParkingEntryPayment(target) {
     data: {...entry, status: "reserved", paymentStatus: "succeeded"},
     serviceType: "business_parking_entry",
   });
+  if (firstSettlement) {
+    // Their receipt, sent the moment the payment lands - the business does
+    // nothing. Guarded so webhook/sweep/manual-refresh overlap cannot send
+    // a second one.
+    const amountCents = Number(entry.amountDueCents || 0);
+    await emailWalkUpParkingCustomer({
+      to: entry.customerEmail,
+      subject: `Payment received - parking ${entry.trackingCode || ""}`,
+      text:
+        `${entry.businessName || "Your parking provider"} has received ` +
+        `your payment of $${(amountCents / 100).toFixed(2)} for parking ` +
+        `${entry.trackingCode || ""}. Keep this email as your receipt.`,
+    });
+  }
+}
+
+/**
+ * Emails a walk-up parking customer directly.
+ *
+ * These customers deliberately have no account (docs/PLAN-2026-08-backlog.md
+ * #5), so the uid-centric notification pipeline cannot reach them; this
+ * writes straight to the trigger-email queue instead. Failures are swallowed
+ * and reported to the caller as false - an email that cannot be sent must
+ * never fail the parking entry or the payment it describes.
+ *
+ * @param {{to: *, subject: string, text: string}} input Recipient and copy.
+ * @return {!Promise<boolean>} True when a send was actually queued.
+ */
+async function emailWalkUpParkingCustomer({to, subject, text}) {
+  const email = String(to || "").trim().toLowerCase();
+  if (!email.includes("@")) return false;
+  try {
+    const db = admin.firestore();
+    const settings = await loadPlatformNotificationSettings(db);
+    if (settings.emailProvider !== "firebaseTriggerEmail") {
+      logger.warn("Walk-up parking email skipped: no provider connected", {
+        subject,
+      });
+      return false;
+    }
+    await db.collection("mail").add({
+      to: [email],
+      message: {subject, text, html: notificationHtml(subject, text)},
+      createdAt: FirestoreFieldValue.serverTimestamp(),
+    });
+    return true;
+  } catch (error) {
+    logger.warn("Walk-up parking email failed", {message: error.message});
+    return false;
+  }
 }
 
 /**
