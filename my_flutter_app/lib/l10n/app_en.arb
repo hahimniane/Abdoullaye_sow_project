@@ -1827,8 +1827,8 @@
   "goodMorning": "Good morning",
   "goodAfternoon": "Good afternoon",
   "goodEvening": "Good evening",
-  "signInToYourWallet": "Sign in to your wallet",
-  "walletSignInSubtitle": "Track orders, balances and refunds.",
+  "signInToYourAccount": "Sign in to your account",
+  "accountSignInSubtitle": "Track your orders and shipments.",
   "shippingBusinessUnavailable": "{businessName} is not shipping to {countryName}, and no alternate business is available yet.",
   "@shippingBusinessUnavailable": {
     "placeholders": {

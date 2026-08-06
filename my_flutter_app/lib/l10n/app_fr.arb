@@ -1828,8 +1828,8 @@
   "goodMorning": "Bonjour",
   "goodAfternoon": "Bon après-midi",
   "goodEvening": "Bonsoir",
-  "signInToYourWallet": "Connectez-vous à votre portefeuille",
-  "walletSignInSubtitle": "Suivez les commandes, soldes et remboursements.",
+  "signInToYourAccount": "Connectez-vous à votre compte",
+  "accountSignInSubtitle": "Suivez vos commandes et vos expéditions.",
   "shippingBusinessUnavailable": "{businessName} n’expédie pas vers {countryName}, et aucune autre entreprise n’est encore disponible.",
   "@shippingBusinessUnavailable": {
     "placeholders": {

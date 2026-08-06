@@ -421,7 +421,7 @@ class _SignInPromptCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        AppLocalizations.of(context)!.signInToYourWallet,
+                        AppLocalizations.of(context)!.signInToYourAccount,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 17,
@@ -430,7 +430,7 @@ class _SignInPromptCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        AppLocalizations.of(context)!.walletSignInSubtitle,
+                        AppLocalizations.of(context)!.accountSignInSubtitle,
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.85),
                           fontSize: 13,

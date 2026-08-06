@@ -4146,10 +4146,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get goodEvening => 'Good evening';
 
   @override
-  String get signInToYourWallet => 'Sign in to your wallet';
+  String get signInToYourAccount => 'Sign in to your account';
 
   @override
-  String get walletSignInSubtitle => 'Track orders, balances and refunds.';
+  String get accountSignInSubtitle => 'Track your orders and shipments.';
 
   @override
   String shippingBusinessUnavailable(Object businessName, Object countryName) {

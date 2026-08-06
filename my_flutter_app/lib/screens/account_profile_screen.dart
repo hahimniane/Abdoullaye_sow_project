@@ -134,7 +134,6 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
       );
       if (_preferences.carActivity ||
           _preferences.shipmentActivity ||
-          _preferences.walletActivity ||
           _preferences.businessActivity ||
           _preferences.reviewActivity) {
         try {
@@ -472,13 +471,6 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
                     value: _preferences.shipmentActivity,
                     onChanged: (value) => _updatePreferences(
                       _preferences.copyWith(shipmentActivity: value),
-                    ),
-                  ),
-                  _PreferenceSwitch(
-                    title: l10n.walletActivityNotifications,
-                    value: _preferences.walletActivity,
-                    onChanged: (value) => _updatePreferences(
-                      _preferences.copyWith(walletActivity: value),
                     ),
                   ),
                   _PreferenceSwitch(

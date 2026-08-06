@@ -4233,11 +4233,11 @@ class AppLocalizationsFr extends AppLocalizations {
   String get goodEvening => 'Bonsoir';
 
   @override
-  String get signInToYourWallet => 'Connectez-vous à votre portefeuille';
+  String get signInToYourAccount => 'Connectez-vous à votre compte';
 
   @override
-  String get walletSignInSubtitle =>
-      'Suivez les commandes, soldes et remboursements.';
+  String get accountSignInSubtitle =>
+      'Suivez vos commandes et vos expéditions.';
 
   @override
   String shippingBusinessUnavailable(Object businessName, Object countryName) {

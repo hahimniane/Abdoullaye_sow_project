@@ -7484,17 +7484,17 @@ abstract class AppLocalizations {
   /// **'Good evening'**
   String get goodEvening;
 
-  /// No description provided for @signInToYourWallet.
+  /// No description provided for @signInToYourAccount.
   ///
   /// In en, this message translates to:
-  /// **'Sign in to your wallet'**
-  String get signInToYourWallet;
+  /// **'Sign in to your account'**
+  String get signInToYourAccount;
 
-  /// No description provided for @walletSignInSubtitle.
+  /// No description provided for @accountSignInSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Track orders, balances and refunds.'**
-  String get walletSignInSubtitle;
+  /// **'Track your orders and shipments.'**
+  String get accountSignInSubtitle;
 
   /// No description provided for @shippingBusinessUnavailable.
   ///
