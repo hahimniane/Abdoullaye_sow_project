@@ -274,6 +274,34 @@ export function businessParkingAmountDue(row: ParkingRowLike) {
   return Number.isFinite(dollars) ? dollars : 0;
 }
 
+/**
+ * Whether a business-entered row has been paid, is still owed, or has
+ * nothing to collect. The long label reads the same weight as every other
+ * field on the card, so a lot scanning a wall of parked cars could not tell
+ * paid from unpaid at a glance - this drives a coloured badge instead.
+ *
+ * @param row A parkedCars document.
+ * @return "paid", "awaiting", or "none".
+ */
+export function businessParkingPaymentTone(
+  row: ParkingRowLike,
+): "paid" | "awaiting" | "none" {
+  if (!isBusinessEnteredParking(row)) return "none";
+  const paymentStatus = trimmed(row?.paymentStatus, 40);
+  if (paymentStatus === "succeeded" || paymentStatus === "paid") return "paid";
+  if (paymentStatus === "not_required") return "none";
+  if (trimmed(row?.status, 40) === "cancelled") return "none";
+  return "awaiting";
+}
+
+/** Two-word badge text for the payment state: what a lot scans for. */
+export function businessParkingPaymentBadge(row: ParkingRowLike) {
+  const tone = businessParkingPaymentTone(row);
+  if (tone === "paid") return "Paid";
+  if (tone === "awaiting") return "Not paid";
+  return "";
+}
+
 /** English label for a business-entered row's payment state. */
 export function businessParkingPaymentLabel(row: ParkingRowLike) {
   if (!isBusinessEnteredParking(row)) return "";

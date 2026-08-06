@@ -9,7 +9,9 @@ import {
   businessParkingEntryMessage,
   businessParkingEntryPayload,
   businessParkingEntryResult,
+  businessParkingPaymentBadge,
   businessParkingPaymentLabel,
+  businessParkingPaymentTone,
   canMarkBusinessParkingPaid,
   emptyBusinessParkingEntryDraft,
   isBusinessEnteredParking,
@@ -241,4 +243,36 @@ test("the walk-up form uses catalog pickers for make, model and year", () => {
   assert.match(entryForm, /carModel: event\.target\.value, carYear: ""/);
   // No free-text car input may exist in this form.
   assert.ok(!/carMake: event\.target\.value\s*\}\)\)\}\s*placeholder/.test(entryForm));
+});
+
+test("payment tone separates paid, still owed, and nothing to collect", () => {
+  const paidLink = { source: "business", paymentMethod: "payment_link", paymentStatus: "succeeded" };
+  const sentLink = { source: "business", paymentMethod: "payment_link", paymentStatus: "pending" };
+  const paidDirect = { source: "business", paymentMethod: "direct", paymentStatus: "paid" };
+  const owedDirect = { source: "business", paymentMethod: "direct", paymentStatus: "awaiting_direct_payment" };
+
+  assert.equal(businessParkingPaymentTone(paidLink), "paid");
+  assert.equal(businessParkingPaymentTone(sentLink), "awaiting");
+  assert.equal(businessParkingPaymentTone(paidDirect), "paid");
+  assert.equal(businessParkingPaymentTone(owedDirect), "awaiting");
+  assert.equal(businessParkingPaymentTone({ source: "business", paymentStatus: "not_required" }), "none");
+  // A cancelled car is not money the lot is still chasing.
+  assert.equal(businessParkingPaymentTone({ source: "business", paymentMethod: "direct", status: "cancelled", paymentStatus: "awaiting_direct_payment" }), "none");
+  // Customer-booked reservations are settled by the customer flow.
+  assert.equal(businessParkingPaymentTone({ paymentStatus: "succeeded" }), "none");
+
+  assert.equal(businessParkingPaymentBadge(paidLink), "Paid");
+  assert.equal(businessParkingPaymentBadge(sentLink), "Not paid");
+  assert.equal(businessParkingPaymentBadge({ source: "business", paymentStatus: "not_required" }), "");
+});
+
+test("a paid card shows a badge and stops offering the used payment link", () => {
+  // The badge sits in the card header beside the parking status, so paid and
+  // unpaid are distinguishable without reading a text row.
+  assert.match(panelSource, /businessParkingPaymentTone\(row\) === "paid" \? "ok" : "warn"/);
+  assert.match(panelSource, /\{businessParkingPaymentBadge\(row\)\}/);
+  // And a link that has already been used must not be offered for copying.
+  const linkBlock = panelSource.slice(panelSource.indexOf('<span>Payment link</span>'), panelSource.indexOf('Check payment status'));
+  assert.match(linkBlock, /businessParkingPaymentTone\(row\) === "paid" \?/);
+  assert.match(linkBlock, /This link was already used to pay/);
 });

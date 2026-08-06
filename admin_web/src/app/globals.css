@@ -5737,6 +5737,7 @@ button[data-loading="true"]::before {
 .pur-card { background: var(--paper); border: 1px solid var(--rule); border-radius: 18px; padding: 16px 16px 14px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 1px 2px rgba(11,59,56,.05), 0 12px 28px rgba(11,59,56,.06); }
 .pur-card.alert { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(245,158,11,.16), 0 12px 28px rgba(11,59,56,.06); }
 .pur-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.pur-badges { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .pur-title { display: flex; flex-direction: column; gap: 3px; }
 .pur-title strong { font-size: 15.5px; font-weight: 800; color: var(--ink); line-height: 1.25; }
 .pur-kind { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }

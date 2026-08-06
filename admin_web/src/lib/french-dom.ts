@@ -3478,6 +3478,14 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Every change is shown here for your confirmation before it runs.":
     "Chaque modification est affichée ici pour votre confirmation avant d’être exécutée.",
   "The assistant is typing...": "L’assistant écrit...",
+  // Server-returned assistant errors reach the bubble verbatim, so they need
+  // entries here too or a French user reads an English failure.
+  "The assistant is not configured yet": "L’assistant n’est pas encore configuré",
+  "The assistant is unavailable": "L’assistant est indisponible",
+  "Paid": "Payé",
+  "Not paid": "Non payé",
+  "This link was already used to pay. Nothing further is owed.":
+    "Ce lien a déjà servi au paiement. Plus rien n’est dû.",
   "The assistant could not reply. Try again.":
     "L’assistant n’a pas pu répondre. Réessayez.",
   "The assistant is unavailable in preview mode.":

@@ -62,7 +62,9 @@ import {
   businessParkingAmountDue,
   businessParkingEntryPayload,
   businessParkingEntryResult,
+  businessParkingPaymentBadge,
   businessParkingPaymentLabel,
+  businessParkingPaymentTone,
   canMarkBusinessParkingPaid,
   emptyBusinessParkingEntryDraft,
   isBusinessEnteredParking,
@@ -3837,7 +3839,14 @@ export function ParkingPanel({
                   <strong>{parkingTitle(row)}</strong>
                   <span className="pur-kind">{text(row.trackingCode, "Parking")}</span>
                 </div>
-                <span className={`lst-badge ${status === "active" ? "warn" : status === "completed" ? "ok" : "muted"}`}>{statusLabel(status)}</span>
+                <span className="pur-badges">
+                  {businessEntered && businessParkingPaymentBadge(row) && (
+                    <span className={`lst-badge ${businessParkingPaymentTone(row) === "paid" ? "ok" : "warn"}`}>
+                      {businessParkingPaymentBadge(row)}
+                    </span>
+                  )}
+                  <span className={`lst-badge ${status === "active" ? "warn" : status === "completed" ? "ok" : "muted"}`}>{statusLabel(status)}</span>
+                </span>
               </div>
               <div className="pur-info">
                 <div><span>Owner</span><b>{text(row.customerName ?? row.ownerName, "—")}</b></div>
@@ -3853,9 +3862,16 @@ export function ParkingPanel({
                 <div className="pur-info">
                   <div style={{gridColumn: "1 / -1", minWidth: 0}}>
                     <span>Payment link</span>
-                    <button className="lst-btn ghost" type="button" onClick={() => copyCheckoutUrl(text(row.checkoutUrl, ""))} title="Copy payment link">
-                      <Copy size={14} /> Copy payment link
-                    </button>
+                    {/* Once the customer has paid, the link leads to Stripe's
+                        "already completed" page. Offering to copy it there
+                        reads as a broken link rather than a finished sale. */}
+                    {businessParkingPaymentTone(row) === "paid" ? (
+                      <em className="lst-hint">This link was already used to pay. Nothing further is owed.</em>
+                    ) : (
+                      <button className="lst-btn ghost" type="button" onClick={() => copyCheckoutUrl(text(row.checkoutUrl, ""))} title="Copy payment link">
+                        <Copy size={14} /> Copy payment link
+                      </button>
+                    )}
                     {/* A webhook can be late or lost; the lot should never be
                         stuck guessing whether a car has been paid for. */}
                     <button
