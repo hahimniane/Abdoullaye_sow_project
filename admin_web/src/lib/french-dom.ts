@@ -3333,7 +3333,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Shipment updates": "Mises à jour des expéditions",
   "Barrel and freight shipment status":
     "État des expéditions de barils et de fret",
-  "Wallet updates": "Mises à jour du portefeuille",
   "Refund and balance changes": "Remboursements et changements de solde",
   "Business updates": "Mises à jour de l’entreprise",
   "Application, verification, and account status":
