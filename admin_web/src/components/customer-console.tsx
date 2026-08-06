@@ -112,20 +112,44 @@ const tabs: Array<{
   { id: "profile", label: "Profile", description: "Account and security", icon: UserRound },
 ];
 
-function tabForNotification(type: string): CustomerTab {
+type NotificationTarget = {
+  tab: CustomerTab;
+  focus?: {collection: string; id: string};
+};
+
+/**
+ * Where a clicked notification should LAND - the tab plus, when the payload
+ * names a record, that exact record. "It just takes me to Home" was mostly
+ * unmapped types (shipment_tracking_update above all) falling through.
+ */
+function targetForNotification(
+  data: Record<string, string>,
+): NotificationTarget {
+  const type = data.type ?? "";
+  const relatedId = data.relatedId ?? data.shipmentId ?? "";
+  const focus = relatedId
+    ? {collection: data.relatedCollection ?? "", id: relatedId}
+    : undefined;
   switch (type) {
     case "support_message":
     case "support_escalated":
-      return "support";
+      return {tab: "support"};
     case "car_purchase_status":
     case "barrel_shipment_status":
     case "freight_shipment_status":
     case "freight_balance_due":
     case "freight_refund_issued":
     case "parking_reservation_status":
-      return "orders";
+    case "shipment_tracking_update":
+    case "review_request":
+    case "deposit_refund_due":
+      return {tab: "orders", focus};
+    case "barrel_pool_deposit":
+    case "barrel_pool_join":
+    case "barrel_pool_balance_due":
+      return {tab: "parkingPools", focus};
     default:
-      return "home";
+      return {tab: "home"};
   }
 }
 
@@ -137,6 +161,12 @@ export function CustomerConsole({
   const [activeTab, setActiveTab] = useState<CustomerTab>(() =>
     firebaseUser.phoneNumber ? "home" : "profile",
   );
+  // The record a clicked notification points at; cleared once shown so a
+  // later manual visit to Orders does not re-scroll.
+  const [focusedRecord, setFocusedRecord] = useState<{
+    collection: string;
+    id: string;
+  } | null>(null);
   const sharedBarrelsEnabled = useSharedBarrelsEnabled();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -220,7 +250,11 @@ export function CustomerConsole({
           </div>
           <NotificationBell
             enabled={Boolean(firebaseUser.uid)}
-            onSelect={(data) => setActiveTab(tabForNotification(data.type ?? ""))}
+            onSelect={(data) => {
+              const target = targetForNotification(data);
+              setActiveTab(target.tab);
+              setFocusedRecord(target.focus ?? null);
+            }}
             uid={firebaseUser.uid}
           />
           <button
@@ -315,6 +349,8 @@ export function CustomerConsole({
           )}
           {activeTab === "orders" && (
             <OrdersView
+              focusedRecord={focusedRecord}
+              onFocusConsumed={() => setFocusedRecord(null)}
               loading={dataLoading}
               orders={allOrders}
               trackedShipments={[
@@ -397,11 +433,15 @@ function CustomerHome({
 }
 
 function OrdersView({
+  focusedRecord,
+  onFocusConsumed,
   loading,
   orders,
   trackedShipments,
   uid,
 }: {
+  focusedRecord: {collection: string; id: string} | null;
+  onFocusConsumed: () => void;
   loading: boolean;
   orders: TaggedRow[];
   trackedShipments: FirestoreRow[];
@@ -410,7 +450,14 @@ function OrdersView({
   return (
     <div className="stack">
       <OrderPanel loading={loading} orders={orders} title="Orders & tracking" uid={uid} />
-      {!loading && <CustomerTracking records={trackedShipments} uid={uid} />}
+      {!loading && (
+        <CustomerTracking
+          focusedRecordId={focusedRecord?.id ?? ""}
+          onFocusConsumed={onFocusConsumed}
+          records={trackedShipments}
+          uid={uid}
+        />
+      )}
     </div>
   );
 }

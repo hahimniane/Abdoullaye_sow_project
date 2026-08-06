@@ -11631,3 +11631,14 @@ button[data-loading="true"]::before {
   .action-confirm-actions { flex-direction: column-reverse; grid-column: 1; }
   .action-confirm-actions button { width: 100%; }
 }
+
+.phase5-tracking-card-focused {
+  animation: tracking-focus-fade 6s ease-out;
+  border-color: rgba(13, 148, 136, 0.9);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.25);
+}
+
+@keyframes tracking-focus-fade {
+  from { background: rgba(13, 148, 136, 0.12); }
+  to { background: transparent; }
+}

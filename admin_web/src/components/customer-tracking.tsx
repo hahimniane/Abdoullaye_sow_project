@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, Clipboard, MapPin, PackageSearch, Search, Star } from "lucide-react";
 
 import { formatDate, text } from "@/lib/format";
@@ -54,13 +54,37 @@ function CopyTrackingNumber({ code }: { code: string }) {
 }
 
 export function CustomerTracking({
+  focusedRecordId = "",
+  onFocusConsumed,
   records,
   uid,
 }: {
+  focusedRecordId?: string;
+  onFocusConsumed?: () => void;
   records: FirestoreRow[];
   uid: string;
 }) {
   const [search, setSearch] = useState("");
+  // A notification deep-link names one shipment: scroll it into view and
+  // hold a highlight on it long enough to be seen.
+  const [highlightId, setHighlightId] = useState("");
+  useEffect(() => {
+    if (!focusedRecordId) return;
+    if (!records.some((record) => record.id === focusedRecordId)) return;
+    setHighlightId(focusedRecordId);
+    onFocusConsumed?.();
+    const frame = requestAnimationFrame(() => {
+      document
+        .getElementById(`tracking-${focusedRecordId}`)
+        ?.scrollIntoView({behavior: "smooth", block: "center"});
+    });
+    const timer = setTimeout(() => setHighlightId(""), 6000);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedRecordId, records]);
   const [reviewTarget, setReviewTarget] = useState<FirestoreRow | null>(null);
   const reviewedKeys = useReviewedOrderKeys(uid);
 
@@ -113,7 +137,11 @@ export function CustomerTracking({
             const reviewKey = `${relatedCollection}_${record.id}`;
             const reviewed = reviewedKeys.has(reviewKey);
             return (
-              <article className="phase5-tracking-card" key={record.id}>
+              <article
+                className={`phase5-tracking-card${record.id === highlightId ? " phase5-tracking-card-focused" : ""}`}
+                id={`tracking-${record.id}`}
+                key={record.id}
+              >
                 <div className="phase5-tracking-topline">
                   <span className="section-kicker">Tracking number</span>
                   <span className="status-pill compact">
