@@ -73,15 +73,59 @@ Remember who a customer has sent to (cars, packages, barrels — any service).
 When they start typing a recipient name on a later shipment, offer the saved
 recipient profile to complete the rest (phone, address, country).
 
-## Status
+## Status and execution plan (as of 2026-08-06)
 
-- [ ] 1 address fields
-- [ ] 2 live business updates
-- [ ] 3 remove wallet
-- [ ] 4 tracking + notification deep links
-- [ ] 5 business AI actions + business parking entry
-- [ ] 6 auto-select single business
-- [ ] 7 recipient memory
+Legend: **DONE** = built, tests green, committed. **SHIPPED** = also deployed
+and verified in the product. Nothing is SHIPPED until a tester drives it.
+
+| # | Item | Built | Deployed | Verified | What is actually left |
+|---|------|-------|----------|----------|----------------------|
+| 1 | Address split fields | server + web + mobile | server NO | no | deploy `suggestPickupAddresses`; see it on a device |
+| 2 | Live business updates | server + mobile | yes | no | **web console still one-shot** |
+| 3 | Remove wallet | server + web + mobile | yes | no | admin refund UI is now dead weight |
+| 4 | Tracking + notif links | pre-existing server + mobile | n/a | no | **web tracking view + web deep-links** |
+| 5 | Business parking + AI | parking backend in flight | no | no | parking UI both clients; the whole AI half |
+| 6 | Auto-select sole business | web freight + mobile barrels | yes | no | web barrel flows unchecked |
+| 7 | Remember recipients | server + mobile | yes | no | **web autocomplete missing** |
+
+### Order of work, and why
+
+**A. Close what is already built (cheapest value, highest risk of rot).**
+1. Deploy `suggestPickupAddresses` so item 1 stops degrading to one box.
+2. Tester drives items 1, 3, 6, 7 and the business-profile Save fix on a
+   device and on the web consoles.
+
+**B. Web parity — three items are half-shipped, and the halves are the web.**
+3. Item 2 web: the customer console fetches its catalogs once per page load
+   via callables. Subscribe to `publicCatalog/services` (the revision the
+   server already bumps) and refetch on change. Mirrors the mobile fix.
+4. Item 7 web: recipient autocomplete on the web receiver-name inputs,
+   reading the customer's own `savedRecipients`.
+5. Item 6 web: apply auto-select to the web barrel flows too.
+
+**C. Item 4 — the real gap is the web.**
+6. Web customer tracking view: a timeline per shipment reading the existing
+   `trackingEvents`, freight first.
+7. Web notification deep-links: clicking a notification must open the record,
+   not Home. Mobile already routes correctly — copy that mapping.
+8. Business-side milestone entry on the web console (the callable exists).
+
+**D. Item 5 — parking, then the assistant.**
+9. Parking backend (in flight): the two callables + pure module + tests.
+10. Business console UI (web) and mobile: enter a walk-up car, choose direct
+    vs payment link, mark a direct payment received.
+11. Business AI assistant: available to businesses, able to take actions, and
+    **confirming before every important one**. Build the action layer on the
+    existing callables so the assistant can only do what a human already can.
+
+### Known defects found along the way (not in the owner's list)
+
+- **Error snackbars render teal, not red** (mobile). `showErrorSnackBar` sets
+  `AppColors.brandRed` but the theme overrides it, so failures look like
+  successes. Fix before trusting any "it showed no error" report.
+- Pickup number fields accept arbitrary text (no input formatter).
+- Business 1's `state` holds "United States" instead of a state, which is why
+  borough pricing can never appear for it. Data fix, not code.
 
 Every item ships on BOTH web and mobile, and is tester-verified on the real
 interface before it is called done (docs/ENGINEERING_GUARDRAILS.md).
