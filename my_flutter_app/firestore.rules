@@ -483,6 +483,15 @@ service cloud.firestore {
           request.auth.uid == userId;
       }
 
+      // People this customer has shipped to, so the next shipment can be
+      // completed from the name. Written by the server on each send; the
+      // owner may read them and delete ones they no longer want offered.
+      match /savedRecipients/{recipientId} {
+        allow read, delete: if request.auth != null &&
+          request.auth.uid == userId;
+        allow create, update: if false;
+      }
+
       match /barrelPools/{poolId} {
         allow read: if request.auth != null &&
           (request.auth.uid == userId || isAdmin(request.auth.uid));

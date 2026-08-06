@@ -14,6 +14,10 @@ const {
   resolveServicePickup,
   computePickupFeeCents,
 } = require("./pickup_plan");
+const {
+  buildSavedRecipient,
+  mergeSavedRecipient,
+} = require("./saved_recipients");
 const admin = require("firebase-admin");
 const {
   FieldValue: FirestoreFieldValue,
@@ -8934,6 +8938,40 @@ exports.updateBusinessProfile = onCall(
 );
 
 /**
+ * Remembers who a customer just sent to, so the next shipment can be
+ * completed from the name (docs/PLAN-2026-08-backlog.md #7).
+ *
+ * Stored under the customer's own document, keyed by phone digits so repeat
+ * sends update one record. Failures are swallowed: this is a convenience,
+ * and must never fail a shipment that has already been paid for.
+ *
+ * @param {{uid: string, receiverName: *, receiverPhone: *,
+ *   destinationCountryId: (*|undefined),
+ *   destinationCountryName: (*|undefined), address: (*|undefined),
+ *   receiverPhoneIsWhatsappOnly: (*|undefined), source: string}} input The
+ *   recipient as this shipment knows them.
+ * @return {!Promise<void>} Resolves once the upsert is attempted.
+ */
+async function rememberRecipient(input) {
+  try {
+    const record = buildSavedRecipient(input);
+    if (!record || !input.uid) return;
+    const ref = admin.firestore()
+        .collection("users").doc(input.uid)
+        .collection("savedRecipients").doc(record.id);
+    const existing = await ref.get();
+    await ref.set({
+      ...mergeSavedRecipient(existing.exists ? existing.data() : null,
+          record.data),
+      lastUsedAt: FirestoreFieldValue.serverTimestamp(),
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    }, {merge: true});
+  } catch (error) {
+    console.warn("rememberRecipient failed", error);
+  }
+}
+
+/**
  * Bumps the revision customers subscribe to so a change a business just made
  * - a service switched off, pickup disabled, a price changed - reaches open
  * customer screens without them reloading the page.
@@ -17684,6 +17722,15 @@ exports.createBarrelShipmentPaymentIntent = onCall(
         throw error;
       }
 
+      await rememberRecipient({
+        uid: customerUid,
+        receiverName,
+        receiverPhone,
+        destinationCountryId,
+        destinationCountryName: businessDestination.country?.name,
+        source: "barrel",
+      });
+
       return {
         shipmentId: shipmentRef.id,
         trackingCode,
@@ -18943,6 +18990,15 @@ exports.createFreightShipmentPaymentIntent = onCall(
         }
         throw error;
       }
+
+      await rememberRecipient({
+        uid: customerUid,
+        receiverName,
+        receiverPhone,
+        destinationCountryId,
+        destinationCountryName: freightDestination.country?.name,
+        source: "freight",
+      });
 
       return {
         shipmentId: shipmentRef.id,
