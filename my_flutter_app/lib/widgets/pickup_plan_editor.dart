@@ -170,6 +170,8 @@ class PickupPlanEditorState extends State<PickupPlanEditor> {
     for (final service in kPickupPlanServices) service: _PickupConfigDraft(),
   };
   String? _hydratedSignature;
+  String? _sharedError;
+  final _serviceErrors = <String, String>{};
 
   @override
   void initState() {
@@ -229,13 +231,17 @@ class PickupPlanEditorState extends State<PickupPlanEditor> {
 
   /// Localized error for the whole plan, or null when it can be saved.
   String? validate(AppLocalizations l10n) {
+    // The message is also held in state and rendered next to the offending
+    // section: a snackbar alone leaves the owner staring at a form that
+    // looks fine, with no idea which field refused.
+    String? sharedError;
+    final serviceErrors = <String, String>{};
     if (_enabled) {
-      final error = _shared.validate(
+      sharedError = _shared.validate(
         l10n,
         l10n.pickupPlanSharedSectionLabel,
         isNewYorkBased: widget.isNewYorkBased,
       );
-      if (error != null) return error;
     }
     for (final service in _visibleServices) {
       if (_serviceChoices[service] != 'custom') continue;
@@ -244,6 +250,19 @@ class PickupPlanEditorState extends State<PickupPlanEditor> {
         _serviceLabel(l10n, service),
         isNewYorkBased: widget.isNewYorkBased,
       );
+      if (error != null) serviceErrors[service] = error;
+    }
+    if (mounted) {
+      setState(() {
+        _sharedError = sharedError;
+        _serviceErrors
+          ..clear()
+          ..addAll(serviceErrors);
+      });
+    }
+    if (sharedError != null) return sharedError;
+    for (final service in _visibleServices) {
+      final error = serviceErrors[service];
       if (error != null) return error;
     }
     return null;
@@ -322,9 +341,10 @@ class PickupPlanEditorState extends State<PickupPlanEditor> {
               : null,
           title: Text(l10n.pickupPlanOfferToggle),
         ),
-        if (_enabled)
-          ..._configFields(context, l10n, _shared)
-        else
+        if (_enabled) ...[
+          ..._configFields(context, l10n, _shared),
+          if (_sharedError != null) _errorText(_sharedError!),
+        ] else
           Text(l10n.pickupPlanDisabledHint, style: hintStyle),
         const SizedBox(height: 16),
         Text(l10n.pickupPlanPerServiceHint, style: hintStyle),
@@ -352,6 +372,8 @@ class PickupPlanEditorState extends State<PickupPlanEditor> {
             const SizedBox(height: 12),
             ..._configFields(context, l10n, _serviceConfigs[service]!),
           ],
+          if (_serviceErrors[service] != null)
+            _errorText(_serviceErrors[service]!),
           const SizedBox(height: 12),
         ],
       ],
@@ -481,6 +503,20 @@ class PickupPlanEditorState extends State<PickupPlanEditor> {
         ],
       ],
     ];
+  }
+
+  Widget _errorText(String message) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Text(
+        message,
+        style: const TextStyle(
+          color: Color(0xFFC62828),
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+        ),
+      ),
+    );
   }
 
   Widget _numberField({

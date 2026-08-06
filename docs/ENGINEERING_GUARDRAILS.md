@@ -83,6 +83,32 @@ curl -s https://business.laawoldigital.com/ \
 It is a public key (it ships to every visitor), so keeping it in a local file
 such as `~/.laawol/appcheck.key` is fine and survives session restarts.
 
+### App Check on the iOS simulator — every callable fails without this
+
+A debug build activates `AppleDebugProvider` (`lib/main.dart`). With no
+registered debug token the app still runs and Firestore reads still work —
+**rules do not enforce App Check, callables do** — so the app looks signed in
+and healthy while every `onCall` function rejects the request as
+`[firebase_functions/unauthenticated] Unauthenticated`.
+
+This is not an auth bug and no amount of re-signing-in fixes it. It cost a
+full mobile test run: the tester correctly reported "nothing on the business
+profile saves", which was true of the simulator and false of the product.
+
+The token the simulator generates is printed on every launch:
+
+```bash
+xcrun simctl spawn booted log show --last 30m \
+  --predicate 'eventMessage CONTAINS "App Check debug token"' | tail -1
+```
+
+Register that value once in Firebase Console → App Check → Apps → the iOS app
+→ **Manage debug tokens**. It persists for that simulator device. A *different*
+simulator, an erased device, or a reinstalled app can mint a new one — re-read
+the log rather than assuming.
+
+Before calling a mobile callable failure a product bug, check this first.
+
 ## 2. Deployment gate — non-negotiable
 
 Production deploys go through the preflight, which now enforces:
