@@ -4300,7 +4300,20 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get businessOperationsWebNote =>
-      'Gérez le fret, les barils, le transport, le stationnement, les destinations, le personnel et les versements dans la console entreprise sécurisée. Cela évite d’ouvrir par erreur un parcours client de réservation ou de paiement.';
+      'Ouvre la console entreprise sécurisée dans votre navigateur, où se trouvent le personnel, les versements et les destinations.';
+
+  @override
+  String get businessServiceOverviewUnpaid => 'Impayés';
+
+  @override
+  String get businessServiceOverviewOpen => 'En cours';
+
+  @override
+  String get businessServiceOverviewShowAll => 'Afficher toute l’activité';
+
+  @override
+  String get businessServiceOverviewEmpty =>
+      'Aucun service n’est encore activé pour votre compte.';
 
   @override
   String get businessCarsMobileNote =>

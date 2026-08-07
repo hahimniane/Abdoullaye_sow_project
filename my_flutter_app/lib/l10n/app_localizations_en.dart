@@ -4210,7 +4210,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get businessOperationsWebNote =>
-      'Manage freight, barrels, transport, parking, destinations, staff, and payouts in the secure business console. This avoids entering a customer booking or payment flow by mistake.';
+      'Opens the secure business console in your browser, where staff, payouts and destinations live.';
+
+  @override
+  String get businessServiceOverviewUnpaid => 'Unpaid';
+
+  @override
+  String get businessServiceOverviewOpen => 'Open';
+
+  @override
+  String get businessServiceOverviewShowAll => 'Show all activity';
+
+  @override
+  String get businessServiceOverviewEmpty =>
+      'No services are switched on for your account yet.';
 
   @override
   String get businessCarsMobileNote =>

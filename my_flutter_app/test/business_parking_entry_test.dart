@@ -121,7 +121,10 @@ void main() {
       // Same day in and out is a real one-day stay, not an inverted window.
       expect(
         validateBusinessParkingEntry(
-          draft(startDate: DateTime(2026, 8, 10, 9), endDate: DateTime(2026, 8, 10, 17)),
+          draft(
+            startDate: DateTime(2026, 8, 10, 9),
+            endDate: DateTime(2026, 8, 10, 17),
+          ),
         ),
         isEmpty,
       );
@@ -188,19 +191,17 @@ void main() {
     });
 
     test('carries the tracking code, the amount and the checkout link', () {
-      final result = BusinessParkingEntryResult.fromCallable(
-        <String, dynamic>{
-          'entryId': 'entry-1',
-          'trackingCode': 'PK-4T2K9M',
-          'paymentMethod': 'payment_link',
-          'amountDue': 84.5,
-          'amountDueCents': 8450,
-          'platformFeeCents': 845,
-          'paymentStatus': 'pending',
-          'checkoutUrl': 'https://checkout.stripe.com/c/pay/cs_test_1',
-          'checkoutSessionId': 'cs_test_1',
-        },
-      );
+      final result = BusinessParkingEntryResult.fromCallable(<String, dynamic>{
+        'entryId': 'entry-1',
+        'trackingCode': 'PK-4T2K9M',
+        'paymentMethod': 'payment_link',
+        'amountDue': 84.5,
+        'amountDueCents': 8450,
+        'platformFeeCents': 845,
+        'paymentStatus': 'pending',
+        'checkoutUrl': 'https://checkout.stripe.com/c/pay/cs_test_1',
+        'checkoutSessionId': 'cs_test_1',
+      });
       expect(result.trackingCode, 'PK-4T2K9M');
       expect(result.amountDue, 84.5);
       expect(result.isPaymentLink, isTrue);
@@ -208,14 +209,12 @@ void main() {
     });
 
     test('a direct entry is not a payment link', () {
-      final result = BusinessParkingEntryResult.fromCallable(
-        <String, dynamic>{
-          'trackingCode': 'PK-9Q1',
-          'paymentMethod': 'direct',
-          'amountDueCents': 4000,
-          'paymentStatus': 'awaiting_direct_payment',
-        },
-      );
+      final result = BusinessParkingEntryResult.fromCallable(<String, dynamic>{
+        'trackingCode': 'PK-9Q1',
+        'paymentMethod': 'direct',
+        'amountDueCents': 4000,
+        'paymentStatus': 'awaiting_direct_payment',
+      });
       expect(result.isPaymentLink, isFalse);
       expect(result.amountDue, 40);
       expect(result.checkoutUrl, '');
@@ -224,13 +223,11 @@ void main() {
 
   group('BusinessParkingPaidResult', () {
     test('a repeat marking comes back as a success, not an error', () {
-      final result = BusinessParkingPaidResult.fromCallable(
-        <String, dynamic>{
-          'alreadyPaid': true,
-          'amountPaidCents': 4000,
-          'trackingCode': 'PK-9Q1',
-        },
-      );
+      final result = BusinessParkingPaidResult.fromCallable(<String, dynamic>{
+        'alreadyPaid': true,
+        'amountPaidCents': 4000,
+        'trackingCode': 'PK-9Q1',
+      });
       expect(result.alreadyPaid, isTrue);
       expect(result.amountPaid, 40);
     });
@@ -256,7 +253,10 @@ void main() {
       );
       // Already paid must not invite a second marking.
       expect(
-        canMarkBusinessParkingPaid({...directAwaiting, 'paymentStatus': 'paid'}),
+        canMarkBusinessParkingPaid({
+          ...directAwaiting,
+          'paymentStatus': 'paid',
+        }),
         isFalse,
       );
       expect(
@@ -271,7 +271,10 @@ void main() {
     });
 
     test('a business entry is recognised by either marker', () {
-      expect(isBusinessEnteredParking(<String, dynamic>{'source': 'business'}), isTrue);
+      expect(
+        isBusinessEnteredParking(<String, dynamic>{'source': 'business'}),
+        isTrue,
+      );
       expect(
         isBusinessEnteredParking(<String, dynamic>{'enteredByBusiness': true}),
         isTrue,
@@ -405,7 +408,7 @@ void main() {
   group('the business home offers a way to record a parked car', () {
     final home = File('lib/screens/home_menu.dart').readAsStringSync();
 
-    test('the action renders in the activity section and opens ParkCarScreen', () {
+    test('the action is the primary one on the services card', () {
       final guard = home.indexOf('if (canRecordParkedCar) ...[');
       final button = home.indexOf("Key('record-parked-car')");
       final push = home.indexOf('const ParkCarScreen()');
@@ -413,13 +416,25 @@ void main() {
       expect(button, greaterThan(guard));
       expect(push, greaterThan(button));
 
-      // Directly above the records it creates: after the "Recent activity"
-      // heading and before the category chips.
+      // Above the fold, not below a "Recent activity" log heading: it is the
+      // action a lot performs all day. It sits under the service overview
+      // grid and ahead of the console button, which leaves the app.
+      final grid = home.indexOf("Key('service-overview-grid')");
       final heading = home.indexOf('l10n.recentActivity');
-      final chips = home.indexOf('ServiceCategory.values.map');
-      expect(heading, greaterThan(-1));
-      expect(guard, greaterThan(heading));
-      expect(push, lessThan(chips));
+      final console = home.indexOf('l10n.openBusinessConsole');
+      expect(grid, greaterThan(-1));
+      expect(guard, greaterThan(grid));
+      expect(push, lessThan(console));
+      expect(console, lessThan(heading));
+
+      // It is the filled control; the console it now outranks is outlined.
+      expect(
+        home,
+        contains(
+          'child: FilledButton.icon(\n'
+          "                key: const Key('record-parked-car'),",
+        ),
+      );
 
       expect(home, contains('l10n.recordAParkedCar'));
       // Not through the named customer route - business_mobile_role_safety
@@ -446,55 +461,64 @@ void main() {
       expect('ParkCarScreen('.allMatches(home).length, 1);
     });
 
-    test('the permission decision itself admits owners and scoped staff only', () {
-      // Owner / admin: not staff-scoped, so every permission is theirs.
-      expect(
-        canAccessBusinessPermission(
-          isStaff: false,
-          permissions: const <String>[],
-          permission: BusinessPermission.parking,
-        ),
-        isTrue,
-      );
-      expect(
-        canAccessBusinessPermission(
-          isStaff: true,
-          permissions: const <String>[BusinessPermission.parking],
-          permission: BusinessPermission.parking,
-        ),
-        isTrue,
-      );
-      expect(
-        canAccessBusinessPermission(
-          isStaff: true,
-          permissions: const <String>[BusinessPermission.barrels],
-          permission: BusinessPermission.parking,
-        ),
-        isFalse,
-      );
-    });
+    test(
+      'the permission decision itself admits owners and scoped staff only',
+      () {
+        // Owner / admin: not staff-scoped, so every permission is theirs.
+        expect(
+          canAccessBusinessPermission(
+            isStaff: false,
+            permissions: const <String>[],
+            permission: BusinessPermission.parking,
+          ),
+          isTrue,
+        );
+        expect(
+          canAccessBusinessPermission(
+            isStaff: true,
+            permissions: const <String>[BusinessPermission.parking],
+            permission: BusinessPermission.parking,
+          ),
+          isTrue,
+        );
+        expect(
+          canAccessBusinessPermission(
+            isStaff: true,
+            permissions: const <String>[BusinessPermission.barrels],
+            permission: BusinessPermission.parking,
+          ),
+          isFalse,
+        );
+      },
+    );
 
-    test('ParkCarScreen picks the walk-up flow itself, with no flag to pass', () {
-      final screen = File(
-        'lib/screens/park_car_screen.dart',
-      ).readAsStringSync();
-      final build = screen.substring(
-        screen.indexOf('  Widget build(BuildContext context) {'),
-        screen.indexOf('Future<void> _selectBusinessEndDate()'),
-      );
-      expect(build, contains('final auth = context.watch<AuthProvider>();'));
-      expect(build, contains('if (!auth.hasBusinessDashboardAccess) {'));
-      expect(build, contains('return _buildCustomerParkingReservation(context);'));
-      expect(build, contains('return _buildBusinessParkingIntake(context);'));
-      // The constructor takes test seams only - no mode parameter exists, so
-      // `const ParkCarScreen()` from the business home lands on the walk-up
-      // intake because the signed-in user has dashboard access.
-      final ctor = screen.substring(
-        screen.indexOf('  const ParkCarScreen({'),
-        screen.indexOf('  State<ParkCarScreen> createState()'),
-      );
-      expect(ctor, isNot(contains('mode')));
-      expect(ctor, isNot(contains('isBusiness')));
-    });
+    test(
+      'ParkCarScreen picks the walk-up flow itself, with no flag to pass',
+      () {
+        final screen = File(
+          'lib/screens/park_car_screen.dart',
+        ).readAsStringSync();
+        final build = screen.substring(
+          screen.indexOf('  Widget build(BuildContext context) {'),
+          screen.indexOf('Future<void> _selectBusinessEndDate()'),
+        );
+        expect(build, contains('final auth = context.watch<AuthProvider>();'));
+        expect(build, contains('if (!auth.hasBusinessDashboardAccess) {'));
+        expect(
+          build,
+          contains('return _buildCustomerParkingReservation(context);'),
+        );
+        expect(build, contains('return _buildBusinessParkingIntake(context);'));
+        // The constructor takes test seams only - no mode parameter exists, so
+        // `const ParkCarScreen()` from the business home lands on the walk-up
+        // intake because the signed-in user has dashboard access.
+        final ctor = screen.substring(
+          screen.indexOf('  const ParkCarScreen({'),
+          screen.indexOf('  State<ParkCarScreen> createState()'),
+        );
+        expect(ctor, isNot(contains('mode')));
+        expect(ctor, isNot(contains('isBusiness')));
+      },
+    );
   });
 }

@@ -16,12 +16,65 @@ import '../widgets/business_parking_payment_badge.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_colors.dart';
 import '../services/business_parking_entry.dart';
+import '../services/business_service_overview.dart';
 import '../utils/business_parking_localization.dart';
 import '../utils/business_permissions.dart';
 import 'business_assistant_screen.dart';
 import 'park_car_screen.dart';
 
-enum ServiceCategory { all, parking, barrels, freight, transport, sales }
+export '../services/business_service_overview.dart' show ServiceCategory;
+
+/// The tint a service carries wherever it appears - tile, chip or record card.
+Color _categoryColor(ServiceCategory category) {
+  switch (category) {
+    case ServiceCategory.parking:
+      return AppColors.sage;
+    case ServiceCategory.barrels:
+      return AppColors.cobalt;
+    case ServiceCategory.freight:
+      return AppColors.cobalt;
+    case ServiceCategory.transport:
+      return AppColors.sage;
+    case ServiceCategory.sales:
+      return AppColors.saffron;
+    case ServiceCategory.all:
+      return AppColors.ink;
+  }
+}
+
+IconData _categoryIcon(ServiceCategory category) {
+  switch (category) {
+    case ServiceCategory.parking:
+      return Icons.local_parking;
+    case ServiceCategory.barrels:
+      return Icons.inventory_2;
+    case ServiceCategory.freight:
+      return Icons.inventory_2_outlined;
+    case ServiceCategory.transport:
+      return Icons.directions_car;
+    case ServiceCategory.sales:
+      return Icons.storefront;
+    case ServiceCategory.all:
+      return Icons.dashboard_outlined;
+  }
+}
+
+String _categoryLabel(ServiceCategory category, AppLocalizations l10n) {
+  switch (category) {
+    case ServiceCategory.all:
+      return l10n.filterAll;
+    case ServiceCategory.parking:
+      return l10n.filterParking;
+    case ServiceCategory.barrels:
+      return l10n.filterBarrels;
+    case ServiceCategory.freight:
+      return l10n.filterFreight;
+    case ServiceCategory.transport:
+      return l10n.filterTransport;
+    case ServiceCategory.sales:
+      return l10n.filterSales;
+  }
+}
 
 class HomeMenu extends StatefulWidget {
   const HomeMenu({super.key});
@@ -51,6 +104,12 @@ class _HomeMenuState extends State<HomeMenu> {
   final List<ParkedCar> _parkedCars = [];
   final List<BarrelShipment> _barrelShipments = [];
   final List<ActivityRecord> _freightRecords = [];
+
+  /// The statuses of the same freight documents `_freightRecords` was built
+  /// from, kept alongside rather than on the record because the record's
+  /// payload is the id the freight tap needs. No extra read: both come out of
+  /// the one snapshot.
+  final List<String> _freightStatuses = [];
   final List<TransportRequest> _transportRequests = [];
   bool _isLoading = true;
   ServiceCategory _selectedCategory = ServiceCategory.all;
@@ -172,6 +231,11 @@ class _HomeMenuState extends State<HomeMenu> {
           : freightCollection.where('businessId', isEqualTo: auth.businessId);
       _freightShipmentsSubscription = freightQuery.snapshots().listen(
         (snapshot) {
+          _freightStatuses
+            ..clear()
+            ..addAll(
+              snapshot.docs.map((doc) => '${doc.data()['status'] ?? ''}'),
+            );
           _freightRecords
             ..clear()
             ..addAll(
@@ -346,42 +410,41 @@ class _HomeMenuState extends State<HomeMenu> {
 
   Set<ServiceCategory> _enabledActivityCategories() {
     final auth = context.read<AuthProvider>();
-    final services = auth.businessServices.isEmpty
-        ? business_services.defaultBusinessServiceValues
-        : auth.businessServices;
-    return {
-      if (business_services.hasBusinessService(
-            services,
-            business_services.BusinessServiceKey.carParking,
-          ) &&
-          auth.hasBusinessPermission(BusinessPermission.parking))
-        ServiceCategory.parking,
-      if (business_services.hasBusinessService(
-            services,
-            business_services.BusinessServiceKey.barrelShipping,
-          ) &&
-          auth.hasBusinessPermission(BusinessPermission.barrels))
-        ServiceCategory.barrels,
-      if (business_services.hasBusinessService(
-            services,
-            business_services.BusinessServiceKey.freight,
-          ) &&
-          auth.hasBusinessPermission(BusinessPermission.freight))
-        ServiceCategory.freight,
-      if (business_services.hasBusinessService(
-            services,
-            business_services.BusinessServiceKey.carTransport,
-          ) &&
-          auth.hasBusinessPermission(BusinessPermission.transport))
-        ServiceCategory.transport,
-      if (business_services.hasBusinessService(
-            services,
-            business_services.BusinessServiceKey.carSales,
-          ) &&
-          (auth.hasBusinessPermission(BusinessPermission.listings) ||
-              auth.hasBusinessPermission(BusinessPermission.purchases)))
-        ServiceCategory.sales,
-    };
+    return businessActivityCategories(
+      services: auth.businessServices,
+      hasPermission: auth.hasBusinessPermission,
+    );
+  }
+
+  /// The overview grid, built from the lists this screen has already
+  /// subscribed to. The tiles and the feed's own gate come from the same pure
+  /// decision, so a tile can never offer a service whose records are hidden.
+  List<BusinessServiceTile> _overviewTiles() {
+    final auth = context.read<AuthProvider>();
+    return businessServiceOverviewTiles(
+      services: auth.businessServices,
+      hasPermission: auth.hasBusinessPermission,
+      parkedCarFields: _parkedCars.map((car) => car.paymentFields),
+      barrelStatuses: _barrelShipments.map((shipment) => shipment.status),
+      freightStatuses: _freightStatuses,
+      transportStatuses: _transportRequests.map((request) => request.status),
+    );
+  }
+
+  /// Narrows the feed to one service, or back to everything.
+  ///
+  /// Leaving parking takes the parking filters with it - an invisible
+  /// narrowing reads as missing records.
+  void _selectCategory(ServiceCategory category) {
+    setState(() {
+      _selectedCategory = category;
+      _paymentFilter = BusinessParkingPaymentFilter.all;
+      _parkingStatusFilter = businessParkingStatusFilterAll;
+      _parkingSearch = '';
+      _parkingSearchController.clear();
+      _parkedFrom = null;
+      _parkedTo = null;
+    });
   }
 
   @override
@@ -413,28 +476,35 @@ class _HomeMenuState extends State<HomeMenu> {
                   child: const LanguageToggle(),
                 ),
                 const SizedBox(height: 16),
-                _WelcomeSection(l10n: l10n, width: width),
-                const SizedBox(height: 24),
-                _ServicesSection(l10n: l10n, width: width),
+                // "Services. / Choose a service to get started" is an
+                // invitation to pick something. Once the service grid is on
+                // screen it is a caption for the thing directly under it,
+                // costing a phone-height of space to say what the tiles
+                // already say. Customers, who get no grid, still need it.
+                if (_overviewTiles().isEmpty) ...[
+                  _WelcomeSection(l10n: l10n, width: width),
+                  const SizedBox(height: 24),
+                ],
+                _ServicesSection(
+                  l10n: l10n,
+                  width: width,
+                  tiles: _overviewTiles(),
+                  isLoading: _isLoading,
+                  selectedCategory: _selectedCategory,
+                  onCategoryTapped: (category) => _selectCategory(
+                    businessServiceOverviewSelection(
+                      _selectedCategory,
+                      category,
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 24),
                 _ActivitySection(
                   l10n: l10n,
                   records: _filteredRecords,
                   isLoading: _isLoading,
                   selectedCategory: _selectedCategory,
-                  onCategoryChanged: (category) {
-                    setState(() {
-                      _selectedCategory = category;
-                      // Leaving parking takes the parking filters with it -
-                      // an invisible narrowing reads as missing records.
-                      _paymentFilter = BusinessParkingPaymentFilter.all;
-                      _parkingStatusFilter = businessParkingStatusFilterAll;
-                      _parkingSearch = '';
-                      _parkingSearchController.clear();
-                      _parkedFrom = null;
-                      _parkedTo = null;
-                    });
-                  },
+                  onCategoryChanged: _selectCategory,
                   paymentFilter: _paymentFilter,
                   onPaymentFilterChanged: (filter) {
                     setState(() {
@@ -534,11 +604,29 @@ class _WelcomeSection extends StatelessWidget {
   }
 }
 
+/// The business's own services, on the first screen, above the fold.
+///
+/// This card used to be a five-line paragraph and a filled button that left
+/// the app for Safari, with the one action a lot performs all day - recording
+/// a walk-up - stranded below a "Recent activity" heading as a plain outlined
+/// button. The order here is the order of the day: what needs doing, then the
+/// thing you do, then the console you occasionally leave for.
 class _ServicesSection extends StatelessWidget {
-  const _ServicesSection({required this.l10n, required this.width});
+  const _ServicesSection({
+    required this.l10n,
+    required this.width,
+    required this.tiles,
+    required this.isLoading,
+    required this.selectedCategory,
+    required this.onCategoryTapped,
+  });
 
   final AppLocalizations l10n;
   final double width;
+  final List<BusinessServiceTile> tiles;
+  final bool isLoading;
+  final ServiceCategory selectedCategory;
+  final ValueChanged<ServiceCategory> onCategoryTapped;
 
   @override
   Widget build(BuildContext context) {
@@ -553,6 +641,12 @@ class _ServicesSection extends StatelessWidget {
         ) &&
         (auth.hasBusinessPermission(BusinessPermission.listings) ||
             auth.hasBusinessPermission(BusinessPermission.purchases));
+    // Same gate as the parkedCars subscription in _HomeMenuState: the lot that
+    // can see its parked cars is the lot that can add one, so the list and the
+    // way to extend it appear together or not at all.
+    final canRecordParkedCar = auth.hasBusinessPermission(
+      BusinessPermission.parking,
+    );
     return Container(
       padding: EdgeInsets.all(width * 0.06),
       decoration: BoxDecoration(
@@ -569,16 +663,17 @@ class _ServicesSection extends StatelessWidget {
               fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            l10n.businessOperationsWebNote,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.muted,
-              height: 1.45,
-            ),
+          const SizedBox(height: 16),
+          _ServiceOverviewGrid(
+            key: const Key('service-overview-grid'),
+            l10n: l10n,
+            tiles: tiles,
+            isLoading: isLoading,
+            selectedCategory: selectedCategory,
+            onCategoryTapped: onCategoryTapped,
           ),
           if (showSales) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Text(
               l10n.businessCarsMobileNote,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -587,10 +682,34 @@ class _ServicesSection extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(height: 16),
+          // The daily action, and so the loudest thing on the screen.
+          // ParkCarScreen picks its own flow from auth.hasBusinessDashboardAccess
+          // (see its build), so pushing the screen directly opens the walk-up
+          // intake for a business - no flag to pass, and no named customer route.
+          if (canRecordParkedCar) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                key: const Key('record-parked-car'),
+                icon: const Icon(Icons.local_parking),
+                label: Text(l10n.recordAParkedCar),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const ParkCarScreen(),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+          // Occasional, and it leaves the app - so it is outlined, and it says
+          // so before it is tapped.
+          const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
-            child: AsyncActionButton.filled(
+            child: AsyncActionButton.outlined(
               icon: Icons.open_in_browser,
               label: l10n.openBusinessConsole,
               loadingLabel: l10n.openingBusinessConsole,
@@ -603,6 +722,14 @@ class _ServicesSection extends StatelessWidget {
                   showErrorSnackBar(context, l10n.businessConsoleOpenFailed);
                 }
               },
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            l10n.businessOperationsWebNote,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.muted,
+              height: 1.4,
             ),
           ),
           if ((auth.businessId ?? '').isNotEmpty) ...[
@@ -627,6 +754,170 @@ class _ServicesSection extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// One tile per service the business actually offers, two to a row.
+///
+/// A tile that only ever said "Barrels" would be a filter chip drawn larger.
+/// What earns the space is the number: for parking, what the lot is still
+/// owed; for the shipping services, what is still moving. A tile with nothing
+/// outstanding still appears - "nothing to chase today" is an answer, and a
+/// grid that changed shape as work arrived would be unreadable.
+class _ServiceOverviewGrid extends StatelessWidget {
+  const _ServiceOverviewGrid({
+    super.key,
+    required this.l10n,
+    required this.tiles,
+    required this.isLoading,
+    required this.selectedCategory,
+    required this.onCategoryTapped,
+  });
+
+  final AppLocalizations l10n;
+  final List<BusinessServiceTile> tiles;
+  final bool isLoading;
+  final ServiceCategory selectedCategory;
+  final ValueChanged<ServiceCategory> onCategoryTapped;
+
+  @override
+  Widget build(BuildContext context) {
+    if (tiles.isEmpty) {
+      return Text(
+        l10n.businessServiceOverviewEmpty,
+        style: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(color: AppColors.muted, height: 1.4),
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const gap = 12.0;
+        // Two to a row on a phone; a single service gets the full width rather
+        // than a lonely half-tile.
+        final columns = tiles.length == 1 ? 1 : 2;
+        final tileWidth =
+            (constraints.maxWidth - gap * (columns - 1)) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final tile in tiles)
+              SizedBox(
+                width: tileWidth,
+                child: _ServiceOverviewCard(
+                  key: Key('service-tile-${tile.category.name}'),
+                  l10n: l10n,
+                  tile: tile,
+                  isLoading: isLoading,
+                  isSelected: tile.category == selectedCategory,
+                  onTap: () => onCategoryTapped(tile.category),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ServiceOverviewCard extends StatelessWidget {
+  const _ServiceOverviewCard({
+    super.key,
+    required this.l10n,
+    required this.tile,
+    required this.isLoading,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final AppLocalizations l10n;
+  final BusinessServiceTile tile;
+  final bool isLoading;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tint = _categoryColor(tile.category);
+    final name = _categoryLabel(tile.category, l10n);
+    final caption = tile.countIsUnpaid
+        ? l10n.businessServiceOverviewUnpaid
+        : l10n.businessServiceOverviewOpen;
+    // Until the feeds have all reported, a "0" would be a claim the screen
+    // cannot make yet.
+    final countText = isLoading ? '—' : '${tile.count}';
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: '$name, $countText $caption',
+      child: InkWell(
+        onTap: onTap,
+        // `Ink` rather than a Container: the decoration is painted on the
+        // Material, so the tap splash lands on top of the tile instead of
+        // under it.
+        child: Ink(
+          decoration: BoxDecoration(
+            color: isSelected ? tint.withValues(alpha: 0.12) : AppColors.paper,
+            border: Border.all(
+              color: tint.withValues(alpha: isSelected ? 1 : 0.45),
+              width: isSelected ? 2 : 1,
+            ),
+          ),
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_categoryIcon(tile.category), color: tint, size: 22),
+              const SizedBox(height: 10),
+              Text(
+                name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.ink,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text(
+                    countText,
+                    style: TextStyle(
+                      fontSize: 24,
+                      height: 1,
+                      fontWeight: FontWeight.w800,
+                      // Nothing outstanding is not news; it must not shout.
+                      color: tile.count == 0 || isLoading
+                          ? AppColors.muted
+                          : AppColors.ink,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      caption,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -693,7 +984,10 @@ class _ActivitySection extends StatelessWidget {
       onParkedRangeChanged(day, to != null && to.isBefore(day) ? day : to);
     } else {
       final from = parkedFrom;
-      onParkedRangeChanged(from != null && day.isBefore(from) ? day : from, day);
+      onParkedRangeChanged(
+        from != null && day.isBefore(from) ? day : from,
+        day,
+      );
     }
   }
 
@@ -715,132 +1009,38 @@ class _ActivitySection extends StatelessWidget {
     }
   }
 
-  Color _categoryColor(ServiceCategory category) {
-    switch (category) {
-      case ServiceCategory.parking:
-        return AppColors.sage;
-      case ServiceCategory.barrels:
-        return AppColors.cobalt;
-      case ServiceCategory.freight:
-        return AppColors.cobalt;
-      case ServiceCategory.transport:
-        return AppColors.sage;
-      case ServiceCategory.sales:
-        return AppColors.saffron;
-      case ServiceCategory.all:
-        return AppColors.ink;
-    }
-  }
-
-  IconData _categoryIcon(ServiceCategory category) {
-    switch (category) {
-      case ServiceCategory.parking:
-        return Icons.local_parking;
-      case ServiceCategory.barrels:
-        return Icons.inventory_2;
-      case ServiceCategory.freight:
-        return Icons.inventory_2_outlined;
-      case ServiceCategory.transport:
-        return Icons.directions_car;
-      case ServiceCategory.sales:
-        return Icons.storefront;
-      case ServiceCategory.all:
-        return Icons.dashboard_outlined;
-    }
-  }
-
-  String _categoryLabel(ServiceCategory category, AppLocalizations l10n) {
-    switch (category) {
-      case ServiceCategory.all:
-        return l10n.filterAll;
-      case ServiceCategory.parking:
-        return l10n.filterParking;
-      case ServiceCategory.barrels:
-        return l10n.filterBarrels;
-      case ServiceCategory.freight:
-        return l10n.filterFreight;
-      case ServiceCategory.transport:
-        return l10n.filterTransport;
-      case ServiceCategory.sales:
-        return l10n.filterSales;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    // Same gate as the parkedCars subscription in _HomeMenuState: the lot that
-    // can see its parked cars is the lot that can add one, so the list and the
-    // way to extend it appear together or not at all.
-    final canRecordParkedCar = auth.hasBusinessPermission(
-      BusinessPermission.parking,
-    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          l10n.recentActivity,
-          style: const TextStyle(
-            color: AppColors.ink,
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        // ParkCarScreen picks its own flow from auth.hasBusinessDashboardAccess
-        // (see its build), so pushing the screen directly opens the walk-up
-        // intake for a business - no flag to pass, and no named customer route.
-        if (canRecordParkedCar) ...[
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              key: const Key('record-parked-car'),
-              icon: const Icon(Icons.local_parking),
-              label: Text(l10n.recordAParkedCar),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const ParkCarScreen(),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-        const SizedBox(height: 16),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: ServiceCategory.values.map((category) {
-              final isSelected = category == selectedCategory;
-              final chipColor = _categoryColor(category);
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ChoiceChip(
-                  label: Text(_categoryLabel(category, l10n)),
-                  selected: isSelected,
-                  onSelected: (_) => onCategoryChanged(category),
-                  avatar: Icon(
-                    _categoryIcon(category),
-                    size: 18,
-                    color: isSelected ? AppColors.paper : chipColor,
-                  ),
-                  labelStyle: TextStyle(
-                    color: isSelected ? AppColors.paper : chipColor,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  backgroundColor: AppColors.paper,
-                  selectedColor: chipColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.zero,
-                    side: BorderSide(
-                      color: chipColor.withValues(alpha: isSelected ? 1 : 0.5),
-                    ),
-                  ),
+        // The tiles above are the only way to narrow this feed now - the
+        // filter chips that used to sit here did the same job twice. What the
+        // tiles cannot say is "you are looking at one service", so the heading
+        // does, and carries the way back.
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                selectedCategory == ServiceCategory.all
+                    ? l10n.recentActivity
+                    : '${l10n.recentActivity} • '
+                          '${_categoryLabel(selectedCategory, l10n)}',
+                style: const TextStyle(
+                  color: AppColors.ink,
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
                 ),
-              );
-            }).toList(),
-          ),
+              ),
+            ),
+            if (selectedCategory != ServiceCategory.all)
+              TextButton.icon(
+                key: const Key('activity-show-all'),
+                onPressed: () => onCategoryChanged(ServiceCategory.all),
+                icon: const Icon(Icons.close, size: 16),
+                label: Text(l10n.businessServiceOverviewShowAll),
+              ),
+          ],
         ),
         // Paid / Not paid, offered only where it means something. The lot's
         // question is "who still owes me", and scrolling a mixed activity

@@ -7589,8 +7589,32 @@ abstract class AppLocalizations {
   /// No description provided for @businessOperationsWebNote.
   ///
   /// In en, this message translates to:
-  /// **'Manage freight, barrels, transport, parking, destinations, staff, and payouts in the secure business console. This avoids entering a customer booking or payment flow by mistake.'**
+  /// **'Opens the secure business console in your browser, where staff, payouts and destinations live.'**
   String get businessOperationsWebNote;
+
+  /// No description provided for @businessServiceOverviewUnpaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpaid'**
+  String get businessServiceOverviewUnpaid;
+
+  /// No description provided for @businessServiceOverviewOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get businessServiceOverviewOpen;
+
+  /// No description provided for @businessServiceOverviewShowAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Show all activity'**
+  String get businessServiceOverviewShowAll;
+
+  /// No description provided for @businessServiceOverviewEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No services are switched on for your account yet.'**
+  String get businessServiceOverviewEmpty;
 
   /// No description provided for @businessCarsMobileNote.
   ///

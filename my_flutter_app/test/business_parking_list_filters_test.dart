@@ -138,10 +138,7 @@ void main() {
         ),
         isTrue,
       );
-      expect(
-        businessParkingListIsNarrowed(from: DateTime(2026, 8, 1)),
-        isTrue,
-      );
+      expect(businessParkingListIsNarrowed(from: DateTime(2026, 8, 1)), isTrue);
       expect(businessParkingListIsNarrowed(to: DateTime(2026, 8, 9)), isTrue);
     });
   });
@@ -164,12 +161,18 @@ void main() {
     });
 
     test('leaving parking clears the new narrowings with the old ones', () {
-      // An invisible filter reads as missing records.
+      // An invisible filter reads as missing records. The reset moved into
+      // `_selectCategory` when the overview tiles took the chips' job: two
+      // controls now change the category, and only one copy of this rule may
+      // exist or they will drift.
       final handler = source.substring(
-        source.indexOf('onCategoryChanged: (category) {'),
-        source.indexOf('onPaymentFilterChanged: (filter) {'),
+        source.indexOf('void _selectCategory(ServiceCategory category) {'),
+        source.indexOf('@override\n  void dispose() {'),
       );
-      expect(handler, contains('_parkingStatusFilter = businessParkingStatusFilterAll'));
+      expect(
+        handler,
+        contains('_parkingStatusFilter = businessParkingStatusFilterAll'),
+      );
       expect(handler, contains("_parkingSearch = ''"));
       expect(handler, contains('_parkedFrom = null'));
     });
