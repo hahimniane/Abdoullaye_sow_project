@@ -3580,6 +3580,52 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Per-service commissions cleared": "Commissions par service supprimées",
 });
 
+// Platform commission summary on the admin Finance page. The page used to show
+// only gross, customer-facing amounts, so the owner could not tell what the
+// platform itself had made; these are the strings that finally say it.
+// "Business", "Service", "Pending", "Records", "Unassigned business" and the
+// five service names are already in the dictionary above — repeating them here
+// would be duplicate keys, not second entries.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Platform commission": "Commission de la plateforme",
+  "Commission earned": "Commission encaissée",
+  "Commission pending": "Commission en attente",
+  "Gross volume": "Volume brut",
+  "Not commissionable": "Sans commission",
+  "Collected from orders the customer has paid":
+    "Encaissée sur les commandes déjà payées par le client",
+  "Expected once these customers pay":
+    "Attendue une fois que ces clients auront payé",
+  "What customers were charged, not platform income":
+    "Ce qui a été facturé aux clients, et non les revenus de la plateforme",
+  "Direct and Zelle payments the platform never bills":
+    "Paiements directs et Zelle que la plateforme ne facture jamais",
+  "Direct and Zelle payments are recorded so the business has paper, but the platform never bills them and takes no cut, so they are counted here and nowhere else.":
+    "Les paiements directs et Zelle sont enregistrés pour que l’entreprise ait une trace, mais la plateforme ne les facture jamais et ne prend aucune commission : ils sont comptés ici et nulle part ailleurs.",
+  "No commission has been recorded yet. Once a business takes a paid order, what the platform earned appears here.":
+    "Aucune commission n’a encore été enregistrée. Dès qu’une entreprise reçoit une commande payée, ce que la plateforme a gagné apparaît ici.",
+  "Commission over time": "Commission dans le temps",
+  "Commission by business": "Commission par entreprise",
+  "Commission by service": "Commission par service",
+  "Commission share": "Part de la commission",
+  Earned: "Encaissé",
+  // "Per day" is already in the dictionary above.
+  "Per month": "Par mois",
+  "No periods": "Aucune période",
+  "No dated records yet, so there is nothing to chart.":
+    "Aucun dossier daté pour l’instant : il n’y a rien à représenter.",
+  "Show these numbers as a table": "Afficher ces chiffres sous forme de tableau",
+  "Commission earned and pending per period":
+    "Commission encaissée et en attente par période",
+  "No business has produced a commissionable record yet.":
+    "Aucune entreprise n’a encore produit de dossier donnant lieu à commission.",
+  "No service has produced a commissionable record yet.":
+    "Aucun service n’a encore produit de dossier donnant lieu à commission.",
+  // Prefixed at runtime by a record count, so only the fixed tail is a key.
+  "records carry no usable date, so they are in the totals above but not in this chart.":
+    "dossiers ne portent aucune date exploitable : ils figurent dans les totaux ci-dessus mais pas dans ce graphique.",
+});
+
 const PICKUP_ERROR_LABELS: Record<string, string> = {
   "Shared pickup plan": "Plan de collecte partagé",
   "Barrel shipping pickup": "Collecte expédition de barils",

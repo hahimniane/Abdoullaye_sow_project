@@ -23,13 +23,20 @@ export type BusinessEarningsServiceRow = {
   pendingTransactions: number;
 };
 
-const SERVICE_LABELS: Record<string, string> = {
+/**
+ * The five services a record can belong to. Exported so the platform-wide
+ * aggregation (platform-earnings.ts) speaks the same vocabulary instead of
+ * inventing a second set of ids for the same five things.
+ */
+export const EARNINGS_SERVICE_LABELS: Record<string, string> = {
   barrelShipping: "Barrel shipping",
   freight: "Freight",
   carSales: "Car sales",
   carTransport: "Car transport",
   carParking: "Car parking",
 };
+
+const SERVICE_LABELS = EARNINGS_SERVICE_LABELS;
 
 const PAID_STATUSES = new Set([
   "paid",
@@ -51,7 +58,11 @@ function numericValue(value: unknown) {
   return Number.isFinite(amount) ? amount : 0;
 }
 
-function centsOrDollars(row: FirestoreRow, centFields: string[], dollarFields: string[]) {
+/**
+ * Reads a money field in dollars, preferring the cents variant. Exported so
+ * every earnings reader resolves the same field precedence.
+ */
+export function centsOrDollars(row: FirestoreRow, centFields: string[], dollarFields: string[]) {
   for (const field of centFields) {
     const cents = numericValue(row[field]);
     if (cents > 0) return cents / 100;
@@ -123,7 +134,19 @@ function businessPayoutAmount(row: FirestoreRow, gross: number, platformFee: num
   return Math.max(0, gross - platformFee);
 }
 
-function platformFeeAmount(row: FirestoreRow, gross: number) {
+/**
+ * The platform's cut on one record, in dollars.
+ *
+ * Precedence, in order: an explicit fee in cents (`platformFeeCents`, or the
+ * legacy `platformCommissionCents`), an explicit fee in dollars, then a rate
+ * (`platformFeePct` / legacy `platformCommissionRate`) applied to the gross.
+ * Exported so the platform-wide roll-up cannot drift from this rule.
+ *
+ * @param row The record.
+ * @param gross The record's gross, in dollars.
+ * @return The platform fee in dollars; 0 when the record carries none.
+ */
+export function platformFeeAmount(row: FirestoreRow, gross: number) {
   const explicit = centsOrDollars(
     row,
     ["platformFeeCents", "platformCommissionCents"],
@@ -135,77 +158,95 @@ function platformFeeAmount(row: FirestoreRow, gross: number) {
   return 0;
 }
 
-export function summarizeBusinessEarnings({
-  purchases,
-  shipments,
-  freightShipments,
-  transports,
-  parkedCars,
-}: {
+/** One billable line: a service, the row whose money fields describe it, and its gross in dollars. */
+export type EarningsLineItem = {
+  serviceId: string;
+  /**
+   * The row to read money and payment status from. For most records this is
+   * the stored document; for a hold extension and for unsettled v2 freight it
+   * is a derived view of it (see earningsLineItems).
+   */
+  row: FirestoreRow;
+  /** The stored document the line came from — its id, business and dates. */
+  source: FirestoreRow;
+  /** Gross in dollars. */
+  gross: number;
+};
+
+export type EarningsRecordInput = {
   purchases: FirestoreRow[];
   shipments: FirestoreRow[];
   freightShipments: FirestoreRow[];
   transports: FirestoreRow[];
   parkedCars: FirestoreRow[];
-}): BusinessEarningsSummary {
-  const services = new Map<string, BusinessEarningsServiceRow>();
-  for (const serviceId of Object.keys(SERVICE_LABELS)) {
-    services.set(serviceId, serviceRow(serviceId));
-  }
+};
 
-  const add = (serviceId: string, row: FirestoreRow, gross: number) => {
-    if (gross <= 0) return;
-    const service = services.get(serviceId) ?? serviceRow(serviceId);
-    const platformFee = platformFeeAmount(row, gross);
-    addTransaction(
-      service,
-      row,
-      gross,
-      platformFee,
-      businessPayoutAmount(row, gross, platformFee),
-    );
-    services.set(serviceId, service);
+/**
+ * Flattens the raw record arrays into billable lines.
+ *
+ * This is the single place that knows which money field belongs to which
+ * service, that a paid hold extension is a second car-sales line on the same
+ * purchase, and that v2 freight is only real money once its price is settled.
+ * Both the per-business summary and the platform-wide roll-up fold over this
+ * so they cannot disagree about what a record is worth.
+ *
+ * @param input The record arrays, each optional-safe.
+ * @return Every line with a positive gross.
+ */
+export function earningsLineItems(input: Partial<EarningsRecordInput>): EarningsLineItem[] {
+  const items: EarningsLineItem[] = [];
+  const push = (serviceId: string, source: FirestoreRow, row: FirestoreRow, gross: number) => {
+    if (!Number.isFinite(gross) || gross <= 0) return;
+    items.push({ serviceId, row, source, gross });
   };
+  const list = (rows: FirestoreRow[] | undefined) =>
+    Array.isArray(rows) ? rows.filter((row): row is FirestoreRow => Boolean(row) && typeof row === "object") : [];
 
-  purchases.forEach((row) => {
-    const gross = centsOrDollars(
+  list(input.purchases).forEach((row) => {
+    push(
+      "carSales",
       row,
-      ["depositAmountCents", "amountCents"],
-      ["depositAmount", "amount", "price", "listingPrice"],
+      row,
+      centsOrDollars(
+        row,
+        ["depositAmountCents", "amountCents"],
+        ["depositAmount", "amount", "price", "listingPrice"],
+      ),
     );
-    add("carSales", row, gross);
     const extensionGross = centsOrDollars(
       row,
       ["extensionExtraAmountCents"],
       ["extensionExtraAmount"],
     );
     if (extensionGross > 0) {
-      const extensionRow = {
+      push("carSales", row, {
         ...row,
         paymentStatus: row.extensionPaymentStatus,
         platformFeeCents: row.extensionPlatformFeeCents,
         businessPayoutCents: row.extensionBusinessPayoutCents,
         platformFeePct: row.extensionPlatformFeePct,
-      };
-      add("carSales", extensionRow, extensionGross);
+      }, extensionGross);
     }
   });
 
-  shipments.forEach((row) => {
-    add(
+  list(input.shipments).forEach((row) => {
+    push(
       "barrelShipping",
+      row,
       row,
       centsOrDollars(row, ["totalCents", "priceCents", "amountCents"], ["total", "price", "amount"]),
     );
   });
-  freightShipments.forEach((row) => {
+
+  list(input.freightShipments).forEach((row) => {
     const versionTwo = numericValue(row.freightPricingVersion) >= 2;
     const settled = normalizedStatus(row.priceSettlementStatus) === "settled";
     const freightRow = versionTwo && !settled
       ? { ...row, paymentStatus: "pending", payoutStatus: "pending" }
       : row;
-    add(
+    push(
       "freight",
+      row,
       freightRow,
       versionTwo
         ? settled
@@ -214,19 +255,45 @@ export function summarizeBusinessEarnings({
         : centsOrDollars(row, ["totalCents", "priceCents", "amountCents"], ["total", "price", "amount"]),
     );
   });
-  transports.forEach((row) => {
-    add(
+
+  list(input.transports).forEach((row) => {
+    push(
       "carTransport",
+      row,
       row,
       centsOrDollars(row, ["totalCents", "priceCents", "amountCents"], ["totalCost", "price", "quoteAmount", "amount"]),
     );
   });
-  parkedCars.forEach((row) => {
-    add(
+
+  list(input.parkedCars).forEach((row) => {
+    push(
       "carParking",
+      row,
       row,
       centsOrDollars(row, ["totalCostCents", "totalCents", "amountCents"], ["totalCost", "price", "amount"]),
     );
+  });
+
+  return items;
+}
+
+export function summarizeBusinessEarnings(input: EarningsRecordInput): BusinessEarningsSummary {
+  const services = new Map<string, BusinessEarningsServiceRow>();
+  for (const serviceId of Object.keys(SERVICE_LABELS)) {
+    services.set(serviceId, serviceRow(serviceId));
+  }
+
+  earningsLineItems(input).forEach((item) => {
+    const service = services.get(item.serviceId) ?? serviceRow(item.serviceId);
+    const platformFee = platformFeeAmount(item.row, item.gross);
+    addTransaction(
+      service,
+      item.row,
+      item.gross,
+      platformFee,
+      businessPayoutAmount(item.row, item.gross, platformFee),
+    );
+    services.set(item.serviceId, service);
   });
 
   const rows = Array.from(services.values());

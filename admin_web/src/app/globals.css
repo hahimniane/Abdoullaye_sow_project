@@ -1110,6 +1110,218 @@ button[data-loading="true"]::before {
   align-items: start;
 }
 
+/* Platform commission summary — what the platform earned, above the ledger
+   that shows what customers were charged. */
+.commission-summary {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.commission-headline {
+  gap: 14px;
+}
+
+.commission-headline .metric strong {
+  font-size: 26px;
+  margin-top: 12px;
+}
+
+.commission-headline .metric small {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-top: 8px;
+  text-transform: none;
+}
+
+.commission-explainer {
+  margin: 0;
+}
+
+.commission-breakdown-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.commission-chart-card {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  min-width: 0;
+  padding: 16px 18px;
+}
+
+.commission-chart-card .chart-head {
+  margin-bottom: 10px;
+}
+
+.commission-chart-card .empty-state {
+  margin: 0 0 12px;
+}
+
+.commission-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+}
+
+.commission-legend li {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 13px;
+  font-weight: 650;
+  gap: 7px;
+}
+
+.commission-legend li b {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.commission-legend .dot {
+  border-radius: 3px;
+  flex: 0 0 auto;
+  height: 11px;
+  width: 11px;
+}
+
+/* Scales uniformly (no preserveAspectRatio override) so the period labels
+   inside the SVG are not stretched wide on a broad console. */
+.commission-chart {
+  display: block;
+  height: auto;
+  max-height: 240px;
+  width: 100%;
+}
+
+.commission-data {
+  margin-top: 10px;
+}
+
+.commission-data > summary {
+  color: var(--brand-strong);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.commission-table {
+  border-collapse: collapse;
+  font-size: 13.5px;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.commission-table caption {
+  text-align: left;
+}
+
+.commission-table th,
+.commission-table td {
+  border-bottom: 1px solid var(--rule);
+  padding: 7px 8px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Headers wrap: the French labels ("Part de la commission", "En attente") are
+   far longer than the English ones and would otherwise run into each other. */
+.commission-table thead th {
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
+  text-transform: uppercase;
+  vertical-align: bottom;
+  white-space: normal;
+}
+
+.commission-table tbody th[scope="row"],
+.commission-table thead th:first-child {
+  color: var(--ink);
+  font-weight: 700;
+  max-width: 220px;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+}
+
+/* Fixed layout so a long business name ellipsizes instead of shoving the
+   record count off the edge of the card. */
+.commission-bar-table {
+  margin-top: 0;
+  table-layout: fixed;
+}
+
+.commission-bar-table th:nth-child(2),
+.commission-bar-table td:nth-child(2) {
+  width: 24%;
+}
+
+.commission-bar-table th:nth-child(3),
+.commission-bar-table td:nth-child(3),
+.commission-bar-table th:nth-child(4),
+.commission-bar-table td:nth-child(4) {
+  width: 17%;
+}
+
+.commission-bar-table th:nth-child(5),
+.commission-bar-table td:nth-child(5) {
+  width: 12%;
+}
+
+.commission-data .commission-table th:not(:first-child),
+.commission-data .commission-table td:not(:first-child) {
+  width: 24%;
+}
+
+.commission-bar-cell {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+.commission-bar {
+  display: block;
+  height: 10px;
+  width: 100%;
+}
+
+.commission-note {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  margin-top: 10px;
+}
+
+@media (max-width: 1080px) {
+  .commission-breakdown-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .commission-headline {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .commission-headline {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .commission-table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
 .finance-ledger-row .finance-account-main > strong {
   font-weight: 650;
 }
@@ -11732,7 +11944,27 @@ button[data-loading="true"]::before {
    modal overlays (z-index 200) so a dialog still covers it. */
 /* Sits ABOVE the language toggle (fixed at bottom:16px, right:16px), which
    the bubble used to land straight on top of. */
+/* The floating stack, bottom-right: the language toggle sits at
+   bottom:16px and is ~38px tall, so the bubble starts above it. Anything
+   that changes either number should keep them from colliding - there is a
+   test asserting the clearance. */
 .assistant-widget { position: fixed; right: 18px; bottom: 74px; z-index: 90; }
+
+/* A fixed bubble covers whatever page content happens to be beneath it, and
+   a covered button cannot be clicked. Reserving the height of the whole
+   floating stack at the end of the scroll area means any control can always
+   be scrolled out from under it, rather than being permanently unreachable. */
+.has-floating-assistant .content { padding-bottom: 150px; }
+
+/* Bottom padding alone only clears the END of the page - mid-scroll the
+   bubble still passed over controls (measured: it covered "Start Stripe
+   registration"). Where there is width to spare, reserve the bubble's own
+   column so no content is ever under it and nothing can be un-clickable.
+   Below this width the screen is too narrow to give up a gutter, and the
+   bubble behaves like any mobile action button. */
+@media (min-width: 1100px) {
+  .has-floating-assistant .content { padding-right: 96px; }
+}
 .assistant-widget-launcher { align-items: center; background: var(--brand); border: 0; border-radius: 50%; box-shadow: 0 14px 34px rgba(13, 148, 136, 0.45); color: #fff; cursor: pointer; display: flex; height: 58px; justify-content: center; transition: transform 0.25s ease, background 0.2s ease; width: 58px; }
 .assistant-widget-launcher:hover { background: var(--brand-mid); transform: translateY(-3px) scale(1.05); }
 .assistant-widget-launcher.open { background: var(--brand-strong); }

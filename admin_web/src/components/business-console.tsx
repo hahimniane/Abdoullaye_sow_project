@@ -388,7 +388,9 @@ export function BusinessConsole({
   ].slice(0, 8);
 
   return (
-    <div className="app-shell">
+    // has-floating-assistant reserves scroll room at the end of the page so
+    // the bubble can never permanently cover a control (see globals.css).
+    <div className="app-shell has-floating-assistant">
       <header className="topbar">
         <div className="topbar-title">
           <button

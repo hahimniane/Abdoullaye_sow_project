@@ -61,6 +61,7 @@ import {
   SlidersHorizontal,
   Star,
   Store,
+  TrendingUp,
   Truck,
   UserCog,
   Users,
@@ -109,6 +110,12 @@ import {
   optionalText,
   text,
 } from "@/lib/format";
+import {
+  centsToDollars,
+  summarizePlatformEarnings,
+  type PlatformEarningsSeries,
+  type PlatformEarningsSummary,
+} from "@/lib/platform-earnings";
 import {
   canonicalDestinationServiceAvailability,
   destinationDepartureDays,
@@ -2914,6 +2921,7 @@ export function AdminConsole() {
               users={userRows}
               cars={carRows}
               shipments={shipmentRows}
+              freightShipments={freightRows}
               transports={transportRows}
               parkedCars={parkedRows}
               purchases={purchaseRows}
@@ -12350,6 +12358,324 @@ function RefundRequestRow({
   );
 }
 
+const COMMISSION_EARNED_COLOR = "var(--money)";
+const COMMISSION_PENDING_COLOR = "var(--accent)";
+
+/** One breakdown line: a named thing and what it has produced for the platform. */
+type CommissionBreakdownRow = {
+  key: string;
+  name: string;
+  earnedCents: number;
+  pendingCents: number;
+  records: number;
+};
+
+function commissionMoney(cents: number) {
+  return formatMoney(centsToDollars(cents));
+}
+
+/**
+ * Commission over time as an inline SVG column chart, with the same numbers in
+ * a table underneath. A chart on its own says nothing to a screen reader and
+ * nothing at all when the data is empty, so the table is not optional decoration
+ * — it is the accessible copy of the picture.
+ */
+function CommissionTrendChart({ series }: { series: PlatformEarningsSeries }) {
+  const points = series.points;
+  const width = 720;
+  const height = 170;
+  const paddingBottom = 22;
+  const plotHeight = height - paddingBottom;
+  const step = points.length > 0 ? width / points.length : width;
+  const barWidth = Math.max(1, Math.min(46, step - 3));
+  const max = Math.max(
+    1,
+    ...points.map((point) => point.earnedCents + point.pendingCents),
+  );
+  const totalEarned = points.reduce((sum, point) => sum + point.earnedCents, 0);
+  const totalPending = points.reduce((sum, point) => sum + point.pendingCents, 0);
+  const labelEvery = Math.max(1, Math.ceil(points.length / 8));
+  const periodLabel = series.granularity === "day" ? "Per day" : "Per month";
+
+  return (
+    <article className="commission-chart-card">
+      <div className="chart-head">
+        <h3>Commission over time</h3>
+        <span className="chart-total">{commissionMoney(totalEarned)}</span>
+      </div>
+      <ul className="commission-legend">
+        <li>
+          <span className="dot" style={{ background: COMMISSION_EARNED_COLOR }} />
+          Earned<b>{commissionMoney(totalEarned)}</b>
+        </li>
+        <li>
+          <span className="dot" style={{ background: COMMISSION_PENDING_COLOR }} />
+          Pending<b>{commissionMoney(totalPending)}</b>
+        </li>
+      </ul>
+      {points.length === 0 ? (
+        <EmptyState text="No dated records yet, so there is nothing to chart." />
+      ) : (
+        <svg
+          aria-hidden="true"
+          className="commission-chart"
+          focusable="false"
+          viewBox={`0 0 ${width} ${height}`}
+        >
+          <line
+            stroke="var(--rule)"
+            strokeWidth="1"
+            x1="0"
+            x2={width}
+            y1={plotHeight}
+            y2={plotHeight}
+          />
+          {points.map((point, index) => {
+            const x = index * step + (step - barWidth) / 2;
+            const earnedHeight = (point.earnedCents / max) * (plotHeight - 6);
+            const pendingHeight = (point.pendingCents / max) * (plotHeight - 6);
+            return (
+              <g key={point.key}>
+                <rect
+                  fill={COMMISSION_PENDING_COLOR}
+                  height={pendingHeight}
+                  opacity="0.75"
+                  width={barWidth}
+                  x={x}
+                  y={plotHeight - earnedHeight - pendingHeight}
+                />
+                <rect
+                  fill={COMMISSION_EARNED_COLOR}
+                  height={earnedHeight}
+                  width={barWidth}
+                  x={x}
+                  y={plotHeight - earnedHeight}
+                />
+                {index % labelEvery === 0 && (
+                  <text
+                    fill="var(--muted)"
+                    fontSize="11"
+                    textAnchor="middle"
+                    x={x + barWidth / 2}
+                    y={height - 6}
+                  >
+                    {point.label}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      )}
+      <details className="commission-data">
+        <summary>Show these numbers as a table</summary>
+        <table className="commission-table">
+          <caption className="sr-only">Commission earned and pending per period</caption>
+          <thead>
+            <tr>
+              <th scope="col">{periodLabel}</th>
+              <th scope="col">Earned</th>
+              <th scope="col">Pending</th>
+            </tr>
+          </thead>
+          <tbody>
+            {points.map((point) => (
+              <tr key={point.key}>
+                <th scope="row">{point.label}</th>
+                <td>{commissionMoney(point.earnedCents)}</td>
+                <td>{commissionMoney(point.pendingCents)}</td>
+              </tr>
+            ))}
+            {points.length === 0 && (
+              <tr>
+                <th scope="row">No periods</th>
+                <td>{commissionMoney(0)}</td>
+                <td>{commissionMoney(0)}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </details>
+      {series.undatedRecords > 0 && (
+        <small className="commission-note">
+          {series.undatedRecords.toLocaleString()} records carry no usable date, so
+          they are in the totals above but not in this chart.
+        </small>
+      )}
+    </article>
+  );
+}
+
+/**
+ * A horizontal bar per row, drawn inside the table that carries the numbers.
+ * The bar and the figures are the same element, so there is no chart a screen
+ * reader can miss and no table that can drift out of step with the picture.
+ */
+function CommissionBreakdown({
+  title,
+  unitLabel,
+  rows,
+  emptyText,
+}: {
+  title: string;
+  unitLabel: string;
+  rows: CommissionBreakdownRow[];
+  emptyText: string;
+}) {
+  const max = Math.max(
+    1,
+    ...rows.map((row) => row.earnedCents + row.pendingCents),
+  );
+  const totalEarned = rows.reduce((sum, row) => sum + row.earnedCents, 0);
+
+  return (
+    <article className="commission-chart-card">
+      <div className="chart-head">
+        <h3>{title}</h3>
+        <span className="chart-total">{commissionMoney(totalEarned)}</span>
+      </div>
+      {rows.length === 0 ? (
+        <EmptyState text={emptyText} />
+      ) : (
+        <table className="commission-table commission-bar-table">
+          <thead>
+            <tr>
+              <th scope="col">{unitLabel}</th>
+              <th scope="col">Commission share</th>
+              <th scope="col">Earned</th>
+              <th scope="col">Pending</th>
+              <th scope="col">Records</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const earnedWidth = (row.earnedCents / max) * 100;
+              const pendingWidth = (row.pendingCents / max) * 100;
+              return (
+                <tr key={row.key}>
+                  <th scope="row" title={row.name}>
+                    {row.name}
+                  </th>
+                  <td className="commission-bar-cell">
+                    <svg
+                      aria-hidden="true"
+                      className="commission-bar"
+                      focusable="false"
+                      preserveAspectRatio="none"
+                      viewBox="0 0 100 10"
+                    >
+                      <rect
+                        fill={COMMISSION_EARNED_COLOR}
+                        height="10"
+                        rx="2"
+                        width={Math.max(earnedWidth, earnedWidth > 0 ? 0.6 : 0)}
+                        x="0"
+                        y="0"
+                      />
+                      <rect
+                        fill={COMMISSION_PENDING_COLOR}
+                        height="10"
+                        opacity="0.75"
+                        rx="2"
+                        width={Math.max(pendingWidth, pendingWidth > 0 ? 0.6 : 0)}
+                        x={earnedWidth}
+                        y="0"
+                      />
+                    </svg>
+                  </td>
+                  <td>{commissionMoney(row.earnedCents)}</td>
+                  <td>{commissionMoney(row.pendingCents)}</td>
+                  <td>{row.records.toLocaleString()}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </article>
+  );
+}
+
+/**
+ * What the platform itself has made, above the transaction list.
+ *
+ * The list below shows gross, customer-facing amounts. This section answers the
+ * questions that number cannot: what has actually been collected, what is still
+ * expected, and which businesses and services it came from.
+ */
+function PlatformCommissionSummary({
+  summary,
+}: {
+  summary: PlatformEarningsSummary;
+}) {
+  const { totals, byBusiness, byService, series } = summary;
+
+  return (
+    <Panel title="Platform commission" icon={<TrendingUp size={18} />}>
+      {totals.records === 0 ? (
+        <EmptyState text="No commission has been recorded yet. Once a business takes a paid order, what the platform earned appears here." />
+      ) : (
+        <div className="commission-summary">
+          <div className="metric-grid commission-headline">
+            <article className="metric good">
+              <span>Commission earned</span>
+              <strong>{commissionMoney(totals.earnedCents)}</strong>
+              <small>Collected from orders the customer has paid</small>
+            </article>
+            <article className="metric attention">
+              <span>Commission pending</span>
+              <strong>{commissionMoney(totals.pendingCents)}</strong>
+              <small>Expected once these customers pay</small>
+            </article>
+            <article className="metric neutral">
+              <span>Gross volume</span>
+              <strong>{commissionMoney(totals.grossCents)}</strong>
+              <small>What customers were charged, not platform income</small>
+            </article>
+            <article className="metric neutral">
+              <span>Not commissionable</span>
+              <strong>{commissionMoney(totals.notCommissionableCents)}</strong>
+              <small>Direct and Zelle payments the platform never bills</small>
+            </article>
+          </div>
+          <div className="info-band commission-explainer">
+            Direct and Zelle payments are recorded so the business has paper, but the
+            platform never bills them and takes no cut, so they are counted here and
+            nowhere else.
+          </div>
+          <CommissionTrendChart series={series} />
+          <div className="commission-breakdown-grid">
+            <CommissionBreakdown
+              title="Commission by business"
+              unitLabel="Business"
+              rows={byBusiness.map((row) => ({
+                key: row.businessId || row.name,
+                name: row.name,
+                earnedCents: row.earnedCents,
+                pendingCents: row.pendingCents,
+                records: row.records,
+              }))}
+              emptyText="No business has produced a commissionable record yet."
+            />
+            <CommissionBreakdown
+              title="Commission by service"
+              unitLabel="Service"
+              rows={byService.map((row) => ({
+                key: row.serviceId,
+                name: row.label,
+                earnedCents: row.earnedCents,
+                pendingCents: row.pendingCents,
+                records: row.records,
+              }))}
+              emptyText="No service has produced a commissionable record yet."
+            />
+          </div>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 function FinanceView({
   refunds,
   barrelPoolBalances,
@@ -12359,6 +12685,7 @@ function FinanceView({
   users,
   cars,
   shipments,
+  freightShipments,
   transports,
   parkedCars,
   purchases,
@@ -12375,6 +12702,7 @@ function FinanceView({
   users: FirestoreRow[];
   cars: FirestoreRow[];
   shipments: FirestoreRow[];
+  freightShipments: FirestoreRow[];
   transports: FirestoreRow[];
   parkedCars: FirestoreRow[];
   purchases: FirestoreRow[];
@@ -12434,6 +12762,27 @@ function FinanceView({
     purchases,
     cars,
     businesses,
+    ],
+  );
+  // The platform's own books, from the records this view already holds. No
+  // extra Firestore reads: the same arrays that build the ledger below.
+  const platformEarnings = useMemo(
+    () =>
+      summarizePlatformEarnings({
+        shipments,
+        freightShipments,
+        transports,
+        parkedCars,
+        purchases,
+        businesses,
+      }),
+    [
+      shipments,
+      freightShipments,
+      transports,
+      parkedCars,
+      purchases,
+      businesses,
     ],
   );
   const sourceOptions = useMemo(() => {
@@ -12554,6 +12903,7 @@ function FinanceView({
           <strong>{formatMoney(pendingWalletTotal)}</strong>
         </article>
       </div>
+      <PlatformCommissionSummary summary={platformEarnings} />
       <Panel
         title="All business transactions"
         icon={<BadgeDollarSign size={18} />}
