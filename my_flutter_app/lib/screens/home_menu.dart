@@ -853,69 +853,80 @@ class _ServiceOverviewCard extends StatelessWidget {
       button: true,
       selected: isSelected,
       label: '$name, $countText $caption',
-      child: InkWell(
-        onTap: onTap,
-        // `Ink` rather than a Container: the decoration is painted on the
-        // Material, so the tap splash lands on top of the tile instead of
-        // under it.
-        child: Ink(
-          decoration: BoxDecoration(
-            color: isSelected ? tint.withValues(alpha: 0.12) : AppColors.paper,
-            border: Border.all(
-              color: tint.withValues(alpha: isSelected ? 1 : 0.45),
-              width: isSelected ? 2 : 1,
-            ),
+      // The tile is its own Material rather than an `Ink` decoration.
+      //
+      // `Ink` paints onto the nearest Material ANCESTOR, and the nearest one
+      // here is the Scaffold - underneath the white card this grid sits in. So
+      // the border and the selected fill were being painted below the card and
+      // hidden by it: tapping a tile filtered the feed, but every tile still
+      // looked identical, and the only evidence of the filter was a heading
+      // further down the page. Giving the tile its own Material paints the
+      // decoration where the tile actually is, and still clips the tap splash
+      // to the rounded corners.
+      child: Material(
+        color: isSelected ? tint.withValues(alpha: 0.12) : AppColors.paper,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: tint.withValues(alpha: isSelected ? 1 : 0.45),
+            width: isSelected ? 2 : 1,
           ),
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(_categoryIcon(tile.category), color: tint, size: 22),
-              const SizedBox(height: 10),
-              Text(
-                name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.ink,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(
-                    countText,
-                    style: TextStyle(
-                      fontSize: 24,
-                      height: 1,
-                      fontWeight: FontWeight.w800,
-                      // Nothing outstanding is not news; it must not shout.
-                      color: tile.count == 0 || isLoading
-                          ? AppColors.muted
-                          : AppColors.ink,
-                    ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(_categoryIcon(tile.category), color: tint, size: 22),
+                const SizedBox(height: 10),
+                Text(
+                  name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink,
                   ),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      caption,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      countText,
                       style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.muted,
+                        fontSize: 24,
+                        height: 1,
+                        fontWeight: FontWeight.w800,
+                        // Nothing outstanding is not news; it must not shout.
+                        color: tile.count == 0 || isLoading
+                            ? AppColors.muted
+                            : AppColors.ink,
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        caption,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.muted,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
