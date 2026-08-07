@@ -504,6 +504,16 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
+    // The VIN is optional for a recorded walk-up - the console does not
+    // require it and neither does the callable - but a printed receipt is a
+    // document identifying a specific car, so this path still asks for one.
+    if (_vinController.text.trim().isEmpty) {
+      showErrorSnackBar(
+        context,
+        AppLocalizations.of(context)!.pleaseEnterVinNumber,
+      );
+      return;
+    }
 
     setState(() {
       _isLoading = true;
@@ -1236,7 +1246,9 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                               const SizedBox(height: 16),
                               _RoundedTextField(
                                 controller: _vinController,
-                                label: AppLocalizations.of(context)!.vinNumber,
+                                label: AppLocalizations.of(
+                                  context,
+                                )!.vinNumberOptional,
                                 textCapitalization:
                                     TextCapitalization.characters,
                                 suffixIcon: IconButton(
@@ -1246,11 +1258,13 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                   onPressed: _isVinDecoding ? null : _scanVin,
                                   icon: const Icon(Icons.qr_code_scanner),
                                 ),
+                                // Optional, the way the console has it: a car
+                                // dropped off at night with the plate out of
+                                // reach still has to be recordable. A VIN that
+                                // IS typed still has to be a real one.
                                 validator: (value) {
                                   if (value == null || value.trim().isEmpty) {
-                                    return AppLocalizations.of(
-                                      context,
-                                    )!.pleaseEnterVinNumber;
+                                    return null;
                                   }
                                   if (!isValidVin(value)) {
                                     return AppLocalizations.of(

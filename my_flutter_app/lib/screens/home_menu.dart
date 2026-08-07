@@ -62,6 +62,18 @@ class _HomeMenuState extends State<HomeMenu> {
   BusinessParkingPaymentFilter _paymentFilter =
       BusinessParkingPaymentFilter.all;
 
+  /// Where the car is in its stay, as opposed to whether it has been paid
+  /// for - the console asks both questions and so must this. `all` is "do not
+  /// narrow" rather than a status.
+  String _parkingStatusFilter = businessParkingStatusFilterAll;
+
+  /// Free text over tracking code, owner, car and VIN. A lot with a windscreen
+  /// slip in its hand looks the car up by its code; without this the only way
+  /// to find one was to scroll.
+  String _parkingSearch = '';
+  final TextEditingController _parkingSearchController =
+      TextEditingController();
+
   /// "Which cars were parked that week." Either bound alone is a question in
   /// its own right ("everything from the 10th onwards"), so both are optional
   /// and independent. Reset with the payment filter when the category changes.
@@ -274,6 +286,19 @@ class _HomeMenuState extends State<HomeMenu> {
     });
   }
 
+  /// Whether any parking narrowing is in force.
+  ///
+  /// An empty list means two different things - "you have no parked cars" and
+  /// "none of them match what you asked for" - and only one of them is fixed
+  /// by clearing a filter, so the empty state has to know which.
+  bool get _parkingListIsNarrowed => businessParkingListIsNarrowed(
+    search: _parkingSearch,
+    statusFilter: _parkingStatusFilter,
+    paymentFilter: _paymentFilter,
+    from: _parkedFrom,
+    to: _parkedTo,
+  );
+
   List<ActivityRecord> get _filteredRecords {
     final enabled = _enabledActivityCategories();
     final serviceRecords = _records
@@ -284,9 +309,7 @@ class _HomeMenuState extends State<HomeMenu> {
         : serviceRecords
               .where((record) => record.category == _selectedCategory)
               .toList();
-    if (_paymentFilter == BusinessParkingPaymentFilter.all &&
-        _parkedFrom == null &&
-        _parkedTo == null) {
+    if (!_parkingListIsNarrowed) {
       return categoryRecords;
     }
     // Only a parked car has a payment state or a stay to narrow on. Nothing
@@ -295,6 +318,15 @@ class _HomeMenuState extends State<HomeMenu> {
       final car = record.payload;
       if (record.category != ServiceCategory.parking || car is! ParkedCar) {
         return true;
+      }
+      if (!businessParkingMatchesSearch(car.paymentFields, _parkingSearch)) {
+        return false;
+      }
+      if (!businessParkingMatchesStatusFilter(
+        car.paymentFields,
+        _parkingStatusFilter,
+      )) {
+        return false;
       }
       if (!businessParkingMatchesPaymentFilter(
         car.paymentFields,
@@ -354,6 +386,7 @@ class _HomeMenuState extends State<HomeMenu> {
 
   @override
   void dispose() {
+    _parkingSearchController.dispose();
     _parkedCarsSubscription?.cancel();
     _barrelShipmentsSubscription?.cancel();
     _freightShipmentsSubscription?.cancel();
@@ -395,6 +428,9 @@ class _HomeMenuState extends State<HomeMenu> {
                       // Leaving parking takes the parking filters with it -
                       // an invisible narrowing reads as missing records.
                       _paymentFilter = BusinessParkingPaymentFilter.all;
+                      _parkingStatusFilter = businessParkingStatusFilterAll;
+                      _parkingSearch = '';
+                      _parkingSearchController.clear();
                       _parkedFrom = null;
                       _parkedTo = null;
                     });
@@ -405,6 +441,19 @@ class _HomeMenuState extends State<HomeMenu> {
                       _paymentFilter = filter;
                     });
                   },
+                  statusFilter: _parkingStatusFilter,
+                  onStatusFilterChanged: (status) {
+                    setState(() {
+                      _parkingStatusFilter = status;
+                    });
+                  },
+                  searchController: _parkingSearchController,
+                  onSearchChanged: (value) {
+                    setState(() {
+                      _parkingSearch = value;
+                    });
+                  },
+                  isNarrowed: _parkingListIsNarrowed,
                   parkedFrom: _parkedFrom,
                   parkedTo: _parkedTo,
                   onParkedRangeChanged: (from, to) {
@@ -592,6 +641,11 @@ class _ActivitySection extends StatelessWidget {
     required this.onCategoryChanged,
     required this.paymentFilter,
     required this.onPaymentFilterChanged,
+    required this.statusFilter,
+    required this.onStatusFilterChanged,
+    required this.searchController,
+    required this.onSearchChanged,
+    required this.isNarrowed,
     required this.parkedFrom,
     required this.parkedTo,
     required this.onParkedRangeChanged,
@@ -604,6 +658,14 @@ class _ActivitySection extends StatelessWidget {
   final ValueChanged<ServiceCategory> onCategoryChanged;
   final BusinessParkingPaymentFilter paymentFilter;
   final ValueChanged<BusinessParkingPaymentFilter> onPaymentFilterChanged;
+  final String statusFilter;
+  final ValueChanged<String> onStatusFilterChanged;
+  final TextEditingController searchController;
+  final ValueChanged<String> onSearchChanged;
+
+  /// True when a parking filter is hiding something, which is what lets the
+  /// empty state say "nothing matches" instead of "you have no records".
+  final bool isNarrowed;
   final DateTime? parkedFrom;
   final DateTime? parkedTo;
   final void Function(DateTime? from, DateTime? to) onParkedRangeChanged;
@@ -784,6 +846,72 @@ class _ActivitySection extends StatelessWidget {
         // question is "who still owes me", and scrolling a mixed activity
         // list for amber badges was the only way to answer it.
         if (selectedCategory == ServiceCategory.parking) ...[
+          // Tracking code, owner, car, VIN - the same fields the console
+          // searches, in the same order, so the same query finds the same car
+          // on both.
+          const SizedBox(height: 12),
+          TextField(
+            key: const Key('parking-search'),
+            controller: searchController,
+            onChanged: onSearchChanged,
+            decoration: InputDecoration(
+              isDense: true,
+              prefixIcon: const Icon(Icons.search, size: 20),
+              hintText: l10n.searchParkedCars,
+              suffixIcon: searchController.text.isEmpty
+                  ? null
+                  : IconButton(
+                      key: const Key('parking-search-clear'),
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () {
+                        searchController.clear();
+                        onSearchChanged('');
+                      },
+                    ),
+            ),
+          ),
+          // Where the car is in its stay. A separate question from whether it
+          // has been paid for, and the console asks both.
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            key: const Key('parking-status-filter'),
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children:
+                  <String>[
+                    businessParkingStatusFilterAll,
+                    ...businessParkingStatusOptions,
+                  ].map((status) {
+                    final isSelected = status == statusFilter;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(
+                          status == businessParkingStatusFilterAll
+                              ? l10n.filterAll
+                              : businessParkingStatusLabel(l10n, status),
+                        ),
+                        selected: isSelected,
+                        onSelected: (_) => onStatusFilterChanged(status),
+                        labelStyle: TextStyle(
+                          color: isSelected ? AppColors.paper : AppColors.ink,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        backgroundColor: AppColors.paper,
+                        selectedColor: AppColors.ink,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.zero,
+                          side: BorderSide(
+                            color: AppColors.ink.withValues(
+                              alpha: isSelected ? 1 : 0.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+            ),
+          ),
           const SizedBox(height: 12),
           SingleChildScrollView(
             key: const Key('parking-payment-filter'),
@@ -879,7 +1007,12 @@ class _ActivitySection extends StatelessWidget {
               border: Border.all(color: AppColors.rule),
             ),
             child: Text(
-              l10n.noRecordsYet,
+              // "You have nothing" and "nothing matches what you asked for"
+              // are different problems, and only the second is fixed by
+              // clearing a filter. The console says so; this used to not.
+              isNarrowed && selectedCategory == ServiceCategory.parking
+                  ? l10n.noParkingRecordsMatchFilter
+                  : l10n.noRecordsYet,
               style: TextStyle(
                 fontSize: 15,
                 color: AppColors.muted,

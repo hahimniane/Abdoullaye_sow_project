@@ -260,7 +260,9 @@ void main() {
       // callable reprices a walk-up from the business's own rates.
       final billing = source.substring(
         source.indexOf('Widget _buildBillingCard('),
-        source.indexOf('String _parkingStatusLabel('),
+        // The status label used to be a private copy here; it now comes from
+        // the shared EN/FR helper, so the card ends at the next widget.
+        source.indexOf('Widget _buildDropdownField('),
       );
       expect(billing, contains('if (!isBusinessEntry)'));
       expect(billing, contains('l10n.costPerDayCurrency'));

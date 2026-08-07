@@ -260,7 +260,12 @@ export function businessParkingResendMessage(emailed: boolean, texted: boolean) 
   if (emailed && texted) return "Payment link re-sent by email and text.";
   if (emailed) return "Payment link re-sent by email.";
   if (texted) return "Payment link re-sent by text.";
-  return "Payment link re-sent.";
+  // Neither channel went out. This used to report "Payment link re-sent.",
+  // which sent staff away believing the customer was holding a link nobody had
+  // sent them - the one case where saying nothing would have been safer than
+  // what it said. A customer with no email and no phone on file lands here.
+  return "Nobody was contacted: this customer has no email address or phone " +
+    "number on file. Add one, then re-send.";
 }
 
 /**

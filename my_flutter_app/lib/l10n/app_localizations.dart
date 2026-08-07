@@ -11340,6 +11340,90 @@ abstract class AppLocalizations {
   /// **'Clear dates'**
   String get clearDates;
 
+  /// No description provided for @vinNumberOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'VIN (optional)'**
+  String get vinNumberOptional;
+
+  /// No description provided for @checkPaymentStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Check payment status'**
+  String get checkPaymentStatus;
+
+  /// No description provided for @checkingPaymentStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking...'**
+  String get checkingPaymentStatus;
+
+  /// No description provided for @parkingPaymentConfirmedWithStripe.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment confirmed with Stripe and recorded.'**
+  String get parkingPaymentConfirmedWithStripe;
+
+  /// No description provided for @parkingPaymentAlreadyRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Already recorded as paid.'**
+  String get parkingPaymentAlreadyRecorded;
+
+  /// No description provided for @parkingPaymentNotReceivedYet.
+  ///
+  /// In en, this message translates to:
+  /// **'Stripe has not received this payment yet.'**
+  String get parkingPaymentNotReceivedYet;
+
+  /// No description provided for @parkingPaymentStatusCouldNotBeChecked.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment status could not be checked.'**
+  String get parkingPaymentStatusCouldNotBeChecked;
+
+  /// No description provided for @parkingPaymentLinkAlreadyCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'This payment link was already cancelled.'**
+  String get parkingPaymentLinkAlreadyCancelled;
+
+  /// No description provided for @parkingEnds.
+  ///
+  /// In en, this message translates to:
+  /// **'Ends'**
+  String get parkingEnds;
+
+  /// No description provided for @parkingEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'Ended'**
+  String get parkingEnded;
+
+  /// No description provided for @parkingStatusUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking status updated.'**
+  String get parkingStatusUpdated;
+
+  /// No description provided for @parkingStatusCouldNotBeUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'The parking status could not be updated.'**
+  String get parkingStatusCouldNotBeUpdated;
+
+  /// No description provided for @searchParkedCars.
+  ///
+  /// In en, this message translates to:
+  /// **'Search tracking, owner, car, VIN…'**
+  String get searchParkedCars;
+
+  /// No description provided for @noParkingRecordsMatchFilter.
+  ///
+  /// In en, this message translates to:
+  /// **'No parking records match this filter.'**
+  String get noParkingRecordsMatchFilter;
+
   /// No description provided for @parkedCarRecordedWithCode.
   ///
   /// In en, this message translates to:

@@ -69,6 +69,48 @@ String businessParkingLinkDeliveryMessage(
   return l10n.parkingPaymentLinkNotDelivered;
 }
 
+/// What Stripe answered when the lot asked whether a link had been paid.
+///
+/// Three outcomes, the same three the console reports, and the difference
+/// between them matters: "recorded" means the money has now been settled by
+/// this call, "already recorded" means nothing moved, and the third means the
+/// lot is still owed and should keep chasing.
+String businessParkingRefreshMessage(
+  AppLocalizations l10n,
+  BusinessParkingRefreshOutcome outcome,
+) => switch (outcome) {
+  BusinessParkingRefreshOutcome.confirmedAndRecorded =>
+    l10n.parkingPaymentConfirmedWithStripe,
+  BusinessParkingRefreshOutcome.alreadyRecorded =>
+    l10n.parkingPaymentAlreadyRecorded,
+  BusinessParkingRefreshOutcome.notReceived =>
+    l10n.parkingPaymentNotReceivedYet,
+};
+
+/// "Ends" or "Ended", for the day the car leaves.
+String businessParkingEndLabelText(
+  AppLocalizations l10n,
+  Map<String, dynamic> row, {
+  DateTime? now,
+}) => switch (businessParkingEndLabel(row, now: now)) {
+  BusinessParkingEndLabel.ends => l10n.parkingEnds,
+  BusinessParkingEndLabel.ended => l10n.parkingEnded,
+};
+
+/// The label for one of [businessParkingStatusOptions].
+///
+/// The same words the details screen already used for a customer booking, so
+/// one record does not read "Terminé" in one place and "Completed" in another.
+String businessParkingStatusLabel(AppLocalizations l10n, String status) =>
+    switch (status.trim()) {
+      'active' => l10n.active,
+      'reserved' => l10n.reserved,
+      'completed' => l10n.completed,
+      'cancelled' => l10n.cancelled,
+      'pending' => l10n.pending,
+      _ => status,
+    };
+
 /// Who is collecting this entry's money, and whether they have.
 ///
 /// Returns "" for a customer's own booking - that record's payment is the

@@ -532,7 +532,18 @@ test("the re-send message names the channels it actually reached", () => {
   assert.equal(businessParkingResendMessage(true, true), "Payment link re-sent by email and text.");
   assert.equal(businessParkingResendMessage(true, false), "Payment link re-sent by email.");
   assert.equal(businessParkingResendMessage(false, true), "Payment link re-sent by text.");
-  assert.equal(businessParkingResendMessage(false, false), "Payment link re-sent.");
+});
+
+test("re-sending to nobody says so instead of claiming success", () => {
+  // The failure that matters: staff walk away believing the customer has a
+  // link when no message was sent at all.
+  const message = businessParkingResendMessage(false, false);
+  assert.match(message, /Nobody was contacted/);
+  assert.doesNotMatch(
+      message,
+      /re-sent/,
+      "must not read as a success",
+  );
 });
 
 test("every string the parking edit and re-send add is translated to French", () => {
@@ -545,7 +556,7 @@ test("every string the parking edit and re-send add is translated to French", ()
     "End date",
     "Customer email",
     "Customer phone",
-    "Payment link re-sent.",
+    "Nobody was contacted: this customer has no email address or phone number on file. Add one, then re-send.",
     "Payment link re-sent by email.",
     "Payment link re-sent by text.",
     "Payment link re-sent by email and text.",

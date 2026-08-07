@@ -6306,6 +6306,54 @@ class AppLocalizationsEn extends AppLocalizations {
   String get clearDates => 'Clear dates';
 
   @override
+  String get vinNumberOptional => 'VIN (optional)';
+
+  @override
+  String get checkPaymentStatus => 'Check payment status';
+
+  @override
+  String get checkingPaymentStatus => 'Checking...';
+
+  @override
+  String get parkingPaymentConfirmedWithStripe =>
+      'Payment confirmed with Stripe and recorded.';
+
+  @override
+  String get parkingPaymentAlreadyRecorded => 'Already recorded as paid.';
+
+  @override
+  String get parkingPaymentNotReceivedYet =>
+      'Stripe has not received this payment yet.';
+
+  @override
+  String get parkingPaymentStatusCouldNotBeChecked =>
+      'The payment status could not be checked.';
+
+  @override
+  String get parkingPaymentLinkAlreadyCancelled =>
+      'This payment link was already cancelled.';
+
+  @override
+  String get parkingEnds => 'Ends';
+
+  @override
+  String get parkingEnded => 'Ended';
+
+  @override
+  String get parkingStatusUpdated => 'Parking status updated.';
+
+  @override
+  String get parkingStatusCouldNotBeUpdated =>
+      'The parking status could not be updated.';
+
+  @override
+  String get searchParkedCars => 'Search tracking, owner, car, VIN…';
+
+  @override
+  String get noParkingRecordsMatchFilter =>
+      'No parking records match this filter.';
+
+  @override
   String parkedCarRecordedWithCode(Object trackingCode) {
     return 'Parked car recorded. Tracking number: $trackingCode';
   }

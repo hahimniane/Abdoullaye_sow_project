@@ -404,6 +404,216 @@ bool canCancelBusinessParkingPaymentLink(Map<String, dynamic> row) {
 bool canResendBusinessParkingPaymentLink(Map<String, dynamic> row) =>
     canCancelBusinessParkingPaymentLink(row);
 
+/// Whether "Check payment status" applies.
+///
+/// A Stripe webhook can arrive late, be misconfigured, or never arrive at all,
+/// and a lot left staring at "Payment link sent" for a car the customer has
+/// already paid for has no way to settle the question. This is the manual
+/// fallback: `refreshBusinessParkingPayment` asks Stripe directly and reuses
+/// the webhook's own completion path, so the action exists for exactly the
+/// records Stripe could answer for.
+///
+/// Mirrors the console (`operations-panels.tsx`): the payment-link block is
+/// shown for a business-entered record with a stored `checkoutUrl`, and the
+/// check button inside it is hidden once the record is paid - there is nothing
+/// left to ask.
+///
+/// Deliberately NOT gated on cancellation, and the console is not either: a
+/// customer can pay a link in the minutes before the lot kills it, and that
+/// payment is precisely the one nobody would otherwise find.
+bool canCheckBusinessParkingPayment(Map<String, dynamic> row) {
+  if (!isBusinessEnteredParking(row)) return false;
+  if (_trimmed(row['paymentMethod'], 40) != 'payment_link') return false;
+  if (_trimmed(row['checkoutUrl'], 2048).isEmpty) return false;
+  return businessParkingPaymentTone(row) != BusinessParkingPaymentTone.paid;
+}
+
+/// The three answers `refreshBusinessParkingPayment` can give, and the only
+/// three - the console reports exactly these and no others.
+enum BusinessParkingRefreshOutcome {
+  /// Stripe had the money, and this call is what recorded it. The payout and
+  /// the platform's cut went through the same path a webhook would have used.
+  confirmedAndRecorded,
+
+  /// The record already said paid. Nothing moved, and that is a success: a
+  /// second check must not read as a failure.
+  alreadyRecorded,
+
+  /// Stripe has not been paid. The lot is still owed.
+  notReceived,
+}
+
+/// What `refreshBusinessParkingPayment` answers with.
+class BusinessParkingRefreshResult {
+  const BusinessParkingRefreshResult({
+    required this.paid,
+    required this.alreadyRecorded,
+    required this.paymentStatus,
+    required this.sessionStatus,
+  });
+
+  /// Reads the response defensively: anything that is not an explicit `true`
+  /// is "not paid", because telling a lot money has arrived when it has not is
+  /// the one mistake this action must never make.
+  factory BusinessParkingRefreshResult.fromCallable(Object? data) {
+    final decoded = deepCastCallableValue(data);
+    final row = decoded is Map ? decoded : const <Object?, Object?>{};
+    return BusinessParkingRefreshResult(
+      paid: row['paid'] == true,
+      alreadyRecorded: row['alreadyRecorded'] == true,
+      paymentStatus: _trimmed(row['paymentStatus'], 40),
+      sessionStatus: _trimmed(row['sessionStatus'], 40),
+    );
+  }
+
+  final bool paid;
+
+  /// True when the record already said paid before the check ran.
+  final bool alreadyRecorded;
+  final String paymentStatus;
+  final String sessionStatus;
+
+  BusinessParkingRefreshOutcome get outcome =>
+      businessParkingRefreshOutcome(this);
+}
+
+/// Which of the three sentences the staff member is shown.
+///
+/// A deliberate mirror of the console's `checkLinkPayment`: `paid` decides
+/// first, and only then does `alreadyRecorded` separate "we just recorded it"
+/// from "it was already recorded". `alreadyRecorded` on an unpaid answer is
+/// meaningless and must not promote it to a payment.
+BusinessParkingRefreshOutcome businessParkingRefreshOutcome(
+  BusinessParkingRefreshResult result,
+) {
+  if (!result.paid) return BusinessParkingRefreshOutcome.notReceived;
+  return result.alreadyRecorded
+      ? BusinessParkingRefreshOutcome.alreadyRecorded
+      : BusinessParkingRefreshOutcome.confirmedAndRecorded;
+}
+
+/// The parking statuses a business may set, in the console's own order.
+///
+/// Not `baseParkedCarStatusOptions`: that list carries `reserved` and no
+/// `cancelled`, which is the customer-booking vocabulary. A lot closing out a
+/// walk-up needs "completed", and a lot releasing a space needs "cancelled".
+const List<String> businessParkingStatusOptions = <String>[
+  'active',
+  'completed',
+  'cancelled',
+];
+
+/// The status choices to offer, with whatever the record already holds kept
+/// in the list.
+///
+/// A record parked on a status the console never offers - `reserved`, or
+/// anything a migration left behind - must not have that status silently
+/// rewritten by opening a dropdown that cannot represent it.
+List<String> businessParkingStatusOptionsFor(String currentStatus) {
+  final normalized = currentStatus.trim();
+  // A set literal is insertion-ordered, so the console's order survives the
+  // de-duplication and an already-known status is not moved to the end.
+  return <String>{
+    ...businessParkingStatusOptions,
+    if (normalized.isNotEmpty) normalized,
+  }.toList(growable: false);
+}
+
+/// "Do not narrow." A filter value rather than a null, the same way
+/// [BusinessParkingPaymentFilter.all] is.
+const String businessParkingStatusFilterAll = 'all';
+
+/// Whether a row survives the parking-status filter.
+///
+/// Mirrors the console's `text(row.status, "") === filter`: a record with no
+/// status recorded matches no narrowing, only `all`.
+bool businessParkingMatchesStatusFilter(
+  Map<String, dynamic> row,
+  String filter,
+) {
+  final wanted = filter.trim();
+  if (wanted.isEmpty || wanted == businessParkingStatusFilterAll) return true;
+  return _trimmed(row['status'], 40) == wanted;
+}
+
+/// The fields a parked-car search reads, in the console's own order.
+///
+/// The order matters: the console joins these values with spaces before
+/// matching, so "toyota camry" finds a car whose make and model are two
+/// separate fields. A different order would answer that query differently.
+const List<String> businessParkingSearchFields = <String>[
+  'trackingCode',
+  'ownerName',
+  'customerName',
+  'carMake',
+  'carModel',
+  'carYear',
+  'vinNumber',
+  'status',
+];
+
+/// Whether a row matches a free-text search.
+///
+/// A deliberate mirror of the console's `filterRows`, down to the join: the
+/// searchable fields are concatenated with a space and the needle is looked
+/// for in the result, so a query can run across two adjacent fields. An empty
+/// query narrows nothing.
+bool businessParkingMatchesSearch(Map<String, dynamic> row, String query) {
+  final needle = query.trim().toLowerCase();
+  if (needle.isEmpty) return true;
+  final haystack = businessParkingSearchFields
+      .map((field) => (row[field] ?? '').toString().toLowerCase())
+      .join(' ');
+  return haystack.contains(needle);
+}
+
+/// Whether any parking narrowing is in force.
+///
+/// An empty list means two different things - "you have no parked cars" and
+/// "none of them match what you asked for" - and only one of them is fixed by
+/// clearing a filter. This is what lets the empty state say which.
+bool businessParkingListIsNarrowed({
+  String search = '',
+  String statusFilter = businessParkingStatusFilterAll,
+  BusinessParkingPaymentFilter paymentFilter = BusinessParkingPaymentFilter.all,
+  DateTime? from,
+  DateTime? to,
+}) {
+  if (search.trim().isNotEmpty) return true;
+  final status = statusFilter.trim();
+  if (status.isNotEmpty && status != businessParkingStatusFilterAll) return true;
+  if (paymentFilter != BusinessParkingPaymentFilter.all) return true;
+  return from != null || to != null;
+}
+
+/// "Ends" while the car is still due to sit there, "Ended" once the day has
+/// passed.
+enum BusinessParkingEndLabel { ends, ended }
+
+/// Which of the two the end-date field is called.
+///
+/// A future date labelled "Ended" reads as though the parking is over while
+/// the car is still in the lot. Whole days are compared, in UTC, the same way
+/// the console's `businessParkingEndLabel` does - a parking that ends today
+/// has not ended yet.
+///
+/// [now] is injected so the boundary is testable rather than a coin flip on
+/// the day a test happens to run.
+BusinessParkingEndLabel businessParkingEndLabel(
+  Map<String, dynamic> row, {
+  DateTime? now,
+}) {
+  final end = _toDateOrNull(row['parkingEndDate']);
+  if (end == null) return BusinessParkingEndLabel.ends;
+  final endUtc = end.toUtc();
+  final todayUtc = (now ?? DateTime.now()).toUtc();
+  final endDay = DateTime.utc(endUtc.year, endUtc.month, endUtc.day);
+  final today = DateTime.utc(todayUtc.year, todayUtc.month, todayUtc.day);
+  return endDay.isBefore(today)
+      ? BusinessParkingEndLabel.ended
+      : BusinessParkingEndLabel.ends;
+}
+
 /// Which document a business-entered row is entitled to.
 ///
 /// Money in is a receipt - proof of something already settled. Money still
@@ -773,6 +983,26 @@ class BusinessParkingService {
         .httpsCallable('resendBusinessParkingPaymentLink')
         .call<Object?>(<String, dynamic>{'entryId': entryId});
     return BusinessParkingResendLinkResult.fromCallable(response.data);
+  }
+
+  /// Asks Stripe, right now, whether a payment link was paid.
+  ///
+  /// The manual fallback for a webhook that never arrived. The callable reuses
+  /// the same completion path the webhook would have taken - including the
+  /// payout - so a record settled this way is indistinguishable from one
+  /// settled automatically, and running it twice is harmless.
+  ///
+  /// It refuses a record that is not on the payment-link path, and one with no
+  /// checkout session to ask about, with `failed-precondition`; those messages
+  /// say something the caller's own copy cannot, so they are surfaced rather
+  /// than swallowed.
+  Future<BusinessParkingRefreshResult> refreshPayment({
+    required String entryId,
+  }) async {
+    final response = await _functions
+        .httpsCallable('refreshBusinessParkingPayment')
+        .call<Object?>(<String, dynamic>{'entryId': entryId});
+    return BusinessParkingRefreshResult.fromCallable(response.data);
   }
 
   /// Asks for the printable receipt or invoice for a record.

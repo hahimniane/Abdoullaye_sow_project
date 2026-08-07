@@ -3801,7 +3801,12 @@ export function ParkingPanel({
       {
         businessId,
         status,
-        ...(status === "completed" ? {parkingEndDate: serverTimestamp()} : {}),
+        // Deliberately does NOT touch parkingEndDate. Marking a car completed
+        // says it left the lot; it must not rewrite the window the server
+        // priced. Stamping "now" here made an early departure silently
+        // contradict the amount owed - and any invoice or payment link the
+        // customer is already holding. Changing what is owed is the edit
+        // flow's job, where the customer is re-quoted.
         updatedAt: serverTimestamp(),
       },
       {merge: true},

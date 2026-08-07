@@ -3547,7 +3547,8 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Payment method": "Mode de paiement",
   "Direct payment (Zelle or cash)": "Paiement direct (Zelle ou espèces)",
   "Resend link": "Renvoyer le lien",
-  "Payment link re-sent.": "Lien de paiement renvoyé.",
+  "Nobody was contacted: this customer has no email address or phone number on file. Add one, then re-send.":
+    "Personne n'a été contacté : ce client n'a ni adresse e-mail ni numéro de téléphone enregistré. Ajoutez-en un, puis renvoyez le lien.",
   "Payment link re-sent by email.": "Lien de paiement renvoyé par courriel.",
   "Payment link re-sent by text.": "Lien de paiement renvoyé par SMS.",
   "Payment link re-sent by email and text.":

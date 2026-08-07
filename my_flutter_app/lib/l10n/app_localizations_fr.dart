@@ -6419,6 +6419,55 @@ class AppLocalizationsFr extends AppLocalizations {
   String get clearDates => 'Effacer les dates';
 
   @override
+  String get vinNumberOptional => 'VIN (facultatif)';
+
+  @override
+  String get checkPaymentStatus => 'Vérifier le statut du paiement';
+
+  @override
+  String get checkingPaymentStatus => 'Vérification…';
+
+  @override
+  String get parkingPaymentConfirmedWithStripe =>
+      'Paiement confirmé auprès de Stripe et enregistré.';
+
+  @override
+  String get parkingPaymentAlreadyRecorded => 'Déjà enregistré comme payé.';
+
+  @override
+  String get parkingPaymentNotReceivedYet =>
+      'Stripe n’a pas encore reçu ce paiement.';
+
+  @override
+  String get parkingPaymentStatusCouldNotBeChecked =>
+      'Le statut du paiement n’a pas pu être vérifié.';
+
+  @override
+  String get parkingPaymentLinkAlreadyCancelled =>
+      'Ce lien de paiement avait déjà été annulé.';
+
+  @override
+  String get parkingEnds => 'Fin prévue';
+
+  @override
+  String get parkingEnded => 'Terminé le';
+
+  @override
+  String get parkingStatusUpdated => 'Statut du stationnement mis à jour.';
+
+  @override
+  String get parkingStatusCouldNotBeUpdated =>
+      'Le statut du stationnement n’a pas pu être mis à jour.';
+
+  @override
+  String get searchParkedCars =>
+      'Rechercher un suivi, un propriétaire, une voiture, un VIN…';
+
+  @override
+  String get noParkingRecordsMatchFilter =>
+      'Aucun stationnement ne correspond à ce filtre.';
+
+  @override
   String parkedCarRecordedWithCode(Object trackingCode) {
     return 'Voiture stationnée enregistrée. Numéro de suivi : $trackingCode';
   }
