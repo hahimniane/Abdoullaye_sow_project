@@ -141,7 +141,9 @@ const {
   publicParkingOption,
 } = require("./public_service_options");
 const {
+  BUSINESS_PARKING_EDIT_REFUSALS,
   BUSINESS_PARKING_PAYMENT_TYPE,
+  businessParkingEditPlan,
   PARKING_LINK_STATES,
   parkingPaymentLinkState,
   parkingCheckoutSessionReusable,
@@ -10761,6 +10763,283 @@ exports.resendBusinessParkingPaymentLink = onCall(
         );
       }
       return {success: true, emailed, texted, url};
+    },
+);
+
+// Full edit of a walk-up parking record. The console used to write these
+// fields straight to Firestore, which meant it could not touch anything that
+// moves money: switching Zelle <-> payment link has to create or kill a
+// Stripe session, and changing the dates changes the price, so the link the
+// customer is holding is suddenly for the wrong amount. All of that lives
+// here; businessParkingEditPlan decides what is allowed and why.
+exports.updateBusinessParkingEntry = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [
+        stripeSecretKey,
+        twilioAccountSid,
+        twilioAuthToken,
+        twilioFromNumber,
+      ],
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const entryId = cleanText(
+          request.data?.entryId || request.data?.reservationId, 180,
+      );
+      if (!entryId) {
+        throw new HttpsError("invalid-argument", "Parking entry is required");
+      }
+      const db = admin.firestore();
+      const entryRef = db.collection("parkedCars").doc(entryId);
+      const existing = await entryRef.get();
+      if (!existing.exists) {
+        throw new HttpsError("not-found", "Parking entry not found");
+      }
+      const before = existing.data() || {};
+      const businessId = String(before.businessId || "");
+      await requireBusinessPermission(uid, businessId, "parking");
+
+      const plan = businessParkingEditPlan({
+        entry: before,
+        changes: request.data?.changes || request.data || {},
+      });
+      if (!plan.ok) {
+        throw new HttpsError(
+            "failed-precondition",
+            BUSINESS_PARKING_EDIT_REFUSALS[plan.reason] ||
+              "This parking cannot be edited",
+        );
+      }
+
+      // Validate the edited record as a whole, so a correction can never
+      // leave a row the create path would have refused.
+      const merged = {
+        businessId,
+        paymentMethod: plan.nextMethod,
+        customerName: plan.changes.customerName ?? before.customerName,
+        customerPhone: plan.changes.customerPhone ?? before.customerPhone,
+        customerEmail: plan.changes.customerEmail ?? before.customerEmail,
+        carMake: plan.changes.carMake ?? before.carMake,
+        carModel: plan.changes.carModel ?? before.carModel,
+        carYear: plan.changes.carYear ?? before.carYear,
+        vinNumber: plan.changes.vinNumber ?? before.vinNumber,
+        startDate: plan.changes.startDate ?? before.parkingDate,
+        endDate: plan.changes.endDate ?? before.parkingEndDate,
+      };
+      if (merged.startDate && typeof merged.startDate.toDate === "function") {
+        merged.startDate = merged.startDate.toDate();
+      }
+      if (merged.endDate && typeof merged.endDate.toDate === "function") {
+        merged.endDate = merged.endDate.toDate();
+      }
+      const {input, errors} = normalizeBusinessParkingEntry(merged);
+      if (errors.length > 0) {
+        throw new HttpsError(
+            "invalid-argument",
+            businessParkingEntryMessage(errors),
+        );
+      }
+
+      const businessRef = db.collection("businesses").doc(businessId);
+      let pricing = null;
+      let payoutFields = null;
+      await db.runTransaction(async (transaction) => {
+        const businessDoc = await transaction.get(businessRef);
+        if (!businessDoc.exists) {
+          throw new HttpsError("not-found", "Business not found");
+        }
+        const business = businessDoc.data() || {};
+        const reservations = await transaction.get(
+            db.collection("parkedCars")
+                .where("businessId", "==", businessId)
+                .limit(500),
+        );
+        // This record must not count against its own availability, or moving
+        // a car's dates by a day would report the lot as full.
+        const others = reservations.docs
+            .filter((doc) => doc.id !== entryRef.id)
+            .map((doc) => doc.data() || {});
+        const option = parkingOptionFromBusiness({
+          businessId,
+          business,
+          reservations: others,
+          start: input.startDate,
+          end: input.endDate,
+          pickupRequested: false,
+          customerLatitude: null,
+          customerLongitude: null,
+        });
+        if (plan.repricing && option.availableSpaces <= 0) {
+          throw new HttpsError(
+              "failed-precondition",
+              "No parking spaces are available for those dates",
+          );
+        }
+        pricing = businessParkingPaymentPlan({
+          paymentMethod: input.paymentMethod,
+          totalCents: centsFromDollars(option.estimatedTotal),
+          simulatePayments: SIMULATE_PAYMENTS,
+        });
+        if (pricing.takesPlatformCut) {
+          const pricingDoc = await transaction.get(
+              db.collection("shipmentPricing").doc("serviceFees"),
+          );
+          const platformFeePct = servicePlatformFeePctForBusiness(
+              pricingDoc.data(),
+              business,
+              ["parkingPlatformFeePct"],
+          );
+          payoutFields = servicePayoutFields({
+            grossCents: pricing.amountDueCents,
+            platformFeePct,
+            connectReady: !!business.stripeAccountId &&
+              business.payoutsEnabled === true,
+            business,
+          });
+        } else {
+          payoutFields = directPaymentPayoutFields(pricing.amountDueCents);
+        }
+
+        transaction.update(entryRef, {
+          customerName: input.customerName,
+          customerPhone: input.customerPhone,
+          customerEmail: input.customerEmail,
+          ownerName: input.customerName,
+          carMake: input.carMake,
+          carModel: input.carModel,
+          carYear: input.carYear,
+          vinNumber: input.vinNumber,
+          parkingDate: input.startDate,
+          parkingEndDate: input.endDate,
+          paymentMethod: input.paymentMethod,
+          paymentStatus: pricing.paymentStatus,
+          status: pricing.status,
+          amountDue: pricing.amountDue,
+          amountDueCents: pricing.amountDueCents,
+          totalCost: pricing.amountDue,
+          totalCostCents: pricing.amountDueCents,
+          ...payoutFields,
+          editedAt: FirestoreFieldValue.serverTimestamp(),
+          editedByUid: uid,
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+      });
+
+      const connectedAccountId =
+        String(payoutFields?.stripeConnectedAccountId || "").trim() ||
+        undefined;
+
+      // Leaving the link behind: the outstanding session has to die, or a
+      // customer can still pay a charge the lot has moved off the platform.
+      if (plan.cancelling) {
+        const oldSession = String(before.checkoutSessionId || "").trim();
+        if (oldSession) {
+          await expireStripeCheckoutSession(
+              oldSession,
+              String(before.stripeConnectedAccountId || "").trim() || undefined,
+          ).catch((error) => {
+            logger.warn("Could not expire the replaced parking session", {
+              detail: error.message, entryId,
+            });
+          });
+        }
+        await entryRef.update({
+          checkoutSessionId: FirestoreFieldValue.delete(),
+          checkoutUrl: FirestoreFieldValue.delete(),
+          paymentLinkUrl: FirestoreFieldValue.delete(),
+          paymentLinkToken: FirestoreFieldValue.delete(),
+          stripeCheckoutUrl: FirestoreFieldValue.delete(),
+          checkoutStatus: "cancelled",
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+        return {success: true, entryId, paymentMethod: input.paymentMethod,
+          amountDueCents: pricing.amountDueCents, relinked: false};
+      }
+
+      if (!plan.relinking) {
+        return {success: true, entryId, paymentMethod: input.paymentMethod,
+          amountDueCents: pricing.amountDueCents, relinked: false};
+      }
+
+      // Reissuing: kill the stale session first so the old amount can never
+      // be paid, then mint a replacement and tell the customer.
+      const staleSession = String(before.checkoutSessionId || "").trim();
+      if (staleSession) {
+        await expireStripeCheckoutSession(
+            staleSession,
+            String(before.stripeConnectedAccountId || "").trim() || undefined,
+        ).catch(() => null);
+      }
+      const mintCount = Number(before.paymentLinkMintCount || 0) + 1;
+      const session = await createStripeCustomerCheckoutSession({
+        amount: pricing.amountDueCents,
+        currency: SHIPMENT_CURRENCY,
+        customerEmail: input.customerEmail || undefined,
+        productName: "Laawol parking",
+        recordId: entryRef.id,
+        idempotencySeed: `business-parking-edit:${entryRef.id}:${mintCount}`,
+        connectedAccountId,
+        applicationFeeAmount:
+          payoutFields?.stripeChargeType === "direct" ?
+            clampedApplicationFeeAmount(
+                Number(payoutFields.platformFeeCents || 0),
+                pricing.amountDueCents,
+            ) :
+            undefined,
+        metadata: {
+          paymentType: BUSINESS_PARKING_PAYMENT_TYPE,
+          reservationId: entryRef.id,
+          businessId,
+          trackingCode: String(before.trackingCode || ""),
+        },
+        ...businessParkingReturnUrls(before.trackingCode),
+      });
+      const token = String(before.paymentLinkToken || "").trim() ||
+        crypto.randomBytes(24).toString("base64url");
+      const durableUrl = parkingPaymentLinkUrl(token);
+      await entryRef.update({
+        paymentLinkToken: token,
+        paymentLinkUrl: durableUrl,
+        checkoutUrl: durableUrl,
+        stripeCheckoutUrl: String(session.url || ""),
+        checkoutSessionId: String(session.id || ""),
+        checkoutStatus: "open",
+        paymentLinkMintCount: mintCount,
+        paymentLinkCancelledAt: FirestoreFieldValue.delete(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+
+      const amountDue = pricing.amountDueCents / 100;
+      const trackingCode = String(before.trackingCode || "");
+      const businessName = String(before.businessName || "").trim() ||
+        "Your parking provider";
+      const emailed = await emailWalkUpParkingCustomer({
+        to: input.customerEmail,
+        subject: `Updated parking payment for ${trackingCode}`,
+        text:
+          `${businessName} updated your parking (${trackingCode}). ` +
+          `Amount due: $${amountDue.toFixed(2)}. Pay securely here: ` +
+          `${durableUrl}`,
+      });
+      const texted = await smsWalkUpParkingCustomer({
+        to: input.customerPhone,
+        body:
+          `${businessName}: parking ${trackingCode} updated, ` +
+          `$${amountDue.toFixed(2)} due. Pay here: ${durableUrl}`,
+      });
+
+      return {
+        success: true,
+        entryId,
+        paymentMethod: input.paymentMethod,
+        amountDueCents: pricing.amountDueCents,
+        relinked: true,
+        paymentLinkUrl: durableUrl,
+        emailed,
+        texted,
+      };
     },
 );
 
