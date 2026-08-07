@@ -1,4 +1,5 @@
 const {onCall, onRequest, HttpsError} = require("firebase-functions/v2/https");
+const {setGlobalOptions} = require("firebase-functions/v2");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {
   onDocumentDeleted,
@@ -198,6 +199,24 @@ const {
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
+
+// Cloud Run charges this project's quota for CPU it has RESERVED, not CPU it
+// uses: every function counts (cpu x maxInstances) against "Total allowable
+// CPU per project per region", whether or not a single request ever arrives.
+//
+// At the defaults - 1 CPU, 10 max instances - roughly 180 deployed functions
+// reserved about 1,800 CPUs, and a full deploy failed partway with "Quota
+// exceeded for total allowable CPU", leaving some functions on a revision that
+// could not serve. Printing a parking receipt broke that way.
+//
+// So the ceiling comes down. maxInstances is the right dimension to cut rather
+// than cpu: a function under 1 CPU is forced to concurrency 1 in Functions v6,
+// which would make every one of these callables serve a single request at a
+// time. Left at 1 CPU they keep the default concurrency of 80, so three
+// instances still absorb far more traffic than any of these endpoints see.
+// Anything that genuinely needs more headroom raises maxInstances for itself -
+// see the Stripe webhook, where a dropped request is a lost payment.
+setGlobalOptions({maxInstances: 3});
 
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
 const businessProPriceId = defineSecret("BUSINESS_PRO_PRICE_ID");
@@ -7404,6 +7423,10 @@ exports.confirmCustomerCheckoutSession = onCall(
 exports.handleBusinessProStripeWebhook = onRequest(
     {
       cors: false,
+      // Opts out of the project-wide maxInstances floor. Stripe retries a
+      // failed delivery, but a webhook that cannot get an instance is how a
+      // payment silently fails to be recorded, so this one keeps its headroom.
+      maxInstances: 10,
       secrets: [
         stripeWebhookSecret,
         stripeSecretKey,
