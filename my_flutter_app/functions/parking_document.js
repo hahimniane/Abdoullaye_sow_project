@@ -25,6 +25,54 @@ function text(value, maxLength = 200) {
       .trim().slice(0, maxLength);
 }
 
+// Firestore hands back a Timestamp, not a string. String()-ing one yields
+// "[object Object]", which is exactly what printed on the first receipts.
+// Everything a record might plausibly carry is normalized here instead.
+function formatDate(value) {
+  if (value === null || value === undefined || value === "") return "";
+  let date = null;
+  if (typeof value.toDate === "function") {
+    try {
+      date = value.toDate();
+    } catch (error) {
+      date = null;
+    }
+  } else if (value instanceof Date) {
+    date = value;
+  } else if (typeof value === "object" &&
+      (typeof value._seconds === "number" ||
+        typeof value.seconds === "number")) {
+    const seconds = typeof value._seconds === "number" ?
+      value._seconds : value.seconds;
+    date = new Date(seconds * 1000);
+  } else if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value);
+    // A string that is not a date at all (already-formatted copy, a note)
+    // is printed as it stands rather than turned into "Invalid Date".
+    if (Number.isNaN(parsed.getTime())) return text(value, 60);
+    date = parsed;
+  }
+  if (!date || Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", {
+    year: "numeric", month: "short", day: "numeric", timeZone: "UTC",
+  });
+}
+
+// The lot's own address, as a business would put it on its paperwork. The
+// business profile wins when it is filled in; otherwise the address recorded
+// against the car is used, because that is where the vehicle actually is.
+function formatBusinessAddress({business, entry}) {
+  const org = business || {};
+  const record = entry || {};
+  const line1 = text(org.addressLine1, 160) || text(record.parkingAddress, 160);
+  const line2 = text(org.addressLine2, 160);
+  const city = text(org.city, 80) || text(record.parkingCity, 80);
+  const region = [city, text(org.state, 40)].filter(Boolean).join(", ");
+  const tail = [region, text(org.postalCode, 20)].filter(Boolean).join(" ");
+  return [line1, line2, tail, text(org.country, 80)]
+      .filter(Boolean).join(", ");
+}
+
 function money(cents) {
   const amount = Number(cents || 0) / 100;
   return `$${(Number.isFinite(amount) ? amount : 0).toFixed(2)}`;
@@ -101,15 +149,16 @@ function parkingDocumentModel({
     reference: `${paid ? "REC" : "INV"}-${text(record.trackingCode, 40)}`,
     trackingCode: text(record.trackingCode, 40),
     businessName: text(org.name || record.businessName, 160),
-    businessCity: [text(org.city, 80), text(org.state, 40)]
-        .filter(Boolean).join(", "),
+    businessAddress: formatBusinessAddress({business: org, entry: record}),
+    businessPhone: text(org.phone, 40),
+    businessEmail: text(org.email, 180),
     customerName: text(record.customerName || record.ownerName, 120),
     customerPhone: text(record.customerPhone, 40),
     customerEmail: text(record.customerEmail, 180),
     car,
     vin: text(record.vinNumber, 40),
-    startDate: text(record.parkingDate, 40),
-    endDate: text(record.parkingEndDate, 40),
+    startDate: formatDate(record.parkingDate),
+    endDate: formatDate(record.parkingEndDate),
     amount: money(amountCents),
     amountCents,
     methodLabel,
@@ -118,7 +167,7 @@ function parkingDocumentModel({
     // a scannable code on a receipt is the same mistake in a friendlier form.
     paymentLinkUrl: paid ? "" : text(paymentLinkUrl, 400),
     paymentLinkQrSvg: paid ? "" : String(paymentLinkQrSvg || ""),
-    issuedAt: text(record.documentIssuedAt, 40),
+    issuedAt: formatDate(record.documentIssuedAt),
   };
 }
 
@@ -174,7 +223,9 @@ function renderParkingDocument(model) {
   .brand{display:flex;align-items:center;gap:12px}
   .brand img{width:44px;height:44px;border-radius:9px;display:block}
   .brand b{font-size:19px;letter-spacing:.2px}
-  .brand span{display:block;color:#5b6b68;font-size:12px;font-weight:500}
+  .brand span{display:block;color:#5b6b68;font-size:12px;font-weight:500;
+    line-height:1.5}
+  .brand div{min-width:0}
   .doc-title{text-align:right}
   .doc-title h1{margin:0;font-size:24px;letter-spacing:.5px;
     text-transform:uppercase;color:#0D9488}
@@ -224,7 +275,9 @@ function renderParkingDocument(model) {
     <div class="brand">
       <img src="${LOGO_URL}" alt="Laawol Digital">
       <div><b>${escapeHtml(model.businessName || "Laawol Digital")}</b>
-        <span>${escapeHtml(model.businessCity)}</span></div>
+        <span>${escapeHtml(model.businessAddress)}</span>
+        <span>${escapeHtml([model.businessPhone, model.businessEmail]
+      .filter(Boolean).join("  |  "))}</span></div>
     </div>
     <div class="doc-title">
       <h1>${escapeHtml(model.title)}</h1>

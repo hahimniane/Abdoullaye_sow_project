@@ -71,7 +71,7 @@ describe("parkingDocumentModel", () => {
     assert.equal(model.reference, "REC-PK-M4W38G");
     assert.equal(model.amount, "$25.00");
     assert.equal(model.car, "1994 Audi 100/200");
-    assert.equal(model.businessCity, "New York, NY");
+    assert.equal(model.businessAddress, "New York, NY");
     assert.equal(model.methodLabel, "Card payment (Stripe)");
     // Printing a live payment link on a receipt invites a second payment.
     assert.equal(model.paymentLinkUrl, "");
@@ -202,5 +202,78 @@ describe("pay-by-QR", () => {
     assert.match(html, /Pay online/);
     assert.ok(html.includes(LINK));
     assert.ok(!html.includes("Scan to pay"));
+  });
+});
+
+describe("real Firestore shapes", () => {
+  // The first printed receipts said "[object Object]" for both dates: the
+  // fixtures above use strings, but Firestore hands back Timestamps. These
+  // cover what the database actually stores.
+  const timestamp = (iso) => ({toDate: () => new Date(iso)});
+
+  it("renders a Firestore Timestamp as a readable date", () => {
+    const model = parkingDocumentModel({
+      entry: {
+        ...PAID_ENTRY,
+        parkingDate: timestamp("2026-08-15T12:00:00Z"),
+        parkingEndDate: timestamp("2026-08-21T12:00:00Z"),
+      },
+      business: BUSINESS,
+    });
+    assert.equal(model.startDate, "Aug 15, 2026");
+    assert.equal(model.endDate, "Aug 21, 2026");
+    const html = renderParkingDocument(model);
+    assert.ok(!html.includes("[object Object]"),
+        "a Timestamp must never reach the page as an object");
+  });
+
+  it("also handles the plain {_seconds} shape and a Date", () => {
+    const model = parkingDocumentModel({
+      entry: {
+        ...PAID_ENTRY,
+        parkingDate: {_seconds: Date.UTC(2026, 7, 15, 12) / 1000},
+        parkingEndDate: new Date("2026-08-21T12:00:00Z"),
+      },
+      business: BUSINESS,
+    });
+    assert.equal(model.startDate, "Aug 15, 2026");
+    assert.equal(model.endDate, "Aug 21, 2026");
+  });
+
+  it("leaves an unparseable date alone, never Invalid Date", () => {
+    const model = parkingDocumentModel({
+      entry: {...PAID_ENTRY, parkingDate: "on arrival"},
+      business: BUSINESS,
+    });
+    assert.equal(model.startDate, "on arrival");
+  });
+
+  it("falls back to the car's own address when the profile has none", () => {
+    // Business 1 has an empty addressLine1 but the record knows where the
+    // car is, and a receipt with no address at all is not a document.
+    const model = parkingDocumentModel({
+      entry: {
+        ...PAID_ENTRY,
+        parkingAddress: "3184 Webster Avenue",
+        parkingCity: "New York",
+      },
+      business: {name: "Business 1", addressLine1: "", state: "NY",
+        postalCode: "", country: "United States",
+        phone: "+13330000", email: "lot@example.com"},
+    });
+    assert.match(model.businessAddress, /3184 Webster Avenue/);
+    assert.match(model.businessAddress, /New York, NY/);
+    const html = renderParkingDocument(model);
+    assert.match(html, /lot@example\.com/);
+    assert.match(html, /\+13330000/);
+  });
+
+  it("prefers the business profile address when it is filled in", () => {
+    const model = parkingDocumentModel({
+      entry: {...PAID_ENTRY, parkingAddress: "somewhere else"},
+      business: {name: "B", addressLine1: "12 Main St", city: "Bronx",
+        state: "NY", postalCode: "10467"},
+    });
+    assert.equal(model.businessAddress, "12 Main St, Bronx, NY 10467");
   });
 });

@@ -10,6 +10,7 @@ import {
   businessParkingEntryPayload,
   businessParkingEntryResult,
   businessParkingDocumentType,
+  businessParkingEndLabel,
   businessParkingPaymentBadge,
   businessParkingPaymentLabel,
   businessParkingPaymentTone,
@@ -410,4 +411,21 @@ test("the printable document follows the money, not the badge", () => {
 
   // And the button must read from that rule, not from the tone.
   assert.match(panelSource, /businessParkingDocumentType\(row\) === "receipt"\s*\n?\s*\? "Print receipt"/);
+});
+
+test("a parking that has not finished says Ends, not Ended", () => {
+  const now = new Date("2026-08-06T12:00:00Z");
+  // The owner's report: a card showed "Ended Aug 21, 2026" while the car was
+  // still sitting in the lot.
+  assert.equal(businessParkingEndLabel({ parkingEndDate: "2026-08-21T12:00:00Z" }, now), "Ends");
+  assert.equal(businessParkingEndLabel({ parkingEndDate: "2026-08-01T12:00:00Z" }, now), "Ended");
+  // The last day still counts as parked.
+  assert.equal(businessParkingEndLabel({ parkingEndDate: "2026-08-06T23:00:00Z" }, now), "Ends");
+  // Firestore hands back Timestamps, not strings.
+  assert.equal(
+    businessParkingEndLabel({ parkingEndDate: { toDate: () => new Date("2026-08-21T12:00:00Z") } }, now),
+    "Ends",
+  );
+  assert.equal(businessParkingEndLabel({}, now), "Ends");
+  assert.match(panelSource, /businessParkingEndLabel\(row\)/);
 });

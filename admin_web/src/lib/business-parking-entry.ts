@@ -330,3 +330,41 @@ export function businessParkingDocumentType(row: ParkingRowLike): "receipt" | "i
   const paymentStatus = trimmed(row?.paymentStatus, 40);
   return paymentStatus === "succeeded" || paymentStatus === "paid" ? "receipt" : "invoice";
 }
+
+/**
+ * "Ends" while the car is still due to sit there, "Ended" once the date has
+ * passed. A future date labelled "Ended" reads as though the parking is over
+ * when the car is still in the lot.
+ *
+ * @param row A parkedCars document.
+ * @param now Injected so the boundary is testable.
+ * @return The label for the end-date field.
+ */
+export function businessParkingEndLabel(row: ParkingRowLike, now: Date = new Date()) {
+  const raw = (row as { parkingEndDate?: unknown })?.parkingEndDate;
+  const end = toDateOrNull(raw);
+  if (!end) return "Ends";
+  // Compare whole days: a parking that ends today has not ended yet.
+  const endDay = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return endDay < today ? "Ended" : "Ends";
+}
+
+function toDateOrNull(value: unknown): Date | null {
+  if (!value) return null;
+  const candidate = value as { toDate?: () => Date; seconds?: number };
+  if (typeof candidate.toDate === "function") {
+    try {
+      return candidate.toDate();
+    } catch {
+      return null;
+    }
+  }
+  if (value instanceof Date) return value;
+  if (typeof candidate.seconds === "number") return new Date(candidate.seconds * 1000);
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}

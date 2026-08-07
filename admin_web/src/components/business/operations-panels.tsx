@@ -64,6 +64,7 @@ import {
   businessParkingEntryPayload,
   businessParkingEntryResult,
   businessParkingDocumentType,
+  businessParkingEndLabel,
   businessParkingPaymentBadge,
   businessParkingPaymentLabel,
   businessParkingPaymentTone,
@@ -3991,7 +3992,7 @@ export function ParkingPanel({
                     bills it, so the amount is labelled as recorded, not paid. */}
                 <div><span>{businessEntered ? "Amount recorded" : "Total cost"}</span><b>{formatMoney(businessEntered ? businessParkingAmountDue(row) : row.totalCost)}</b></div>
                 {businessEntered && <div><span>Payment status</span><b>{businessParkingPaymentLabel(row)}</b></div>}
-                {Boolean(row.parkingEndDate) && <div><span>Ended</span><b>{formatDate(row.parkingEndDate)}</b></div>}
+                {Boolean(row.parkingEndDate) && <div><span>{businessParkingEndLabel(row)}</span><b>{formatDate(row.parkingEndDate)}</b></div>}
               </div>
               {businessEntered && text(row.paymentMethod, "") === "payment_link" && Boolean(text(row.checkoutUrl, "")) && (
                 <div className="pur-info">
