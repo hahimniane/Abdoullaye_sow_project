@@ -288,7 +288,13 @@ describe("payment runtime configuration", () => {
         "utf8",
     );
     const serviceFeesReads = source.match(/doc\("serviceFees"\)/g) || [];
-    assert.match(source, /DEFAULT_PLATFORM_SERVICE_FEE_PCT = 0\.1/);
+    // The default moved into platform_fees.js when fee resolution was
+    // extracted; index.js still has to READ the pricing document.
+    const feesSource = fs.readFileSync(
+        path.join(__dirname, "..", "platform_fees.js"),
+        "utf8",
+    );
+    assert.match(feesSource, /DEFAULT_PLATFORM_SERVICE_FEE_PCT = 0\.1/);
     assert.ok(serviceFeesReads.length >= 3);
     assert.match(source, /pricingDoc\.data\(\)/);
     assert.match(source, /"carDepositPlatformFeePct"/);
@@ -301,13 +307,20 @@ describe("payment runtime configuration", () => {
         path.join(__dirname, "..", "index.js"),
         "utf8",
     );
-    assert.match(source, /function businessPlatformFeePctFromBusiness/);
-    assert.match(source, /business\?\.platformFeePct/);
-    assert.match(source, /function servicePlatformFeePctForBusiness/);
-    assert.match(
-        source,
-        /businessPlatformFeePctFromBusiness\(business\) \?\?/,
+    // Resolution itself lives in platform_fees.js (unit-tested there);
+    // index.js must still route every charge through it.
+    const feesSource = fs.readFileSync(
+        path.join(__dirname, "..", "platform_fees.js"),
+        "utf8",
     );
+    assert.match(feesSource, /function businessPlatformFeePctFromBusiness/);
+    assert.match(feesSource, /business\?\.platformFeePct/);
+    assert.match(feesSource, /function servicePlatformFeePctForBusiness/);
+    // Precedence: this business's rate for THIS service, then its blanket
+    // rate, then the platform's rate for the service.
+    assert.match(feesSource, /source: "business_service"/);
+    assert.match(feesSource, /businessPlatformFeePctFromBusiness\(business\)/);
+    assert.match(source, /require\("\.\/platform_fees"\)/);
     assert.match(source, /servicePlatformFeePctForBusiness\(/);
     assert.match(
         source,

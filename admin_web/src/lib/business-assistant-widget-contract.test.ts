@@ -73,9 +73,18 @@ test("the floating assistant is announced and closes on Escape", () => {
 });
 
 test("the widget floats bottom-right and scrolls its own transcript", () => {
-  assert.match(
-    stylesSource,
-    /\.assistant-widget \{[^}]*position: fixed;[^}]*right: 22px;[^}]*bottom: 22px;/,
+  assert.match(stylesSource, /\.assistant-widget \{[^}]*position: fixed;/);
+  // It must clear the language toggle, which is also fixed bottom-right at
+  // bottom:16px and is ~40px tall - the bubble used to land on top of it.
+  const langBottom = Number(
+    /\.console-lang-toggle \{[^}]*bottom: (\d+)px/.exec(stylesSource)?.[1] ?? "0",
+  );
+  const widgetBottom = Number(
+    /\.assistant-widget \{[^}]*bottom: (\d+)px/.exec(stylesSource)?.[1] ?? "0",
+  );
+  assert.ok(
+    widgetBottom >= langBottom + 40,
+    `the bubble (bottom:${widgetBottom}px) must clear the language toggle (bottom:${langBottom}px)`,
   );
   assert.match(
     stylesSource,

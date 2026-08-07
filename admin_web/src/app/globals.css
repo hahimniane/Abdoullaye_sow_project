@@ -11667,7 +11667,9 @@ button[data-loading="true"]::before {
 /* Mirrors the customer widget on the public marketing site: a fixed
    bottom-right bubble with a small panel anchored above it. It sits under the
    modal overlays (z-index 200) so a dialog still covers it. */
-.assistant-widget { position: fixed; right: 22px; bottom: 22px; z-index: 90; }
+/* Sits ABOVE the language toggle (fixed at bottom:16px, right:16px), which
+   the bubble used to land straight on top of. */
+.assistant-widget { position: fixed; right: 18px; bottom: 74px; z-index: 90; }
 .assistant-widget-launcher { align-items: center; background: var(--brand); border: 0; border-radius: 50%; box-shadow: 0 14px 34px rgba(13, 148, 136, 0.45); color: #fff; cursor: pointer; display: flex; height: 58px; justify-content: center; transition: transform 0.25s ease, background 0.2s ease; width: 58px; }
 .assistant-widget-launcher:hover { background: var(--brand-mid); transform: translateY(-3px) scale(1.05); }
 .assistant-widget-launcher.open { background: var(--brand-strong); }
@@ -11686,7 +11688,7 @@ button[data-loading="true"]::before {
 .assistant-widget-body .assistant-hint { max-width: none; }
 .assistant-widget-body .assistant-composer { margin-top: 0; }
 @media (max-width: 640px) {
-  .assistant-widget { bottom: 14px; right: 14px; }
+  .assistant-widget { bottom: 68px; right: 14px; }
   .assistant-widget-panel { bottom: 70px; }
   .assistant-widget-body .assistant-chat { height: 46vh; }
 }

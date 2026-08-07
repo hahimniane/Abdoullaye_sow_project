@@ -157,6 +157,11 @@ const {
   sendFirebasePasswordSetupEmail,
 } = require("./firebase_auth_email");
 const {
+  servicePlatformFeePctForBusiness,
+  servicePlatformFeePctFromPricing,
+  businessPlatformFeePctFromBusiness,
+} = require("./platform_fees");
+const {
   parkingDocumentType,
   parkingDocumentModel,
   renderParkingDocument,
@@ -316,7 +321,6 @@ const ACCESS_INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const USER_DIRECTORY_PAGE_SIZE = 100;
 const DEFAULT_BUSINESS_SERVICES = [...VALID_BUSINESS_SERVICES];
 const DEFAULT_BUSINESS_ADVISOR_MODEL = "claude-fable-5";
-const DEFAULT_PLATFORM_SERVICE_FEE_PCT = 0.1;
 function requireAuth(request) {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required");
@@ -18797,36 +18801,6 @@ function normalizeBarrelQuantity(value) {
   return quantity;
 }
 
-function servicePlatformFeePctFromPricing(pricingDoc, keys = []) {
-  let raw;
-  for (const key of keys) {
-    if (pricingDoc?.[key] !== undefined) {
-      raw = pricingDoc[key];
-      break;
-    }
-  }
-  if (raw === undefined || raw === null) {
-    raw = pricingDoc?.platformFeePct ??
-      process.env.PLATFORM_SERVICE_FEE_PCT ??
-      DEFAULT_PLATFORM_SERVICE_FEE_PCT;
-  }
-  const pct = Number(raw);
-  if (!Number.isFinite(pct) || pct < 0 || pct >= 1) return 0;
-  return pct;
-}
-
-function businessPlatformFeePctFromBusiness(business) {
-  const raw = business?.platformFeePct ?? business?.platformCommissionPct;
-  if (raw === undefined || raw === null || raw === "") return null;
-  const pct = Number(raw);
-  if (!Number.isFinite(pct) || pct < 0 || pct >= 1) return null;
-  return pct;
-}
-
-function servicePlatformFeePctForBusiness(pricingDoc, business, keys = []) {
-  return businessPlatformFeePctFromBusiness(business) ??
-    servicePlatformFeePctFromPricing(pricingDoc, keys);
-}
 
 function barrelPlatformFeePctFromPricing(pricingDoc, business) {
   return servicePlatformFeePctForBusiness(pricingDoc, business, [
