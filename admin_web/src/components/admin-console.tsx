@@ -113,7 +113,10 @@ import {
 import {
   centsToDollars,
   summarizePlatformEarnings,
+  type PlatformEarningsBusinessRow,
+  type PlatformEarningsFocus,
   type PlatformEarningsSeries,
+  type PlatformEarningsServiceRow,
   type PlatformEarningsSummary,
 } from "@/lib/platform-earnings";
 import {
@@ -4698,9 +4701,30 @@ function PersonDetailWorkspace({
             )}
           {kind === "invitation" && (
             <div className="people-invitation-access">
-              <strong>Invitation awaiting acceptance</strong>
+              <strong>
+                {text(user.invitationStatus, "") === "expired"
+                  ? "Invitation expired"
+                  : "Invitation awaiting acceptance"}
+              </strong>
               <span>
-                Access starts only after the recipient accepts the invitation.
+                {text(user.invitationStatus, "") === "expired"
+                  ? "The link no longer works. Resend it to issue a new one."
+                  : "Access starts only after the recipient accepts the invitation."}
+              </span>
+              {/* An operator chasing an unanswered invitation needs to know
+                  when it went out and when the link dies, not just that one
+                  exists. */}
+              <span>
+                {user.createdAt
+                  ? `Sent ${formatDate(user.createdAt)}`
+                  : "Send date not reported"}
+                {text(user.invitedByName, "") &&
+                  ` by ${text(user.invitedByName, "")}`}
+              </span>
+              <span>
+                {user.expiresAt
+                  ? `Link expires ${formatDate(user.expiresAt)}`
+                  : "No expiry recorded"}
               </span>
             </div>
           )}
@@ -12516,11 +12540,17 @@ function CommissionBreakdown({
   unitLabel,
   rows,
   emptyText,
+  selectedKey,
+  onSelect,
+  selectHint,
 }: {
   title: string;
   unitLabel: string;
   rows: CommissionBreakdownRow[];
   emptyText: string;
+  selectedKey: string;
+  onSelect: (key: string) => void;
+  selectHint: string;
 }) {
   const max = Math.max(
     1,
@@ -12551,10 +12581,22 @@ function CommissionBreakdown({
             {rows.map((row) => {
               const earnedWidth = (row.earnedCents / max) * 100;
               const pendingWidth = (row.pendingCents / max) * 100;
+              const selected = selectedKey === row.key;
               return (
-                <tr key={row.key}>
-                  <th scope="row" title={row.name}>
-                    {row.name}
+                <tr
+                  className={selected ? "is-selected" : undefined}
+                  key={row.key}
+                >
+                  <th scope="row">
+                    <button
+                      aria-pressed={selected}
+                      className="commission-pick"
+                      onClick={() => onSelect(selected ? "" : row.key)}
+                      title={selected ? selectHint : row.name}
+                      type="button"
+                    >
+                      {row.name}
+                    </button>
                   </th>
                   <td className="commission-bar-cell">
                     <svg
@@ -12605,14 +12647,27 @@ function CommissionBreakdown({
  */
 function PlatformCommissionSummary({
   summary,
+  businessRows,
+  serviceRows,
+  focus,
+  onFocusChange,
+  focusLabel,
+  hasRecords,
 }: {
   summary: PlatformEarningsSummary;
+  businessRows: PlatformEarningsBusinessRow[];
+  serviceRows: PlatformEarningsServiceRow[];
+  focus: PlatformEarningsFocus;
+  onFocusChange: (next: PlatformEarningsFocus) => void;
+  focusLabel: string;
+  hasRecords: boolean;
 }) {
-  const { totals, byBusiness, byService, series } = summary;
+  const { totals, series } = summary;
+  const focused = Boolean(focus.businessKey || focus.serviceId);
 
   return (
     <Panel title="Platform commission" icon={<TrendingUp size={18} />}>
-      {totals.records === 0 ? (
+      {!hasRecords ? (
         <EmptyState text="No commission has been recorded yet. Once a business takes a paid order, what the platform earned appears here." />
       ) : (
         <div className="commission-summary">
@@ -12638,36 +12693,57 @@ function PlatformCommissionSummary({
               <small>Direct and Zelle payments the platform never bills</small>
             </article>
           </div>
-          <div className="info-band commission-explainer">
-            Direct and Zelle payments are recorded so the business has paper, but the
-            platform never bills them and takes no cut, so they are counted here and
-            nowhere else.
-          </div>
+          {focused ? (
+            <div className="commission-focus-bar">
+              <span className="commission-focus-label">{focusLabel}</span>
+              <button
+                className="ghost-button"
+                onClick={() => onFocusChange({})}
+                type="button"
+              >
+                Show everything again
+              </button>
+            </div>
+          ) : (
+            <div className="info-band commission-explainer">
+              Direct and Zelle payments are recorded so the business has paper, but the
+              platform never bills them and takes no cut, so they are counted here and
+              nowhere else.
+            </div>
+          )}
           <CommissionTrendChart series={series} />
           <div className="commission-breakdown-grid">
             <CommissionBreakdown
-              title="Commission by business"
-              unitLabel="Business"
-              rows={byBusiness.map((row) => ({
-                key: row.businessId || row.name,
+              emptyText="No business has produced a commissionable record yet."
+              onSelect={(key) =>
+                onFocusChange({ ...focus, businessKey: key })
+              }
+              rows={businessRows.map((row) => ({
+                key: row.key,
                 name: row.name,
                 earnedCents: row.earnedCents,
                 pendingCents: row.pendingCents,
                 records: row.records,
               }))}
-              emptyText="No business has produced a commissionable record yet."
+              selectHint="Show every business again"
+              selectedKey={focus.businessKey ?? ""}
+              title="Commission by business"
+              unitLabel="Business"
             />
             <CommissionBreakdown
-              title="Commission by service"
-              unitLabel="Service"
-              rows={byService.map((row) => ({
+              emptyText="No service has produced a commissionable record yet."
+              onSelect={(key) => onFocusChange({ ...focus, serviceId: key })}
+              rows={serviceRows.map((row) => ({
                 key: row.serviceId,
                 name: row.label,
                 earnedCents: row.earnedCents,
                 pendingCents: row.pendingCents,
                 records: row.records,
               }))}
-              emptyText="No service has produced a commissionable record yet."
+              selectHint="Show every service again"
+              selectedKey={focus.serviceId ?? ""}
+              title="Commission by service"
+              unitLabel="Service"
             />
           </div>
         </div>
@@ -12711,6 +12787,9 @@ function FinanceView({
   canManage: boolean;
   canSendSupport: boolean;
 }) {
+  const [commissionFocus, setCommissionFocus] = useState<PlatformEarningsFocus>(
+    {},
+  );
   const [ledgerSearch, setLedgerSearch] = useState("");
   const [businessFilter, setBusinessFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
@@ -12766,16 +12845,15 @@ function FinanceView({
   );
   // The platform's own books, from the records this view already holds. No
   // extra Firestore reads: the same arrays that build the ledger below.
-  const platformEarnings = useMemo(
-    () =>
-      summarizePlatformEarnings({
-        shipments,
-        freightShipments,
-        transports,
-        parkedCars,
-        purchases,
-        businesses,
-      }),
+  const earningsRecords = useMemo(
+    () => ({
+      shipments,
+      freightShipments,
+      transports,
+      parkedCars,
+      purchases,
+      businesses,
+    }),
     [
       shipments,
       freightShipments,
@@ -12785,6 +12863,59 @@ function FinanceView({
       businesses,
     ],
   );
+  const platformEarnings = useMemo(
+    () => summarizePlatformEarnings(earningsRecords),
+    [earningsRecords],
+  );
+  // The two breakdowns cross-filter each other, so each is summarized against
+  // the *other* axis only. Picking a service re-ranks the businesses by what
+  // they earned on that service, and picking a business re-ranks its services,
+  // while both lists stay complete enough to change your mind from.
+  const commissionFocused = useMemo(
+    () =>
+      commissionFocus.businessKey || commissionFocus.serviceId
+        ? summarizePlatformEarnings({ ...earningsRecords, focus: commissionFocus })
+        : platformEarnings,
+    [earningsRecords, platformEarnings, commissionFocus],
+  );
+  const commissionBusinessRows = useMemo(
+    () =>
+      commissionFocus.serviceId
+        ? summarizePlatformEarnings({
+            ...earningsRecords,
+            focus: { serviceId: commissionFocus.serviceId },
+          }).byBusiness
+        : platformEarnings.byBusiness,
+    [earningsRecords, platformEarnings, commissionFocus.serviceId],
+  );
+  const commissionServiceRows = useMemo(
+    () =>
+      commissionFocus.businessKey
+        ? summarizePlatformEarnings({
+            ...earningsRecords,
+            focus: { businessKey: commissionFocus.businessKey },
+          }).byService
+        : platformEarnings.byService,
+    [earningsRecords, platformEarnings, commissionFocus.businessKey],
+  );
+  const commissionFocusLabel = useMemo(() => {
+    const parts: string[] = [];
+    if (commissionFocus.businessKey) {
+      parts.push(
+        platformEarnings.byBusiness.find(
+          (row) => row.key === commissionFocus.businessKey,
+        )?.name ?? "",
+      );
+    }
+    if (commissionFocus.serviceId) {
+      parts.push(
+        platformEarnings.byService.find(
+          (row) => row.serviceId === commissionFocus.serviceId,
+        )?.label ?? "",
+      );
+    }
+    return parts.filter(Boolean).join(" - ");
+  }, [platformEarnings, commissionFocus]);
   const sourceOptions = useMemo(() => {
     const options = new Map<string, string>();
     ledgerRows.forEach((row) => options.set(row.source, row.sourceLabel));
@@ -12857,53 +12988,61 @@ function FinanceView({
     });
   }
 
+  // An empty queue carries no information, so it stays out of the header until
+  // there is something to act on. The page used to open with eight figures of
+  // which six were permanently zero, which buried the two that move.
+  const pendingRefundCount = refunds.filter(
+    (item) => item.status === "pending",
+  ).length;
+  const financeHeadlineStats = useMemo(() => {
+    const stats: Array<[string, string]> = [
+      [
+        "Commission earned",
+        commissionMoney(platformEarnings.totals.earnedCents),
+      ],
+      [
+        "Commission pending",
+        commissionMoney(platformEarnings.totals.pendingCents),
+      ],
+      ["Businesses earning", String(platformEarnings.byBusiness.length)],
+    ];
+    if (pendingRefundCount > 0) {
+      stats.push(["Refunds to review", String(pendingRefundCount)]);
+    }
+    if (pendingBarrelBalanceCount > 0) {
+      stats.push([
+        "Shared balances due",
+        formatMoney(pendingBarrelBalanceTotal),
+      ]);
+    }
+    if (walletBalanceTotal > 0) {
+      stats.push(["Held for customers", formatMoney(walletBalanceTotal)]);
+    }
+    return stats;
+  }, [
+    platformEarnings,
+    pendingRefundCount,
+    pendingBarrelBalanceCount,
+    pendingBarrelBalanceTotal,
+    walletBalanceTotal,
+  ]);
+
   return (
     <div className="stack">
       <SectionIntro
-        title="Finance queue"
-        description="Monitor wallet balance return requests and finance readiness."
-        stats={[
-          [
-            "Pending refunds",
-            String(refunds.filter((item) => item.status === "pending").length),
-          ],
-          ["Pending amount", formatMoney(totalPending)],
-          ["Shared balances due", String(pendingBarrelBalanceCount)],
-          ["Balance due amount", formatMoney(pendingBarrelBalanceTotal)],
-          ["Wallet balance", formatMoney(walletBalanceTotal)],
-          ["Pending in wallets", formatMoney(pendingWalletTotal)],
-          ["Ledger rows", String(ledgerRows.length)],
-          [
-            "Customers",
-            String(users.filter((item) => item.role === "customer").length),
-          ],
-        ]}
+        title="Finance"
+        description="What the platform has earned, and anything waiting on a decision."
+        stats={financeHeadlineStats}
       />
-      <div className="metric-grid">
-        <article className="metric money">
-          <span>Pending refund amount</span>
-          <strong>{formatMoney(totalPending)}</strong>
-        </article>
-        <article className="metric attention">
-          <span>Refund requests</span>
-          <strong>
-            {refunds.filter((item) => item.status === "pending").length}
-          </strong>
-        </article>
-        <article className="metric attention">
-          <span>Shared balances due</span>
-          <strong>{formatMoney(pendingBarrelBalanceTotal)}</strong>
-        </article>
-        <article className="metric good">
-          <span>Customer wallet balance</span>
-          <strong>{formatMoney(walletBalanceTotal)}</strong>
-        </article>
-        <article className="metric neutral">
-          <span>Pending in wallets</span>
-          <strong>{formatMoney(pendingWalletTotal)}</strong>
-        </article>
-      </div>
-      <PlatformCommissionSummary summary={platformEarnings} />
+      <PlatformCommissionSummary
+        businessRows={commissionBusinessRows}
+        focus={commissionFocus}
+        focusLabel={commissionFocusLabel}
+        hasRecords={platformEarnings.totals.records > 0}
+        onFocusChange={setCommissionFocus}
+        serviceRows={commissionServiceRows}
+        summary={commissionFocused}
+      />
       <Panel
         title="All business transactions"
         icon={<BadgeDollarSign size={18} />}
@@ -13032,34 +13171,38 @@ function FinanceView({
           )}
         </div>
       </Panel>
-      <Panel
-        title="Wallet card return requests"
-        icon={<BadgeDollarSign size={18} />}
-      >
-        <div className="info-band">
-          Review the customer account and wallet balance before action. Complete
-          after the external card return is done. Reject moves the pending
-          amount back to the customer's wallet.
-        </div>
-        <div className="row-list">
-          {refunds.map((item) => (
-            <RefundRequestRow
-              key={item.id}
-              item={item}
-              wallet={findWalletForRefund(item, wallets)}
-              user={findUserForRefund(item, users)}
-              canManage={canManage}
-              reviewRefund={reviewRefund}
-              runAction={runAction}
-            />
-          ))}
-          {refunds.length === 0 && (
-            <div className="empty-state">
-              No wallet card return requests are loaded.
-            </div>
-          )}
-        </div>
-      </Panel>
+      {/*
+        This queue is normally empty, so it only appears when it has something
+        in it. It is not dead weight: a shared-barrel participant who leaves a
+        pool has a return request opened for them automatically, and a freight
+        parcel that weighs under its quote credits the customer here. Removing
+        the panel would leave that money owed with nowhere to action it.
+      */}
+      {refunds.length > 0 && (
+        <Panel
+          title="Customer money to return"
+          icon={<BadgeDollarSign size={18} />}
+        >
+          <div className="info-band">
+            Review the customer account and balance before action. Complete
+            after the external card return is done. Reject moves the pending
+            amount back to the customer&apos;s balance.
+          </div>
+          <div className="row-list">
+            {refunds.map((item) => (
+              <RefundRequestRow
+                key={item.id}
+                item={item}
+                wallet={findWalletForRefund(item, wallets)}
+                user={findUserForRefund(item, users)}
+                canManage={canManage}
+                reviewRefund={reviewRefund}
+                runAction={runAction}
+              />
+            ))}
+          </div>
+        </Panel>
+      )}
     </div>
   );
 }
@@ -13643,7 +13786,7 @@ function tabHint(tab: Tab) {
     people: "Admins & customers",
     operations: "Barrels, freight, transport, parking",
     marketplace: "Listings by business",
-    finance: "Refund queue",
+    finance: "Commission & returns",
     support: "Escalated cases",
     website: "Site content",
     tools: "Setup utilities",

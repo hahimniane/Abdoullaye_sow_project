@@ -150,7 +150,7 @@ and verified in the product. Nothing is SHIPPED until a tester drives it.
 - ~~Choosing a transport carrier notified nobody~~ — FIXED 2026-08-06; the
   winner and the passed-over bidders now both get a notification.
 
-### Open owner decision: transport has no payment step
+### Transport payment: ANSWERED 2026-08-06 — bill it through the platform
 
 `selectTransportQuote` records `totalCents` and flips the request to
 `pending`, and that is the end of it — there is no Stripe route for car
@@ -159,11 +159,45 @@ barrel shipments and orders; freight has its own estimate → weigh → balance
 settlement). So today the customer and the carrier settle the transport
 money entirely off-platform, and the platform takes no cut on it.
 
-Two questions only the owner can answer: should transport be billed through
-the platform like parking and barrels, and if so does the platform take a
-commission on it? Everything needed to build it already exists (the
-commission machinery, the connected-account payouts, the reconciliation
-sweep) — this is a business decision, not a technical blocker.
+The owner has now decided: **accepting a bid must collect payment**, and the
+platform takes its commission on it like every other service.
+
+That decision does not, by itself, unblock the build. Transport differs from
+parking in the one way that matters for money: parking is paid at or after a
+short local service you can verify, whereas transport is paid *before* a long
+fulfilment the platform cannot yet observe. Charging on acceptance means
+holding money against a service not yet rendered, which makes refunds — not
+charges — the hard part. Three things must be settled first, and only the
+first is an engineering question:
+
+1. **Where the money sits.** Direct charges (the parking model) put funds on
+   the carrier's connected account the moment the customer pays; the platform
+   then has no leverage if the carrier never shows, and a refund depends on
+   that carrier still holding a balance. Holding funds on the platform and
+   transferring on delivery is real escrow — better protection, materially
+   more code, and a money-transmission question that is legal, not technical.
+2. **The cancellation and refund policy.** The code encodes the policy, so
+   the policy has to exist first: customer cancels before pickup, customer
+   cancels after dispatch, carrier no-shows, vehicle turns out to be
+   non-running and the price changes. Each needs a stated outcome.
+3. **Whether acceptance takes a deposit or the full fare.** The auto
+   transport industry norm is a deposit on acceptance with the balance at
+   pickup or delivery, which is also the shape freight already implements
+   here (estimate → weigh → balance). Full payment upfront maximises
+   collected commission and maximises refund exposure at the same time.
+
+Two implementation traps to carry into the build regardless of those answers:
+refunding a Stripe charge does **not** refund the platform's
+`application_fee` unless `refund_application_fee` is set, so a naive refund
+leaves the carrier paying a commission on a job they never performed; and
+acceptance must not be a single write — accept, pay, and carrier-confirm are
+distinct states, with a timeout that releases a request whose customer
+accepted and then never paid, otherwise an unpaid acceptance holds a carrier
+hostage indefinitely.
+
+Commission on transport should count as *pending* until the transport
+completes, not *earned* at acceptance — the Finance view already separates
+those, and booking refundable money as earned would overstate revenue.
 
 Every item ships on BOTH web and mobile, and is tester-verified on the real
 interface before it is called done (docs/ENGINEERING_GUARDRAILS.md).

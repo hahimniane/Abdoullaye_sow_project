@@ -526,3 +526,99 @@ test("the mixed real-world shape a Finance page actually loads still balances", 
   assert.equal(summary.totals.records, 8);
   assertBreakdownsSumToTotals(summary);
 });
+
+// Focusing the summary. The owner's question is "how much am I getting from
+// this business" - so a selection has to narrow every figure on the page at
+// once, not just re-sort one list.
+
+const FOCUS_FIXTURE = {
+  parkedCars: [
+    { id: "pk1", businessId: "biz-a", paidAt: "2026-08-03T10:00:00Z", paymentStatus: "succeeded", totalCostCents: 10000, platformFeeCents: 1000 },
+    { id: "pk2", businessId: "biz-b", paidAt: "2026-08-03T10:00:00Z", paymentStatus: "succeeded", totalCostCents: 20000, platformFeeCents: 2000 },
+  ],
+  shipments: [
+    { id: "sh1", businessId: "biz-a", paidAt: "2026-08-04T10:00:00Z", paymentStatus: "succeeded", totalCents: 40000, platformFeeCents: 4000 },
+  ],
+  businesses: [
+    { id: "biz-a", name: "Alpha Motors" },
+    { id: "biz-b", name: "Bravo Cargo" },
+  ],
+};
+
+test("focusing a business narrows the totals, the services and the chart", () => {
+  const all = summarizePlatformEarnings(FOCUS_FIXTURE);
+  assert.equal(all.totals.earnedCents, 7000);
+  assert.equal(all.byService.length, 2);
+
+  const focused = summarizePlatformEarnings({
+    ...FOCUS_FIXTURE,
+    focus: { businessKey: "biz-a" },
+  });
+  assert.equal(focused.totals.earnedCents, 5000);
+  assert.equal(focused.totals.records, 2);
+  assert.equal(focused.byBusiness.length, 1);
+  assert.equal(focused.byBusiness[0].name, "Alpha Motors");
+  assert.equal(
+    focused.series.points.reduce((total, point) => total + point.earnedCents, 0),
+    5000,
+    "the chart follows the selection too",
+  );
+  assertBreakdownsSumToTotals(focused);
+});
+
+test("focusing a service narrows to that service across businesses", () => {
+  const focused = summarizePlatformEarnings({
+    ...FOCUS_FIXTURE,
+    focus: { serviceId: "carParking" },
+  });
+  assert.equal(focused.totals.earnedCents, 3000);
+  assert.equal(focused.byService.length, 1);
+  assert.equal(focused.byBusiness.length, 2);
+  assertBreakdownsSumToTotals(focused);
+});
+
+test("a business and a service together intersect rather than widen", () => {
+  const focused = summarizePlatformEarnings({
+    ...FOCUS_FIXTURE,
+    focus: { businessKey: "biz-a", serviceId: "carParking" },
+  });
+  assert.equal(focused.totals.earnedCents, 1000);
+  assert.equal(focused.totals.records, 1);
+});
+
+test("an empty focus is the same as no focus at all", () => {
+  const all = summarizePlatformEarnings(FOCUS_FIXTURE);
+  const blank = summarizePlatformEarnings({
+    ...FOCUS_FIXTURE,
+    focus: { businessKey: "", serviceId: "" },
+  });
+  assert.deepEqual(blank.totals, all.totals);
+});
+
+test("a focus that matches nothing yields zeros, not everything", () => {
+  const focused = summarizePlatformEarnings({
+    ...FOCUS_FIXTURE,
+    focus: { businessKey: "biz-missing" },
+  });
+  assert.equal(focused.totals.records, 0);
+  assert.equal(focused.totals.earnedCents, 0);
+  assert.equal(focused.byBusiness.length, 0);
+});
+
+test("a record with no business is still selectable by its row key", () => {
+  const summary = summarizePlatformEarnings({
+    parkedCars: [
+      { id: "pk1", paymentStatus: "succeeded", totalCostCents: 10000, platformFeeCents: 1000 },
+    ],
+  });
+  const row = summary.byBusiness[0];
+  assert.ok(row.key, "an unassigned row still carries a key");
+
+  const focused = summarizePlatformEarnings({
+    parkedCars: [
+      { id: "pk1", paymentStatus: "succeeded", totalCostCents: 10000, platformFeeCents: 1000 },
+    ],
+    focus: { businessKey: row.key },
+  });
+  assert.equal(focused.totals.earnedCents, 1000);
+});

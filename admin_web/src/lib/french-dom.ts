@@ -3306,6 +3306,29 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Une invitation est déjà en attente pour cette personne. Renvoyez-la ou annulez-la au lieu d’en envoyer une nouvelle.",
   "The invitation could not be sent. Try again.":
     "L’invitation n’a pas pu être envoyée. Réessayez.",
+  "Invitations sent — waiting for the person to set a password":
+    "Invitations envoyées — en attente de la création du mot de passe",
+  "Team members": "Membres de l’équipe",
+  "Awaiting reply": "En attente de réponse",
+  // "Expired" is already carried above for listing badges; a second entry
+  // here would break the dictionary's no-duplicate-keys rule.
+  "Invitation expired": "Invitation expirée",
+  "The link no longer works. Resend it to issue a new one.":
+    "Le lien ne fonctionne plus. Renvoyez-le pour en générer un nouveau.",
+  "Link expires": "Le lien expire le",
+  "Link expired — resend to renew":
+    "Lien expiré — renvoyez-le pour le renouveler",
+  "No expiry recorded": "Aucune expiration enregistrée",
+  "Send date not reported": "Date d’envoi non indiquée",
+  "Invited to manage": "Invité à gérer",
+  "No sections selected": "Aucune section sélectionnée",
+  "Pending invitations could not be loaded.":
+    "Les invitations en attente n’ont pas pu être chargées.",
+  "Sent with the plain Firebase template — connect an email sender for the branded invitation.":
+    "Envoyée avec le modèle Firebase brut — connectez un expéditeur de courriel pour l’invitation personnalisée.",
+  "The invitation email could not be delivered. Resend it.":
+    "Le courriel d’invitation n’a pas pu être remis. Renvoyez-le.",
+  "Invitation cancelled": "Invitation annulée",
   "Loading more...": "Chargement en cours…",
   "Load more people": "Afficher plus de personnes",
   "More people could not be loaded. Try again.":
@@ -3587,6 +3610,18 @@ Object.assign(TEXT_TRANSLATIONS, {
 // five service names are already in the dictionary above — repeating them here
 // would be duplicate keys, not second entries.
 Object.assign(TEXT_TRANSLATIONS, {
+  "What the platform has earned, and anything waiting on a decision.":
+    "Ce que la plateforme a gagné, et ce qui attend une décision.",
+  "Commission & returns": "Commissions et remboursements",
+  "Businesses earning": "Entreprises génératrices",
+  "Refunds to review": "Remboursements à examiner",
+  "Held for customers": "Détenu pour les clients",
+  "Show everything again": "Tout réafficher",
+  "Show every business again": "Réafficher toutes les entreprises",
+  "Show every service again": "Réafficher tous les services",
+  "Customer money to return": "Sommes à rendre aux clients",
+  "Review the customer account and balance before action. Complete after the external card return is done. Reject moves the pending amount back to the customer's balance.":
+    "Vérifiez le compte client et son solde avant d'agir. Terminez une fois le remboursement de carte effectué. Refuser renvoie le montant en attente vers le solde du client.",
   "Platform commission": "Commission de la plateforme",
   "Commission earned": "Commission encaissée",
   "Commission pending": "Commission en attente",

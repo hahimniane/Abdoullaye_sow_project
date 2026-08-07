@@ -354,7 +354,9 @@ function accessInvitationEmailCopy({
       "Create your password to activate your access.",
     buttonLabel: french ? "Créer mon mot de passe" : "Set my password",
     expiryNote: expiry ?
-      (french ? `Ce lien expire le ${expiry}.` : `This link expires ${expiry}.`) :
+      (french ?
+        `Ce lien expire le ${expiry}.` :
+        `This link expires ${expiry}.`) :
       "",
     signature: french ?
       "Laawol Digital · laawoldigital.com" :

@@ -1158,6 +1158,20 @@ button[data-loading="true"]::before {
 
 .commission-chart-card .chart-head {
   margin-bottom: 10px;
+  /* On a phone the title wraps, and a baseline-aligned total lands inside the
+     wrapped words ("Commission over $0.00 time"). Keep them on separate rows
+     once there is no room to sit side by side. */
+  column-gap: 12px;
+  flex-wrap: wrap;
+}
+
+.commission-chart-card .chart-head h3 {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.commission-chart-card .chart-head .chart-total {
+  flex: 0 0 auto;
 }
 
 .commission-chart-card .empty-state {
@@ -1288,6 +1302,76 @@ button[data-loading="true"]::before {
 .commission-bar-cell {
   padding-left: 12px;
   padding-right: 12px;
+}
+
+/* Picking a row narrows every other figure in the section to it. The button
+   fills its cell so the whole name is the target, not just the glyph. */
+.commission-pick {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  display: block;
+  font: inherit;
+  font-weight: inherit;
+  overflow: hidden;
+  padding: 4px 6px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.commission-pick:hover {
+  background: rgba(13, 148, 136, 0.1);
+}
+
+.commission-pick:focus-visible {
+  outline: 2px solid #0d9488;
+  outline-offset: 1px;
+}
+
+.commission-bar-table tr.is-selected {
+  background: rgba(13, 148, 136, 0.08);
+}
+
+.commission-bar-table tr.is-selected .commission-pick {
+  color: #0f766e;
+  font-weight: 600;
+}
+
+.commission-focus-bar {
+  align-items: center;
+  background: rgba(13, 148, 136, 0.08);
+  border: 1px solid rgba(13, 148, 136, 0.25);
+  border-radius: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 14px;
+}
+
+.commission-focus-label {
+  color: #0f766e;
+  font-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+  .commission-pick:hover {
+    background: rgba(45, 212, 191, 0.16);
+  }
+
+  .commission-bar-table tr.is-selected {
+    background: rgba(45, 212, 191, 0.12);
+  }
+
+  .commission-bar-table tr.is-selected .commission-pick,
+  .commission-focus-label {
+    color: #5eead4;
+  }
 }
 
 .commission-bar {

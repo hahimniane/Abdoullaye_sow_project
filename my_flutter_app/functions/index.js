@@ -159,7 +159,6 @@ const {
 } = require("./firebase_auth_email");
 const {
   ACCESS_INVITATION_REFUSALS,
-  ACCESS_INVITATION_TTL_MS,
   accessEmailDeliveryPlan,
   accessInvitationActionDecision,
   accessInvitationEmailCopy,
@@ -12834,7 +12833,7 @@ async function queueAccessEmail({
   });
   const deliveryRef = db.collection("notificationDeliveries").doc();
   const now = FirestoreFieldValue.serverTimestamp();
-  let provider = plan.provider;
+  const provider = plan.provider;
   let deliveryStatus = plan.status;
   let deliveryError = plan.lastError;
   let brandedEmail = plan.branded;
@@ -13288,31 +13287,28 @@ async function resendAccessInvitationHandler(request) {
     targetLabel: invitation.email,
   });
   await batch.commit();
-  let delivery;
-  try {
-    delivery = await queueAccessEmail({
-      db,
-      uid: invitation.targetUid,
-      email: invitation.email,
-      locale: invitation.locale || "en",
-      kind: "invitation",
-      links,
-      invitation: {
-        kind: invitation.kind,
-        businessName: invitation.businessName,
-        inviterName: invitation.invitedByName,
-        adminRoleLabel: invitation.adminRole,
-        expiresAtMs,
-      },
-    });
-  } catch (error) {
+  const delivery = await queueAccessEmail({
+    db,
+    uid: invitation.targetUid,
+    email: invitation.email,
+    locale: invitation.locale || "en",
+    kind: "invitation",
+    links,
+    invitation: {
+      kind: invitation.kind,
+      businessName: invitation.businessName,
+      inviterName: invitation.invitedByName,
+      adminRoleLabel: invitation.adminRole,
+      expiresAtMs,
+    },
+  }).catch(async (error) => {
     await recordInvitationDelivery(ref, {
       emailProvider: String(error?.details?.provider || ""),
       emailBranded: false,
       deliveryStatus: "failed",
     });
     throw error;
-  }
+  });
   await recordInvitationDelivery(ref, delivery);
   return {success: true, invitationId, status: "pending", ...delivery};
 }

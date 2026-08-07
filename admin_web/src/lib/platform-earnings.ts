@@ -51,6 +51,12 @@ export type PlatformEarningsBucket = {
 export type PlatformEarningsBusinessRow = PlatformEarningsBucket & {
   /** The business document id, or "" when the record names no business. */
   businessId: string;
+  /**
+   * What this row is grouped by, and the value to focus a summary on. Records
+   * that name no business id still group by name, so "Unassigned business" is
+   * a selectable row rather than an unfilterable one.
+   */
+  key: string;
   name: string;
 };
 
@@ -87,8 +93,27 @@ export type PlatformEarningsSummary = {
   series: PlatformEarningsSeries;
 };
 
+/**
+ * Narrows a summary to one business, one service, or one of each.
+ *
+ * An empty string means "not filtering on this", so a caller can pass its
+ * selection state straight through without unwrapping it first.
+ */
+export type PlatformEarningsFocus = {
+  /** A `PlatformEarningsBusinessRow.key`, not a raw document id. */
+  businessKey?: string;
+  serviceId?: string;
+};
+
 export type PlatformEarningsInput = Partial<EarningsRecordInput> & {
   businesses?: FirestoreRow[];
+  /**
+   * Restricts every figure to the matching lines. Callers that want both a
+   * focused view and the full list to pick from should summarize twice - the
+   * work is a pass over arrays already in memory, and it keeps this function
+   * honest: everything it returns describes the same set of lines.
+   */
+  focus?: PlatformEarningsFocus;
 };
 
 /** Where a line's money belongs. */
@@ -433,10 +458,17 @@ export function summarizePlatformEarnings(
 
   const index = businessIndex(input.businesses);
   const items = earningsLineItems(input);
+  const focusBusinessKey = String(input.focus?.businessKey ?? "").trim();
+  const focusServiceId = String(input.focus?.serviceId ?? "").trim();
 
   for (const item of items) {
     const grossCents = toCents(item.gross);
     if (grossCents <= 0) continue;
+
+    const business = resolveBusiness(item.row, item.source, index);
+    const businessKey = business.id || `name:${business.name.toLowerCase()}`;
+    if (focusBusinessKey && businessKey !== focusBusinessKey) continue;
+    if (focusServiceId && item.serviceId !== focusServiceId) continue;
 
     const state = commissionState(item.row);
     const feeCents =
@@ -446,11 +478,14 @@ export function summarizePlatformEarnings(
 
     addToBucket(totals, state, grossCents, feeCents);
 
-    const business = resolveBusiness(item.row, item.source, index);
-    const businessKey = business.id || `name:${business.name.toLowerCase()}`;
     let businessRow = businessBuckets.get(businessKey);
     if (!businessRow) {
-      businessRow = { businessId: business.id, name: business.name, ...emptyBucket() };
+      businessRow = {
+        businessId: business.id,
+        key: businessKey,
+        name: business.name,
+        ...emptyBucket(),
+      };
       businessBuckets.set(businessKey, businessRow);
     }
     addToBucket(businessRow, state, grossCents, feeCents);

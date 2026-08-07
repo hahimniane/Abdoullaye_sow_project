@@ -3,6 +3,7 @@
 import {
   type ChangeEvent,
   type FormEvent,
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -14,6 +15,7 @@ import {
   Building2,
   Car,
   Check,
+  Clock,
   FileText,
   ImageUp,
   LifeBuoy,
@@ -31,6 +33,17 @@ import {
 } from "lucide-react";
 
 import { SearchableSelect } from "@/components/searchable-select";
+import {
+  accessInvitationDeliveryNote,
+  accessInvitationExpiryLine,
+  accessInvitationRowsFrom,
+  accessInvitationSentLine,
+  accessInvitationStatusLabel,
+  accessInvitationStatusTone,
+  canActOnAccessInvitation,
+  type AccessInvitationLine,
+  type AccessInvitationRow,
+} from "@/lib/access-invitations";
 import {
   buildBusinessVerificationChecklist,
   businessServiceLabel,
@@ -1567,6 +1580,7 @@ export function BusinessPeoplePanel({
   const [formOpen, setFormOpen] = useState(false);
   const {busy, busyLabel, error, success, run} = useActionFeedback(runAction, toast);
   const businessName = text(business?.name, businessId || "this business");
+  const invitations = useBusinessInvitations(businessId);
 
   function update(patch: Partial<StaffDraft>) {
     setDraft((current) => ({...current, ...patch}));
@@ -1602,6 +1616,41 @@ export function BusinessPeoplePanel({
           "Envoyer cette invitation d’employé avec les autorisations sélectionnées ?",
       },
     );
+    // Whether it went out or not, the pending list is now stale: a sent
+    // invitation must appear, and a refused one must not linger.
+    invitations.refresh();
+  }
+
+  async function resendInvitation(row: AccessInvitationRow) {
+    await run(
+      "Invitation resent",
+      async () => {
+        await httpsCallable(functions, "resendAccessInvitation")({
+          invitationId: row.invitationId,
+        });
+      },
+      {
+        confirm: `Send ${row.email} a new invitation link?`,
+        confirmFr: `Envoyer à ${row.email} un nouveau lien d’invitation ?`,
+      },
+    );
+    invitations.refresh();
+  }
+
+  async function cancelInvitation(row: AccessInvitationRow) {
+    await run(
+      "Invitation cancelled",
+      async () => {
+        await httpsCallable(functions, "cancelAccessInvitation")({
+          invitationId: row.invitationId,
+        });
+      },
+      {
+        confirm: `Cancel the invitation for ${row.email}? Their link stops working.`,
+        confirmFr: `Annuler l’invitation de ${row.email} ? Son lien cessera de fonctionner.`,
+      },
+    );
+    invitations.refresh();
   }
 
   async function saveStaffPermissions(row: FirestoreRow) {
@@ -1641,15 +1690,37 @@ export function BusinessPeoplePanel({
       </header>
 
       {(error || rowsError) && <div className="error-box">{error || rowsError}</div>}
+      {invitations.error && <div className="error-box">{invitations.error}</div>}
 
       {loading && <div className="lst-empty"><p>Loading…</p></div>}
-      {!loading && rows.length === 0 && (
+      {!loading && rows.length === 0 && invitations.rows.length === 0 && (
         <div className="lst-empty">
           <div className="lst-empty-icon"><Users size={30} /></div>
           <h3>No team members yet</h3>
           <p>Invite staff and choose what each person can manage.</p>
           {canManageStaff && <button className="lst-add" type="button" disabled={!businessId} onClick={() => setFormOpen(true)}><UserPlus size={16} /> Invite staff</button>}
         </div>
+      )}
+
+      {invitations.rows.length > 0 && (
+        <>
+          <div className="lst-form-section">
+            Invitations sent — waiting for the person to set a password
+          </div>
+          <div className="pur-grid">
+            {invitations.rows.map((invitation) => (
+              <PendingInvitationRow
+                key={invitation.invitationId}
+                busy={busy}
+                canManageStaff={canManageStaff}
+                cancelInvitation={cancelInvitation}
+                resendInvitation={resendInvitation}
+                row={invitation}
+              />
+            ))}
+          </div>
+          <div className="lst-form-section">Team members</div>
+        </>
       )}
 
       <div className="pur-grid">
@@ -1718,6 +1789,146 @@ export function BusinessPeoplePanel({
         </div>
       )}
     </section>
+  );
+}
+
+// An invitation lives in `accessInvitations`, which the security rules close
+// to every client - it carries the pending authority of an account that does
+// not exist yet. So the pending list arrives through a callable scoped to
+// this business rather than a Firestore listener, and is re-read after every
+// action instead of streaming.
+function useBusinessInvitations(businessId: string) {
+  const [rows, setRows] = useState<AccessInvitationRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [token, setToken] = useState(0);
+
+  useEffect(() => {
+    const scopedBusinessId = businessId.trim();
+    if (!scopedBusinessId) {
+      setRows([]);
+      setError("");
+      return;
+    }
+    let active = true;
+    setLoading(true);
+    httpsCallable(functions, "listBusinessInvitations")({businessId: scopedBusinessId})
+      .then((result) => {
+        if (!active) return;
+        const payload = result.data as {invitations?: unknown};
+        setRows(accessInvitationRowsFrom(payload?.invitations));
+        setError("");
+      })
+      .catch((loadError: unknown) => {
+        if (!active) return;
+        setRows([]);
+        // A staff member without the People permission is refused by the
+        // callable; that is not an error worth shouting about in a panel
+        // they can still read.
+        const message =
+          loadError instanceof Error ? loadError.message : String(loadError);
+        setError(
+          /permission-denied|not allowed/i.test(message)
+            ? ""
+            : "Pending invitations could not be loaded.",
+        );
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [businessId, token]);
+
+  const refresh = useCallback(() => setToken((value) => value + 1), []);
+  return {rows, loading, error, refresh};
+}
+
+function PendingInvitationRow({
+  row,
+  busy,
+  canManageStaff,
+  resendInvitation,
+  cancelInvitation,
+}: {
+  row: AccessInvitationRow;
+  busy: boolean;
+  canManageStaff: boolean;
+  resendInvitation: (row: AccessInvitationRow) => Promise<void>;
+  cancelInvitation: (row: AccessInvitationRow) => Promise<void>;
+}) {
+  const deliveryNote = accessInvitationDeliveryNote(row);
+  return (
+    <article className="pur-card">
+      <div className="pur-head">
+        <div className="pur-title">
+          <strong>{row.fullName || row.email}</strong>
+          <span className="pur-kind">{row.email}</span>
+        </div>
+        <span className={`lst-badge ${accessInvitationStatusTone(row)}`}>
+          {accessInvitationStatusLabel(row)}
+        </span>
+      </div>
+      <div className="pur-reliability">
+        <InvitationLine line={accessInvitationSentLine(row, formatDate)} />
+      </div>
+      <div className="pur-reliability">
+        <Clock size={13} />{" "}
+        <InvitationLine line={accessInvitationExpiryLine(row, formatDate)} />
+      </div>
+      {deliveryNote && <div className="pur-reliability">{deliveryNote}</div>}
+      <div className="lst-form-section" style={{ marginTop: 0 }}>Invited to manage</div>
+      <div className="lst-chips">
+        {row.businessPermissions.length === 0 ? (
+          <span className="pur-kind">No sections selected</span>
+        ) : (
+          row.businessPermissions.map((permission) => (
+            <span className="lst-chip on" key={permission}>
+              {businessPermissionLabel(permission)}
+            </span>
+          ))
+        )}
+      </div>
+      {canManageStaff && canActOnAccessInvitation(row) && (
+        <div className="pur-actions">
+          <button
+            className="lst-btn"
+            disabled={busy}
+            onClick={() => resendInvitation(row)}
+            type="button"
+          >
+            <Send size={14} /> Resend invitation
+          </button>
+          <button
+            className="lst-btn ghost danger"
+            disabled={busy}
+            onClick={() => cancelInvitation(row)}
+            type="button"
+          >
+            Cancel invitation
+          </button>
+        </div>
+      )}
+    </article>
+  );
+}
+
+// The label and its value stay in separate text nodes so the runtime French
+// dictionary, which matches whole nodes, can translate the label without the
+// date or the sender's name defeating the match.
+function InvitationLine({line}: {line: AccessInvitationLine}) {
+  return (
+    <>
+      <span>{line.label}</span>
+      {line.detail ? <span> · {line.detail}</span> : null}
+    </>
+  );
+}
+
+function businessPermissionLabel(id: string) {
+  return (
+    businessPermissionOptions.find((option) => option.id === id)?.label ?? id
   );
 }
 
