@@ -182,6 +182,24 @@ export function businessParkingEntryPayload(
 ) {
   return {
     businessId: trimmed(businessId, 180),
+    ...businessParkingUpdateChanges(draft),
+  };
+}
+
+/**
+ * The `changes` object for `updateBusinessParkingEntry`.
+ *
+ * Deliberately the same field shapes and the same midday clock as creation —
+ * one convention, one place, so an edit cannot roll a parking window back a
+ * day that creation would have kept. The amount is deliberately absent: the
+ * server recomputes it from the business's parking rates, and a client that
+ * could send one could rewrite the price of a stay it had already quoted.
+ *
+ * @param draft The validated draft.
+ * @return The `changes` object `updateBusinessParkingEntry` expects.
+ */
+export function businessParkingUpdateChanges(draft: BusinessParkingEntryDraft) {
+  return {
     customerName: trimmed(draft.customerName),
     customerPhone: trimmed(draft.customerPhone, 40),
     customerEmail: trimmed(draft.customerEmail, 180).toLowerCase(),
@@ -193,6 +211,69 @@ export function businessParkingEntryPayload(
     endDate: `${trimmed(draft.endDate, 60)}T12:00:00`,
     paymentMethod: trimmed(draft.paymentMethod, 40),
   };
+}
+
+/** What `updateBusinessParkingEntry` answers with. */
+export type BusinessParkingUpdateResult = {
+  entryId: string;
+  paymentMethod: string;
+  amountDueCents: number;
+  /** The link was reissued at a new amount and re-sent to the customer. */
+  relinked: boolean;
+  paymentLinkUrl: string;
+  emailed: boolean;
+  texted: boolean;
+};
+
+/**
+ * Reads the update callable's response defensively. `relinked` is the one
+ * flag staff must never miss: it means the customer is now holding a link for
+ * a different amount than the one they were quoted.
+ *
+ * @param data The callable's `.data`.
+ * @return A fully-populated result.
+ */
+export function businessParkingUpdateResult(data: unknown): BusinessParkingUpdateResult {
+  const row = (data && typeof data === "object" ? data : {}) as Record<string, unknown>;
+  return {
+    entryId: trimmed(row.entryId, 180),
+    paymentMethod: trimmed(row.paymentMethod, 40),
+    amountDueCents: Math.max(0, Math.round(Number(row.amountDueCents ?? 0) || 0)),
+    relinked: row.relinked === true,
+    paymentLinkUrl: trimmed(row.paymentLinkUrl, 2048),
+    emailed: row.emailed === true,
+    texted: row.texted === true,
+  };
+}
+
+/**
+ * What to tell the staff member after a re-send. The channels matter: a lot
+ * that reads "re-sent" and assumes a text went out will stop chasing a
+ * customer who only has an email on file — and the callable reports exactly
+ * which ones it reached.
+ *
+ * @param emailed Whether the link went out by email.
+ * @param texted Whether the link went out by SMS.
+ * @return A sentence for the row message.
+ */
+export function businessParkingResendMessage(emailed: boolean, texted: boolean) {
+  if (emailed && texted) return "Payment link re-sent by email and text.";
+  if (emailed) return "Payment link re-sent by email.";
+  if (texted) return "Payment link re-sent by text.";
+  return "Payment link re-sent.";
+}
+
+/**
+ * Whether a record may still have its link re-sent or cancelled. Paid money
+ * has nothing left to collect, and a cancelled link must not quietly come
+ * back to life through a re-send.
+ *
+ * @param row A parkedCars document.
+ * @return True when the link is still live.
+ */
+export function canResendBusinessParkingLink(row: ParkingRowLike) {
+  if (businessParkingPaymentTone(row) === "paid") return false;
+  return !row?.paymentLinkCancelledAt;
 }
 
 /** What the callable answers with. */

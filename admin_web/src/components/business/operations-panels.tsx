@@ -10,7 +10,6 @@ import {
   query,
   serverTimestamp,
   setDoc,
-  Timestamp,
   where,
   type DocumentData,
   type QueryConstraint,
@@ -37,6 +36,7 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
+  Send,
   Ship,
   Star,
   Truck,
@@ -69,13 +69,18 @@ import {
   businessParkingPaymentBadge,
   businessParkingPaymentLabel,
   businessParkingPaymentTone,
+  businessParkingResendMessage,
+  businessParkingUpdateChanges,
+  businessParkingUpdateResult,
   canMarkBusinessParkingPaid,
+  canResendBusinessParkingLink,
   emptyBusinessParkingEntryDraft,
   isBusinessEnteredParking,
   validateBusinessParkingEntryDraft,
   type BusinessParkingEntryDraft,
   type BusinessParkingEntryError,
   type BusinessParkingEntryResult,
+  type BusinessParkingPaymentMethod,
 } from "@/lib/business-parking-entry";
 import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import {
@@ -175,16 +180,23 @@ type ListingDraft = {
 const MAX_LISTING_IMAGES = 12;
 type EditImage = { key: string; url?: string; file?: File; preview: string };
 
+// The parking edit form. Everything except `id` and `status` goes to
+// `updateBusinessParkingEntry`; the amount is absent on purpose - the server
+// recomputes it from the business's parking rates, so there is nothing here
+// for a staff member to type a price into.
 type ParkingDraft = {
   id: string;
   ownerName: string;
+  customerPhone: string;
+  customerEmail: string;
   carMake: string;
   carModel: string;
   carYear: string;
   vinNumber: string;
-  parkingDate: string;
+  startDate: string;
+  endDate: string;
+  paymentMethod: BusinessParkingPaymentMethod;
   status: string;
-  totalCost: string;
 };
 
 type TransportQuoteDraft = {
@@ -415,13 +427,16 @@ const emptyListingDraft: ListingDraft = {
 const emptyParkingDraft: ParkingDraft = {
   id: "",
   ownerName: "",
+  customerPhone: "",
+  customerEmail: "",
   carMake: "",
   carModel: "",
   carYear: "",
   vinNumber: "",
-  parkingDate: "",
+  startDate: "",
+  endDate: "",
+  paymentMethod: "direct",
   status: "active",
-  totalCost: "",
 };
 
 const emptyTransportQuoteDraft: TransportQuoteDraft = {
@@ -3607,10 +3622,12 @@ function useTransientMessage(setMessage: (value: string) => void, ms = ROW_MESSA
   };
 }
 
+// `businessName` is no longer destructured: the panel used to stamp it onto
+// the parkedCars document it wrote itself, and every write now goes through a
+// callable that reads the business record server-side.
 export function ParkingPanel({
   businessId,
   previewMode = false,
-  businessName = "",
 }: PanelProps) {
   const parkedCars = useBusinessRows("parkedCars", businessId, Boolean(businessId && !previewMode), 500);
   const [draft, setDraft] = useState<ParkingDraft>(emptyParkingDraft);
@@ -3619,6 +3636,9 @@ export function ParkingPanel({
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  // The edit form is validated by the same rules as the create form, so it
+  // reports the same list of sentences.
+  const [editErrors, setEditErrors] = useState<BusinessParkingEntryError[]>([]);
   // "Record a parked car" — the walk-up flow. Unlike the manual record above
   // it goes through createBusinessParkingEntry, so the price, the tracking
   // code, the space availability check and the platform's cut all come from
@@ -3667,73 +3687,111 @@ export function ParkingPanel({
 
   function closeForm() {
     setDraft(emptyParkingDraft);
+    setEditErrors([]);
     setFormOpen(false);
   }
   function editParking(row: FirestoreRow) {
     setDraft({
       id: row.id,
-      ownerName: text(row.ownerName, ""),
+      ownerName: text(row.customerName ?? row.ownerName, ""),
+      customerPhone: text(row.customerPhone, ""),
+      customerEmail: text(row.customerEmail, ""),
       carMake: text(row.carMake, ""),
       carModel: text(row.carModel, ""),
       carYear: text(row.carYear, ""),
       vinNumber: text(row.vinNumber, ""),
-      parkingDate: dateInputValue(row.parkingDate ?? row.createdAt),
+      startDate: dateInputValue(row.parkingDate ?? row.createdAt),
+      endDate: dateInputValue(row.parkingEndDate),
+      paymentMethod:
+        text(row.paymentMethod, "direct") === "payment_link" ? "payment_link" : "direct",
       status: text(row.status, "active"),
-      totalCost: numberString(row.totalCost),
     });
+    setEditErrors([]);
     setMessage("");
     setFormOpen(true);
   }
 
+  /**
+   * Everything the callable owns, as the callable's own draft shape. Keeping
+   * one shape means the edit form is validated by the same rules the create
+   * form is, rather than a second, drifting copy of them.
+   */
+  function editDraftAsEntry(): BusinessParkingEntryDraft {
+    return {
+      customerName: draft.ownerName,
+      customerPhone: draft.customerPhone,
+      customerEmail: draft.customerEmail,
+      carMake: draft.carMake,
+      carModel: draft.carModel,
+      carYear: draft.carYear,
+      vinNumber: draft.vinNumber,
+      startDate: draft.startDate,
+      endDate: draft.endDate,
+      paymentMethod: draft.paymentMethod,
+    };
+  }
+
+  // The edit no longer writes a parkedCars document from the browser. A
+  // client-side setDoc could change the dates a stay is billed on without the
+  // amount ever being recalculated - so the record's price and the days it
+  // covers stopped agreeing. updateBusinessParkingEntry recomputes the amount
+  // from the business's rates, reissues the customer's link when that amount
+  // moves, and refuses records whose money has already settled.
   async function saveParking() {
-    if (!businessId) throw new Error("Business ID is required.");
-    // Hiding the Edit button is the affordance; this is the guard. A paid
-    // record's amount has already been charged, split and paid out.
-    if (draft.id) {
-      const existing = parkedCars.rows.find((row) => row.id === draft.id);
-      if (existing && businessParkingPaymentTone(existing) === "paid") {
-        throw new Error("This parking has been paid for and can no longer be edited.");
-      }
-      // The amount on a link entry is baked into the Stripe session the
-      // customer already holds; changing it here would bill one price and
-      // show another.
-      if (existing && text(existing.paymentMethod, "") === "payment_link") {
-        throw new Error("The amount on a payment-link parking cannot be changed. Cancel it and record a new one.");
-      }
+    if (!businessId) {
+      setMessage("Business ID is required.");
+      return;
     }
-    if (!draft.ownerName.trim()) throw new Error("Owner name is required.");
-    if (!draft.carMake.trim() || !draft.carModel.trim() || !draft.carYear.trim()) {
-      throw new Error("Car make, model, and year are required.");
+    if (!draft.id) {
+      setMessage("Open a parking record to edit it.");
+      return;
+    }
+    // Hiding the Edit button is the affordance; this is the guard. A paid
+    // record's amount has already been charged, split and paid out. The
+    // server refuses it too - this only saves the round trip.
+    const existing = parkedCars.rows.find((row) => row.id === draft.id);
+    if (existing && businessParkingPaymentTone(existing) === "paid") {
+      setMessage("This parking has been paid for and can no longer be edited.");
+      return;
     }
 
-    const targetRef = draft.id ? doc(db, "parkedCars", draft.id) : doc(collection(db, "parkedCars"));
-    const totalCost = Number(draft.totalCost);
-    const parkingDate = draft.parkingDate ? new Date(`${draft.parkingDate}T12:00:00`) : new Date();
-    const payload = {
-        businessId,
-        businessName,
-        ownerName: draft.ownerName.trim(),
-        carMake: draft.carMake.trim(),
-        carModel: draft.carModel.trim(),
-        carYear: draft.carYear.trim(),
-        vinNumber: draft.vinNumber.trim().toUpperCase(),
-        parkingDate: Timestamp.fromDate(parkingDate),
-        status: draft.status,
-        ...(Number.isFinite(totalCost) && totalCost >= 0 ? {totalCost} : {}),
-        ...(draft.status === "completed" ? {parkingEndDate: serverTimestamp()} : {}),
-        updatedAt: serverTimestamp(),
-        ...(draft.id ? {} : {createdAt: serverTimestamp()}),
-    };
-    await setDoc(
-      targetRef,
-      {
-        ...payload,
-        ...(draft.id ? {} : {trackingCode: `PC-${targetRef.id.slice(0, 6).toUpperCase()}`}),
-      },
-      {merge: true},
-    );
-    closeForm();
-    setMessage(draft.id ? "Parking record updated." : "Parking record created.");
+    const entry = editDraftAsEntry();
+    const errors = validateBusinessParkingEntryDraft(entry, businessId);
+    setEditErrors(errors);
+    if (errors.length > 0) {
+      // The list under the form already names every one of these.
+      setMessage("");
+      return;
+    }
+
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await httpsCallable(
+        functions,
+        "updateBusinessParkingEntry",
+      )({entryId: draft.id, changes: businessParkingUpdateChanges(entry)});
+      const result = businessParkingUpdateResult(response.data);
+      // Status is not the callable's business; it stays on the path that
+      // already owned it, and only moves when the staff member changed it.
+      if (existing && draft.status !== text(existing.status, "active")) {
+        await updateParkingStatus(existing, draft.status);
+      }
+      closeForm();
+      // A reissued link is the one outcome staff must not miss: the customer
+      // is now holding a link for a different amount than the one quoted.
+      setMessage(
+        result.relinked
+          ? "The amount changed, so a new payment link was issued and the customer was notified of the new amount."
+          : "Parking record updated.",
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "The parking record could not be updated.",
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function updateParkingStatus(row: FirestoreRow, status: string) {
@@ -3851,6 +3909,30 @@ export function ParkingPanel({
     } catch (error) {
       setRowMessage(
         error instanceof Error ? error.message : "The payment link could not be cancelled.",
+      );
+    } finally {
+      setPaidBusyId("");
+    }
+  }
+
+  // A link that was sent while the customer's phone was wrong, or that landed
+  // in a spam folder, is a space the lot cannot bill for. Re-sending costs
+  // nothing and does not change the amount.
+  async function resendPaymentLink(row: FirestoreRow) {
+    setPaidBusyId(row.id);
+    setRowMessage("");
+    try {
+      const response = await httpsCallable(
+        functions,
+        "resendBusinessParkingPaymentLink",
+      )({entryId: row.id});
+      const data = (response.data ?? {}) as {emailed?: boolean; texted?: boolean};
+      setRowMessage(
+        businessParkingResendMessage(data.emailed === true, data.texted === true),
+      );
+    } catch (error) {
+      setRowMessage(
+        error instanceof Error ? error.message : "The payment link could not be re-sent.",
       );
     } finally {
       setPaidBusyId("");
@@ -4047,9 +4129,23 @@ export function ParkingPanel({
                         {paidBusyId === row.id ? "Checking..." : "Check payment status"}
                       </button>
                     )}
+                    {/* Same gate as Cancel below: a paid link has nothing
+                        left to collect, and a cancelled one must not be
+                        quietly brought back to life by a re-send. */}
+                    {canResendBusinessParkingLink(row) && (
+                      <button
+                        className="lst-btn ghost"
+                        type="button"
+                        disabled={paidBusyId === row.id}
+                        onClick={() => void resendPaymentLink(row)}
+                        title="Resend link"
+                      >
+                        <Send size={14} /> Resend link
+                      </button>
+                    )}
                     {/* The other half of the rule: a link stays good until
                         the customer pays it or the lot kills it here. */}
-                    {businessParkingPaymentTone(row) !== "paid" && !row.paymentLinkCancelledAt && (
+                    {canResendBusinessParkingLink(row) && (
                       <button
                         className="lst-btn ghost"
                         type="button"
@@ -4137,6 +4233,14 @@ export function ParkingPanel({
                 <label className="lst-field wide"><span>Owner name</span>
                   <input value={draft.ownerName} onChange={(event) => setDraft((value) => ({ ...value, ownerName: event.target.value }))} placeholder="Customer name" />
                 </label>
+                <label className="lst-field"><span>Customer phone</span>
+                  <input value={draft.customerPhone} onChange={(event) => setDraft((value) => ({ ...value, customerPhone: event.target.value }))} placeholder="Phone number" />
+                </label>
+                {/* Email is what a re-sent payment link travels on, so it is
+                    editable here rather than frozen at the moment of intake. */}
+                <label className="lst-field"><span>Customer email</span>
+                  <input value={draft.customerEmail} onChange={(event) => setDraft((value) => ({ ...value, customerEmail: event.target.value }))} placeholder="Email address" />
+                </label>
                 {/* Catalog pickers, not free text - this file already uses
                     them for listings; the parking form was the last holdout. */}
                 <label className="lst-field"><span>Make</span>
@@ -4160,11 +4264,19 @@ export function ParkingPanel({
                 <label className="lst-field"><span>VIN</span>
                   <input value={draft.vinNumber} onChange={(event) => setDraft((value) => ({ ...value, vinNumber: event.target.value }))} placeholder="17 characters" />
                 </label>
-                <label className="lst-field"><span>Parking date</span>
-                  <input type="date" value={draft.parkingDate} onChange={(event) => setDraft((value) => ({ ...value, parkingDate: event.target.value }))} />
+                {/* Both ends of the stay: the server re-prices from these, so
+                    a corrected pick-up day changes what is owed. */}
+                <label className="lst-field"><span>Start date</span>
+                  <input type="date" value={draft.startDate} onChange={(event) => setDraft((value) => ({ ...value, startDate: event.target.value }))} />
                 </label>
-                <label className="lst-field"><span>Total cost (USD)</span>
-                  <input inputMode="decimal" value={draft.totalCost} onChange={(event) => setDraft((value) => ({ ...value, totalCost: event.target.value }))} placeholder="0.00" />
+                <label className="lst-field"><span>End date</span>
+                  <input type="date" value={draft.endDate} onChange={(event) => setDraft((value) => ({ ...value, endDate: event.target.value }))} />
+                </label>
+                <label className="lst-field"><span>Payment method</span>
+                  <select value={draft.paymentMethod} onChange={(event) => setDraft((value) => ({ ...value, paymentMethod: event.target.value === "payment_link" ? "payment_link" : "direct" }))}>
+                    <option value="direct">Direct payment (Zelle or cash)</option>
+                    <option value="payment_link">Payment link</option>
+                  </select>
                 </label>
                 <label className="lst-field"><span>Status</span>
                   <select value={draft.status} onChange={(event) => setDraft((value) => ({ ...value, status: event.target.value }))}>
@@ -4172,12 +4284,21 @@ export function ParkingPanel({
                   </select>
                 </label>
               </div>
+              {/* No amount input, deliberately: the server recalculates the
+                  price from the business's parking rates every time, so a
+                  typed total would only ever be overwritten - or believed. */}
+              <p className="lst-hint">The amount is recalculated from your parking rates when you save. If it changes on a payment-link parking, we issue a new link and tell the customer.</p>
+              {editErrors.length > 0 && (
+                <ul className="lst-form-error" role="alert">
+                  {editErrors.map((code) => (<li key={code}>{BUSINESS_PARKING_ENTRY_MESSAGES[code]}</li>))}
+                </ul>
+              )}
             </div>
             <footer className="lst-modal-foot">
               <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeForm}>Cancel</button>
-              <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => runPanelAction(setBusy, setMessage, draft.id ? "Parking record updated." : "Parking record created.", saveParking)}>
+              <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => void saveParking()}>
                 {busy ? <RefreshCw className="spin" size={16} /> : <Save size={16} />}
-                {busy ? "Saving..." : draft.id ? "Save changes" : "Create parking"}
+                {busy ? "Saving..." : "Save changes"}
               </button>
             </footer>
           </div>

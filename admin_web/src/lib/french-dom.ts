@@ -3511,6 +3511,30 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Le document n’est pas encore prêt. Réessayez dans un instant.",
   "Your browser blocked the document window. Allow pop-ups for this site, or use the link on the card.":
     "Votre navigateur a bloqué la fenêtre du document. Autorisez les fenêtres contextuelles pour ce site ou utilisez le lien sur la fiche.",
+  // Full edit of a walk-up parking, and re-sending a link that never landed.
+  // "Start date", "End date", "Payment link", "Customer email", "Customer
+  // phone", "Owner name" and "Save changes" are already in the dictionary
+  // above — repeating them here would be a duplicate key, not a second entry.
+  "Payment method": "Mode de paiement",
+  "Direct payment (Zelle or cash)": "Paiement direct (Zelle ou espèces)",
+  "Resend link": "Renvoyer le lien",
+  "Payment link re-sent.": "Lien de paiement renvoyé.",
+  "Payment link re-sent by email.": "Lien de paiement renvoyé par courriel.",
+  "Payment link re-sent by text.": "Lien de paiement renvoyé par SMS.",
+  "Payment link re-sent by email and text.":
+    "Lien de paiement renvoyé par courriel et par SMS.",
+  "The payment link could not be re-sent.":
+    "Le lien de paiement n’a pas pu être renvoyé.",
+  "The parking record could not be updated.":
+    "Le dossier de stationnement n’a pas pu être mis à jour.",
+  "Open a parking record to edit it.":
+    "Ouvrez un dossier de stationnement pour le modifier.",
+  "This parking has been paid for and can no longer be edited.":
+    "Ce stationnement a été payé et ne peut plus être modifié.",
+  "The amount changed, so a new payment link was issued and the customer was notified of the new amount.":
+    "Le montant a changé : un nouveau lien de paiement a été émis et le client a été informé du nouveau montant.",
+  "The amount is recalculated from your parking rates when you save. If it changes on a payment-link parking, we issue a new link and tell the customer.":
+    "Le montant est recalculé à partir de vos tarifs de stationnement lors de l’enregistrement. S’il change sur un stationnement avec lien de paiement, nous émettons un nouveau lien et prévenons le client.",
 });
 
 const PICKUP_ERROR_LABELS: Record<string, string> = {

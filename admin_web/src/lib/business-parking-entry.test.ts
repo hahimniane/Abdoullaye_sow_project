@@ -15,7 +15,11 @@ import {
   businessParkingPaymentBadge,
   businessParkingPaymentLabel,
   businessParkingPaymentTone,
+  businessParkingResendMessage,
+  businessParkingUpdateChanges,
+  businessParkingUpdateResult,
   canMarkBusinessParkingPaid,
+  canResendBusinessParkingLink,
   emptyBusinessParkingEntryDraft,
   isBusinessEnteredParking,
   validateBusinessParkingEntryDraft,
@@ -384,10 +388,176 @@ test("the browser-write parking form cannot create records or edit paid ones", (
   const save = panelSource.slice(panelSource.indexOf("async function saveParking("), panelSource.indexOf("async function saveParking(") + 1400);
   assert.match(save, /businessParkingPaymentTone\(existing\) === "paid"/);
   assert.match(save, /can no longer be edited/);
-  // And a link entry's amount is already baked into the customer's session.
-  assert.match(save, /payment_link/);
-  assert.match(save, /cannot be changed/);
   assert.match(panelSource, /Paid records cannot be edited/);
+});
+
+const saveParkingSource = panelSource.slice(
+  panelSource.indexOf("async function saveParking("),
+  panelSource.indexOf("async function updateParkingStatus("),
+);
+const editFormSource = panelSource.slice(
+  panelSource.indexOf("<h3>Edit parking</h3>"),
+  panelSource.indexOf("{entryOpen && ("),
+);
+
+test("editing a parking goes through the callable, never a browser write", () => {
+  assert.ok(saveParkingSource.length > 0, "saveParking must exist");
+  assert.match(saveParkingSource, /"updateBusinessParkingEntry"/);
+  assert.match(saveParkingSource, /entryId: draft\.id/);
+  assert.match(saveParkingSource, /changes: businessParkingUpdateChanges\(/);
+  // The old path wrote parkedCars straight from the browser: it could move the
+  // dates a stay is billed on while the amount stayed frozen, so the record's
+  // price and the days it covered stopped agreeing. Nothing in this function
+  // may write a document again.
+  assert.ok(!/setDoc\(/.test(saveParkingSource), "saveParking must not write Firestore directly");
+  assert.ok(!/Timestamp\.fromDate\(/.test(saveParkingSource), "no client-built parking timestamps");
+  assert.ok(!/trackingCode:/.test(saveParkingSource), "tracking codes are the server's to issue");
+  // Status is not the callable's field, so it keeps the path that owned it.
+  assert.match(saveParkingSource, /updateParkingStatus\(existing, draft\.status\)/);
+  // A reissued link is the outcome staff must not miss.
+  assert.match(saveParkingSource, /result\.relinked/);
+  assert.match(saveParkingSource, /a new payment link was issued and the customer was notified/);
+});
+
+test("the edit form takes contact, both dates and the payment method - and no amount", () => {
+  assert.ok(editFormSource.length > 0, "the parking edit modal must exist");
+  for (const field of [
+    /customerEmail: event\.target\.value/,
+    /customerPhone: event\.target\.value/,
+    /startDate: event\.target\.value/,
+    /endDate: event\.target\.value/,
+    /paymentMethod: event\.target\.value === "payment_link" \? "payment_link" : "direct"/,
+  ]) {
+    assert.match(editFormSource, field);
+  }
+  assert.match(editFormSource, /<option value="direct">Direct payment \(Zelle or cash\)<\/option>/);
+  assert.match(editFormSource, /<option value="payment_link">Payment link<\/option>/);
+  // The catalog pickers stay, cascading clears and all.
+  assert.match(editFormSource, /getMakes\(\)/);
+  assert.match(editFormSource, /getModels\(draft\.carMake\)/);
+  assert.match(editFormSource, /getYears\(draft\.carMake, draft\.carModel\)/);
+  // The amount belongs to the server, which recomputes it from the business's
+  // parking rates. A price box here would either be ignored or believed.
+  assert.ok(!/totalCost/.test(editFormSource), "no amount input may exist in the edit form");
+  assert.ok(!/Total cost/.test(editFormSource), "no amount label may exist in the edit form");
+  assert.ok(!/amount(Due)?:/.test(editFormSource), "the form must not carry an amount field");
+  // The edit is validated by the same rules as the walk-up form.
+  assert.match(saveParkingSource, /validateBusinessParkingEntryDraft\(entry, businessId\)/);
+  assert.match(editFormSource, /BUSINESS_PARKING_ENTRY_MESSAGES\[code\]/);
+});
+
+test("the resend button is offered only while the link is still live", () => {
+  const resend = panelSource.slice(
+    panelSource.indexOf("async function resendPaymentLink("),
+    panelSource.indexOf("async function checkLinkPayment("),
+  );
+  assert.ok(resend.length > 0, "resendPaymentLink must exist");
+  assert.match(resend, /"resendBusinessParkingPaymentLink"/);
+  assert.match(resend, /entryId: row\.id/);
+  // Row results report transiently, like every other action on the card.
+  assert.match(resend, /setRowMessage\(\s*businessParkingResendMessage\(/);
+  assert.ok(!/\bsetMessage\(/.test(resend), "row results must not stick in the header");
+
+  // Gated exactly like "Cancel payment link": paid has nothing to collect, and
+  // a cancelled link must not be brought back to life by a re-send.
+  const button = panelSource.slice(
+    panelSource.indexOf("Same gate as Cancel below"),
+    panelSource.indexOf('title="Cancel payment link"'),
+  );
+  assert.ok(button.length > 0, "the resend button must exist");
+  assert.match(button, /\{canResendBusinessParkingLink\(row\) && \(/);
+  assert.match(button, /onClick=\{\(\) => void resendPaymentLink\(row\)\}/);
+  assert.match(button, /Resend link/);
+
+  assert.equal(canResendBusinessParkingLink({ source: "business", paymentMethod: "payment_link", paymentStatus: "pending" }), true);
+  assert.equal(canResendBusinessParkingLink({ source: "business", paymentMethod: "payment_link", paymentStatus: "succeeded" }), false);
+  assert.equal(
+    canResendBusinessParkingLink({ source: "business", paymentMethod: "payment_link", paymentStatus: "pending", paymentLinkCancelledAt: "2026-08-05" }),
+    false,
+  );
+});
+
+test("the update payload keeps the midday clock and carries no amount", () => {
+  const changes = businessParkingUpdateChanges({
+    ...validDraft,
+    customerEmail: "Aissatou@Example.COM",
+    paymentMethod: "payment_link",
+  });
+  assert.deepEqual(changes, {
+    customerName: "Aissatou Diallo",
+    customerPhone: "+1 917 555 0102",
+    customerEmail: "aissatou@example.com",
+    carMake: "Toyota",
+    carModel: "Camry",
+    carYear: "2019",
+    vinNumber: "1HGCM82633A004352",
+    startDate: "2026-08-10T12:00:00",
+    endDate: "2026-08-20T12:00:00",
+    paymentMethod: "payment_link",
+  });
+  // No businessId either: the entry already knows whose lot it is.
+  assert.ok(!("businessId" in changes));
+  // And creation is still the same object plus the business.
+  assert.deepEqual(businessParkingEntryPayload(validDraft, "biz-1"), {
+    businessId: "biz-1",
+    ...businessParkingUpdateChanges(validDraft),
+  });
+});
+
+test("the update response is read defensively, and relinked is never assumed", () => {
+  const empty = businessParkingUpdateResult(undefined);
+  assert.equal(empty.relinked, false);
+  assert.equal(empty.amountDueCents, 0);
+  assert.equal(empty.paymentLinkUrl, "");
+
+  const relinked = businessParkingUpdateResult({
+    success: true,
+    entryId: "entry-9",
+    paymentMethod: "payment_link",
+    amountDueCents: 12000,
+    relinked: true,
+    paymentLinkUrl: "https://laawol.example/pay/abc",
+    emailed: true,
+    texted: false,
+  });
+  assert.equal(relinked.relinked, true);
+  assert.equal(relinked.amountDueCents, 12000);
+  assert.equal(relinked.emailed, true);
+  assert.equal(relinked.texted, false);
+  // A truthy-but-not-true value must not read as a reissued link.
+  assert.equal(businessParkingUpdateResult({ relinked: "yes" }).relinked, false);
+});
+
+test("the re-send message names the channels it actually reached", () => {
+  assert.equal(businessParkingResendMessage(true, true), "Payment link re-sent by email and text.");
+  assert.equal(businessParkingResendMessage(true, false), "Payment link re-sent by email.");
+  assert.equal(businessParkingResendMessage(false, true), "Payment link re-sent by text.");
+  assert.equal(businessParkingResendMessage(false, false), "Payment link re-sent.");
+});
+
+test("every string the parking edit and re-send add is translated to French", () => {
+  for (const value of [
+    "Payment method",
+    "Direct payment (Zelle or cash)",
+    "Payment link",
+    "Resend link",
+    "Start date",
+    "End date",
+    "Customer email",
+    "Customer phone",
+    "Payment link re-sent.",
+    "Payment link re-sent by email.",
+    "Payment link re-sent by text.",
+    "Payment link re-sent by email and text.",
+    "The payment link could not be re-sent.",
+    "The parking record could not be updated.",
+    "Open a parking record to edit it.",
+    "This parking has been paid for and can no longer be edited.",
+    "The amount changed, so a new payment link was issued and the customer was notified of the new amount.",
+    "The amount is recalculated from your parking rates when you save. If it changes on a payment-link parking, we issue a new link and tell the customer.",
+  ]) {
+    assert.ok(TEXT_TRANSLATIONS[value], `missing French for: ${value}`);
+  }
 });
 
 test("the printable document follows the money, not the badge", () => {
