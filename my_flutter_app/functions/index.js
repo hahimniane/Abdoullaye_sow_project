@@ -7,6 +7,7 @@ const {
 } = require("firebase-functions/v2/firestore");
 const {defineSecret} = require("firebase-functions/params");
 const crypto = require("crypto");
+const QRCode = require("qrcode");
 const {buildTrackingCode} = require("./tracking_code");
 const {classifyTransportEdit} = require("./transport_request_edit");
 const {
@@ -10601,11 +10602,21 @@ exports.parkingDocument = onRequest(
       const businessDoc = await db.collection("businesses")
           .doc(String(entry.businessId || "")).get().catch(() => null);
       // An invoice must carry a way to pay; a receipt renders without one.
+      const isInvoice = parkingDocumentType(entry) === "invoice";
+      const payUrl = isInvoice ? parkingPaymentLinkUrl(token) : "";
+      // Inline SVG, so a printed invoice needs no network and no third
+      // party ever sees the payment URL.
+      let qrSvg = "";
+      if (payUrl) {
+        qrSvg = await QRCode.toString(payUrl, {
+          type: "svg", margin: 0, errorCorrectionLevel: "M",
+        }).catch(() => "");
+      }
       const model = parkingDocumentModel({
         entry,
         business: businessDoc && businessDoc.exists ? businessDoc.data() : {},
-        paymentLinkUrl: parkingDocumentType(entry) === "invoice" ?
-          parkingPaymentLinkUrl(token) : "",
+        paymentLinkUrl: payUrl,
+        paymentLinkQrSvg: qrSvg,
       });
       res.set("Content-Type", "text/html; charset=utf-8");
       return res.status(200).send(renderParkingDocument(model));

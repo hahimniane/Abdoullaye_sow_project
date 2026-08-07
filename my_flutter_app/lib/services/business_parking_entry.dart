@@ -341,14 +341,18 @@ BusinessParkingPaymentTone businessParkingPaymentTone(
   Map<String, dynamic> row,
 ) {
   if (!isBusinessEnteredParking(row)) return BusinessParkingPaymentTone.none;
-  if (_trimmed(row['status'], 40).toLowerCase() == 'cancelled') {
-    return BusinessParkingPaymentTone.none;
-  }
+  // Paid is checked BEFORE cancelled, matching the web console: money that
+  // arrived is a fact the cancellation does not undo, and hiding the badge on
+  // a cancelled-but-paid record made the two clients disagree about the same
+  // car. Only an unpaid cancellation has nothing left to chase.
   final paymentStatus = _trimmed(row['paymentStatus'], 40).toLowerCase();
   if (paymentStatus == 'succeeded' || paymentStatus == 'paid') {
     return BusinessParkingPaymentTone.paid;
   }
   if (paymentStatus == 'not_required') return BusinessParkingPaymentTone.none;
+  if (_trimmed(row['status'], 40).toLowerCase() == 'cancelled') {
+    return BusinessParkingPaymentTone.none;
+  }
   return BusinessParkingPaymentTone.awaiting;
 }
 
@@ -376,6 +380,81 @@ bool canCancelBusinessParkingPaymentLink(Map<String, dynamic> row) {
   // still calls a succeeded payment paid and would refuse.
   final paymentStatus = _trimmed(row['paymentStatus'], 40).toLowerCase();
   return paymentStatus != 'succeeded' && paymentStatus != 'paid';
+}
+
+/// Which document a business-entered row is entitled to.
+///
+/// Money in is a receipt - proof of something already settled. Money still
+/// owed is an invoice, which carries a way to pay. The server decides the
+/// same thing in `functions/parking_document.js`; this exists so the button
+/// can be labelled before the callable answers, and so the label and the
+/// document that opens agree.
+enum BusinessParkingDocumentType { receipt, invoice }
+
+/// Receipt when the money is in, invoice otherwise.
+///
+/// Keyed off [businessParkingPaymentTone] rather than the raw payment status
+/// so the button never contradicts the badge sitting a few pixels above it. A
+/// cancelled record is [BusinessParkingPaymentTone.none], so it reads as an
+/// invoice here - the server may still call it a receipt, and the document it
+/// serves is the authority on its own heading.
+BusinessParkingDocumentType businessParkingDocumentType(
+  Map<String, dynamic> row,
+) {
+  // Mirrors functions/parking_document.js parkingDocumentType: the document
+  // follows the MONEY, not the badge. The badge tone reports `none` for a
+  // cancelled record even when it was paid, so keying the label off the tone
+  // would print "Invoice" on a card whose served document says "Receipt".
+  final status = (row['paymentStatus'] ?? '').toString().trim();
+  return status == 'succeeded' || status == 'paid'
+      ? BusinessParkingDocumentType.receipt
+      : BusinessParkingDocumentType.invoice;
+}
+
+/// What a list is being asked to show. `all` is not "everything that exists" -
+/// it is "do not narrow", which is why it is a filter value rather than a null.
+enum BusinessParkingPaymentFilter { all, paid, notPaid }
+
+/// Whether a row survives the paid/not-paid filter.
+///
+/// A row with nothing to say - a customer's own booking, a cancelled record,
+/// an entry with nothing to collect - is neither paid nor unpaid, so it is
+/// hidden by either narrowing rather than being quietly counted as unpaid and
+/// sending staff chasing money nobody owes. It is only ever shown under `all`.
+bool businessParkingMatchesPaymentFilter(
+  Map<String, dynamic> row,
+  BusinessParkingPaymentFilter filter,
+) {
+  if (filter == BusinessParkingPaymentFilter.all) return true;
+  final tone = businessParkingPaymentTone(row);
+  return filter == BusinessParkingPaymentFilter.paid
+      ? tone == BusinessParkingPaymentTone.paid
+      : tone == BusinessParkingPaymentTone.awaiting;
+}
+
+/// The branded, print-optimised document the server serves for a parked car.
+class BusinessParkingDocumentLink {
+  const BusinessParkingDocumentLink({
+    required this.documentType,
+    required this.url,
+  });
+
+  /// Reads the response defensively: a missing url must surface as "could not
+  /// be opened", never as a `launchUrl` against an empty string.
+  factory BusinessParkingDocumentLink.fromCallable(Object? data) {
+    final row = data is Map ? data : const <Object?, Object?>{};
+    return BusinessParkingDocumentLink(
+      documentType: _trimmed(row['documentType'], 40).toLowerCase() == 'receipt'
+          ? BusinessParkingDocumentType.receipt
+          : BusinessParkingDocumentType.invoice,
+      url: _trimmed(row['url'], 2048),
+    );
+  }
+
+  final BusinessParkingDocumentType documentType;
+  final String url;
+
+  bool get hasUrl => url.isNotEmpty;
 }
 
 /// What a business-entered row recorded, in dollars. A direct entry is
@@ -431,5 +510,19 @@ class BusinessParkingService {
         .httpsCallable('cancelBusinessParkingPaymentLink')
         .call<Object?>(<String, dynamic>{'entryId': entryId});
     return BusinessParkingCancelLinkResult.fromCallable(response.data);
+  }
+
+  /// Asks for the printable receipt or invoice for a record.
+  ///
+  /// The callable mints the durable token when the record predates it and
+  /// enforces the parking permission itself, so a refusal comes back as a
+  /// `FirebaseFunctionsException` the caller surfaces rather than swallows.
+  Future<BusinessParkingDocumentLink> parkingDocumentUrl({
+    required String entryId,
+  }) async {
+    final response = await _functions
+        .httpsCallable('getParkingDocumentUrl')
+        .call<Object?>(<String, dynamic>{'entryId': entryId});
+    return BusinessParkingDocumentLink.fromCallable(response.data);
   }
 }

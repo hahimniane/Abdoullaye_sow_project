@@ -15,6 +15,7 @@ import '../widgets/app_snackbars.dart';
 import '../widgets/business_parking_payment_badge.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_colors.dart';
+import '../services/business_parking_entry.dart';
 import '../utils/business_parking_localization.dart';
 import '../utils/business_permissions.dart';
 import 'business_assistant_screen.dart';
@@ -52,6 +53,13 @@ class _HomeMenuState extends State<HomeMenu> {
   final List<TransportRequest> _transportRequests = [];
   bool _isLoading = true;
   ServiceCategory _selectedCategory = ServiceCategory.all;
+
+  /// Narrows the parked-car list to what the lot is still owed, or to what is
+  /// settled. Only ever offered while parking is the selected category, and
+  /// reset whenever the category changes so a narrowing can never be in force
+  /// while its control is off screen.
+  BusinessParkingPaymentFilter _paymentFilter =
+      BusinessParkingPaymentFilter.all;
   StreamSubscription<QuerySnapshot>? _parkedCarsSubscription;
   StreamSubscription<QuerySnapshot>? _barrelShipmentsSubscription;
   StreamSubscription<QuerySnapshot>? _freightShipmentsSubscription;
@@ -264,12 +272,26 @@ class _HomeMenuState extends State<HomeMenu> {
     final serviceRecords = _records
         .where((record) => enabled.contains(record.category))
         .toList();
-    if (_selectedCategory == ServiceCategory.all) {
-      return serviceRecords;
+    final categoryRecords = _selectedCategory == ServiceCategory.all
+        ? serviceRecords
+        : serviceRecords
+              .where((record) => record.category == _selectedCategory)
+              .toList();
+    if (_paymentFilter == BusinessParkingPaymentFilter.all) {
+      return categoryRecords;
     }
-    return serviceRecords
-        .where((record) => record.category == _selectedCategory)
-        .toList();
+    // Only a parked car has a payment state to narrow on. Nothing else is
+    // touched, so a barrel cannot be hidden by a parking filter.
+    return categoryRecords.where((record) {
+      final car = record.payload;
+      if (record.category != ServiceCategory.parking || car is! ParkedCar) {
+        return true;
+      }
+      return businessParkingMatchesPaymentFilter(
+        car.paymentFields,
+        _paymentFilter,
+      );
+    }).toList();
   }
 
   Set<ServiceCategory> _enabledActivityCategories() {
@@ -352,6 +374,15 @@ class _HomeMenuState extends State<HomeMenu> {
                   onCategoryChanged: (category) {
                     setState(() {
                       _selectedCategory = category;
+                      // Leaving parking takes the parking filter with it -
+                      // an invisible narrowing reads as missing records.
+                      _paymentFilter = BusinessParkingPaymentFilter.all;
+                    });
+                  },
+                  paymentFilter: _paymentFilter,
+                  onPaymentFilterChanged: (filter) {
+                    setState(() {
+                      _paymentFilter = filter;
                     });
                   },
                 ),
@@ -531,6 +562,8 @@ class _ActivitySection extends StatelessWidget {
     required this.isLoading,
     required this.selectedCategory,
     required this.onCategoryChanged,
+    required this.paymentFilter,
+    required this.onPaymentFilterChanged,
   });
 
   final AppLocalizations l10n;
@@ -538,6 +571,22 @@ class _ActivitySection extends StatelessWidget {
   final bool isLoading;
   final ServiceCategory selectedCategory;
   final ValueChanged<ServiceCategory> onCategoryChanged;
+  final BusinessParkingPaymentFilter paymentFilter;
+  final ValueChanged<BusinessParkingPaymentFilter> onPaymentFilterChanged;
+
+  String _paymentFilterLabel(
+    BusinessParkingPaymentFilter filter,
+    AppLocalizations l10n,
+  ) {
+    switch (filter) {
+      case BusinessParkingPaymentFilter.all:
+        return l10n.filterAll;
+      case BusinessParkingPaymentFilter.paid:
+        return l10n.paid;
+      case BusinessParkingPaymentFilter.notPaid:
+        return l10n.notPaid;
+    }
+  }
 
   Color _categoryColor(ServiceCategory category) {
     switch (category) {
@@ -638,6 +687,53 @@ class _ActivitySection extends StatelessWidget {
             }).toList(),
           ),
         ),
+        // Paid / Not paid, offered only where it means something. The lot's
+        // question is "who still owes me", and scrolling a mixed activity
+        // list for amber badges was the only way to answer it.
+        if (selectedCategory == ServiceCategory.parking) ...[
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            key: const Key('parking-payment-filter'),
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: BusinessParkingPaymentFilter.values.map((filter) {
+                final isSelected = filter == paymentFilter;
+                // Mirrors the badge: sage carries white text, amber carries
+                // dark ink. brandRed is an alias for the teal brand colour,
+                // so an unpaid control painted with it would read as settled.
+                final fill = switch (filter) {
+                  BusinessParkingPaymentFilter.all => AppColors.ink,
+                  BusinessParkingPaymentFilter.paid => AppColors.sage,
+                  BusinessParkingPaymentFilter.notPaid => AppColors.warn,
+                };
+                final selectedText =
+                    filter == BusinessParkingPaymentFilter.notPaid
+                    ? AppColors.ink
+                    : AppColors.paper;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(_paymentFilterLabel(filter, l10n)),
+                    selected: isSelected,
+                    onSelected: (_) => onPaymentFilterChanged(filter),
+                    labelStyle: TextStyle(
+                      color: isSelected ? selectedText : AppColors.ink,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    backgroundColor: AppColors.paper,
+                    selectedColor: fill,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.zero,
+                      side: BorderSide(
+                        color: fill.withValues(alpha: isSelected ? 1 : 0.5),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         if (isLoading)
           const Center(child: CircularProgressIndicator())

@@ -6244,6 +6244,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'The payment link could not be cancelled.';
 
   @override
+  String get parkingPrintReceipt => 'Print receipt';
+
+  @override
+  String get parkingPrintInvoice => 'Print invoice';
+
+  @override
+  String get parkingDocumentCouldNotBeOpened =>
+      'The document could not be opened.';
+
+  @override
   String parkedCarRecordedWithCode(Object trackingCode) {
     return 'Parked car recorded. Tracking number: $trackingCode';
   }

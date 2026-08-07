@@ -150,3 +150,57 @@ describe("renderParkingDocument", () => {
     assert.match(html, />Vehicle</);
   });
 });
+
+describe("pay-by-QR", () => {
+  const QRCode = require("qrcode");
+  const LINK = "https://example.com/parkingPaymentLink?t=abc123def456";
+
+  it("the QR encodes exactly the payment URL, byte for byte", () => {
+    // A QR that renders but decodes to the wrong thing looks perfect and
+    // takes the customer nowhere, so assert the payload, not the picture.
+    // The encoder splits a URL into mixed segments - byte data arrives as a
+    // number array, numeric/alphanumeric as a string - so both are joined
+    // back in order rather than assuming a single byte segment.
+    const qr = QRCode.create(LINK, {errorCorrectionLevel: "M"});
+    const decoded = qr.segments.map((segment) => (
+      typeof segment.data === "string" ?
+        segment.data :
+        Buffer.from(Array.from(segment.data)).toString("utf8")
+    )).join("");
+    assert.equal(decoded, LINK);
+  });
+
+  it("an invoice renders the code inline with a scan prompt", async () => {
+    const svg = await QRCode.toString(LINK, {type: "svg", margin: 0});
+    const html = renderParkingDocument(parkingDocumentModel({
+      entry: UNPAID_ENTRY, business: BUSINESS,
+      paymentLinkUrl: LINK, paymentLinkQrSvg: svg,
+    }));
+    assert.match(html, /Scan to pay/);
+    // Inline SVG: a printed invoice must not need the network, and no third
+    // party should ever be handed the payment URL.
+    assert.match(html, /<svg/);
+    assert.ok(!/<img[^>]+qr/i.test(html),
+        "the code must not be a remote image");
+  });
+
+  it("a receipt never carries a scannable code", async () => {
+    const svg = await QRCode.toString(LINK, {type: "svg", margin: 0});
+    const html = renderParkingDocument(parkingDocumentModel({
+      entry: PAID_ENTRY, business: BUSINESS,
+      paymentLinkUrl: LINK, paymentLinkQrSvg: svg,
+    }));
+    assert.ok(!html.includes("Scan to pay"));
+    assert.ok(!html.includes("<svg"));
+  });
+
+  it("a failed QR degrades to the link, not a broken invoice", () => {
+    const html = renderParkingDocument(parkingDocumentModel({
+      entry: UNPAID_ENTRY, business: BUSINESS,
+      paymentLinkUrl: LINK, paymentLinkQrSvg: "",
+    }));
+    assert.match(html, /Pay online/);
+    assert.ok(html.includes(LINK));
+    assert.ok(!html.includes("Scan to pay"));
+  });
+});

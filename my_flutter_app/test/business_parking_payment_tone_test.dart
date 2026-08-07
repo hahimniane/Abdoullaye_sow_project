@@ -82,7 +82,8 @@ void main() {
       );
     });
 
-    test('a cancelled record shows no badge, settled or not', () {
+    test('an unpaid cancellation shows no badge - there is nothing to chase',
+        () {
       expect(
         businessParkingPaymentTone(
           row(
@@ -93,6 +94,12 @@ void main() {
         ),
         BusinessParkingPaymentTone.none,
       );
+    });
+
+    test('a cancelled record that was paid still reads as paid', () {
+      // Money that arrived is a fact the cancellation does not undo, and the
+      // web console has always shown it this way - hiding the badge here made
+      // the two clients disagree about the same car.
       expect(
         businessParkingPaymentTone(
           row(
@@ -101,7 +108,7 @@ void main() {
             status: 'cancelled',
           ),
         ),
-        BusinessParkingPaymentTone.none,
+        BusinessParkingPaymentTone.paid,
       );
     });
 

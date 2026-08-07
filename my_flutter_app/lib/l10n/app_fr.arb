@@ -2592,6 +2592,9 @@
   "paymentLinkCancelled": "Lien de paiement annulé.",
   "parkingPaymentLinkCancelled": "Ce lien de paiement a été annulé.",
   "paymentLinkCouldNotBeCancelled": "Le lien de paiement n’a pas pu être annulé.",
+  "parkingPrintReceipt": "Imprimer le reçu",
+  "parkingPrintInvoice": "Imprimer la facture",
+  "parkingDocumentCouldNotBeOpened": "Le document n’a pas pu être ouvert.",
   "parkedCarRecordedWithCode": "Voiture stationnée enregistrée. Numéro de suivi : {trackingCode}",
   "@parkedCarRecordedWithCode": {
     "placeholders": {

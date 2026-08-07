@@ -6356,6 +6356,16 @@ class AppLocalizationsFr extends AppLocalizations {
       'Le lien de paiement n’a pas pu être annulé.';
 
   @override
+  String get parkingPrintReceipt => 'Imprimer le reçu';
+
+  @override
+  String get parkingPrintInvoice => 'Imprimer la facture';
+
+  @override
+  String get parkingDocumentCouldNotBeOpened =>
+      'Le document n’a pas pu être ouvert.';
+
+  @override
   String parkedCarRecordedWithCode(Object trackingCode) {
     return 'Voiture stationnée enregistrée. Numéro de suivi : $trackingCode';
   }

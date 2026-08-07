@@ -3495,6 +3495,21 @@ Object.assign(TEXT_TRANSLATIONS, {
     "L’assistant n’a pas pu répondre. Réessayez.",
   "The assistant is unavailable in preview mode.":
     "L’assistant est indisponible en mode aperçu.",
+  // Parked cars: printable paper, and the one filter that answers both
+  // "where is this car" and "have we been paid". "Paid", "Not paid" and
+  // "Payment" are already above — repeating them here would be a duplicate
+  // key, not a second entry.
+  "Parking status": "Statut du stationnement",
+  "Print receipt": "Imprimer le reçu",
+  "Print invoice": "Imprimer la facture",
+  "Preparing...": "Préparation en cours...",
+  "Open the document": "Ouvrir le document",
+  "The document could not be prepared.":
+    "Le document n’a pas pu être préparé.",
+  "The document is not ready yet. Try again in a moment.":
+    "Le document n’est pas encore prêt. Réessayez dans un instant.",
+  "Your browser blocked the document window. Allow pop-ups for this site, or use the link on the card.":
+    "Votre navigateur a bloqué la fenêtre du document. Autorisez les fenêtres contextuelles pour ce site ou utilisez le lien sur la fiche.",
 });
 
 const PICKUP_ERROR_LABELS: Record<string, string> = {
@@ -3652,7 +3667,9 @@ function translateTextNode(node: Node) {
 }
 
 function translateAttributes(element: Element) {
-  ["placeholder", "title", "aria-label", "alt"].forEach((name) => {
+  // `label` is how an <optgroup> names a group of options — text the user
+  // reads that lives nowhere in the DOM as a text node.
+  ["placeholder", "title", "aria-label", "alt", "label"].forEach((name) => {
     const value = element.getAttribute(name);
     if (!value) return;
     const translated = translateValue(value, currentLang());

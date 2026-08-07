@@ -8,6 +8,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/parked_car.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
@@ -990,6 +991,46 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     }
   }
 
+  /// Opens the branded receipt or invoice for this record.
+  ///
+  /// The server owns the document: it mints the durable token, decides
+  /// whether the page is headed "Receipt" or "Invoice", and serves the print
+  /// button. All this does is ask for the URL and hand it to the OS browser -
+  /// [LaunchMode.externalApplication] rather than an in-app view, because
+  /// printing and sharing are the browser's, not ours.
+  ///
+  /// The callable enforces the parking permission itself and answers a refusal
+  /// with `FirebaseFunctionsException`, whose message says something this
+  /// screen's copy cannot, so it is shown rather than replaced.
+  Future<void> _openParkingDocument() async {
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      final document = await _businessParkingService.parkingDocumentUrl(
+        entryId: widget.parkedCar.id,
+      );
+      if (!mounted) return;
+      final uri = document.hasUrl ? Uri.tryParse(document.url) : null;
+      if (uri == null) {
+        showErrorSnackBar(context, l10n.parkingDocumentCouldNotBeOpened);
+        return;
+      }
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && mounted) {
+        showErrorSnackBar(context, l10n.parkingDocumentCouldNotBeOpened);
+      }
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      final message = (error.message ?? '').trim();
+      showErrorSnackBar(
+        context,
+        message.isEmpty ? l10n.parkingDocumentCouldNotBeOpened : message,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      showErrorSnackBar(context, l10n.parkingDocumentCouldNotBeOpened);
+    }
+  }
+
   Future<void> _copyCheckoutUrl(String url) async {
     final l10n = AppLocalizations.of(context)!;
     try {
@@ -1023,6 +1064,12 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     final canCancelLink =
         canRecordPayment &&
         canCancelBusinessParkingPaymentLink(_paymentFields);
+    // Settled money prints as a receipt, money still owed as an invoice - the
+    // owner asked for one button, not two, and for it to say which it is
+    // before it is pressed.
+    final documentIsReceipt =
+        businessParkingDocumentType(_paymentFields) ==
+        BusinessParkingDocumentType.receipt;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1052,6 +1099,23 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
             currency.format(businessParkingAmountDue(_paymentFields)),
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
+          // Gated on the same permission as the rest of the card: the lot's
+          // own staff hand a customer their paperwork, and the callable
+          // enforces the permission anyway.
+          if (canRecordPayment) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: AsyncActionButton.outlined(
+                key: const ValueKey<String>('parking-print-document'),
+                onPressed: _openParkingDocument,
+                icon: Icons.print_outlined,
+                label: documentIsReceipt
+                    ? l10n.parkingPrintReceipt
+                    : l10n.parkingPrintInvoice,
+              ),
+            ),
+          ],
           if (checkoutUrl.isNotEmpty && isPaid) ...[
             const SizedBox(height: 12),
             Text(

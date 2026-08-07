@@ -73,7 +73,9 @@ function parkingDocumentTitle(type) {
  * @param {Object} args entry, business and the durable payment link.
  * @return {Object} The document model.
  */
-function parkingDocumentModel({entry, business, paymentLinkUrl}) {
+function parkingDocumentModel({
+  entry, business, paymentLinkUrl, paymentLinkQrSvg,
+}) {
   const record = entry && typeof entry === "object" ? entry : {};
   const org = business && typeof business === "object" ? business : {};
   const type = parkingDocumentType(record);
@@ -112,8 +114,10 @@ function parkingDocumentModel({entry, business, paymentLinkUrl}) {
     amountCents,
     methodLabel,
     // Only an invoice carries a way to pay; printing a live payment link on
-    // a receipt would invite a second payment.
+    // a receipt would invite a second payment. The QR follows the same rule -
+    // a scannable code on a receipt is the same mistake in a friendlier form.
     paymentLinkUrl: paid ? "" : text(paymentLinkUrl, 400),
+    paymentLinkQrSvg: paid ? "" : String(paymentLinkQrSvg || ""),
     issuedAt: text(record.documentIssuedAt, 40),
   };
 }
@@ -134,13 +138,24 @@ function renderParkingDocument(model) {
     `<p class="stamp paid">PAID</p>` :
     `<p class="stamp due">PAYMENT DUE</p>`;
 
+  // The QR is what makes a PRINTED invoice payable: nobody types a
+  // 116-character URL off a sheet of paper. The link stays for the digital
+  // copy, where tapping is easier than scanning.
+  const qrBlock = model.paymentLinkQrSvg ?
+    `<div class="qr">${model.paymentLinkQrSvg}
+       <span>Scan to pay</span></div>` :
+    "";
+
   const payBlock = model.paymentLinkUrl ?
     `<div class="pay">
-       <p class="pay-title">Pay online</p>
-       <p class="pay-link"><a href="${escapeHtml(model.paymentLinkUrl)}">` +
-         `${escapeHtml(model.paymentLinkUrl)}</a></p>
-       <p class="pay-note">This link stays valid until the parking is paid
-         or the business cancels it.</p>
+       ${qrBlock}
+       <div class="pay-body">
+         <p class="pay-title">Pay online</p>
+         <p class="pay-link"><a href="${escapeHtml(model.paymentLinkUrl)}">` +
+           `${escapeHtml(model.paymentLinkUrl)}</a></p>
+         <p class="pay-note">Scan the code or open the link. It stays valid
+           until the parking is paid or the business cancels it.</p>
+       </div>
      </div>` :
     "";
 
@@ -178,7 +193,14 @@ function renderParkingDocument(model) {
     text-transform:uppercase;letter-spacing:.5px}
   .total b{font-size:26px}
   .pay{margin-top:24px;border:1px dashed #0D9488;border-radius:10px;
-    padding:16px 20px;background:#f2fbfa}
+    padding:16px 20px;background:#f2fbfa;display:flex;align-items:center;
+    gap:18px}
+  .pay-body{flex:1;min-width:0}
+  .qr{flex:0 0 auto;text-align:center}
+  .qr svg{width:104px;height:104px;display:block;background:#fff;
+    border-radius:6px;padding:6px}
+  .qr span{display:block;margin-top:6px;font-size:11px;font-weight:600;
+    color:#0D9488;letter-spacing:.3px}
   .pay-title{margin:0 0 6px;font-weight:700;font-size:14px}
   .pay-link{margin:0;font-size:12px;word-break:break-all}
   .pay-link a{color:#0D9488}

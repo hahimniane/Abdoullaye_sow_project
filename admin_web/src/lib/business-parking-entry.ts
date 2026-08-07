@@ -315,3 +315,18 @@ export function businessParkingPaymentLabel(row: ParkingRowLike) {
   if (paymentStatus === "not_required") return "Nothing to collect";
   return "Awaiting payment to the business";
 }
+
+/**
+ * Which printable document a record produces. Mirrors the server rule in
+ * functions/parking_document.js: the document follows the MONEY, not the
+ * badge. The badge tone reports "none" for a cancelled record even when it
+ * was paid, so keying the label off the tone would print "Invoice" on a card
+ * whose served document is headed "Receipt".
+ *
+ * @param row A parkedCars document.
+ * @return "receipt" when the money arrived, otherwise "invoice".
+ */
+export function businessParkingDocumentType(row: ParkingRowLike): "receipt" | "invoice" {
+  const paymentStatus = trimmed(row?.paymentStatus, 40);
+  return paymentStatus === "succeeded" || paymentStatus === "paid" ? "receipt" : "invoice";
+}

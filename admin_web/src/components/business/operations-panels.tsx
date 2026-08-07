@@ -33,6 +33,7 @@ import {
   Pencil,
   Plane,
   Plus,
+  Printer,
   RefreshCw,
   RotateCcw,
   Save,
@@ -62,6 +63,7 @@ import {
   businessParkingAmountDue,
   businessParkingEntryPayload,
   businessParkingEntryResult,
+  businessParkingDocumentType,
   businessParkingPaymentBadge,
   businessParkingPaymentLabel,
   businessParkingPaymentTone,
@@ -3564,6 +3566,45 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
   );
 }
 
+/** How long a row-level result stays in the panel header. */
+const ROW_MESSAGE_MS = 6000;
+
+/**
+ * A message setter for results that belong to one row rather than to the
+ * panel. "Already recorded as paid." is an answer to a click, not a state of
+ * the panel — left in the header it reads as a standing claim about a list the
+ * owner has since scrolled away from. This clears it.
+ *
+ * Panel-level errors keep the plain `setMessage`: a refusal that stops work
+ * must stay on screen until the work is done differently.
+ *
+ * @param setMessage The panel's own message setter.
+ * @param ms How long the message survives.
+ * @return A setter that clears itself, cancelling any message still pending.
+ */
+function useTransientMessage(setMessage: (value: string) => void, ms = ROW_MESSAGE_MS) {
+  const timer = useRef<number | null>(null);
+  // Without this, a click followed by a tab change fires setState on an
+  // unmounted panel six seconds later.
+  useEffect(
+    () => () => {
+      if (timer.current !== null) window.clearTimeout(timer.current);
+      timer.current = null;
+    },
+    [],
+  );
+  return (value: string) => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+    setMessage(value);
+    if (!value) return;
+    timer.current = window.setTimeout(() => {
+      timer.current = null;
+      setMessage("");
+    }, ms);
+  };
+}
+
 export function ParkingPanel({
   businessId,
   previewMode = false,
@@ -3589,14 +3630,29 @@ export function ParkingPanel({
   const [linkCopied, setLinkCopied] = useState(false);
   const [receivedVia, setReceivedVia] = useState<Record<string, string>>({});
   const [paidBusyId, setPaidBusyId] = useState("");
+  // Set only when window.open was blocked, so the card can offer the document
+  // as a plain link the browser will honour.
+  const [blockedDocument, setBlockedDocument] = useState<{ id: string; url: string } | null>(null);
+  const setRowMessage = useTransientMessage(setMessage);
   const searched = useMemo(
     () => filterRows(parkedCars.rows, search, ["trackingCode", "ownerName", "customerName", "carMake", "carModel", "carYear", "vinNumber", "status"]),
     [parkedCars.rows, search],
   );
-  const filteredRows = useMemo(
-    () => (filter === "all" ? searched : searched.filter((row) => text(row.status, "") === filter)),
-    [searched, filter],
-  );
+  // One control, two questions: where the car is in its stay, and whether it
+  // has been paid for. A lot chasing money filters on the second and never
+  // learns the first is a separate dropdown.
+  const filteredRows = useMemo(() => {
+    if (filter === "all") return searched;
+    if (filter === "payment:paid") {
+      return searched.filter((row) => businessParkingPaymentTone(row) === "paid");
+    }
+    if (filter === "payment:unpaid") {
+      // "Not paid" is money still owed — a cancelled car or one with nothing
+      // to collect ("none") is not something to chase.
+      return searched.filter((row) => businessParkingPaymentTone(row) === "awaiting");
+    }
+    return searched.filter((row) => text(row.status, "") === filter);
+  }, [searched, filter]);
   const activeCount = parkedCars.rows.filter((row) => text(row.status, "active") === "active").length;
 
   function closeForm() {
@@ -3748,16 +3804,16 @@ export function ParkingPanel({
     );
     if (!confirmed) return;
     setPaidBusyId(row.id);
-    setMessage("");
+    setRowMessage("");
     try {
       const response = await httpsCallable(functions, "markBusinessParkingPaid")({
         entryId: row.id,
         receivedVia: method,
       });
       const data = (response.data ?? {}) as {alreadyPaid?: boolean};
-      setMessage(data.alreadyPaid ? "This parking was already marked paid." : "Payment recorded.");
+      setRowMessage(data.alreadyPaid ? "This parking was already marked paid." : "Payment recorded.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "The payment could not be recorded.");
+      setRowMessage(error instanceof Error ? error.message : "The payment could not be recorded.");
     } finally {
       setPaidBusyId("");
     }
@@ -3770,20 +3826,20 @@ export function ParkingPanel({
     );
     if (!confirmed) return;
     setPaidBusyId(row.id);
-    setMessage("");
+    setRowMessage("");
     try {
       const response = await httpsCallable(
         functions,
         "cancelBusinessParkingPaymentLink",
       )({entryId: row.id});
       const data = (response.data ?? {}) as { alreadyCancelled?: boolean };
-      setMessage(
+      setRowMessage(
         data.alreadyCancelled
           ? "This payment link was already cancelled."
           : "Payment link cancelled.",
       );
     } catch (error) {
-      setMessage(
+      setRowMessage(
         error instanceof Error ? error.message : "The payment link could not be cancelled.",
       );
     } finally {
@@ -3793,7 +3849,7 @@ export function ParkingPanel({
 
   async function checkLinkPayment(row: FirestoreRow) {
     setPaidBusyId(row.id);
-    setMessage("");
+    setRowMessage("");
     try {
       const response = await httpsCallable(
         functions,
@@ -3803,7 +3859,7 @@ export function ParkingPanel({
         paid?: boolean;
         alreadyRecorded?: boolean;
       };
-      setMessage(
+      setRowMessage(
         data.paid
           ? data.alreadyRecorded
             ? "Already recorded as paid."
@@ -3811,10 +3867,42 @@ export function ParkingPanel({
           : "Stripe has not received this payment yet.",
       );
     } catch (error) {
-      setMessage(
+      setRowMessage(
         error instanceof Error
           ? error.message
           : "The payment status could not be checked.",
+      );
+    } finally {
+      setPaidBusyId("");
+    }
+  }
+
+  // A lot handing a car back needs paper: a receipt once the money is in, an
+  // invoice while it is not. The server renders and brands the document; this
+  // only has to get the owner to it.
+  async function openParkingDocument(row: FirestoreRow) {
+    setPaidBusyId(row.id);
+    setRowMessage("");
+    setBlockedDocument(null);
+    try {
+      const response = await httpsCallable(
+        functions,
+        "getParkingDocumentUrl",
+      )({entryId: row.id});
+      const data = (response.data ?? {}) as {documentType?: string; url?: string};
+      const url = text(data.url, "");
+      if (!url) throw new Error("The document is not ready yet. Try again in a moment.");
+      // The callable is awaited, so this open is no longer inside the click's
+      // user gesture and a blocker can refuse it silently. A refusal must
+      // leave the owner a link, not a button that appears to do nothing.
+      const opened = window.open(url, "_blank", "noopener");
+      if (!opened) {
+        setBlockedDocument({id: row.id, url});
+        setRowMessage("Your browser blocked the document window. Allow pop-ups for this site, or use the link on the card.");
+      }
+    } catch (error) {
+      setRowMessage(
+        error instanceof Error ? error.message : "The document could not be prepared.",
       );
     } finally {
       setPaidBusyId("");
@@ -3847,7 +3935,13 @@ export function ParkingPanel({
         </div>
         <select className="lst-status-select" style={{ flex: "0 0 auto", minWidth: 150 }} value={filter} onChange={(event) => setFilter(event.target.value)}>
           <option value="all">All statuses</option>
-          {parkingStatuses.map((status) => (<option key={status} value={status}>{statusLabel(status)}</option>))}
+          <optgroup label="Parking status">
+            {parkingStatuses.map((status) => (<option key={status} value={status}>{statusLabel(status)}</option>))}
+          </optgroup>
+          <optgroup label="Payment">
+            <option value="payment:paid">Paid</option>
+            <option value="payment:unpaid">Not paid</option>
+          </optgroup>
         </select>
         <button className="lst-btn ghost" type="button" disabled={filteredRows.length === 0} onClick={() => downloadCsv("parking-receipts.csv", filteredRows, ["trackingCode", "ownerName", "carMake", "carModel", "carYear", "vinNumber", "parkingDate", "parkingEndDate", "totalCost", "status", "updatedAt"])}>
           <Download size={15} /> Export receipts
@@ -3917,17 +4011,21 @@ export function ParkingPanel({
                       </button>
                     )}
                     {/* A webhook can be late or lost; the lot should never be
-                        stuck guessing whether a car has been paid for. */}
-                    <button
-                      className="lst-btn ghost"
-                      type="button"
-                      disabled={paidBusyId === row.id}
-                      onClick={() => void checkLinkPayment(row)}
-                      title="Check payment status"
-                    >
-                      <RefreshCw size={14} />
-                      {paidBusyId === row.id ? "Checking..." : "Check payment status"}
-                    </button>
+                        stuck guessing whether a car has been paid for. Once it
+                        is paid there is nothing left to ask Stripe, so the
+                        button goes — same rule as the cancel button below. */}
+                    {businessParkingPaymentTone(row) !== "paid" && (
+                      <button
+                        className="lst-btn ghost"
+                        type="button"
+                        disabled={paidBusyId === row.id}
+                        onClick={() => void checkLinkPayment(row)}
+                        title="Check payment status"
+                      >
+                        <RefreshCw size={14} />
+                        {paidBusyId === row.id ? "Checking..." : "Check payment status"}
+                      </button>
+                    )}
                     {/* The other half of the rule: a link stays good until
                         the customer pays it or the lot kills it here. */}
                     {businessParkingPaymentTone(row) !== "paid" && !row.paymentLinkCancelledAt && (
@@ -3962,6 +4060,31 @@ export function ParkingPanel({
                     {rowBusy ? <RefreshCw className="spin" size={14} /> : <CircleDollarSign size={14} />}
                     {rowBusy ? "Recording..." : "Mark payment received"}
                   </button>
+                )}
+                {/* Paper for the owner: a receipt once the money is in, an
+                    invoice while it is still owed. The document itself is
+                    server-rendered and print-optimised. */}
+                {businessEntered && (
+                  <button
+                    className="lst-btn ghost"
+                    type="button"
+                    disabled={rowBusy}
+                    aria-busy={rowBusy}
+                    onClick={() => void openParkingDocument(row)}
+                    title={businessParkingDocumentType(row) === "receipt" ? "Print receipt" : "Print invoice"}
+                  >
+                    {rowBusy ? <RefreshCw className="spin" size={14} /> : <Printer size={14} />}
+                    {rowBusy
+                      ? "Preparing..."
+                      : businessParkingDocumentType(row) === "receipt"
+                        ? "Print receipt"
+                        : "Print invoice"}
+                  </button>
+                )}
+                {blockedDocument?.id === row.id && (
+                  <a className="lst-btn ghost" href={blockedDocument.url} target="_blank" rel="noopener noreferrer">
+                    <Printer size={14} /> Open the document
+                  </a>
                 )}
                 {/* A paid record is settled money: the amount was charged,
                     the platform fee taken and the payout sent. Editing it

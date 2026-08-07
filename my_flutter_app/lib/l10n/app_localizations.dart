@@ -11232,6 +11232,24 @@ abstract class AppLocalizations {
   /// **'The payment link could not be cancelled.'**
   String get paymentLinkCouldNotBeCancelled;
 
+  /// No description provided for @parkingPrintReceipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Print receipt'**
+  String get parkingPrintReceipt;
+
+  /// No description provided for @parkingPrintInvoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Print invoice'**
+  String get parkingPrintInvoice;
+
+  /// No description provided for @parkingDocumentCouldNotBeOpened.
+  ///
+  /// In en, this message translates to:
+  /// **'The document could not be opened.'**
+  String get parkingDocumentCouldNotBeOpened;
+
   /// No description provided for @parkedCarRecordedWithCode.
   ///
   /// In en, this message translates to:

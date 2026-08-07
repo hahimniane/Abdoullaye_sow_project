@@ -2621,6 +2621,9 @@
   "paymentLinkCancelled": "Payment link cancelled.",
   "parkingPaymentLinkCancelled": "This payment link was cancelled.",
   "paymentLinkCouldNotBeCancelled": "The payment link could not be cancelled.",
+  "parkingPrintReceipt": "Print receipt",
+  "parkingPrintInvoice": "Print invoice",
+  "parkingDocumentCouldNotBeOpened": "The document could not be opened.",
   "parkedCarRecordedWithCode": "Parked car recorded. Tracking number: {trackingCode}",
   "@parkedCarRecordedWithCode": {
     "placeholders": {

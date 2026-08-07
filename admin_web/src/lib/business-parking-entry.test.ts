@@ -9,6 +9,7 @@ import {
   businessParkingEntryMessage,
   businessParkingEntryPayload,
   businessParkingEntryResult,
+  businessParkingDocumentType,
   businessParkingPaymentBadge,
   businessParkingPaymentLabel,
   businessParkingPaymentTone,
@@ -277,6 +278,94 @@ test("a paid card shows a badge and stops offering the used payment link", () =>
   assert.match(linkBlock, /This link was already used to pay/);
 });
 
+test("a paid record stops offering to check a payment that has landed", () => {
+  // The cancel button was already gated this way; the check button asked
+  // Stripe about money Stripe had already confirmed.
+  const check = panelSource.slice(
+    panelSource.indexOf("stuck guessing whether a car has been paid for"),
+    panelSource.indexOf('title="Check payment status"'),
+  );
+  assert.ok(check.length > 0, "the check-status button must exist");
+  assert.match(check, /businessParkingPaymentTone\(row\) !== "paid" && \(/);
+  // And the row action it fires reports through the self-clearing setter, not
+  // the panel's sticky one.
+  const checkFn = panelSource.slice(
+    panelSource.indexOf("async function checkLinkPayment("),
+    panelSource.indexOf("async function openParkingDocument("),
+  );
+  assert.ok(checkFn.length > 0, "checkLinkPayment must exist");
+  assert.match(checkFn, /setRowMessage\(/);
+  assert.ok(!/\bsetMessage\(/.test(checkFn), "row results must not stick in the header");
+});
+
+test("row results expire; the timer is cleared before reuse and on unmount", () => {
+  const hook = panelSource.slice(
+    panelSource.indexOf("function useTransientMessage("),
+    panelSource.indexOf("export function ParkingPanel("),
+  );
+  assert.ok(hook.length > 0, "the transient-message helper must exist");
+  assert.match(hook, /window\.clearTimeout\(timer\.current\)/);
+  assert.match(hook, /window\.setTimeout\(/);
+  assert.match(hook, /useEffect\(/);
+  // Every row action in the parking panel uses it.
+  for (const fn of ["markPaid", "cancelPaymentLink", "checkLinkPayment"]) {
+    const body = panelSource.slice(panelSource.indexOf(`async function ${fn}(`), panelSource.indexOf(`async function ${fn}(`) + 1600);
+    assert.match(body, /setRowMessage\(/, `${fn} must report transiently`);
+  }
+});
+
+test("the parking filter asks about payment as well as parking status", () => {
+  assert.match(panelSource, /<optgroup label="Parking status">/);
+  assert.match(panelSource, /<optgroup label="Payment">/);
+  assert.match(panelSource, /<option value="payment:paid">Paid<\/option>/);
+  assert.match(panelSource, /<option value="payment:unpaid">Not paid<\/option>/);
+  // And the values are honoured by the same memo that filters by status.
+  const memo = panelSource.slice(
+    panelSource.indexOf("const filteredRows = useMemo("),
+    panelSource.indexOf("const activeCount = parkedCars.rows"),
+  );
+  assert.ok(memo.length > 0, "the filter memo must exist");
+  assert.match(memo, /filter === "payment:paid"/);
+  assert.match(memo, /filter === "payment:unpaid"/);
+  assert.match(memo, /businessParkingPaymentTone\(row\) === "paid"/);
+  assert.match(memo, /businessParkingPaymentTone\(row\) === "awaiting"/);
+  assert.match(memo, /text\(row\.status, ""\) === filter/);
+});
+
+test("every business-entered card can print its own paper", () => {
+  assert.match(panelSource, /"getParkingDocumentUrl"/);
+  const openStart = panelSource.indexOf("async function openParkingDocument(");
+  const open = openStart < 0 ? "" : panelSource.slice(openStart, openStart + 1800);
+  assert.ok(open.length > 0, "openParkingDocument must exist");
+  assert.match(open, /httpsCallable\(\s*functions,\s*"getParkingDocumentUrl",?\s*\)\(\{entryId: row\.id\}\)/);
+  assert.match(open, /window\.open\(url, "_blank", "noopener"\)/);
+  // A popup blocker returns null; the owner must still be able to reach it.
+  assert.match(open, /if \(!opened\)/);
+  assert.match(open, /setBlockedDocument\(\{id: row\.id, url\}\)/);
+  assert.match(open, /Allow pop-ups for this site/);
+  // The label follows the money: receipt once paid, invoice while owed.
+  assert.match(panelSource, /\? "Print receipt"\s*\n?\s*: "Print invoice"/);
+  assert.match(panelSource, /href=\{blockedDocument\.url\}/);
+});
+
+test("every new parked-car string is translated to French", () => {
+  for (const value of [
+    "Parking status",
+    "Payment",
+    "Paid",
+    "Not paid",
+    "Print receipt",
+    "Print invoice",
+    "Preparing...",
+    "Open the document",
+    "The document could not be prepared.",
+    "The document is not ready yet. Try again in a moment.",
+    "Your browser blocked the document window. Allow pop-ups for this site, or use the link on the card.",
+  ]) {
+    assert.ok(TEXT_TRANSLATIONS[value], `missing French for: ${value}`);
+  }
+});
+
 test("the browser-write parking form cannot create records or edit paid ones", () => {
   // "New parking" wrote a parkedCars doc straight from the client: it faked a
   // PC-xxxxxx tracking code, set no amountDueCents and no payment plan, and
@@ -297,4 +386,28 @@ test("the browser-write parking form cannot create records or edit paid ones", (
   assert.match(save, /payment_link/);
   assert.match(save, /cannot be changed/);
   assert.match(panelSource, /Paid records cannot be edited/);
+});
+
+test("the printable document follows the money, not the badge", () => {
+  // A parking cancelled after the customer paid: the badge has nothing left
+  // to chase, but the money still earns a receipt — and the server
+  // (functions/parking_document.js) serves one. Keying the button off the
+  // badge would label it "Invoice" over a document headed "Receipt".
+  const cancelledButPaid = {
+    source: "business",
+    status: "cancelled",
+    paymentMethod: "payment_link",
+    paymentStatus: "succeeded",
+  };
+  // Both clients read this the same way: money that arrived is a fact the
+  // cancellation does not undo.
+  assert.equal(businessParkingPaymentTone(cancelledButPaid), "paid");
+  assert.equal(businessParkingDocumentType(cancelledButPaid), "receipt");
+
+  assert.equal(businessParkingDocumentType({ paymentStatus: "paid" }), "receipt");
+  assert.equal(businessParkingDocumentType({ paymentStatus: "pending" }), "invoice");
+  assert.equal(businessParkingDocumentType({}), "invoice");
+
+  // And the button must read from that rule, not from the tone.
+  assert.match(panelSource, /businessParkingDocumentType\(row\) === "receipt"\s*\n?\s*\? "Print receipt"/);
 });
