@@ -404,7 +404,7 @@ describe("provider translation (DeepSeek / OpenAI shape)", () => {
     assert.equal(content[0].text, "You have 5 cars parked.");
   });
 
-  it("unparseable tool arguments degrade to an empty input, not a crash", () => {
+  it("unparseable tool arguments become an empty input, not a crash", () => {
     const {content} = contentFromOpenAiChoice({
       message: {
         content: null,
@@ -427,7 +427,10 @@ describe("provider translation (DeepSeek / OpenAI shape)", () => {
         content: "",
         tool_calls: [{
           id: "call_rt",
-          function: {name: "mark_parking_paid", arguments: "{\"entryId\":\"x\"}"},
+          function: {
+            name: "mark_parking_paid",
+            arguments: "{\"entryId\":\"x\"}",
+          },
         }],
       },
     });
