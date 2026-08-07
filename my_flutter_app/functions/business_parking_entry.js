@@ -490,7 +490,98 @@ function parkingCheckoutSessionReusable({session, nowMs}) {
   return expiresAt * 1000 > Number(nowMs || 0) + 60000;
 }
 
+
+// What a business may change on an existing walk-up record, and when.
+//
+// The rules are money rules, not form rules:
+//   * a PAID record is settled - the charge was taken, the platform cut split
+//     and the payout sent - so nothing on it may be rewritten;
+//   * customer and vehicle details are always safe to correct, because they
+//     describe the car rather than the charge;
+//   * dates change the price, and the price on a payment-link entry is
+//     already baked into the Stripe session the customer is holding, so the
+//     link has to be reissued rather than quietly diverge;
+//   * switching payment method is really "cancel one arrangement, start
+//     another", which the callable performs rather than the browser.
+const BUSINESS_PARKING_EDITABLE_FIELDS = Object.freeze([
+  "customerName",
+  "customerPhone",
+  "customerEmail",
+  "carMake",
+  "carModel",
+  "carYear",
+  "vinNumber",
+  "startDate",
+  "endDate",
+  "paymentMethod",
+]);
+
+const BUSINESS_PARKING_EDIT_REFUSALS = Object.freeze({
+  paid: "This parking has been paid for and can no longer be edited",
+  not_business_entered:
+    "Only a parking the business recorded can be edited here",
+  nothing_to_change: "Nothing was changed",
+});
+
+/**
+ * Decides what an edit is allowed to do.
+ * @param {Object} args entry plus the requested changes.
+ * @return {Object} {ok, reason, changes, repricing, relinking}.
+ */
+function businessParkingEditPlan({entry, changes}) {
+  const record = entry && typeof entry === "object" ? entry : {};
+  const wanted = changes && typeof changes === "object" ? changes : {};
+
+  if (text(record.source, 40) !== BUSINESS_PARKING_SOURCE &&
+      record.enteredByBusiness !== true) {
+    return {ok: false, reason: "not_business_entered"};
+  }
+  const paymentStatus = text(record.paymentStatus, 40);
+  if (paymentStatus === "succeeded" || paymentStatus === "paid") {
+    return {ok: false, reason: "paid"};
+  }
+
+  const applied = {};
+  for (const field of BUSINESS_PARKING_EDITABLE_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(wanted, field)) continue;
+    const value = wanted[field];
+    if (value === undefined || value === null) continue;
+    applied[field] = value;
+  }
+  if (!Object.keys(applied).length) {
+    return {ok: false, reason: "nothing_to_change"};
+  }
+
+  // Dates move the amount owed; the method decides how it is collected.
+  const has = (field) => Object.prototype.hasOwnProperty.call(applied, field);
+  const repricing = has("startDate") || has("endDate");
+  const currentMethod = text(record.paymentMethod, 40);
+  const nextMethod = text(applied.paymentMethod, 40) || currentMethod;
+  const methodChanged = nextMethod !== currentMethod;
+  // A link already in a customer's hands must be replaced whenever the money
+  // behind it moves, or they pay yesterday's price.
+  const relinking = nextMethod === "payment_link" &&
+    (methodChanged || repricing);
+
+  return {
+    ok: true,
+    reason: "",
+    changes: applied,
+    currentMethod,
+    nextMethod,
+    methodChanged,
+    repricing,
+    relinking,
+    // Leaving the link path means the outstanding session must die.
+    cancelling: currentMethod === "payment_link" &&
+      nextMethod !== "payment_link",
+  };
+}
+
 module.exports = {
+  BUSINESS_PARKING_EDITABLE_FIELDS,
+  BUSINESS_PARKING_EDIT_REFUSALS,
+  businessParkingEditPlan,
   PARKING_LINK_STATES,
   parkingPaymentLinkState,
   parkingCheckoutSessionReusable,

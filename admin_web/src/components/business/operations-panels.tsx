@@ -65,6 +65,7 @@ import {
   businessParkingEntryResult,
   businessParkingDocumentType,
   businessParkingEndLabel,
+  businessParkingWithinRange,
   businessParkingPaymentBadge,
   businessParkingPaymentLabel,
   businessParkingPaymentTone,
@@ -3642,18 +3643,26 @@ export function ParkingPanel({
   // One control, two questions: where the car is in its stay, and whether it
   // has been paid for. A lot chasing money filters on the second and never
   // learns the first is a separate dropdown.
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+
   const filteredRows = useMemo(() => {
-    if (filter === "all") return searched;
+    // The date window narrows first: "what was in the lot that week" is the
+    // question, and the status/payment filter refines it.
+    const inRange = (rangeFrom || rangeTo)
+      ? searched.filter((row) => businessParkingWithinRange(row, rangeFrom, rangeTo))
+      : searched;
+    if (filter === "all") return inRange;
     if (filter === "payment:paid") {
-      return searched.filter((row) => businessParkingPaymentTone(row) === "paid");
+      return inRange.filter((row) => businessParkingPaymentTone(row) === "paid");
     }
     if (filter === "payment:unpaid") {
       // "Not paid" is money still owed — a cancelled car or one with nothing
       // to collect ("none") is not something to chase.
-      return searched.filter((row) => businessParkingPaymentTone(row) === "awaiting");
+      return inRange.filter((row) => businessParkingPaymentTone(row) === "awaiting");
     }
-    return searched.filter((row) => text(row.status, "") === filter);
-  }, [searched, filter]);
+    return inRange.filter((row) => text(row.status, "") === filter);
+  }, [searched, filter, rangeFrom, rangeTo]);
   const activeCount = parkedCars.rows.filter((row) => text(row.status, "active") === "active").length;
 
   function closeForm() {
@@ -3944,6 +3953,17 @@ export function ParkingPanel({
             <option value="payment:unpaid">Not paid</option>
           </optgroup>
         </select>
+        {/* Which cars were in the lot during a window - overlapping, not
+            only those entirely inside it, or a long stay disappears. */}
+        <label className="bar-field" style={{ flex: "0 0 auto" }}><span>Parked between</span>
+          <input type="date" value={rangeFrom} onChange={(event) => setRangeFrom(event.target.value)} aria-label="Parked between start date" />
+        </label>
+        <label className="bar-field" style={{ flex: "0 0 auto" }}><span>and</span>
+          <input type="date" value={rangeTo} onChange={(event) => setRangeTo(event.target.value)} aria-label="Parked between end date" />
+        </label>
+        {(rangeFrom || rangeTo) && (
+          <button className="lst-btn ghost" type="button" onClick={() => { setRangeFrom(""); setRangeTo(""); }}>Clear dates</button>
+        )}
         <button className="lst-btn ghost" type="button" disabled={filteredRows.length === 0} onClick={() => downloadCsv("parking-receipts.csv", filteredRows, ["trackingCode", "ownerName", "carMake", "carModel", "carYear", "vinNumber", "parkingDate", "parkingEndDate", "totalCost", "status", "updatedAt"])}>
           <Download size={15} /> Export receipts
         </button>

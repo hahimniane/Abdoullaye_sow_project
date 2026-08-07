@@ -368,3 +368,47 @@ function toDateOrNull(value: unknown): Date | null {
   }
   return null;
 }
+
+/**
+ * Whether a parking OVERLAPS a date window.
+ *
+ * "Cars parked between the 10th and the 15th" means every car sitting in the
+ * lot during that window - including one that arrived on the 5th and leaves
+ * on the 20th. Matching only parkings fully contained in the range would hide
+ * exactly the long stays a lot most needs to see.
+ *
+ * An open-ended bound is treated as "no bound on that side", so a business can
+ * ask "everything from the 10th onwards" by filling one field.
+ *
+ * @param row A parkedCars document.
+ * @param from Inclusive start, "yyyy-mm-dd" or "" for none.
+ * @param to Inclusive end, "yyyy-mm-dd" or "" for none.
+ * @return True when the parking is present at any point in the window.
+ */
+export function businessParkingWithinRange(
+  row: ParkingRowLike,
+  from: string,
+  to: string,
+): boolean {
+  const fromDay = trimmed(from, 10);
+  const toDay = trimmed(to, 10);
+  if (!fromDay && !toDay) return true;
+
+  const start = toDayString(toDateOrNull((row as { parkingDate?: unknown })?.parkingDate));
+  const end = toDayString(toDateOrNull((row as { parkingEndDate?: unknown })?.parkingEndDate));
+  // A record with no dates at all cannot be placed in time; excluding it is
+  // the honest answer to "what was parked that week".
+  if (!start && !end) return false;
+
+  // A missing end means still parked: treat it as open-ended.
+  const effectiveStart = start || end;
+  const effectiveEnd = end || start;
+  if (toDay && effectiveStart > toDay) return false;
+  if (fromDay && effectiveEnd < fromDay) return false;
+  return true;
+}
+
+function toDayString(date: Date | null): string {
+  if (!date) return "";
+  return date.toISOString().slice(0, 10);
+}

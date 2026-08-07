@@ -10666,6 +10666,104 @@ exports.getParkingDocumentUrl = onCall(
     },
 );
 
+// Re-sends the durable payment link to the customer. A walk-up loses the
+// text, changes their number, or never got the email - and until now the only
+// recovery was for the business to copy the link and send it by hand.
+exports.resendBusinessParkingPaymentLink = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [twilioAccountSid, twilioAuthToken, twilioFromNumber],
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const entryId = cleanText(
+          request.data?.entryId || request.data?.reservationId, 180,
+      );
+      if (!entryId) {
+        throw new HttpsError("invalid-argument", "Parking entry is required");
+      }
+      const db = admin.firestore();
+      const entryRef = db.collection("parkedCars").doc(entryId);
+      const snapshot = await entryRef.get();
+      if (!snapshot.exists) {
+        throw new HttpsError("not-found", "Parking entry not found");
+      }
+      const entry = snapshot.data() || {};
+      await requireBusinessPermission(
+          uid, String(entry.businessId || ""), "parking",
+      );
+
+      const state = parkingPaymentLinkState(entry);
+      if (state === PARKING_LINK_STATES.PAID) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This parking has already been paid for",
+        );
+      }
+      if (state === PARKING_LINK_STATES.CANCELLED) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This payment link was cancelled",
+        );
+      }
+      if (state !== PARKING_LINK_STATES.PAYABLE) {
+        throw new HttpsError(
+            "failed-precondition",
+            "There is no payment link to resend for this parking",
+        );
+      }
+
+      // Send the record's own durable link, not a freshly minted one: the
+      // customer may already be holding this URL, and two links for one car
+      // is how a lot ends up chasing a payment that was already made.
+      let token = String(entry.paymentLinkToken || "").trim();
+      if (!token) {
+        token = crypto.randomBytes(24).toString("base64url");
+        await entryRef.update({
+          paymentLinkToken: token,
+          paymentLinkUrl: parkingPaymentLinkUrl(token),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+      }
+      const url = parkingPaymentLinkUrl(token);
+      const amountDue = Number(entry.amountDueCents || 0) / 100;
+      const trackingCode = String(entry.trackingCode || "");
+      const businessName = String(entry.businessName || "").trim() ||
+        "Your parking provider";
+
+      const emailed = await emailWalkUpParkingCustomer({
+        to: entry.customerEmail,
+        subject: `Parking payment for ${trackingCode}`,
+        text:
+          `${businessName} has parked your vehicle (${trackingCode}). ` +
+          `Amount due: $${amountDue.toFixed(2)}. Pay securely here: ${url}`,
+      });
+      const texted = await smsWalkUpParkingCustomer({
+        to: entry.customerPhone,
+        body:
+          `${businessName}: parking ${trackingCode}, ` +
+          `$${amountDue.toFixed(2)} due. Pay here: ${url}`,
+      });
+
+      await entryRef.update({
+        paymentLinkResentAt: FirestoreFieldValue.serverTimestamp(),
+        paymentLinkResentByUid: uid,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+
+      // Neither channel firing is not an error the lot can fix by retrying -
+      // it means there is nowhere to send it, so say so plainly.
+      if (!emailed && !texted) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This customer has no email or phone number on file to send to",
+        );
+      }
+      return {success: true, emailed, texted, url};
+    },
+);
+
 // Completion for a business parking payment link. Unlike every other
 // payment type there is no customer callable to replay as the payer, so the
 // reconciliation runs this instead: settle the record, then hand the

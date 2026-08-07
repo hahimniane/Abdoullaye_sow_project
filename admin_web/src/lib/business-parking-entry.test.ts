@@ -11,6 +11,7 @@ import {
   businessParkingEntryResult,
   businessParkingDocumentType,
   businessParkingEndLabel,
+  businessParkingWithinRange,
   businessParkingPaymentBadge,
   businessParkingPaymentLabel,
   businessParkingPaymentTone,
@@ -428,4 +429,34 @@ test("a parking that has not finished says Ends, not Ended", () => {
   );
   assert.equal(businessParkingEndLabel({}, now), "Ends");
   assert.match(panelSource, /businessParkingEndLabel\(row\)/);
+});
+
+test("the date window matches cars present during it, not only those inside it", () => {
+  const car = (start: string, end: string) => ({ parkingDate: start, parkingEndDate: end });
+  // A long stay spanning the whole window is exactly what a lot needs to see.
+  assert.equal(businessParkingWithinRange(car("2026-08-01", "2026-08-30"), "2026-08-10", "2026-08-15"), true);
+  assert.equal(businessParkingWithinRange(car("2026-08-11", "2026-08-12"), "2026-08-10", "2026-08-15"), true);
+  // Touching the boundary counts.
+  assert.equal(businessParkingWithinRange(car("2026-08-15", "2026-08-20"), "2026-08-10", "2026-08-15"), true);
+  assert.equal(businessParkingWithinRange(car("2026-08-01", "2026-08-10"), "2026-08-10", "2026-08-15"), true);
+  // Wholly outside, both sides.
+  assert.equal(businessParkingWithinRange(car("2026-07-01", "2026-07-20"), "2026-08-10", "2026-08-15"), false);
+  assert.equal(businessParkingWithinRange(car("2026-09-01", "2026-09-20"), "2026-08-10", "2026-08-15"), false);
+  // One-sided windows: "from the 10th onwards", "up to the 15th".
+  assert.equal(businessParkingWithinRange(car("2026-09-01", "2026-09-05"), "2026-08-10", ""), true);
+  assert.equal(businessParkingWithinRange(car("2026-07-01", "2026-07-05"), "2026-08-10", ""), false);
+  assert.equal(businessParkingWithinRange(car("2026-07-01", "2026-07-05"), "", "2026-08-15"), true);
+  // No window means no narrowing.
+  assert.equal(businessParkingWithinRange(car("2026-07-01", "2026-07-05"), "", ""), true);
+  // Firestore Timestamps, and a still-parked car with no end date.
+  assert.equal(
+    businessParkingWithinRange(
+      { parkingDate: { toDate: () => new Date("2026-08-12T00:00:00Z") }, parkingEndDate: null },
+      "2026-08-10", "2026-08-15",
+    ),
+    true,
+  );
+  // A record with no dates cannot honestly be placed in a week.
+  assert.equal(businessParkingWithinRange({}, "2026-08-10", "2026-08-15"), false);
+  assert.match(panelSource, /businessParkingWithinRange\(row, rangeFrom, rangeTo\)/);
 });

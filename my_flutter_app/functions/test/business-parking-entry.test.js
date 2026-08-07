@@ -683,3 +683,87 @@ describe("durable payment links", () => {
     }), false);
   });
 });
+
+describe("editing a walk-up record", () => {
+  const {
+    businessParkingEditPlan,
+  } = require("../business_parking_entry");
+
+  const unpaidLink = {
+    source: "business", paymentMethod: "payment_link",
+    paymentStatus: "pending",
+  };
+
+  it("refuses to touch a record whose money already moved", () => {
+    for (const status of ["succeeded", "paid"]) {
+      const plan = businessParkingEditPlan({
+        entry: {...unpaidLink, paymentStatus: status},
+        changes: {customerName: "New Name"},
+      });
+      assert.equal(plan.ok, false);
+      assert.equal(plan.reason, "paid");
+    }
+  });
+
+  it("refuses a record the business did not enter", () => {
+    const plan = businessParkingEditPlan({
+      entry: {paymentMethod: "payment_link", paymentStatus: "pending"},
+      changes: {customerName: "x"},
+    });
+    assert.equal(plan.ok, false);
+    assert.equal(plan.reason, "not_business_entered");
+  });
+
+  it("lets contact and vehicle details be corrected freely", () => {
+    const plan = businessParkingEditPlan({
+      entry: unpaidLink,
+      changes: {customerEmail: "new@example.com", vinNumber: "ABC"},
+    });
+    assert.equal(plan.ok, true);
+    assert.equal(plan.repricing, false);
+    // Correcting an email must not silently reissue the customer's link.
+    assert.equal(plan.relinking, false);
+    assert.deepEqual(plan.changes,
+        {customerEmail: "new@example.com", vinNumber: "ABC"});
+  });
+
+  it("reissues the link whenever the dates move the price", () => {
+    const plan = businessParkingEditPlan({
+      entry: unpaidLink,
+      changes: {endDate: "2026-09-01"},
+    });
+    assert.equal(plan.repricing, true);
+    assert.equal(plan.relinking, true);
+  });
+
+  it("switching direct -> link issues one; link -> direct kills it", () => {
+    const toLink = businessParkingEditPlan({
+      entry: {...unpaidLink, paymentMethod: "direct",
+        paymentStatus: "awaiting_direct_payment"},
+      changes: {paymentMethod: "payment_link"},
+    });
+    assert.equal(toLink.methodChanged, true);
+    assert.equal(toLink.relinking, true);
+    assert.equal(toLink.cancelling, false);
+
+    const toDirect = businessParkingEditPlan({
+      entry: unpaidLink,
+      changes: {paymentMethod: "direct"},
+    });
+    assert.equal(toDirect.methodChanged, true);
+    assert.equal(toDirect.relinking, false);
+    assert.equal(toDirect.cancelling, true);
+  });
+
+  it("rejects an edit that changes nothing, and unknown fields", () => {
+    assert.equal(businessParkingEditPlan({
+      entry: unpaidLink, changes: {},
+    }).reason, "nothing_to_change");
+    // A field not on the allowlist must not ride along - amountDueCents,
+    // payoutStatus and platformFeeCents are the server's to compute.
+    assert.equal(businessParkingEditPlan({
+      entry: unpaidLink,
+      changes: {amountDueCents: 1, payoutStatus: "paid"},
+    }).reason, "nothing_to_change");
+  });
+});
