@@ -30,8 +30,8 @@ import {
   discoverStripeBoundFunctionNames,
 } from "./payment-functions-lib.mjs";
 import {
-  deployCapacity,
-  summarizeReservations,
+  revisionCapacity,
+  safeDeployBatchSize,
 } from "./cloud-run-capacity-lib.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -473,86 +473,69 @@ if (checksBackend) {
   }
 
   // The dry run above proves the functions RESOLVE. It cannot prove they will
-  // FIT: it never creates a revision, so it never touches the CPU quota. On
-  // 2026-08-07 it passed twice, minutes before deploys that exhausted the
-  // quota, stranded 30 and then 157 functions on revisions that could not
-  // serve, and took parking receipts and payment links down with them.
+  // FIT: it never creates a revision, so it never touches a Cloud Run quota. On
+  // 2026-08-07 it passed twice, minutes before deploys that exhausted one,
+  // stranded 30 and then 157 functions on revisions that could not serve, and
+  // took parking receipts and payment links down with them.
+  //
+  // The binding limit is Active Revisions per region (4,000). Cloud Run never
+  // collects revisions, this project had reached 4,605, and pruning to 410
+  // restored service on its own. Concurrent CPU during a rollout is the other
+  // one, and it is handled by deploying in batches rather than by a check -
+  // see backend-deploy.mjs.
+  let functionCount = 0;
+  try {
+    const source = fs.readFileSync(
+        path.join(ROOT, "my_flutter_app", "functions", "index.js"),
+        "utf8",
+    );
+    functionCount = new Set(
+        (source.match(/^exports\.[A-Za-z0-9_]+/gm) || [])
+            .map((line) => line.slice("exports.".length)),
+    ).size;
+  } catch {
+    functionCount = 0;
+  }
+  if (functionCount === 0) functionCount = paymentFunctionNames.length;
+
   const revisions = run("gcloud", [
     "run", "revisions", "list",
     "--project", PROJECT_ID,
     "--region", "us-central1",
-    "--format",
-    "csv[no-heading](metadata.name," +
-      "spec.containers[0].resources.limits.cpu," +
-      "metadata.annotations['autoscaling.knative.dev/maxScale']," +
-      "status.conditions[0].status)",
+    "--format", "value(metadata.name)",
   ]);
   if (!revisions.ok) {
     addCheck(
-        "Cloud Run CPU headroom",
+        "Cloud Run revision headroom",
         false,
-        "could not list Cloud Run revisions to measure reserved CPU",
+        "could not list Cloud Run revisions to count them",
     );
   } else {
-    const rows = revisions.stdout.split("\n")
+    const activeRevisions = revisions.stdout.split("\n")
         .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line) => {
-          const [name, cpu, maxInstances, ready] = line.split(",");
-          return {
-            name,
-            cpu,
-            maxInstances,
-            // Only a Ready revision holds its reservation; the failed ones a
-            // broken deploy leaves behind do not, and counting them would
-            // block deploys that would actually have fitted.
-            serving: String(ready).trim() === "True",
-          };
-        });
-    const reservations = summarizeReservations(rows.filter((row) => row.serving));
-    const idle = summarizeReservations(rows);
-    // Every exported function, not just the Stripe-bound ones: a full deploy
-    // creates a revision for all of them, and counting only the payment subset
-    // would under-report the peak by more than three times and wave through
-    // exactly the deploy this exists to stop.
-    let functionCount = 0;
-    try {
-      const source = fs.readFileSync(
-          path.join(ROOT, "my_flutter_app", "functions", "index.js"),
-          "utf8",
-      );
-      functionCount = new Set(
-          (source.match(/^exports\.[A-Za-z0-9_]+/gm) || [])
-              .map((line) => line.slice("exports.".length)),
-      ).size;
-    } catch {
-      functionCount = 0;
-    }
-    if (functionCount === 0) functionCount = paymentFunctionNames.length;
-    const perFunctionCpu = Number(process.env.DEPLOY_PER_FUNCTION_CPU || 10);
-    // Set CLOUD_RUN_CPU_LIMIT from the real quota: GCP console -> IAM & Admin
-    // -> Quotas -> Cloud Run "Total allowable CPU", for this region. The
-    // default below is deliberately conservative; it is an assumption, and
-    // the detail line says so rather than pretending otherwise.
-    const limit = Number(process.env.CLOUD_RUN_CPU_LIMIT || 4000);
-    const verdict = deployCapacity(
-        {reservedCpu: reservations.reservedCpu, debtCpu: idle.debtCpu},
-        functionCount,
-        perFunctionCpu,
-        limit,
-    );
-    const assumed = process.env.CLOUD_RUN_CPU_LIMIT ? "" :
-      " (assumed limit - set CLOUD_RUN_CPU_LIMIT from the GCP quota page)";
+        .filter(Boolean).length;
+    const verdict = revisionCapacity({
+      activeRevisions,
+      functionCount,
+      limit: Number(process.env.CLOUD_RUN_REVISION_LIMIT) || undefined,
+    });
     addCheck(
-        "Cloud Run CPU headroom",
+        "Cloud Run revision headroom",
         verdict.fits,
         verdict.fits ?
-          `${Math.round(verdict.projected)}/${limit} CPU at deploy peak, ` +
-            `${Math.round(verdict.headroom)} spare${assumed}` :
-          `deploy would reserve ${Math.round(verdict.projected)} CPU against ` +
-            `a ${limit} limit${assumed}; ${verdict.remedy}`,
+          `${verdict.projected}/${verdict.limit} revisions after deploying ` +
+            `${functionCount} functions, ${verdict.headroom} spare` :
+          `${activeRevisions} revisions plus ${functionCount} incoming ` +
+            `exceeds ${verdict.limit}; ${verdict.remedy}`,
     );
   }
+
+  addCheck(
+      "Functions deploy in batches that fit concurrent CPU",
+      true,
+      `${safeDeployBatchSize()} functions per batch ` +
+        "(20 vCPU region ceiling; each rollout starts a container)",
+  );
 }
 
 const summary = checks.reduce(

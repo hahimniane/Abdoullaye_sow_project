@@ -6,11 +6,17 @@
 // This script is intentionally separate from Hostinger FTP static upload.
 
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  batchFunctionNames,
+  safeDeployBatchSize,
+} from "./cloud-run-capacity-lib.mjs";
+import {
   deploymentChildEnvironment,
   deploymentJavaEnvironment,
+  firebaseDryRunConfig,
 } from "./preflight-lib.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,16 +41,15 @@ function run(command, args, options = {}) {
   });
 }
 
-// Before the preflight measures headroom, reclaim what is free to reclaim.
-// Cloud Run keeps every revision forever and each one holds its reservation at
-// zero traffic, so without this the ceiling creeps up with every deploy until
-// one cannot fit - and the deploy that finds the ceiling leaves functions
-// stranded on revisions that cannot serve. Skippable for a fast redeploy when
-// the headroom is known to be there.
+// Cloud Run allows 4,000 Active Revisions per region and never collects them:
+// every deploy leaves one more behind on every function. This project reached
+// 4,605 and functions began failing to serve; pruning to 410 restored them.
+// So a deploy reclaims that space before asking for more. Skippable for a fast
+// redeploy when the count is known to be low.
 if (process.env.SKIP_REVISION_PRUNE === "true") {
   console.log("Skipping Cloud Run revision prune (SKIP_REVISION_PRUNE=true).");
 } else {
-  console.log("Pruning idle Cloud Run revisions to reclaim CPU quota...");
+  console.log("Pruning idle Cloud Run revisions to reclaim revision headroom...");
   try {
     run("node", [path.join(__dirname, "prune-cloud-run-revisions.mjs")]);
   } catch {
@@ -67,14 +72,77 @@ try {
   process.exit(1);
 }
 
-console.log("\nDeploying Functions, rules, indexes, and Storage as one release...");
+// Rules, indexes and Storage first: they are one small write each and carry no
+// Cloud Run cost, so getting them out of the way keeps the batching below
+// purely about functions.
+console.log("\nDeploying rules, indexes, and Storage...");
 run("firebase", [
   "deploy",
   "--only",
-  "functions,firestore:rules,firestore:indexes,storage",
+  "firestore:rules,firestore:indexes,storage",
   "--project",
   PROJECT_ID,
 ], {cwd: APP_DIR, env: commandEnvironment});
+
+// Functions go out in batches, because the region allows 20 vCPU of
+// concurrently allocated CPU and every function being rolled out starts a
+// container to pass its health check. Asking for ~175 at once asks for ~175
+// vCPU against that ceiling: on 2026-08-07 that stranded 30 and then 157
+// functions on revisions that could not serve, and took parking receipts and
+// payment links down with them. Deploying two at a time had worked fine the
+// same afternoon - the count was always the variable, not the code.
+const functionNames = Array.from(new Set(
+    (fs.readFileSync(
+        path.join(APP_DIR, "functions", "index.js"),
+        "utf8",
+    ).match(/^exports\.[A-Za-z0-9_]+/gm) || [])
+        .map((line) => line.slice("exports.".length)),
+));
+const batches = batchFunctionNames(functionNames, safeDeployBatchSize());
+console.log(
+    `\nDeploying ${functionNames.length} functions in ${batches.length} ` +
+    `batches of up to ${safeDeployBatchSize()}...`,
+);
+
+// The predeploy hook runs lint and the whole test suite. That is exactly right
+// once, and preflight has already done it for this commit; running it again per
+// batch would add ten minutes to each of fifteen batches and prove nothing new
+// about code that has not changed between them. So the batches deploy through a
+// config with the hook stripped - the same mechanism preflight uses for its dry
+// run - and the temp file is always removed.
+const batchConfigPath = path.join(
+    APP_DIR,
+    `.firebase-batch-${process.pid}.json`,
+);
+try {
+  fs.writeFileSync(
+      batchConfigPath,
+      JSON.stringify(
+          firebaseDryRunConfig(
+              JSON.parse(fs.readFileSync(path.join(APP_DIR, "firebase.json"), "utf8")),
+          ),
+          null,
+          2,
+      ),
+  );
+  batches.forEach((batch, index) => {
+    console.log(`\n  Batch ${index + 1}/${batches.length} (${batch.length})`);
+    run("firebase", [
+      "deploy",
+      "--only",
+      batch.map((name) => `functions:${name}`).join(","),
+      "--project",
+      PROJECT_ID,
+      "--config",
+      batchConfigPath,
+      // Functions removed from source are deleted without prompting. Preflight
+      // has already listed what this commit exports, so the set is known.
+      "--force",
+    ], {cwd: APP_DIR, env: commandEnvironment});
+  });
+} finally {
+  fs.rmSync(batchConfigPath, {force: true});
+}
 
 console.log("\nRunning read-only backend smoke checks...");
 run("node", [path.join(__dirname, "post-deploy-smoke.mjs")], {

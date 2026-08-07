@@ -1,121 +1,99 @@
-// The check that would have prevented two outages on 2026-08-07.
+// The limits that actually stopped two deploys on 2026-08-07, and the batching
+// that keeps inside them.
 //
-// Both times the deploy's preflight passed and the deploy then exhausted the
-// Cloud Run CPU quota, leaving functions on revisions that could not serve.
-// The gap was never a missing signal - it was that nothing added up what a
-// deploy was ABOUT to reserve on top of what was already held.
+// The first version of this file tested the wrong model: a "reserved CPU"
+// figure summed from cpu x maxInstances, against an assumed 4,000 ceiling.
+// Cloud Run enforces no such quota. These tests are written against the values
+// read off the project's own quota page - 20,000 MILLI vCPU and 4,000 active
+// revisions in us-central1 - so a future reader can check them against the
+// console rather than trusting the arithmetic.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  DEFAULT_MAX_INSTANCES,
-  deployCapacity,
-  revisionReservedCpu,
-  summarizeReservations,
+  DEFAULT_ACTIVE_REVISION_LIMIT,
+  DEFAULT_CPU_LIMIT_MILLI,
+  DEFAULT_FUNCTION_CPU_MILLI,
+  batchFunctionNames,
+  revisionCapacity,
+  safeDeployBatchSize,
 } from "../cloud-run-capacity-lib.mjs";
 
-test("a revision reserves cpu times its instance ceiling", () => {
-  assert.equal(revisionReservedCpu({ cpu: 1, maxInstances: 10 }), 10);
-  assert.equal(revisionReservedCpu({ cpu: "1", maxInstances: "3" }), 3);
-  assert.equal(revisionReservedCpu({ cpu: 0.5, maxInstances: 4 }), 2);
+test("the measured quota values are the ones being defended", () => {
+  // If these drift from the console, every number below is meaningless.
+  assert.equal(DEFAULT_CPU_LIMIT_MILLI, 20000, "20 vCPU, expressed in milli");
+  assert.equal(DEFAULT_ACTIVE_REVISION_LIMIT, 4000);
+  assert.equal(DEFAULT_FUNCTION_CPU_MILLI, 1000, "1 vCPU per starting container");
 });
 
-test("an unpinned maxInstances reserves Cloud Run's default, not one", () => {
-  // Reading a missing ceiling as 1 would under-report by a hundredfold and
-  // wave through exactly the deploy this check exists to stop.
-  assert.equal(
-      revisionReservedCpu({ cpu: 1 }),
-      DEFAULT_MAX_INSTANCES,
+test("a batch leaves room for the traffic already being served", () => {
+  // 20 vCPU total, 60% of it for the rollout, 1 vCPU per starting container.
+  assert.equal(safeDeployBatchSize(), 12);
+});
+
+test("the batch size follows the quota, not the function count", () => {
+  assert.equal(safeDeployBatchSize({cpuLimitMilli: 40000}), 24);
+  assert.equal(safeDeployBatchSize({safetyFraction: 1}), 20);
+  assert.equal(safeDeployBatchSize({perFunctionMilli: 500}), 24);
+});
+
+test("a batch is never zero, however tight the ceiling", () => {
+  // Deploying nothing is not a safe outcome, it is a stuck one.
+  assert.equal(safeDeployBatchSize({cpuLimitMilli: 100}), 1);
+  assert.equal(safeDeployBatchSize({safetyFraction: 0.001}), 1);
+});
+
+test("unusable overrides fall back to the measured values", () => {
+  assert.equal(safeDeployBatchSize({cpuLimitMilli: 0}), 12);
+  assert.equal(safeDeployBatchSize({cpuLimitMilli: -5}), 12);
+  assert.equal(safeDeployBatchSize({safetyFraction: 4}), 12);
+  assert.equal(safeDeployBatchSize({perFunctionMilli: NaN}), 12);
+});
+
+test("every function lands in exactly one batch", () => {
+  const names = Array.from({length: 175}, (_, index) => `fn${index}`);
+  const batches = batchFunctionNames(names, 12);
+  assert.equal(batches.length, 15);
+  assert.equal(batches.flat().length, 175, "nothing dropped");
+  assert.deepEqual(new Set(batches.flat()).size, 175, "nothing duplicated");
+  assert.ok(
+      batches.every((batch) => batch.length <= 12),
+      "no batch exceeds the ceiling",
   );
 });
 
-test("unreadable rows contribute nothing rather than throwing", () => {
-  assert.equal(revisionReservedCpu(null), 0);
-  assert.equal(revisionReservedCpu({}), 0);
-  assert.equal(revisionReservedCpu({ cpu: "unknown", maxInstances: 3 }), 0);
-  assert.equal(revisionReservedCpu({ cpu: -1, maxInstances: 3 }), 0);
+test("batching an empty or junk list produces no batches", () => {
+  assert.deepEqual(batchFunctionNames([], 12), []);
+  assert.deepEqual(batchFunctionNames(undefined, 12), []);
+  assert.deepEqual(batchFunctionNames([null, "", "a"], 12), [["a"]]);
 });
 
-test("idle revisions are counted as recoverable debt", () => {
-  const summary = summarizeReservations([
-    { cpu: 1, maxInstances: 10, serving: true },
-    { cpu: 1, maxInstances: 10, serving: false },
-    { cpu: 1, maxInstances: 10, serving: false },
-  ]);
-  assert.equal(summary.reservedCpu, 30);
-  assert.equal(summary.servingCpu, 10);
-  assert.equal(summary.debtCpu, 20);
-  assert.equal(summary.total, 3);
-  assert.equal(summary.idle, 2);
-});
-
-test("a non-array is a summary of nothing, not a crash", () => {
-  const summary = summarizeReservations(undefined);
-  assert.equal(summary.reservedCpu, 0);
-  assert.equal(summary.total, 0);
-});
-
-test("the peak counts the incoming revisions, not just what is held", () => {
-  // The whole point. Old revisions are held until the new ones are healthy,
-  // so a deploy's peak is current + incoming. Judging on `reserved` alone is
-  // what let both outages through.
-  const summary = summarizeReservations([
-    { cpu: 1, maxInstances: 10, serving: true },
-  ]);
-  const verdict = deployCapacity(summary, 10, 10, 100);
-  assert.equal(verdict.projected, 110);
-  assert.equal(verdict.fits, false, "110 does not fit in 100");
-});
-
-test("it recommends a prune when a prune would be enough", () => {
-  const summary = summarizeReservations([
-    { cpu: 1, maxInstances: 10, serving: true },
-    ...Array.from({ length: 8 }, () => ({
-      cpu: 1,
-      maxInstances: 10,
-      serving: false,
-    })),
-  ]);
-  // 90 reserved, 80 of it idle, deploy adds 30 -> 120 now, 40 after a prune.
-  const verdict = deployCapacity(summary, 10, 3, 100);
+test("the deploy that broke production would be refused", () => {
+  // 4,605 revisions had accumulated against a 4,000 limit before anything was
+  // deployed. This is the check that would have said so first.
+  const verdict = revisionCapacity({activeRevisions: 4605, functionCount: 175});
   assert.equal(verdict.fits, false);
-  assert.equal(verdict.fitsAfterPrune, true);
-  assert.match(verdict.remedy, /prune idle revisions first/);
-  assert.match(verdict.remedy, /80 CPU/);
+  assert.match(verdict.remedy, /prune/);
 });
 
-test("it says so plainly when pruning cannot save the deploy", () => {
-  // The situation on 2026-08-07: even with every idle revision gone, the
-  // deploy still did not fit. Recommending a prune here would have sent
-  // someone round the same loop that had already failed twice.
-  const summary = summarizeReservations([
-    { cpu: 1, maxInstances: 10, serving: true },
-    { cpu: 1, maxInstances: 10, serving: false },
-  ]);
-  const verdict = deployCapacity(summary, 178, 10, 100);
-  assert.equal(verdict.fits, false);
-  assert.equal(verdict.fitsAfterPrune, false);
-  assert.match(verdict.remedy, /quota/);
-  assert.doesNotMatch(verdict.remedy, /prune idle revisions first/);
-});
-
-test("a deploy that fits carries no remedy", () => {
-  const summary = summarizeReservations([
-    { cpu: 1, maxInstances: 3, serving: true },
-  ]);
-  const verdict = deployCapacity(summary, 10, 3, 1000);
+test("a pruned project has room for a full deploy", () => {
+  const verdict = revisionCapacity({activeRevisions: 175, functionCount: 175});
   assert.equal(verdict.fits, true);
-  assert.equal(verdict.headroom, 1000 - 33);
+  assert.equal(verdict.projected, 350);
+  assert.equal(verdict.headroom, 3650);
   assert.equal(verdict.remedy, "");
 });
 
-test("an unknown limit never reports a fit", () => {
-  // Failing closed matters more than convenience here: silently passing when
-  // the ceiling could not be read is how the old dry-run check behaved.
-  const summary = summarizeReservations([
-    { cpu: 1, maxInstances: 3, serving: true },
-  ]);
-  assert.equal(deployCapacity(summary, 1, 3, 0).fits, false);
-  assert.equal(deployCapacity(summary, 1, 3, NaN).fits, false);
+test("the revision check counts the incoming revisions, not just the held", () => {
+  // One revision per function is created and the old ones stay until pruned.
+  const verdict = revisionCapacity({activeRevisions: 3900, functionCount: 175});
+  assert.equal(verdict.fits, false);
+  assert.equal(verdict.projected, 4075);
+});
+
+test("missing numbers read as zero rather than throwing", () => {
+  const verdict = revisionCapacity({});
+  assert.equal(verdict.fits, true);
+  assert.equal(verdict.projected, 0);
 });
