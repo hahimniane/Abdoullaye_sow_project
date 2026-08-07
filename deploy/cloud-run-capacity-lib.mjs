@@ -26,8 +26,18 @@
 // Neither is adjustable - the console reports the project is not eligible for
 // an increase - so the fix is to deploy within them, not to raise them.
 
-/** Milli vCPU a starting Cloud Run container is allocated, per function. */
-export const DEFAULT_FUNCTION_CPU_MILLI = 1000;
+/**
+ * Milli vCPU a STARTING Cloud Run container is allocated, per function.
+ *
+ * Not 1000: every service in this project carries
+ * `run.googleapis.com/startup-cpu-boost: true`, which doubles CPU during
+ * instance initialization - and initialization is precisely what a deploy
+ * does. Counting 1 vCPU per rolling function is how a batch of 12 was sized
+ * for a 20 vCPU ceiling and then asked it for 24. Batch 1 passed only because
+ * nothing else was starting; batch 2 hit the wall while batch 1's instances
+ * were still settling.
+ */
+export const DEFAULT_FUNCTION_CPU_MILLI = 2000;
 
 /** Total CPU allocation, in milli vCPU, per project per region. */
 export const DEFAULT_CPU_LIMIT_MILLI = 20000;

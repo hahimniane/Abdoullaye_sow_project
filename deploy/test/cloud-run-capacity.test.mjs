@@ -24,17 +24,23 @@ test("the measured quota values are the ones being defended", () => {
   // If these drift from the console, every number below is meaningless.
   assert.equal(DEFAULT_CPU_LIMIT_MILLI, 20000, "20 vCPU, expressed in milli");
   assert.equal(DEFAULT_ACTIVE_REVISION_LIMIT, 4000);
-  assert.equal(DEFAULT_FUNCTION_CPU_MILLI, 1000, "1 vCPU per starting container");
+  assert.equal(
+      DEFAULT_FUNCTION_CPU_MILLI,
+      2000,
+      "startup-cpu-boost doubles a starting container to 2 vCPU",
+  );
 });
 
 test("a batch leaves room for the traffic already being served", () => {
-  // 20 vCPU total, 60% of it for the rollout, 1 vCPU per starting container.
-  assert.equal(safeDeployBatchSize(), 12);
+  // 20 vCPU total, 60% for the rollout, 2 vCPU per BOOSTED starting container.
+  // A batch of 12 sized on 1 vCPU each is the mistake that broke the deploy:
+  // it fit on paper and asked the region for 24.
+  assert.equal(safeDeployBatchSize(), 6);
 });
 
 test("the batch size follows the quota, not the function count", () => {
-  assert.equal(safeDeployBatchSize({cpuLimitMilli: 40000}), 24);
-  assert.equal(safeDeployBatchSize({safetyFraction: 1}), 20);
+  assert.equal(safeDeployBatchSize({cpuLimitMilli: 40000}), 12);
+  assert.equal(safeDeployBatchSize({safetyFraction: 1}), 10);
   assert.equal(safeDeployBatchSize({perFunctionMilli: 500}), 24);
 });
 
@@ -45,20 +51,20 @@ test("a batch is never zero, however tight the ceiling", () => {
 });
 
 test("unusable overrides fall back to the measured values", () => {
-  assert.equal(safeDeployBatchSize({cpuLimitMilli: 0}), 12);
-  assert.equal(safeDeployBatchSize({cpuLimitMilli: -5}), 12);
-  assert.equal(safeDeployBatchSize({safetyFraction: 4}), 12);
-  assert.equal(safeDeployBatchSize({perFunctionMilli: NaN}), 12);
+  assert.equal(safeDeployBatchSize({cpuLimitMilli: 0}), 6);
+  assert.equal(safeDeployBatchSize({cpuLimitMilli: -5}), 6);
+  assert.equal(safeDeployBatchSize({safetyFraction: 4}), 6);
+  assert.equal(safeDeployBatchSize({perFunctionMilli: NaN}), 6);
 });
 
 test("every function lands in exactly one batch", () => {
   const names = Array.from({length: 175}, (_, index) => `fn${index}`);
-  const batches = batchFunctionNames(names, 12);
-  assert.equal(batches.length, 15);
+  const batches = batchFunctionNames(names, 6);
+  assert.equal(batches.length, 30);
   assert.equal(batches.flat().length, 175, "nothing dropped");
   assert.deepEqual(new Set(batches.flat()).size, 175, "nothing duplicated");
   assert.ok(
-      batches.every((batch) => batch.length <= 12),
+      batches.every((batch) => batch.length <= 6),
       "no batch exceeds the ceiling",
   );
 });

@@ -25,7 +25,7 @@ const PROJECT_ID = process.env.FIREBASE_PROJECT || "car-selling-flutter-app";
 const APP_DIR = path.join(ROOT, "my_flutter_app");
 const BATCH_ATTEMPTS = Number(process.env.DEPLOY_BATCH_ATTEMPTS || 4);
 const BATCH_RETRY_SECONDS = Number(process.env.DEPLOY_BATCH_RETRY_SECONDS || 45);
-const BATCH_GAP_SECONDS = Number(process.env.DEPLOY_BATCH_GAP_SECONDS || 20);
+const BATCH_GAP_SECONDS = Number(process.env.DEPLOY_BATCH_GAP_SECONDS || 45);
 const commandEnvironment = deploymentChildEnvironment(
     deploymentJavaEnvironment({
       environment: process.env,
