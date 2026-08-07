@@ -170,21 +170,43 @@ holding money against a service not yet rendered, which makes refunds — not
 charges — the hard part. Three things must be settled first, and only the
 first is an engineering question:
 
-1. **Where the money sits.** Direct charges (the parking model) put funds on
-   the carrier's connected account the moment the customer pays; the platform
-   then has no leverage if the carrier never shows, and a refund depends on
-   that carrier still holding a balance. Holding funds on the platform and
-   transferring on delivery is real escrow — better protection, materially
-   more code, and a money-transmission question that is legal, not technical.
+1. **Where the money sits — DECIDED 2026-08-06: direct charges.** Funds land
+   on the carrier's connected account the moment the customer pays, exactly as
+   parking already works. The owner accepted the consequence knowingly: the
+   platform holds no leverage if a carrier never shows, and a refund can only
+   be taken from a carrier who still has a balance. Escrow was rejected; it is
+   also against the existing product line, which avoids holding funds.
+
+   Two things follow from that choice and are no longer optional. A refund
+   attempt can now **fail for lack of funds**, so the refund path needs a real
+   failed state that is visible and retryable rather than a silent throw — the
+   existing `retryFreightSettlementRefunds` sweeper is the precedent. And
+   because exposure is capped only by how much was collected, the deposit
+   question below stops being a preference and becomes the main risk control.
 2. **The cancellation and refund policy.** The code encodes the policy, so
    the policy has to exist first: customer cancels before pickup, customer
    cancels after dispatch, carrier no-shows, vehicle turns out to be
    non-running and the price changes. Each needs a stated outcome.
-3. **Whether acceptance takes a deposit or the full fare.** The auto
-   transport industry norm is a deposit on acceptance with the balance at
-   pickup or delivery, which is also the shape freight already implements
-   here (estimate → weigh → balance). Full payment upfront maximises
-   collected commission and maximises refund exposure at the same time.
+3. **Whether acceptance takes a deposit or the full fare — DECIDED
+   2026-08-06: each business sets its own rule, and the customer sees that
+   rule before accepting.** So a carrier may ask for a deposit or the full
+   fare, and their terms are part of what the customer is comparing when they
+   choose between bids — a carrier demanding 100% up front is offering
+   something different from one asking 15%, and the customer should be able to
+   see that.
+
+   The trap this creates: the rule must be **copied onto the quote when it is
+   submitted**, not read from the business profile at acceptance. Otherwise a
+   carrier can change their terms between the moment the customer reads them
+   and the moment they pay, and the customer is charged something they never
+   agreed to. Quotes are already revised in place with a `revision` counter,
+   so a terms change should behave exactly like a price change: a new revision
+   the customer has to accept, never a silent edit under a live bid.
+
+   A business with no rule set needs a platform default rather than an
+   undefined charge, and the deposit percentage needs bounds — the same
+   reasoning as `platform_fees.js`, where an out-of-range value is refused
+   rather than clamped so a typo cannot charge a customer 400%.
 
 Two implementation traps to carry into the build regardless of those answers:
 refunding a Stripe charge does **not** refund the platform's
