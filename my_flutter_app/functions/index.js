@@ -154,6 +154,11 @@ const {
   sendFirebasePasswordSetupEmail,
 } = require("./firebase_auth_email");
 const {
+  parkingDocumentType,
+  parkingDocumentModel,
+  renderParkingDocument,
+} = require("./parking_document");
+const {
   toolsForOpenAi,
   messagesForOpenAi,
   contentFromOpenAiChoice,
@@ -10567,6 +10572,86 @@ exports.cancelBusinessParkingPaymentLink = onCall(
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
       return {success: true, alreadyCancelled: false};
+    },
+);
+
+// The printable invoice / receipt. Shares the payment link's token so a
+// business can hand the same URL to a customer, and so both clients open one
+// implementation instead of each rendering their own document.
+exports.parkingDocument = onRequest(
+    {cors: false, maxInstances: 10},
+    async (req, res) => {
+      res.set("Cache-Control", "no-store");
+      const token = String(req.query?.t || "").trim();
+      const notFound = () => res.status(404).send(parkingPaymentLinkPage({
+        title: "Document not found",
+        message: "This document link is not valid. Ask the parking " +
+          "business to send you a new one.",
+      }));
+      if (!token || token.length < 16) return notFound();
+
+      const db = admin.firestore();
+      const matches = await db.collection("parkedCars")
+          .where("paymentLinkToken", "==", token)
+          .limit(1)
+          .get();
+      if (matches.empty) return notFound();
+
+      const entry = matches.docs[0].data() || {};
+      const businessDoc = await db.collection("businesses")
+          .doc(String(entry.businessId || "")).get().catch(() => null);
+      // An invoice must carry a way to pay; a receipt renders without one.
+      const model = parkingDocumentModel({
+        entry,
+        business: businessDoc && businessDoc.exists ? businessDoc.data() : {},
+        paymentLinkUrl: parkingDocumentType(entry) === "invoice" ?
+          parkingPaymentLinkUrl(token) : "",
+      });
+      res.set("Content-Type", "text/html; charset=utf-8");
+      return res.status(200).send(renderParkingDocument(model));
+    },
+);
+
+// Returns the document URL for a record, minting the durable token when the
+// record predates it. Permission-checked, because the console must not be
+// able to mint a shareable link for another business's car.
+exports.getParkingDocumentUrl = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const entryId = cleanText(
+          request.data?.entryId || request.data?.reservationId, 180,
+      );
+      if (!entryId) {
+        throw new HttpsError("invalid-argument", "Parking entry is required");
+      }
+      const db = admin.firestore();
+      const entryRef = db.collection("parkedCars").doc(entryId);
+      const snapshot = await entryRef.get();
+      if (!snapshot.exists) {
+        throw new HttpsError("not-found", "Parking entry not found");
+      }
+      const entry = snapshot.data() || {};
+      await requireBusinessPermission(
+          uid, String(entry.businessId || ""), "parking",
+      );
+
+      let token = String(entry.paymentLinkToken || "").trim();
+      if (!token) {
+        token = crypto.randomBytes(24).toString("base64url");
+        await entryRef.update({
+          paymentLinkToken: token,
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+      }
+      const base = String(process.env.PARKING_DOCUMENT_BASE_URL || "").trim() ||
+        "https://us-central1-car-selling-flutter-app.cloudfunctions.net/" +
+          "parkingDocument";
+      return {
+        success: true,
+        documentType: parkingDocumentType(entry),
+        url: `${base}?t=${encodeURIComponent(token)}`,
+      };
     },
 );
 
