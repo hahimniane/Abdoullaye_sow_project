@@ -35,7 +35,26 @@ function run(command, args, options = {}) {
   });
 }
 
-console.log("Running backend deploy preflight...");
+// Before the preflight measures headroom, reclaim what is free to reclaim.
+// Cloud Run keeps every revision forever and each one holds its reservation at
+// zero traffic, so without this the ceiling creeps up with every deploy until
+// one cannot fit - and the deploy that finds the ceiling leaves functions
+// stranded on revisions that cannot serve. Skippable for a fast redeploy when
+// the headroom is known to be there.
+if (process.env.SKIP_REVISION_PRUNE === "true") {
+  console.log("Skipping Cloud Run revision prune (SKIP_REVISION_PRUNE=true).");
+} else {
+  console.log("Pruning idle Cloud Run revisions to reclaim CPU quota...");
+  try {
+    run("node", [path.join(__dirname, "prune-cloud-run-revisions.mjs")]);
+  } catch {
+    // A failed prune is not a failed deploy: the headroom check below is the
+    // gate, and it will refuse the deploy if this left too little room.
+    console.warn("Revision prune did not complete; continuing to preflight.");
+  }
+}
+
+console.log("\nRunning backend deploy preflight...");
 try {
   run("node", [path.join(__dirname, "preflight.mjs")], {
     env: {
