@@ -5555,6 +5555,7 @@ async function buildBusinessAdvisorSummary(db, businessId) {
     cars,
     purchases,
     shipments,
+    freight,
     transports,
     parkedCars,
     supportRequests,
@@ -5564,6 +5565,10 @@ async function buildBusinessAdvisorSummary(db, businessId) {
     db.collection("carPurchases").where("businessId", "==", businessId)
         .limit(250).get(),
     db.collection("barrelShipments").where("businessId", "==", businessId)
+        .limit(250).get(),
+    // Freight was missing here, so a parcel business's whole operation was
+    // invisible to both the advisor and the assistant overview.
+    db.collection("freightShipments").where("businessId", "==", businessId)
         .limit(250).get(),
     db.collection("transportRequests").where("businessId", "==", businessId)
         .limit(250).get(),
@@ -5577,6 +5582,7 @@ async function buildBusinessAdvisorSummary(db, businessId) {
   const carRows = cars.docs.map((doc) => doc.data() || {});
   const purchaseRows = purchases.docs.map((doc) => doc.data() || {});
   const shipmentRows = shipments.docs.map((doc) => doc.data() || {});
+  const freightRows = freight.docs.map((doc) => doc.data() || {});
   const transportRows = transports.docs.map((doc) => doc.data() || {});
   const parkedRows = parkedCars.docs.map((doc) => doc.data() || {});
   const supportRows = supportRequests.docs.map((doc) => doc.data() || {});
@@ -5609,6 +5615,16 @@ async function buildBusinessAdvisorSummary(db, businessId) {
       barrelShipments: {
         total: shipmentRows.length,
         byStatus: countsBy(shipmentRows, "status"),
+      },
+      freightShipments: {
+        total: freightRows.length,
+        byStatus: countsBy(freightRows, "status"),
+        // The number a lot actually chases: parcels weighed heavier than
+        // quoted, where the customer still owes the difference.
+        balanceDueCents: sumNumber(freightRows, "balanceDueCents"),
+        awaitingWeight: freightRows.filter((row) =>
+          String(row.weightVerificationStatus || "") === "pending",
+        ).length,
       },
       transportRequests: {
         total: transportRows.length,
