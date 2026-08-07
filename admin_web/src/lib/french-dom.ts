@@ -3543,6 +3543,43 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Le montant est recalculé à partir de vos tarifs de stationnement lors de l’enregistrement. S’il change sur un stationnement avec lien de paiement, nous émettons un nouveau lien et prévenons le client.",
 });
 
+// Per-service platform commission overrides in the admin console
+// (src/lib/business-service-fees.ts). The three source labels are the three
+// levels functions/platform_fees.js resolves through, so they have to read as
+// clearly distinct in French too - an admin who confuses them edits the wrong
+// level.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Per-service commission overrides": "Commissions spécifiques par service",
+  "Inherit every service": "Hériter pour tous les services",
+  "A rate set here applies to one service only. Every other service keeps the blanket rate for this business, and services with no rate of their own fall back to the platform default.":
+    "Un taux défini ici s’applique à un seul service. Tous les autres services conservent le taux global de cette entreprise, et les services sans taux propre reviennent à la valeur par défaut de la plateforme.",
+  "Leave a box empty to inherit": "Laissez une case vide pour hériter",
+  "An empty box removes the override; 0% is a real rate that takes nothing.":
+    "Une case vide supprime la dérogation ; 0 % est un taux réel qui ne prélève rien.",
+  "Select a business to review and edit its per-service commissions.":
+    "Sélectionnez une entreprise pour consulter et modifier ses commissions par service.",
+  "No businesses match your search.":
+    "Aucune entreprise ne correspond à votre recherche.",
+  "Business options": "Options d’entreprise",
+  "Search or choose a business": "Rechercher ou choisir une entreprise",
+  "Effective rate": "Taux effectif",
+  "In force": "Niveau appliqué",
+  "Override (%)": "Dérogation (%)",
+  "Service override": "Dérogation par service",
+  "Business rate": "Taux de l’entreprise",
+  "Platform default": "Valeur par défaut de la plateforme",
+  "Inherited from": "Hérité de",
+  Inherit: "Hériter",
+  "commission override percent": "pourcentage de la commission spécifique",
+  "Car deposit": "Acompte de voiture",
+  "Hold extension": "Prolongation de blocage",
+  "Enter a commission of at least 0% and under 100%, or leave it empty to inherit.":
+    "Saisissez une commission d’au moins 0 % et inférieure à 100 %, ou laissez le champ vide pour hériter.",
+  "Service commission saved": "Commission du service enregistrée",
+  "Service commission cleared": "Commission du service supprimée",
+  "Per-service commissions cleared": "Commissions par service supprimées",
+});
+
 const PICKUP_ERROR_LABELS: Record<string, string> = {
   "Shared pickup plan": "Plan de collecte partagé",
   "Barrel shipping pickup": "Collecte expédition de barils",

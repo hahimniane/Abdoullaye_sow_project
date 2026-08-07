@@ -4801,6 +4801,64 @@ button[data-loading="true"]::before {
   font-size: 13px;
   padding: 12px 16px;
 }
+.service-fee-list {
+  display: grid;
+}
+.service-fee-head,
+.service-fee-row {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  /* The action column is a fixed width rather than `auto` so the header and
+     the rows resolve the same track sizes and stay in line. */
+  grid-template-columns: minmax(140px, 1fr) 88px 150px 116px 172px;
+  padding: 10px 16px;
+}
+.service-fee-head {
+  border-top: 1px solid rgba(13, 148, 136, 0.12);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.service-fee-row {
+  border-top: 1px solid rgba(13, 148, 136, 0.12);
+  min-height: 62px;
+}
+.service-fee-name {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.service-fee-name small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.service-fee-rate {
+  font-size: 15px;
+}
+.service-fee-input {
+  background: var(--paper-soft);
+  border: 1.5px solid var(--rule);
+  border-radius: 10px;
+  color: var(--ink);
+  font-size: 15px;
+  min-height: 42px;
+  padding: 10px 12px;
+  width: 100%;
+}
+.service-fee-input:focus {
+  background: #fff;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.14);
+  outline: none;
+}
+.service-fee-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .provider-setup-grid {
   border-top: 1px solid rgba(13, 148, 136, 0.1);
   display: grid;
@@ -5162,6 +5220,11 @@ button[data-loading="true"]::before {
   .commission-override {
     grid-column: 2;
   }
+  .service-fee-head { display: none; }
+  .service-fee-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .service-fee-actions { grid-column: 1 / -1; justify-self: start; }
   .dest-editor-head { display: none; }
   .dest-editor-row { grid-template-columns: 1fr 1fr; }
   .website-panel-footer {

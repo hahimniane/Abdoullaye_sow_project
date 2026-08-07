@@ -92,6 +92,17 @@ import {
   type VerificationStatus,
 } from "@/lib/business-verification";
 import {
+  SERVICE_FEE_KEYS,
+  SERVICE_FEE_LABELS,
+  SERVICE_PLATFORM_FEE_FIELD,
+  hasStoredServiceFeeOverride,
+  parseServiceFeePercent,
+  resolveServiceFeeForKey,
+  storedServiceFeeRate,
+  type PlatformFeeSource,
+  type ServiceFeeKey,
+} from "@/lib/business-service-fees";
+import {
   asDate,
   formatDate,
   formatMoney,
@@ -5333,6 +5344,21 @@ function percentLabelFromRate(value: unknown) {
   return `${Math.round(rate * 10000) / 100}%`;
 }
 
+// Which of the three levels in functions/platform_fees.js decided a rate. An
+// admin who cannot see the level will "fix" a rate at the wrong one, so the
+// per-service editor labels every row with it.
+const PLATFORM_FEE_SOURCE_LABELS: Record<PlatformFeeSource, string> = {
+  business_service: "Service override",
+  business: "Business rate",
+  platform: "Platform default",
+};
+
+const PLATFORM_FEE_SOURCE_CLASSES: Record<PlatformFeeSource, string> = {
+  business_service: "commission-override",
+  business: "commission-status",
+  platform: "commission-default",
+};
+
 function businessCommissionRate(business: FirestoreRow) {
   const rate = Number(
     business.platformFeePct ?? business.platformCommissionPct,
@@ -5422,6 +5448,10 @@ function MoreSettings({
     STRIPE_FEE_MODE_PLATFORM_ABSORBS,
   );
   const [businessFeeSearch, setBusinessFeeSearch] = useState("");
+  const [serviceFeeBusinessId, setServiceFeeBusinessId] = useState("");
+  const [serviceFeeDrafts, setServiceFeeDrafts] = useState<
+    Record<string, string>
+  >({});
   const [deliverySearch, setDeliverySearch] = useState("");
   const [deliveryStatusFilter, setDeliveryStatusFilter] =
     useState("action_needed");
@@ -5451,6 +5481,22 @@ function MoreSettings({
   const selectedBusinesses = useMemo(
     () => eligibleBusinesses.filter((business) => selectedSet.has(business.id)),
     [eligibleBusinesses, selectedSet],
+  );
+  const serviceFeeBusiness = useMemo(
+    () =>
+      eligibleBusinesses.find(
+        (business) => business.id === serviceFeeBusinessId,
+      ) ?? null,
+    [eligibleBusinesses, serviceFeeBusinessId],
+  );
+  const serviceFeeBusinessOptions = useMemo(
+    () =>
+      eligibleBusinesses.map((business) => ({
+        value: business.id,
+        label: text(business.name ?? business.businessName, business.id),
+        keywords: businessSearchText(business),
+      })),
+    [eligibleBusinesses],
   );
   const sortedDeliveryRows = useMemo(
     () =>
@@ -5520,6 +5566,30 @@ function MoreSettings({
   useEffect(() => {
     setPlatformFeeDraft(percentInputFromRate(serviceFees?.platformFeePct));
   }, [serviceFees]);
+
+  // What is STORED for each service on the selected business, as percent-input
+  // strings ("" when the business has no override of its own). It is joined
+  // into one signature rather than depended on as an object so that a live
+  // snapshot touching an unrelated field on the business does not wipe what
+  // the admin is halfway through typing; the values are decimal strings or
+  // empty, so "|" can never appear inside one.
+  const serviceFeeStoredSignature = useMemo(
+    () =>
+      SERVICE_FEE_KEYS.map((key) => {
+        const stored = storedServiceFeeRate(serviceFeeBusiness, key);
+        return stored === null ? "" : percentInputFromRate(stored);
+      }).join("|"),
+    [serviceFeeBusiness],
+  );
+
+  useEffect(() => {
+    const values = serviceFeeStoredSignature.split("|");
+    setServiceFeeDrafts(
+      Object.fromEntries(
+        SERVICE_FEE_KEYS.map((key, index) => [key, values[index] ?? ""]),
+      ),
+    );
+  }, [serviceFeeBusinessId, serviceFeeStoredSignature]);
 
   useEffect(() => {
     setSelectedBusinessIds((current) => {
@@ -5637,6 +5707,59 @@ function MoreSettings({
         platformFeeUpdatedBy: currentUserId,
       }),
     ));
+  }
+
+  function setServiceFeeDraft(key: ServiceFeeKey, value: string) {
+    setServiceFeeDrafts((current) => ({ ...current, [key]: value }));
+  }
+
+  // "Inherit" has to REMOVE the field. Writing 0 would not mean "inherit" - 0
+  // is a real rate meaning the platform takes nothing - so this mirrors the
+  // blanket-rate reset above and deletes it.
+  async function clearBusinessServiceFee(
+    business: FirestoreRow,
+    key: ServiceFeeKey,
+  ) {
+    if (previewMode) return;
+    await updateDoc(doc(db, "businesses", business.id), {
+      [`${SERVICE_PLATFORM_FEE_FIELD}.${key}`]: deleteField(),
+      platformFeeUpdatedAt: serverTimestamp(),
+      platformFeeUpdatedBy: currentUserId,
+    });
+  }
+
+  async function clearAllBusinessServiceFees(business: FirestoreRow) {
+    if (previewMode) return;
+    await updateDoc(doc(db, "businesses", business.id), {
+      [SERVICE_PLATFORM_FEE_FIELD]: deleteField(),
+      platformFeeUpdatedAt: serverTimestamp(),
+      platformFeeUpdatedBy: currentUserId,
+    });
+  }
+
+  async function saveBusinessServiceFee(
+    business: FirestoreRow,
+    key: ServiceFeeKey,
+  ) {
+    const edit = parseServiceFeePercent(serviceFeeDrafts[key] ?? "");
+    // Refuse rather than store: the backend IGNORES an out-of-range rate and
+    // falls through to the next level, so a silent save would look like it
+    // worked and change nothing.
+    if (!edit.ok) throw new Error(edit.error);
+    if (edit.action === "clear") {
+      await clearBusinessServiceFee(business, key);
+      return;
+    }
+    if (previewMode) return;
+    await setDoc(
+      doc(db, "businesses", business.id),
+      {
+        [SERVICE_PLATFORM_FEE_FIELD]: { [key]: edit.rate },
+        platformFeeUpdatedAt: serverTimestamp(),
+        platformFeeUpdatedBy: currentUserId,
+      },
+      { merge: true },
+    );
   }
 
   async function retryDelivery(row: FirestoreRow) {
@@ -5946,6 +6069,157 @@ function MoreSettings({
             />
           )}
         </div>
+      </Panel>
+
+      <Panel
+        title="Per-service commission overrides"
+        icon={<BadgeDollarSign size={18} />}
+        action={
+          <button
+            className="ghost-button"
+            type="button"
+            disabled={!serviceFeeBusiness}
+            onClick={() =>
+              serviceFeeBusiness &&
+              runAction(
+                "Per-service commissions cleared",
+                () => clearAllBusinessServiceFees(serviceFeeBusiness),
+                {
+                  confirm: `Remove every per-service commission for ${text(serviceFeeBusiness.name ?? serviceFeeBusiness.businessName, serviceFeeBusiness.id)}?`,
+                  confirmFr: `Supprimer toutes les commissions par service pour ${text(serviceFeeBusiness.name ?? serviceFeeBusiness.businessName, serviceFeeBusiness.id)} ?`,
+                },
+              )
+            }
+          >
+            Inherit every service
+          </button>
+        }
+      >
+        <div className="info-band">
+          <p>
+            A rate set here applies to one service only. Every other service
+            keeps the blanket rate for this business, and services with no rate
+            of their own fall back to the platform default.
+          </p>
+          <p>
+            <span>Leave a box empty to inherit</span>.{" "}
+            <span>
+              An empty box removes the override; 0% is a real rate that takes
+              nothing.
+            </span>{" "}
+            <span>Current default</span>: <b>{defaultPlatformFeeLabel}</b>.
+          </p>
+        </div>
+        <div className="commission-toolbar">
+          <SearchableSelect
+            emptyMessage="No businesses match your search."
+            label="Business"
+            listLabel="Business options"
+            onChange={setServiceFeeBusinessId}
+            options={serviceFeeBusinessOptions}
+            placeholder="Search or choose a business"
+            value={serviceFeeBusinessId}
+          />
+        </div>
+        {!serviceFeeBusiness ? (
+          <EmptyState text="Select a business to review and edit its per-service commissions." />
+        ) : (
+          <div className="service-fee-list">
+            <div className="service-fee-head">
+              <span>Service</span>
+              <span>Effective rate</span>
+              <span>In force</span>
+              <span>Override (%)</span>
+              <span />
+            </div>
+            {SERVICE_FEE_KEYS.map((key) => {
+              // Exactly what functions/platform_fees.js will decide for this
+              // business and service, and which of the three levels decided
+              // it.
+              const resolved = resolveServiceFeeForKey(
+                serviceFees,
+                serviceFeeBusiness,
+                key,
+              );
+              const inheritedFrom =
+                resolved.source === "business_service" && resolved.key !== key
+                  ? SERVICE_FEE_LABELS[resolved.key as ServiceFeeKey]
+                  : "";
+              const hasOverride = hasStoredServiceFeeOverride(
+                serviceFeeBusiness,
+                key,
+              );
+              const serviceLabel = SERVICE_FEE_LABELS[key];
+              return (
+                <div className="service-fee-row" key={key}>
+                  <span className="service-fee-name">
+                    <b>{serviceLabel}</b>
+                    {inheritedFrom ? (
+                      <small>
+                        <span>Inherited from</span> {inheritedFrom}
+                      </small>
+                    ) : null}
+                  </span>
+                  <b className="service-fee-rate">
+                    {percentLabelFromRate(resolved.pct)}
+                  </b>
+                  <span className={PLATFORM_FEE_SOURCE_CLASSES[resolved.source]}>
+                    {PLATFORM_FEE_SOURCE_LABELS[resolved.source]}
+                  </span>
+                  <input
+                    aria-label={`${serviceLabel} commission override percent`}
+                    className="service-fee-input"
+                    inputMode="decimal"
+                    min="0"
+                    max="99.99"
+                    step="0.01"
+                    type="number"
+                    value={serviceFeeDrafts[key] ?? ""}
+                    onChange={(event) =>
+                      setServiceFeeDraft(key, event.target.value)
+                    }
+                    placeholder="Inherit"
+                  />
+                  <span className="service-fee-actions">
+                    <button
+                      className="primary-button compact"
+                      type="button"
+                      onClick={() =>
+                        runAction(
+                          "Service commission saved",
+                          () => saveBusinessServiceFee(serviceFeeBusiness, key),
+                          {
+                            confirm: `Save the ${serviceLabel} commission for ${text(serviceFeeBusiness.name ?? serviceFeeBusiness.businessName, serviceFeeBusiness.id)}?`,
+                            confirmFr: `Enregistrer la commission ${serviceLabel} pour ${text(serviceFeeBusiness.name ?? serviceFeeBusiness.businessName, serviceFeeBusiness.id)} ?`,
+                          },
+                        )
+                      }
+                    >
+                      Save
+                    </button>
+                    <button
+                      className="ghost-button compact"
+                      type="button"
+                      disabled={!hasOverride}
+                      onClick={() =>
+                        runAction(
+                          "Service commission cleared",
+                          () => clearBusinessServiceFee(serviceFeeBusiness, key),
+                          {
+                            confirm: `Remove the ${serviceLabel} commission override for ${text(serviceFeeBusiness.name ?? serviceFeeBusiness.businessName, serviceFeeBusiness.id)}?`,
+                            confirmFr: `Supprimer la commission spécifique ${serviceLabel} pour ${text(serviceFeeBusiness.name ?? serviceFeeBusiness.businessName, serviceFeeBusiness.id)} ?`,
+                          },
+                        )
+                      }
+                    >
+                      Inherit
+                    </button>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </Panel>
 
       <Panel
