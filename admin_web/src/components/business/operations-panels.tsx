@@ -102,6 +102,16 @@ import {
   type DestinationServiceAvailability,
 } from "@/lib/destination-pricing";
 import { currentLanguage, formatDate, formatMoney, text } from "@/lib/format";
+import {
+  normalizeTransportContainerNumber,
+  transportFulfillmentErrorMessage,
+  transportFulfillmentNextStatuses,
+  transportFulfillmentPayload,
+  transportFulfillmentRequiresContainer,
+  transportFulfillmentStatusIsKnown,
+  transportJobCurrentStatus,
+  validateTransportFulfillmentChange,
+} from "@/lib/transport-fulfillment";
 import { canonicalMake, canonicalModel, getMakes, getModels, getYears } from "@/lib/car-catalog";
 import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
 import { US_STATE_OPTIONS, citiesForState, withSelected } from "@/lib/us-locations";
@@ -336,7 +346,6 @@ export function optionLabel(value: string) {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 }
-const transportStatuses = ["pending", "scheduled", "in_transit", "delivered", "cancelled"];
 const parkingStatuses = ["active", "completed", "cancelled"];
 
 const emptyDestinationDraft: DestinationDraft = {
@@ -3127,6 +3136,10 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
   const [busyId, setBusyId] = useState("");
   const [draft, setDraft] = useState<TransportQuoteDraft>(emptyTransportQuoteDraft);
   const [quoteFormOpen, setQuoteFormOpen] = useState(false);
+  // Typed container numbers, per job. Asked for before `in_transit` rather
+  // than letting the server's refusal be how an operator finds out it was
+  // needed.
+  const [containerDrafts, setContainerDrafts] = useState<Record<string, string>>({});
   const focusedCardRef = useRef<HTMLElement | null>(null);
 
   // A notification points at one request. Show the view that contains it and
@@ -3210,30 +3223,58 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
     setQuoteFormOpen(true);
   }
 
+  // One path for every transport job, marketplace or legacy. There used to be
+  // a second: legacy records were written straight to `transportRequests`,
+  // because the callable refused anything without a selected quote. That
+  // fallback skipped the transition table AND the container-number gate, so a
+  // legacy car could be marked delivered from pending, or in transit with
+  // nothing to track it by. The callable now accepts legacy records on their
+  // own `businessId`, so the direct write is gone and the state machine has
+  // exactly one implementation.
   async function updateTransportStatus(row: FirestoreRow, status: string) {
-    setBusyId(row.id);
+    const currentStatus = transportJobCurrentStatus(row);
+    const submittedContainerNumber = containerDrafts[row.id] ?? "";
+    const errors = validateTransportFulfillmentChange({
+      currentStatus,
+      nextStatus: status,
+      existingContainerNumber: row.containerNumber,
+      submittedContainerNumber,
+    });
+    if (errors.length > 0) {
+      setMessage(transportFulfillmentErrorMessage(errors));
+      return;
+    }
+    setBusyId(`${row.id}:${status}`);
     setMessage("");
     try {
-      // flowVersion is the field the server actually writes and reads
-      // (functions/index.js). transportMarketplaceVersion was never written by
-      // anything, so this arm was dead and marketplace jobs could fall through
-      // to the legacy direct write below.
-      const isMarketplaceJob =
-        Boolean(row.selectedQuoteId) ||
-        text(row.quoteStatus, "") === "selected" ||
-        Number(row.flowVersion ?? 0) >= 2;
-      if (isMarketplaceJob) {
-        await httpsCallable(functions, "updateTransportFulfillmentStatus")({
+      const response = await httpsCallable(
+        functions,
+        "updateTransportFulfillmentStatus",
+      )(
+        transportFulfillmentPayload({
           requestId: row.id,
           status,
-        });
-      } else {
-        // The mobile app reads `fulfillmentStatus ?? status`, so writing only
-        // `status` here left it showing the stale fulfillmentStatus forever.
-        await setDoc(doc(db, "transportRequests", row.id), { businessId, status, fulfillmentStatus: status, updatedAt: serverTimestamp() }, { merge: true });
-      }
-      setMessage("Transport updated.");
+          containerNumber: submittedContainerNumber,
+          businessId,
+        }),
+      );
+      setContainerDrafts((drafts) => {
+        const next = { ...drafts };
+        delete next[row.id];
+        return next;
+      });
+      // Two people clicking the same status is a success, not a failure.
+      const alreadyUpdated =
+        (response.data as { alreadyUpdated?: boolean } | null)?.alreadyUpdated === true;
+      setMessage(
+        alreadyUpdated
+          ? "This job was already on that status."
+          : "Transport updated.",
+      );
     } catch (error) {
+      // The server's own sentence names the reason (wrong business, terminal
+      // status, missing container number). Replacing it with a generic line
+      // would throw away the only thing that says what to do next.
       setMessage(
         error instanceof Error && error.message
           ? error.message
@@ -3499,8 +3540,14 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
             )}
           <div className="pur-grid">
             {filteredJobs.map((row) => {
-              const status = text(row.status, "pending");
-              const busyRow = busyId === row.id;
+              // What the server compares against its table: `fulfillmentStatus`
+              // when it has one, `status` otherwise. Reading `status` alone
+              // showed a stale value on every job the callable had moved.
+              const status = transportJobCurrentStatus(row);
+              const known = transportFulfillmentStatusIsKnown(status);
+              const nextStatuses = transportFulfillmentNextStatuses(status);
+              const container = normalizeTransportContainerNumber(row.containerNumber);
+              const busyRow = busyId.startsWith(`${row.id}:`);
               const selectedAmountCents = Number(row.selectedAmountCents ?? 0);
               return (
                 <article className="pur-card transport-job-card" key={row.id}>
@@ -3509,7 +3556,15 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
                       <strong>{transportTitle(row)}</strong>
                       <span className="pur-kind">{text(row.trackingCode, "Transport")}</span>
                     </div>
-                    <span className={`lst-badge ${transportTone(status)}`}>{statusLabel(status)}</span>
+                    {/* An unrecognised status is SHOWN, not mapped onto the
+                        nearest transport status: the admin record path can
+                        write `active`, `in_progress`, `completed`, `sold`,
+                        `reserved` or `inactive` onto this same document, and
+                        labelling one of those "In transit" would be a claim
+                        nobody made. */}
+                    <span className={`lst-badge ${known ? transportTone(status) : "warn"}`}>
+                      {known ? statusLabel(status) : text(status, "Not provided")}
+                    </span>
                   </div>
                   <div className="pur-info">
                     <div><span>Owner</span><b>{text(row.ownerName ?? row.customerName, "—")}</b></div>
@@ -3518,13 +3573,51 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
                     <div><span>Destination</span><b>{text(row.destinationCountryName, "—")}</b></div>
                     <div><span>Accepted quote</span><b>{selectedAmountCents > 0 ? formatMoney(selectedAmountCents / 100) : formatMoney(row.price)}</b></div>
                     <div><span>Transport date</span><b>{formatDate(row.transportDate ?? row.estimatedPickupDate ?? row.createdAt)}</b></div>
+                    {container && (<div><span>Container on file</span><b>{container}</b></div>)}
                   </div>
-                  <div className="pur-actions">
-                    <label className="bar-field"><span>Update job status</span>
-                      <select value={status} disabled={busyRow} onChange={(event) => updateTransportStatus(row, event.target.value)}>
-                        {transportStatuses.map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}
-                      </select>
-                    </label>
+                  <div className="pur-actions transport-job-move">
+                    <span className="transport-job-move-title">Update job status</span>
+                    {!known ? (
+                      <p className="transport-job-move-note">
+                        This job is on a status the transport workflow did not set, so no transport action applies here.
+                      </p>
+                    ) : nextStatuses.length === 0 ? (
+                      <p className="transport-job-move-note">
+                        This job is finished. There is nothing left to move.
+                      </p>
+                    ) : (
+                      <>
+                        {/* Shown only while a move that needs it is on offer,
+                            and only while the job does not already carry one. */}
+                        {nextStatuses.some(transportFulfillmentRequiresContainer) && !container && (
+                          <label className="bar-field">
+                            <span>Container / booking / BOL number</span>
+                            <input
+                              onChange={(event) =>
+                                setContainerDrafts((drafts) => ({ ...drafts, [row.id]: event.target.value }))
+                              }
+                              placeholder="e.g. MSKU1234567"
+                              value={containerDrafts[row.id] ?? ""}
+                            />
+                          </label>
+                        )}
+                        <div className="transport-job-move-actions">
+                          {nextStatuses.map((next) => (
+                            <button
+                              aria-busy={busyId === `${row.id}:${next}`}
+                              className={`lst-btn${next === "cancelled" ? " danger" : ""}`}
+                              disabled={busyRow}
+                              key={next}
+                              onClick={() => void updateTransportStatus(row, next)}
+                              type="button"
+                            >
+                              {busyId === `${row.id}:${next}` ? <RefreshCw className="spin" size={15} /> : null}
+                              {busyId === `${row.id}:${next}` ? "Updating..." : statusLabel(next)}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </article>
               );

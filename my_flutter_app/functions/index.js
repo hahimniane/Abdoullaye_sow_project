@@ -12,6 +12,10 @@ const QRCode = require("qrcode");
 const {buildTrackingCode} = require("./tracking_code");
 const {classifyTransportEdit} = require("./transport_request_edit");
 const {
+  TRANSPORT_FULFILLMENT_DESTINATIONS,
+  classifyTransportFulfillmentChange,
+} = require("./transport_fulfillment");
+const {
   planBarrelDestinationRefund,
 } = require("./barrel_destination_change");
 const {
@@ -4242,13 +4246,7 @@ exports.updateTransportFulfillmentStatus = onCall(
       const requestId =
         requireTransportDocumentId(data.requestId, "Transport request");
       const nextStatus = String(data.status || "").trim().toLowerCase();
-      const allowedStatuses = new Set([
-        "scheduled",
-        "in_transit",
-        "delivered",
-        "cancelled",
-      ]);
-      if (!allowedStatuses.has(nextStatus)) {
+      if (!TRANSPORT_FULFILLMENT_DESTINATIONS.includes(nextStatus)) {
         throw new HttpsError(
             "invalid-argument",
             "Transport status is invalid",
@@ -4264,64 +4262,36 @@ exports.updateTransportFulfillmentStatus = onCall(
           throw new HttpsError("not-found", "Transport request not found");
         }
         const requestData = requestDoc.data();
-        if (Number(requestData.flowVersion || 1) !== 2 ||
-            requestData.quoteStatus !== "selected") {
+        // One state machine for both shapes. A legacy record (no flowVersion)
+        // never had a quote selected, so it is owned by its own `businessId` -
+        // the same field firestore.rules gates its direct write on - while a
+        // marketplace record is owned by `selectedBusinessId`. Everything after
+        // ownership (the transition table, the container-number gate) is
+        // identical, which is why the console no longer needs a path that
+        // writes this document itself.
+        const decision = classifyTransportFulfillmentChange({
+          requestData,
+          businessId,
+          nextStatus,
+          submittedContainerNumber: data.containerNumber,
+        });
+        if (decision.error) {
           throw new HttpsError(
-              "failed-precondition",
-              "This is not a selected marketplace transport request",
+              decision.error.code,
+              decision.error.message,
+              decision.error.details,
           );
         }
-        if (requestData.selectedBusinessId !== businessId ||
-            requestData.businessId !== businessId) {
-          throw new HttpsError(
-              "permission-denied",
-              "Only the selected transport business can update this request",
-          );
-        }
-        const currentStatus = String(
-            requestData.fulfillmentStatus || requestData.status || "",
-        );
-        if (currentStatus === nextStatus) {
-          return {previousStatus: currentStatus, alreadyUpdated: true};
-        }
-        const transitions = {
-          pending: new Set(["scheduled", "in_transit", "cancelled"]),
-          scheduled: new Set(["in_transit", "cancelled"]),
-          in_transit: new Set(["delivered"]),
-          delivered: new Set(),
-          cancelled: new Set(),
-        };
-        const allowedNext = transitions[currentStatus];
-        if (!allowedNext || !allowedNext.has(nextStatus)) {
-          throw new HttpsError(
-              "failed-precondition",
-              `Transport cannot move from ${currentStatus} to ${nextStatus}`,
-          );
-        }
-        // A car in transit is in a container, and the customer's next question
-        // is always "where is it". Without an identifier there is nothing to
-        // answer with and nothing to hand the carrier tracking API, so the
-        // number is required at the moment the job starts moving - not left
-        // optional to be filled in later, or never.
-        const existingContainer = validateContainerNumber(
-            requestData.containerNumber,
-        );
-        const submittedContainer = validateContainerNumber(
-            data.containerNumber,
-        );
-        const containerNumber = submittedContainer || existingContainer;
-        if (nextStatus === "in_transit" && !containerNumber) {
-          throw new HttpsError(
-              "failed-precondition",
-              "Add the container number before marking this transport " +
-              "in transit",
-              {reason: "container_number_required"},
-          );
+        if (decision.alreadyUpdated) {
+          return {
+            previousStatus: decision.previousStatus,
+            alreadyUpdated: true,
+          };
         }
         const now = FirestoreFieldValue.serverTimestamp();
         transaction.update(requestRef, {
-          ...(containerNumber && containerNumber !== existingContainer ?
-            {containerNumber} :
+          ...(decision.containerChanged ?
+            {containerNumber: decision.containerNumber} :
             {}),
           status: nextStatus,
           fulfillmentStatus: nextStatus,
@@ -4331,7 +4301,10 @@ exports.updateTransportFulfillmentStatus = onCall(
           ...(nextStatus === "delivered" ? {deliveredAt: now} : {}),
           ...(nextStatus === "cancelled" ? {cancelledAt: now} : {}),
         });
-        return {previousStatus: currentStatus, alreadyUpdated: false};
+        return {
+          previousStatus: decision.previousStatus,
+          alreadyUpdated: false,
+        };
       });
       return {
         success: true,

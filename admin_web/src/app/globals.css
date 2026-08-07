@@ -6241,6 +6241,12 @@ button[data-loading="true"]::before {
   outline: none;
 }
 .transport-job-card .pur-info b { overflow-wrap: anywhere; }
+/* The status control is a set of buttons, one per legal next status, rather
+   than a list of every status the server would then reject. */
+.transport-job-move { align-items: stretch; flex-direction: column; gap: 10px; }
+.transport-job-move-title { color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
+.transport-job-move-note { color: var(--muted); font-size: 13px; line-height: 1.45; margin: 0; }
+.transport-job-move-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .pur-note { flex: 1 1 140px; min-width: 120px; padding: 8px 11px; border: 1.5px solid var(--rule); border-radius: 10px; font: inherit; font-size: 13px; }
 .pur-note:focus { outline: none; border-color: var(--brand); }
 @media (max-width: 560px) { .pur-grid { grid-template-columns: 1fr; } }

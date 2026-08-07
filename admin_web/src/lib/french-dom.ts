@@ -70,6 +70,7 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Maximum pickup distance (miles) — required":
     "Distance maximale de collecte (miles) — obligatoire",
   "e.g. 25": "p. ex. 25",
+  "e.g. MSKU1234567": "ex. MSKU1234567",
   "One price for any pickup within your maximum distance. Addresses beyond it are refused, never surcharged.":
     "Un prix unique pour toute collecte dans votre distance maximale. Les adresses au-delà sont refusées, jamais surfacturées.",
   "Flat pickup fee (USD)": "Frais fixes de collecte (USD)",
@@ -808,7 +809,23 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "No accepted jobs match this search.":
     "Aucun transport accepté ne correspond à cette recherche.",
   "Accepted quote": "Devis accepté",
+  "Container on file": "Conteneur enregistré",
   "Update job status": "Mettre à jour le statut du transport",
+  // The console offers only the moves the transition table allows, so these
+  // sentences describe why nothing is on offer rather than reporting a
+  // refusal after the fact.
+  "This job is on a status the transport workflow did not set, so no transport action applies here.":
+    "Cette mission est à un statut qui ne vient pas du transport : aucune action de transport ne s’applique ici.",
+  "This job is finished. There is nothing left to move.":
+    "Cette mission est terminée. Il n’y a plus rien à faire avancer.",
+  "That is not a status a transport job can be moved to.":
+    "Ce n’est pas un statut vers lequel un transport peut être déplacé.",
+  "A transport job cannot move between those two statuses.":
+    "Un transport ne peut pas passer de l’un à l’autre de ces deux statuts.",
+  "Add the container number before marking this transport in transit.":
+    "Ajoutez le numéro de conteneur avant de mettre ce transport en transit.",
+  "This job was already on that status.":
+    "Cette mission était déjà à ce statut.",
   "Structured quote": "Devis structuré",
   "Revise transport quote": "Réviser le devis de transport",
   "Send transport quote": "Envoyer un devis de transport",

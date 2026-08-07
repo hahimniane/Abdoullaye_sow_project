@@ -116,3 +116,48 @@ test("transport marketplace layout is responsive and localized", () => {
     "Conditions et inclusions",
   );
 });
+
+test("the accepted-jobs card routes every status change through the callable", () => {
+  const start = businessSource.indexOf("export function TransportPanel");
+  const end = businessSource.indexOf("export function ParkingPanel", start);
+  const panel = businessSource.slice(start, end);
+
+  // The legacy escape hatch: a direct `transportRequests` write that skipped
+  // the transition table and the container-number gate entirely.
+  assert.doesNotMatch(panel, /doc\(db, "transportRequests"/);
+  assert.doesNotMatch(businessSource, /const transportStatuses = \[/);
+
+  // Only the moves the table allows are offered, and the decision comes from
+  // the pure module rather than being spelled out again here.
+  assert.match(panel, /transportFulfillmentNextStatuses\(status\)/);
+  assert.match(panel, /nextStatuses\.map\(\(next\) =>/);
+  assert.match(panel, /validateTransportFulfillmentChange\(\{/);
+  assert.match(panel, /transportJobCurrentStatus\(row\)/);
+  assert.match(panel, /nextStatuses\.some\(transportFulfillmentRequiresContainer\)/);
+
+  // The server's own sentence is what the operator reads.
+  assert.match(panel, /error instanceof Error && error\.message\s*\?\s*error\.message/);
+});
+
+test("the accepted-jobs status copy is translated", () => {
+  for (const [english, french] of [
+    [
+      "This job is finished. There is nothing left to move.",
+      "Cette mission est terminée. Il n’y a plus rien à faire avancer.",
+    ],
+    [
+      "This job is on a status the transport workflow did not set, so no transport action applies here.",
+      "Cette mission est à un statut qui ne vient pas du transport : aucune action de transport ne s’applique ici.",
+    ],
+    [
+      "Add the container number before marking this transport in transit.",
+      "Ajoutez le numéro de conteneur avant de mettre ce transport en transit.",
+    ],
+    ["Container on file", "Conteneur enregistré"],
+    ["This job was already on that status.", "Cette mission était déjà à ce statut."],
+    ["e.g. MSKU1234567", "ex. MSKU1234567"],
+  ]) {
+    assert.equal(translateValue(english, "fr"), french);
+    assert.equal(translateValue(french, "en"), english);
+  }
+});
