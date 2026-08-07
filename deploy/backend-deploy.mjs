@@ -44,22 +44,20 @@ function run(command, args, options = {}) {
   });
 }
 
-// Cloud Run allows 4,000 Active Revisions per region and never collects them:
-// every deploy leaves one more behind on every function. This project reached
-// 4,605 and functions began failing to serve; pruning to 410 restored them.
-// So a deploy reclaims that space before asking for more. Skippable for a fast
-// redeploy when the count is known to be low.
-if (process.env.SKIP_REVISION_PRUNE === "true") {
-  console.log("Skipping Cloud Run revision prune (SKIP_REVISION_PRUNE=true).");
-} else {
-  console.log("Pruning idle Cloud Run revisions to reclaim revision headroom...");
-  try {
-    run("node", [path.join(__dirname, "prune-cloud-run-revisions.mjs")]);
-  } catch {
-    // A failed prune is not a failed deploy: the headroom check below is the
-    // gate, and it will refuse the deploy if this left too little room.
-    console.warn("Revision prune did not complete; continuing to preflight.");
-  }
+// The prune is not skippable. It was once, and the skip caused an outage:
+// a run started with 150 failed revisions left over from earlier attempts,
+// and Cloud Run kept trying to start them - each attempt drawing boosted
+// startup CPU against the same 20 vCPU the rollout and live traffic needed.
+// Batches that fit on paper failed against pressure the arithmetic could not
+// see. On a clean project the prune finds nothing and costs a few minutes;
+// on a dirty one it is the difference between a deploy and an outage.
+console.log("Pruning idle Cloud Run revisions to reclaim headroom...");
+try {
+  run("node", [path.join(__dirname, "prune-cloud-run-revisions.mjs")]);
+} catch {
+  // A failed prune is not a failed deploy: the preflight headroom check is
+  // the gate, and it will refuse the deploy if this left too little room.
+  console.warn("Revision prune did not complete; continuing to preflight.");
 }
 
 console.log("\nRunning backend deploy preflight...");
