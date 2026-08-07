@@ -11453,6 +11453,396 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Parked car recorded. Tracking number: {trackingCode}'**
   String parkedCarRecordedWithCode(Object trackingCode);
+
+  /// No description provided for @businessServiceOverviewNeedsYou.
+  ///
+  /// In en, this message translates to:
+  /// **'need you'**
+  String get businessServiceOverviewNeedsYou;
+
+  /// No description provided for @businessTransportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport bids & jobs'**
+  String get businessTransportTitle;
+
+  /// No description provided for @businessTransportSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Quote the requests you were invited to, then move the jobs you won.'**
+  String get businessTransportSubtitle;
+
+  /// No description provided for @businessTransportOpenToBid.
+  ///
+  /// In en, this message translates to:
+  /// **'Open to bid'**
+  String get businessTransportOpenToBid;
+
+  /// No description provided for @businessTransportQuoted.
+  ///
+  /// In en, this message translates to:
+  /// **'Your quotes'**
+  String get businessTransportQuoted;
+
+  /// No description provided for @businessTransportWonJobs.
+  ///
+  /// In en, this message translates to:
+  /// **'Won jobs'**
+  String get businessTransportWonJobs;
+
+  /// No description provided for @businessTransportNoOpportunities.
+  ///
+  /// In en, this message translates to:
+  /// **'No transport request is open for a bid right now.'**
+  String get businessTransportNoOpportunities;
+
+  /// No description provided for @businessTransportNoQuotes.
+  ///
+  /// In en, this message translates to:
+  /// **'You have no live quotes. Bid on an open request to get one.'**
+  String get businessTransportNoQuotes;
+
+  /// No description provided for @businessTransportNoJobs.
+  ///
+  /// In en, this message translates to:
+  /// **'No customer has chosen your quote yet.'**
+  String get businessTransportNoJobs;
+
+  /// No description provided for @businessTransportQuoteDeadline.
+  ///
+  /// In en, this message translates to:
+  /// **'Quote deadline'**
+  String get businessTransportQuoteDeadline;
+
+  /// No description provided for @businessTransportWindowClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'The quote window has closed.'**
+  String get businessTransportWindowClosed;
+
+  /// No description provided for @businessTransportRoute.
+  ///
+  /// In en, this message translates to:
+  /// **'Route'**
+  String get businessTransportRoute;
+
+  /// No description provided for @businessTransportVehicleOperable.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs and drives'**
+  String get businessTransportVehicleOperable;
+
+  /// No description provided for @businessTransportVehicleNotOperable.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs assistance'**
+  String get businessTransportVehicleNotOperable;
+
+  /// No description provided for @businessTransportPreferredPickup.
+  ///
+  /// In en, this message translates to:
+  /// **'Preferred pickup'**
+  String get businessTransportPreferredPickup;
+
+  /// No description provided for @businessTransportFlexibleDates.
+  ///
+  /// In en, this message translates to:
+  /// **'Flexible'**
+  String get businessTransportFlexibleDates;
+
+  /// No description provided for @businessTransportSendQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Send quote'**
+  String get businessTransportSendQuote;
+
+  /// No description provided for @businessTransportSendingQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending quote…'**
+  String get businessTransportSendingQuote;
+
+  /// No description provided for @businessTransportReviseQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Revise quote'**
+  String get businessTransportReviseQuote;
+
+  /// No description provided for @businessTransportRevisingQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving revision…'**
+  String get businessTransportRevisingQuote;
+
+  /// No description provided for @businessTransportReviseNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'You already have a quote on this request. Sending again replaces it — one business has one quote per request.'**
+  String get businessTransportReviseNotice;
+
+  /// No description provided for @businessTransportCurrentQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Your current quote'**
+  String get businessTransportCurrentQuote;
+
+  /// No description provided for @businessTransportRevisionNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Revision {revision}'**
+  String businessTransportRevisionNumber(Object revision);
+
+  /// No description provided for @businessTransportWithdrawQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Withdraw quote'**
+  String get businessTransportWithdrawQuote;
+
+  /// No description provided for @businessTransportWithdrawingQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Withdrawing…'**
+  String get businessTransportWithdrawingQuote;
+
+  /// No description provided for @businessTransportWithdrawTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Withdraw this quote?'**
+  String get businessTransportWithdrawTitle;
+
+  /// No description provided for @businessTransportWithdrawMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The customer will no longer be able to choose it. The request goes back to open, so you can bid again.'**
+  String get businessTransportWithdrawMessage;
+
+  /// No description provided for @businessTransportQuoteWithdrawn.
+  ///
+  /// In en, this message translates to:
+  /// **'Quote withdrawn. The request is open for a new bid.'**
+  String get businessTransportQuoteWithdrawn;
+
+  /// No description provided for @businessTransportWithdrawFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The quote could not be withdrawn. Try again.'**
+  String get businessTransportWithdrawFailed;
+
+  /// No description provided for @businessTransportQuoteSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Quote sent to the customer.'**
+  String get businessTransportQuoteSent;
+
+  /// No description provided for @businessTransportQuoteRevised.
+  ///
+  /// In en, this message translates to:
+  /// **'Quote revised. The customer now sees revision {revision}.'**
+  String businessTransportQuoteRevised(Object revision);
+
+  /// No description provided for @businessTransportQuoteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The quote could not be sent. Try again.'**
+  String get businessTransportQuoteFailed;
+
+  /// No description provided for @businessTransportAmountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Your transport price (USD)'**
+  String get businessTransportAmountLabel;
+
+  /// No description provided for @businessTransportAmountHint.
+  ///
+  /// In en, this message translates to:
+  /// **'For example, 1250.00'**
+  String get businessTransportAmountHint;
+
+  /// No description provided for @businessTransportAmountHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'The transport leg only. Laawol adds your pickup fee on top.'**
+  String get businessTransportAmountHelp;
+
+  /// No description provided for @businessTransportPickupLeg.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup leg'**
+  String get businessTransportPickupLeg;
+
+  /// No description provided for @businessTransportPickupPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Priced from your pickup plan when this quote is sent.'**
+  String get businessTransportPickupPending;
+
+  /// No description provided for @businessTransportPickupNotCharged.
+  ///
+  /// In en, this message translates to:
+  /// **'No separate pickup fee — include collection in your price.'**
+  String get businessTransportPickupNotCharged;
+
+  /// No description provided for @businessTransportCustomerTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer pays'**
+  String get businessTransportCustomerTotal;
+
+  /// No description provided for @businessTransportCustomerTotalPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Your price plus the pickup fee, once it is priced.'**
+  String get businessTransportCustomerTotalPending;
+
+  /// No description provided for @businessTransportTermsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms and inclusions (optional)'**
+  String get businessTransportTermsLabel;
+
+  /// No description provided for @businessTransportTermsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'What is included, timing assumptions, and any conditions.'**
+  String get businessTransportTermsHint;
+
+  /// No description provided for @businessTransportQuoteExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Expired'**
+  String get businessTransportQuoteExpired;
+
+  /// No description provided for @transportQuoteAmountRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your transport price.'**
+  String get transportQuoteAmountRequired;
+
+  /// No description provided for @transportQuoteAmountInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the price as a number, for example 1250.00.'**
+  String get transportQuoteAmountInvalid;
+
+  /// No description provided for @transportQuoteAmountFractional.
+  ///
+  /// In en, this message translates to:
+  /// **'Prices are in whole cents — two decimal places at most.'**
+  String get transportQuoteAmountFractional;
+
+  /// No description provided for @transportQuoteAmountNotPositive.
+  ///
+  /// In en, this message translates to:
+  /// **'A quote has to be more than zero.'**
+  String get transportQuoteAmountNotPositive;
+
+  /// No description provided for @transportQuoteAmountAboveCap.
+  ///
+  /// In en, this message translates to:
+  /// **'A quote cannot be more than 1,000,000 USD.'**
+  String get transportQuoteAmountAboveCap;
+
+  /// No description provided for @transportQuoteCurrencyNotSupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport quotes must be in US dollars.'**
+  String get transportQuoteCurrencyNotSupported;
+
+  /// No description provided for @transportQuoteMethodNotSupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose open or enclosed transport.'**
+  String get transportQuoteMethodNotSupported;
+
+  /// No description provided for @transportQuoteDatesIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Give both estimates or neither.'**
+  String get transportQuoteDatesIncomplete;
+
+  /// No description provided for @transportQuotePickupNotInFuture.
+  ///
+  /// In en, this message translates to:
+  /// **'The estimated pickup date has to be in the future.'**
+  String get transportQuotePickupNotInFuture;
+
+  /// No description provided for @transportQuoteDeliveryBeforePickup.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery cannot be before pickup.'**
+  String get transportQuoteDeliveryBeforePickup;
+
+  /// No description provided for @transportQuoteTermsTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms must be 1000 characters or fewer.'**
+  String get transportQuoteTermsTooLong;
+
+  /// No description provided for @transportStatusScheduled.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled'**
+  String get transportStatusScheduled;
+
+  /// No description provided for @transportJobMoveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Move this job'**
+  String get transportJobMoveTitle;
+
+  /// No description provided for @transportJobStatusUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'This job is on {status}, which the transport workflow did not set — no transport action applies here.'**
+  String transportJobStatusUnknown(Object status);
+
+  /// No description provided for @transportJobNothingLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'This job is finished. There is nothing left to move.'**
+  String get transportJobNothingLeft;
+
+  /// No description provided for @transportJobStatusUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport updated.'**
+  String get transportJobStatusUpdated;
+
+  /// No description provided for @transportJobStatusAlready.
+  ///
+  /// In en, this message translates to:
+  /// **'This job was already {status}.'**
+  String transportJobStatusAlready(Object status);
+
+  /// No description provided for @transportJobStatusFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The transport status could not be updated. Try again.'**
+  String get transportJobStatusFailed;
+
+  /// No description provided for @transportJobContainerRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the container number before marking this transport in transit.'**
+  String get transportJobContainerRequired;
+
+  /// No description provided for @transportJobTransitionNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'A transport cannot move from {from} to {to}.'**
+  String transportJobTransitionNotAllowed(Object from, Object to);
+
+  /// No description provided for @transportJobContainerOnFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Container {number}'**
+  String transportJobContainerOnFile(Object number);
+
+  /// No description provided for @transportJobAcceptedQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Accepted quote'**
+  String get transportJobAcceptedQuote;
 }
 
 class _AppLocalizationsDelegate

@@ -1,6 +1,7 @@
 import '../models/business_service.dart' as business_services;
 import '../utils/business_permissions.dart';
 import 'business_parking_entry.dart';
+import 'business_transport_jobs.dart';
 
 /// What a business sees on the phone, and what the activity feed can be
 /// narrowed to.
@@ -121,37 +122,55 @@ int businessParkingUnpaidCount(Iterable<Map<String, dynamic>> rows) => rows
     )
     .length;
 
+/// What a tile's number is counting.
+///
+/// The same digit means entirely different things per service, and the caption
+/// under it is the only thing that says which - so the caption is chosen here
+/// rather than guessed from the category at the call site.
+enum BusinessServiceCountMeaning {
+  /// Money the lot is still owed.
+  unpaid,
+
+  /// Records still open.
+  open,
+
+  /// Work waiting on this business specifically: transport requests it has not
+  /// bid on yet, plus won jobs it has not delivered. Not a record count - a
+  /// business with nothing to do reads zero even with a full history.
+  needsYou,
+}
+
 /// One service, and the one number that says whether it needs attention.
 class BusinessServiceTile {
   const BusinessServiceTile({
     required this.category,
     required this.count,
-    required this.countIsUnpaid,
+    required this.meaning,
   });
 
   final ServiceCategory category;
 
   final int count;
 
-  /// True when [count] is money still owed rather than work still open. The
-  /// two read the same as a number and mean entirely different things, so the
-  /// caption under the number is chosen from this rather than guessed from the
-  /// category at the call site.
-  final bool countIsUnpaid;
+  /// What [count] is counting, and so which caption sits under it.
+  final BusinessServiceCountMeaning meaning;
+
+  /// True when [count] is money still owed rather than work still open.
+  bool get countIsUnpaid => meaning == BusinessServiceCountMeaning.unpaid;
 
   @override
   bool operator ==(Object other) =>
       other is BusinessServiceTile &&
       other.category == category &&
       other.count == count &&
-      other.countIsUnpaid == countIsUnpaid;
+      other.meaning == meaning;
 
   @override
-  int get hashCode => Object.hash(category, count, countIsUnpaid);
+  int get hashCode => Object.hash(category, count, meaning);
 
   @override
   String toString() =>
-      'BusinessServiceTile(${category.name}, $count, unpaid: $countIsUnpaid)';
+      'BusinessServiceTile(${category.name}, $count, ${meaning.name})';
 }
 
 /// The whole grid: one tile per service this business actually offers, in
@@ -164,6 +183,7 @@ List<BusinessServiceTile> businessServiceOverviewTiles({
   required Iterable<String> barrelStatuses,
   required Iterable<String> freightStatuses,
   required Iterable<String> transportStatuses,
+  Iterable<String> transportOpportunityStatuses = const <String>[],
 }) {
   final enabled = businessActivityCategories(
     services: services,
@@ -183,12 +203,21 @@ List<BusinessServiceTile> businessServiceOverviewTiles({
             ServiceCategory.freight => businessServiceOpenCount(
               freightStatuses,
             ),
-            ServiceCategory.transport => businessServiceOpenCount(
-              transportStatuses,
+            // Transport is the one service where the business is bidding for
+            // work as well as doing it, so "still open" alone would miss half
+            // the day: a request nobody has quoted is the most urgent thing on
+            // the screen and lives in a different collection entirely.
+            ServiceCategory.transport => businessTransportNeedsYouCount(
+              opportunityStatuses: transportOpportunityStatuses,
+              jobStatuses: transportStatuses,
             ),
             ServiceCategory.sales || ServiceCategory.all => 0,
           },
-          countIsUnpaid: category == ServiceCategory.parking,
+          meaning: switch (category) {
+            ServiceCategory.parking => BusinessServiceCountMeaning.unpaid,
+            ServiceCategory.transport => BusinessServiceCountMeaning.needsYou,
+            _ => BusinessServiceCountMeaning.open,
+          },
         ),
   ];
 }

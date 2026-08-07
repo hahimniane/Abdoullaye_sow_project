@@ -20,6 +20,7 @@ import '../services/business_service_overview.dart';
 import '../utils/business_parking_localization.dart';
 import '../utils/business_permissions.dart';
 import 'business_assistant_screen.dart';
+import 'business_transport_screen.dart';
 import 'park_car_screen.dart';
 
 export '../services/business_service_overview.dart' show ServiceCategory;
@@ -111,6 +112,12 @@ class _HomeMenuState extends State<HomeMenu> {
   /// the one snapshot.
   final List<String> _freightStatuses = [];
   final List<TransportRequest> _transportRequests = [];
+
+  /// The statuses of the `transportOpportunities` this business was invited to
+  /// price. A won job lives in `transportRequests`; a request nobody has quoted
+  /// yet lives ONLY here, which is why the transport tile could not have meant
+  /// anything operational before this subscription existed.
+  final List<String> _transportOpportunityStatuses = [];
   bool _isLoading = true;
   ServiceCategory _selectedCategory = ServiceCategory.all;
 
@@ -142,10 +149,12 @@ class _HomeMenuState extends State<HomeMenu> {
   StreamSubscription<QuerySnapshot>? _barrelShipmentsSubscription;
   StreamSubscription<QuerySnapshot>? _freightShipmentsSubscription;
   StreamSubscription<QuerySnapshot>? _transportRequestsSubscription;
+  StreamSubscription<QuerySnapshot>? _transportOpportunitiesSubscription;
   bool _parkedLoaded = false;
   bool _barrelsLoaded = false;
   bool _freightLoaded = false;
   bool _transportLoaded = false;
+  bool _transportOpportunitiesLoaded = false;
 
   @override
   void initState() {
@@ -287,8 +296,32 @@ class _HomeMenuState extends State<HomeMenu> {
               _rebuildActivityRecords();
             },
           );
+      // The requests this business may BID on. A separate collection, and the
+      // only one that knows about work nobody has priced yet - the transport
+      // tile counted delivered-or-not on won jobs alone before this, which told
+      // a carrier nothing about the deadline running down on an open request.
+      _transportOpportunitiesSubscription =
+          scope(
+            FirebaseFirestore.instance.collection('transportOpportunities'),
+            'createdAt',
+          ).snapshots().listen(
+            (snapshot) {
+              _transportOpportunityStatuses
+                ..clear()
+                ..addAll(
+                  snapshot.docs.map((doc) => '${doc.data()['status'] ?? ''}'),
+                );
+              _transportOpportunitiesLoaded = true;
+              _rebuildActivityRecords();
+            },
+            onError: (_) {
+              _transportOpportunitiesLoaded = true;
+              _rebuildActivityRecords();
+            },
+          );
     } else {
       _transportLoaded = true;
+      _transportOpportunitiesLoaded = true;
     }
     _rebuildActivityRecords();
   }
@@ -346,7 +379,8 @@ class _HomeMenuState extends State<HomeMenu> {
           !(_parkedLoaded &&
               _barrelsLoaded &&
               _freightLoaded &&
-              _transportLoaded);
+              _transportLoaded &&
+              _transportOpportunitiesLoaded);
     });
   }
 
@@ -428,6 +462,7 @@ class _HomeMenuState extends State<HomeMenu> {
       barrelStatuses: _barrelShipments.map((shipment) => shipment.status),
       freightStatuses: _freightStatuses,
       transportStatuses: _transportRequests.map((request) => request.status),
+      transportOpportunityStatuses: _transportOpportunityStatuses,
     );
   }
 
@@ -454,6 +489,7 @@ class _HomeMenuState extends State<HomeMenu> {
     _barrelShipmentsSubscription?.cancel();
     _freightShipmentsSubscription?.cancel();
     _transportRequestsSubscription?.cancel();
+    _transportOpportunitiesSubscription?.cancel();
     super.dispose();
   }
 
@@ -647,6 +683,19 @@ class _ServicesSection extends StatelessWidget {
     final canRecordParkedCar = auth.hasBusinessPermission(
       BusinessPermission.parking,
     );
+    // Same two gates as the Car Transport tile itself: the business offers
+    // transport and this person holds the transport permission. Everything
+    // behind the button - `submitTransportQuote`, `withdrawTransportQuote`,
+    // `updateTransportFulfillmentStatus` - is gated on that same permission
+    // server-side, so an ungated button would only ever be refused.
+    final transportBusinessId = auth.businessId ?? '';
+    final canWorkTransport =
+        business_services.hasBusinessService(
+          services,
+          business_services.BusinessServiceKey.carTransport,
+        ) &&
+        auth.hasBusinessPermission(BusinessPermission.transport) &&
+        transportBusinessId.isNotEmpty;
     return Container(
       padding: EdgeInsets.all(width * 0.06),
       decoration: BoxDecoration(
@@ -698,6 +747,30 @@ class _ServicesSection extends StatelessWidget {
                   Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (_) => const ParkCarScreen(),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+          // The other daily action, for a carrier rather than a lot: bid on
+          // what came in, move what was won. Before this the Car Transport tile
+          // opened a read-only feed and the console was the only place a
+          // business could actually quote.
+          if (canWorkTransport) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                key: const Key('open-transport-jobs'),
+                icon: const Icon(Icons.local_shipping),
+                label: Text(l10n.businessTransportTitle),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => BusinessTransportScreen(
+                        businessId: transportBusinessId,
+                      ),
                     ),
                   );
                 },
@@ -843,9 +916,15 @@ class _ServiceOverviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final tint = _categoryColor(tile.category);
     final name = _categoryLabel(tile.category, l10n);
-    final caption = tile.countIsUnpaid
-        ? l10n.businessServiceOverviewUnpaid
-        : l10n.businessServiceOverviewOpen;
+    // The same digit means three different things across the grid, and this
+    // caption is the only thing that says which: money owed, records open, or
+    // work waiting on this business.
+    final caption = switch (tile.meaning) {
+      BusinessServiceCountMeaning.unpaid => l10n.businessServiceOverviewUnpaid,
+      BusinessServiceCountMeaning.open => l10n.businessServiceOverviewOpen,
+      BusinessServiceCountMeaning.needsYou =>
+        l10n.businessServiceOverviewNeedsYou,
+    };
     // Until the feeds have all reported, a "0" would be a claim the screen
     // cannot make yet.
     final countText = isLoading ? '—' : '${tile.count}';

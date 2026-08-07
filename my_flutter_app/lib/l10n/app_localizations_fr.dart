@@ -6484,4 +6484,241 @@ class AppLocalizationsFr extends AppLocalizations {
   String parkedCarRecordedWithCode(Object trackingCode) {
     return 'Voiture stationnée enregistrée. Numéro de suivi : $trackingCode';
   }
+
+  @override
+  String get businessServiceOverviewNeedsYou => 'à traiter';
+
+  @override
+  String get businessTransportTitle => 'Devis et missions de transport';
+
+  @override
+  String get businessTransportSubtitle =>
+      'Chiffrez les demandes reçues, puis faites avancer les missions gagnées.';
+
+  @override
+  String get businessTransportOpenToBid => 'À chiffrer';
+
+  @override
+  String get businessTransportQuoted => 'Vos devis';
+
+  @override
+  String get businessTransportWonJobs => 'Missions gagnées';
+
+  @override
+  String get businessTransportNoOpportunities =>
+      'Aucune demande de transport n’attend un devis pour le moment.';
+
+  @override
+  String get businessTransportNoQuotes =>
+      'Vous n’avez aucun devis en cours. Chiffrez une demande ouverte.';
+
+  @override
+  String get businessTransportNoJobs =>
+      'Aucun client n’a encore choisi votre devis.';
+
+  @override
+  String get businessTransportQuoteDeadline => 'Date limite du devis';
+
+  @override
+  String get businessTransportWindowClosed =>
+      'La période de devis est terminée.';
+
+  @override
+  String get businessTransportRoute => 'Trajet';
+
+  @override
+  String get businessTransportVehicleOperable => 'Roule et démarre';
+
+  @override
+  String get businessTransportVehicleNotOperable => 'Nécessite une assistance';
+
+  @override
+  String get businessTransportPreferredPickup => 'Enlèvement souhaité';
+
+  @override
+  String get businessTransportFlexibleDates => 'Flexible';
+
+  @override
+  String get businessTransportSendQuote => 'Envoyer le devis';
+
+  @override
+  String get businessTransportSendingQuote => 'Envoi du devis…';
+
+  @override
+  String get businessTransportReviseQuote => 'Réviser le devis';
+
+  @override
+  String get businessTransportRevisingQuote => 'Enregistrement de la révision…';
+
+  @override
+  String get businessTransportReviseNotice =>
+      'Vous avez déjà un devis sur cette demande. Un nouvel envoi le remplace — une entreprise n’a qu’un seul devis par demande.';
+
+  @override
+  String get businessTransportCurrentQuote => 'Votre devis actuel';
+
+  @override
+  String businessTransportRevisionNumber(Object revision) {
+    return 'Révision $revision';
+  }
+
+  @override
+  String get businessTransportWithdrawQuote => 'Retirer le devis';
+
+  @override
+  String get businessTransportWithdrawingQuote => 'Retrait en cours…';
+
+  @override
+  String get businessTransportWithdrawTitle => 'Retirer ce devis ?';
+
+  @override
+  String get businessTransportWithdrawMessage =>
+      'Le client ne pourra plus le choisir. La demande redevient ouverte : vous pourrez chiffrer à nouveau.';
+
+  @override
+  String get businessTransportQuoteWithdrawn =>
+      'Devis retiré. La demande est de nouveau ouverte aux devis.';
+
+  @override
+  String get businessTransportWithdrawFailed =>
+      'Le devis n’a pas pu être retiré. Réessayez.';
+
+  @override
+  String get businessTransportQuoteSent => 'Devis envoyé au client.';
+
+  @override
+  String businessTransportQuoteRevised(Object revision) {
+    return 'Devis révisé. Le client voit maintenant la révision $revision.';
+  }
+
+  @override
+  String get businessTransportQuoteFailed =>
+      'Le devis n’a pas pu être envoyé. Réessayez.';
+
+  @override
+  String get businessTransportAmountLabel => 'Votre prix de transport (USD)';
+
+  @override
+  String get businessTransportAmountHint => 'Par exemple, 1250.00';
+
+  @override
+  String get businessTransportAmountHelp =>
+      'Le transport seul. Laawol ajoute vos frais d’enlèvement par-dessus.';
+
+  @override
+  String get businessTransportPickupLeg => 'Frais d’enlèvement';
+
+  @override
+  String get businessTransportPickupPending =>
+      'Calculés selon votre plan d’enlèvement au moment de l’envoi du devis.';
+
+  @override
+  String get businessTransportPickupNotCharged =>
+      'Aucun frais d’enlèvement séparé — incluez la collecte dans votre prix.';
+
+  @override
+  String get businessTransportCustomerTotal => 'Le client paie';
+
+  @override
+  String get businessTransportCustomerTotalPending =>
+      'Votre prix plus les frais d’enlèvement, une fois calculés.';
+
+  @override
+  String get businessTransportTermsLabel =>
+      'Conditions et prestations incluses (facultatif)';
+
+  @override
+  String get businessTransportTermsHint =>
+      'Ce qui est inclus, les délais estimés et les conditions.';
+
+  @override
+  String get businessTransportQuoteExpired => 'Expiré';
+
+  @override
+  String get transportQuoteAmountRequired =>
+      'Saisissez votre prix de transport.';
+
+  @override
+  String get transportQuoteAmountInvalid =>
+      'Saisissez le prix sous forme de nombre, par exemple 1250.00.';
+
+  @override
+  String get transportQuoteAmountFractional =>
+      'Les prix sont en cents entiers — deux décimales au maximum.';
+
+  @override
+  String get transportQuoteAmountNotPositive =>
+      'Un devis doit être supérieur à zéro.';
+
+  @override
+  String get transportQuoteAmountAboveCap =>
+      'Un devis ne peut pas dépasser 1 000 000 USD.';
+
+  @override
+  String get transportQuoteCurrencyNotSupported =>
+      'Les devis de transport doivent être en dollars américains.';
+
+  @override
+  String get transportQuoteMethodNotSupported =>
+      'Choisissez un transport ouvert ou fermé.';
+
+  @override
+  String get transportQuoteDatesIncomplete =>
+      'Indiquez les deux estimations ou aucune.';
+
+  @override
+  String get transportQuotePickupNotInFuture =>
+      'La date d’enlèvement estimée doit être dans le futur.';
+
+  @override
+  String get transportQuoteDeliveryBeforePickup =>
+      'La livraison ne peut pas précéder l’enlèvement.';
+
+  @override
+  String get transportQuoteTermsTooLong =>
+      'Les conditions doivent contenir 1000 caractères ou moins.';
+
+  @override
+  String get transportStatusScheduled => 'Planifié';
+
+  @override
+  String get transportJobMoveTitle => 'Faire avancer cette mission';
+
+  @override
+  String transportJobStatusUnknown(Object status) {
+    return 'Cette mission est au statut $status, qui ne vient pas du transport — aucune action de transport ne s’applique ici.';
+  }
+
+  @override
+  String get transportJobNothingLeft =>
+      'Cette mission est terminée. Il n’y a plus rien à faire avancer.';
+
+  @override
+  String get transportJobStatusUpdated => 'Transport mis à jour.';
+
+  @override
+  String transportJobStatusAlready(Object status) {
+    return 'Cette mission était déjà au statut $status.';
+  }
+
+  @override
+  String get transportJobStatusFailed =>
+      'Le statut du transport n’a pas pu être mis à jour. Réessayez.';
+
+  @override
+  String get transportJobContainerRequired =>
+      'Ajoutez le numéro de conteneur avant de mettre ce transport en transit.';
+
+  @override
+  String transportJobTransitionNotAllowed(Object from, Object to) {
+    return 'Un transport ne peut pas passer de $from à $to.';
+  }
+
+  @override
+  String transportJobContainerOnFile(Object number) {
+    return 'Conteneur $number';
+  }
+
+  @override
+  String get transportJobAcceptedQuote => 'Devis accepté';
 }

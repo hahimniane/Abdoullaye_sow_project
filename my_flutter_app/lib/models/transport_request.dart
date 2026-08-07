@@ -33,6 +33,7 @@ class TransportRequest {
     this.vehicleOperable = true,
     this.requestedTransportMethod = 'open',
     this.flexibleDates = true,
+    this.containerNumber = '',
   });
 
   final String id;
@@ -73,6 +74,11 @@ class TransportRequest {
   final String requestedTransportMethod;
   final bool flexibleDates;
 
+  /// The container, booking or bill-of-lading number the car travels under.
+  /// `updateTransportFulfillmentStatus` refuses `in_transit` without one, so
+  /// the business needs to know whether the job already carries it.
+  final String containerNumber;
+
   bool get usesQuoteMarketplace => flowVersion >= 2;
   bool get hasSelectedQuote =>
       selectedQuoteId.isNotEmpty && selectedBusinessId.isNotEmpty;
@@ -97,6 +103,13 @@ class TransportRequest {
     final selectedAmountCents =
         (data['selectedAmountCents'] as num?)?.toInt() ?? 0;
     final legacyPrice = (data['price'] as num?)?.toDouble();
+    // The server reads the live status as
+    // `fulfillmentStatus || status` - JS truthiness, so an EMPTY
+    // fulfillmentStatus falls through to status. `??` does not: it keeps the
+    // empty string, and a job whose fulfillmentStatus was written as "" then
+    // read as statusless here while the server still read it as `pending`.
+    final fulfillmentStatus = (data['fulfillmentStatus'] ?? '') as String;
+    final recordStatus = (data['status'] ?? '') as String;
     return TransportRequest(
       id: id,
       trackingCode: trackingCode is String && trackingCode.trim().isNotEmpty
@@ -120,8 +133,9 @@ class TransportRequest {
       transportDate:
           (data['transportDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
       price: legacyPrice ?? selectedAmountCents / 100,
-      status:
-          (data['fulfillmentStatus'] ?? data['status'] ?? 'pending') as String,
+      status: fulfillmentStatus.isNotEmpty
+          ? fulfillmentStatus
+          : (recordStatus.isNotEmpty ? recordStatus : 'pending'),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       businessName: (data['businessName'] ?? '') as String,
       businessId: (data['businessId'] ?? '') as String,
@@ -131,7 +145,7 @@ class TransportRequest {
       notes: (data['notes'] ?? '') as String,
       quoteStatus: (data['quoteStatus'] ?? '') as String,
       flowVersion: flowVersion,
-      fulfillmentStatus: (data['fulfillmentStatus'] ?? '') as String,
+      fulfillmentStatus: fulfillmentStatus,
       selectedQuoteId: (data['selectedQuoteId'] ?? '') as String,
       selectedBusinessId:
           (data['selectedBusinessId'] ?? data['businessId'] ?? '') as String,
@@ -143,6 +157,7 @@ class TransportRequest {
       requestedTransportMethod:
           (data['requestedTransportMethod'] ?? 'open') as String,
       flexibleDates: data['flexibleDates'] != false,
+      containerNumber: (data['containerNumber'] ?? '') as String,
     );
   }
 
@@ -179,6 +194,7 @@ class TransportRequest {
         'vehicleOperable': vehicleOperable,
         'requestedTransportMethod': requestedTransportMethod,
         'flexibleDates': flexibleDates,
+        if (containerNumber.isNotEmpty) 'containerNumber': containerNumber,
       },
     };
   }
@@ -215,6 +231,7 @@ class TransportRequest {
     bool? vehicleOperable,
     String? requestedTransportMethod,
     bool? flexibleDates,
+    String? containerNumber,
   }) {
     return TransportRequest(
       id: id ?? this.id,
@@ -250,6 +267,7 @@ class TransportRequest {
       requestedTransportMethod:
           requestedTransportMethod ?? this.requestedTransportMethod,
       flexibleDates: flexibleDates ?? this.flexibleDates,
+      containerNumber: containerNumber ?? this.containerNumber,
     );
   }
 }

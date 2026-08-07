@@ -2662,5 +2662,101 @@
     "placeholders": {
       "trackingCode": {}
     }
-  }
+  },
+  "businessServiceOverviewNeedsYou": "need you",
+  "businessTransportTitle": "Transport bids & jobs",
+  "businessTransportSubtitle": "Quote the requests you were invited to, then move the jobs you won.",
+  "businessTransportOpenToBid": "Open to bid",
+  "businessTransportQuoted": "Your quotes",
+  "businessTransportWonJobs": "Won jobs",
+  "businessTransportNoOpportunities": "No transport request is open for a bid right now.",
+  "businessTransportNoQuotes": "You have no live quotes. Bid on an open request to get one.",
+  "businessTransportNoJobs": "No customer has chosen your quote yet.",
+  "businessTransportQuoteDeadline": "Quote deadline",
+  "businessTransportWindowClosed": "The quote window has closed.",
+  "businessTransportRoute": "Route",
+  "businessTransportVehicleOperable": "Runs and drives",
+  "businessTransportVehicleNotOperable": "Needs assistance",
+  "businessTransportPreferredPickup": "Preferred pickup",
+  "businessTransportFlexibleDates": "Flexible",
+  "businessTransportSendQuote": "Send quote",
+  "businessTransportSendingQuote": "Sending quote…",
+  "businessTransportReviseQuote": "Revise quote",
+  "businessTransportRevisingQuote": "Saving revision…",
+  "businessTransportReviseNotice": "You already have a quote on this request. Sending again replaces it — one business has one quote per request.",
+  "businessTransportCurrentQuote": "Your current quote",
+  "businessTransportRevisionNumber": "Revision {revision}",
+  "@businessTransportRevisionNumber": {
+    "placeholders": {
+      "revision": {}
+    }
+  },
+  "businessTransportWithdrawQuote": "Withdraw quote",
+  "businessTransportWithdrawingQuote": "Withdrawing…",
+  "businessTransportWithdrawTitle": "Withdraw this quote?",
+  "businessTransportWithdrawMessage": "The customer will no longer be able to choose it. The request goes back to open, so you can bid again.",
+  "businessTransportQuoteWithdrawn": "Quote withdrawn. The request is open for a new bid.",
+  "businessTransportWithdrawFailed": "The quote could not be withdrawn. Try again.",
+  "businessTransportQuoteSent": "Quote sent to the customer.",
+  "businessTransportQuoteRevised": "Quote revised. The customer now sees revision {revision}.",
+  "@businessTransportQuoteRevised": {
+    "placeholders": {
+      "revision": {}
+    }
+  },
+  "businessTransportQuoteFailed": "The quote could not be sent. Try again.",
+  "businessTransportAmountLabel": "Your transport price (USD)",
+  "businessTransportAmountHint": "For example, 1250.00",
+  "businessTransportAmountHelp": "The transport leg only. Laawol adds your pickup fee on top.",
+  "businessTransportPickupLeg": "Pickup leg",
+  "businessTransportPickupPending": "Priced from your pickup plan when this quote is sent.",
+  "businessTransportPickupNotCharged": "No separate pickup fee — include collection in your price.",
+  "businessTransportCustomerTotal": "Customer pays",
+  "businessTransportCustomerTotalPending": "Your price plus the pickup fee, once it is priced.",
+  "businessTransportTermsLabel": "Terms and inclusions (optional)",
+  "businessTransportTermsHint": "What is included, timing assumptions, and any conditions.",
+  "businessTransportQuoteExpired": "Expired",
+  "transportQuoteAmountRequired": "Enter your transport price.",
+  "transportQuoteAmountInvalid": "Enter the price as a number, for example 1250.00.",
+  "transportQuoteAmountFractional": "Prices are in whole cents — two decimal places at most.",
+  "transportQuoteAmountNotPositive": "A quote has to be more than zero.",
+  "transportQuoteAmountAboveCap": "A quote cannot be more than 1,000,000 USD.",
+  "transportQuoteCurrencyNotSupported": "Transport quotes must be in US dollars.",
+  "transportQuoteMethodNotSupported": "Choose open or enclosed transport.",
+  "transportQuoteDatesIncomplete": "Give both estimates or neither.",
+  "transportQuotePickupNotInFuture": "The estimated pickup date has to be in the future.",
+  "transportQuoteDeliveryBeforePickup": "Delivery cannot be before pickup.",
+  "transportQuoteTermsTooLong": "Terms must be 1000 characters or fewer.",
+  "transportStatusScheduled": "Scheduled",
+  "transportJobMoveTitle": "Move this job",
+  "transportJobStatusUnknown": "This job is on {status}, which the transport workflow did not set — no transport action applies here.",
+  "@transportJobStatusUnknown": {
+    "placeholders": {
+      "status": {}
+    }
+  },
+  "transportJobNothingLeft": "This job is finished. There is nothing left to move.",
+  "transportJobStatusUpdated": "Transport updated.",
+  "transportJobStatusAlready": "This job was already {status}.",
+  "@transportJobStatusAlready": {
+    "placeholders": {
+      "status": {}
+    }
+  },
+  "transportJobStatusFailed": "The transport status could not be updated. Try again.",
+  "transportJobContainerRequired": "Add the container number before marking this transport in transit.",
+  "transportJobTransitionNotAllowed": "A transport cannot move from {from} to {to}.",
+  "@transportJobTransitionNotAllowed": {
+    "placeholders": {
+      "from": {},
+      "to": {}
+    }
+  },
+  "transportJobContainerOnFile": "Container {number}",
+  "@transportJobContainerOnFile": {
+    "placeholders": {
+      "number": {}
+    }
+  },
+  "transportJobAcceptedQuote": "Accepted quote"
 }

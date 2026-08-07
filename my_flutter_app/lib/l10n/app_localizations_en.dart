@@ -6370,4 +6370,237 @@ class AppLocalizationsEn extends AppLocalizations {
   String parkedCarRecordedWithCode(Object trackingCode) {
     return 'Parked car recorded. Tracking number: $trackingCode';
   }
+
+  @override
+  String get businessServiceOverviewNeedsYou => 'need you';
+
+  @override
+  String get businessTransportTitle => 'Transport bids & jobs';
+
+  @override
+  String get businessTransportSubtitle =>
+      'Quote the requests you were invited to, then move the jobs you won.';
+
+  @override
+  String get businessTransportOpenToBid => 'Open to bid';
+
+  @override
+  String get businessTransportQuoted => 'Your quotes';
+
+  @override
+  String get businessTransportWonJobs => 'Won jobs';
+
+  @override
+  String get businessTransportNoOpportunities =>
+      'No transport request is open for a bid right now.';
+
+  @override
+  String get businessTransportNoQuotes =>
+      'You have no live quotes. Bid on an open request to get one.';
+
+  @override
+  String get businessTransportNoJobs =>
+      'No customer has chosen your quote yet.';
+
+  @override
+  String get businessTransportQuoteDeadline => 'Quote deadline';
+
+  @override
+  String get businessTransportWindowClosed => 'The quote window has closed.';
+
+  @override
+  String get businessTransportRoute => 'Route';
+
+  @override
+  String get businessTransportVehicleOperable => 'Runs and drives';
+
+  @override
+  String get businessTransportVehicleNotOperable => 'Needs assistance';
+
+  @override
+  String get businessTransportPreferredPickup => 'Preferred pickup';
+
+  @override
+  String get businessTransportFlexibleDates => 'Flexible';
+
+  @override
+  String get businessTransportSendQuote => 'Send quote';
+
+  @override
+  String get businessTransportSendingQuote => 'Sending quote…';
+
+  @override
+  String get businessTransportReviseQuote => 'Revise quote';
+
+  @override
+  String get businessTransportRevisingQuote => 'Saving revision…';
+
+  @override
+  String get businessTransportReviseNotice =>
+      'You already have a quote on this request. Sending again replaces it — one business has one quote per request.';
+
+  @override
+  String get businessTransportCurrentQuote => 'Your current quote';
+
+  @override
+  String businessTransportRevisionNumber(Object revision) {
+    return 'Revision $revision';
+  }
+
+  @override
+  String get businessTransportWithdrawQuote => 'Withdraw quote';
+
+  @override
+  String get businessTransportWithdrawingQuote => 'Withdrawing…';
+
+  @override
+  String get businessTransportWithdrawTitle => 'Withdraw this quote?';
+
+  @override
+  String get businessTransportWithdrawMessage =>
+      'The customer will no longer be able to choose it. The request goes back to open, so you can bid again.';
+
+  @override
+  String get businessTransportQuoteWithdrawn =>
+      'Quote withdrawn. The request is open for a new bid.';
+
+  @override
+  String get businessTransportWithdrawFailed =>
+      'The quote could not be withdrawn. Try again.';
+
+  @override
+  String get businessTransportQuoteSent => 'Quote sent to the customer.';
+
+  @override
+  String businessTransportQuoteRevised(Object revision) {
+    return 'Quote revised. The customer now sees revision $revision.';
+  }
+
+  @override
+  String get businessTransportQuoteFailed =>
+      'The quote could not be sent. Try again.';
+
+  @override
+  String get businessTransportAmountLabel => 'Your transport price (USD)';
+
+  @override
+  String get businessTransportAmountHint => 'For example, 1250.00';
+
+  @override
+  String get businessTransportAmountHelp =>
+      'The transport leg only. Laawol adds your pickup fee on top.';
+
+  @override
+  String get businessTransportPickupLeg => 'Pickup leg';
+
+  @override
+  String get businessTransportPickupPending =>
+      'Priced from your pickup plan when this quote is sent.';
+
+  @override
+  String get businessTransportPickupNotCharged =>
+      'No separate pickup fee — include collection in your price.';
+
+  @override
+  String get businessTransportCustomerTotal => 'Customer pays';
+
+  @override
+  String get businessTransportCustomerTotalPending =>
+      'Your price plus the pickup fee, once it is priced.';
+
+  @override
+  String get businessTransportTermsLabel => 'Terms and inclusions (optional)';
+
+  @override
+  String get businessTransportTermsHint =>
+      'What is included, timing assumptions, and any conditions.';
+
+  @override
+  String get businessTransportQuoteExpired => 'Expired';
+
+  @override
+  String get transportQuoteAmountRequired => 'Enter your transport price.';
+
+  @override
+  String get transportQuoteAmountInvalid =>
+      'Enter the price as a number, for example 1250.00.';
+
+  @override
+  String get transportQuoteAmountFractional =>
+      'Prices are in whole cents — two decimal places at most.';
+
+  @override
+  String get transportQuoteAmountNotPositive =>
+      'A quote has to be more than zero.';
+
+  @override
+  String get transportQuoteAmountAboveCap =>
+      'A quote cannot be more than 1,000,000 USD.';
+
+  @override
+  String get transportQuoteCurrencyNotSupported =>
+      'Transport quotes must be in US dollars.';
+
+  @override
+  String get transportQuoteMethodNotSupported =>
+      'Choose open or enclosed transport.';
+
+  @override
+  String get transportQuoteDatesIncomplete => 'Give both estimates or neither.';
+
+  @override
+  String get transportQuotePickupNotInFuture =>
+      'The estimated pickup date has to be in the future.';
+
+  @override
+  String get transportQuoteDeliveryBeforePickup =>
+      'Delivery cannot be before pickup.';
+
+  @override
+  String get transportQuoteTermsTooLong =>
+      'Terms must be 1000 characters or fewer.';
+
+  @override
+  String get transportStatusScheduled => 'Scheduled';
+
+  @override
+  String get transportJobMoveTitle => 'Move this job';
+
+  @override
+  String transportJobStatusUnknown(Object status) {
+    return 'This job is on $status, which the transport workflow did not set — no transport action applies here.';
+  }
+
+  @override
+  String get transportJobNothingLeft =>
+      'This job is finished. There is nothing left to move.';
+
+  @override
+  String get transportJobStatusUpdated => 'Transport updated.';
+
+  @override
+  String transportJobStatusAlready(Object status) {
+    return 'This job was already $status.';
+  }
+
+  @override
+  String get transportJobStatusFailed =>
+      'The transport status could not be updated. Try again.';
+
+  @override
+  String get transportJobContainerRequired =>
+      'Add the container number before marking this transport in transit.';
+
+  @override
+  String transportJobTransitionNotAllowed(Object from, Object to) {
+    return 'A transport cannot move from $from to $to.';
+  }
+
+  @override
+  String transportJobContainerOnFile(Object number) {
+    return 'Container $number';
+  }
+
+  @override
+  String get transportJobAcceptedQuote => 'Accepted quote';
 }
