@@ -469,3 +469,61 @@ describe("business verification review helpers", () => {
     );
   });
 });
+
+describe("keeping the Stripe display name in step", () => {
+  const {businessStripeNameSync} = require("../business_profile_validation");
+  const ACCT = "acct_123";
+
+  it("syncs when the business is renamed", () => {
+    const decision = businessStripeNameSync({
+      before: {name: "Old Name", stripeAccountId: ACCT},
+      after: {name: "Business 1", stripeAccountId: ACCT},
+    });
+    assert.equal(decision.sync, true);
+    assert.equal(decision.name, "Business 1");
+    assert.equal(decision.stripeAccountId, ACCT);
+    assert.equal(decision.reason, "name_changed");
+  });
+
+  it("syncs the first time an account is connected", () => {
+    // The account arrives after the name was set, so nothing "changed" -
+    // without this the dashboard shows the individual's name forever.
+    const decision = businessStripeNameSync({
+      before: {name: "Business 1", stripeAccountId: ""},
+      after: {name: "Business 1", stripeAccountId: ACCT},
+    });
+    assert.equal(decision.sync, true);
+    assert.equal(decision.reason, "account_connected");
+  });
+
+  it("stays quiet when nothing relevant changed", () => {
+    // Every field a business edits writes the document; Stripe rate-limits
+    // account updates, so an unchanged name must not spend that budget.
+    const decision = businessStripeNameSync({
+      before: {name: "Business 1", stripeAccountId: ACCT, city: "Bronx"},
+      after: {name: "Business 1", stripeAccountId: ACCT, city: "Queens"},
+    });
+    assert.equal(decision.sync, false);
+    assert.equal(decision.reason, "unchanged");
+  });
+
+  it("never blanks the Stripe name", () => {
+    // An empty business_profile.name makes Stripe fall back to the
+    // individual - the exact confusion this exists to prevent.
+    const decision = businessStripeNameSync({
+      before: {name: "Business 1", stripeAccountId: ACCT},
+      after: {name: "   ", stripeAccountId: ACCT},
+    });
+    assert.equal(decision.sync, false);
+    assert.equal(decision.reason, "no_name");
+  });
+
+  it("does nothing without a connected account, or on delete", () => {
+    assert.equal(businessStripeNameSync({
+      before: null, after: {name: "Business 1"},
+    }).reason, "no_stripe_account");
+    assert.equal(businessStripeNameSync({
+      before: {name: "Business 1", stripeAccountId: ACCT}, after: null,
+    }).reason, "deleted");
+  });
+});

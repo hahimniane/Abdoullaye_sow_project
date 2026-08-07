@@ -61,6 +61,7 @@ const {
   parseContainersFromIncluded,
 } = require("./shipment_tracking");
 const {
+  businessStripeNameSync,
   coerceReviewWebsite,
 } = require("./business_profile_validation");
 const {
@@ -13803,7 +13804,50 @@ exports.syncBusinessStripeCapabilities = onDocumentWritten(
         logger.warn("Could not request card_payments capability", {
           businessId: event.params.businessId,
           stripeAccountId,
-          message: error instanceof Error ? error.message : String(error),
+          // `message` collides with the logger's own field and is dropped.
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+);
+
+// Keeps the Stripe connected account's display name in step with the
+// business name in Laawol.
+//
+// Without this the two drift silently and nobody notices until someone is
+// reconciling money: a connected account with no business_profile.name falls
+// back to the individual's name, so the Stripe dashboard shows a person
+// where the operator expects a business, and a row of parking payments looks
+// like it landed in the wrong account.
+//
+// Deliberately fail-soft. The name in Laawol is the source of truth and the
+// Stripe copy is cosmetic, so a Stripe outage must never block a business
+// from saving its own profile.
+exports.syncBusinessStripeProfileName = onDocumentWritten(
+    {document: "businesses/{businessId}", secrets: [stripeSecretKey]},
+    async (event) => {
+      const decision = businessStripeNameSync({
+        before: event.data?.before?.exists ?
+          event.data.before.data() : null,
+        after: event.data?.after?.exists ? event.data.after.data() : null,
+      });
+      if (!decision.sync) return;
+      try {
+        const body = new URLSearchParams();
+        body.set("business_profile[name]", decision.name);
+        await stripeFormRequest(
+            `/accounts/${encodeURIComponent(decision.stripeAccountId)}`,
+            body,
+        );
+        logger.info("Synced the business name to Stripe", {
+          businessId: event.params.businessId,
+          stripeAccountId: decision.stripeAccountId,
+        });
+      } catch (error) {
+        logger.warn("Could not sync the business name to Stripe", {
+          businessId: event.params.businessId,
+          stripeAccountId: decision.stripeAccountId,
+          detail: error instanceof Error ? error.message : String(error),
         });
       }
     },
