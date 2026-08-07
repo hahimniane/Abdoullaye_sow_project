@@ -7,7 +7,6 @@ import { httpsCallable } from "firebase/functions";
 import {
   BarChart3,
   Banknote,
-  Bot,
   Building2,
   Car,
   ClipboardList,
@@ -26,7 +25,7 @@ import {
   UserCog,
 } from "lucide-react";
 
-import {AssistantPanel} from "@/components/business/assistant-panel";
+import {AssistantWidget} from "@/components/business/assistant-widget";
 import {GrowthPanel} from "@/components/business/growth-panel";
 import {
   BarrelsPanel,
@@ -655,14 +654,12 @@ export function BusinessConsole({
               error={insights.error}
             />
           )}
-          {activeTab === "assistant" && (
-            <AssistantPanel
-              businessId={businessId}
-              previewMode={previewMode}
-            />
-          )}
         </section>
       </main>
+
+      {/* Mounted once for the whole console so the assistant floats over every
+          tab and keeps its conversation while the business navigates. */}
+      <AssistantWidget businessId={businessId} previewMode={previewMode} />
     </div>
   );
 }
@@ -1496,7 +1493,6 @@ function tabIcon(tab: BusinessTab) {
     reviews: <Star {...props} />,
     cases: <MessageCircle {...props} />,
     growth: <Sparkles {...props} />,
-    assistant: <Bot {...props} />,
   };
   return icons[tab];
 }

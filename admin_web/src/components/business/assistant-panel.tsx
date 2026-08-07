@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { httpsCallable } from "firebase/functions";
-import { Bot } from "lucide-react";
 
 import { functions } from "@/lib/firebase";
 
+// Chat body for the business assistant. It is rendered inside the floating
+// `AssistantWidget`, which supplies the surrounding panel chrome and header.
+//
 // Client for the deployed `businessAssistantChat` callable. The response's
 // `transcript` is the canonical conversation state: to continue the chat we
 // append a user turn and call the function again. Proposed actions are never
@@ -219,13 +221,7 @@ export function AssistantPanel({
   }
 
   return (
-    <section className="panel assistant-panel">
-      <div className="panel-header">
-        <div>
-          <Bot size={18} />
-          <h2>Assistant</h2>
-        </div>
-      </div>
+    <div className="assistant-panel">
       {previewMode && (
         <div className="info-band">
           The assistant is unavailable in preview mode.
@@ -299,7 +295,7 @@ export function AssistantPanel({
           </button>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 

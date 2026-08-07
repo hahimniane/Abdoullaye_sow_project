@@ -3496,6 +3496,12 @@ Object.assign(TEXT_TRANSLATIONS, {
     "L’assistant n’a pas pu répondre. Réessayez.",
   "The assistant is unavailable in preview mode.":
     "L’assistant est indisponible en mode aperçu.",
+  // Floating assistant bubble (assistant-widget.tsx). Its header title is the
+  // bare word "Assistant", which is identical in French, so it stays out of
+  // this dictionary; the subtitle reuses "Chat help for daily operations"
+  // above rather than adding a second wording for the same idea.
+  "Open the assistant": "Ouvrir l’assistant",
+  "Close the assistant": "Fermer l’assistant",
   // Parked cars: printable paper, and the one filter that answers both
   // "where is this car" and "have we been paid". "Paid", "Not paid" and
   // "Payment" are already above — repeating them here would be a duplicate
