@@ -224,6 +224,52 @@ those, and booking refundable money as earned would overstate revenue.
 Every item ships on BOTH web and mobile, and is tester-verified on the real
 interface before it is called done (docs/ENGINEERING_GUARDRAILS.md).
 
+### Scope: business service actions missing from mobile (2026-08-07)
+
+Parking is the only service a business can actually *operate* from the phone.
+Barrels, freight and transport permissions gate read-only feeds and the
+activity filter chips; there is nothing to do for them in the app. Everything
+below already exists as a deployed callable and a working web control, so this
+is client work, not new backend.
+
+**Transport — 3 actions, and the strongest case.**
+`submitTransportQuote`, `withdrawTransportQuote`,
+`updateTransportFulfillmentStatus`. Both halves are inherently mobile: bidding
+is time-boxed (a 7-day quote window where the first credible bid usually wins,
+and a hauler away from a desk cannot bid at all today), and advancing a
+transport is done by the person standing next to the car, not by someone at a
+desk afterwards. This is also the natural companion to transport payments —
+accepting a bid and collecting money is a phone workflow end to end.
+
+Two things the mobile build must get right that the web currently does not.
+`updateTransportFulfillmentStatus` enforces a transition table and refuses
+`in_transit` without a validated container number; the web business console
+bypasses both by writing `status` straight to Firestore
+(`operations-panels.tsx`), so mobile should call the callable and be the
+correct implementation rather than copying the shortcut. And an admin path can
+push transport into statuses the transport state machine never produces, so
+the mobile UI must render an unexpected status rather than assume the
+vocabulary.
+
+**Freight — 1 action.** `confirmFreightShipmentWeight`. Also inherently
+physical: someone at a scale. It moves money — the settlement it triggers
+either raises a balance due or refunds the card — so it needs a confirmation
+step and the server's own error surfaced, not a generic failure sentence.
+
+**Car sales — 4 actions.** `businessFinalizeCarPurchase`,
+`decidePaidHoldExtension`, `markPaidHoldNoShow`, `markPaidHoldSold`. Real, but
+desk work rather than yard work.
+
+**Barrels — nothing worth porting.** Almost every barrel business action in
+the console is shared-barrel pool machinery (`createBusinessBarrelPool`,
+`sealBarrelPool`, `decideBarrelPoolJoin`, `adjustBarrelPoolCapacity`,
+`cancelBarrelPool`, `rollBarrelPoolToBusinessHeld`,
+`markBarrelPoolBalanceCollected`) and shared barrels are retired. The one
+barrel action that matters day to day is the tracking milestone, which mobile
+already has.
+
+Order: transport, then freight, then car sales. Barrels need no work.
+
 ### Parking payment links are durable (2026-08-06)
 
 A Stripe Checkout Session expires **24 hours** after it is minted; that
