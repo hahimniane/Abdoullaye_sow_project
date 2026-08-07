@@ -10119,10 +10119,13 @@ function businessParkingEntryMessage(errors) {
 // a live Stripe session, or to a plain page saying it is already paid or
 // cancelled.
 function parkingPaymentLinkUrl(token) {
+  // Defaults to the short path on our own domain (an .htaccess rewrite in
+  // public_site sends /p to this function, preserving the query). The raw
+  // function URL is 116 characters - enough to push a parking text into a
+  // second SMS segment and far too long to read off a printed invoice; this
+  // is 61. The env var stays as an override for other environments.
   const configured = String(process.env.PARKING_LINK_BASE_URL || "").trim();
-  const base = configured ||
-    "https://us-central1-car-selling-flutter-app.cloudfunctions.net/" +
-      "parkingPaymentLink";
+  const base = configured || "https://laawoldigital.com/p";
   return `${base}?t=${encodeURIComponent(token)}`;
 }
 
@@ -10661,9 +10664,9 @@ exports.getParkingDocumentUrl = onCall(
           updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
       }
+      // Same reasoning as the payment link: /d is the short rewrite.
       const base = String(process.env.PARKING_DOCUMENT_BASE_URL || "").trim() ||
-        "https://us-central1-car-selling-flutter-app.cloudfunctions.net/" +
-          "parkingDocument";
+        "https://laawoldigital.com/d";
       return {
         success: true,
         documentType: parkingDocumentType(entry),
