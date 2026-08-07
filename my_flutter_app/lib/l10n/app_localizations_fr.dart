@@ -6366,6 +6366,59 @@ class AppLocalizationsFr extends AppLocalizations {
       'Le document n’a pas pu être ouvert.';
 
   @override
+  String get resendPaymentLink => 'Renvoyer le lien de paiement';
+
+  @override
+  String get parkingPaymentLinkEmailed =>
+      'Lien de paiement envoyé au client par e-mail.';
+
+  @override
+  String get parkingPaymentLinkTexted =>
+      'Lien de paiement envoyé au client par SMS.';
+
+  @override
+  String get parkingPaymentLinkEmailedAndTexted =>
+      'Lien de paiement envoyé au client par e-mail et par SMS.';
+
+  @override
+  String get parkingPaymentLinkNotDelivered =>
+      'Le lien n’a pas pu être envoyé par e-mail ni par SMS. Copiez-le et envoyez-le vous-même au client.';
+
+  @override
+  String get parkingPaymentLinkCouldNotBeResent =>
+      'Le lien de paiement n’a pas pu être renvoyé.';
+
+  @override
+  String get parkingPaymentLinkReissued =>
+      'Le montant a changé : un nouveau lien de paiement a été émis.';
+
+  @override
+  String get parkingPaidCannotBeEdited =>
+      'Ce stationnement a été payé et ne peut plus être modifié.';
+
+  @override
+  String get parkingNothingChanged => 'Aucune modification n’a été faite.';
+
+  @override
+  String get parkingRecordCouldNotBeUpdated =>
+      'Le stationnement n’a pas pu être mis à jour.';
+
+  @override
+  String get parkedBetween => 'Stationné entre';
+
+  @override
+  String get dateFrom => 'Du';
+
+  @override
+  String get dateTo => 'Au';
+
+  @override
+  String get anyDate => 'Toute date';
+
+  @override
+  String get clearDates => 'Effacer les dates';
+
+  @override
   String parkedCarRecordedWithCode(Object trackingCode) {
     return 'Voiture stationnée enregistrée. Numéro de suivi : $trackingCode';
   }

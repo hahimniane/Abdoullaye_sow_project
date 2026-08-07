@@ -60,6 +60,12 @@ class _HomeMenuState extends State<HomeMenu> {
   /// while its control is off screen.
   BusinessParkingPaymentFilter _paymentFilter =
       BusinessParkingPaymentFilter.all;
+
+  /// "Which cars were parked that week." Either bound alone is a question in
+  /// its own right ("everything from the 10th onwards"), so both are optional
+  /// and independent. Reset with the payment filter when the category changes.
+  DateTime? _parkedFrom;
+  DateTime? _parkedTo;
   StreamSubscription<QuerySnapshot>? _parkedCarsSubscription;
   StreamSubscription<QuerySnapshot>? _barrelShipmentsSubscription;
   StreamSubscription<QuerySnapshot>? _freightShipmentsSubscription;
@@ -277,19 +283,30 @@ class _HomeMenuState extends State<HomeMenu> {
         : serviceRecords
               .where((record) => record.category == _selectedCategory)
               .toList();
-    if (_paymentFilter == BusinessParkingPaymentFilter.all) {
+    if (_paymentFilter == BusinessParkingPaymentFilter.all &&
+        _parkedFrom == null &&
+        _parkedTo == null) {
       return categoryRecords;
     }
-    // Only a parked car has a payment state to narrow on. Nothing else is
-    // touched, so a barrel cannot be hidden by a parking filter.
+    // Only a parked car has a payment state or a stay to narrow on. Nothing
+    // else is touched, so a barrel cannot be hidden by a parking filter.
     return categoryRecords.where((record) {
       final car = record.payload;
       if (record.category != ServiceCategory.parking || car is! ParkedCar) {
         return true;
       }
-      return businessParkingMatchesPaymentFilter(
+      if (!businessParkingMatchesPaymentFilter(
         car.paymentFields,
         _paymentFilter,
+      )) {
+        return false;
+      }
+      // Overlap, not containment: a car that arrived before the window and
+      // leaves after it was parked during that week and must still appear.
+      return businessParkingWithinRange(
+        car.paymentFields,
+        _parkedFrom,
+        _parkedTo,
       );
     }).toList();
   }
@@ -374,15 +391,25 @@ class _HomeMenuState extends State<HomeMenu> {
                   onCategoryChanged: (category) {
                     setState(() {
                       _selectedCategory = category;
-                      // Leaving parking takes the parking filter with it -
+                      // Leaving parking takes the parking filters with it -
                       // an invisible narrowing reads as missing records.
                       _paymentFilter = BusinessParkingPaymentFilter.all;
+                      _parkedFrom = null;
+                      _parkedTo = null;
                     });
                   },
                   paymentFilter: _paymentFilter,
                   onPaymentFilterChanged: (filter) {
                     setState(() {
                       _paymentFilter = filter;
+                    });
+                  },
+                  parkedFrom: _parkedFrom,
+                  parkedTo: _parkedTo,
+                  onParkedRangeChanged: (from, to) {
+                    setState(() {
+                      _parkedFrom = from;
+                      _parkedTo = to;
                     });
                   },
                 ),
@@ -564,6 +591,9 @@ class _ActivitySection extends StatelessWidget {
     required this.onCategoryChanged,
     required this.paymentFilter,
     required this.onPaymentFilterChanged,
+    required this.parkedFrom,
+    required this.parkedTo,
+    required this.onParkedRangeChanged,
   });
 
   final AppLocalizations l10n;
@@ -573,6 +603,40 @@ class _ActivitySection extends StatelessWidget {
   final ValueChanged<ServiceCategory> onCategoryChanged;
   final BusinessParkingPaymentFilter paymentFilter;
   final ValueChanged<BusinessParkingPaymentFilter> onPaymentFilterChanged;
+  final DateTime? parkedFrom;
+  final DateTime? parkedTo;
+  final void Function(DateTime? from, DateTime? to) onParkedRangeChanged;
+
+  /// Picks one end of the window.
+  ///
+  /// A bound that would invert the window drags the other with it: "from the
+  /// 20th to the 10th" is not a range anyone meant to ask for, and the pure
+  /// predicate would answer it with an empty list rather than an explanation.
+  Future<void> _pickParkedBound(
+    BuildContext context, {
+    required bool isFrom,
+  }) async {
+    final current = isFrom ? parkedFrom : parkedTo;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 730)),
+    );
+    if (picked == null) return;
+    final day = DateTime(picked.year, picked.month, picked.day);
+    if (isFrom) {
+      final to = parkedTo;
+      onParkedRangeChanged(day, to != null && to.isBefore(day) ? day : to);
+    } else {
+      final from = parkedFrom;
+      onParkedRangeChanged(from != null && day.isBefore(from) ? day : from, day);
+    }
+  }
+
+  String _boundLabel(String prefix, DateTime? value) => value == null
+      ? '$prefix: ${l10n.anyDate}'
+      : '$prefix: ${DateFormat.yMMMd().format(value)}';
 
   String _paymentFilterLabel(
     BusinessParkingPaymentFilter filter,
@@ -732,6 +796,46 @@ class _ActivitySection extends StatelessWidget {
                 );
               }).toList(),
             ),
+          ),
+          // "Which cars were parked that week." A stay that OVERLAPS the
+          // window counts, so a car that arrived before it and leaves after it
+          // is still listed - the long stays are exactly the ones a lot is
+          // looking for. Either bound alone is a valid question.
+          const SizedBox(height: 12),
+          Wrap(
+            key: const Key('parking-date-range-filter'),
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                l10n.parkedBetween,
+                style: const TextStyle(
+                  color: AppColors.ink,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              OutlinedButton.icon(
+                key: const Key('parking-range-from'),
+                onPressed: () => _pickParkedBound(context, isFrom: true),
+                icon: const Icon(Icons.event, size: 16),
+                label: Text(_boundLabel(l10n.dateFrom, parkedFrom)),
+              ),
+              OutlinedButton.icon(
+                key: const Key('parking-range-to'),
+                onPressed: () => _pickParkedBound(context, isFrom: false),
+                icon: const Icon(Icons.event_available, size: 16),
+                label: Text(_boundLabel(l10n.dateTo, parkedTo)),
+              ),
+              if (parkedFrom != null || parkedTo != null)
+                TextButton.icon(
+                  key: const Key('parking-range-clear'),
+                  onPressed: () => onParkedRangeChanged(null, null),
+                  icon: const Icon(Icons.close, size: 16),
+                  label: Text(l10n.clearDates),
+                ),
+            ],
           ),
         ],
         const SizedBox(height: 16),

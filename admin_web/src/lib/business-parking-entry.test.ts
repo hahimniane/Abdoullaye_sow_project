@@ -626,6 +626,13 @@ test("the date window matches cars present during it, not only those inside it",
     ),
     true,
   );
+  // No end recorded means the car never left, so it is still in the lot for
+  // every window after it arrived - not parked for a single day.
+  assert.equal(businessParkingWithinRange({ parkingDate: "2026-08-01" }, "2026-08-10", "2026-08-15"), true);
+  assert.equal(businessParkingWithinRange({ parkingDate: "2026-09-01" }, "2026-08-10", "2026-08-15"), false);
+  // And an end with no start is bounded only by its end.
+  assert.equal(businessParkingWithinRange({ parkingEndDate: "2026-08-20" }, "2026-08-10", "2026-08-15"), true);
+  assert.equal(businessParkingWithinRange({ parkingEndDate: "2026-07-01" }, "2026-08-10", "2026-08-15"), false);
   // A record with no dates cannot honestly be placed in a week.
   assert.equal(businessParkingWithinRange({}, "2026-08-10", "2026-08-15"), false);
   assert.match(panelSource, /businessParkingWithinRange\(row, rangeFrom, rangeTo\)/);

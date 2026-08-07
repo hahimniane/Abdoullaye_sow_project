@@ -11250,6 +11250,96 @@ abstract class AppLocalizations {
   /// **'The document could not be opened.'**
   String get parkingDocumentCouldNotBeOpened;
 
+  /// No description provided for @resendPaymentLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend payment link'**
+  String get resendPaymentLink;
+
+  /// No description provided for @parkingPaymentLinkEmailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment link emailed to the customer.'**
+  String get parkingPaymentLinkEmailed;
+
+  /// No description provided for @parkingPaymentLinkTexted.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment link texted to the customer.'**
+  String get parkingPaymentLinkTexted;
+
+  /// No description provided for @parkingPaymentLinkEmailedAndTexted.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment link emailed and texted to the customer.'**
+  String get parkingPaymentLinkEmailedAndTexted;
+
+  /// No description provided for @parkingPaymentLinkNotDelivered.
+  ///
+  /// In en, this message translates to:
+  /// **'The link could not be emailed or texted. Copy it and send it to the customer yourself.'**
+  String get parkingPaymentLinkNotDelivered;
+
+  /// No description provided for @parkingPaymentLinkCouldNotBeResent.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment link could not be resent.'**
+  String get parkingPaymentLinkCouldNotBeResent;
+
+  /// No description provided for @parkingPaymentLinkReissued.
+  ///
+  /// In en, this message translates to:
+  /// **'The amount changed, so a new payment link was issued.'**
+  String get parkingPaymentLinkReissued;
+
+  /// No description provided for @parkingPaidCannotBeEdited.
+  ///
+  /// In en, this message translates to:
+  /// **'This parking has been paid for and can no longer be edited.'**
+  String get parkingPaidCannotBeEdited;
+
+  /// No description provided for @parkingNothingChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing was changed.'**
+  String get parkingNothingChanged;
+
+  /// No description provided for @parkingRecordCouldNotBeUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'The parking record could not be updated.'**
+  String get parkingRecordCouldNotBeUpdated;
+
+  /// No description provided for @parkedBetween.
+  ///
+  /// In en, this message translates to:
+  /// **'Parked between'**
+  String get parkedBetween;
+
+  /// No description provided for @dateFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'From'**
+  String get dateFrom;
+
+  /// No description provided for @dateTo.
+  ///
+  /// In en, this message translates to:
+  /// **'To'**
+  String get dateTo;
+
+  /// No description provided for @anyDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Any date'**
+  String get anyDate;
+
+  /// No description provided for @clearDates.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear dates'**
+  String get clearDates;
+
   /// No description provided for @parkedCarRecordedWithCode.
   ///
   /// In en, this message translates to:

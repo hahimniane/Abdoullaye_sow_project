@@ -51,6 +51,24 @@ String businessParkingReceivedViaLabel(AppLocalizations l10n, String value) =>
       _ => l10n.receivedViaOther,
     };
 
+/// What happened to a payment link the server just sent - or tried to.
+///
+/// The callables report `emailed` and `texted` separately because they fail
+/// separately: a record with a phone and no email reaches the customer by SMS
+/// alone, and one with neither reaches nobody at all. The staff member is told
+/// which, because the last case leaves them holding a link the customer has
+/// never seen.
+String businessParkingLinkDeliveryMessage(
+  AppLocalizations l10n, {
+  required bool emailed,
+  required bool texted,
+}) {
+  if (emailed && texted) return l10n.parkingPaymentLinkEmailedAndTexted;
+  if (emailed) return l10n.parkingPaymentLinkEmailed;
+  if (texted) return l10n.parkingPaymentLinkTexted;
+  return l10n.parkingPaymentLinkNotDelivered;
+}
+
 /// Who is collecting this entry's money, and whether they have.
 ///
 /// Returns "" for a customer's own booking - that record's payment is the

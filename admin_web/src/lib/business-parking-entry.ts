@@ -481,11 +481,12 @@ export function businessParkingWithinRange(
   // the honest answer to "what was parked that week".
   if (!start && !end) return false;
 
-  // A missing end means still parked: treat it as open-ended.
-  const effectiveStart = start || end;
-  const effectiveEnd = end || start;
-  if (toDay && effectiveStart > toDay) return false;
-  if (fromDay && effectiveEnd < fromDay) return false;
+  // A missing bound is genuinely unbounded on that side. No end recorded
+  // means the car has not left, so it is still in the lot today and must
+  // show up in a window after its arrival - collapsing it onto its start day
+  // would hide exactly the car a lot is most likely to be looking for.
+  if (toDay && start && start > toDay) return false;
+  if (fromDay && end && end < fromDay) return false;
   return true;
 }
 

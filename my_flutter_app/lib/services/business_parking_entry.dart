@@ -1,5 +1,7 @@
 import 'package:cloud_functions/cloud_functions.dart';
 
+import 'business_assistant_service.dart' show deepCastCallableValue;
+
 /// Business-entered parking, app side (docs/PLAN-2026-08-backlog.md item 5).
 ///
 /// A deliberate mirror of the server's pure module,
@@ -159,6 +161,21 @@ List<BusinessParkingEntryError> validateBusinessParkingEntry(
   return errors;
 }
 
+/// A calendar day plus a midday clock, the only date shape the parking
+/// callables accept.
+///
+/// The clock is the point: the server parses with `new Date(...)` and charges
+/// for the window it gets, so a bare `yyyy-mm-dd` read in a timezone west of
+/// UTC would roll the parking back a day and price it wrong. Midday cannot be
+/// moved off its own date by any real offset.
+String businessParkingMiddayIso(DateTime? value) {
+  if (value == null) return '';
+  final day = _dayOnly(value);
+  final month = day.month.toString().padLeft(2, '0');
+  final date = day.day.toString().padLeft(2, '0');
+  return '${day.year}-$month-${date}T12:00:00';
+}
+
 /// The exact payload `createBusinessParkingEntry` expects.
 ///
 /// Dates go as a date plus a midday clock so a timezone west of UTC cannot
@@ -167,14 +184,6 @@ List<BusinessParkingEntryError> validateBusinessParkingEntry(
 Map<String, dynamic> businessParkingEntryPayload(
   BusinessParkingEntryDraft draft,
 ) {
-  String middayIso(DateTime? value) {
-    if (value == null) return '';
-    final day = _dayOnly(value);
-    final month = day.month.toString().padLeft(2, '0');
-    final date = day.day.toString().padLeft(2, '0');
-    return '${day.year}-$month-${date}T12:00:00';
-  }
-
   return <String, dynamic>{
     'businessId': _trimmed(draft.businessId, 180),
     'customerName': _trimmed(draft.customerName),
@@ -184,8 +193,8 @@ Map<String, dynamic> businessParkingEntryPayload(
     'carModel': _trimmed(draft.carModel, 80),
     'carYear': _trimmed(draft.carYear, 8),
     'vinNumber': _trimmed(draft.vinNumber, 17).toUpperCase(),
-    'startDate': middayIso(draft.startDate),
-    'endDate': middayIso(draft.endDate),
+    'startDate': businessParkingMiddayIso(draft.startDate),
+    'endDate': businessParkingMiddayIso(draft.endDate),
     'paymentMethod': draft.paymentMethod.wireValue,
   };
 }
@@ -382,6 +391,19 @@ bool canCancelBusinessParkingPaymentLink(Map<String, dynamic> row) {
   return paymentStatus != 'succeeded' && paymentStatus != 'paid';
 }
 
+/// Whether "Resend payment link" applies.
+///
+/// Exactly the cancel gate, and deliberately expressed as one: the server
+/// refuses a resend for the same three reasons it refuses a cancellation -
+/// the money is already in, the link was killed, or there is no link at all -
+/// so two gates that could drift apart would only ever offer a button the
+/// callable would reject. `resendBusinessParkingPaymentLink` additionally
+/// refuses a record with no email and no phone on file; that one is the
+/// server's to answer, and its `failed-precondition` message is shown as
+/// written.
+bool canResendBusinessParkingPaymentLink(Map<String, dynamic> row) =>
+    canCancelBusinessParkingPaymentLink(row);
+
 /// Which document a business-entered row is entitled to.
 ///
 /// Money in is a receipt - proof of something already settled. Money still
@@ -430,6 +452,207 @@ bool businessParkingMatchesPaymentFilter(
   return filter == BusinessParkingPaymentFilter.paid
       ? tone == BusinessParkingPaymentTone.paid
       : tone == BusinessParkingPaymentTone.awaiting;
+}
+
+/// Anything a parkedCars document might hold a date in, as a [DateTime].
+///
+/// Mirrors the console's `toDateOrNull`. A Firestore `Timestamp` is read by
+/// duck typing rather than by importing `cloud_firestore`, so everything above
+/// [BusinessParkingService] stays free of Firebase and the tests can drive it
+/// with a plain fake.
+DateTime? _toDateOrNull(Object? value) {
+  if (value == null) return null;
+  try {
+    final converted = (value as dynamic).toDate();
+    if (converted is DateTime) return converted;
+  } catch (_) {
+    // Not a Timestamp; fall through to the shapes below.
+  }
+  if (value is DateTime) return value;
+  try {
+    final seconds = (value as dynamic).seconds;
+    if (seconds is int) {
+      return DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true);
+    }
+  } catch (_) {
+    // Not a {seconds} shape either.
+  }
+  if (value is num) {
+    return DateTime.fromMillisecondsSinceEpoch(value.round(), isUtc: true);
+  }
+  if (value is String) {
+    final text = value.trim();
+    if (text.isEmpty) return null;
+    // A bare `yyyy-mm-dd` is a calendar day, not a local midnight: reading it
+    // as local would move it a day west of UTC, which is the whole reason the
+    // payload sends midday clocks.
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(text)) {
+      return DateTime.tryParse('${text}T00:00:00Z');
+    }
+    return DateTime.tryParse(text);
+  }
+  return null;
+}
+
+/// The stored instant as a `yyyy-mm-dd` day, in UTC.
+///
+/// UTC, not local, because that is what the console's
+/// `toISOString().slice(0, 10)` produces - a phone and a browser filtering the
+/// same lot must not disagree about which day a car arrived.
+String _utcDayString(DateTime? value) {
+  if (value == null) return '';
+  final day = value.toUtc();
+  final month = day.month.toString().padLeft(2, '0');
+  final date = day.day.toString().padLeft(2, '0');
+  return '${day.year}-$month-$date';
+}
+
+/// A picked bound as a `yyyy-mm-dd` day.
+///
+/// Read literally rather than converted, because a date picker hands back the
+/// calendar day the staff member tapped - the console's equivalent is the raw
+/// string from an `<input type="date">`, which has no timezone at all.
+String _boundDayString(DateTime? value) {
+  if (value == null) return '';
+  final month = value.month.toString().padLeft(2, '0');
+  final date = value.day.toString().padLeft(2, '0');
+  return '${value.year}-$month-$date';
+}
+
+/// Whether a parking OVERLAPS a date window.
+///
+/// "Cars parked between the 10th and the 15th" means every car sitting in the
+/// lot during that window - including one that arrived on the 5th and leaves
+/// on the 20th. Matching only parkings fully contained in the range would hide
+/// exactly the long stays a lot most needs to see.
+///
+/// An open bound is "no bound on that side", so a business can ask for
+/// "everything from the 10th onwards" by filling one field. A record with no
+/// dates at all cannot be placed in time, so it matches nothing: excluding it
+/// is the honest answer to "what was parked that week".
+///
+/// A deliberate mirror of the console's `businessParkingWithinRange` in
+/// `admin_web/src/lib/business-parking-entry.ts`, down to the missing-end-date
+/// rule - a car still parked is treated as open-ended rather than as having
+/// left on its arrival day.
+bool businessParkingWithinRange(
+  Map<String, dynamic> row,
+  DateTime? from,
+  DateTime? to,
+) {
+  final fromDay = _boundDayString(from);
+  final toDay = _boundDayString(to);
+  if (fromDay.isEmpty && toDay.isEmpty) return true;
+
+  final start = _utcDayString(_toDateOrNull(row['parkingDate']));
+  final end = _utcDayString(_toDateOrNull(row['parkingEndDate']));
+  if (start.isEmpty && end.isEmpty) return false;
+
+  // A missing bound is genuinely unbounded on that side. No end recorded
+  // means the car has not left, so it is still in the lot for every window
+  // after it arrived - collapsing it onto its start day would hide exactly
+  // the car a lot is most likely to be looking for.
+  //
+  // yyyy-mm-dd sorts chronologically as text, which is why the whole
+  // comparison can stay in day strings and never touch a clock.
+  if (toDay.isNotEmpty && start.isNotEmpty && start.compareTo(toDay) > 0) {
+    return false;
+  }
+  if (fromDay.isNotEmpty && end.isNotEmpty && end.compareTo(fromDay) < 0) {
+    return false;
+  }
+  return true;
+}
+
+/// What `updateBusinessParkingEntry` answers with.
+///
+/// The amount is reported, never sent: the server recomputes it from the
+/// business's own parking rates, so a client that offered an amount field
+/// would be offering to contradict the price the customer is charged.
+class BusinessParkingUpdateResult {
+  const BusinessParkingUpdateResult({
+    required this.success,
+    required this.entryId,
+    required this.paymentMethod,
+    required this.amountDueCents,
+    required this.relinked,
+    required this.paymentLinkUrl,
+    required this.emailed,
+    required this.texted,
+  });
+
+  /// Reads the response defensively: a missing paymentLinkUrl on a reissue
+  /// must surface as "copy it yourself" in the UI, never as a null rendered
+  /// into a copy button.
+  factory BusinessParkingUpdateResult.fromCallable(Object? data) {
+    final decoded = deepCastCallableValue(data);
+    final row = decoded is Map ? decoded : const <Object?, Object?>{};
+    return BusinessParkingUpdateResult(
+      success: row['success'] != false,
+      entryId: _trimmed(row['entryId'], 180),
+      paymentMethod: _trimmed(row['paymentMethod'], 40),
+      amountDueCents: (num.tryParse(_trimmed(row['amountDueCents'], 20)) ?? 0)
+          .round()
+          .clamp(0, 1 << 40),
+      relinked: row['relinked'] == true,
+      paymentLinkUrl: _trimmed(
+        row['paymentLinkUrl'] ?? row['checkoutUrl'],
+        2048,
+      ),
+      emailed: row['emailed'] == true,
+      texted: row['texted'] == true,
+    );
+  }
+
+  final bool success;
+  final String entryId;
+  final String paymentMethod;
+  final int amountDueCents;
+
+  /// True when the customer's payment link was reissued at a new amount and
+  /// re-sent. The staff member has to be told: the URL they copied a minute
+  /// ago is now dead.
+  final bool relinked;
+  final String paymentLinkUrl;
+  final bool emailed;
+  final bool texted;
+
+  bool get isPaymentLink => paymentMethod == 'payment_link';
+
+  /// Whether the reissued link actually left the building. Neither channel
+  /// answering is not a success - the customer is holding a dead link and
+  /// nobody has sent them the new one.
+  bool get reachedCustomer => emailed || texted;
+}
+
+/// What `resendBusinessParkingPaymentLink` answers with.
+class BusinessParkingResendLinkResult {
+  const BusinessParkingResendLinkResult({
+    required this.success,
+    required this.emailed,
+    required this.texted,
+    required this.url,
+  });
+
+  factory BusinessParkingResendLinkResult.fromCallable(Object? data) {
+    final decoded = deepCastCallableValue(data);
+    final row = decoded is Map ? decoded : const <Object?, Object?>{};
+    return BusinessParkingResendLinkResult(
+      success: row['success'] != false,
+      emailed: row['emailed'] == true,
+      texted: row['texted'] == true,
+      url: _trimmed(row['url'], 2048),
+    );
+  }
+
+  final bool success;
+  final bool emailed;
+  final bool texted;
+  final String url;
+
+  /// Same rule as a reissue: a send that reached neither channel is something
+  /// the staff member has to hear about, not a green snackbar.
+  bool get reachedCustomer => emailed || texted;
 }
 
 /// The branded, print-optimised document the server serves for a parked car.
@@ -510,6 +733,46 @@ class BusinessParkingService {
         .httpsCallable('cancelBusinessParkingPaymentLink')
         .call<Object?>(<String, dynamic>{'entryId': entryId});
     return BusinessParkingCancelLinkResult.fromCallable(response.data);
+  }
+
+  /// Corrects a walk-up the lot already recorded.
+  ///
+  /// [changes] carries only the fields the server lets a business rewrite:
+  /// customerName, customerPhone, customerEmail, carMake, carModel, carYear,
+  /// vinNumber, startDate, endDate, paymentMethod - dates as
+  /// [businessParkingMiddayIso] strings. There is deliberately no amount: the
+  /// callable reprices the window from the business's own rates, and a client
+  /// that sent one would be proposing a charge the customer never agreed to.
+  ///
+  /// The callable refuses a paid record with `failed-precondition` ("This
+  /// parking has been paid for and can no longer be edited"), which the caller
+  /// surfaces rather than swallows.
+  Future<BusinessParkingUpdateResult> updateEntry({
+    required String entryId,
+    required Map<String, dynamic> changes,
+  }) async {
+    final response = await _functions
+        .httpsCallable('updateBusinessParkingEntry')
+        .call<Object?>(<String, dynamic>{
+          'entryId': entryId,
+          'changes': changes,
+        });
+    return BusinessParkingUpdateResult.fromCallable(response.data);
+  }
+
+  /// Sends the customer their existing payment link again.
+  ///
+  /// The record's own durable URL, not a fresh one - two live links for one
+  /// car is how a lot ends up chasing a payment that already happened. The
+  /// callable refuses with `failed-precondition` when the parking is paid, the
+  /// link was cancelled, or there is no email and no phone to send it to.
+  Future<BusinessParkingResendLinkResult> resendPaymentLink({
+    required String entryId,
+  }) async {
+    final response = await _functions
+        .httpsCallable('resendBusinessParkingPaymentLink')
+        .call<Object?>(<String, dynamic>{'entryId': entryId});
+    return BusinessParkingResendLinkResult.fromCallable(response.data);
   }
 
   /// Asks for the printable receipt or invoice for a record.

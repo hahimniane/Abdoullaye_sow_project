@@ -46,9 +46,22 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
   late TextEditingController _ownerNameController;
   late TextEditingController _costPerDayController;
   late TextEditingController _vinController;
+
+  /// Only ever shown for a walk-up the lot recorded: a customer's own booking
+  /// carries the platform's contact details, not the lot's to rewrite.
+  late TextEditingController _customerPhoneController;
+  late TextEditingController _customerEmailController;
   late final String _trackingCode;
   DateTime? _parkingEndDate;
   late DateTime _parkingStartDate;
+
+  /// What the record held when this screen opened, so a save can send only
+  /// what actually moved. The server treats an unchanged date as a reprice and
+  /// would reissue a payment link the customer is already holding.
+  late DateTime _savedStartDate;
+  DateTime? _savedEndDate;
+  late BusinessParkingPaymentMethod _paymentMethod;
+  bool _isSavingEntry = false;
   late String _statusDraft;
   late String _persistedStatus;
   double _totalCost = 0.0;
@@ -79,12 +92,25 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     _vinController = TextEditingController(text: widget.parkedCar.vinNumber);
     _trackingCode = widget.parkedCar.trackingCode;
     _paymentFields = Map<String, dynamic>.from(widget.parkedCar.paymentFields);
+    _customerPhoneController = TextEditingController(
+      text: (_paymentFields['customerPhone'] ?? '').toString(),
+    );
+    _customerEmailController = TextEditingController(
+      text: (_paymentFields['customerEmail'] ?? '').toString(),
+    );
+    _paymentMethod =
+        (_paymentFields['paymentMethod'] ?? '').toString().trim() ==
+            BusinessParkingPaymentMethod.paymentLink.wireValue
+        ? BusinessParkingPaymentMethod.paymentLink
+        : BusinessParkingPaymentMethod.direct;
     _businessParkingService =
         widget.businessParkingService ?? BusinessParkingService();
     _persistedStatus = widget.parkedCar.status;
     _statusDraft = _persistedStatus;
     _parkingStartDate = widget.parkedCar.parkingDate;
     _parkingEndDate = widget.parkedCar.parkingEndDate;
+    _savedStartDate = widget.parkedCar.parkingDate;
+    _savedEndDate = widget.parkedCar.parkingEndDate;
     _totalCost = widget.parkedCar.totalCost ?? 0.0;
     _selectedMake = widget.parkedCar.carMake.isNotEmpty
         ? widget.parkedCar.carMake
@@ -123,8 +149,19 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     _ownerNameController.dispose();
     _costPerDayController.dispose();
     _vinController.dispose();
+    _customerPhoneController.dispose();
+    _customerEmailController.dispose();
     super.dispose();
   }
+
+  /// A walk-up the lot entered itself, rather than a customer's own booking.
+  bool get _isBusinessEntry => isBusinessEnteredParking(_paymentFields);
+
+  /// Settled money. The server refuses every edit on such a record, so the
+  /// screen must not offer one.
+  bool get _isPaidEntry =>
+      businessParkingPaymentTone(_paymentFields) ==
+      BusinessParkingPaymentTone.paid;
 
   Future<void> _initializeCatalog() async {
     final catalog = CarCatalog.instance;
@@ -301,7 +338,195 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     );
   }
 
+  /// What this edit actually moved, in the callable's own field names.
+  ///
+  /// Only the difference goes to the server. An unchanged date resent as a
+  /// change reads as a reprice, and a reprice on the payment-link path kills
+  /// the URL the customer is holding and mints another - so sending the whole
+  /// form every time would reissue links nobody asked to reissue.
+  ///
+  /// There is no amount here, and there cannot be one: the server recomputes
+  /// it from the business's parking rates.
+  Map<String, dynamic> _businessParkingChanges(
+    BusinessParkingEntryDraft draft,
+  ) {
+    // The create payload already trims, lower-cases the email, upper-cases the
+    // VIN and stamps the midday clock on both dates, which is exactly the
+    // normalisation the comparison has to happen in.
+    final payload = businessParkingEntryPayload(draft);
+    final changes = <String, dynamic>{};
+    void moved(String field, Object? current) {
+      final next = payload[field];
+      if ((next ?? '').toString() != (current ?? '').toString()) {
+        changes[field] = next;
+      }
+    }
+
+    moved(
+      'customerName',
+      _paymentFields['customerName'] ?? _paymentFields['ownerName'],
+    );
+    moved('customerPhone', _paymentFields['customerPhone']);
+    moved(
+      'customerEmail',
+      (_paymentFields['customerEmail'] ?? '').toString().toLowerCase(),
+    );
+    moved('carMake', _paymentFields['carMake']);
+    moved('carModel', _paymentFields['carModel']);
+    moved('carYear', _paymentFields['carYear']);
+    moved(
+      'vinNumber',
+      (_paymentFields['vinNumber'] ?? '').toString().toUpperCase(),
+    );
+    moved('startDate', businessParkingMiddayIso(_savedStartDate));
+    moved('endDate', businessParkingMiddayIso(_savedEndDate));
+    moved('paymentMethod', _paymentFields['paymentMethod']);
+    return changes;
+  }
+
+  /// Saves a walk-up through `updateBusinessParkingEntry`.
+  ///
+  /// Deliberately not the Firestore write below. Dates move the price, and the
+  /// price on a payment-link entry is baked into the Stripe session the
+  /// customer is holding, so only the server can reprice the window, expire
+  /// the stale session and reissue the link. Switching payment method is the
+  /// same thing in reverse: one arrangement cancelled, another started.
+  Future<bool> _saveBusinessParkingEntry({bool showSuccess = true}) async {
+    final l10n = AppLocalizations.of(context)!;
+    if (!_formKey.currentState!.validate()) return false;
+    if (_selectedMake == null ||
+        _selectedModel == null ||
+        _selectedYear == null) {
+      showErrorSnackBar(context, l10n.carIdentityRequired);
+      return false;
+    }
+
+    final draft = BusinessParkingEntryDraft(
+      businessId: (_paymentFields['businessId'] ?? '').toString(),
+      customerName: _ownerNameController.text,
+      customerPhone: _customerPhoneController.text,
+      customerEmail: _customerEmailController.text,
+      carMake: _selectedMake ?? '',
+      carModel: _selectedModel ?? '',
+      carYear: _selectedYear ?? '',
+      vinNumber: _vinController.text,
+      startDate: _parkingStartDate,
+      endDate: _parkingEndDate,
+      paymentMethod: _paymentMethod,
+    );
+    // The same rules the create form and the server enforce, so a correction
+    // can never leave a record the create path would have refused.
+    final errors = validateBusinessParkingEntry(draft);
+    if (errors.isNotEmpty) {
+      showErrorSnackBar(context, businessParkingErrorSummary(l10n, errors));
+      return false;
+    }
+
+    final changes = _businessParkingChanges(draft);
+    if (changes.isEmpty) {
+      // The server answers an empty edit with a refusal; saying so here keeps
+      // "nothing was changed" from arriving as a red failure.
+      if (showSuccess) showSuccessSnackBar(context, l10n.parkingNothingChanged);
+      return true;
+    }
+
+    setState(() => _isSavingEntry = true);
+    try {
+      final result = await _businessParkingService.updateEntry(
+        entryId: widget.parkedCar.id,
+        changes: changes,
+      );
+      if (!mounted) return false;
+
+      final nextFields = <String, dynamic>{
+        ..._paymentFields,
+        'customerName': draft.customerName.trim(),
+        'ownerName': draft.customerName.trim(),
+        'customerPhone': draft.customerPhone.trim(),
+        'customerEmail': draft.customerEmail.trim().toLowerCase(),
+        'carMake': draft.carMake,
+        'carModel': draft.carModel,
+        'carYear': draft.carYear,
+        'vinNumber': draft.vinNumber.trim().toUpperCase(),
+        'parkingDate': _parkingStartDate,
+        'parkingEndDate': _parkingEndDate,
+        'paymentMethod': result.paymentMethod.isEmpty
+            ? _paymentMethod.wireValue
+            : result.paymentMethod,
+        'amountDueCents': result.amountDueCents,
+      };
+      if (changes.containsKey('paymentMethod')) {
+        nextFields['paymentStatus'] = result.isPaymentLink
+            ? 'awaiting_link_payment'
+            : 'awaiting_direct_payment';
+      }
+      if (result.relinked) {
+        // A reissued link is a live link again, whatever the record said
+        // before, and the URL in the card is now the stale one.
+        nextFields['paymentLinkCancelledAt'] = null;
+        nextFields['checkoutStatus'] = 'open';
+        if (result.paymentLinkUrl.isNotEmpty) {
+          nextFields['checkoutUrl'] = result.paymentLinkUrl;
+        }
+      }
+      if (!result.isPaymentLink) {
+        // Off the link path: the server deleted the URL and expired the
+        // session, so the card must stop offering either.
+        nextFields['checkoutUrl'] = '';
+        nextFields['paymentLinkCancelledAt'] = null;
+      }
+      setState(() {
+        _paymentFields = nextFields;
+        _savedStartDate = _parkingStartDate;
+        _savedEndDate = _parkingEndDate;
+      });
+
+      if (result.relinked) {
+        // Said whether or not the caller wanted a success message: the staff
+        // member is holding a URL that no longer takes money.
+        final delivery = businessParkingLinkDeliveryMessage(
+          l10n,
+          emailed: result.emailed,
+          texted: result.texted,
+        );
+        final message = '${l10n.parkingPaymentLinkReissued} $delivery';
+        if (result.reachedCustomer) {
+          showSuccessSnackBar(context, message);
+        } else {
+          showErrorSnackBar(context, message);
+        }
+      } else if (showSuccess) {
+        showSuccessSnackBar(context, l10n.recordUpdated);
+      }
+      return true;
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return false;
+      // The server's refusal says something this screen's copy cannot - "This
+      // parking has been paid for and can no longer be edited", or which field
+      // it would not accept - so it is shown as written.
+      final message = (error.message ?? '').trim();
+      showErrorSnackBar(
+        context,
+        message.isEmpty ? l10n.parkingRecordCouldNotBeUpdated : message,
+      );
+      return false;
+    } catch (_) {
+      if (!mounted) return false;
+      showErrorSnackBar(context, l10n.parkingRecordCouldNotBeUpdated);
+      return false;
+    } finally {
+      if (mounted) setState(() => _isSavingEntry = false);
+    }
+  }
+
   Future<bool> _persistChanges({bool showSuccess = true}) async {
+    // A walk-up the lot recorded is the callable's to change, never this
+    // screen's: the money, the availability check and the payment link all
+    // hang off the same edit.
+    if (_isBusinessEntry) {
+      return _saveBusinessParkingEntry(showSuccess: showSuccess);
+    }
+
     final l10n = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate()) {
       return false;
@@ -380,8 +605,11 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
   }
 
   Future<void> _updateRecord() async {
+    final wasBusinessEntry = _isBusinessEntry;
     final success = await _persistChanges();
-    if (success && mounted) {
+    // A walk-up stays on screen after a save: the edit may have reissued the
+    // payment link, and popping would take the new URL away with it.
+    if (success && mounted && !wasBusinessEntry) {
       Navigator.pop(context);
     }
   }
@@ -614,11 +842,20 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     final l10n = AppLocalizations.of(context)!;
     final authProvider = context.watch<AuthProvider>();
     final bool isAdmin = authProvider.isAdmin;
-    final bool canEdit = isAdmin && _persistedStatus != 'completed';
     // Marking money received is a parking-permission action, not an admin one:
     // the lot's own staff are the people who take the Zelle.
     final bool canRecordPayment =
         isAdmin || authProvider.hasBusinessPermission(BusinessPermission.parking);
+    final bool isBusinessEntry = _isBusinessEntry;
+    final bool isPaidEntry = _isPaidEntry;
+    // A walk-up is the lot's own record, taken at its own window, so its staff
+    // correct it under the same permission that records the payment - and the
+    // callable enforces that permission anyway. A PAID record is frozen: the
+    // charge was taken, the platform cut split and the payout sent, so the
+    // server refuses every edit and an editable field would be a lie.
+    final bool canEdit = isBusinessEntry
+        ? (canRecordPayment && !isPaidEntry)
+        : (isAdmin && _persistedStatus != 'completed');
 
     return Scaffold(
       body: Container(
@@ -722,46 +959,90 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                             ],
                           ),
                           const SizedBox(height: 16),
-                          _buildInfoCard(canEdit),
+                          // The record is frozen rather than silently
+                          // unsaveable: a form that accepts typing and then
+                          // refuses to save is how a lot loses an afternoon.
+                          if (isBusinessEntry && isPaidEntry) ...[
+                            Container(
+                              key: const ValueKey<String>(
+                                'parking-edit-locked',
+                              ),
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.85),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                l10n.parkingPaidCannotBeEdited,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey.shade800,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                          _buildInfoCard(canEdit, isBusinessEntry),
                           const SizedBox(height: 24),
-                          _buildBillingCard(l10n, canEdit),
-                          if (isBusinessEnteredParking(_paymentFields)) ...[
+                          _buildBillingCard(l10n, canEdit, isBusinessEntry),
+                          if (isBusinessEntry) ...[
                             const SizedBox(height: 24),
                             _buildBusinessPaymentCard(l10n, canRecordPayment),
                           ],
                           const SizedBox(height: 24),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  style: OutlinedButton.styleFrom(
-                                    minimumSize: const Size.fromHeight(52),
-                                    foregroundColor: AppColors.brandRed,
-                                    side: const BorderSide(
-                                      color: AppColors.brandRed,
-                                    ),
-                                  ),
-                                  onPressed: canEdit ? _updateRecord : null,
-                                  child: Text(l10n.updateRecord),
+                          if (isBusinessEntry)
+                            // One button, and only while the record can still
+                            // be changed. The printable document for a walk-up
+                            // is the server's - it is offered in the payment
+                            // card above, headed receipt or invoice to match
+                            // the money.
+                            SizedBox(
+                              width: double.infinity,
+                              child: AsyncActionButton.filled(
+                                key: const ValueKey<String>(
+                                  'parking-save-entry',
                                 ),
+                                onPressed: (canEdit && !_isSavingEntry)
+                                    ? _updateRecord
+                                    : null,
+                                icon: Icons.save_outlined,
+                                label: l10n.updateRecord,
                               ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    minimumSize: const Size.fromHeight(52),
-                                    backgroundColor: const Color(0xFF28A745),
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
+                            )
+                          else
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    style: OutlinedButton.styleFrom(
+                                      minimumSize: const Size.fromHeight(52),
+                                      foregroundColor: AppColors.brandRed,
+                                      side: const BorderSide(
+                                        color: AppColors.brandRed,
+                                      ),
                                     ),
+                                    onPressed: canEdit ? _updateRecord : null,
+                                    child: Text(l10n.updateRecord),
                                   ),
-                                  onPressed: _generateFinalReceipt,
-                                  child: Text(l10n.generateFinalReceipt),
                                 ),
-                              ),
-                            ],
-                          ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      minimumSize: const Size.fromHeight(52),
+                                      backgroundColor: const Color(0xFF28A745),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    onPressed: _generateFinalReceipt,
+                                    child: Text(l10n.generateFinalReceipt),
+                                  ),
+                                ),
+                              ],
+                            ),
                         ],
                       ),
                     ),
@@ -775,7 +1056,88 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     );
   }
 
-  Widget _buildInfoCard(bool canEdit) {
+  /// The day the car leaves. It lives beside the arrival date on a walk-up
+  /// (the window is what the server prices) and in the billing card on a
+  /// customer booking, where the cost per day sits next to it.
+  Widget _buildEndDateTile(AppLocalizations l10n, bool canEdit) {
+    return ListTile(
+      key: const ValueKey<String>('parking-end-date'),
+      contentPadding: EdgeInsets.zero,
+      title: Text(l10n.parkingEndDate),
+      subtitle: Text(
+        _parkingEndDate == null
+            ? 'Select a date'
+            : DateFormat.yMMMd().format(_parkingEndDate!),
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      trailing: Icon(
+        Icons.calendar_today,
+        color: canEdit ? AppColors.brandRed : Colors.grey,
+      ),
+      onTap: canEdit ? _selectEndDate : null,
+    );
+  }
+
+  /// The payment question, asked in the same plain words the intake form uses.
+  ///
+  /// Changing it is not a form edit but a money edit - one arrangement
+  /// cancelled and another started - which is why the callable performs it and
+  /// this only collects the answer.
+  Widget _buildPaymentMethodChoice(AppLocalizations l10n, bool canEdit) {
+    return Column(
+      key: const ValueKey<String>('parking-payment-method'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.howDoesThisParkingGetPaid,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: Colors.grey.shade800,
+          ),
+        ),
+        RadioGroup<BusinessParkingPaymentMethod>(
+          groupValue: _paymentMethod,
+          // The group's callback is not nullable, so a frozen record is held
+          // by the tiles' `enabled` and by this guard together.
+          onChanged: (value) {
+            if (value == null || !canEdit) return;
+            setState(() => _paymentMethod = value);
+          },
+          child: Column(
+            children: [
+              RadioListTile<BusinessParkingPaymentMethod>(
+                value: BusinessParkingPaymentMethod.direct,
+                contentPadding: EdgeInsets.zero,
+                enabled: canEdit,
+                title: Text(
+                  l10n.customerPaysUsDirectly,
+                  style: const TextStyle(fontSize: 15),
+                ),
+              ),
+              RadioListTile<BusinessParkingPaymentMethod>(
+                value: BusinessParkingPaymentMethod.paymentLink,
+                contentPadding: EdgeInsets.zero,
+                enabled: canEdit,
+                title: Text(
+                  l10n.sendTheCustomerAPaymentLink,
+                  style: const TextStyle(fontSize: 15),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Text(
+          _paymentMethod == BusinessParkingPaymentMethod.direct
+              ? l10n.directPaymentExplainer
+              : l10n.paymentLinkExplainer,
+          style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfoCard(bool canEdit, bool isBusinessEntry) {
     final l10n = AppLocalizations.of(context)!;
     final dropdownEnabled = canEdit && !_isCatalogLoading;
 
@@ -801,6 +1163,35 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                   : null;
             },
           ),
+          // A walk-up carries the customer's own contact details, and they are
+          // what a payment link travels on: an email corrected here is the
+          // difference between a link that arrives and one that does not.
+          if (isBusinessEntry) ...[
+            const SizedBox(height: 16),
+            TextFormField(
+              key: const ValueKey<String>('parking-customer-phone'),
+              controller: _customerPhoneController,
+              readOnly: !canEdit,
+              keyboardType: TextInputType.phone,
+              decoration: InputDecoration(labelText: l10n.customerPhone),
+              validator: (value) {
+                if (!canEdit) return null;
+                return (value ?? '').trim().isEmpty
+                    ? l10n.parkingErrorCustomerPhone
+                    : null;
+              },
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              key: const ValueKey<String>('parking-customer-email'),
+              controller: _customerEmailController,
+              readOnly: !canEdit,
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(
+                labelText: l10n.customerEmailOptional,
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           _buildDropdownField(
             label: l10n.carMake,
@@ -892,6 +1283,11 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
             ),
             onTap: canEdit ? _selectStartDate : null,
           ),
+          if (isBusinessEntry) ...[
+            _buildEndDateTile(l10n, canEdit),
+            const SizedBox(height: 8),
+            _buildPaymentMethodChoice(l10n, canEdit),
+          ],
         ],
       ),
     );
@@ -991,6 +1387,49 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     }
   }
 
+  /// Sends the customer their payment link again.
+  ///
+  /// The record's own durable URL, not a new one - the customer may already be
+  /// holding this link, and two live links for one car is how a lot ends up
+  /// chasing a payment that already happened. No confirmation: sending a link
+  /// again takes nothing away, unlike cancelling one.
+  ///
+  /// A send that reached neither the email nor the phone is reported as a
+  /// failure even though the callable calls it a success: the staff member has
+  /// to know the customer never got it.
+  Future<void> _resendPaymentLink() async {
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      final result = await _businessParkingService.resendPaymentLink(
+        entryId: widget.parkedCar.id,
+      );
+      if (!mounted) return;
+      final message = businessParkingLinkDeliveryMessage(
+        l10n,
+        emailed: result.emailed,
+        texted: result.texted,
+      );
+      if (result.reachedCustomer) {
+        showSuccessSnackBar(context, message);
+      } else {
+        showErrorSnackBar(context, message);
+      }
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      // "This parking has already been paid for", "This payment link was
+      // cancelled", "There is no email or phone number on file" - each says
+      // something this screen's copy cannot.
+      final message = (error.message ?? '').trim();
+      showErrorSnackBar(
+        context,
+        message.isEmpty ? l10n.parkingPaymentLinkCouldNotBeResent : message,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      showErrorSnackBar(context, l10n.parkingPaymentLinkCouldNotBeResent);
+    }
+  }
+
   /// Opens the branded receipt or invoice for this record.
   ///
   /// The server owns the document: it mints the durable token, decides
@@ -1064,6 +1503,11 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     final canCancelLink =
         canRecordPayment &&
         canCancelBusinessParkingPaymentLink(_paymentFields);
+    // Same gate, same reasons: a paid entry, a killed link or a record with no
+    // link has nothing to resend, and the server would refuse all three.
+    final canResendLink =
+        canRecordPayment &&
+        canResendBusinessParkingPaymentLink(_paymentFields);
     // Settled money prints as a receipt, money still owed as an invoice - the
     // owner asked for one button, not two, and for it to say which it is
     // before it is pressed.
@@ -1149,6 +1593,13 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                   icon: Icons.copy,
                   label: l10n.copyPaymentLink,
                 ),
+                if (canResendLink)
+                  AsyncActionButton.outlined(
+                    key: const ValueKey<String>('parking-resend-payment-link'),
+                    onPressed: _resendPaymentLink,
+                    icon: Icons.send_outlined,
+                    label: l10n.resendPaymentLink,
+                  ),
                 if (canCancelLink)
                   AsyncActionButton.outlined(
                     key: const ValueKey<String>('parking-cancel-payment-link'),
@@ -1198,7 +1649,11 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     );
   }
 
-  Widget _buildBillingCard(AppLocalizations l10n, bool canEdit) {
+  Widget _buildBillingCard(
+    AppLocalizations l10n,
+    bool canEdit,
+    bool isBusinessEntry,
+  ) {
     final statusOptions = parkedCarStatusOptions(_statusDraft);
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1209,36 +1664,29 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.parkingEndDate),
-            subtitle: Text(
-              _parkingEndDate == null
-                  ? 'Select a date'
-                  : DateFormat.yMMMd().format(_parkingEndDate!),
-              style: const TextStyle(fontWeight: FontWeight.w600),
+          // A walk-up shows neither of these. The amount is the server's: it
+          // reprices the window from the business's own parking rates on every
+          // edit, so a cost-per-day field here would offer to contradict what
+          // the customer is actually charged. What the entry recorded is shown
+          // in the payment card below, as "amount recorded".
+          if (!isBusinessEntry) ...[
+            _buildEndDateTile(l10n, canEdit),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _costPerDayController,
+              readOnly: !canEdit,
+              decoration: InputDecoration(labelText: l10n.costPerDayCurrency),
+              keyboardType: TextInputType.number,
+              onChanged: (_) => _calculateTotalCost(),
+              validator: (value) {
+                if (!canEdit) return null;
+                return value == null || value.isEmpty
+                    ? 'Please enter cost per day'
+                    : null;
+              },
             ),
-            trailing: Icon(
-              Icons.calendar_today,
-              color: canEdit ? AppColors.brandRed : Colors.grey,
-            ),
-            onTap: canEdit ? _selectEndDate : null,
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _costPerDayController,
-            readOnly: !canEdit,
-            decoration: InputDecoration(labelText: l10n.costPerDayCurrency),
-            keyboardType: TextInputType.number,
-            onChanged: (_) => _calculateTotalCost(),
-            validator: (value) {
-              if (!canEdit) return null;
-              return value == null || value.isEmpty
-                  ? 'Please enter cost per day'
-                  : null;
-            },
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
+          ],
           DropdownButtonFormField<String>(
             key: ValueKey<String>(_statusDraft),
             initialValue: _statusDraft,
@@ -1251,7 +1699,11 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                   ),
                 )
                 .toList(),
-            onChanged: canEdit
+            // Read-only on a walk-up: the status of such a record follows the
+            // money (`updateBusinessParkingEntry` sets it from the payment
+            // plan), and the callable takes no status field - a dropdown that
+            // saved nothing would be worse than one that cannot be moved.
+            onChanged: (canEdit && !isBusinessEntry)
                 ? (value) {
                     if (value != null) {
                       setState(() {
@@ -1261,16 +1713,18 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                   }
                 : null,
           ),
-          const SizedBox(height: 24),
-          Text(
-            l10n.totalDaysLabel(_totalDays > 0 ? _totalDays : '-'),
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            l10n.totalCostLabel('\$${_totalCost.toStringAsFixed(2)}'),
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
+          if (!isBusinessEntry) ...[
+            const SizedBox(height: 24),
+            Text(
+              l10n.totalDaysLabel(_totalDays > 0 ? _totalDays : '-'),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              l10n.totalCostLabel('\$${_totalCost.toStringAsFixed(2)}'),
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+          ],
         ],
       ),
     );

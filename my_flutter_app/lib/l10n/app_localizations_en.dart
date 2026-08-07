@@ -6254,6 +6254,58 @@ class AppLocalizationsEn extends AppLocalizations {
       'The document could not be opened.';
 
   @override
+  String get resendPaymentLink => 'Resend payment link';
+
+  @override
+  String get parkingPaymentLinkEmailed =>
+      'Payment link emailed to the customer.';
+
+  @override
+  String get parkingPaymentLinkTexted => 'Payment link texted to the customer.';
+
+  @override
+  String get parkingPaymentLinkEmailedAndTexted =>
+      'Payment link emailed and texted to the customer.';
+
+  @override
+  String get parkingPaymentLinkNotDelivered =>
+      'The link could not be emailed or texted. Copy it and send it to the customer yourself.';
+
+  @override
+  String get parkingPaymentLinkCouldNotBeResent =>
+      'The payment link could not be resent.';
+
+  @override
+  String get parkingPaymentLinkReissued =>
+      'The amount changed, so a new payment link was issued.';
+
+  @override
+  String get parkingPaidCannotBeEdited =>
+      'This parking has been paid for and can no longer be edited.';
+
+  @override
+  String get parkingNothingChanged => 'Nothing was changed.';
+
+  @override
+  String get parkingRecordCouldNotBeUpdated =>
+      'The parking record could not be updated.';
+
+  @override
+  String get parkedBetween => 'Parked between';
+
+  @override
+  String get dateFrom => 'From';
+
+  @override
+  String get dateTo => 'To';
+
+  @override
+  String get anyDate => 'Any date';
+
+  @override
+  String get clearDates => 'Clear dates';
+
+  @override
   String parkedCarRecordedWithCode(Object trackingCode) {
     return 'Parked car recorded. Tracking number: $trackingCode';
   }
