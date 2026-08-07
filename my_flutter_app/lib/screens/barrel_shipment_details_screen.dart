@@ -639,10 +639,10 @@ class _BarrelShipmentDetailsScreenState
         context,
       )!.destinationChangePaid(currency.format(result.amountDue));
     }
-    if (result.walletCredit > 0) {
+    if (result.cardRefund > 0) {
       return AppLocalizations.of(
         context,
-      )!.destinationChangeCredited(currency.format(result.walletCredit));
+      )!.destinationChangeCredited(currency.format(result.cardRefund));
     }
     return AppLocalizations.of(context)!.shipmentDestinationUpdated;
   }

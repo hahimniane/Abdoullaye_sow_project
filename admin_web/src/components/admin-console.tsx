@@ -681,10 +681,6 @@ function loadingActionLabel(label: string) {
     return "Sending phone code...";
   if (lower.includes("phone") && lower.includes("confirmed"))
     return "Confirming phone...";
-  if (lower.includes("refund") && lower.includes("completed"))
-    return "Completing refund request...";
-  if (lower.includes("refund") && lower.includes("rejected"))
-    return "Rejecting refund request...";
   if (lower.includes("deleted"))
     return value.replace(/deleted/i, "Deleting...");
   if (lower.includes("created"))
@@ -1025,58 +1021,6 @@ const previewData = {
       businessName: "Keren Auto Sales",
     },
   ],
-  refunds: [
-    {
-      id: "RF-17",
-      customerUid: "customer-a",
-      customerEmail: "aissatou@example.com",
-      amount: 125,
-      amountCents: 12500,
-      currency: "USD",
-      status: "pending",
-      businessName: "Keren Auto Sales",
-    },
-  ],
-  wallets: [
-    {
-      id: "customer-a",
-      customerUid: "customer-a",
-      balance: 45,
-      balanceCents: 4500,
-      pendingRefund: 125,
-      pendingRefundCents: 12500,
-      currency: "USD",
-    },
-  ],
-  walletTransactions: [
-    {
-      id: "WT-1",
-      _parentId: "customer-a",
-      type: "debit",
-      reason: "card_refund_requested",
-      amount: 125,
-      amountCents: 12500,
-      currency: "USD",
-      status: "pending",
-      refundRequestId: "RF-17",
-      createdAt: "2026-06-20",
-      businessName: "Keren Auto Sales",
-      customerEmail: "aissatou@example.com",
-    },
-    {
-      id: "WT-2",
-      _parentId: "customer-a",
-      type: "credit",
-      reason: "shipment_adjustment",
-      amount: 45,
-      amountCents: 4500,
-      currency: "USD",
-      status: "completed",
-      createdAt: "2026-06-18",
-      businessName: "Keren Auto Sales",
-      customerEmail: "mamadou@example.com",
-    },
-  ],
   supportRequests: [
     {
       id: "SR-1",
@@ -1379,7 +1323,6 @@ function detailRows(rows: Array<[string, unknown]>) {
 }
 
 function urgencyRank(item: { kind: string; status: string }) {
-  if (item.kind === "refund") return 0;
   if (item.kind === "business") return 1;
   if (item.kind === "purchase") return 2;
   if (item.kind === "shipment") return 3;
@@ -1961,51 +1904,11 @@ function useAdminCollection(name: string, enabled: boolean, max = 150) {
   return { rows, loading, error };
 }
 
-function useAdminCollectionGroup(name: string, enabled: boolean, max = 500) {
-  const [rows, setRows] = useState<FirestoreRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!enabled) {
-      setRows([]);
-      setLoading(false);
-      setError("");
-      return;
-    }
-    setLoading(true);
-    const unsubscribe = onSnapshot(
-      query(collectionGroup(db, name), limit(max)),
-      (snapshot) => {
-        setRows(
-          snapshot.docs.map((item) => ({
-          id: item.id,
-          _path: item.ref.path,
-          _parentId: item.ref.parent.parent?.id ?? "",
-          _parentPath: item.ref.parent.parent?.path ?? "",
-          ...item.data(),
-          })),
-        );
-        setLoading(false);
-        setError("");
-      },
-      (snapshotError) => {
-        setRows([]);
-        setError(snapshotError.message);
-        setLoading(false);
-      },
-    );
-    return unsubscribe;
-  }, [enabled, max, name]);
-
-  return { rows, loading, error };
-}
-
-// A plain collectionGroup("reviews") listen (as useAdminCollectionGroup
-// would do) is denied by firestore.rules: the {path=**}/reviews rule that
-// authorizes this collection-group query is only provable when the query
-// itself filters to moderationStatus == "flagged", so that filter has to be
-// baked into the query here rather than left to a generic caller.
+// A plain collectionGroup("reviews") listen is denied by firestore.rules: the
+// {path=**}/reviews rule that authorizes this collection-group query is only
+// provable when the query itself filters to moderationStatus == "flagged", so
+// that filter has to be baked into the query here rather than left to a
+// generic caller.
 function useFlaggedReviews(enabled: boolean, max = 300) {
   const [rows, setRows] = useState<FirestoreRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -2384,25 +2287,10 @@ export function AdminConsole() {
     tabNeeds("today", "businesses", "operations", "finance", "support"),
     1000,
   );
-  const refunds = useAdminCollection(
-    "walletRefundRequests",
-    tabNeeds("today", "finance", "support"),
-    500,
-  );
   const barrelPoolBalances = useAdminCollection(
     "barrelPoolBalanceRequests",
     tabNeeds("today", "finance", "support"),
     500,
-  );
-  const wallets = useAdminCollection(
-    "wallets",
-    tabNeeds("today", "finance", "support"),
-    1000,
-  );
-  const walletTransactions = useAdminCollectionGroup(
-    "transactions",
-    tabNeeds("today", "finance", "support"),
-    1000,
   );
   const pricing = useAdminCollection(
     "shipmentPricing",
@@ -2453,13 +2341,8 @@ export function AdminConsole() {
     : transportRequests.rows;
   const parkedRows = previewMode ? previewData.parkedCars : parkedCars.rows;
   const purchaseRows = previewMode ? previewData.purchases : purchases.rows;
-  const refundRows = previewMode ? previewData.refunds : refunds.rows;
   const barrelPoolBalanceRows = previewMode ? [] : barrelPoolBalances.rows;
   const flaggedReviewRows = previewMode ? [] : flaggedReviews.rows;
-  const walletRows = previewMode ? previewData.wallets : wallets.rows;
-  const walletTransactionRows = previewMode
-    ? previewData.walletTransactions
-    : walletTransactions.rows;
   const pricingRows = previewMode ? previewData.pricing : pricing.rows;
   const destinationRows = previewMode
     ? previewData.destinations
@@ -2527,7 +2410,6 @@ export function AdminConsole() {
         transportRows,
         parkedRows,
         purchaseRows,
-        refundRows,
         supportRequestRows,
       ]);
   const businessRows = previewMode
@@ -2834,7 +2716,6 @@ export function AdminConsole() {
               transportRequests={transportRows}
               parkedCars={parkedRows}
               purchases={purchaseRows}
-              refunds={refundRows}
               applications={applicationRows}
               navigate={setActiveTab}
             />
@@ -2879,7 +2760,6 @@ export function AdminConsole() {
               transports={transportRows}
               parkedCars={parkedRows}
               purchases={purchaseRows}
-              refunds={refundRows}
               destinations={destinationRows}
               contactReferences={userRows.filter(isContactReference)}
               applications={applicationRows}
@@ -2916,12 +2796,8 @@ export function AdminConsole() {
           )}
           {activeTab === "finance" && (
             <FinanceView
-              refunds={refundRows}
               barrelPoolBalances={barrelPoolBalanceRows}
-              wallets={walletRows}
-              walletTransactions={walletTransactionRows}
               businesses={businessRows}
-              users={userRows}
               cars={carRows}
               shipments={shipmentRows}
               freightShipments={freightRows}
@@ -3110,7 +2986,6 @@ function Today(props: {
   transportRequests: FirestoreRow[];
   parkedCars: FirestoreRow[];
   purchases: FirestoreRow[];
-  refunds: FirestoreRow[];
   applications: FirestoreRow[];
   navigate: (tab: Tab) => void;
 }) {
@@ -3146,14 +3021,6 @@ function Today(props: {
     props.purchases,
     (item) => rowStatus(item, "purchaseStatus") === "pending",
   );
-  const pendingRefunds = props.refunds.filter(
-    (item) => rowStatus(item) === "pending",
-  );
-  const pendingRefundAmount = pendingRefunds.reduce(
-    (total, item) => total + numberValue(item.amount),
-    0,
-  );
-
   const queue = [
     ...props.businesses
       .filter((item) => item.status === "pending")
@@ -3181,22 +3048,6 @@ function Today(props: {
           .join(" • "),
         status: text(item.status, "pending"),
         cta: "Open application",
-      })),
-    ...props.refunds
-      .filter((item) => item.status === "pending")
-      .map((item) => ({
-        id: item.id,
-        kind: "refund" as const,
-        target: "finance" as Tab,
-        label: `${formatMoney(item.amount, text(item.currency, "USD"))} card return`,
-        meta: [
-          text(item.customerEmail, "Customer"),
-          text(item.businessName, ""),
-        ]
-          .filter(Boolean)
-          .join(" • "),
-        status: "pending",
-        cta: "Resolve refund",
       })),
     ...props.purchases
       .filter((item) => item.purchaseStatus === "pending")
@@ -3308,12 +3159,6 @@ function Today(props: {
       total: Math.max(props.purchases.length, 1),
       meta: `Open records: ${pendingPurchases} of ${props.purchases.length}`,
     },
-    {
-      label: "Card returns",
-      value: pendingRefunds.length,
-      total: Math.max(props.refunds.length, 1),
-      meta: `${formatMoney(pendingRefundAmount)} awaiting payout`,
-    },
   ];
 
   const kpis = [
@@ -3340,13 +3185,6 @@ function Today(props: {
       tone: "neutral" as const,
       meta: `Purchase records: ${props.purchases.length}`,
       target: "operations" as Tab,
-    },
-    {
-      label: "Refunds to pay",
-      value: pendingRefunds.length,
-      tone: "money" as const,
-      meta: formatMoney(pendingRefundAmount),
-      target: "finance" as Tab,
     },
   ];
 
@@ -3429,7 +3267,7 @@ function Today(props: {
                 )}
               </div>
             ) : (
-              <EmptyState text="No open approvals, shipments, purchases, or refunds are currently loaded." />
+              <EmptyState text="No open approvals, shipments, or purchases are currently loaded." />
             )}
           </Panel>
         </div>
@@ -8353,7 +8191,6 @@ function BusinessesView({
   transports,
   parkedCars,
   purchases,
-  refunds,
   destinations,
   contactReferences,
   applications,
@@ -8368,7 +8205,6 @@ function BusinessesView({
   transports: FirestoreRow[];
   parkedCars: FirestoreRow[];
   purchases: FirestoreRow[];
-  refunds: FirestoreRow[];
   destinations: FirestoreRow[];
   contactReferences: FirestoreRow[];
   applications: FirestoreRow[];
@@ -8496,7 +8332,6 @@ function BusinessesView({
         belongsToBusiness(item, business),
       ),
       purchases: purchases.filter((item) => belongsToBusiness(item, business)),
-      refunds: refunds.filter((item) => belongsToBusiness(item, business)),
       destinations: destinations.filter((item) =>
         belongsToBusiness(item, business),
       ),
@@ -8523,7 +8358,6 @@ function BusinessesView({
         slices.purchases,
         (item) => rowStatus(item, "purchaseStatus") === "pending",
       ) +
-      countWhere(slices.refunds, (item) => rowStatus(item) === "pending") +
       slices.applications.length +
       businessVerificationActionCount(business) +
       countWhere(
@@ -9372,7 +9206,6 @@ function BusinessWorkspace({
   transports,
   parkedCars,
   purchases,
-  refunds,
   destinations,
   contactReferences,
   applications,
@@ -9390,7 +9223,6 @@ function BusinessWorkspace({
   transports: FirestoreRow[];
   parkedCars: FirestoreRow[];
   purchases: FirestoreRow[];
-  refunds: FirestoreRow[];
   destinations: FirestoreRow[];
   contactReferences: FirestoreRow[];
   applications: FirestoreRow[];
@@ -9467,10 +9299,6 @@ function BusinessWorkspace({
     purchases,
     (item) => rowStatus(item, "purchaseStatus") === "pending",
   );
-  const openRefunds = countWhere(
-    refunds,
-    (item) => rowStatus(item) === "pending",
-  );
   const activeListings = countWhere(
     cars,
     (item) => rowStatus(item) === "active",
@@ -9482,7 +9310,6 @@ function BusinessWorkspace({
     ["Transport", transports.length],
     ["Parking", parkedCars.length],
     ["Purchases", purchases.length],
-    ["Refunds", refunds.length],
     [
       "Destinations",
       destinations.filter((item) => item.isActive === true).length,
@@ -9517,17 +9344,6 @@ function BusinessWorkspace({
       id: `parking-${item.id}`,
       title: relatedRecordTitle(item, "Parked car"),
       subtitle: relatedRecordMeta(item),
-      badge: statusLabel(item.status),
-    })),
-    ...refunds.map((item) => ({
-      id: `refund-${item.id}`,
-      title: `${optionalMoney(item.amount, text(item.currency, "USD")) || "Card return"}`,
-      subtitle: [
-        text(item.customerEmail ?? item.customerName, ""),
-        relatedContactSummary(item),
-      ]
-        .filter(Boolean)
-        .join(" • "),
       badge: statusLabel(item.status),
     })),
     ...applications.map((item) => ({
@@ -9734,9 +9550,6 @@ function BusinessWorkspace({
         </span>
         <span>
           <b>{openPurchases}</b> open purchases
-        </span>
-        <span className={openRefunds > 0 ? "warn" : ""}>
-          <b>{openRefunds}</b> refunds to pay
         </span>
         <span>
           <b>{members.length}</b> people
@@ -10101,27 +9914,6 @@ function BusinessWorkspace({
                   rows={purchases}
                   statusField="purchaseStatus"
                 />
-                <div className="subsection">
-                  <h3>Refund requests</h3>
-                  <div className="row-list compact">
-                    {refunds.map((item) => (
-                      <DataRow
-                        key={item.id}
-                        title={`${optionalMoney(item.amount, text(item.currency, "USD")) || "Refund request"}`}
-                        subtitle={[
-                          text(item.customerEmail, "Customer"),
-                          formatDate(item.createdAt),
-                        ]
-                          .filter(Boolean)
-                          .join(" • ")}
-                        badge={statusLabel(item.status)}
-                      />
-                    ))}
-                    {refunds.length === 0 && (
-                      <EmptyState text="No refund requests for this business." />
-                    )}
-                  </div>
-                </div>
               </div>
             )}
 
@@ -11999,8 +11791,6 @@ function financeLedgerRow({
 }
 
 function buildFinanceLedgerRows({
-  walletTransactions,
-  refunds,
   barrelPoolBalances,
   shipments,
   transports,
@@ -12009,8 +11799,6 @@ function buildFinanceLedgerRows({
   cars,
   businesses,
 }: {
-  walletTransactions: FirestoreRow[];
-  refunds: FirestoreRow[];
   barrelPoolBalances: FirestoreRow[];
   shipments: FirestoreRow[];
   transports: FirestoreRow[];
@@ -12019,61 +11807,7 @@ function buildFinanceLedgerRows({
   cars: FirestoreRow[];
   businesses: FirestoreRow[];
 }) {
-  const refundById = new Map(refunds.map((refund) => [refund.id, refund]));
   const rows: FinanceLedgerRow[] = [];
-
-  walletTransactions.forEach((transaction) => {
-    const refund = refundById.get(optionalText(transaction.refundRequestId));
-    const merged = {
-      ...refund,
-      ...transaction,
-      customerUid:
-        transaction.customerUid ?? transaction._parentId ?? refund?.customerUid,
-      customerEmail: transaction.customerEmail ?? refund?.customerEmail,
-      customerName: transaction.customerName ?? refund?.customerName,
-      customerPhone: transaction.customerPhone ?? refund?.customerPhone,
-      businessId: transaction.businessId ?? refund?.businessId,
-      businessName: transaction.businessName ?? refund?.businessName,
-    };
-    const amount = amountFromRecord(
-      merged,
-      ["amountCents", "walletAppliedCents"],
-      ["amount", "walletAppliedAmount"],
-    );
-    rows.push(
-      financeLedgerRow({
-      row: merged,
-      source: "wallet",
-      sourceLabel: "Wallet transaction",
-      sourceCollection: "wallets/transactions",
-      title: firstText(merged, ["reason", "type"], "Wallet transaction"),
-      amount,
-      businesses,
-      }),
-    );
-  });
-
-  refunds.forEach((refund) => {
-    const amount = amountFromRecord(refund, ["amountCents"], ["amount"]);
-    const sharedBarrelRefund = text(refund.source, "") === "barrel_pool";
-    rows.push(
-      financeLedgerRow({
-      row: refund,
-      source: "refund",
-        sourceLabel: sharedBarrelRefund
-          ? "Shared barrel refund"
-          : "Card return",
-      sourceCollection: "walletRefundRequests",
-      title: firstText(
-        refund,
-        ["customerEmail", "customerName"],
-        sharedBarrelRefund ? "Shared barrel refund" : "Card return request",
-      ),
-      amount,
-      businesses,
-      }),
-    );
-  });
 
   barrelPoolBalances.forEach((balance) => {
     const amount = amountFromRecord(balance, ["amountCents"], ["amount"]);
@@ -12097,8 +11831,8 @@ function buildFinanceLedgerRows({
   shipments.forEach((shipment) => {
     const amount = amountFromRecord(
       shipment,
-      ["totalCents", "priceCents", "amountCents", "walletAppliedCents"],
-      ["total", "price", "amount", "walletAppliedAmount"],
+      ["totalCents", "priceCents", "amountCents"],
+      ["total", "price", "amount"],
     );
     rows.push(
       financeLedgerRow({
@@ -12213,173 +11947,6 @@ function supportDraftFromLedgerRow(row: FinanceLedgerRow): SupportDraft {
     relatedId: row.sourceId,
     relatedLabel: row.relatedLabel,
   };
-}
-
-function amountFromWallet(
-  wallet: FirestoreRow | undefined,
-  centsField: string,
-  amountField: string,
-) {
-  if (!wallet) return 0;
-  const cents = Number(wallet[centsField] ?? 0);
-  if (Number.isFinite(cents) && cents !== 0) return cents / 100;
-  const amount = Number(wallet[amountField] ?? 0);
-  return Number.isFinite(amount) ? amount : 0;
-}
-
-function refundCustomerId(item: FirestoreRow) {
-  return text(
-    item.customerUid ?? item.uid ?? item.userId ?? item.customerId,
-    "",
-  );
-}
-
-function refundCustomerEmail(item: FirestoreRow) {
-  return text(item.customerEmail ?? item.email ?? item.buyerEmail, "");
-}
-
-function walletCustomerId(wallet: FirestoreRow) {
-  return text(wallet.customerUid ?? wallet.id, "");
-}
-
-function findWalletForRefund(item: FirestoreRow, wallets: FirestoreRow[]) {
-  const customerId = refundCustomerId(item);
-  if (!customerId) return undefined;
-  return wallets.find((wallet) => walletCustomerId(wallet) === customerId);
-}
-
-function findUserForRefund(item: FirestoreRow, users: FirestoreRow[]) {
-  const customerId = refundCustomerId(item);
-  const customerEmail = refundCustomerEmail(item).toLowerCase();
-  return users.find((user) => {
-    const userId = text(user.uid ?? user.id, "");
-    const email = text(user.email, "").toLowerCase();
-    return Boolean(
-      (customerId && userId === customerId) ||
-      (customerEmail && email === customerEmail),
-    );
-  });
-}
-
-function RefundRequestRow({
-  item,
-  wallet,
-  user,
-  canManage,
-  reviewRefund,
-  runAction,
-}: {
-  item: FirestoreRow;
-  wallet?: FirestoreRow;
-  user?: FirestoreRow;
-  canManage: boolean;
-  reviewRefund: (
-    requestId: string,
-    decision: "completed" | "rejected",
-    note: string,
-  ) => Promise<void>;
-  runAction: ActionRunner;
-}) {
-  const [note, setNote] = useState("");
-  const status = rowStatus(item);
-  const currency = text(item.currency, "USD");
-  const balance = amountFromWallet(wallet, "balanceCents", "balance");
-  const pending = amountFromWallet(
-    wallet,
-    "pendingRefundCents",
-    "pendingRefund",
-  );
-  const customerId = refundCustomerId(item);
-  const accountLabel = user
-    ? userDisplayName(user)
-    : refundCustomerEmail(item) || customerId || "Customer";
-  const walletLabel = wallet
-    ? `Wallet available ${formatMoney(balance, currency)} • Pending return ${formatMoney(pending, currency)}`
-    : "No wallet account loaded";
-
-  return (
-    <div className="data-row finance-row refund-account-row">
-      <div className="finance-account-main">
-        <strong>{formatMoney(item.amount, currency)}</strong>
-        <small>
-          {[
-            accountLabel,
-            refundCustomerEmail(item),
-            customerId ? `UID ${customerId}` : "",
-            formatDate(item.createdAt),
-          ]
-            .filter(Boolean)
-            .join(" • ")}
-        </small>
-        <div className="finance-account-grid">
-          <span>
-            Wallet balance <b>{formatMoney(balance, currency)}</b>
-          </span>
-          <span>
-            Pending return <b>{formatMoney(pending, currency)}</b>
-          </span>
-          <span>
-            Request amount <b>{formatMoney(item.amount, currency)}</b>
-          </span>
-          <span>{walletLabel}</span>
-        </div>
-      </div>
-      <span className={`status-pill ${status === "pending" ? "warning" : ""}`}>
-        {statusLabel(status)}
-      </span>
-      {status === "pending" && canManage ? (
-        <div className="finance-review-tools">
-          <input
-            aria-label={`Review note for ${accountLabel}`}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder="Review note"
-            value={note}
-          />
-          <div className="row-actions">
-            <button
-              className="secondary-button"
-              onClick={() =>
-                runAction(
-                "Refund request completed",
-                () => reviewRefund(item.id, "completed", note),
-                {
-                    confirm: "Mark this refund request completed?",
-                  confirmFr:
-                    "Marquer cette demande de remboursement comme terminée ?",
-                },
-                )
-              }
-            >
-              <Check size={15} />
-              Complete
-            </button>
-            <button
-              className="danger-button"
-              onClick={() =>
-                runAction(
-                "Refund request rejected",
-                () => reviewRefund(item.id, "rejected", note),
-                {
-                  confirm:
-                    "Return this pending amount to the customer's wallet?",
-                  confirmFr:
-                    "Renvoyer ce montant en attente dans le portefeuille du client ?",
-                },
-                )
-              }
-            >
-              <X size={15} />
-              Reject
-            </button>
-          </div>
-        </div>
-      ) : (
-        <span className="muted-action">
-          {status === "pending" ? "View only" : "Reviewed"}
-        </span>
-      )}
-    </div>
-  );
 }
 
 const COMMISSION_EARNED_COLOR = "var(--money)";
@@ -12753,12 +12320,8 @@ function PlatformCommissionSummary({
 }
 
 function FinanceView({
-  refunds,
   barrelPoolBalances,
-  wallets,
-  walletTransactions,
   businesses,
-  users,
   cars,
   shipments,
   freightShipments,
@@ -12770,12 +12333,8 @@ function FinanceView({
   canManage,
   canSendSupport,
 }: {
-  refunds: FirestoreRow[];
   barrelPoolBalances: FirestoreRow[];
-  wallets: FirestoreRow[];
-  walletTransactions: FirestoreRow[];
   businesses: FirestoreRow[];
-  users: FirestoreRow[];
   cars: FirestoreRow[];
   shipments: FirestoreRow[];
   freightShipments: FirestoreRow[];
@@ -12797,9 +12356,6 @@ function FinanceView({
   const [supportDraft, setSupportDraft] = useState<SupportDraft>(() =>
     emptySupportDraft(),
   );
-  const totalPending = refunds
-    .filter((item) => item.status === "pending")
-    .reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
   const pendingBarrelBalanceCount = barrelPoolBalances.filter(
     (item) => item.status === "pending",
   ).length;
@@ -12809,20 +12365,9 @@ function FinanceView({
       (sum, item) => sum + amountFromRecord(item, ["amountCents"], ["amount"]),
       0,
     );
-  const walletBalanceTotal = wallets.reduce(
-    (sum, wallet) => sum + amountFromWallet(wallet, "balanceCents", "balance"),
-    0,
-  );
-  const pendingWalletTotal = wallets.reduce(
-    (sum, wallet) =>
-      sum + amountFromWallet(wallet, "pendingRefundCents", "pendingRefund"),
-    0,
-  );
   const ledgerRows = useMemo(
     () =>
       buildFinanceLedgerRows({
-    walletTransactions,
-    refunds,
     barrelPoolBalances,
     shipments,
     transports,
@@ -12832,8 +12377,6 @@ function FinanceView({
     businesses,
       }),
     [
-    walletTransactions,
-    refunds,
     barrelPoolBalances,
     shipments,
     transports,
@@ -12964,20 +12507,6 @@ function FinanceView({
     (business) => business._inferred !== true,
   );
 
-  async function reviewRefund(
-    requestId: string,
-    decision: "completed" | "rejected",
-    note: string,
-  ) {
-    await httpsCallable(
-      functions,
-      "reviewWalletRefundRequest",
-    )({
-      requestId,
-      decision,
-      note: note.trim(),
-    });
-  }
   async function markBalanceCollected(requestId: string, note: string) {
     await httpsCallable(
       functions,
@@ -12991,9 +12520,6 @@ function FinanceView({
   // An empty queue carries no information, so it stays out of the header until
   // there is something to act on. The page used to open with eight figures of
   // which six were permanently zero, which buried the two that move.
-  const pendingRefundCount = refunds.filter(
-    (item) => item.status === "pending",
-  ).length;
   const financeHeadlineStats = useMemo(() => {
     const stats: Array<[string, string]> = [
       [
@@ -13006,25 +12532,17 @@ function FinanceView({
       ],
       ["Businesses earning", String(platformEarnings.byBusiness.length)],
     ];
-    if (pendingRefundCount > 0) {
-      stats.push(["Refunds to review", String(pendingRefundCount)]);
-    }
     if (pendingBarrelBalanceCount > 0) {
       stats.push([
         "Shared balances due",
         formatMoney(pendingBarrelBalanceTotal),
       ]);
     }
-    if (walletBalanceTotal > 0) {
-      stats.push(["Held for customers", formatMoney(walletBalanceTotal)]);
-    }
     return stats;
   }, [
     platformEarnings,
-    pendingRefundCount,
     pendingBarrelBalanceCount,
     pendingBarrelBalanceTotal,
-    walletBalanceTotal,
   ]);
 
   return (
@@ -13171,38 +12689,6 @@ function FinanceView({
           )}
         </div>
       </Panel>
-      {/*
-        This queue is normally empty, so it only appears when it has something
-        in it. It is not dead weight: a shared-barrel participant who leaves a
-        pool has a return request opened for them automatically, and a freight
-        parcel that weighs under its quote credits the customer here. Removing
-        the panel would leave that money owed with nowhere to action it.
-      */}
-      {refunds.length > 0 && (
-        <Panel
-          title="Customer money to return"
-          icon={<BadgeDollarSign size={18} />}
-        >
-          <div className="info-band">
-            Review the customer account and balance before action. Complete
-            after the external card return is done. Reject moves the pending
-            amount back to the customer&apos;s balance.
-          </div>
-          <div className="row-list">
-            {refunds.map((item) => (
-              <RefundRequestRow
-                key={item.id}
-                item={item}
-                wallet={findWalletForRefund(item, wallets)}
-                user={findUserForRefund(item, users)}
-                canManage={canManage}
-                reviewRefund={reviewRefund}
-                runAction={runAction}
-              />
-            ))}
-          </div>
-        </Panel>
-      )}
     </div>
   );
 }

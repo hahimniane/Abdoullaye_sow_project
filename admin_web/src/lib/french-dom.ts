@@ -337,7 +337,6 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "Aucune adresse correspondante. Continuez à saisir ou entrez l’adresse complète.",
   "Total barrels": "Nombre total de barils",
   "Total pending": "Total en attente",
-  "Use wallet balance": "Utiliser le solde du portefeuille",
   "Available balance will be applied first.":
     "Le solde disponible sera appliqué en premier.",
   "We couldn’t check pickup availability. Check the address and try again.":
@@ -492,7 +491,6 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Request pickup": "Demander la collecte",
   "Choose an address and appointment time.":
     "Choisissez une adresse et une heure de rendez-vous.",
-  "Use my available wallet balance": "Utiliser le solde disponible du portefeuille",
   "Any remaining amount continues to secure payment.":
     "Tout montant restant sera réglé par paiement sécurisé.",
   "Continue to secure payment": "Continuer vers le paiement sécurisé",
@@ -834,7 +832,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Le devis n’a pas pu être envoyé. Vérifiez les informations et réessayez.",
   "The transport status could not be updated. Try again.":
     "Le statut du transport n’a pas pu être mis à jour. Réessayez.",
-  "Return wallet balance": "Rembourser le solde du portefeuille",
   "Return to card": "Retour vers la carte",
   "Move your available balance back to your payment card.":
     "Renvoyez votre solde disponible vers votre carte de paiement.",
@@ -850,7 +847,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   " to the original card?": " vers la carte d’origine ?",
   "Requesting return...": "Demande de retour...",
   "Confirm card return": "Confirmer le retour vers la carte",
-  "Keep in wallet": "Conserver dans le portefeuille",
   "Copy tracking number": "Copier le numéro de suivi",
   "Tracking number copied": "Numéro de suivi copié",
   "Open carrier tracking": "Ouvrir le suivi du transporteur",
@@ -1144,7 +1140,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Listings from approved businesses": "Annonces d’entreprises approuvées",
   "Orders & tracking": "Commandes et suivi",
   "Shipping and vehicle services": "Expédition et services automobiles",
-  "Wallet": "Portefeuille",
   "Balance and transactions": "Solde et transactions",
   "Profile": "Profil",
   "Account and security": "Compte et sécurité",
@@ -1156,8 +1151,8 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "All activity": "Toute l’activité",
   "Account access": "Accès au compte",
   "Web + mobile": "Web + mobile",
-  "New service requests and web payments are being added service by service. Your existing orders, purchases, tracking, wallet, and account remain shared with the mobile app.":
-    "Les nouvelles demandes de service et les paiements web sont ajoutés service par service. Vos commandes, achats, suivis, portefeuille et compte existants restent partagés avec l’application mobile.",
+  "New service requests and web payments are being added service by service. Your existing orders, purchases, tracking, and account remain shared with the mobile app.":
+    "Les nouvelles demandes de service et les paiements web sont ajoutés service par service. Vos commandes, achats, suivis et compte existants restent partagés avec l’application mobile.",
   "Loading car listings...": "Chargement des annonces de voitures...",
   "Car listings could not be loaded.": "Les annonces de voitures n’ont pas pu être chargées.",
   "No active car listings are available right now.":
@@ -1166,10 +1161,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Loading your activity...": "Chargement de votre activité...",
   "You do not have any activity here yet.": "Vous n’avez encore aucune activité ici.",
   "Freight shipment": "Expédition de fret",
-  "Wallet activity": "Activité du portefeuille",
-  "Loading wallet...": "Chargement du portefeuille...",
-  "Wallet could not be loaded.": "Le portefeuille n’a pas pu être chargé.",
-  "No wallet transactions yet.": "Aucune transaction de portefeuille pour le moment.",
   "Available balance": "Solde disponible",
   "Transactions": "Transactions",
   "Account": "Compte",
@@ -1357,8 +1348,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Mark this paid hold as sold?":
     "Marquer cette réservation payée comme vendue ?",
   "Mark this purchase as completed?": "Marquer cet achat comme terminé ?",
-  "Mark this refund request completed?":
-    "Marquer cette demande de remboursement comme terminée ?",
   "Mark this shared barrel balance as collected?":
     "Marquer ce solde de baril partagé comme encaissé ?",
   "Mark sold": "Marquer vendu",
@@ -1634,7 +1623,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Shared barrel pools": "Barils partagés",
   "Shared pools need one active priced destination before you can start one.":
     "Les barils partagés nécessitent une destination active avec tarif avant de pouvoir commencer.",
-  "Shared barrel refund": "Remboursement de baril partagé",
   "Shared barrel refund due": "Remboursement de baril partagé à traiter",
   "Shared barrel balance": "Solde de baril partagé",
   "Shared barrel balance collected": "Solde de baril partagé encaissé",
@@ -2012,10 +2000,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Car purchase": "Achat de voiture",
   "Car purchase status emails": "Emails de statut d’achat de voiture",
   "Car purchases": "Achats de voitures",
-  "Card return": "Retour de carte",
-  "Card return request": "Demande de retour de carte",
-  "Card return requests": "Demandes de retour de carte",
-  "Card returns": "Retours de carte",
   "Cars you list appear in the marketplace once approved.":
     "Les voitures que vous publiez apparaissent dans la marketplace après approbation.",
   "Cars, parking, transport, and shipping support for customers moving between the U.S. and West Africa.":
@@ -2040,8 +2024,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   Code: "Code",
   "Collection note (optional)": "Note d’encaissement (facultatif)",
   Complete: "Terminé",
-  "Completing refund request...":
-    "Finalisation de la demande de remboursement...",
   Condition: "État",
   "Configure how the console works. Create roles, decide what each one can see and do, and limit them to specific services.":
     "Configurez le fonctionnement de la console. Créez des rôles, décidez ce que chacun peut voir et faire, puis limitez-les à des services précis.",
@@ -2068,7 +2050,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Customer email": "Email du client",
   "Customer name": "Nom du client",
   "Customer phone": "Téléphone du client",
-  "Customer wallet balance": "Solde du portefeuille client",
   Customers: "Clients",
   "Customers and help": "Clients et aide",
   Reviews: "Avis",
@@ -2229,8 +2210,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Marked no-show.": "Marqué absent.",
   "Message sent": "Message envoyé",
   Mileage: "Kilométrage",
-  "Monitor wallet balance return requests and finance readiness.":
-    "Surveillez les demandes de retour de solde portefeuille et la préparation finance.",
   "Needs your attention": "Requiert votre attention",
   Network: "Réseau",
   "Network health": "Santé du réseau",
@@ -2254,10 +2233,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Aucune entreprise ne correspond à cette recherche.",
   "No car listings are currently loaded.":
     "Aucune annonce de voiture n’est actuellement chargée.",
-  "No card return requests for this business.":
-    "Aucune demande de retour de carte pour cette entreprise.",
-  "No refund requests for this business.":
-    "Aucune demande de remboursement pour cette entreprise.",
   "No contact-only references match this search.":
     "Aucune référence contact uniquement ne correspond à cette recherche.",
   "No customer accounts match this search.":
@@ -2279,8 +2254,8 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Aucune annonce de cette entreprise ne correspond aux filtres actuels.",
   "No listings match the current marketplace filters.":
     "Aucune annonce ne correspond aux filtres marketplace actuels.",
-  "No open approvals, shipments, purchases, or refunds are currently loaded.":
-    "Aucune approbation, expédition, achat ou remboursement ouvert n’est actuellement chargé.",
+  "No open approvals, shipments, or purchases are currently loaded.":
+    "Aucune approbation, expédition ou achat ouvert n’est actuellement chargé.",
   "No owner assigned": "Aucun propriétaire affecté",
   "No phone": "Aucun téléphone",
   "No photo": "Aucune photo",
@@ -2299,9 +2274,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Aucun dossier de service n’est actuellement chargé.",
   "No show": "Absent",
   "No staff assigned.": "Aucun membre du personnel affecté.",
-  "No wallet account loaded": "Aucun compte portefeuille chargé",
-  "No wallet card return requests are loaded.":
-    "Aucune demande de retour de carte portefeuille n’est chargée.",
   "No-show": "Absence",
   None: "Aucun",
   "Not confirmed": "Non confirmé",
@@ -2430,13 +2402,10 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   Payments: "Paiements",
   "Pending amount": "Montant en attente",
   "Pending document review": "Vérification des documents en attente",
-  "Pending in wallets": "En attente dans les portefeuilles",
   "Pending payment": "Paiement en attente",
   "Pending purchases": "Achats en attente",
   "Pending refund amount": "Montant de remboursement en attente",
   "Pending refunds": "Remboursements en attente",
-  "Pending return": "Retour en attente",
-  "Wallet available": "Portefeuille disponible",
   "awaiting payout": "en attente de versement",
   "card return": "retour de carte",
   "Pending seal": "En attente de scellement",
@@ -2492,20 +2461,11 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   Refresh: "Actualiser",
   "Refresh Auth": "Actualiser Auth",
   "Refund decision emails": "Emails de décision de remboursement",
-  "Refund queue": "File de remboursements",
-  "Refund request": "Demande de remboursement",
-  "Refund request completed": "Demande de remboursement terminée",
-  "Refund request rejected": "Demande de remboursement rejetée",
-  "Refund requests": "Demandes de remboursement",
   "Refund pending": "Remboursement en attente",
   Refunded: "Remboursé",
-  Refunds: "Remboursements",
-  "Refunds to pay": "Remboursements à payer",
-  "Rejecting refund request...": "Rejet de la demande de remboursement...",
   "Related:": "Associé :",
   "Remove to customer": "Retourner au client",
   "Reply to support requests": "Répondre aux demandes d’assistance",
-  "Request amount": "Montant demandé",
   Requested: "Demandé",
   "All pool statuses": "Tous les statuts de baril partagé",
   "Add an active barrel destination with a price before starting a shared pool.":
@@ -2658,15 +2618,10 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Require business address": "Exiger l’adresse de l’entreprise",
   "Require business documents": "Exiger les documents de l’entreprise",
   "Require phone number": "Exiger le numéro de téléphone",
-  "Resolve refund": "Résoudre le remboursement",
-  "Return this pending amount to the customer's wallet?":
-    "Retourner ce montant en attente dans le portefeuille du client ?",
   "Review business": "Examiner l’entreprise",
   "Review each business first, then inspect and control the listings that business published.":
     "Examinez d’abord chaque entreprise, puis inspectez et contrôlez les annonces qu’elle a publiées.",
   "Review note": "Note d’examen",
-  "Review the customer account and wallet balance before action. Complete after the external card return is done. Reject moves the pending amount back to the customer's wallet.":
-    "Examinez le compte client et le solde du portefeuille avant d’agir. Terminez après le retour externe de la carte. Le rejet remet le montant en attente dans le portefeuille du client.",
   Reviewed: "Examiné",
   "Role name": "Nom du rôle",
   Roles: "Rôles",
@@ -2851,9 +2806,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   Viewing: "Visite",
   "Viewing scheduled": "Visite planifiée",
   Viewings: "Visites",
-  "Wallet balance": "Solde portefeuille",
-  "Wallet card return requests": "Demandes de retour de carte portefeuille",
-  "Wallet transaction": "Transaction portefeuille",
   "Website contact saved": "Contact du site enregistré",
   "Website content saved": "Contenu du site enregistré",
   "What needs you now": "Ce qui vous attend maintenant",
@@ -3097,7 +3049,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Réservez l’espace disponible et envoyez votre acompte en toute sécurité.",
   "Your shares": "Vos parts",
   "Shares requested": "Parts demandées",
-  "Use wallet first, then card": "Utiliser d’abord le portefeuille, puis la carte",
   "Secure card payment": "Paiement sécurisé par carte",
   "All content and shared-liability acknowledgements confirmed":
     "Tous les engagements relatifs au contenu et à la responsabilité partagée sont confirmés",
@@ -3109,8 +3060,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Describe what will be placed in your share":
     "Décrivez ce qui sera placé dans votre part",
   "Shares you keep": "Parts que vous conservez",
-  "Use my available wallet balance first":
-    "Utiliser d’abord le solde disponible de mon portefeuille",
   "Required acknowledgements": "Engagements obligatoires",
   "My contents description is complete and accurate.":
     "Ma description du contenu est complète et exacte.",
@@ -3615,14 +3564,9 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Ce que la plateforme a gagné, et ce qui attend une décision.",
   "Commission & returns": "Commissions et remboursements",
   "Businesses earning": "Entreprises génératrices",
-  "Refunds to review": "Remboursements à examiner",
-  "Held for customers": "Détenu pour les clients",
   "Show everything again": "Tout réafficher",
   "Show every business again": "Réafficher toutes les entreprises",
   "Show every service again": "Réafficher tous les services",
-  "Customer money to return": "Sommes à rendre aux clients",
-  "Review the customer account and balance before action. Complete after the external card return is done. Reject moves the pending amount back to the customer's balance.":
-    "Vérifiez le compte client et son solde avant d'agir. Terminez une fois le remboursement de carte effectué. Refuser renvoie le montant en attente vers le solde du client.",
   "Platform commission": "Commission de la plateforme",
   "Commission earned": "Commission encaissée",
   "Commission pending": "Commission en attente",

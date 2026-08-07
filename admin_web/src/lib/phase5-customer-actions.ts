@@ -59,10 +59,6 @@ export function buildSupportTypingPayload(caseId: string, typing: boolean) {
   return { ...buildSupportCaseIdPayload(caseId), typing };
 }
 
-export function buildWalletCardRefundPayload() {
-  return {};
-}
-
 export function safeCustomerTrackingUrl(value: unknown) {
   if (typeof value !== "string" || !value.trim()) return MAERSK_TRACKING_URL;
   try {

@@ -63,17 +63,26 @@ describe("support case callable contract", () => {
     assert.match(notificationSource, /supportCaseUpdates/);
   });
 
-  it("keeps wallet refund support cases platform-owned when no business exists",
+  it("routes a platform-owned record to platform support, not a business",
       () => {
         const source = fs.readFileSync(
             path.join(__dirname, "..", "index.js"),
             "utf8",
         );
-        assert.match(
-            source,
-            /walletRefundRequests:\s*{[\s\S]*platformOwned: true/,
-        );
+        assert.match(source, /config\.platformOwned === true/);
         assert.match(source, /businessId = "__platform_support"/);
         assert.match(source, /"Laawol support"/);
       });
+
+  it("offers no support case for the retired wallet refund queue", () => {
+    // The wallet and its refund queue are removed
+    // (docs/PLAN-2026-08-backlog.md #3), so no client can open a case
+    // against a walletRefundRequests document any more.
+    const source = fs.readFileSync(
+        path.join(__dirname, "..", "index.js"),
+        "utf8",
+    );
+    assert.doesNotMatch(source, /walletRefundRequests:\s*{/);
+    assert.doesNotMatch(source, /caseType: "wallet_refund"/);
+  });
 });

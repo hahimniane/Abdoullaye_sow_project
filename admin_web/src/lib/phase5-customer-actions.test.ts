@@ -8,7 +8,6 @@ import {
   buildSupportCaseIdPayload,
   buildSupportMessagePayload,
   buildSupportTypingPayload,
-  buildWalletCardRefundPayload,
   safeCustomerTrackingUrl,
   trackingCodeFor,
 } from "./phase5-customer-actions.ts";
@@ -44,10 +43,6 @@ test("phase 5 support builders preserve the mobile callable contracts", () => {
     caseId: "case-1",
     typing: true,
   });
-});
-
-test("wallet refund payload stays empty so the server derives the full balance", () => {
-  assert.deepEqual(buildWalletCardRefundPayload(), {});
 });
 
 test("tracking follows the mobile Maersk handoff and rejects unsafe URLs", () => {

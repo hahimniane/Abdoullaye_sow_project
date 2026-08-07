@@ -2554,7 +2554,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String destinationChangeCredited(Object amount) {
-    return 'Expédition mise à jour. $amount crédité dans votre portefeuille.';
+    return 'Expédition mise à jour. $amount est en cours de remboursement sur votre carte.';
   }
 
   @override

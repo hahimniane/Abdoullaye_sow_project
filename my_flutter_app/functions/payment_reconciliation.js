@@ -597,7 +597,7 @@ function buildReconciliationDecision({target, intent, document, event}) {
   });
   const decision = advanceReconciliationState({
     // A client completion call can persist paymentStatus before all domain
-    // side effects (inventory, wallet, payout, pool summaries) are complete.
+    // side effects (inventory, payout, pool summaries) are complete.
     // Only the server reconciliation marker proves the authoritative Stripe
     // event finished. Without it, replay the idempotent completion handler.
     currentState: data.stripeReconciliationState || PAYMENT_STATES.PENDING,

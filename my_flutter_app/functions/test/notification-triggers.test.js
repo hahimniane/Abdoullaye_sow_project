@@ -10,7 +10,7 @@ describe("service status notification triggers", () => {
         path.join(__dirname, "..", "index.js"),
         "utf8",
     );
-    // Every other service (cars, barrels, freight, wallet, business
+    // Every other service (cars, barrels, freight, business
     // applications) has a Firestore trigger that calls
     // sendPreferenceNotification on a status change - parking reservations
     // previously had none, so a customer got no push/email/SMS at all when

@@ -522,7 +522,7 @@ class BarrelDestinationChangeResult {
     required this.trackingCode,
     required this.difference,
     required this.amountDue,
-    required this.walletCredit,
+    required this.cardRefund,
     required this.simulatedPayment,
     required this.requiresPayment,
     required this.changeRequestId,
@@ -535,7 +535,11 @@ class BarrelDestinationChangeResult {
   final String trackingCode;
   final double difference;
   final double amountDue;
-  final double walletCredit;
+
+  /// Money returned to the card the shipment was paid on when a destination
+  /// change makes it cheaper. This used to arrive as `walletCredit`; wallets
+  /// are retired, so the difference goes back the way it came.
+  final double cardRefund;
   final bool simulatedPayment;
   final bool requiresPayment;
   final String changeRequestId;
@@ -553,7 +557,7 @@ class BarrelDestinationChangeResult {
       trackingCode: (data['trackingCode'] ?? '') as String,
       difference: (data['difference'] as num?)?.toDouble() ?? 0,
       amountDue: (data['amountDue'] as num?)?.toDouble() ?? 0,
-      walletCredit: (data['walletCredit'] as num?)?.toDouble() ?? 0,
+      cardRefund: (data['cardRefund'] as num?)?.toDouble() ?? 0,
       simulatedPayment: data['simulatedPayment'] == true,
       requiresPayment: data['requiresPayment'] == true,
       changeRequestId: (data['changeRequestId'] as String?) ?? '',

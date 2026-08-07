@@ -113,13 +113,6 @@ test("translates dynamic finance summaries without leaving English fragments", (
     ),
     "Affichage 10 sur 10 lignes financières • montant visible $37,670.00",
   );
-  assert.equal(
-    translateValue(
-      "Wallet available $45.00 • Pending return $125.00",
-      "fr",
-    ),
-    "Portefeuille disponible $45.00 • Retour en attente $125.00",
-  );
 });
 
 test("translates dynamic admin overview summaries without English fragments", () => {

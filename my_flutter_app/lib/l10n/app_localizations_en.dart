@@ -2496,7 +2496,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String destinationChangeCredited(Object amount) {
-    return 'Shipment updated. $amount credited to your wallet.';
+    return 'Shipment updated. $amount is on its way back to your card.';
   }
 
   @override

@@ -4595,7 +4595,7 @@ abstract class AppLocalizations {
   /// No description provided for @destinationChangeCredited.
   ///
   /// In en, this message translates to:
-  /// **'Shipment updated. {amount} credited to your wallet.'**
+  /// **'Shipment updated. {amount} is on its way back to your card.'**
   String destinationChangeCredited(Object amount);
 
   /// No description provided for @shipmentDestinationUpdated.

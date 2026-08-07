@@ -12,6 +12,9 @@ const QRCode = require("qrcode");
 const {buildTrackingCode} = require("./tracking_code");
 const {classifyTransportEdit} = require("./transport_request_edit");
 const {
+  planBarrelDestinationRefund,
+} = require("./barrel_destination_change");
+const {
   normalizePickupPlan,
   resolveServicePickup,
   computePickupFeeCents,
@@ -865,26 +868,6 @@ exports.notifyFreightShipmentPaid = onDocumentUpdated(
           shipmentId: event.params.shipmentId,
           requestId: event.params.shipmentId,
           trackingCode: after.trackingCode || "",
-        },
-      });
-    },
-);
-
-exports.notifyWalletRefundStatus = onDocumentUpdated(
-    "walletRefundRequests/{requestId}",
-    async (event) => {
-      if (!statusChanged(event)) return;
-      const after = event.data.after.data() || {};
-      const uid = userIdFrom(after, ["customerUid", "userId", "uid"]);
-      await sendPreferenceNotification({
-        uid,
-        preferenceKey: "walletActivity",
-        title: "Wallet update",
-        body: `Your refund request is now ${after.status || "updated"}.`,
-        data: {
-          type: "wallet_refund_status",
-          requestId: event.params.requestId,
-          status: after.status || "",
         },
       });
     },
@@ -5927,275 +5910,6 @@ function requireCustomerShipmentEditable(shipment, customerUid) {
     );
   }
 }
-
-async function creditWallet({
-  transaction,
-  customerUid,
-  amountCents,
-  shipmentId,
-  trackingCode,
-  reason,
-  businessId,
-  businessName,
-}) {
-  if (amountCents <= 0) return;
-  const db = admin.firestore();
-  const walletRef = db.collection("wallets").doc(customerUid);
-  const creditRef = walletRef.collection("transactions").doc();
-  const now = FirestoreFieldValue.serverTimestamp();
-  transaction.set(walletRef, {
-    customerUid,
-    currency: SHIPMENT_CURRENCY,
-    balanceCents: FirestoreFieldValue.increment(amountCents),
-    balance: FirestoreFieldValue.increment(
-        dollarsFromCents(amountCents),
-    ),
-    updatedAt: now,
-  }, {merge: true});
-  transaction.set(creditRef, {
-    type: "credit",
-    reason,
-    amountCents,
-    amount: dollarsFromCents(amountCents),
-    currency: SHIPMENT_CURRENCY,
-    shipmentId,
-    trackingCode,
-    businessId: businessId || "",
-    businessName: businessName || "",
-    createdAt: now,
-  });
-}
-
-/**
- * The wallet is retired: the platform no longer holds customer money
- * (docs/PLAN-2026-08-backlog.md #3).
- *
- * This is deliberately a no-op that always applies zero rather than a
- * deletion of the wallet machinery. Returning 0 means every charge is taken
- * in full by card, and because every creditWallet call is guarded by
- * `walletAppliedCents > 0` (they exist only to reverse a debit), no money
- * flows back into a wallet either. Both directions close with one change.
- *
- * Existing balances are intentionally left in place, untouched: any money
- * already on file is owed to a real customer and must be reconciled and
- * returned deliberately, not silently erased by a refactor.
- *
- * @return {!Promise<number>} Always 0 - no wallet balance is ever applied.
- */
-async function debitWallet() {
-  return 0;
-}
-
-exports.requestWalletCardRefund = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
-    async (request) => {
-      const customerUid = requireAuth(request);
-      const db = admin.firestore();
-      const walletRef = db.collection("wallets").doc(customerUid);
-      const requestRef = db.collection("walletRefundRequests").doc();
-      const debitRef = walletRef.collection("transactions").doc();
-      const userRecord = await admin.auth().getUser(customerUid);
-
-      return db.runTransaction(async (transaction) => {
-        const walletDoc = await transaction.get(walletRef);
-        const wallet = walletDoc.exists ? walletDoc.data() : {};
-        const balanceCents = Number(wallet.balanceCents || 0);
-        if (!Number.isFinite(balanceCents) || balanceCents <= 0) {
-          throw new HttpsError(
-              "failed-precondition",
-              "There is no wallet balance to return",
-          );
-        }
-
-        const amount = dollarsFromCents(balanceCents);
-        const now = FirestoreFieldValue.serverTimestamp();
-        transaction.set(walletRef, {
-          customerUid,
-          currency: wallet.currency || SHIPMENT_CURRENCY,
-          balanceCents: FirestoreFieldValue.increment(-balanceCents),
-          balance: FirestoreFieldValue.increment(-amount),
-          pendingRefundCents: FirestoreFieldValue.increment(
-              balanceCents,
-          ),
-          pendingRefund: FirestoreFieldValue.increment(amount),
-          updatedAt: now,
-        }, {merge: true});
-        transaction.set(debitRef, {
-          type: "debit",
-          reason: "card_refund_request",
-          status: "pending",
-          amountCents: balanceCents,
-          amount,
-          currency: wallet.currency || SHIPMENT_CURRENCY,
-          refundRequestId: requestRef.id,
-          createdAt: now,
-        });
-        transaction.set(requestRef, {
-          customerUid,
-          customerEmail: userRecord.email || "",
-          amountCents: balanceCents,
-          amount,
-          currency: wallet.currency || SHIPMENT_CURRENCY,
-          status: "pending",
-          destination: "original_card",
-          createdAt: now,
-          updatedAt: now,
-        });
-
-        return {
-          success: true,
-          refundRequestId: requestRef.id,
-          amount,
-          amountCents: balanceCents,
-        };
-      });
-    },
-);
-
-exports.reviewWalletRefundRequest = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-    },
-    async (request) => {
-      const adminUid = requireAuth(request);
-      const adminUser = await getUserProfile(adminUid);
-      requireAdminCapability(
-          adminUser,
-          "finance",
-          "Only finance admins can review wallet refund requests",
-      );
-
-      const requestId = String(request.data?.requestId || "").trim();
-      const decision = String(request.data?.decision || "").trim();
-      const note = String(request.data?.note || "").trim();
-      if (!requestId) {
-        throw new HttpsError("invalid-argument", "Request ID is required");
-      }
-      if (!["completed", "rejected"].includes(decision)) {
-        throw new HttpsError(
-            "invalid-argument",
-            "Decision must be completed or rejected",
-        );
-      }
-
-      const db = admin.firestore();
-      const requestRef = db.collection("walletRefundRequests").doc(requestId);
-      const requestDoc = await requestRef.get();
-      if (!requestDoc.exists) {
-        throw new HttpsError("not-found", "Refund request not found");
-      }
-      const requestData = requestDoc.data() || {};
-      const customerUid = String(requestData.customerUid || "").trim();
-      if (!customerUid) {
-        throw new HttpsError(
-            "failed-precondition",
-            "Refund request is missing a customer",
-        );
-      }
-
-      const walletRef = db.collection("wallets").doc(customerUid);
-      const transactionSnapshot = await walletRef
-          .collection("transactions")
-          .where("refundRequestId", "==", requestId)
-          .limit(1)
-          .get();
-      const debitRef = transactionSnapshot.empty ?
-        null :
-        transactionSnapshot.docs[0].ref;
-
-      await db.runTransaction(async (transaction) => {
-        const freshRequestDoc = await transaction.get(requestRef);
-        if (!freshRequestDoc.exists) {
-          throw new HttpsError("not-found", "Refund request not found");
-        }
-        const freshRequest = freshRequestDoc.data() || {};
-        if (freshRequest.status !== "pending") {
-          throw new HttpsError(
-              "failed-precondition",
-              "Only pending refund requests can be reviewed",
-          );
-        }
-
-        const amountCents = Number(freshRequest.amountCents || 0);
-        if (!Number.isFinite(amountCents) || amountCents <= 0) {
-          throw new HttpsError(
-              "failed-precondition",
-              "Refund request amount is invalid",
-          );
-        }
-        const amount = dollarsFromCents(amountCents);
-        const currency = freshRequest.currency || SHIPMENT_CURRENCY;
-        const now = FirestoreFieldValue.serverTimestamp();
-
-        const walletUpdate = {
-          customerUid,
-          currency,
-          pendingRefundCents: FirestoreFieldValue.increment(
-              -amountCents,
-          ),
-          pendingRefund: FirestoreFieldValue.increment(-amount),
-          updatedAt: now,
-        };
-        if (decision === "rejected") {
-          walletUpdate.balanceCents = FirestoreFieldValue.increment(
-              amountCents,
-          );
-          walletUpdate.balance = FirestoreFieldValue.increment(amount);
-        }
-        transaction.set(walletRef, walletUpdate, {merge: true});
-
-        transaction.update(requestRef, {
-          status: decision,
-          reviewedAt: now,
-          reviewedBy: adminUid,
-          reviewNote: note,
-          updatedAt: now,
-        });
-        setAdminAuditLog(transaction, {
-          action: "wallet_refund_reviewed",
-          actorUid: adminUid,
-          targetCollection: "walletRefundRequests",
-          targetId: requestId,
-          targetLabel: `${currency} ${amount}`,
-          statusField: "status",
-          previousValue: freshRequest.status || "",
-          nextValue: decision,
-        });
-
-        if (debitRef) {
-          transaction.update(debitRef, {
-            status: decision,
-            reviewedAt: now,
-            reviewedBy: adminUid,
-          });
-        }
-
-        if (decision === "rejected") {
-          const creditRef = walletRef.collection("transactions").doc();
-          transaction.set(creditRef, {
-            type: "credit",
-            reason: "card_refund_rejected",
-            amountCents,
-            amount,
-            currency,
-            refundRequestId: requestId,
-            createdAt: now,
-            createdBy: adminUid,
-          });
-        }
-      });
-
-      return {
-        success: true,
-        requestId,
-        status: decision,
-      };
-    },
-);
 
 exports.sendBusinessSupportRequest = onCall(
     {
@@ -14321,7 +14035,6 @@ const USER_DELETION_DEPENDENCIES = [
   ["parkedCars", ["customerUid", "ownerUid"]],
   ["carPurchases", ["customerUid", "buyerUid"]],
   ["barrelPoolBalanceRequests", ["customerUid", "userId"]],
-  ["walletRefundRequests", ["customerUid", "userId"]],
   ["supportCases", ["customerUid"]],
 ];
 
@@ -14361,19 +14074,6 @@ async function userDeletionReview(userId, target) {
         });
         break;
       }
-    }
-  }
-  const wallet = await db.collection("wallets").doc(userId).get();
-  if (wallet.exists) {
-    const data = wallet.data() || {};
-    const balance = Number(
-        data.balance ?? data.availableBalance ?? data.amount ?? 0,
-    );
-    if (!Number.isFinite(balance) || balance !== 0) {
-      blockers.push({
-        code: "wallet-balance-must-be-resolved",
-        collection: "wallets",
-      });
     }
   }
   return {
@@ -15571,14 +15271,12 @@ function sharedPoolPaymentFields({
   poolId,
   uid,
   amountCents,
-  totalDepositCents = amountCents,
   type,
 }) {
   return buildSharedPoolPaymentFields({
     poolId,
     uid,
     amountCents,
-    totalDepositCents,
     type,
     currency: SHIPMENT_CURRENCY,
     simulatePayments: SIMULATE_PAYMENTS,
@@ -15651,7 +15349,27 @@ async function requireVerifiedCustomerForSharedPool(uid) {
   return user;
 }
 
-function queuePoolParticipantRefund({
+/**
+ * Record that a shared-barrel participant is owed their deposit back.
+ *
+ * The wallet is retired (docs/PLAN-2026-08-backlog.md #3), so this no longer
+ * opens a `walletRefundRequests` document, moves a wallet balance, or writes a
+ * wallet transaction. What it still does - and what actually mattered here - is
+ * raise the platform notification that tells the platform and the business that
+ * a participant's deposit has to go back to them. That signal is not
+ * wallet-specific: removing it would leave money owed with nothing saying so.
+ *
+ * @param {!Object} params Call parameters.
+ * @param {!Object} params.transaction Firestore transaction to write in.
+ * @param {!Object} params.participant Participant record, including `uid`.
+ * @param {!Object} params.pool Parent barrel pool record.
+ * @param {string} params.poolId Barrel pool document ID.
+ * @param {string} params.reason Why the refund is due.
+ * @param {string=} params.requestedBy UID of whoever triggered it.
+ * @return {?{notificationId: string, amountCents: number}} Null when nothing
+ *     is refundable.
+ */
+function queuePoolParticipantRefundNotice({
   transaction,
   participant,
   pool,
@@ -15670,63 +15388,9 @@ function queuePoolParticipantRefund({
   const trackingCode = pool.trackingCode || poolId;
   const customerName = participant.senderName || participant.customerName || "";
   const customerEmail = participant.customerEmail || "";
-  const requestRef = db.collection("walletRefundRequests").doc();
   const notificationRef = db.collection("platformNotifications").doc();
-  const walletRef = db.collection("wallets").doc(uid);
-  const walletTransactionRef = walletRef.collection("transactions").doc();
   const now = FirestoreFieldValue.serverTimestamp();
 
-  transaction.set(walletRef, {
-    customerUid: uid,
-    currency,
-    pendingRefundCents: FirestoreFieldValue.increment(
-        refundableCents,
-    ),
-    pendingRefund: FirestoreFieldValue.increment(amount),
-    updatedAt: now,
-  }, {merge: true});
-  transaction.set(walletTransactionRef, {
-    type: "credit",
-    reason,
-    status: "pending",
-    amountCents: refundableCents,
-    amount,
-    currency,
-    refundRequestId: requestRef.id,
-    shipmentId: poolId,
-    trackingCode,
-    businessId: pool.businessId,
-    businessName: pool.businessName,
-    customerUid: uid,
-    customerName,
-    customerEmail,
-    createdAt: now,
-  });
-  transaction.set(requestRef, {
-    customerUid: uid,
-    customerEmail,
-    customerName,
-    amountCents: refundableCents,
-    amount,
-    currency,
-    status: "pending",
-    destination: "original_payment",
-    source: "barrel_pool",
-    refundReason: reason,
-    businessId: pool.businessId || "",
-    businessName: pool.businessName || "",
-    barrelPoolId: poolId,
-    trackingCode,
-    participantUid: uid,
-    participantRole: participant.role || "",
-    sharesClaimed: Number(participant.sharesClaimed || 0),
-    relatedCollection: "barrelPools",
-    relatedId: poolId,
-    relatedLabel: trackingCode,
-    createdBy: requestedBy,
-    createdAt: now,
-    updatedAt: now,
-  });
   transaction.set(notificationRef, {
     type: "deposit_refund_due",
     status: "unread",
@@ -15735,13 +15399,15 @@ function queuePoolParticipantRefund({
     barrelPoolId: poolId,
     trackingCode,
     participantUid: uid,
+    participantRole: participant.role || "",
+    sharesClaimed: Number(participant.sharesClaimed || 0),
     customerUid: uid,
     customerEmail,
     customerName,
     amount,
     amountCents: refundableCents,
     currency,
-    walletRefundRequestId: requestRef.id,
+    refundReason: reason,
     relatedCollection: "barrelPools",
     relatedId: poolId,
     relatedLabel: trackingCode,
@@ -15755,12 +15421,10 @@ function queuePoolParticipantRefund({
     updatedAt: now,
   });
   return {
-    refundRequestId: requestRef.id,
     notificationId: notificationRef.id,
     amountCents: refundableCents,
   };
 }
-
 function queuePoolParticipantBalancePayment({
   batch,
   participant,
@@ -15927,7 +15591,6 @@ exports.createBarrelPool = onCall(
         approvalMode,
         joinDeadline,
         shipMode,
-        useWalletBalance,
       } = request.data || {};
       const normalizedOrigin = requirePoolOrigin(origin);
       if (normalizedOrigin !== "customerPosted") {
@@ -16001,27 +15664,13 @@ exports.createBarrelPool = onCall(
       const trackingCode = await generateTrackingCode("BP", "barrelPools");
       const userRecord = await admin.auth().getUser(customerUid);
       const now = FirestoreFieldValue.serverTimestamp();
-      let walletAppliedCents = 0;
       let cardDepositCents = 0;
       await db.runTransaction(async (transaction) => {
-        if (useWalletBalance === true) {
-          walletAppliedCents = await debitWallet({
-            transaction,
-            customerUid,
-            amountCents: depositCents,
-            shipmentId: poolRef.id,
-            trackingCode,
-            reason: "barrel_pool_deposit",
-            businessId: businessDestination.businessId,
-            businessName: business.name || DEFAULT_BUSINESS_NAME,
-          });
-        }
-        cardDepositCents = depositCents - walletAppliedCents;
+        cardDepositCents = depositCents;
         const payment = sharedPoolPaymentFields({
           poolId: poolRef.id,
           uid: customerUid,
           amountCents: cardDepositCents,
-          totalDepositCents: depositCents,
           type: "barrel_pool_deposit",
         });
         const openShares = normalizedTotalShares - normalizedShares;
@@ -16102,8 +15751,6 @@ exports.createBarrelPool = onCall(
           joinStatus: "accepted",
           depositAmount: dollarsFromCents(depositCents),
           depositAmountCents: depositCents,
-          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
-          walletAppliedCents,
           cardDepositAmount: dollarsFromCents(cardDepositCents),
           cardDepositAmountCents: cardDepositCents,
           balanceAmount: dollarsFromCents(balanceCents),
@@ -16203,18 +15850,6 @@ exports.createBarrelPool = onCall(
               },
               now: failedAt,
             });
-            if (walletAppliedCents > 0) {
-              await creditWallet({
-                transaction,
-                customerUid,
-                amountCents: walletAppliedCents,
-                shipmentId: poolRef.id,
-                trackingCode,
-                reason: "barrel_pool_deposit_reversal",
-                businessId: businessDestination.businessId,
-                businessName: business.name || DEFAULT_BUSINESS_NAME,
-              });
-            }
           });
           throw error;
         }
@@ -16226,7 +15861,6 @@ exports.createBarrelPool = onCall(
           // Platform-owned: this deposit is created without a Stripe-Account
           // header, so the client must not scope its payment sheet.
           stripeConnectedAccountId: clientStripeAccountId(""),
-          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
           cardDepositAmount: dollarsFromCents(cardDepositCents),
           depositAmount: dollarsFromCents(depositCents),
         };
@@ -16238,7 +15872,6 @@ exports.createBarrelPool = onCall(
         trackingCode,
         simulatedPayment: true,
         depositAmount: dollarsFromCents(depositCents),
-        walletAppliedAmount: dollarsFromCents(walletAppliedCents),
         cardDepositAmount: dollarsFromCents(cardDepositCents),
       };
     },
@@ -16500,8 +16133,6 @@ exports.createBusinessBarrelPool = onCall(
             joinStatus: "accepted",
             depositAmount: dollarsFromCents(depositCents),
             depositAmountCents: depositCents,
-            walletAppliedAmount: 0,
-            walletAppliedCents: 0,
             cardDepositAmount: 0,
             cardDepositAmountCents: 0,
             balanceAmount: dollarsFromCents(balanceCents),
@@ -16786,7 +16417,6 @@ exports.requestJoinBarrelPool = onCall(
           "shared_barrel_join",
       );
       const poolId = cleanText(request.data?.poolId, 160);
-      const useWalletBalance = request.data?.useWalletBalance === true;
       const requestedDestinationCountryId = cleanText(
           request.data?.destinationCountryId,
           160,
@@ -16833,7 +16463,6 @@ exports.requestJoinBarrelPool = onCall(
           pricingDoc?.data(),
       );
       let depositCents = 0;
-      let walletAppliedCents = 0;
       let cardDepositCents = 0;
       let trackingCode = poolId;
       let poolBusinessId = "";
@@ -16916,19 +16545,7 @@ exports.requestJoinBarrelPool = onCall(
             pickup.fee,
         );
         trackingCode = pool.trackingCode || poolId;
-        if (useWalletBalance === true) {
-          walletAppliedCents = await debitWallet({
-            transaction,
-            customerUid,
-            amountCents: depositCents,
-            shipmentId: poolId,
-            trackingCode,
-            reason: "barrel_pool_join_deposit",
-            businessId: pool.businessId,
-            businessName: pool.businessName,
-          });
-        }
-        cardDepositCents = depositCents - walletAppliedCents;
+        cardDepositCents = depositCents;
         const nextOpenShares = openShares - sharesClaimed;
         const approvalMode = String(pool.approvalMode || "approval");
         const joinStatus = approvalMode === "auto" ? "accepted" : "requested";
@@ -16941,7 +16558,6 @@ exports.requestJoinBarrelPool = onCall(
           poolId,
           uid: customerUid,
           amountCents: cardDepositCents,
-          totalDepositCents: depositCents,
           type: "barrel_pool_join",
         });
         const participant = {
@@ -16978,8 +16594,6 @@ exports.requestJoinBarrelPool = onCall(
           joinStatus,
           depositAmount: dollarsFromCents(depositCents),
           depositAmountCents: depositCents,
-          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
-          walletAppliedCents,
           cardDepositAmount: dollarsFromCents(cardDepositCents),
           cardDepositAmountCents: cardDepositCents,
           balanceAmount: dollarsFromCents(balanceCents),
@@ -17141,18 +16755,6 @@ exports.requestJoinBarrelPool = onCall(
               },
               now: failedAt,
             });
-            if (walletAppliedCents > 0) {
-              await creditWallet({
-                transaction,
-                customerUid,
-                amountCents: walletAppliedCents,
-                shipmentId: poolId,
-                trackingCode,
-                reason: "barrel_pool_join_deposit_reversal",
-                businessId: poolBusinessId,
-                businessName: poolBusinessName,
-              });
-            }
           });
           throw error;
         }
@@ -17161,7 +16763,6 @@ exports.requestJoinBarrelPool = onCall(
           poolId,
           trackingCode,
           depositAmount: dollarsFromCents(depositCents),
-          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
           cardDepositAmount: dollarsFromCents(cardDepositCents),
           clientSecret: paymentIntent.client_secret,
           // Platform-owned: created without a Stripe-Account header.
@@ -17174,7 +16775,6 @@ exports.requestJoinBarrelPool = onCall(
         poolId,
         trackingCode,
         depositAmount: dollarsFromCents(depositCents),
-        walletAppliedAmount: dollarsFromCents(walletAppliedCents),
         cardDepositAmount: dollarsFromCents(cardDepositCents),
         simulatedPayment: true,
       };
@@ -17484,21 +17084,6 @@ exports.cancelPendingBarrelPoolDeposit = onCall(
             now,
           });
         }
-        const walletAppliedCents = Number(
-            freshParticipant.walletAppliedCents || 0,
-        );
-        if (Number.isFinite(walletAppliedCents) && walletAppliedCents > 0) {
-          await creditWallet({
-            transaction,
-            customerUid,
-            amountCents: walletAppliedCents,
-            shipmentId: poolId,
-            trackingCode: freshPool.trackingCode || poolId,
-            reason: "barrel_pool_deposit_reversal",
-            businessId: freshPool.businessId,
-            businessName: freshPool.businessName,
-          });
-        }
       });
 
       return {success: true, poolId};
@@ -17592,8 +17177,8 @@ exports.decideBarrelPoolJoin = onCall(
           });
           return;
         }
-        const refundRequest = depositSettled ?
-          queuePoolParticipantRefund({
+        const refundNotice = depositSettled ?
+          queuePoolParticipantRefundNotice({
             transaction,
             participant: {...participant, uid: participantUid},
             pool,
@@ -17625,31 +17210,14 @@ exports.decideBarrelPoolJoin = onCall(
           paymentStatus: nextPaymentStatus,
           refundableAmountCents: 0,
           refundableAmount: 0,
-          walletRefundRequestId: depositSettled ?
-            refundRequest?.refundRequestId || "" :
+          refundNoticeId: depositSettled ?
+            refundNotice?.notificationId || "" :
             FirestoreFieldValue.delete(),
           refundRequestedAt: depositSettled ?
             now :
             FirestoreFieldValue.delete(),
           updatedAt: now,
         });
-        if (!depositSettled) {
-          const walletAppliedCents = Number(
-              participant.walletAppliedCents || 0,
-          );
-          if (Number.isFinite(walletAppliedCents) && walletAppliedCents > 0) {
-            await creditWallet({
-              transaction,
-              customerUid: participantUid,
-              amountCents: walletAppliedCents,
-              shipmentId: poolId,
-              trackingCode: pool.trackingCode || poolId,
-              reason: "barrel_pool_join_deposit_reversal",
-              businessId: pool.businessId,
-              businessName: pool.businessName,
-            });
-          }
-        }
         transaction.update(poolRef, {
           openShares: nextOpenShares,
           takenShares: nextTakenShares,
@@ -17734,9 +17302,9 @@ exports.leaveBarrelPool = onCall(
         forfeitedCents = shouldRefund ?
           0 :
           Number(participant.depositAmountCents || 0);
-        let refundRequest = null;
+        let refundNotice = null;
         if (shouldRefund) {
-          refundRequest = queuePoolParticipantRefund({
+          refundNotice = queuePoolParticipantRefundNotice({
             transaction,
             participant: {...participant, uid: customerUid},
             pool,
@@ -17777,8 +17345,8 @@ exports.leaveBarrelPool = onCall(
           paymentStatus: nextPaymentStatus,
           refundableAmountCents: 0,
           refundableAmount: 0,
-          walletRefundRequestId: shouldRefund ?
-            refundRequest?.refundRequestId || "" :
+          refundNoticeId: shouldRefund ?
+            refundNotice?.notificationId || "" :
             FirestoreFieldValue.delete(),
           leftAt: now,
           refundRequestedAt: shouldRefund ?
@@ -17914,7 +17482,7 @@ exports.cancelBarrelPool = onCall(
                 ),
             });
           } else if (participantPaid) {
-            const refundRequest = queuePoolParticipantRefund({
+            const refundNotice = queuePoolParticipantRefundNotice({
               transaction,
               participant: {...participant, uid: doc.id},
               pool,
@@ -17927,7 +17495,7 @@ exports.cancelBarrelPool = onCall(
               paymentStatus: nextPaymentStatus,
               refundableAmountCents: 0,
               refundableAmount: 0,
-              walletRefundRequestId: refundRequest?.refundRequestId || "",
+              refundNoticeId: refundNotice?.notificationId || "",
               refundRequestedAt: now,
               updatedAt: now,
             });
@@ -18912,9 +18480,9 @@ exports.expireBarrelPools = onSchedule(
           participants.docs.forEach((participantDoc) => {
             const participant = participantDoc.data() || {};
             const participantUid = participantDoc.id;
-            let refundRequest = null;
+            let refundNotice = null;
             if (participant.paymentStatus === "succeeded") {
-              refundRequest = queuePoolParticipantRefund({
+              refundNotice = queuePoolParticipantRefundNotice({
                 transaction,
                 participant: {...participant, uid: participantUid},
                 pool,
@@ -18929,9 +18497,9 @@ exports.expireBarrelPools = onSchedule(
                 participant.paymentStatus || "not_required",
               refundableAmountCents: 0,
               refundableAmount: 0,
-              walletRefundRequestId:
+              refundNoticeId:
                 participant.paymentStatus === "succeeded" ?
-                refundRequest?.refundRequestId || "" :
+                refundNotice?.notificationId || "" :
                 FirestoreFieldValue.delete(),
               refundRequestedAt: participant.paymentStatus === "succeeded" ?
                 now :
@@ -19081,7 +18649,7 @@ function clientStripeAccountId(connectedAccountId) {
 
 // Stripe rejects a PaymentIntent if application_fee_amount exceeds amount.
 // The platform fee is normally computed off the full gross price, but some
-// flows let a customer cover part of that gross with wallet credit first,
+// flows once let a customer cover part of that gross with wallet credit,
 // so the actual card charge can be smaller than the gross the fee was based
 // on - clamp so a direct-charge business's payment intent never fails to
 // create over this.
@@ -19414,7 +18982,6 @@ exports.createBarrelShipmentPaymentIntent = onCall(
         pickupBorough,
         pickupDateTime,
         officeLocationId,
-        useWalletBalance,
       } = request.data || {};
 
       if (
@@ -19508,21 +19075,8 @@ exports.createBarrelShipmentPaymentIntent = onCall(
       const cleanPickupAddress = wantsPickup ?
         pickup.address :
         formatOfficeLocationAddress(officeLocation);
-      let walletAppliedCents = 0;
       await db.runTransaction(async (transaction) => {
-        if (useWalletBalance === true) {
-          walletAppliedCents = await debitWallet({
-            transaction,
-            customerUid,
-            amountCents: totalCents,
-            shipmentId: shipmentRef.id,
-            trackingCode,
-            reason: "barrel_shipment_payment",
-            businessId: businessDestination.businessId,
-            businessName: business.name || DEFAULT_BUSINESS_NAME,
-          });
-        }
-        const chargeCents = totalCents - walletAppliedCents;
+        const chargeCents = totalCents;
         transaction.set(shipmentRef, {
           trackingCode,
           senderName: String(senderName).trim(),
@@ -19560,8 +19114,6 @@ exports.createBarrelShipmentPaymentIntent = onCall(
           price: total,
           platformFeePct,
           ...payoutFields,
-          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
-          walletAppliedCents,
           cardChargeAmount: dollarsFromCents(chargeCents),
           cardChargeAmountCents: chargeCents,
           paymentStatus: chargeCents === 0 ? "succeeded" : "pending",
@@ -19572,7 +19124,7 @@ exports.createBarrelShipmentPaymentIntent = onCall(
         });
       });
 
-      const chargeCents = totalCents - walletAppliedCents;
+      const chargeCents = totalCents;
       if (chargeCents === 0) {
         if (!SIMULATE_PAYMENTS) {
           const snapshot = await shipmentRef.get();
@@ -19586,7 +19138,6 @@ exports.createBarrelShipmentPaymentIntent = onCall(
           shipmentId: shipmentRef.id,
           trackingCode,
           simulatedPayment: true,
-          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
           cardChargeAmount: 0,
         };
       }
@@ -19603,7 +19154,6 @@ exports.createBarrelShipmentPaymentIntent = onCall(
           shipmentId: shipmentRef.id,
           trackingCode,
           simulatedPayment: true,
-          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
           cardChargeAmount: dollarsFromCents(chargeCents),
         };
       }
@@ -19639,20 +19189,6 @@ exports.createBarrelShipmentPaymentIntent = onCall(
           status: "cancelled",
           updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
-        if (walletAppliedCents > 0) {
-          await db.runTransaction(async (transaction) => {
-            await creditWallet({
-              transaction,
-              customerUid,
-              amountCents: walletAppliedCents,
-              shipmentId: shipmentRef.id,
-              trackingCode,
-              reason: "barrel_shipment_payment_reversal",
-              businessId: businessDestination.businessId,
-              businessName: business.name || DEFAULT_BUSINESS_NAME,
-            });
-          });
-        }
         throw error;
       }
 
@@ -19672,7 +19208,6 @@ exports.createBarrelShipmentPaymentIntent = onCall(
         stripeConnectedAccountId: clientStripeAccountId(
             payoutFields.stripeConnectedAccountId,
         ),
-        walletAppliedAmount: dollarsFromCents(walletAppliedCents),
         cardChargeAmount: dollarsFromCents(chargeCents),
       };
     },
@@ -19697,7 +19232,6 @@ exports.createBarrelOrderPaymentIntent = onCall(
         pickupAddress,
         pickupBorough,
         pickupDateTime,
-        useWalletBalance,
       } = request.data || {};
       const lines = Array.isArray(request.data?.lines) ?
         request.data.lines :
@@ -19940,22 +19474,9 @@ exports.createBarrelOrderPaymentIntent = onCall(
         );
       }
       const now = FirestoreFieldValue.serverTimestamp();
-      let walletAppliedCents = 0;
 
       await db.runTransaction(async (transaction) => {
-        if (useWalletBalance === true) {
-          walletAppliedCents = await debitWallet({
-            transaction,
-            customerUid,
-            amountCents: orderTotalCents,
-            shipmentId: orderRef.id,
-            trackingCode: trackingCodes[0],
-            reason: "barrel_order_payment",
-            businessId: "",
-            businessName: "Multiple businesses",
-          });
-        }
-        const chargeCents = orderTotalCents - walletAppliedCents;
+        const chargeCents = orderTotalCents;
         transaction.set(orderRef, {
           customerUid,
           customerEmail: userRecord.email || "",
@@ -19981,8 +19502,6 @@ exports.createBarrelOrderPaymentIntent = onCall(
           currency: SHIPMENT_CURRENCY,
           orderTotalCents,
           orderTotal: dollarsFromCents(orderTotalCents),
-          walletAppliedCents,
-          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
           cardChargeAmountCents: chargeCents,
           cardChargeAmount: dollarsFromCents(chargeCents),
           paymentStatus: chargeCents === 0 ? "succeeded" : "pending",
@@ -19995,10 +19514,6 @@ exports.createBarrelOrderPaymentIntent = onCall(
         validatedLines.forEach((line, index) => {
           const shipmentRef = shipmentRefs[index];
           const trackingCode = trackingCodes[index];
-          const lineWalletAppliedCents = walletAppliedCents > 0 ?
-            Math.round(walletAppliedCents * line.lineTotalCents /
-              orderTotalCents) :
-            0;
           transaction.set(shipmentRef, {
             orderId: orderRef.id,
             orderLineIndex: line.index,
@@ -20036,16 +19551,8 @@ exports.createBarrelOrderPaymentIntent = onCall(
             price: dollarsFromCents(line.lineTotalCents),
             platformFeePct: line.platformFeePct,
             ...line.payoutFields,
-            walletAppliedCents: lineWalletAppliedCents,
-            walletAppliedAmount: dollarsFromCents(lineWalletAppliedCents),
-            cardChargeAmountCents: Math.max(
-                0,
-                line.lineTotalCents - lineWalletAppliedCents,
-            ),
-            cardChargeAmount: dollarsFromCents(Math.max(
-                0,
-                line.lineTotalCents - lineWalletAppliedCents,
-            )),
+            cardChargeAmountCents: line.lineTotalCents,
+            cardChargeAmount: dollarsFromCents(line.lineTotalCents),
             paymentStatus: chargeCents === 0 ? "succeeded" : "pending",
             status: chargeCents === 0 ? "pending" : "pending_payment",
             ...(chargeCents === 0 && {paidAt: now}),
@@ -20055,7 +19562,7 @@ exports.createBarrelOrderPaymentIntent = onCall(
         });
       });
 
-      const chargeCents = orderTotalCents - walletAppliedCents;
+      const chargeCents = orderTotalCents;
       if (chargeCents === 0) {
         if (!SIMULATE_PAYMENTS) {
           await issueBarrelOrderTransfers({orderId: orderRef.id});
@@ -20065,7 +19572,6 @@ exports.createBarrelOrderPaymentIntent = onCall(
           shipmentIds: shipmentRefs.map((ref) => ref.id),
           trackingCodes,
           simulatedPayment: true,
-          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
           cardChargeAmount: 0,
         };
       }
@@ -20092,7 +19598,6 @@ exports.createBarrelOrderPaymentIntent = onCall(
           shipmentIds: shipmentRefs.map((ref) => ref.id),
           trackingCodes,
           simulatedPayment: true,
-          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
           cardChargeAmount: dollarsFromCents(chargeCents),
         };
       }
@@ -20137,20 +19642,6 @@ exports.createBarrelOrderPaymentIntent = onCall(
             updatedAt: FirestoreFieldValue.serverTimestamp(),
           })),
         ]);
-        if (walletAppliedCents > 0) {
-          await db.runTransaction(async (transaction) => {
-            await creditWallet({
-              transaction,
-              customerUid,
-              amountCents: walletAppliedCents,
-              shipmentId: orderRef.id,
-              trackingCode: trackingCodes[0],
-              reason: "barrel_order_payment_reversal",
-              businessId: "",
-              businessName: "Multiple businesses",
-            });
-          });
-        }
         throw error;
       }
 
@@ -20162,7 +19653,6 @@ exports.createBarrelOrderPaymentIntent = onCall(
         stripeConnectedAccountId: clientStripeAccountId(
             orderConnectedAccountId,
         ),
-        walletAppliedAmount: dollarsFromCents(walletAppliedCents),
         cardChargeAmount: dollarsFromCents(chargeCents),
       };
     },
@@ -20312,33 +19802,11 @@ exports.cancelPendingBarrelShipment = onCall(
         }
       }
 
-      const walletAppliedCents = Number(shipment.walletAppliedCents || 0);
-      if (Number.isFinite(walletAppliedCents) && walletAppliedCents > 0) {
-        await db.runTransaction(async (transaction) => {
-          transaction.update(shipmentRef, {
-            paymentStatus: "cancelled",
-            status: "cancelled",
-            walletAppliedReversed: true,
-            updatedAt: FirestoreFieldValue.serverTimestamp(),
-          });
-          await creditWallet({
-            transaction,
-            customerUid,
-            amountCents: walletAppliedCents,
-            shipmentId,
-            trackingCode: shipment.trackingCode,
-            reason: "barrel_shipment_payment_reversal",
-            businessId: shipment.businessId,
-            businessName: shipment.businessName,
-          });
-        });
-      } else {
-        await shipmentRef.update({
-          paymentStatus: "cancelled",
-          status: "cancelled",
-          updatedAt: FirestoreFieldValue.serverTimestamp(),
-        });
-      }
+      await shipmentRef.update({
+        paymentStatus: "cancelled",
+        status: "cancelled",
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
       return {success: true, shipmentId};
     },
 );
@@ -20510,35 +19978,20 @@ exports.cancelPendingBarrelOrder = onCall(
       const shipments = await db.collection("barrelShipments")
           .where("orderId", "==", orderId)
           .get();
-      const walletAppliedCents = Number(order.walletAppliedCents || 0);
       await db.runTransaction(async (transaction) => {
         const now = FirestoreFieldValue.serverTimestamp();
         transaction.update(orderRef, {
           paymentStatus: "cancelled",
           status: "cancelled",
-          walletAppliedReversed: walletAppliedCents > 0,
           updatedAt: now,
         });
         shipments.docs.forEach((doc) => {
           transaction.update(doc.ref, {
             paymentStatus: "cancelled",
             status: "cancelled",
-            walletAppliedReversed: walletAppliedCents > 0,
             updatedAt: now,
           });
         });
-        if (Number.isFinite(walletAppliedCents) && walletAppliedCents > 0) {
-          await creditWallet({
-            transaction,
-            customerUid,
-            amountCents: walletAppliedCents,
-            shipmentId: orderId,
-            trackingCode: (order.trackingCodes || [])[0] || orderId,
-            reason: "barrel_order_payment_reversal",
-            businessId: "",
-            businessName: "Multiple businesses",
-          });
-        }
       });
 
       return {success: true, orderId};
@@ -20637,7 +20090,6 @@ exports.createFreightShipmentPaymentIntent = onCall(
         pickupLongitude,
         pickupDateTime,
         officeLocationId,
-        useWalletBalance,
       } = request.data || {};
 
       if (
@@ -20744,21 +20196,8 @@ exports.createFreightShipmentPaymentIntent = onCall(
         connectReady,
         business,
       });
-      let walletAppliedCents = 0;
       await db.runTransaction(async (transaction) => {
-        if (useWalletBalance === true) {
-          walletAppliedCents = await debitWallet({
-            transaction,
-            customerUid,
-            amountCents: totalCents,
-            shipmentId: shipmentRef.id,
-            trackingCode,
-            reason: "freight_shipment_payment",
-            businessId: freightDestination.businessId,
-            businessName: business.name || DEFAULT_BUSINESS_NAME,
-          });
-        }
-        const chargeCents = totalCents - walletAppliedCents;
+        const chargeCents = totalCents;
         transaction.set(shipmentRef, {
           trackingCode,
           senderName: String(senderName).trim(),
@@ -20808,8 +20247,6 @@ exports.createFreightShipmentPaymentIntent = onCall(
           platformFeePct,
           ...payoutFields,
           payoutStatus: "awaiting_settlement",
-          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
-          walletAppliedCents,
           cardChargeAmount: dollarsFromCents(chargeCents),
           cardChargeAmountCents: chargeCents,
           paymentStatus: chargeCents === 0 ? "succeeded" : "pending",
@@ -20825,13 +20262,12 @@ exports.createFreightShipmentPaymentIntent = onCall(
         });
       });
 
-      const chargeCents = totalCents - walletAppliedCents;
+      const chargeCents = totalCents;
       if (chargeCents === 0) {
         return {
           shipmentId: shipmentRef.id,
           trackingCode,
           simulatedPayment: true,
-          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
           cardChargeAmount: 0,
         };
       }
@@ -20849,7 +20285,6 @@ exports.createFreightShipmentPaymentIntent = onCall(
           shipmentId: shipmentRef.id,
           trackingCode,
           simulatedPayment: true,
-          walletAppliedAmount: dollarsFromCents(walletAppliedCents),
           cardChargeAmount: dollarsFromCents(chargeCents),
         };
       }
@@ -20908,20 +20343,6 @@ exports.createFreightShipmentPaymentIntent = onCall(
           status: "cancelled",
           updatedAt: FirestoreFieldValue.serverTimestamp(),
         });
-        if (walletAppliedCents > 0) {
-          await db.runTransaction(async (transaction) => {
-            await creditWallet({
-              transaction,
-              customerUid,
-              amountCents: walletAppliedCents,
-              shipmentId: shipmentRef.id,
-              trackingCode,
-              reason: "freight_shipment_payment_reversal",
-              businessId: freightDestination.businessId,
-              businessName: business.name || DEFAULT_BUSINESS_NAME,
-            });
-          });
-        }
         throw error;
       }
 
@@ -20941,7 +20362,6 @@ exports.createFreightShipmentPaymentIntent = onCall(
         stripeConnectedAccountId: clientStripeAccountId(
             payoutFields.stripeConnectedAccountId,
         ),
-        walletAppliedAmount: dollarsFromCents(walletAppliedCents),
         cardChargeAmount: dollarsFromCents(chargeCents),
       };
     },
@@ -21110,33 +20530,11 @@ exports.cancelPendingFreightShipment = onCall(
         }
       }
 
-      const walletAppliedCents = Number(shipment.walletAppliedCents || 0);
-      if (Number.isFinite(walletAppliedCents) && walletAppliedCents > 0) {
-        await db.runTransaction(async (transaction) => {
-          transaction.update(shipmentRef, {
-            paymentStatus: "cancelled",
-            status: "cancelled",
-            walletAppliedReversed: true,
-            updatedAt: FirestoreFieldValue.serverTimestamp(),
-          });
-          await creditWallet({
-            transaction,
-            customerUid,
-            amountCents: walletAppliedCents,
-            shipmentId,
-            trackingCode: shipment.trackingCode,
-            reason: "freight_shipment_payment_reversal",
-            businessId: shipment.businessId,
-            businessName: shipment.businessName,
-          });
-        });
-      } else {
-        await shipmentRef.update({
-          paymentStatus: "cancelled",
-          status: "cancelled",
-          updatedAt: FirestoreFieldValue.serverTimestamp(),
-        });
-      }
+      await shipmentRef.update({
+        paymentStatus: "cancelled",
+        status: "cancelled",
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
       return {success: true, shipmentId};
     },
 );
@@ -21437,7 +20835,6 @@ exports.confirmFreightShipmentWeight = onCall(
               shipment.estimatedTotalCents ?? centsFromDollars(shipment.price),
           ),
           ...calculation,
-          initialWalletAppliedCents: Number(shipment.walletAppliedCents || 0),
           initialCardChargeCents: Number(shipment.cardChargeAmountCents || 0),
           weightConfirmedByUid: callerUid,
           weightConfirmedAt: now,
@@ -22219,7 +21616,7 @@ exports.changeBarrelShipmentDestination = onCall(
           shipmentId,
           trackingCode: shipment.trackingCode,
           difference: 0,
-          walletCredit: 0,
+          cardRefund: 0,
           amountDue: 0,
         };
       }
@@ -22398,7 +21795,7 @@ exports.changeBarrelShipmentDestination = onCall(
                 trackingCode: shipment.trackingCode,
                 difference: dollarsFromCents(differenceCents),
                 amountDue: 0,
-                walletCredit: 0,
+                cardRefund: 0,
                 recoveredPayment: true,
               };
             }
@@ -22441,7 +21838,7 @@ exports.changeBarrelShipmentDestination = onCall(
             trackingCode: shipment.trackingCode,
             difference: dollarsFromCents(differenceCents),
             amountDue: dollarsFromCents(differenceCents),
-            walletCredit: 0,
+            cardRefund: 0,
             requiresPayment: true,
             changeRequestId: cleanRequestId,
             clientSecret: paymentIntent.client_secret,
@@ -22463,13 +21860,32 @@ exports.changeBarrelShipmentDestination = onCall(
           trackingCode: shipment.trackingCode,
           difference: dollarsFromCents(differenceCents),
           amountDue: dollarsFromCents(differenceCents),
-          walletCredit: 0,
+          cardRefund: 0,
           simulatedPayment: true,
         };
       }
 
       if (differenceCents < 0) {
-        const creditCents = Math.abs(differenceCents);
+        const refundCents = Math.abs(differenceCents);
+        // The wallet is retired, so a cheaper destination goes back on the
+        // card the shipment was paid with - the same route freight settlement
+        // uses for a parcel that weighs under its quote.
+        const plan = planBarrelDestinationRefund({
+          differenceCents,
+          paymentStatus: shipment.paymentStatus,
+          stripePaymentIntentId: shipment.stripePaymentIntentId,
+        });
+        if (plan.action === "manual_review") {
+          logger.warn("Barrel destination refund needs manual settlement", {
+            shipmentId,
+            detail: plan.reason,
+            refundCents: plan.refundCents,
+          });
+        }
+        // Claim the change first, refund second. The same order the paid
+        // upgrade above uses: money must never leave on a change that the
+        // re-read then rejects, and a refund recorded as pending is
+        // recoverable in a way a silent one is not.
         await db.runTransaction(async (transaction) => {
           const latestShipmentDoc = await transaction.get(shipmentRef);
           if (!latestShipmentDoc.exists) {
@@ -22484,21 +21900,56 @@ exports.changeBarrelShipmentDestination = onCall(
           });
           transaction.update(shipmentRef, {
             ...update,
-            destinationAdjustmentPaymentStatus: "credited_to_wallet",
-            destinationAdjustmentAmount: -dollarsFromCents(creditCents),
-            destinationAdjustmentAmountCents: -creditCents,
-          });
-          await creditWallet({
-            transaction,
-            customerUid,
-            amountCents: creditCents,
-            shipmentId,
-            trackingCode: latestShipment.trackingCode,
-            reason: "barrel_destination_refund",
-            businessId: businessDestination.businessId,
-            businessName: business.name || DEFAULT_BUSINESS_NAME,
+            destinationAdjustmentPaymentStatus:
+              plan.action === "card_refund" ?
+                "refund_pending" :
+                plan.action === "manual_review" ?
+                  "refund_due" :
+                  "not_required",
+            destinationAdjustmentAmount: -dollarsFromCents(refundCents),
+            destinationAdjustmentAmountCents: -refundCents,
           });
         });
+        if (plan.action === "card_refund") {
+          let refund;
+          try {
+            refund = SIMULATE_PAYMENTS ?
+              {id: `simulated_destination_refund_${shipmentId}`} :
+              await createStripeRefund({
+                paymentIntentId: plan.paymentIntentId,
+                amount: plan.refundCents,
+                connectedAccountId: stripeAccountIdForRetrieval(shipment),
+                idempotencyKey:
+                  `barrel-destination-refund-v1-${shipmentId}-` +
+                  `${plan.refundCents}-${destinationCountryId}`,
+                metadata: {
+                  shipmentId,
+                  customerUid,
+                  paymentType: "barrel_destination_refund",
+                },
+              });
+          } catch (error) {
+            await shipmentRef.update({
+              destinationAdjustmentPaymentStatus: "refund_due",
+              updatedAt: FirestoreFieldValue.serverTimestamp(),
+            });
+            logger.error("Barrel destination refund failed", {
+              shipmentId,
+              detail: error.message,
+              refundCents: plan.refundCents,
+            });
+            throw error;
+          }
+          await shipmentRef.update({
+            destinationAdjustmentPaymentStatus: "refunded_to_card",
+            destinationAdjustmentRefundId: refund.id,
+            destinationAdjustmentRefundedCents: plan.refundCents,
+            destinationAdjustmentRefundedAmount: dollarsFromCents(
+                plan.refundCents,
+            ),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          });
+        }
         const changedShipment = await shipmentRef.get();
         await issueBarrelShipmentTransfer({
           shipmentRef,
@@ -22509,9 +21960,11 @@ exports.changeBarrelShipmentDestination = onCall(
           success: true,
           shipmentId,
           trackingCode: shipment.trackingCode,
-          difference: -dollarsFromCents(creditCents),
+          difference: -dollarsFromCents(refundCents),
           amountDue: 0,
-          walletCredit: dollarsFromCents(creditCents),
+          cardRefund: dollarsFromCents(
+              plan.action === "card_refund" ? plan.refundCents : 0,
+          ),
         };
       }
 
@@ -22541,7 +21994,7 @@ exports.changeBarrelShipmentDestination = onCall(
         trackingCode: shipment.trackingCode,
         difference: 0,
         amountDue: 0,
-        walletCredit: 0,
+        cardRefund: 0,
       };
     },
 );
@@ -24655,14 +24108,6 @@ const SUPPORT_CASE_COLLECTIONS = {
     businessField: "businessId",
     businessNameField: "businessName",
     labelFields: ["destinationCountryName", "status"],
-  },
-  walletRefundRequests: {
-    caseType: "wallet_refund",
-    customerField: "customerUid",
-    businessField: "businessId",
-    businessNameField: "businessName",
-    labelFields: ["amount", "status", "source"],
-    platformOwned: true,
   },
   barrelPoolBalanceRequests: {
     caseType: "barrel_pool_balance",

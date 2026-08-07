@@ -116,7 +116,6 @@ function freightInput(businessId, overrides = {}) {
     mode: "air",
     weightKg: 10,
     pickupRequested: false,
-    useWalletBalance: false,
     ...overrides,
   };
 }
@@ -497,11 +496,12 @@ describe("freight service callable lifecycle", () => {
           data: freightInput(businessId, {
             mode: "sea",
             weightKg: 10,
-            useWalletBalance: true,
           }),
         });
         const paidShipment = await freightData(paid.shipmentId);
-        assert.equal(paidShipment.walletAppliedCents, 0);
+        // The wallet fields are gone entirely, not zeroed.
+        assert.equal(Object.hasOwn(paidShipment, "walletAppliedCents"), false);
+        assert.equal(Object.hasOwn(paidShipment, "walletAppliedAmount"), false);
         // Full price on the card - 10kg sea at 5/kg.
         assert.equal(paidShipment.cardChargeAmountCents, 5000);
         const walletAfter = await db.collection("wallets")
@@ -766,7 +766,6 @@ describe("freight service callable lifecycle", () => {
           auth: {uid: CUSTOMER_UID},
           data: freightInput(businessId, {
             weightKg: 10,
-            useWalletBalance: true,
           }),
         });
         const confirmed = await functions.confirmFreightShipmentWeight.run({
@@ -1732,7 +1731,6 @@ describe("barrel shipping service callable lifecycle", () => {
             businessId,
             quantity: 1,
             pickupRequested: false,
-            useWalletBalance: false,
           },
         }),
         /not configured for barrel shipping/,
@@ -1753,7 +1751,6 @@ describe("barrel shipping service callable lifecycle", () => {
             businessId,
             quantity: 2,
             pickupRequested: false,
-            useWalletBalance: false,
           },
         });
         const shipment = await db.collection("barrelShipments")
@@ -1854,7 +1851,6 @@ describe("barrel shipping service callable lifecycle", () => {
             pickupAddress: "123 Atlantic Ave, Brooklyn, NY 11201",
             pickupBorough: "Albany",
             pickupDateTime,
-            useWalletBalance: false,
           },
         });
         const shipment = await db.collection("barrelShipments")
@@ -1892,7 +1888,6 @@ describe("barrel shipping service callable lifecycle", () => {
               pickupAddress: "123 Atlantic Ave, Brooklyn, NY 11201",
               pickupBorough: "Bronx",
               pickupDateTime: futureIso(),
-              useWalletBalance: false,
               ...overrides,
             },
           });
@@ -1943,7 +1938,6 @@ describe("barrel shipping service callable lifecycle", () => {
         businessId,
         quantity: 1,
         pickupRequested: false,
-        useWalletBalance: false,
       },
     });
     const shipment = await db.collection("barrelShipments")
@@ -1983,7 +1977,6 @@ describe("barrel shipping service callable lifecycle", () => {
             businessId,
             quantity: 1,
             pickupRequested: false,
-            useWalletBalance: false,
           },
         });
         await assert.rejects(attempt, /multiple office locations/);
@@ -2000,7 +1993,6 @@ describe("barrel shipping service callable lifecycle", () => {
                 quantity: 1,
                 pickupRequested: false,
                 officeLocationId: "not-a-real-location",
-                useWalletBalance: false,
               },
             }),
             /Select a valid office location/,
@@ -2017,7 +2009,6 @@ describe("barrel shipping service callable lifecycle", () => {
             quantity: 1,
             pickupRequested: false,
             officeLocationId: "manhattan",
-            useWalletBalance: false,
           },
         });
         const shipment = await db.collection("barrelShipments")
@@ -2048,7 +2039,6 @@ describe("barrel shipping service callable lifecycle", () => {
           data: {
             senderName: "Multi Destination Sender",
             pickupRequested: false,
-            useWalletBalance: false,
             lines: [
               {
                 destinationCountryId: COUNTRY_ID,
@@ -2120,7 +2110,6 @@ describe("barrel shipping service callable lifecycle", () => {
             pickupAddress: "123 Atlantic Ave, Brooklyn, NY 11201",
             pickupBorough: "Brooklyn",
             pickupDateTime,
-            useWalletBalance: false,
             lines: [
               {
                 destinationCountryId: COUNTRY_ID,
@@ -2193,7 +2182,6 @@ describe("barrel shipping service callable lifecycle", () => {
           auth: {uid: CUSTOMER_UID},
           data: {
             senderName: "Line Pickup Sender",
-            useWalletBalance: false,
             lines: [
               {
                 destinationCountryId: COUNTRY_ID,
@@ -2314,72 +2302,26 @@ describe("car parking service callable lifecycle", () => {
   });
 });
 
-describe("wallet refund lifecycle", () => {
-  it("moves funds to pending and restores or completes them exactly once",
-      async () => {
-        const walletRef = db.collection("wallets").doc(OTHER_UID);
-        await walletRef.set({
-          customerUid: OTHER_UID,
-          currency: "usd",
-          balanceCents: 5000,
-          balance: 50,
-          pendingRefundCents: 0,
-          pendingRefund: 0,
-        });
+describe("the retired wallet", () => {
+  it("exposes no callable that can move a stored balance", async () => {
+    // The wallet is removed (docs/PLAN-2026-08-backlog.md #3). The stored
+    // documents stay - deleting data is not reversible - but nothing on the
+    // server can read, spend, or return them any more.
+    const walletRef = db.collection("wallets").doc(OTHER_UID);
+    await walletRef.set({
+      customerUid: OTHER_UID,
+      currency: "usd",
+      balanceCents: 5000,
+      balance: 50,
+    });
 
-        const first = await functions.requestWalletCardRefund.run({
-          auth: {uid: OTHER_UID},
-          data: {},
-        });
-        let wallet = await walletRef.get();
-        assert.equal(wallet.get("balanceCents"), 0);
-        assert.equal(wallet.get("pendingRefundCents"), 5000);
-        await assert.rejects(
-            () => functions.requestWalletCardRefund.run({
-              auth: {uid: OTHER_UID},
-              data: {},
-            }),
-            /no wallet balance to return/,
-        );
+    assert.equal(functions.requestWalletCardRefund, undefined);
+    assert.equal(functions.reviewWalletRefundRequest, undefined);
+    assert.equal(functions.notifyWalletRefundStatus, undefined);
 
-        await functions.reviewWalletRefundRequest.run({
-          auth: {uid: FINANCE_UID},
-          data: {
-            requestId: first.refundRequestId,
-            decision: "rejected",
-            note: "External card return was not available.",
-          },
-        });
-        wallet = await walletRef.get();
-        assert.equal(wallet.get("balanceCents"), 5000);
-        assert.equal(wallet.get("pendingRefundCents"), 0);
-
-        const second = await functions.requestWalletCardRefund.run({
-          auth: {uid: OTHER_UID},
-          data: {},
-        });
-        await functions.reviewWalletRefundRequest.run({
-          auth: {uid: FINANCE_UID},
-          data: {
-            requestId: second.refundRequestId,
-            decision: "completed",
-            note: "External card return confirmed.",
-          },
-        });
-        wallet = await walletRef.get();
-        assert.equal(wallet.get("balanceCents"), 0);
-        assert.equal(wallet.get("pendingRefundCents"), 0);
-        await assert.rejects(
-            () => functions.reviewWalletRefundRequest.run({
-              auth: {uid: FINANCE_UID},
-              data: {
-                requestId: second.refundRequestId,
-                decision: "completed",
-              },
-            }),
-            /Only pending refund requests can be reviewed/,
-        );
-      });
+    const wallet = await walletRef.get();
+    assert.equal(wallet.get("balanceCents"), 5000);
+  });
 });
 
 describe("car sales service callable lifecycle", () => {

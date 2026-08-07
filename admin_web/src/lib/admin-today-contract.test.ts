@@ -42,7 +42,6 @@ describe("admin Today dashboard contract", () => {
       ["Needs review", "businesses"],
       ["Open shipments", "operations"],
       ["Pending purchases", "operations"],
-      ["Refunds to pay", "finance"],
     ]) {
       assert.match(
         todaySource,
@@ -61,7 +60,6 @@ describe("admin Today dashboard contract", () => {
     for (const action of [
       "Review business",
       "Open application",
-      "Resolve refund",
       "Open purchase",
       "Open shipment",
     ]) {
@@ -79,7 +77,6 @@ describe("admin Today dashboard contract", () => {
       "Barrel shipments",
       "Freight shipments",
       "Car purchases",
-      "Card returns",
       "Admins",
       "Owners",
       "Staff",
@@ -90,6 +87,14 @@ describe("admin Today dashboard contract", () => {
         `Today dashboard must retain the "${metric}" metric`,
       );
     }
+  });
+
+  test("shows nothing about the retired wallet or its refund queue", () => {
+    // The wallet is removed (docs/PLAN-2026-08-backlog.md #3), so the
+    // overview no longer opens with a refund queue that can never fill.
+    assert.doesNotMatch(todaySource, /refund/i);
+    assert.doesNotMatch(todaySource, /wallet/i);
+    assert.doesNotMatch(todaySource, /Card returns/);
   });
 
   test("collapses dashboard grids without horizontal fixed-width columns", () => {
@@ -117,7 +122,6 @@ describe("admin Today dashboard contract", () => {
       "Needs review",
       "Open shipments",
       "Pending purchases",
-      "Refunds to pay",
       "Needs your attention",
       "Network health",
       "Service load",

@@ -1052,7 +1052,7 @@
       "amount": {}
     }
   },
-  "destinationChangeCredited": "Shipment updated. {amount} credited to your wallet.",
+  "destinationChangeCredited": "Shipment updated. {amount} is on its way back to your card.",
   "@destinationChangeCredited": {
     "placeholders": {
       "amount": {}

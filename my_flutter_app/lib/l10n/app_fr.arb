@@ -1053,7 +1053,7 @@
       "amount": {}
     }
   },
-  "destinationChangeCredited": "Expédition mise à jour. {amount} crédité dans votre portefeuille.",
+  "destinationChangeCredited": "Expédition mise à jour. {amount} est en cours de remboursement sur votre carte.",
   "@destinationChangeCredited": {
     "placeholders": {
       "amount": {}
