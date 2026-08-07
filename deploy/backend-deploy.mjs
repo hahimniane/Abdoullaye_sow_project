@@ -99,10 +99,19 @@ const functionNames = Array.from(new Set(
     ).match(/^exports\.[A-Za-z0-9_]+/gm) || [])
         .map((line) => line.slice("exports.".length)),
 ));
-const batches = batchFunctionNames(functionNames, safeDeployBatchSize());
+// DEPLOY_BATCH_SIZE overrides the computed size downward for a cautious run.
+// The CPU quota is measured over a rolling one-minute window, so consecutive
+// batches' startups overlap in it; a smaller batch with a longer gap trades
+// wall-clock for certainty.
+const computedBatch = safeDeployBatchSize();
+const batchSize = Math.max(1, Math.min(
+    Number(process.env.DEPLOY_BATCH_SIZE) || computedBatch,
+    computedBatch,
+));
+const batches = batchFunctionNames(functionNames, batchSize);
 console.log(
     `\nDeploying ${functionNames.length} functions in ${batches.length} ` +
-    `batches of up to ${safeDeployBatchSize()}...`,
+    `batches of up to ${batchSize}...`,
 );
 
 // The predeploy hook runs lint and the whole test suite. That is exactly right
