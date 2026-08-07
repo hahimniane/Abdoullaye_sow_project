@@ -8,6 +8,14 @@
 
   # The admin console moved to its own subdomain.
   RewriteRule ^admin(/.*)?$ https://admin.laawoldigital.com/ [L,R=301]
+
+  # Short parking payment link. A walk-up customer receives this by SMS, and
+  # the Cloud Function URL is 116 characters - long enough to push a parking
+  # text into a second segment and far too long to read off a printed
+  # invoice. /p?t=<token> is 61. QSA keeps the token; 302 rather than 301 so
+  # the destination is never cached by a browser or an operator.
+  RewriteRule ^p$ https://us-central1-car-selling-flutter-app.cloudfunctions.net/parkingPaymentLink [QSA,R=302,L]
+  RewriteRule ^d$ https://us-central1-car-selling-flutter-app.cloudfunctions.net/parkingDocument [QSA,R=302,L]
 </IfModule>
 
 # Default document

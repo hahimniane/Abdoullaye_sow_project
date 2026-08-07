@@ -19,6 +19,7 @@ import '../services/business_parking_entry.dart';
 import '../utils/business_parking_localization.dart';
 import '../utils/business_permissions.dart';
 import 'business_assistant_screen.dart';
+import 'park_car_screen.dart';
 
 enum ServiceCategory { all, parking, barrels, freight, transport, sales }
 
@@ -705,6 +706,13 @@ class _ActivitySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    // Same gate as the parkedCars subscription in _HomeMenuState: the lot that
+    // can see its parked cars is the lot that can add one, so the list and the
+    // way to extend it appear together or not at all.
+    final canRecordParkedCar = auth.hasBusinessPermission(
+      BusinessPermission.parking,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -716,6 +724,27 @@ class _ActivitySection extends StatelessWidget {
             fontWeight: FontWeight.bold,
           ),
         ),
+        // ParkCarScreen picks its own flow from auth.hasBusinessDashboardAccess
+        // (see its build), so pushing the screen directly opens the walk-up
+        // intake for a business - no flag to pass, and no named customer route.
+        if (canRecordParkedCar) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              key: const Key('record-parked-car'),
+              icon: const Icon(Icons.local_parking),
+              label: Text(l10n.recordAParkedCar),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ParkCarScreen(),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,

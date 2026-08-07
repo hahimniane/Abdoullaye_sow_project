@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/services/business_parking_entry.dart';
+import 'package:my_flutter_app/utils/business_permissions.dart';
 
 /// The app half of business-entered parking (docs/PLAN-2026-08-backlog.md
 /// item 5). These assertions are deliberately the same ones
@@ -394,6 +395,106 @@ void main() {
         expect(labelKeys, contains(value));
         expect(en[labelKeys[value]], isNotNull);
       }
+    });
+  });
+
+  // A lot could see its parked cars and open one, but had no way to add one:
+  // every route into ParkCarScreen was a customer surface. AuthProvider builds
+  // Firebase in its field initializers, so this is asserted the way the rest of
+  // this feature's widget behaviour is - on the source and on the decision.
+  group('the business home offers a way to record a parked car', () {
+    final home = File('lib/screens/home_menu.dart').readAsStringSync();
+
+    test('the action renders in the activity section and opens ParkCarScreen', () {
+      final guard = home.indexOf('if (canRecordParkedCar) ...[');
+      final button = home.indexOf("Key('record-parked-car')");
+      final push = home.indexOf('const ParkCarScreen()');
+      expect(guard, greaterThan(-1));
+      expect(button, greaterThan(guard));
+      expect(push, greaterThan(button));
+
+      // Directly above the records it creates: after the "Recent activity"
+      // heading and before the category chips.
+      final heading = home.indexOf('l10n.recentActivity');
+      final chips = home.indexOf('ServiceCategory.values.map');
+      expect(heading, greaterThan(-1));
+      expect(guard, greaterThan(heading));
+      expect(push, lessThan(chips));
+
+      expect(home, contains('l10n.recordAParkedCar'));
+      // Not through the named customer route - business_mobile_role_safety
+      // forbids '/park' here, and the push carries no customer arguments.
+      expect(home, contains('MaterialPageRoute<void>('));
+    });
+
+    test('it is gated on the same permission as the parkedCars feed', () {
+      expect(
+        home,
+        contains(
+          'final canRecordParkedCar = auth.hasBusinessPermission(\n'
+          '      BusinessPermission.parking,\n'
+          '    );',
+        ),
+      );
+      expect(
+        home,
+        contains('if (auth.hasBusinessPermission(BusinessPermission.parking))'),
+      );
+      // One render site, and it sits inside the guard - a user without the
+      // permission has no path to the screen from this page.
+      expect("Key('record-parked-car')".allMatches(home).length, 1);
+      expect('ParkCarScreen('.allMatches(home).length, 1);
+    });
+
+    test('the permission decision itself admits owners and scoped staff only', () {
+      // Owner / admin: not staff-scoped, so every permission is theirs.
+      expect(
+        canAccessBusinessPermission(
+          isStaff: false,
+          permissions: const <String>[],
+          permission: BusinessPermission.parking,
+        ),
+        isTrue,
+      );
+      expect(
+        canAccessBusinessPermission(
+          isStaff: true,
+          permissions: const <String>[BusinessPermission.parking],
+          permission: BusinessPermission.parking,
+        ),
+        isTrue,
+      );
+      expect(
+        canAccessBusinessPermission(
+          isStaff: true,
+          permissions: const <String>[BusinessPermission.barrels],
+          permission: BusinessPermission.parking,
+        ),
+        isFalse,
+      );
+    });
+
+    test('ParkCarScreen picks the walk-up flow itself, with no flag to pass', () {
+      final screen = File(
+        'lib/screens/park_car_screen.dart',
+      ).readAsStringSync();
+      final build = screen.substring(
+        screen.indexOf('  Widget build(BuildContext context) {'),
+        screen.indexOf('Future<void> _selectBusinessEndDate()'),
+      );
+      expect(build, contains('final auth = context.watch<AuthProvider>();'));
+      expect(build, contains('if (!auth.hasBusinessDashboardAccess) {'));
+      expect(build, contains('return _buildCustomerParkingReservation(context);'));
+      expect(build, contains('return _buildBusinessParkingIntake(context);'));
+      // The constructor takes test seams only - no mode parameter exists, so
+      // `const ParkCarScreen()` from the business home lands on the walk-up
+      // intake because the signed-in user has dashboard access.
+      final ctor = screen.substring(
+        screen.indexOf('  const ParkCarScreen({'),
+        screen.indexOf('  State<ParkCarScreen> createState()'),
+      );
+      expect(ctor, isNot(contains('mode')));
+      expect(ctor, isNot(contains('isBusiness')));
     });
   });
 }
