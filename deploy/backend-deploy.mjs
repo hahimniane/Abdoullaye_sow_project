@@ -23,6 +23,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const PROJECT_ID = process.env.FIREBASE_PROJECT || "car-selling-flutter-app";
 const APP_DIR = path.join(ROOT, "my_flutter_app");
+const BATCH_ATTEMPTS = Number(process.env.DEPLOY_BATCH_ATTEMPTS || 4);
+const BATCH_RETRY_SECONDS = Number(process.env.DEPLOY_BATCH_RETRY_SECONDS || 45);
+const BATCH_GAP_SECONDS = Number(process.env.DEPLOY_BATCH_GAP_SECONDS || 20);
 const commandEnvironment = deploymentChildEnvironment(
     deploymentJavaEnvironment({
       environment: process.env,
@@ -125,21 +128,52 @@ try {
           2,
       ),
   );
-  batches.forEach((batch, index) => {
+  for (const [index, batch] of batches.entries()) {
     console.log(`\n  Batch ${index + 1}/${batches.length} (${batch.length})`);
-    run("firebase", [
-      "deploy",
-      "--only",
-      batch.map((name) => `functions:${name}`).join(","),
-      "--project",
-      PROJECT_ID,
-      "--config",
-      batchConfigPath,
-      // Functions removed from source are deleted without prompting. Preflight
-      // has already listed what this commit exports, so the set is known.
-      "--force",
-    ], {cwd: APP_DIR, env: commandEnvironment});
-  });
+    // Every `firebase deploy` asks the Cloud Billing API whether the project
+    // is on a paid plan, and that API's "all requests per minute" quota is
+    // billed to a shared consumer - other people's traffic counts against it
+    // too. Fifteen invocations in a row tripped it on the first attempt, which
+    // killed the run before a single function had been touched. So a batch
+    // that fails is retried rather than being taken as a verdict, and batches
+    // are spaced out to stop the run causing the problem in the first place.
+    let attempt = 0;
+    for (;;) {
+      attempt += 1;
+      try {
+        run("firebase", [
+          "deploy",
+          "--only",
+          batch.map((name) => `functions:${name}`).join(","),
+          "--project",
+          PROJECT_ID,
+          "--config",
+          batchConfigPath,
+          // Functions removed from source are deleted without prompting.
+          // Preflight has already listed what this commit exports.
+          "--force",
+        ], {cwd: APP_DIR, env: commandEnvironment});
+        break;
+      } catch (error) {
+        if (attempt >= BATCH_ATTEMPTS) {
+          console.error(
+              `\n  Batch ${index + 1} failed ${attempt} times. Stopping so the ` +
+              "rest of the rollout does not pile onto whatever is wrong.",
+          );
+          throw error;
+        }
+        const backoffSeconds = BATCH_RETRY_SECONDS * attempt;
+        console.warn(
+            `\n  Batch ${index + 1} failed (attempt ${attempt}). Retrying in ` +
+            `${backoffSeconds}s...`,
+        );
+        execFileSync("sleep", [String(backoffSeconds)], {stdio: "ignore"});
+      }
+    }
+    if (index < batches.length - 1) {
+      execFileSync("sleep", [String(BATCH_GAP_SECONDS)], {stdio: "ignore"});
+    }
+  }
 } finally {
   fs.rmSync(batchConfigPath, {force: true});
 }
