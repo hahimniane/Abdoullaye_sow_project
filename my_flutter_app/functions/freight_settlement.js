@@ -21,14 +21,12 @@ function calculateFreightSettlement({
   verifiedWeightKg,
   pricePerKg,
   pickupFeeCents = 0,
-  originalCardCents = 0,
 }) {
   const estimatedCents = positiveMoneyCents(
       estimatedTotalCents,
       "estimatedTotalCents",
   );
   const pickupCents = positiveMoneyCents(pickupFeeCents, "pickupFeeCents");
-  const cardCents = positiveMoneyCents(originalCardCents, "originalCardCents");
   const weight = Number(verifiedWeightKg);
   const rate = Number(pricePerKg);
   if (!Number.isFinite(weight) || weight <= 0) {
@@ -43,11 +41,21 @@ function calculateFreightSettlement({
   const adjustmentCents = finalTotalCents - estimatedCents;
   const refundDueCents = Math.max(0, -adjustmentCents);
 
-  // Wallet is applied before card at booking, so the card is the marginal
-  // payment source. Return overpayment to card first, then restore any wallet
-  // amount that is still owed. This is deterministic and fully auditable.
-  const refundCardCents = Math.min(refundDueCents, cardCents);
-  const refundWalletCents = refundDueCents - refundCardCents;
+  // Money goes back the way it came, in one card refund.
+  //
+  // This used to split: wallet credit was applied before card at booking, so
+  // an overpayment larger than the card charge had to restore the wallet part
+  // separately. Wallet payment has since been retired - every booking is taken
+  // in full by card - which left that second leg crediting a balance the
+  // customer could no longer spend, only ask for back.
+  //
+  // The refund is therefore claimed in full against the card, with no local
+  // opinion about how much of it is refundable. Stripe knows what was actually
+  // charged; asking it for more than that fails loudly through the existing
+  // cardRefundStatus and its retry sweeper, which is the right outcome for a
+  // legacy booking that really was part-funded by wallet credit. Deciding here
+  // would mean silently refunding the customer less than they are owed.
+  const refundCardCents = refundDueCents;
 
   return {
     verifiedWeightKg: Math.round(weight * 1000) / 1000,
@@ -57,7 +65,6 @@ function calculateFreightSettlement({
     balanceDueCents: Math.max(0, adjustmentCents),
     refundDueCents,
     refundCardCents,
-    refundWalletCents,
     priceSettlementStatus: adjustmentCents > 0 ?
       FreightSettlementStatus.BALANCE_DUE :
       adjustmentCents < 0 ?

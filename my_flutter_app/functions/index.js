@@ -21212,53 +21212,11 @@ async function processFreightSettlementRefund({settlementRef, shipmentRef}) {
       }, {merge: true});
     }
 
-    await db.runTransaction(async (transaction) => {
-      const fresh = await transaction.get(settlementRef);
-      settlement = fresh.data() || {};
-      const walletRefundCents = Number(settlement.refundWalletCents || 0);
-      if (walletRefundCents <= 0 ||
-          settlement.walletRefundStatus === "succeeded") return;
-      const walletRef = db.collection("wallets").doc(settlement.customerUid);
-      const walletTransactionRef = walletRef.collection("transactions")
-          .doc(`freight_refund_${settlement.settlementId}`);
-      const now = FirestoreFieldValue.serverTimestamp();
-      transaction.set(walletRef, {
-        customerUid: settlement.customerUid,
-        currency: SHIPMENT_CURRENCY,
-        balanceCents: FirestoreFieldValue.increment(walletRefundCents),
-        balance: FirestoreFieldValue.increment(
-            dollarsFromCents(walletRefundCents),
-        ),
-        updatedAt: now,
-      }, {merge: true});
-      transaction.set(walletTransactionRef, {
-        type: "credit",
-        reason: "freight_weight_adjustment_refund",
-        amountCents: walletRefundCents,
-        amount: dollarsFromCents(walletRefundCents),
-        currency: SHIPMENT_CURRENCY,
-        shipmentId: settlement.shipmentId,
-        settlementId: settlement.settlementId,
-        trackingCode: settlement.trackingCode || "",
-        businessId: settlement.businessId || "",
-        businessName: settlement.businessName || "",
-        createdAt: now,
-      });
-      transaction.update(settlementRef, {
-        walletRefundStatus: "succeeded",
-        walletRefundedCents: walletRefundCents,
-        walletRefundedAmount: dollarsFromCents(walletRefundCents),
-        updatedAt: now,
-      });
-    });
-
     settlementDoc = await settlementRef.get();
     settlement = settlementDoc.data() || {};
     const cardReady = Number(settlement.refundCardCents || 0) <= 0 ||
       settlement.cardRefundStatus === "succeeded";
-    const walletReady = Number(settlement.refundWalletCents || 0) <= 0 ||
-      settlement.walletRefundStatus === "succeeded";
-    if (!cardReady || !walletReady) {
+    if (!cardReady) {
       throw new Error("Freight refund is incomplete");
     }
 
@@ -21437,7 +21395,6 @@ exports.confirmFreightShipmentWeight = onCall(
             pickupFeeCents: Number(
                 shipment.pickupFeeCents ?? centsFromDollars(shipment.pickupFee),
             ),
-            originalCardCents: Number(shipment.cardChargeAmountCents || 0),
           });
         } catch (error) {
           throw new HttpsError("failed-precondition", error.message);
@@ -21486,8 +21443,6 @@ exports.confirmFreightShipmentWeight = onCall(
           weightConfirmedAt: now,
           cardRefundStatus: calculation.refundCardCents > 0 ?
             "pending" : "not_required",
-          walletRefundStatus: calculation.refundWalletCents > 0 ?
-            "pending" : "not_required",
           refundStatus: calculation.refundDueCents > 0 ?
             "processing" : "not_required",
           createdAt: now,
@@ -21511,7 +21466,6 @@ exports.confirmFreightShipmentWeight = onCall(
           refundDueCents: calculation.refundDueCents,
           refundDue: dollarsFromCents(calculation.refundDueCents),
           refundCardCents: calculation.refundCardCents,
-          refundWalletCents: calculation.refundWalletCents,
           priceSettlementStatus: calculation.priceSettlementStatus,
           weightVerificationStatus: "confirmed",
           weightConfirmedByUid: callerUid,
@@ -21629,7 +21583,6 @@ async function notifyFreightRefundIssued({shipmentId, shipment, settlement}) {
   const uid = shipment.customerUid;
   if (!uid) return;
   const refundCardCents = Number(settlement.refundCardCents || 0);
-  const refundWalletCents = Number(settlement.refundWalletCents || 0);
   const verifiedWeightKg = settlement.verifiedWeightKg;
   const estimatedWeightKg = settlement.estimatedWeightKg;
   const weightNote = (verifiedWeightKg && estimatedWeightKg) ?
@@ -21637,20 +21590,10 @@ async function notifyFreightRefundIssued({shipmentId, shipment, settlement}) {
       `${estimatedWeightKg}kg you entered.` :
     "";
   const businessName = shipment.businessName || "The business";
-  const destinationParts = [];
-  if (refundCardCents > 0) {
-    destinationParts.push(
-        `$${dollarsFromCents(refundCardCents)} back to your card`,
-    );
-  }
-  if (refundWalletCents > 0) {
-    destinationParts.push(
-        `$${dollarsFromCents(refundWalletCents)} credited to your Laawol ` +
-          `wallet`,
-    );
-  }
-  const destinationNote = destinationParts.length ?
-    ` ${destinationParts.join(" and ")}.` :
+  // One destination now: the card it was paid on. The wallet leg was removed
+  // with the wallet credit itself, so there is no second sentence to compose.
+  const destinationNote = refundCardCents > 0 ?
+    ` $${dollarsFromCents(refundCardCents)} back to your card.` :
     "";
   await sendPreferenceNotification({
     uid,

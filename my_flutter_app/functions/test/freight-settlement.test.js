@@ -13,7 +13,6 @@ describe("freight settlement arithmetic", () => {
       verifiedWeightKg: 10,
       pricePerKg: 12,
       pickupFeeCents: 2000,
-      originalCardCents: 11500,
     });
     assert.equal(result.finalShippingFeeCents, 12000);
     assert.equal(result.finalTotalCents, 14000);
@@ -26,7 +25,6 @@ describe("freight settlement arithmetic", () => {
       estimatedTotalCents: 10000,
       verifiedWeightKg: 12,
       pricePerKg: 10,
-      originalCardCents: 7500,
     });
     assert.equal(result.balanceDueCents, 2000);
     assert.equal(
@@ -36,27 +34,40 @@ describe("freight settlement arithmetic", () => {
     assert.equal(freightMayProgress(result.priceSettlementStatus), false);
   });
 
-  it("refunds card before restoring the booking wallet contribution", () => {
-    const cardOnly = calculateFreightSettlement({
+  it("returns the whole overpayment to the card", () => {
+    const result = calculateFreightSettlement({
       estimatedTotalCents: 10000,
       verifiedWeightKg: 8,
       pricePerKg: 10,
-      originalCardCents: 7500,
     });
-    assert.equal(cardOnly.refundCardCents, 2000);
-    assert.equal(cardOnly.refundWalletCents, 0);
+    assert.equal(result.refundCardCents, 2000);
+    assert.equal(
+        result.priceSettlementStatus,
+        FreightSettlementStatus.REFUND_PROCESSING,
+    );
+  });
 
-    const split = calculateFreightSettlement({
+  it("claims the full refund on the card, never a partial one", () => {
+    // Wallet payment is retired, so the card carries the whole booking and the
+    // whole refund. Nothing here may quietly hold money back: an amount larger
+    // than the original charge is Stripe's to refuse, and refusing loudly is
+    // the point - the alternative is short-refunding a customer in silence.
+    const result = calculateFreightSettlement({
       estimatedTotalCents: 10000,
       verifiedWeightKg: 1,
       pricePerKg: 10,
-      originalCardCents: 7500,
     });
-    assert.equal(split.refundCardCents, 7500);
-    assert.equal(split.refundWalletCents, 1500);
+    assert.equal(result.refundDueCents, 9000);
+    assert.equal(result.refundCardCents, 9000);
     assert.equal(
-        split.priceSettlementStatus,
-        FreightSettlementStatus.REFUND_PROCESSING,
+        result.refundCardCents,
+        result.refundDueCents,
+        "the card refund must always equal the refund due",
+    );
+    assert.equal(
+        result.refundWalletCents,
+        undefined,
+        "no wallet leg is produced any more",
     );
   });
 
