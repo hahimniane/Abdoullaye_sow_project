@@ -158,6 +158,18 @@ const {
   sendFirebasePasswordSetupEmail,
 } = require("./firebase_auth_email");
 const {
+  ACCESS_INVITATION_REFUSALS,
+  ACCESS_INVITATION_TTL_MS,
+  accessEmailDeliveryPlan,
+  accessInvitationActionDecision,
+  accessInvitationEmailCopy,
+  accessInvitationExpiryMs,
+  accessInvitationStatus,
+  outstandingAccessInvitations,
+  renderAccessInvitationEmail,
+  renderAccessInvitationText,
+} = require("./access_invitation");
+const {
   servicePlatformFeePctForBusiness,
   servicePlatformFeePctFromPricing,
   businessPlatformFeePctFromBusiness,
@@ -318,7 +330,6 @@ const BLOCKED_ACCOUNT_STATUSES = new Set([
   "deleting",
   "deleted",
 ]);
-const ACCESS_INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const USER_DIRECTORY_PAGE_SIZE = 100;
 const DEFAULT_BUSINESS_SERVICES = [...VALID_BUSINESS_SERVICES];
 const DEFAULT_BUSINESS_ADVISOR_MODEL = "claude-fable-5";
@@ -12284,10 +12295,17 @@ function invitationDirectoryDto(snapshot) {
     businessPermissions: normalizeBusinessPermissions(
         invitation.businessPermissions,
     ),
-    accountStatus: String(invitation.status || "pending"),
+    // The DERIVED status, not the stored one: nothing sweeps this collection,
+    // so an invitation whose window closed is still written as "pending" and
+    // would otherwise sit in the directory advertising itself as live.
+    accountStatus: accessInvitationStatus(invitation),
+    invitationStatus: accessInvitationStatus(invitation),
+    invitedByName: String(invitation.invitedByName || ""),
+    sendCount: Number(invitation.sendCount || 0) || 0,
     disabled: null,
     emailVerified: null,
     createdAt: invitation.createdAt || null,
+    updatedAt: invitation.updatedAt || null,
     expiresAt: invitation.expiresAt || null,
     lastSignInAt: "",
     hasProfile: false,
@@ -12768,6 +12786,29 @@ async function authActionLinks(email, actions) {
   return links;
 }
 
+// The one email a stranger ever receives from this platform. Firebase's stock
+// password-reset template says nothing about who Laawol is, who invited them,
+// or what they are joining, so a recipient reads it as a reset they never
+// asked for - or as phishing. When a sender is connected, a branded document
+// carrying the logo, the inviter, the business and one button goes out
+// instead, built around a link this platform generated itself.
+function accessInvitationMessage({locale, links, invitation}) {
+  const copy = accessInvitationEmailCopy({
+    locale,
+    kind: invitation?.kind,
+    businessName: invitation?.businessName,
+    inviterName: invitation?.inviterName,
+    adminRoleLabel: invitation?.adminRoleLabel,
+    expiresAtMs: invitation?.expiresAtMs,
+    actionUrl: links?.passwordResetLink || "",
+  });
+  return {
+    title: copy.subject,
+    body: renderAccessInvitationText(copy),
+    html: renderAccessInvitationEmail(copy),
+  };
+}
+
 async function queueAccessEmail({
   db,
   uid,
@@ -12776,28 +12817,37 @@ async function queueAccessEmail({
   kind,
   links,
   audit,
+  invitation,
 }) {
   const settings = await loadPlatformNotificationSettings(db);
-  const copy = accessEmailCopy(locale, kind, links);
+  const branded = kind === "invitation" ?
+    accessInvitationMessage({locale, links, invitation}) :
+    null;
+  const plain = branded ? null : accessEmailCopy(locale, kind, links);
+  const copy = branded || plain;
+  const html = branded ?
+    branded.html :
+    notificationHtml(copy.title, copy.body);
+  const plan = accessEmailDeliveryPlan({
+    emailProvider: settings.emailProvider,
+    kind,
+  });
   const deliveryRef = db.collection("notificationDeliveries").doc();
   const now = FirestoreFieldValue.serverTimestamp();
-  const triggerEmailConfigured =
-    settings.emailProvider === "firebaseTriggerEmail";
-  let provider = settings.emailProvider;
-  let deliveryStatus = triggerEmailConfigured ?
-    "queued" :
-    "provider_not_configured";
-  let deliveryError = "";
+  let provider = plan.provider;
+  let deliveryStatus = plan.status;
+  let deliveryError = plan.lastError;
+  let brandedEmail = plan.branded;
   let fallbackError = null;
 
-  // Invitations create a Firebase Auth user without a shared password. When a
-  // custom SMTP/Trigger Email provider is not connected, Firebase
-  // Authentication can still send its secure password-reset template so the
-  // invited person can choose their own password. Email verification is sent
-  // after first sign-in because Firebase requires the target user's ID token.
-  if (!triggerEmailConfigured &&
-      ["invitation", "password_reset"].includes(kind)) {
-    provider = "firebaseAuth";
+  // Fail-soft, in this order: the branded sender first, then Firebase's own
+  // template so the invited person still hears about it, and only if THAT
+  // fails does the caller learn the invitation went out silent. The
+  // invitation document itself stays pending either way, so it shows up in
+  // the pending list with a Resend button rather than disappearing.
+  // Email verification is sent after first sign-in because Firebase requires
+  // the target user's ID token.
+  if (plan.useFirebaseFallback) {
     try {
       await sendFirebasePasswordSetupEmail({
         apiKey: FIREBASE_WEB_API_KEY,
@@ -12805,14 +12855,14 @@ async function queueAccessEmail({
         locale,
       });
       deliveryStatus = "sent";
+      brandedEmail = false;
     } catch (error) {
       fallbackError = error;
       deliveryStatus = "failed";
+      brandedEmail = false;
       deliveryError =
         error instanceof Error ? error.message : String(error);
     }
-  } else if (!triggerEmailConfigured) {
-    deliveryError = "Email sender provider is not connected.";
   }
 
   const batch = db.batch();
@@ -12820,6 +12870,7 @@ async function queueAccessEmail({
     channel: "email",
     provider,
     status: deliveryStatus,
+    branded: brandedEmail,
     to: email,
     recipientUid: uid,
     preferenceKey: "securityActivity",
@@ -12830,13 +12881,13 @@ async function queueAccessEmail({
     createdAt: now,
     updatedAt: now,
   });
-  if (triggerEmailConfigured) {
+  if (plan.useTriggerEmail) {
     batch.set(db.collection("mail").doc(deliveryRef.id), {
       to: [email],
       message: {
         subject: copy.title,
         text: copy.body,
-        html: notificationHtml(copy.title, copy.body),
+        html,
       },
       deliveryId: deliveryRef.id,
       recipientUid: uid,
@@ -12861,8 +12912,29 @@ async function queueAccessEmail({
   return {
     deliveryId: deliveryRef.id,
     deliveryStatus,
+    emailProvider: provider,
+    emailBranded: brandedEmail,
     emailSent: deliveryStatus === "queued" || deliveryStatus === "sent",
   };
+}
+
+// Which sender actually carried the last invitation email, kept on the
+// invitation so the People panel can say "sent with the plain Firebase
+// template" instead of leaving an operator guessing why it looked wrong.
+async function recordInvitationDelivery(ref, delivery) {
+  try {
+    await ref.set({
+      lastEmailProvider: String(delivery?.emailProvider || ""),
+      lastEmailBranded: delivery?.emailBranded === true,
+      lastEmailStatus: String(delivery?.deliveryStatus || "failed"),
+      lastEmailAt: FirestoreFieldValue.serverTimestamp(),
+    }, {merge: true});
+  } catch (error) {
+    logger.warn("Invitation delivery record failed", {
+      detail: error instanceof Error ? error.message : String(error),
+      invitationId: ref.id,
+    });
+  }
 }
 
 async function sendUserRecoveryEmailHandler(request) {
@@ -13052,6 +13124,10 @@ async function createAccessInvitation(request, kind) {
   }
 
   let links;
+  let expiresAtMs = 0;
+  const invitedByName = String(
+      caller.fullName || caller.email || "",
+  ).slice(0, 200);
   try {
     links = await authActionLinks(
         email,
@@ -13060,9 +13136,8 @@ async function createAccessInvitation(request, kind) {
           ["password_reset", "verify_email"],
     );
     const now = FirestoreTimestamp.now();
-    const expiresAt = FirestoreTimestamp.fromMillis(
-        Date.now() + ACCESS_INVITATION_TTL_MS,
-    );
+    expiresAtMs = accessInvitationExpiryMs(Date.now());
+    const expiresAt = FirestoreTimestamp.fromMillis(expiresAtMs);
     const batch = db.batch();
     batch.set(invitationRef, {
       kind,
@@ -13079,6 +13154,7 @@ async function createAccessInvitation(request, kind) {
       updatedAt: now,
       expiresAt,
       invitedBy: callerUid,
+      invitedByName,
       sendCount: Number(previous.sendCount || 0) + 1,
     });
     setAdminAuditLog(batch, {
@@ -13100,6 +13176,13 @@ async function createAccessInvitation(request, kind) {
     throw error;
   }
 
+  const invitationBranding = {
+    kind,
+    businessName: String(business?.name || ""),
+    inviterName: invitedByName,
+    adminRoleLabel: adminRole,
+    expiresAtMs,
+  };
   const delivery = await queueAccessEmail({
     db,
     uid: authUser.uid,
@@ -13107,7 +13190,19 @@ async function createAccessInvitation(request, kind) {
     locale,
     kind: "invitation",
     links,
+    invitation: invitationBranding,
+  }).catch(async (error) => {
+    // The invitation document stays pending on purpose, so a delivery that
+    // failed shows up in the pending list with a Resend button instead of
+    // leaving an operator with an account nobody was told about.
+    await recordInvitationDelivery(invitationRef, {
+      emailProvider: String(error?.details?.provider || ""),
+      emailBranded: false,
+      deliveryStatus: "failed",
+    });
+    throw error;
   });
+  await recordInvitationDelivery(invitationRef, delivery);
   return {
     success: true,
     invitationId,
@@ -13144,16 +13239,29 @@ async function invitationForManagement(request) {
   return {callerUid, caller, invitationId, invitation, ref, db};
 }
 
+// Resending re-issues: a brand new action link and a fresh window. Mailing
+// the same expired link again is how an operator ends up telling someone
+// "I resent it" while the recipient keeps landing on a dead page.
+function assertInvitationAction(invitation, action, message) {
+  const decision = accessInvitationActionDecision(invitation, action);
+  if (decision.allowed) return decision;
+  throw userManagementError(
+      "failed-precondition",
+      decision.reason,
+      decision.reason === ACCESS_INVITATION_REFUSALS.ACCEPTED ?
+        "This invitation was already accepted" :
+        message,
+  );
+}
+
 async function resendAccessInvitationHandler(request) {
   const context = await invitationForManagement(request);
   const {invitation, invitationId, callerUid, caller, ref, db} = context;
-  if (invitation.status !== "pending") {
-    throw userManagementError(
-        "failed-precondition",
-        "invitation-not-pending",
-        "Only pending invitations can be resent",
-    );
-  }
+  assertInvitationAction(
+      invitation,
+      "resend",
+      "Only an outstanding invitation can be resent",
+  );
   const authUser = await admin.auth().getUser(invitation.targetUid);
   const links = await authActionLinks(
       invitation.email,
@@ -13161,12 +13269,12 @@ async function resendAccessInvitationHandler(request) {
         ["password_reset"] :
         ["password_reset", "verify_email"],
   );
-  const expiresAt = FirestoreTimestamp.fromMillis(
-      Date.now() + ACCESS_INVITATION_TTL_MS,
-  );
+  const expiresAtMs = accessInvitationExpiryMs(Date.now());
+  const expiresAt = FirestoreTimestamp.fromMillis(expiresAtMs);
   const batch = db.batch();
   batch.set(ref, {
     expiresAt,
+    status: "pending",
     updatedAt: FirestoreFieldValue.serverTimestamp(),
     sendCount: Number(invitation.sendCount || 0) + 1,
     lastSentBy: callerUid,
@@ -13180,27 +13288,43 @@ async function resendAccessInvitationHandler(request) {
     targetLabel: invitation.email,
   });
   await batch.commit();
-  const delivery = await queueAccessEmail({
-    db,
-    uid: invitation.targetUid,
-    email: invitation.email,
-    locale: invitation.locale || "en",
-    kind: "invitation",
-    links,
-  });
+  let delivery;
+  try {
+    delivery = await queueAccessEmail({
+      db,
+      uid: invitation.targetUid,
+      email: invitation.email,
+      locale: invitation.locale || "en",
+      kind: "invitation",
+      links,
+      invitation: {
+        kind: invitation.kind,
+        businessName: invitation.businessName,
+        inviterName: invitation.invitedByName,
+        adminRoleLabel: invitation.adminRole,
+        expiresAtMs,
+      },
+    });
+  } catch (error) {
+    await recordInvitationDelivery(ref, {
+      emailProvider: String(error?.details?.provider || ""),
+      emailBranded: false,
+      deliveryStatus: "failed",
+    });
+    throw error;
+  }
+  await recordInvitationDelivery(ref, delivery);
   return {success: true, invitationId, status: "pending", ...delivery};
 }
 
 async function cancelAccessInvitationHandler(request) {
   const context = await invitationForManagement(request);
   const {invitation, invitationId, callerUid, caller, ref, db} = context;
-  if (invitation.status !== "pending") {
-    throw userManagementError(
-        "failed-precondition",
-        "invitation-not-pending",
-        "Only pending invitations can be cancelled",
-    );
-  }
+  assertInvitationAction(
+      invitation,
+      "cancel",
+      "This invitation was already cancelled",
+  );
   const batch = db.batch();
   batch.set(ref, {
     status: "cancelled",
@@ -13291,18 +13415,19 @@ async function acceptAccessInvitationHandler(request) {
       );
     }
     const invitation = invitationDoc.data() || {};
-    if (invitation.status !== "pending") {
-      throw userManagementError(
-          "failed-precondition",
-          "invitation-not-pending",
-          "This invitation is no longer active",
-      );
-    }
-    if ((invitation.expiresAt?.toMillis?.() || 0) <= Date.now()) {
+    const liveStatus = accessInvitationStatus(invitation);
+    if (liveStatus === "expired") {
       throw userManagementError(
           "failed-precondition",
           "invitation-expired",
           "This invitation has expired",
+      );
+    }
+    if (liveStatus !== "pending") {
+      throw userManagementError(
+          "failed-precondition",
+          "invitation-not-pending",
+          "This invitation is no longer active",
       );
     }
     if (invitation.targetUid !== uid ||
@@ -13420,6 +13545,38 @@ exports.invitePlatformAdmin = onCall(
 exports.inviteBusinessMember = onCall(
     MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     (request) => createAccessInvitation(request, "business"),
+);
+
+// A business console cannot read `accessInvitations` directly - the rules
+// close that collection to every client, because it carries the pending
+// authority of accounts that do not exist yet. So the pending list comes
+// through a callable scoped to the caller's own business. Without this, an
+// invitation sent from the People panel simply vanished: no way to see it, no
+// way to cancel one sent to the wrong address, no way to revive an expired
+// one.
+async function listBusinessInvitationsHandler(request) {
+  const uid = requireAuth(request);
+  const businessId = cleanText(request.data?.businessId, 160);
+  if (!businessId) {
+    throw new HttpsError("invalid-argument", "Business is required");
+  }
+  await requireBusinessPermission(uid, businessId, "people");
+  // Equality on one field only, so this needs no composite index; the status
+  // filter and the ordering are decided in the tested pure module.
+  const snapshot = await admin.firestore()
+      .collection("accessInvitations")
+      .where("businessId", "==", businessId)
+      .limit(200)
+      .get();
+  const invitations = outstandingAccessInvitations(
+      snapshot.docs.map((doc) => ({id: doc.id, data: doc.data() || {}})),
+  );
+  return {invitations, businessId};
+}
+
+exports.listBusinessInvitations = onCall(
+    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
+    listBusinessInvitationsHandler,
 );
 
 exports.resendAccessInvitation = onCall(
