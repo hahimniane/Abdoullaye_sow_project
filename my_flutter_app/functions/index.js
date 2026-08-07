@@ -154,6 +154,9 @@ const {
   sendFirebasePasswordSetupEmail,
 } = require("./firebase_auth_email");
 const {
+  toolsForOpenAi,
+  messagesForOpenAi,
+  contentFromOpenAiChoice,
   BUSINESS_ASSISTANT_TOOLS,
   isReadTool,
   isActionTool,
@@ -7796,6 +7799,7 @@ exports.generateBusinessInsights = onCall(
 );
 
 const BUSINESS_ASSISTANT_MODEL = "claude-opus-5";
+const BUSINESS_ASSISTANT_DEEPSEEK_MODEL = "deepseek-v4-flash";
 const BUSINESS_ASSISTANT_MAX_MODEL_CALLS = 5;
 
 // Executes one READ tool for the business assistant. Action tools never come
@@ -7876,7 +7880,7 @@ exports.businessAssistantChat = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
-      secrets: [anthropicApiKey],
+      secrets: [anthropicApiKey, deepseekApiKey],
       timeoutSeconds: 180,
       maxInstances: 5,
     },
@@ -7905,8 +7909,14 @@ exports.businessAssistantChat = onCall(
         );
       }
 
-      const apiKey = cleanText(anthropicApiKey.value(), 240);
-      if (!apiKey.startsWith("sk-ant-")) {
+      // Same secrets as the public website widget - there is no separate
+      // business key. Anthropic is preferred when a real key exists;
+      // otherwise DeepSeek, which is the key the platform actually has.
+      const anthropicKey = cleanText(anthropicApiKey.value(), 240);
+      const deepseekKey = cleanText(deepseekApiKey.value(), 240);
+      const useAnthropic = anthropicKey.startsWith("sk-ant-");
+      const useDeepseek = !useAnthropic && deepseekKey.startsWith("sk-");
+      if (!useAnthropic && !useDeepseek) {
         throw new HttpsError(
             "failed-precondition",
             "The assistant is not configured yet",
@@ -7918,34 +7928,59 @@ exports.businessAssistantChat = onCall(
         enabledServices: business.enabledServices,
       });
       const model = cleanText(business.aiAssistantModel, 120) ||
-        BUSINESS_ASSISTANT_MODEL;
+        (useAnthropic ?
+          BUSINESS_ASSISTANT_MODEL :
+          BUSINESS_ASSISTANT_DEEPSEEK_MODEL);
 
       for (let call = 0; call < BUSINESS_ASSISTANT_MAX_MODEL_CALLS; call++) {
-        const response = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            model,
-            max_tokens: 1500,
-            system,
-            tools: BUSINESS_ASSISTANT_TOOLS,
-            messages,
-          }),
-        });
+        const response = useAnthropic ?
+          await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "x-api-key": anthropicKey,
+              "anthropic-version": "2023-06-01",
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              model,
+              max_tokens: 1500,
+              system,
+              tools: BUSINESS_ASSISTANT_TOOLS,
+              messages,
+            }),
+          }) :
+          await fetch("https://api.deepseek.com/chat/completions", {
+            method: "POST",
+            headers: {
+              "authorization": `Bearer ${deepseekKey}`,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              model,
+              max_tokens: 1500,
+              tools: toolsForOpenAi(BUSINESS_ASSISTANT_TOOLS),
+              messages: messagesForOpenAi(messages, system),
+            }),
+          });
         const data = await response.json();
         if (!response.ok) {
           logger.error("businessAssistantChat model call failed", {
             detail: data.error?.message || "unknown",
             status: response.status,
+            provider: useAnthropic ? "anthropic" : "deepseek",
           });
           throw new HttpsError("internal", "The assistant is unavailable");
         }
 
-        const content = Array.isArray(data.content) ? data.content : [];
+        // Both providers are normalized to this module's block format, so
+        // everything below - and both clients - stay provider-agnostic.
+        const translated = useAnthropic ?
+          {
+            content: Array.isArray(data.content) ? data.content : [],
+            stopReason: data.stop_reason,
+          } :
+          contentFromOpenAiChoice((data.choices || [])[0]);
+        const content = translated.content;
         const reply = content
             .filter((block) => block?.type === "text")
             .map((block) => block.text || "")
@@ -7953,7 +7988,7 @@ exports.businessAssistantChat = onCall(
             .trim();
         messages.push({role: "assistant", content});
 
-        if (data.stop_reason !== "tool_use") {
+        if (translated.stopReason !== "tool_use") {
           return {reply, transcript: messages, proposedAction: null};
         }
 

@@ -260,6 +260,116 @@ function isActionTool(name) {
 }
 
 // ---------------------------------------------------------------------------
+// Provider translation
+//
+// The transcript format this module owns is Anthropic-shaped (content blocks:
+// text / tool_use / tool_result), and both clients already speak it. DeepSeek
+// is OpenAI-shaped (a flat string content plus a separate tool_calls array,
+// and tool results as their own "tool" role messages). Rather than teach the
+// clients two formats, everything below translates at the API boundary only,
+// so the stored transcript and the proposedAction contract never change.
+// ---------------------------------------------------------------------------
+
+/**
+ * Anthropic tool schema -> OpenAI/DeepSeek function schema.
+ * @param {Array} tools Tools in Anthropic shape.
+ * @return {Array} Tools in OpenAI function shape.
+ */
+function toolsForOpenAi(tools) {
+  return (tools || []).map((tool) => ({
+    type: "function",
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.input_schema,
+    },
+  }));
+}
+
+/**
+ * Anthropic messages -> OpenAI/DeepSeek messages.
+ * @param {Array} messages Transcript in this module's format.
+ * @param {string} system The system prompt.
+ * @return {Array} OpenAI-shaped messages.
+ */
+function messagesForOpenAi(messages, system) {
+  const out = [{role: "system", content: system}];
+  for (const message of messages || []) {
+    if (typeof message.content === "string") {
+      out.push({role: message.role, content: message.content});
+      continue;
+    }
+    const blocks = Array.isArray(message.content) ? message.content : [];
+    // Tool results are their own role in the OpenAI shape, and must not be
+    // merged into the user turn that carries them here.
+    const toolResults = blocks.filter((b) => b.type === "tool_result");
+    const text = blocks.filter((b) => b.type === "text")
+        .map((b) => b.text).join("\n").trim();
+    const toolUses = blocks.filter((b) => b.type === "tool_use");
+
+    if (message.role === "assistant") {
+      const entry = {role: "assistant", content: text || null};
+      if (toolUses.length) {
+        entry.tool_calls = toolUses.map((block) => ({
+          id: block.id,
+          type: "function",
+          function: {
+            name: block.name,
+            arguments: JSON.stringify(block.input || {}),
+          },
+        }));
+      }
+      out.push(entry);
+      continue;
+    }
+    for (const result of toolResults) {
+      out.push({
+        role: "tool",
+        tool_call_id: result.tool_use_id,
+        content: String(result.content || ""),
+      });
+    }
+    if (text) out.push({role: "user", content: text});
+  }
+  return out;
+}
+
+/**
+ * An OpenAI/DeepSeek choice -> this module's content blocks + stop reason.
+ * @param {Object} choice The first choice from a chat completion.
+ * @return {{content: Array, stopReason: string}} Anthropic-shaped result.
+ */
+function contentFromOpenAiChoice(choice) {
+  const message = choice && choice.message ? choice.message : {};
+  const content = [];
+  const text = cleanString(message.content, MAX_TEXT_LENGTH);
+  if (text) content.push({type: "text", text});
+  const calls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
+  for (const call of calls) {
+    let input = {};
+    try {
+      input = JSON.parse(call?.function?.arguments || "{}");
+    } catch (error) {
+      // A model that emits unparseable arguments must not take the tool
+      // down with it - an empty input surfaces as a validation refusal
+      // from the callable the action maps to.
+      input = {};
+    }
+    if (!input || typeof input !== "object" || Array.isArray(input)) input = {};
+    content.push({
+      type: "tool_use",
+      id: cleanString(call?.id, 120) || `call_${content.length}`,
+      name: cleanString(call?.function?.name, 80),
+      input,
+    });
+  }
+  return {
+    content,
+    stopReason: calls.length ? "tool_use" : "end_turn",
+  };
+}
+
+// ---------------------------------------------------------------------------
 // System prompt
 // ---------------------------------------------------------------------------
 
@@ -509,6 +619,9 @@ function clampLimit(value, fallback = 20, max = 50) {
 }
 
 module.exports = {
+  toolsForOpenAi,
+  messagesForOpenAi,
+  contentFromOpenAiChoice,
   BUSINESS_ASSISTANT_TOOLS,
   ACTION_TOOL_MAP,
   isReadTool,

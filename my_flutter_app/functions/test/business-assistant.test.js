@@ -312,3 +312,131 @@ describe("clampLimit", () => {
     assert.equal(clampLimit(500), 50);
   });
 });
+
+describe("provider translation (DeepSeek / OpenAI shape)", () => {
+  const {
+    toolsForOpenAi,
+    messagesForOpenAi,
+    contentFromOpenAiChoice,
+  } = require("../business_assistant");
+
+  it("every tool survives the schema translation", () => {
+    const translated = toolsForOpenAi(BUSINESS_ASSISTANT_TOOLS);
+    assert.equal(translated.length, BUSINESS_ASSISTANT_TOOLS.length);
+    for (const [index, tool] of translated.entries()) {
+      assert.equal(tool.type, "function");
+      assert.equal(tool.function.name, BUSINESS_ASSISTANT_TOOLS[index].name);
+      assert.equal(
+          tool.function.parameters,
+          BUSINESS_ASSISTANT_TOOLS[index].input_schema,
+      );
+      assert.ok(tool.function.description.length > 20);
+    }
+  });
+
+  it("the system prompt leads, and plain turns pass through", () => {
+    const out = messagesForOpenAi(
+        [{role: "user", content: "How many cars are parked?"}],
+        "SYSTEM",
+    );
+    assert.deepEqual(out, [
+      {role: "system", content: "SYSTEM"},
+      {role: "user", content: "How many cars are parked?"},
+    ]);
+  });
+
+  it("tool_use becomes tool_calls and tool_result becomes a tool turn", () => {
+    const out = messagesForOpenAi([
+      {role: "user", content: "check parking"},
+      {role: "assistant", content: [
+        {type: "text", text: "Looking"},
+        {type: "tool_use", id: "call_1", name: "list_parked_cars",
+          input: {limit: 5}},
+      ]},
+      {role: "user", content: [
+        {type: "tool_result", tool_use_id: "call_1", content: "[]"},
+      ]},
+    ], "SYSTEM");
+
+    const assistant = out.find((m) => m.role === "assistant");
+    assert.equal(assistant.content, "Looking");
+    assert.equal(assistant.tool_calls.length, 1);
+    assert.equal(assistant.tool_calls[0].id, "call_1");
+    assert.equal(assistant.tool_calls[0].function.name, "list_parked_cars");
+    assert.deepEqual(
+        JSON.parse(assistant.tool_calls[0].function.arguments), {limit: 5},
+    );
+
+    // The tool result must be its own role, never folded into a user turn:
+    // OpenAI-shaped APIs reject an unanswered tool_call.
+    const toolTurn = out.find((m) => m.role === "tool");
+    assert.equal(toolTurn.tool_call_id, "call_1");
+    assert.equal(toolTurn.content, "[]");
+  });
+
+  it("a tool call comes back as a tool_use block with parsed input", () => {
+    const {content, stopReason} = contentFromOpenAiChoice({
+      message: {
+        content: "Let me check.",
+        tool_calls: [{
+          id: "call_9",
+          type: "function",
+          function: {
+            name: "mark_parking_paid",
+            arguments: "{\"entryId\":\"abc\",\"receivedVia\":\"cash\"}",
+          },
+        }],
+      },
+    });
+    assert.equal(stopReason, "tool_use");
+    assert.deepEqual(content[0], {type: "text", text: "Let me check."});
+    assert.equal(content[1].type, "tool_use");
+    assert.equal(content[1].name, "mark_parking_paid");
+    assert.deepEqual(content[1].input, {entryId: "abc", receivedVia: "cash"});
+  });
+
+  it("a plain answer ends the turn", () => {
+    const {content, stopReason} = contentFromOpenAiChoice({
+      message: {content: "You have 5 cars parked."},
+    });
+    assert.equal(stopReason, "end_turn");
+    assert.equal(content.length, 1);
+    assert.equal(content[0].text, "You have 5 cars parked.");
+  });
+
+  it("unparseable tool arguments degrade to an empty input, not a crash", () => {
+    const {content} = contentFromOpenAiChoice({
+      message: {
+        content: null,
+        tool_calls: [{
+          id: "call_bad",
+          function: {name: "mark_parking_paid", arguments: "{not json"},
+        }],
+      },
+    });
+    assert.equal(content.length, 1);
+    assert.deepEqual(content[0].input, {});
+  });
+
+  it("a round trip through both translators preserves the tool call", () => {
+    const original = [
+      {role: "user", content: "mark the BMW paid"},
+    ];
+    const {content} = contentFromOpenAiChoice({
+      message: {
+        content: "",
+        tool_calls: [{
+          id: "call_rt",
+          function: {name: "mark_parking_paid", arguments: "{\"entryId\":\"x\"}"},
+        }],
+      },
+    });
+    const next = [...original, {role: "assistant", content}];
+    const forApi = messagesForOpenAi(next, "SYSTEM");
+    const assistant = forApi.find((m) => m.role === "assistant");
+    assert.equal(assistant.tool_calls[0].id, "call_rt");
+    assert.deepEqual(
+        JSON.parse(assistant.tool_calls[0].function.arguments), {entryId: "x"},
+    );
+  });
+});
