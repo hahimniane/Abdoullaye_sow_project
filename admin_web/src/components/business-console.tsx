@@ -1,5 +1,7 @@
 "use client";
 
+import { useConsoleDocumentTitle } from "@/lib/document-title";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -204,6 +206,7 @@ export function BusinessConsole({
   const businessId = text(profile.businessId, "");
   const previewMode = Boolean(previewBusiness);
   const [activeTab, setActiveTab] = useState<BusinessTab>("today");
+  useConsoleDocumentTitle("business");
   // Set when a notification is opened, so the destination panel can scroll to
   // and highlight the exact record instead of dropping the business into a
   // list of everything and making them hunt for it.

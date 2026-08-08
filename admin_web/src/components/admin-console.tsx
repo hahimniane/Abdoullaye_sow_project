@@ -1,5 +1,7 @@
 "use client";
 
+import { useConsoleDocumentTitle } from "@/lib/document-title";
+
 import {
   FormEvent,
   ReactNode,
@@ -2213,6 +2215,9 @@ export function AdminConsole() {
   const [booting, setBooting] = useState(true);
   const [authError, setAuthError] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("today");
+  // Same bundle serves every subdomain, so the tab title has to be set here
+  // rather than in layout metadata - otherwise all three consoles read alike.
+  useConsoleDocumentTitle("admin", tabLabel(activeTab));
   const [toast, setToast] = useState<Toast | null>(null);
   const [busyAction, setBusyAction] = useState<BusyAction | null>(null);
   const actionSequence = useRef(0);

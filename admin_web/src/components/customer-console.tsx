@@ -1,5 +1,7 @@
 "use client";
 
+import { useConsoleDocumentTitle } from "@/lib/document-title";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   EmailAuthProvider,
@@ -160,6 +162,10 @@ export function CustomerConsole({
 }: CustomerConsoleProps) {
   const [activeTab, setActiveTab] = useState<CustomerTab>(() =>
     firebaseUser.phoneNumber ? "home" : "profile",
+  );
+  useConsoleDocumentTitle(
+    "customer",
+    tabs.find((item) => item.id === activeTab)?.label,
   );
   // The record a clicked notification points at; cleared once shown so a
   // later manual visit to Orders does not re-scroll.
