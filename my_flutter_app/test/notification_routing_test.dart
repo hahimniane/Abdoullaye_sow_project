@@ -102,6 +102,12 @@ void main() {
       expect(route, isNull);
     });
 
+    test('routes a car viewing update to My Purchases', () {
+      final route = routeForNotificationData({'type': 'car_viewing_status'});
+
+      expect(route?.name, '/my-purchases');
+    });
+
     test('routes a support case update to the support thread', () {
       final route = routeForNotificationData({
         'type': 'support_case_update',

@@ -35,9 +35,14 @@ import { Car, CircleAlert, CircleDollarSign, ClipboardList, Headphones, Home, Lo
 
 import { auth, db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
+import {
+  carPurchaseIsViewing,
+  viewingStatusLabel,
+} from "@/lib/car-viewing";
 import { customerCarListingIsEligible } from "@/lib/customer-service-eligibility";
 import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
+import { CustomerCarViewing } from "@/components/customer-car-viewing";
 import { CustomerCars } from "@/components/customer-cars";
 import { NotificationBell } from "@/components/notification-bell";
 import { ToggleRow } from "@/components/toggle-row";
@@ -479,9 +484,17 @@ function OrderPanel({
   title: string;
   uid: string;
 }) {
-  const [selected, setSelected] = useState<TaggedRow | null>(null);
+  // The open record is held by key and looked up from the live rows, never
+  // kept as a snapshot: a car viewing changes status while its drawer is open
+  // - the seller counters, the customer accepts - and a copy frozen at open
+  // time would keep offering the action that was just taken.
+  const [selectedKey, setSelectedKey] = useState("");
   const [reviewing, setReviewing] = useState(false);
   const [editing, setEditing] = useState(false);
+  const selected = useMemo(
+    () => orders.find((order) => orderKey(order) === selectedKey) ?? null,
+    [orders, selectedKey],
+  );
   const cancelAction = selected ? pendingOrderCancellation(selected) : null;
   const reviewedKeys = useReviewedOrderKeys(uid);
 
@@ -505,9 +518,9 @@ function OrderPanel({
               <button
                 aria-label="Open order details"
                 className="data-row customer-order-row customer-order-button"
-                key={`${label}-${row.id}`}
+                key={orderKey(order)}
                 onClick={() => {
-                  setSelected(order);
+                  setSelectedKey(orderKey(order));
                   setReviewing(false);
                 }}
                 type="button"
@@ -518,7 +531,7 @@ function OrderPanel({
                   <small>{text(row.trackingCode ?? row.trackingNumber ?? row.id)}</small>
                 </div>
                 <div>
-                  <span className="status-pill compact">{text(row.status ?? row.purchaseStatus, "Pending")}</span>
+                  <span className="status-pill compact">{orderStatusLabel(order)}</span>
                   <small>{formatDate(row.updatedAt ?? row.createdAt)}</small>
                 </div>
               </button>
@@ -529,7 +542,7 @@ function OrderPanel({
       <OrderDetailDrawer
         onCancelOrder={cancelAction ? cancelSelectedOrder : undefined}
         onClose={() => {
-          setSelected(null);
+          setSelectedKey("");
           setReviewing(false);
         }}
         open={Boolean(selected)}
@@ -546,13 +559,7 @@ function OrderPanel({
                     selected.row.id,
                 )}
               />
-              <OrderFact
-                label="Status"
-                value={text(
-                  selected.row.status ?? selected.row.purchaseStatus,
-                  "Pending",
-                )}
-              />
+              <OrderFact label="Status" value={orderStatusLabel(selected)} />
               <OrderFact
                 label="Service provider"
                 value={text(selected.row.businessName, "Not set")}
@@ -593,6 +600,10 @@ function OrderPanel({
                 )}
               />
             </div>
+            {selected.collectionName === "carPurchases" &&
+              carPurchaseIsViewing(selected.row) && (
+                <CustomerCarViewing row={selected.row} />
+              )}
             {transportEditWindowOpen(selected) && (
               <button
                 className="secondary-button"
@@ -1150,6 +1161,22 @@ type TaggedRow = {
   collectionName: string;
   icon: typeof Car;
 };
+
+// Identity of one activity row across renders. The collection is part of it
+// because two collections can hand out the same document id.
+function orderKey(order: TaggedRow) {
+  return `${order.collectionName}:${order.row.id}`;
+}
+
+// A status a customer can read. Only viewings are mapped: they are the one
+// activity whose raw status words - viewing_countered, viewing_expired - say
+// nothing to the person waiting on them. Everything else keeps the value it
+// has always shown.
+function orderStatusLabel(order: TaggedRow) {
+  const status = text(order.row.status ?? order.row.purchaseStatus, "Pending");
+  if (order.collectionName !== "carPurchases") return status;
+  return viewingStatusLabel(status) || status;
+}
 
 function tagRows(
   rows: FirestoreRow[],

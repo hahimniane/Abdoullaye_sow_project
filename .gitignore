@@ -19,3 +19,7 @@ my_flutter_app/.firebase-batch-*.json
 # Local-only Stripe build config. Never committed - holds the publishable
 # key passed to release builds via --dart-define.
 my_flutter_app/.env.stripe.local
+
+# Temp deploy config written when deploying a subset of functions without
+# re-running the predeploy lint+test hook per batch.
+my_flutter_app/.firebase-nopredeploy.json

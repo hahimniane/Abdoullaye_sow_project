@@ -2770,5 +2770,89 @@
       "number": {}
     }
   },
-  "transportJobAcceptedQuote": "Accepted quote"
+  "transportJobAcceptedQuote": "Accepted quote",
+  "requestViewing": "Request a viewing",
+  "manageViewing": "Manage viewing",
+  "requestViewingSummary": "Propose a time to come and see this vehicle. The seller confirms it or offers other times.",
+  "requestViewingQuestion": "Send viewing request?",
+  "requestViewingConfirmMessage": "The seller will confirm this time or offer other times. Nothing is charged.",
+  "viewingRequestSent": "Viewing request sent. The seller will confirm it or offer other times.",
+  "viewingConversationTitle": "Your viewing for this car",
+  "viewingStatusRequested": "Viewing requested",
+  "viewingStatusCountered": "Other times offered",
+  "viewingStatusDeclined": "Viewing declined",
+  "viewingStatusExpired": "Proposal expired",
+  "viewingStatusCancelled": "Viewing cancelled",
+  "viewingYourTurn": "Your turn",
+  "viewingWaitingOnBuyer": "Waiting on the buyer",
+  "viewingWaitingOnSeller": "Waiting on the seller",
+  "viewingProposedByYou": "You proposed",
+  "viewingProposedByBuyer": "The buyer proposed",
+  "viewingProposedBySeller": "The seller offered",
+  "viewingTimesOnTable": "Times on the table",
+  "viewingConfirmedFor": "Confirmed for {time}",
+  "@viewingConfirmedFor": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "viewingRespondBy": "Reply by {time}",
+  "@viewingRespondBy": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "viewingAcceptTime": "Accept this time",
+  "viewingOfferOtherTimes": "Offer other times",
+  "viewingProposeAnotherTime": "Propose another time",
+  "viewingDeclineRequest": "Decline",
+  "viewingDeclineQuestion": "Decline this viewing?",
+  "viewingDeclineConfirmMessage": "The buyer will be told you cannot show the car at these times.",
+  "viewingDeclinedMessage": "Viewing declined.",
+  "viewingConfirmedMessage": "Viewing confirmed for {time}.",
+  "@viewingConfirmedMessage": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "viewingTimesSent": "Your times were sent.",
+  "viewingActionFailed": "That could not be done right now. Try again.",
+  "viewingProposalExpiredNotice": "Nobody answered in time, so this proposal expired.",
+  "viewingNoMoreCounters": "This has gone back and forth enough - accept a time, decline, or cancel.",
+  "viewingClosedNotice": "This viewing is closed. Nothing on it can be changed.",
+  "viewingHistoryTitle": "What has happened so far",
+  "viewingHistoryEntryLine": "{who} • {action} • {when}",
+  "@viewingHistoryEntryLine": {
+    "placeholders": {
+      "who": {},
+      "action": {},
+      "when": {}
+    }
+  },
+  "viewingActorYou": "You",
+  "viewingActorBuyer": "The buyer",
+  "viewingActorSeller": "The seller",
+  "viewingHistoryActionProposed": "proposal",
+  "viewingHistoryActionAccepted": "acceptance",
+  "viewingHistoryActionDeclined": "decline",
+  "viewingHistoryActionCancelled": "cancellation",
+  "viewingProposalSheetTitleCustomer": "Propose a viewing time",
+  "viewingProposalSheetTitleBusiness": "Offer viewing times",
+  "viewingProposalSheetMessageCustomer": "Pick the time that suits you. The seller can accept it or offer other times.",
+  "viewingProposalSheetMessageBusiness": "Offer up to {count} times. The buyer picks one or comes back with another.",
+  "@viewingProposalSheetMessageBusiness": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "viewingRescheduleNotice": "Proposing a new time reopens the conversation, so the agreed appointment stops being confirmed.",
+  "viewingChooseTime": "Choose a viewing time.",
+  "viewingSlotsChosen": "{count} of {max} times chosen",
+  "@viewingSlotsChosen": {
+    "placeholders": {
+      "count": {},
+      "max": {}
+    }
+  },
+  "viewingSendProposal": "Send"
 }

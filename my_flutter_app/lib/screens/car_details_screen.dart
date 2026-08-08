@@ -9,9 +9,11 @@ import '../models/car.dart';
 import '../models/car_purchase.dart';
 import '../providers/auth_provider.dart';
 import '../services/car_purchase_service.dart';
+import '../services/car_viewing_service.dart';
 import '../services/favorite_cars_service.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/car_viewing_negotiation.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
 import '../theme/app_colors.dart';
@@ -501,8 +503,8 @@ class CarDetailsScreen extends StatelessWidget {
     final profilePhone = authProvider.customerPhone?.trim() ?? '';
     final buyerPhoneController = TextEditingController(text: profilePhone);
     final needsPhone = profilePhone.isEmpty;
-    final slots = _ViewingSlot.available();
-    _ViewingSlot? selectedSlot;
+    final slots = viewingSlotChoices();
+    ViewingSlot? selectedSlot;
     var isSubmitting = false;
     final formKey = GlobalKey<FormState>();
 
@@ -528,7 +530,7 @@ class CarDetailsScreen extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              l10n.reserveViewing,
+                              l10n.requestViewing,
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
                           ),
@@ -542,7 +544,7 @@ class CarDetailsScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        l10n.reserveViewingSummary,
+                        l10n.requestViewingSummary,
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 20),
@@ -586,7 +588,7 @@ class CarDetailsScreen extends StatelessWidget {
                                   ? Colors.white
                                   : AppColors.brandRed,
                             ),
-                            label: Text(slot.label),
+                            label: Text(viewingSlotLabel(slot)),
                             selectedColor: AppColors.brandRed,
                             labelStyle: TextStyle(
                               color: isSelected
@@ -626,9 +628,9 @@ class CarDetailsScreen extends StatelessWidget {
                                   }
                                   final confirmed = await confirmMajorAction(
                                     context,
-                                    title: l10n.reserveViewingQuestion,
-                                    message: l10n.reserveViewingConfirmMessage,
-                                    confirmLabel: l10n.reserveViewing,
+                                    title: l10n.requestViewingQuestion,
+                                    message: l10n.requestViewingConfirmMessage,
+                                    confirmLabel: l10n.requestViewing,
                                     icon: Icons.event_available_outlined,
                                   );
                                   if (!confirmed || !context.mounted) return;
@@ -655,21 +657,34 @@ class CarDetailsScreen extends StatelessWidget {
                                             );
                                           });
                                     }
-                                    await CarPurchaseService().reserveViewing(
+                                    await CarPurchaseService().requestViewing(
                                       car: car,
                                       buyerName: buyerName,
                                       buyerPhone: buyerPhoneController.text
                                           .trim(),
-                                      appointmentStart: selectedSlot!.start,
-                                      appointmentLabel: selectedSlot!.label,
+                                      slot: selectedSlot!,
                                     );
                                     if (!context.mounted) return;
                                     Navigator.pop(context);
                                     showSuccessSnackBar(
                                       context,
-                                      l10n.viewingReservationComplete(
-                                        selectedSlot!.label,
-                                      ),
+                                      l10n.viewingRequestSent,
+                                    );
+                                  } on FirebaseFunctionsException catch (
+                                    error
+                                  ) {
+                                    if (!context.mounted) return;
+                                    // The viewing callables answer in
+                                    // sentences meant for the buyer; only fall
+                                    // back to our own wording when there is
+                                    // nothing to show.
+                                    final message = (error.message ?? '')
+                                        .trim();
+                                    showErrorSnackBar(
+                                      context,
+                                      message.isEmpty
+                                          ? _checkoutError(l10n, error)
+                                          : message,
                                     );
                                   } catch (e) {
                                     if (!context.mounted) return;
@@ -692,7 +707,7 @@ class CarDetailsScreen extends StatelessWidget {
                                     color: Colors.white,
                                   ),
                                 )
-                              : Text(l10n.confirmViewingReservation),
+                              : Text(l10n.requestViewing),
                         ),
                       ),
                     ],
@@ -708,291 +723,86 @@ class CarDetailsScreen extends StatelessWidget {
     buyerPhoneController.dispose();
   }
 
+  /// The viewing this buyer already has on this listing, as it stands.
+  ///
+  /// The panel inside is the same one `/my-purchases` shows and the same one
+  /// the selling business reads from its own side, so the two can never
+  /// disagree about whose turn it is or what times are on the table. There is
+  /// no separate "edit" sheet any more: moving a viewing is a proposal the
+  /// other party answers.
   Future<void> _showExistingViewingSheet(
     BuildContext context,
     CarPurchase reservation,
   ) async {
     final l10n = AppLocalizations.of(context)!;
-    var isSubmitting = false;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final appointment = reservation.appointmentStart;
-            final label =
-                reservation.appointmentLabel ??
-                (appointment == null
-                    ? l10n.viewingScheduled
-                    : DateFormat.yMMMd().add_jm().format(appointment));
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
+        return SingleChildScrollView(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: 20 + MediaQuery.of(sheetContext).viewInsets.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: AppColors.brandRed.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.event_available_outlined,
+                      color: AppColors.brandRed,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      l10n.viewingConversationTitle,
+                      style: Theme.of(sheetContext).textTheme.titleLarge,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(sheetContext),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
               ),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: AppColors.brandRed.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: const Icon(
-                            Icons.event_available_outlined,
-                            color: AppColors.brandRed,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            l10n.youHaveViewingReserved,
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: isSubmitting
-                              ? null
-                              : () => Navigator.pop(context),
-                          icon: const Icon(Icons.close),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    _SheetInfoPanel(
-                      icon: Icons.schedule_outlined,
-                      title: l10n.currentViewingTime,
-                      message: label,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      l10n.changeOrCancelViewingToBookNew,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.lightMuted,
-                        height: 1.35,
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: FilledButton.icon(
-                        onPressed:
-                            isSubmitting ||
-                                !reservation.canEditViewingReservation
-                            ? null
-                            : () async {
-                                Navigator.pop(context);
-                                await _showEditViewingSheet(
-                                  context,
-                                  reservation,
-                                );
-                              },
-                        icon: const Icon(Icons.event_repeat_outlined),
-                        label: Text(l10n.editViewingReservation),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.errorRed,
-                          side: const BorderSide(color: AppColors.errorRed),
-                        ),
-                        onPressed: isSubmitting
-                            ? null
-                            : () async {
-                                final confirmed = await confirmMajorAction(
-                                  context,
-                                  title: l10n.cancelViewingQuestion,
-                                  message: l10n.cancelViewingConfirmMessage,
-                                  confirmLabel: l10n.cancelViewingReservation,
-                                  icon: Icons.event_busy_outlined,
-                                  destructive: true,
-                                );
-                                if (!confirmed || !context.mounted) return;
-                                setModalState(() => isSubmitting = true);
-                                try {
-                                  await CarPurchaseService()
-                                      .cancelViewingReservation(
-                                        purchaseId: reservation.id,
-                                      );
-                                  if (!context.mounted) return;
-                                  Navigator.pop(context);
-                                  showSuccessSnackBar(
-                                    context,
-                                    l10n.viewingReservationCancelled,
-                                  );
-                                } catch (error) {
-                                  if (!context.mounted) return;
-                                  showErrorSnackBar(
-                                    context,
-                                    l10n.operationFailed('$error'),
-                                  );
-                                  setModalState(() => isSubmitting = false);
-                                }
-                              },
-                        icon: isSubmitting
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.event_busy_outlined),
-                        label: Text(l10n.cancelViewingReservation),
-                      ),
-                    ),
-                  ],
+              const SizedBox(height: 14),
+              CarViewingNegotiationPanel(
+                purchase: reservation,
+                party: ViewingParty.customer,
+                // The sheet holds a snapshot of the record. Once the server has
+                // accepted something it is out of date, so it closes and the
+                // listing's own stream renders what actually happened.
+                onActed: () => Navigator.pop(sheetContext),
+              ),
+              // Only while there is something to change. A declined or expired
+              // viewing has no actions left in it, and telling someone to
+              // cancel one would send them looking for a button that is not
+              // there.
+              if (reservation.hasOpenViewingNegotiation) ...[
+                const SizedBox(height: 12),
+                Text(
+                  l10n.changeOrCancelViewingToBookNew,
+                  style: Theme.of(sheetContext).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.lightMuted,
+                    height: 1.35,
+                  ),
                 ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Future<void> _showEditViewingSheet(
-    BuildContext context,
-    CarPurchase reservation,
-  ) async {
-    final l10n = AppLocalizations.of(context)!;
-    final slots = _ViewingSlot.available();
-    _ViewingSlot? selectedSlot;
-    var isSubmitting = false;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            l10n.editViewingReservation,
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: isSubmitting
-                              ? null
-                              : () => Navigator.pop(context),
-                          icon: const Icon(Icons.close),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      l10n.viewingEditCutoff,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.lightMuted,
-                        height: 1.35,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: slots.map((slot) {
-                        final isSelected = selectedSlot == slot;
-                        return ChoiceChip(
-                          selected: isSelected,
-                          avatar: Icon(
-                            Icons.schedule,
-                            size: 18,
-                            color: isSelected
-                                ? Colors.white
-                                : AppColors.brandRed,
-                          ),
-                          label: Text(slot.label),
-                          selectedColor: AppColors.brandRed,
-                          labelStyle: TextStyle(
-                            color: isSelected
-                                ? Colors.white
-                                : AppColors.lightOnSurface,
-                            fontWeight: FontWeight.w700,
-                          ),
-                          onSelected: isSubmitting
-                              ? null
-                              : (_) => setModalState(() => selectedSlot = slot),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 22),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: FilledButton.icon(
-                        onPressed: isSubmitting
-                            ? null
-                            : () async {
-                                final slot = selectedSlot;
-                                if (slot == null) return;
-                                setModalState(() => isSubmitting = true);
-                                try {
-                                  await CarPurchaseService()
-                                      .updateViewingReservation(
-                                        purchaseId: reservation.id,
-                                        appointmentStart: slot.start,
-                                        appointmentLabel: slot.label,
-                                      );
-                                  if (!context.mounted) return;
-                                  Navigator.pop(context);
-                                  showSuccessSnackBar(
-                                    context,
-                                    l10n.viewingReservationUpdated,
-                                  );
-                                } catch (error) {
-                                  if (!context.mounted) return;
-                                  showErrorSnackBar(
-                                    context,
-                                    l10n.operationFailed('$error'),
-                                  );
-                                  setModalState(() => isSubmitting = false);
-                                }
-                              },
-                        icon: isSubmitting
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.event_repeat_outlined),
-                        label: Text(l10n.changeViewingTime),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
+              ],
+            ],
+          ),
         );
       },
     );
@@ -1597,12 +1407,19 @@ class _ReservationActionArea extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final viewing = activeViewing;
-    final appointment = viewing?.appointmentStart;
-    final label =
-        viewing?.appointmentLabel ??
-        (appointment == null
-            ? l10n.viewingScheduled
-            : DateFormat.yMMMd().add_jm().format(appointment));
+    final state = viewing?.viewingState;
+    // What the banner says is the negotiation's status, not "reserved": a
+    // request nobody has answered yet is not an appointment, and telling a
+    // buyer it is would be the whole bug this flow exists to fix.
+    final label = state == null
+        ? ''
+        : state.purchaseStatus == viewingScheduled &&
+              state.appointmentStart != null
+        ? (state.appointmentLabel.isNotEmpty
+              ? state.appointmentLabel
+              : DateFormat.yMMMd().add_jm().format(state.appointmentStart!))
+        : viewingAwaitingLabel(l10n, state, ViewingParty.customer) ??
+              l10n.viewingClosedNotice;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1636,7 +1453,7 @@ class _ReservationActionArea extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        l10n.youHaveViewingReserved,
+                        viewingStatusLabel(l10n, viewing.purchaseStatus),
                         style: const TextStyle(
                           color: AppColors.brandRed,
                           fontWeight: FontWeight.w900,
@@ -1677,9 +1494,7 @@ class _ReservationActionArea extends StatelessWidget {
               size: 24,
             ),
             label: Text(
-              viewing == null
-                  ? l10n.reserveViewing
-                  : l10n.editViewingReservation,
+              viewing == null ? l10n.requestViewing : l10n.manageViewing,
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
           ),
@@ -1881,39 +1696,6 @@ class _BusinessLocationCard extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _ViewingSlot {
-  const _ViewingSlot({required this.start, required this.label});
-
-  final DateTime start;
-  final String label;
-
-  static List<_ViewingSlot> available() {
-    final now = DateTime.now();
-    final earliest = now.add(const Duration(hours: 2));
-    final dateFormat = DateFormat('EEE, MMM d');
-    final timeFormat = DateFormat.jm();
-    final slots = <_ViewingSlot>[];
-    var day = DateTime(now.year, now.month, now.day);
-
-    while (slots.length < 8) {
-      day = day.add(const Duration(days: 1));
-      if (day.weekday == DateTime.sunday) continue;
-      for (final hour in const [10, 12, 14, 16]) {
-        final start = DateTime(day.year, day.month, day.day, hour);
-        if (start.isBefore(earliest)) continue;
-        slots.add(
-          _ViewingSlot(
-            start: start,
-            label: '${dateFormat.format(start)} - ${timeFormat.format(start)}',
-          ),
-        );
-        if (slots.length == 8) break;
-      }
-    }
-    return slots;
   }
 }
 

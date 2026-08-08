@@ -101,6 +101,23 @@ import {
   type DestinationDepartureDay,
   type DestinationServiceAvailability,
 } from "@/lib/destination-pricing";
+import {
+  VIEWING_BLOCK_MESSAGES,
+  VIEWING_SLOT_ERROR_MESSAGES,
+  formatViewingSlot,
+  validateViewingSlots,
+  viewingActionAvailability,
+  viewingActionPayload,
+  viewingAwaitingParty,
+  viewingHistoryFrom,
+  viewingHistoryLabel,
+  viewingRecordFrom,
+  viewingSlotFromInput,
+  viewingSlotInputMin,
+  viewingWaitingLabel,
+  type ViewingAction,
+  type ViewingSlot,
+} from "@/lib/car-viewing";
 import { currentLanguage, formatDate, formatMoney, text } from "@/lib/format";
 import {
   normalizeTransportContainerNumber,
@@ -4532,24 +4549,303 @@ function purchaseKindLabel(kind: ReturnType<typeof purchaseKind>) {
   return kind === "hold" ? "Paid hold" : kind === "viewing" ? "Viewing" : "Purchase";
 }
 function purchaseNeedsAction(row: FirestoreRow) {
-  return Boolean(row.holdReviewRequiredAt) || row.extensionRequestStatus === "pending";
+  // A viewing request nobody has answered is the same kind of "somebody is
+  // waiting on us" as a hold review, and it expires if it is left alone, so it
+  // carries the same alert border and the same Needs action filter.
+  return Boolean(row.holdReviewRequiredAt) ||
+    row.extensionRequestStatus === "pending" ||
+    viewingAwaitingParty(text(row.purchaseStatus, "")) === "business";
 }
 function purchaseTone(status: string) {
   switch (status) {
     case "completed": return "ok";
-    case "reserved": case "hold_review_required": case "viewing_scheduled": return "warn";
-    case "cancelled": case "refunded": case "no_show": case "forfeited": return "muted";
+    case "reserved": case "hold_review_required": case "viewing_requested": return "warn";
+    case "viewing_scheduled": return "ok";
+    case "cancelled": case "refunded": case "no_show": case "forfeited":
+    case "viewing_declined": case "viewing_expired": return "muted";
     default: return "navy";
   }
 }
 
+/**
+ * The negotiation half of a viewing card.
+ *
+ * A viewing is an appointment two people have to agree on, so the card has to
+ * show what is on the table, who owes the reply and by when — none of which a
+ * hold or a purchase has. It sits inline rather than behind a modal because a
+ * business working through ten of these should not have to open ten dialogs.
+ *
+ * Which buttons exist comes from `viewingActionAvailability`, the console's
+ * copy of the server's own rules, so the panel never offers an action
+ * `actOnCarViewing` would refuse.
+ */
+function ViewingNegotiation({
+  row,
+  carStatus,
+  nowMs,
+  busy,
+  onAct,
+  onComplete,
+}: {
+  row: FirestoreRow;
+  carStatus: string;
+  nowMs: number;
+  busy: boolean;
+  onAct: (
+    action: ViewingAction,
+    slots: ViewingSlot[],
+    label: string,
+    confirm: string,
+    confirmFr: string,
+  ) => void;
+  onComplete: () => void;
+}) {
+  const record = viewingRecordFrom(row);
+  const available = viewingActionAvailability({ record, actor: "business", nowMs, carStatus });
+  const history = viewingHistoryFrom(row);
+  const [chosenSlotMs, setChosenSlotMs] = useState(0);
+  const [countering, setCountering] = useState(false);
+  const [counterSlots, setCounterSlots] = useState<string[]>([""]);
+  const [slotError, setSlotError] = useState("");
+
+  const waiting = viewingWaitingLabel(record.purchaseStatus, "business");
+  const selected =
+    available.acceptableSlots.find((slot) => slot.startAtMs === chosenSlotMs) ??
+    available.acceptableSlots[0];
+
+  function sendCounter() {
+    const slots = counterSlots
+      .map(viewingSlotFromInput)
+      .filter((slot): slot is ViewingSlot => slot !== null);
+    const error = validateViewingSlots(slots, nowMs, available.maxSlots);
+    if (error) {
+      setSlotError(VIEWING_SLOT_ERROR_MESSAGES[error]);
+      return;
+    }
+    setSlotError("");
+    setCountering(false);
+    setCounterSlots([""]);
+    onAct(
+      "propose",
+      slots,
+      "Times sent to the buyer.",
+      "Offer these times to the buyer?",
+      "Proposer ces horaires à l’acheteur ?",
+    );
+  }
+
+  return (
+    <>
+      {(waiting || record.respondByAtMs != null) && (
+        <div className="pur-info">
+          {waiting && <div><span>Waiting on</span><b>{waiting}</b></div>}
+          {record.respondByAtMs != null && (
+            <div><span>Reply by</span><b>{formatViewingSlot(record.respondByAtMs)}</b></div>
+          )}
+        </div>
+      )}
+
+      {available.blockedReason !== "" && available.blockedReason !== "closed" && (
+        <div className="pur-notice warn">
+          <AlertTriangle size={15} /> {VIEWING_BLOCK_MESSAGES[available.blockedReason]}
+        </div>
+      )}
+      {available.open && available.proposalsLeft === 0 && (
+        <div className="pur-notice">
+          <Clock3 size={15} /> This has gone back and forth enough - accept a time, decline, or cancel
+        </div>
+      )}
+
+      {record.proposedSlots.length > 0 && available.blockedReason !== "closed" && (
+        <div className="viewing-slots">
+          <span className="pur-kind">{available.canAccept ? "Pick a time to accept" : "Times on the table"}</span>
+          {record.proposedSlots.map((slot) => {
+            const acceptable = available.acceptableSlots.some(
+              (item) => item.startAtMs === slot.startAtMs,
+            );
+            return (
+              <label className="viewing-slot" key={slot.startAtMs}>
+                {available.canAccept ? (
+                  <input
+                    checked={selected?.startAtMs === slot.startAtMs}
+                    disabled={busy || !acceptable}
+                    name={`viewing-slot-${row.id}`}
+                    onChange={() => setChosenSlotMs(slot.startAtMs)}
+                    type="radio"
+                  />
+                ) : (
+                  <Clock3 size={14} />
+                )}
+                <span>{formatViewingSlot(slot.startAtMs)}</span>
+                {/* A slot inside the edit floor stays visible but cannot be
+                    agreed — hiding it would make the buyer's offer look
+                    smaller than it was. */}
+                {!acceptable && <span className="lst-badge muted">Too soon</span>}
+              </label>
+            );
+          })}
+        </div>
+      )}
+
+      {countering && (
+        <div className="viewing-counter-fields">
+          {counterSlots.map((value, index) => (
+            <input
+              aria-label="Time to offer"
+              key={index}
+              min={viewingSlotInputMin(nowMs)}
+              onChange={(event) =>
+                setCounterSlots((values) =>
+                  values.map((item, position) => (position === index ? event.target.value : item)),
+                )
+              }
+              type="datetime-local"
+              value={value}
+            />
+          ))}
+          {counterSlots.length < available.maxSlots && (
+            <button className="lst-btn ghost" type="button" onClick={() => setCounterSlots((values) => [...values, ""])}>
+              <Plus size={14} /> Add another time
+            </button>
+          )}
+          {slotError && <div className="lst-form-error" role="alert">{slotError}</div>}
+        </div>
+      )}
+
+      {history.length > 0 && (
+        <details className="viewing-history">
+          <summary>Negotiation history</summary>
+          <ol>
+            {history.map((entry) => (
+              <li key={`${entry.atMs}-${entry.actor}-${entry.action}`}>
+                <b>{viewingHistoryLabel(entry)}</b>
+                {entry.slots.length > 0 && (
+                  <span>{entry.slots.map((slot) => formatViewingSlot(slot.startAtMs)).join(" · ")}</span>
+                )}
+                <small>{formatViewingSlot(entry.atMs)}</small>
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
+
+      {available.open && (
+        <div className="pur-actions">
+          {countering ? (
+            <>
+              <button className="lst-btn" type="button" disabled={busy} onClick={sendCounter}>
+                <Send size={15} /> Send these times
+              </button>
+              <button
+                className="lst-btn ghost"
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setCountering(false);
+                  setCounterSlots([""]);
+                  setSlotError("");
+                }}
+              >
+                Discard these times
+              </button>
+            </>
+          ) : (
+            <>
+              {available.canAccept && (
+                <button
+                  className="lst-btn"
+                  type="button"
+                  disabled={busy || !selected}
+                  onClick={() => selected && onAct(
+                    "accept",
+                    [selected],
+                    "Viewing confirmed.",
+                    "Confirm this viewing time?",
+                    "Confirmer cet horaire de visite ?",
+                  )}
+                >
+                  <CheckCircle2 size={15} /> Accept this time
+                </button>
+              )}
+              {available.canPropose && (
+                <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => setCountering(true)}>
+                  <Clock3 size={14} />
+                  {record.purchaseStatus === "viewing_scheduled" ? "Propose a new time" : "Offer other times"}
+                </button>
+              )}
+              {available.canDecline && (
+                <button
+                  className="lst-btn ghost danger"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onAct(
+                    "decline",
+                    [],
+                    "Viewing declined.",
+                    "Decline this viewing request?",
+                    "Refuser cette demande de visite ?",
+                  )}
+                >
+                  <XCircle size={15} /> Decline
+                </button>
+              )}
+              {record.purchaseStatus === "viewing_scheduled" && (
+                <button className="lst-btn" type="button" disabled={busy} onClick={onComplete}>
+                  <CheckCircle2 size={15} /> Viewing done
+                </button>
+              )}
+              {/* Last, and always present while the viewing is open — the one
+                  action neither an inactive listing nor a used-up round cap
+                  takes away. */}
+              {available.canCancel && (
+                <button
+                  className="lst-btn ghost danger"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onAct(
+                    "cancel",
+                    [],
+                    "Viewing cancelled.",
+                    "Cancel this viewing?",
+                    "Annuler cette visite ?",
+                  )}
+                >
+                  <RotateCcw size={14} /> Cancel viewing
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
 export function PurchasesPanel({ businessId, previewMode = false }: PanelProps) {
-  const purchases = useBusinessRows("carPurchases", businessId, Boolean(businessId && !previewMode), 250);
+  const enabled = Boolean(businessId && !previewMode);
+  const purchases = useBusinessRows("carPurchases", businessId, enabled, 250);
+  // Read for one field: a viewing on a listing that is no longer active can
+  // only be cancelled, and the purchase record does not carry the listing's
+  // status. Knowing it here is what lets the panel say so instead of letting
+  // the callable's refusal be how an operator finds out.
+  const cars = useBusinessRows("cars", businessId, enabled, 250);
   const [noteById, setNoteById] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [message, setMessage] = useState("");
   const [busyId, setBusyId] = useState("");
+  // One clock for the whole panel. Every viewing window is measured against
+  // the hour before an appointment, so a card left open has to stop offering
+  // an action when that hour arrives rather than waiting for a refresh.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+  const carStatusById = useMemo(
+    () => new Map(cars.rows.map((car) => [car.id, text(car.status, "")])),
+    [cars.rows],
+  );
 
   const searched = useMemo(
     () => filterRows(purchases.rows, search, ["carTitle", "buyerName", "buyerEmail", "buyerPhone", "customerName", "purchaseStatus", "paymentStatus", "destinationCountryName"]),
@@ -4593,7 +4889,30 @@ export function PurchasesPanel({ businessId, previewMode = false }: PanelProps) 
     return (res.data as { refundQueued?: boolean })?.refundQueued ?? false;
   }
 
-  const statusFilters = ["all", "needs_action", "holds", "viewings", "reserved", "hold_review_required", "viewing_scheduled", "completed", "cancelled", "refunded", "no_show", "forfeited"];
+  // Every viewing transition — accept, counter, decline, cancel — goes through
+  // the one callable, which re-decides the move inside its own transaction. A
+  // refusal from it is already a sentence for the operator, so it is shown as
+  // it arrives rather than replaced with a generic failure line.
+  function runViewing(
+    purchaseId: string,
+    action: ViewingAction,
+    slots: ViewingSlot[],
+    label: string,
+    confirm: string,
+    confirmFr: string,
+  ) {
+    void runHold(
+      purchaseId,
+      label,
+      () => httpsCallable(functions, "actOnCarViewing")(
+        viewingActionPayload({ purchaseId, action, slots }),
+      ),
+      confirm,
+      confirmFr,
+    );
+  }
+
+  const statusFilters = ["all", "needs_action", "holds", "viewings", "reserved", "hold_review_required", "viewing_requested", "viewing_countered", "viewing_scheduled", "viewing_declined", "viewing_expired", "completed", "cancelled", "refunded", "no_show", "forfeited"];
 
   return (
     <section className="lst">
@@ -4684,6 +5003,30 @@ export function PurchasesPanel({ businessId, previewMode = false }: PanelProps) 
                 </div>
               )}
 
+              {/* A viewing is negotiated, not finalized: it brings its own
+                  actions, so the completed / cancel-and-refund pair below —
+                  which is about money that a viewing never took — stays out
+                  of its way. */}
+              {kind === "viewing" && (
+                <ViewingNegotiation
+                  busy={busy}
+                  carStatus={carStatusById.get(text(row.carId, "")) ?? ""}
+                  nowMs={nowMs}
+                  onAct={(action, slots, label, confirm, confirmFr) =>
+                    runViewing(row.id, action, slots, label, confirm, confirmFr)
+                  }
+                  onComplete={() => runHold(
+                    row.id,
+                    "Viewing marked completed.",
+                    () => finalize(row.id, "completed", note),
+                    "Mark this viewing as completed?",
+                    "Marquer cette visite comme terminée ?",
+                  )}
+                  row={row}
+                />
+              )}
+
+              {kind !== "viewing" && (
               <div className="pur-actions">
                 {holdActive ? (
                   <>
@@ -4786,6 +5129,7 @@ export function PurchasesPanel({ businessId, previewMode = false }: PanelProps) 
                   </>
                 )}
               </div>
+              )}
             </article>
           );
         })}
@@ -5162,6 +5506,10 @@ function statusLabel(value: unknown) {
       sealed: "Sealed",
       sold: "Sold",
       unknown: "Unknown",
+      viewing_countered: "Other times offered",
+      viewing_declined: "Viewing declined",
+      viewing_expired: "Viewing request expired",
+      viewing_requested: "Viewing requested",
       viewing_scheduled: "Viewing scheduled",
       waiting_on_platform: "Waiting on platform",
     },
@@ -5216,6 +5564,10 @@ function statusLabel(value: unknown) {
       sealed: "Scellé",
       sold: "Vendu",
       unknown: "Inconnu",
+      viewing_countered: "Autres horaires proposés",
+      viewing_declined: "Visite refusée",
+      viewing_expired: "Demande de visite expirée",
+      viewing_requested: "Visite demandée",
       viewing_scheduled: "Visite planifiée",
       waiting_on_platform: "En attente de la plateforme",
     },

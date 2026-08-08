@@ -663,6 +663,7 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "Comparez l’offre complète avant de choisir une entreprise.",
   "Quote request": "Demande de devis",
   "Choose quote request": "Choisir une demande de devis",
+  "Time to offer": "Horaire à proposer",
   "Pickup area not provided": "Zone de collecte non indiquée",
   "Destination not provided": "Destination non indiquée",
   "quote received": "devis reçu",
@@ -3621,6 +3622,105 @@ Object.assign(TEXT_TRANSLATIONS, {
   // Prefixed at runtime by a record count, so only the fixed tail is a key.
   "records carry no usable date, so they are in the totals above but not in this chart.":
     "dossiers ne portent aucune date exploitable : ils figurent dans les totaux ci-dessus mais pas dans ce graphique.",
+});
+
+// Car-viewing negotiation (functions/car_viewing.js + the two consoles). Both
+// halves are here: the strings the consoles render themselves, and the
+// sentences `actOnCarViewing` throws — those come back from the server already
+// written for the reader and are shown verbatim, so they need French too or a
+// French user gets an English refusal. "Viewing scheduled" and "Cancelled" are
+// already in the dictionary above; repeating them would be duplicate keys.
+Object.assign(TEXT_TRANSLATIONS, {
+  // Statuses and who owes the reply.
+  "Viewing requested": "Visite demandée",
+  "Other times offered": "Autres horaires proposés",
+  "Viewing declined": "Visite refusée",
+  "Viewing request expired": "Demande de visite expirée",
+  "Viewing appointment": "Rendez-vous de visite",
+  "Viewing status": "Statut de la visite",
+  "Agreed time": "Horaire convenu",
+  "Waiting on": "En attente de",
+  "Waiting on the seller": "En attente du vendeur",
+  "Waiting on the buyer": "En attente de l’acheteur",
+  "Your reply is needed": "Votre réponse est attendue",
+  "Reply by": "Répondre avant le",
+  // The times on the table, and the boxes for offering others.
+  "Pick a time to accept": "Choisissez un horaire à accepter",
+  "Times on the table": "Horaires proposés",
+  "Too soon": "Trop proche",
+  "Add another time": "Ajouter un autre horaire",
+  "Time you would like": "Horaire souhaité",
+  "Send these times": "Envoyer ces horaires",
+  "Send this time": "Envoyer cet horaire",
+  "Discard these times": "Abandonner ces horaires",
+  "Discard this time": "Abandonner cet horaire",
+  // Actions.
+  "Accept this time": "Accepter cet horaire",
+  "Offer other times": "Proposer d’autres horaires",
+  "Offer a different time": "Proposer un autre horaire",
+  "Propose a new time": "Proposer un nouvel horaire",
+  Decline: "Refuser",
+  "Viewing done": "Visite effectuée",
+  "Cancel viewing": "Annuler la visite",
+  "Negotiation history": "Historique des échanges",
+  // The audit trail. Buyer and seller rather than you and them, because both
+  // consoles read the same lines.
+  "Buyer proposed a time": "L’acheteur a proposé un horaire",
+  "Buyer accepted a time": "L’acheteur a accepté un horaire",
+  "Buyer cancelled the viewing": "L’acheteur a annulé la visite",
+  "Seller offered other times": "Le vendeur a proposé d’autres horaires",
+  "Seller accepted a time": "Le vendeur a accepté un horaire",
+  "Seller declined the request": "Le vendeur a refusé la demande",
+  "Seller cancelled the viewing": "Le vendeur a annulé la visite",
+  "Viewing updated": "Visite mise à jour",
+  // What the consoles say after an action.
+  "Viewing confirmed.": "Visite confirmée.",
+  "Viewing cancelled.": "Visite annulée.",
+  "Viewing declined.": "Visite refusée.",
+  "Viewing marked completed.": "Visite marquée comme terminée.",
+  "Times sent to the buyer.": "Horaires envoyés à l’acheteur.",
+  "Your time was sent to the seller.": "Votre horaire a été envoyé au vendeur.",
+  "The viewing could not be updated. Try again.":
+    "La visite n’a pas pu être mise à jour. Réessayez.",
+  // Why fewer actions than usual are on offer.
+  "This viewing is closed. Nothing more can be arranged on it.":
+    "Cette visite est close. Plus rien ne peut y être organisé.",
+  "Nobody answered in time, so this proposal can no longer be used.":
+    "Personne n’a répondu à temps : cette proposition n’est plus utilisable.",
+  "This listing is no longer active, so no new time can be agreed. Cancelling is still possible.":
+    "Cette annonce n’est plus active : aucun nouvel horaire ne peut être convenu. L’annulation reste possible.",
+  "Viewings cannot be changed within an hour of the appointment.":
+    "Une visite ne peut pas être modifiée dans l’heure qui précède le rendez-vous.",
+  "You have offered as many times as this booking allows. Take one of the times on the table, or cancel the viewing.":
+    "Vous avez proposé autant d’horaires que cette réservation le permet. Retenez l’un des horaires proposés ou annulez la visite.",
+  // Refusals thrown by actOnCarViewing, shown to the user exactly as they
+  // arrive. The wording matches VIEWING_ERROR_MESSAGES on the server.
+  "This record is not a viewing appointment":
+    "Ce dossier n’est pas un rendez-vous de visite",
+  "This viewing is already closed": "Cette visite est déjà close",
+  "This proposal has expired. Please propose a new time":
+    "Cette proposition a expiré. Proposez un nouvel horaire",
+  "You are waiting on the other party to respond":
+    "Vous attendez la réponse de l’autre partie",
+  "You cannot take that action on this viewing":
+    "Vous ne pouvez pas effectuer cette action sur cette visite",
+  "Choose one of the times that was offered":
+    "Choisissez l’un des horaires proposés",
+  "Viewing times must be more than an hour away":
+    "Les horaires de visite doivent être à plus d’une heure",
+  "Viewings cannot be changed within an hour of the appointment":
+    "Une visite ne peut pas être modifiée dans l’heure qui précède le rendez-vous",
+  "This car is no longer available to view":
+    "Cette voiture n’est plus disponible à la visite",
+  "This has gone back and forth enough - accept a time, decline, or cancel":
+    "Les échanges ont assez duré : acceptez un horaire, refusez ou annulez",
+  "Too many times offered at once": "Trop d’horaires proposés à la fois",
+  "Choose a viewing time": "Choisissez un horaire de visite",
+  "That viewing time is not valid": "Cet horaire de visite n’est pas valide",
+  "Unknown action": "Action inconnue",
+  "Action not allowed": "Action non autorisée",
+  "Viewing not found": "Visite introuvable",
+  "Viewing and action are required": "La visite et l’action sont obligatoires",
 });
 
 const PICKUP_ERROR_LABELS: Record<string, string> = {

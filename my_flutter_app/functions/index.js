@@ -10,6 +10,20 @@ const {defineSecret} = require("firebase-functions/params");
 const crypto = require("crypto");
 const QRCode = require("qrcode");
 const {buildTrackingCode} = require("./tracking_code");
+const {
+  VIEWING_REQUESTED,
+  VIEWING_SCHEDULED,
+  VIEWING_EXPIRED,
+  OPEN_VIEWING_STATUSES,
+  PENDING_VIEWING_STATUSES,
+  CUSTOMER: VIEWING_ACTOR_CUSTOMER,
+  BUSINESS: VIEWING_ACTOR_BUSINESS,
+  isProposalExpired,
+  responseDeadlineMs,
+  decideViewingAction,
+  awaitingParty,
+  viewingHistoryEntry,
+} = require("./car_viewing");
 const {classifyTransportEdit} = require("./transport_request_edit");
 const {
   TRANSPORT_FULFILLMENT_DESTINATIONS,
@@ -22661,9 +22675,12 @@ exports.createCarViewingReservation = onCall(
               purchase.appointmentStart &&
               Number(purchase.depositAmount || 0) === 0
             );
+          // Only a viewing that is still going blocks a new request. Listing
+          // "not cancelled and not completed" used to catch declined and
+          // expired ones too, which left a buyer permanently unable to ask
+          // again about a car they had been turned down for once.
           return isViewingReservation &&
-            purchase.purchaseStatus !== "cancelled" &&
-            purchase.purchaseStatus !== "completed";
+            OPEN_VIEWING_STATUSES.includes(purchase.purchaseStatus);
         });
         if (hasActiveViewing) {
           throw new HttpsError(
@@ -22696,18 +22713,370 @@ exports.createCarViewingReservation = onCall(
           depositCurrency: PURCHASE_CURRENCY.toUpperCase(),
           paymentType: "viewing_reservation",
           paymentStatus: "not_required",
-          purchaseStatus: "viewing_scheduled",
-          appointmentStart: FirestoreTimestamp.fromDate(appointment),
-          appointmentLabel: String(appointmentLabel).trim(),
+          // A viewing is an appointment for two parties, so asking for one
+          // opens a negotiation rather than booking the slot outright. The
+          // business must accept or counter before anything is agreed.
+          purchaseStatus: VIEWING_REQUESTED,
+          proposedBy: VIEWING_ACTOR_CUSTOMER,
+          proposedSlots: [{
+            startAtMs: appointment.getTime(),
+            label: String(appointmentLabel).trim(),
+          }],
+          proposalRound: 1,
+          respondByAt: FirestoreTimestamp.fromMillis(
+              responseDeadlineMs(
+                  [{startAtMs: appointment.getTime()}],
+                  Date.now(),
+              ),
+          ),
+          viewingHistory: [viewingHistoryEntry({
+            actor: VIEWING_ACTOR_CUSTOMER,
+            action: "propose",
+            slots: [{
+              startAtMs: appointment.getTime(),
+              label: String(appointmentLabel).trim(),
+            }],
+            atMs: Date.now(),
+          })],
           createdAt: now,
           updatedAt: now,
         });
       });
 
+      // The original flow told nobody a viewing had been booked, so a
+      // business could miss it entirely. The request now reaches them.
+      await notifyBusinessOfPaidOrder({
+        businessId: carBusiness.businessId,
+        title: "New viewing request",
+        body: `A buyer proposed a time to view ${carTitle(listedCar)}.`,
+        data: {
+          type: "car_viewing_status",
+          purchaseId: purchaseRef.id,
+          carId,
+          status: VIEWING_REQUESTED,
+        },
+      });
+
       return {
         success: true,
         purchaseId: purchaseRef.id,
+        purchaseStatus: VIEWING_REQUESTED,
+        // Same shape actOnCarViewing returns, so a client can parse either
+        // response with one reader.
+        awaiting: awaitingParty(VIEWING_REQUESTED),
       };
+    },
+);
+
+/**
+ * Resolves who the caller is on a viewing, from the record rather than a
+ * client-supplied role. The buyer is the buyer; anyone with `sales` permission
+ * on the owning business acts as the business. Nobody else may touch it.
+ *
+ * @param {string} uid Caller.
+ * @param {object} purchase The viewing record.
+ * @return {Promise<string>} The actor constant.
+ */
+async function viewingActorFor(uid, purchase) {
+  if (uid && uid === String(purchase.buyerUid || "")) {
+    return VIEWING_ACTOR_CUSTOMER;
+  }
+  await requireBusinessPermission(uid, String(purchase.businessId || ""),
+      "sales");
+  return VIEWING_ACTOR_BUSINESS;
+}
+
+/** Maps a decision error code to the sentence the caller sees. */
+const VIEWING_ERROR_MESSAGES = {
+  not_a_viewing: "This record is not a viewing appointment",
+  viewing_closed: "This viewing is already closed",
+  proposal_expired: "This proposal has expired. Please propose a new time",
+  not_your_turn: "You are waiting on the other party to respond",
+  not_your_action: "You cannot take that action on this viewing",
+  slot_not_offered: "Choose one of the times that was offered",
+  slot_too_soon: "Viewing times must be more than an hour away",
+  too_close_to_appointment:
+    "Viewings cannot be changed within an hour of the appointment",
+  car_unavailable: "This car is no longer available to view",
+  too_many_rounds:
+    "This has gone back and forth enough - accept a time, decline, or cancel",
+  too_many_slots: "Too many times offered at once",
+  no_slots: "Choose a viewing time",
+  invalid_slot: "That viewing time is not valid",
+  unknown_action: "Unknown action",
+};
+
+/**
+ * Normalises client slot input into the shape the state machine expects.
+ *
+ * @param {*} raw Whatever the client sent.
+ * @return {Array<object>} Slots with startAtMs and label.
+ */
+function normalizeViewingSlots(raw) {
+  const list = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+  return list.map((slot) => ({
+    startAtMs: new Date(slot?.startAt ?? slot?.startAtMs ?? NaN).getTime(),
+    label: String(slot?.label || "").trim().slice(0, 120),
+  }));
+}
+
+/**
+ * Every viewing transition, for both parties, behind one entry point.
+ *
+ * One callable rather than several because the rules live in
+ * decideViewingAction and splitting them across endpoints would mean four
+ * places to keep in step. The decision is re-made inside the transaction
+ * against a freshly read record, so two people acting at once - a customer
+ * cancelling while the business accepts - resolves to whichever transaction
+ * commits first instead of a lost update.
+ */
+exports.actOnCarViewing = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const {purchaseId, action, slots} = request.data || {};
+      if (!purchaseId || !action) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Viewing and action are required",
+        );
+      }
+      const proposedSlots = normalizeViewingSlots(slots);
+      const db = admin.firestore();
+      const purchaseRef = db.collection("carPurchases").doc(purchaseId);
+
+      const outcome = await db.runTransaction(async (transaction) => {
+        const purchaseDoc = await transaction.get(purchaseRef);
+        if (!purchaseDoc.exists) {
+          throw new HttpsError("not-found", "Viewing not found");
+        }
+        const purchase = purchaseDoc.data() || {};
+        const actor = await viewingActorFor(uid, purchase);
+
+        const carRef = db.collection("cars").doc(String(purchase.carId || ""));
+        const carDoc = await transaction.get(carRef);
+        const carStatus = carDoc.exists ?
+          String(carDoc.data()?.status || "") :
+          "missing";
+
+        const nowMs = Date.now();
+        const decision = decideViewingAction({
+          record: {
+            purchaseStatus: purchase.purchaseStatus,
+            proposedSlots: purchase.proposedSlots || [],
+            proposalRound: purchase.proposalRound || 0,
+            respondByAtMs: purchase.respondByAt?.toMillis?.() ?? null,
+            appointmentStartMs: purchase.appointmentStart?.toMillis?.() ?? null,
+          },
+          actor,
+          action: String(action),
+          slots: proposedSlots,
+          nowMs,
+          carStatus,
+        });
+        if (!decision.ok) {
+          throw new HttpsError(
+              "failed-precondition",
+              VIEWING_ERROR_MESSAGES[decision.error] || "Action not allowed",
+              {code: decision.error},
+          );
+        }
+
+        const next = decision.next;
+        const update = {
+          purchaseStatus: next.purchaseStatus,
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+          viewingHistory: FirestoreFieldValue.arrayUnion(
+              viewingHistoryEntry({
+                actor,
+                action: String(action),
+                slots: proposedSlots,
+                atMs: nowMs,
+              }),
+          ),
+        };
+        if (next.proposedSlots) {
+          update.proposedSlots = next.proposedSlots;
+          update.proposedBy = next.proposedBy;
+          update.proposalRound = next.proposalRound;
+          update.respondByAt = FirestoreTimestamp.fromMillis(
+              next.respondByAtMs,
+          );
+        }
+        if (next.appointmentStartMs) {
+          update.appointmentStart = FirestoreTimestamp.fromMillis(
+              next.appointmentStartMs,
+          );
+          update.appointmentLabel = next.appointmentLabel;
+          // Nobody owes a reply once a time is agreed.
+          update.respondByAt = FirestoreFieldValue.delete();
+        }
+        transaction.update(purchaseRef, update);
+        return {purchase, actor, next};
+      });
+
+      await notifyViewingTransition({
+        purchaseId,
+        purchase: outcome.purchase,
+        actor: outcome.actor,
+        next: outcome.next,
+      });
+
+      return {
+        success: true,
+        purchaseId,
+        purchaseStatus: outcome.next.purchaseStatus,
+        awaiting: awaitingParty(outcome.next.purchaseStatus),
+      };
+    },
+);
+
+/**
+ * Tells the other party what just happened.
+ *
+ * Viewings previously sent nothing at all - a customer could book one and the
+ * business would never hear about it. Every transition now reaches whoever is
+ * next to act.
+ *
+ * @param {object} params Transition details.
+ * @param {string} params.purchaseId Record id.
+ * @param {object} params.purchase Record before the change.
+ * @param {string} params.actor Who acted.
+ * @param {object} params.next The applied field values.
+ * @return {Promise<void>} Resolves once delivery has been attempted.
+ */
+async function notifyViewingTransition({purchaseId, purchase, actor, next}) {
+  const status = next.purchaseStatus;
+  const carName = String(purchase.carTitle || "the car");
+  const data = {
+    type: "car_viewing_status",
+    purchaseId,
+    carId: String(purchase.carId || ""),
+    status,
+  };
+  const toCustomer = (title, body) => safeSendPreferenceNotification({
+    uid: String(purchase.buyerUid || ""),
+    preferenceKey: "carActivity",
+    title,
+    body,
+    data,
+  });
+  const toBusiness = (title, body) => notifyBusinessOfPaidOrder({
+    businessId: String(purchase.businessId || ""),
+    title,
+    body,
+    data,
+  });
+
+  if (status === VIEWING_SCHEDULED) {
+    const when = String(next.appointmentLabel || "the agreed time");
+    await Promise.all([
+      toCustomer("Viewing confirmed", `${carName} - ${when}.`),
+      toBusiness("Viewing confirmed", `${carName} - ${when}.`),
+    ]);
+    return;
+  }
+  if (status === VIEWING_REQUESTED) {
+    await (actor === VIEWING_ACTOR_CUSTOMER ?
+      toBusiness(
+          "New viewing request",
+          `A buyer proposed a time for ${carName}.`,
+      ) :
+      toCustomer(
+          "Viewing time proposed",
+          `A new time was proposed for ${carName}.`,
+      ));
+    return;
+  }
+  if (awaitingParty(status) === VIEWING_ACTOR_CUSTOMER) {
+    await toCustomer(
+        "New times offered",
+        `The seller offered other times to view ${carName}.`,
+    );
+    return;
+  }
+  const closedBody = `Your viewing for ${carName} is no longer scheduled.`;
+  await (actor === VIEWING_ACTOR_CUSTOMER ?
+    toBusiness(
+        "Viewing cancelled",
+        `A buyer cancelled their viewing of ${carName}.`,
+    ) :
+    toCustomer("Viewing cancelled", closedBody));
+}
+
+/**
+ * Moves viewing proposals nobody answered out of limbo.
+ *
+ * A proposal that is never replied to would otherwise sit as "awaiting the
+ * business" forever, and the customer would keep seeing a request that can no
+ * longer be accepted. Runs hourly because the reply window is measured in
+ * hours, not minutes.
+ */
+exports.expireStaleCarViewings = onSchedule(
+    {
+      schedule: "every 1 hours",
+      timeZone: "America/New_York",
+      timeoutSeconds: 300,
+    },
+    async () => {
+      const db = admin.firestore();
+      const nowMs = Date.now();
+      const snapshot = await db.collection("carPurchases")
+          .where("purchaseStatus", "in", PENDING_VIEWING_STATUSES)
+          .limit(300)
+          .get();
+
+      let expired = 0;
+      for (const doc of snapshot.docs) {
+        const purchase = doc.data() || {};
+        const record = {
+          purchaseStatus: purchase.purchaseStatus,
+          proposedSlots: purchase.proposedSlots || [],
+          respondByAtMs: purchase.respondByAt?.toMillis?.() ?? null,
+        };
+        if (!isProposalExpired(record, nowMs)) continue;
+        try {
+          await doc.ref.update({
+            purchaseStatus: VIEWING_EXPIRED,
+            respondByAt: FirestoreFieldValue.delete(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          });
+          expired += 1;
+          // Both sides are told: the customer so they know to propose again,
+          // the business because a missed request is worth seeing.
+          const data = {
+            type: "car_viewing_status",
+            purchaseId: doc.id,
+            carId: String(purchase.carId || ""),
+            status: VIEWING_EXPIRED,
+          };
+          const carName = String(purchase.carTitle || "a car");
+          await Promise.all([
+            safeSendPreferenceNotification({
+              uid: String(purchase.buyerUid || ""),
+              preferenceKey: "carActivity",
+              title: "Viewing request expired",
+              body: `No reply about ${carName}. Propose another time.`,
+              data,
+            }),
+            notifyBusinessOfPaidOrder({
+              businessId: String(purchase.businessId || ""),
+              title: "Viewing request expired",
+              body: `A request to view ${carName} went unanswered.`,
+              data,
+            }),
+          ]);
+        } catch (error) {
+          logger.warn("Could not expire viewing", {
+            purchaseId: doc.id,
+            detail: error?.message || String(error),
+          });
+        }
+      }
+      logger.info("Viewing expiry sweep finished", {
+        scanned: snapshot.size,
+        expired,
+      });
     },
 );
 
@@ -22757,8 +23126,11 @@ exports.updateCarViewingReservation = onCall(
               "Only viewing reservations can be edited here",
           );
         }
+        // Every state where the appointment has not happened yet, not just an
+        // agreed one: a customer must be able to move a time they proposed
+        // while still waiting on the business.
         if (
-          purchase.purchaseStatus !== "viewing_scheduled" &&
+          !OPEN_VIEWING_STATUSES.includes(purchase.purchaseStatus) &&
           purchase.purchaseStatus !== "reserved"
         ) {
           throw new HttpsError(
@@ -22774,10 +23146,27 @@ exports.updateCarViewingReservation = onCall(
         const carRef = db.collection("cars").doc(purchase.carId);
         const carDoc = await transaction.get(carRef);
         const now = FirestoreFieldValue.serverTimestamp();
+        // Kept as an endpoint because builds already on phones call it, but
+        // it no longer books a time on its own: moving a viewing is a
+        // proposal the business still has to accept.
+        const proposedSlot = {
+          startAtMs: appointment.getTime(),
+          label: String(appointmentLabel).trim(),
+        };
         transaction.update(purchaseRef, {
-          appointmentStart: FirestoreTimestamp.fromDate(appointment),
-          appointmentLabel: String(appointmentLabel).trim(),
-          purchaseStatus: "viewing_scheduled",
+          purchaseStatus: VIEWING_REQUESTED,
+          proposedBy: VIEWING_ACTOR_CUSTOMER,
+          proposedSlots: [proposedSlot],
+          proposalRound: 1,
+          respondByAt: FirestoreTimestamp.fromMillis(
+              responseDeadlineMs([proposedSlot], Date.now()),
+          ),
+          viewingHistory: FirestoreFieldValue.arrayUnion(viewingHistoryEntry({
+            actor: VIEWING_ACTOR_CUSTOMER,
+            action: "propose",
+            slots: [proposedSlot],
+            atMs: Date.now(),
+          })),
           paymentStatus: "not_required",
           updatedAt: now,
         });

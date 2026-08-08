@@ -2732,5 +2732,89 @@
       "number": {}
     }
   },
-  "transportJobAcceptedQuote": "Devis accepté"
+  "transportJobAcceptedQuote": "Devis accepté",
+  "requestViewing": "Demander une visite",
+  "manageViewing": "Gérer la visite",
+  "requestViewingSummary": "Proposez un horaire pour venir voir ce véhicule. Le vendeur le confirme ou propose d'autres horaires.",
+  "requestViewingQuestion": "Envoyer la demande de visite ?",
+  "requestViewingConfirmMessage": "Le vendeur confirmera cet horaire ou en proposera d'autres. Rien n'est facturé.",
+  "viewingRequestSent": "Demande de visite envoyée. Le vendeur la confirmera ou proposera d'autres horaires.",
+  "viewingConversationTitle": "Votre visite pour ce véhicule",
+  "viewingStatusRequested": "Visite demandée",
+  "viewingStatusCountered": "Autres horaires proposés",
+  "viewingStatusDeclined": "Visite refusée",
+  "viewingStatusExpired": "Proposition expirée",
+  "viewingStatusCancelled": "Visite annulée",
+  "viewingYourTurn": "À vous de répondre",
+  "viewingWaitingOnBuyer": "En attente de l'acheteur",
+  "viewingWaitingOnSeller": "En attente du vendeur",
+  "viewingProposedByYou": "Vous avez proposé",
+  "viewingProposedByBuyer": "L'acheteur a proposé",
+  "viewingProposedBySeller": "Le vendeur a proposé",
+  "viewingTimesOnTable": "Horaires proposés",
+  "viewingConfirmedFor": "Confirmé pour {time}",
+  "@viewingConfirmedFor": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "viewingRespondBy": "À répondre avant le {time}",
+  "@viewingRespondBy": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "viewingAcceptTime": "Accepter cet horaire",
+  "viewingOfferOtherTimes": "Proposer d'autres horaires",
+  "viewingProposeAnotherTime": "Proposer un autre horaire",
+  "viewingDeclineRequest": "Refuser",
+  "viewingDeclineQuestion": "Refuser cette visite ?",
+  "viewingDeclineConfirmMessage": "L'acheteur sera informé que vous ne pouvez pas montrer le véhicule à ces horaires.",
+  "viewingDeclinedMessage": "Visite refusée.",
+  "viewingConfirmedMessage": "Visite confirmée pour {time}.",
+  "@viewingConfirmedMessage": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "viewingTimesSent": "Vos horaires ont été envoyés.",
+  "viewingActionFailed": "Cette action n'a pas pu aboutir. Réessayez.",
+  "viewingProposalExpiredNotice": "Personne n'a répondu à temps : cette proposition a expiré.",
+  "viewingNoMoreCounters": "Les échanges ont assez duré - acceptez un horaire, refusez ou annulez.",
+  "viewingClosedNotice": "Cette visite est close. Plus rien n'y peut être modifié.",
+  "viewingHistoryTitle": "Ce qui s'est passé jusqu'ici",
+  "viewingHistoryEntryLine": "{who} • {action} • {when}",
+  "@viewingHistoryEntryLine": {
+    "placeholders": {
+      "who": {},
+      "action": {},
+      "when": {}
+    }
+  },
+  "viewingActorYou": "Vous",
+  "viewingActorBuyer": "L'acheteur",
+  "viewingActorSeller": "Le vendeur",
+  "viewingHistoryActionProposed": "proposition",
+  "viewingHistoryActionAccepted": "acceptation",
+  "viewingHistoryActionDeclined": "refus",
+  "viewingHistoryActionCancelled": "annulation",
+  "viewingProposalSheetTitleCustomer": "Proposer un horaire de visite",
+  "viewingProposalSheetTitleBusiness": "Proposer des horaires de visite",
+  "viewingProposalSheetMessageCustomer": "Choisissez l'horaire qui vous convient. Le vendeur peut l'accepter ou en proposer d'autres.",
+  "viewingProposalSheetMessageBusiness": "Proposez jusqu'à {count} horaires. L'acheteur en choisit un ou en propose un autre.",
+  "@viewingProposalSheetMessageBusiness": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "viewingRescheduleNotice": "Proposer un nouvel horaire rouvre la discussion : le rendez-vous convenu n'est plus confirmé.",
+  "viewingChooseTime": "Choisissez un horaire de visite.",
+  "viewingSlotsChosen": "{count} horaire(s) sur {max} sélectionné(s)",
+  "@viewingSlotsChosen": {
+    "placeholders": {
+      "count": {},
+      "max": {}
+    }
+  },
+  "viewingSendProposal": "Envoyer"
 }

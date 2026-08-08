@@ -19,6 +19,10 @@ NotificationRoute? routeForNotificationData(Map<String, dynamic> data) {
   final type = data['type']?.toString() ?? '';
   switch (type) {
     case 'car_purchase_status':
+    case 'car_viewing_status':
+      // Viewing negotiations live on the purchase record, so both land on the
+      // same screen. Without this case the six new viewing notifications would
+      // display and do nothing when tapped.
       return const NotificationRoute('/my-purchases');
     case 'barrel_shipment_status':
     case 'freight_shipment_status':

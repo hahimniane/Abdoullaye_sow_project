@@ -11867,6 +11867,312 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Accepted quote'**
   String get transportJobAcceptedQuote;
+
+  /// No description provided for @requestViewing.
+  ///
+  /// In en, this message translates to:
+  /// **'Request a viewing'**
+  String get requestViewing;
+
+  /// No description provided for @manageViewing.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage viewing'**
+  String get manageViewing;
+
+  /// No description provided for @requestViewingSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Propose a time to come and see this vehicle. The seller confirms it or offers other times.'**
+  String get requestViewingSummary;
+
+  /// No description provided for @requestViewingQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Send viewing request?'**
+  String get requestViewingQuestion;
+
+  /// No description provided for @requestViewingConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The seller will confirm this time or offer other times. Nothing is charged.'**
+  String get requestViewingConfirmMessage;
+
+  /// No description provided for @viewingRequestSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Viewing request sent. The seller will confirm it or offer other times.'**
+  String get viewingRequestSent;
+
+  /// No description provided for @viewingConversationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your viewing for this car'**
+  String get viewingConversationTitle;
+
+  /// No description provided for @viewingStatusRequested.
+  ///
+  /// In en, this message translates to:
+  /// **'Viewing requested'**
+  String get viewingStatusRequested;
+
+  /// No description provided for @viewingStatusCountered.
+  ///
+  /// In en, this message translates to:
+  /// **'Other times offered'**
+  String get viewingStatusCountered;
+
+  /// No description provided for @viewingStatusDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'Viewing declined'**
+  String get viewingStatusDeclined;
+
+  /// No description provided for @viewingStatusExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Proposal expired'**
+  String get viewingStatusExpired;
+
+  /// No description provided for @viewingStatusCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Viewing cancelled'**
+  String get viewingStatusCancelled;
+
+  /// No description provided for @viewingYourTurn.
+  ///
+  /// In en, this message translates to:
+  /// **'Your turn'**
+  String get viewingYourTurn;
+
+  /// No description provided for @viewingWaitingOnBuyer.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting on the buyer'**
+  String get viewingWaitingOnBuyer;
+
+  /// No description provided for @viewingWaitingOnSeller.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting on the seller'**
+  String get viewingWaitingOnSeller;
+
+  /// No description provided for @viewingProposedByYou.
+  ///
+  /// In en, this message translates to:
+  /// **'You proposed'**
+  String get viewingProposedByYou;
+
+  /// No description provided for @viewingProposedByBuyer.
+  ///
+  /// In en, this message translates to:
+  /// **'The buyer proposed'**
+  String get viewingProposedByBuyer;
+
+  /// No description provided for @viewingProposedBySeller.
+  ///
+  /// In en, this message translates to:
+  /// **'The seller offered'**
+  String get viewingProposedBySeller;
+
+  /// No description provided for @viewingTimesOnTable.
+  ///
+  /// In en, this message translates to:
+  /// **'Times on the table'**
+  String get viewingTimesOnTable;
+
+  /// No description provided for @viewingConfirmedFor.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed for {time}'**
+  String viewingConfirmedFor(Object time);
+
+  /// No description provided for @viewingRespondBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply by {time}'**
+  String viewingRespondBy(Object time);
+
+  /// No description provided for @viewingAcceptTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept this time'**
+  String get viewingAcceptTime;
+
+  /// No description provided for @viewingOfferOtherTimes.
+  ///
+  /// In en, this message translates to:
+  /// **'Offer other times'**
+  String get viewingOfferOtherTimes;
+
+  /// No description provided for @viewingProposeAnotherTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Propose another time'**
+  String get viewingProposeAnotherTime;
+
+  /// No description provided for @viewingDeclineRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline'**
+  String get viewingDeclineRequest;
+
+  /// No description provided for @viewingDeclineQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline this viewing?'**
+  String get viewingDeclineQuestion;
+
+  /// No description provided for @viewingDeclineConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The buyer will be told you cannot show the car at these times.'**
+  String get viewingDeclineConfirmMessage;
+
+  /// No description provided for @viewingDeclinedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Viewing declined.'**
+  String get viewingDeclinedMessage;
+
+  /// No description provided for @viewingConfirmedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Viewing confirmed for {time}.'**
+  String viewingConfirmedMessage(Object time);
+
+  /// No description provided for @viewingTimesSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Your times were sent.'**
+  String get viewingTimesSent;
+
+  /// No description provided for @viewingActionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'That could not be done right now. Try again.'**
+  String get viewingActionFailed;
+
+  /// No description provided for @viewingProposalExpiredNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody answered in time, so this proposal expired.'**
+  String get viewingProposalExpiredNotice;
+
+  /// No description provided for @viewingNoMoreCounters.
+  ///
+  /// In en, this message translates to:
+  /// **'This has gone back and forth enough - accept a time, decline, or cancel.'**
+  String get viewingNoMoreCounters;
+
+  /// No description provided for @viewingClosedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'This viewing is closed. Nothing on it can be changed.'**
+  String get viewingClosedNotice;
+
+  /// No description provided for @viewingHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What has happened so far'**
+  String get viewingHistoryTitle;
+
+  /// No description provided for @viewingHistoryEntryLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{who} • {action} • {when}'**
+  String viewingHistoryEntryLine(Object who, Object action, Object when);
+
+  /// No description provided for @viewingActorYou.
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get viewingActorYou;
+
+  /// No description provided for @viewingActorBuyer.
+  ///
+  /// In en, this message translates to:
+  /// **'The buyer'**
+  String get viewingActorBuyer;
+
+  /// No description provided for @viewingActorSeller.
+  ///
+  /// In en, this message translates to:
+  /// **'The seller'**
+  String get viewingActorSeller;
+
+  /// No description provided for @viewingHistoryActionProposed.
+  ///
+  /// In en, this message translates to:
+  /// **'proposal'**
+  String get viewingHistoryActionProposed;
+
+  /// No description provided for @viewingHistoryActionAccepted.
+  ///
+  /// In en, this message translates to:
+  /// **'acceptance'**
+  String get viewingHistoryActionAccepted;
+
+  /// No description provided for @viewingHistoryActionDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'decline'**
+  String get viewingHistoryActionDeclined;
+
+  /// No description provided for @viewingHistoryActionCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'cancellation'**
+  String get viewingHistoryActionCancelled;
+
+  /// No description provided for @viewingProposalSheetTitleCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Propose a viewing time'**
+  String get viewingProposalSheetTitleCustomer;
+
+  /// No description provided for @viewingProposalSheetTitleBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Offer viewing times'**
+  String get viewingProposalSheetTitleBusiness;
+
+  /// No description provided for @viewingProposalSheetMessageCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick the time that suits you. The seller can accept it or offer other times.'**
+  String get viewingProposalSheetMessageCustomer;
+
+  /// No description provided for @viewingProposalSheetMessageBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Offer up to {count} times. The buyer picks one or comes back with another.'**
+  String viewingProposalSheetMessageBusiness(Object count);
+
+  /// No description provided for @viewingRescheduleNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Proposing a new time reopens the conversation, so the agreed appointment stops being confirmed.'**
+  String get viewingRescheduleNotice;
+
+  /// No description provided for @viewingChooseTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a viewing time.'**
+  String get viewingChooseTime;
+
+  /// No description provided for @viewingSlotsChosen.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} of {max} times chosen'**
+  String viewingSlotsChosen(Object count, Object max);
+
+  /// No description provided for @viewingSendProposal.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get viewingSendProposal;
 }
 
 class _AppLocalizationsDelegate

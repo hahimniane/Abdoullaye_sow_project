@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../services/car_viewing_service.dart';
+
 class CarPurchase {
   CarPurchase({
     required this.id,
@@ -37,6 +39,11 @@ class CarPurchase {
     this.extensionExtraAmount,
     this.extensionPaymentStatus,
     this.buyerReliabilitySnapshot,
+    this.proposedSlots = const <ViewingSlot>[],
+    this.proposedBy,
+    this.proposalRound = 0,
+    this.respondByAt,
+    this.viewingHistory = const <ViewingHistoryEntry>[],
   });
 
   static const double fixedDepositAmount = 500;
@@ -78,6 +85,22 @@ class CarPurchase {
   final String? extensionPaymentStatus;
   final Map<String, dynamic>? buyerReliabilitySnapshot;
 
+  /// The times currently on the table, empty once a time is agreed.
+  final List<ViewingSlot> proposedSlots;
+
+  /// Who put them there, so a card can say "you proposed" or "they offered".
+  final ViewingParty? proposedBy;
+
+  /// How many proposals this negotiation has already carried. The server stops
+  /// accepting counters after [maxViewingProposalRounds].
+  final int proposalRound;
+
+  /// When the party being waited on must answer by.
+  final DateTime? respondByAt;
+
+  /// The audit trail, oldest first.
+  final List<ViewingHistoryEntry> viewingHistory;
+
   bool get isViewingReservation {
     return paymentType == 'viewing_reservation' ||
         (appointmentStart != null && depositAmount == 0);
@@ -89,14 +112,28 @@ class CarPurchase {
         purchaseStatus != 'completed';
   }
 
-  bool get canEditViewingReservation {
-    final appointment = appointmentStart;
-    if (!isViewingReservation || appointment == null) return false;
-    if (purchaseStatus != 'viewing_scheduled' && purchaseStatus != 'reserved') {
-      return false;
-    }
-    return appointment.difference(DateTime.now()) > const Duration(hours: 1);
-  }
+  /// Exactly what `decideViewingAction` reads, so the screens can ask
+  /// [availableViewingActions] what to offer instead of branching on the
+  /// status themselves.
+  ViewingState get viewingState => ViewingState(
+    purchaseStatus: purchaseStatus,
+    proposedSlots: proposedSlots,
+    proposedBy: proposedBy,
+    proposalRound: proposalRound,
+    respondByAt: respondByAt,
+    appointmentStart: appointmentStart,
+    appointmentLabel: appointmentLabel ?? '',
+    history: viewingHistory,
+  );
+
+  /// Whether the appointment has not happened and something can still change.
+  ///
+  /// Narrower than [isActiveViewingReservation], which mirrors the server's
+  /// "one viewing per listing" guard and so still counts a declined or expired
+  /// record: those are closed conversations with no actions left in them, but
+  /// they do still block a second request for the same car.
+  bool get hasOpenViewingNegotiation =>
+      isViewingReservation && viewingState.isOpen;
 
   bool get isPaidHold => paymentType == 'reservation_deposit';
 
@@ -173,6 +210,13 @@ class CarPurchase {
           data['buyerReliabilitySnapshot'] is Map<String, dynamic>
           ? Map<String, dynamic>.from(data['buyerReliabilitySnapshot'] as Map)
           : null,
+      proposedSlots: viewingSlotsFromStored(data['proposedSlots']),
+      proposedBy: viewingPartyFromWire(data['proposedBy']),
+      proposalRound: data['proposalRound'] is num
+          ? (data['proposalRound'] as num).toInt()
+          : int.tryParse('${data['proposalRound'] ?? ''}') ?? 0,
+      respondByAt: _toDateTime(data['respondByAt']),
+      viewingHistory: viewingHistoryFromStored(data['viewingHistory']),
     );
   }
 

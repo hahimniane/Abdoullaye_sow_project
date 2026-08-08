@@ -7,9 +7,11 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../models/car_purchase.dart';
 import '../providers/auth_provider.dart';
+import '../services/car_viewing_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/car_viewing_negotiation.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/support_entry_button.dart';
 
@@ -257,7 +259,11 @@ class _StaffPurchaseCard extends StatelessWidget {
                   ),
                 ),
                 Chip(
-                  label: Text(purchase.purchaseStatus),
+                  label: Text(
+                    purchase.isViewingReservation
+                        ? viewingStatusLabel(l10n, purchase.purchaseStatus)
+                        : purchase.purchaseStatus,
+                  ),
                   backgroundColor: AppColors.brandRed.withValues(alpha: 0.1),
                 ),
               ],
@@ -276,11 +282,21 @@ class _StaffPurchaseCard extends StatelessWidget {
                 purchase.paymentStatus,
               ),
             ),
-            if (purchase.appointmentStart != null)
+            // A viewing's appointment belongs to the negotiation panel below,
+            // which knows whether it is agreed or still being argued over.
+            if (purchase.appointmentStart != null &&
+                !purchase.isViewingReservation)
               Text(
                 '${l10n.selectViewingTime}: '
                 '${purchase.appointmentLabel ?? DateFormat.yMMMd().add_jm().format(purchase.appointmentStart!)}',
               ),
+            if (purchase.isViewingReservation) ...[
+              const SizedBox(height: 10),
+              CarViewingNegotiationPanel(
+                purchase: purchase,
+                party: ViewingParty.business,
+              ),
+            ],
             if (purchase.holdUntilDate != null)
               Text(
                 l10n.holdUntilDate(
@@ -366,6 +382,18 @@ class _StaffPurchaseCard extends StatelessWidget {
                         foregroundColor: AppColors.errorRed,
                       ),
                     ),
+                ] else if (purchase.isViewingReservation) ...[
+                  // Everything else a viewing can do - agree a time, counter,
+                  // decline, cancel - goes through `actOnCarViewing` in the
+                  // panel above, which notifies the buyer and keeps the two
+                  // sides in step. Only "the viewing happened" is left here,
+                  // and only once there is an appointment to have happened.
+                  OutlinedButton(
+                    onPressed: purchase.purchaseStatus == viewingScheduled
+                        ? () => onStatus('completed')
+                        : null,
+                    child: Text(l10n.completed),
+                  ),
                 ] else ...[
                   OutlinedButton(
                     onPressed:

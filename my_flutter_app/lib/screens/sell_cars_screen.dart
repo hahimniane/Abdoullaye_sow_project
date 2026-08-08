@@ -11,12 +11,14 @@ import '../models/car_purchase.dart';
 import '../models/business_service.dart';
 import '../providers/auth_provider.dart';
 import '../services/car_purchase_service.dart';
+import '../services/car_viewing_service.dart';
 import '../services/favorite_cars_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../utils/car_option_localization.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/car_viewing_negotiation.dart';
 import '../widgets/language_toggle.dart';
 import 'car_details_screen.dart';
 
@@ -2136,7 +2138,7 @@ class _CarListTile extends StatelessWidget {
                           ),
                         _SpecChip(
                           icon: Icons.verified_outlined,
-                          label: l10n.reserveViewing,
+                          label: l10n.requestViewing,
                           emphasized: true,
                         ),
                       ],
@@ -2215,12 +2217,18 @@ class _ActiveViewingBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final appointment = reservation.appointmentStart;
+    final state = reservation.viewingState;
+    // A viewing nobody has agreed to yet is not an appointment. The banner
+    // says where the conversation stands, and only shows a time once both
+    // sides have settled on one.
     final label =
-        reservation.appointmentLabel ??
-        (appointment == null
-            ? l10n.viewingScheduled
-            : DateFormat.yMMMd().add_jm().format(appointment));
+        state.purchaseStatus == viewingScheduled &&
+            state.appointmentStart != null
+        ? (state.appointmentLabel.isNotEmpty
+              ? state.appointmentLabel
+              : DateFormat.yMMMd().add_jm().format(state.appointmentStart!))
+        : viewingAwaitingLabel(l10n, state, ViewingParty.customer) ??
+              l10n.viewingClosedNotice;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -2250,7 +2258,7 @@ class _ActiveViewingBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  l10n.youHaveViewingReserved,
+                  viewingStatusLabel(l10n, reservation.purchaseStatus),
                   style: const TextStyle(
                     color: AppColors.brandRed,
                     fontSize: 12,

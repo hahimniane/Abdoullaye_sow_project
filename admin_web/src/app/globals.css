@@ -6113,6 +6113,25 @@ button[data-loading="true"]::before {
 .lst-btn.danger { color: var(--danger); }
 .lst-btn.danger:hover { border-color: var(--danger); color: var(--danger); }
 
+/* Car-viewing negotiation. Layout only, and shared by both consoles: the
+   business card and the customer order drawer show the same times, the same
+   counter-offer boxes and the same trail, each keeping its own buttons. */
+.viewing-slots { display: flex; flex-direction: column; gap: 6px; }
+.viewing-slots > small { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.viewing-slot { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.viewing-slot input { flex: 0 0 auto; margin: 0; }
+.viewing-slot svg { flex: 0 0 auto; color: var(--muted); }
+.viewing-counter-fields { display: flex; flex-direction: column; gap: 6px; }
+.viewing-counter-fields input { border: 1.5px solid var(--rule); border-radius: 10px; font: inherit; font-size: 13px; padding: 8px 11px; }
+.viewing-counter-fields input:focus { border-color: var(--brand); outline: none; }
+.viewing-history { color: var(--muted); font-size: 12px; }
+.viewing-history summary { cursor: pointer; font-weight: 700; }
+.viewing-history ol { display: flex; flex-direction: column; gap: 4px; margin: 8px 0 0; padding-left: 18px; }
+.viewing-history li { display: flex; flex-direction: column; }
+.viewing-history b { color: var(--ink); font-weight: 700; }
+.customer-viewing { display: flex; flex-direction: column; gap: 12px; }
+.customer-viewing h3 { font-size: 15px; font-weight: 800; margin: 0; }
+
 /* Vehicle transport marketplace — quote opportunities stay separate from jobs. */
 .transport-marketplace-panel { display: grid; gap: 16px; }
 .transport-marketplace-tabs { border-bottom: 1px solid var(--rule); display: flex; gap: 6px; }

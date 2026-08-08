@@ -2501,8 +2501,15 @@ describe("car sales service callable lifecycle", () => {
     let viewing = await db.collection("carPurchases")
         .doc(created.purchaseId).get();
     assert.equal(viewing.get("paymentType"), "viewing_reservation");
-    assert.equal(viewing.get("purchaseStatus"), "viewing_scheduled");
     assert.equal(viewing.get("paymentStatus"), "not_required");
+    // Asking for a viewing opens a negotiation; it does not book the slot.
+    // The business has to accept or counter before anything is agreed, so
+    // there is deliberately no appointmentStart yet.
+    assert.equal(viewing.get("purchaseStatus"), "viewing_requested");
+    assert.equal(viewing.get("proposedBy"), "customer");
+    assert.equal(viewing.get("proposedSlots").length, 1);
+    assert.equal(viewing.get("appointmentStart"), undefined);
+    assert.ok(viewing.get("respondByAt"));
 
     const rescheduledAt = futureIso(72);
     await functions.updateCarViewingReservation.run({
@@ -2514,6 +2521,29 @@ describe("car sales service callable lifecycle", () => {
       },
     });
     viewing = await viewing.ref.get();
+    // Moving a viewing is also a proposal - the customer cannot set the time
+    // unilaterally, so the new time lands in proposedSlots, not on the
+    // appointment.
+    assert.equal(viewing.get("purchaseStatus"), "viewing_requested");
+    assert.equal(
+        viewing.get("proposedSlots")[0].startAtMs,
+        Date.parse(rescheduledAt),
+    );
+
+    // The business accepting is what actually schedules it.
+    const sales = await seedFreightManager(businessId, {
+      permissions: ["sales"],
+    });
+    await functions.actOnCarViewing.run({
+      auth: {uid: sales.uid},
+      data: {
+        purchaseId: created.purchaseId,
+        action: "accept",
+        slots: [{startAt: rescheduledAt, label: "Saturday afternoon"}],
+      },
+    });
+    viewing = await viewing.ref.get();
+    assert.equal(viewing.get("purchaseStatus"), "viewing_scheduled");
     assert.equal(
         viewing.get("appointmentStart").toMillis(),
         Date.parse(rescheduledAt),

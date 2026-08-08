@@ -6738,4 +6738,181 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get transportJobAcceptedQuote => 'Devis accepté';
+
+  @override
+  String get requestViewing => 'Demander une visite';
+
+  @override
+  String get manageViewing => 'Gérer la visite';
+
+  @override
+  String get requestViewingSummary =>
+      'Proposez un horaire pour venir voir ce véhicule. Le vendeur le confirme ou propose d\'autres horaires.';
+
+  @override
+  String get requestViewingQuestion => 'Envoyer la demande de visite ?';
+
+  @override
+  String get requestViewingConfirmMessage =>
+      'Le vendeur confirmera cet horaire ou en proposera d\'autres. Rien n\'est facturé.';
+
+  @override
+  String get viewingRequestSent =>
+      'Demande de visite envoyée. Le vendeur la confirmera ou proposera d\'autres horaires.';
+
+  @override
+  String get viewingConversationTitle => 'Votre visite pour ce véhicule';
+
+  @override
+  String get viewingStatusRequested => 'Visite demandée';
+
+  @override
+  String get viewingStatusCountered => 'Autres horaires proposés';
+
+  @override
+  String get viewingStatusDeclined => 'Visite refusée';
+
+  @override
+  String get viewingStatusExpired => 'Proposition expirée';
+
+  @override
+  String get viewingStatusCancelled => 'Visite annulée';
+
+  @override
+  String get viewingYourTurn => 'À vous de répondre';
+
+  @override
+  String get viewingWaitingOnBuyer => 'En attente de l\'acheteur';
+
+  @override
+  String get viewingWaitingOnSeller => 'En attente du vendeur';
+
+  @override
+  String get viewingProposedByYou => 'Vous avez proposé';
+
+  @override
+  String get viewingProposedByBuyer => 'L\'acheteur a proposé';
+
+  @override
+  String get viewingProposedBySeller => 'Le vendeur a proposé';
+
+  @override
+  String get viewingTimesOnTable => 'Horaires proposés';
+
+  @override
+  String viewingConfirmedFor(Object time) {
+    return 'Confirmé pour $time';
+  }
+
+  @override
+  String viewingRespondBy(Object time) {
+    return 'À répondre avant le $time';
+  }
+
+  @override
+  String get viewingAcceptTime => 'Accepter cet horaire';
+
+  @override
+  String get viewingOfferOtherTimes => 'Proposer d\'autres horaires';
+
+  @override
+  String get viewingProposeAnotherTime => 'Proposer un autre horaire';
+
+  @override
+  String get viewingDeclineRequest => 'Refuser';
+
+  @override
+  String get viewingDeclineQuestion => 'Refuser cette visite ?';
+
+  @override
+  String get viewingDeclineConfirmMessage =>
+      'L\'acheteur sera informé que vous ne pouvez pas montrer le véhicule à ces horaires.';
+
+  @override
+  String get viewingDeclinedMessage => 'Visite refusée.';
+
+  @override
+  String viewingConfirmedMessage(Object time) {
+    return 'Visite confirmée pour $time.';
+  }
+
+  @override
+  String get viewingTimesSent => 'Vos horaires ont été envoyés.';
+
+  @override
+  String get viewingActionFailed =>
+      'Cette action n\'a pas pu aboutir. Réessayez.';
+
+  @override
+  String get viewingProposalExpiredNotice =>
+      'Personne n\'a répondu à temps : cette proposition a expiré.';
+
+  @override
+  String get viewingNoMoreCounters =>
+      'Les échanges ont assez duré - acceptez un horaire, refusez ou annulez.';
+
+  @override
+  String get viewingClosedNotice =>
+      'Cette visite est close. Plus rien n\'y peut être modifié.';
+
+  @override
+  String get viewingHistoryTitle => 'Ce qui s\'est passé jusqu\'ici';
+
+  @override
+  String viewingHistoryEntryLine(Object who, Object action, Object when) {
+    return '$who • $action • $when';
+  }
+
+  @override
+  String get viewingActorYou => 'Vous';
+
+  @override
+  String get viewingActorBuyer => 'L\'acheteur';
+
+  @override
+  String get viewingActorSeller => 'Le vendeur';
+
+  @override
+  String get viewingHistoryActionProposed => 'proposition';
+
+  @override
+  String get viewingHistoryActionAccepted => 'acceptation';
+
+  @override
+  String get viewingHistoryActionDeclined => 'refus';
+
+  @override
+  String get viewingHistoryActionCancelled => 'annulation';
+
+  @override
+  String get viewingProposalSheetTitleCustomer =>
+      'Proposer un horaire de visite';
+
+  @override
+  String get viewingProposalSheetTitleBusiness =>
+      'Proposer des horaires de visite';
+
+  @override
+  String get viewingProposalSheetMessageCustomer =>
+      'Choisissez l\'horaire qui vous convient. Le vendeur peut l\'accepter ou en proposer d\'autres.';
+
+  @override
+  String viewingProposalSheetMessageBusiness(Object count) {
+    return 'Proposez jusqu\'à $count horaires. L\'acheteur en choisit un ou en propose un autre.';
+  }
+
+  @override
+  String get viewingRescheduleNotice =>
+      'Proposer un nouvel horaire rouvre la discussion : le rendez-vous convenu n\'est plus confirmé.';
+
+  @override
+  String get viewingChooseTime => 'Choisissez un horaire de visite.';
+
+  @override
+  String viewingSlotsChosen(Object count, Object max) {
+    return '$count horaire(s) sur $max sélectionné(s)';
+  }
+
+  @override
+  String get viewingSendProposal => 'Envoyer';
 }

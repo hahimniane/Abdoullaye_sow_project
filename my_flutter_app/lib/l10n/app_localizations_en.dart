@@ -6620,4 +6620,179 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get transportJobAcceptedQuote => 'Accepted quote';
+
+  @override
+  String get requestViewing => 'Request a viewing';
+
+  @override
+  String get manageViewing => 'Manage viewing';
+
+  @override
+  String get requestViewingSummary =>
+      'Propose a time to come and see this vehicle. The seller confirms it or offers other times.';
+
+  @override
+  String get requestViewingQuestion => 'Send viewing request?';
+
+  @override
+  String get requestViewingConfirmMessage =>
+      'The seller will confirm this time or offer other times. Nothing is charged.';
+
+  @override
+  String get viewingRequestSent =>
+      'Viewing request sent. The seller will confirm it or offer other times.';
+
+  @override
+  String get viewingConversationTitle => 'Your viewing for this car';
+
+  @override
+  String get viewingStatusRequested => 'Viewing requested';
+
+  @override
+  String get viewingStatusCountered => 'Other times offered';
+
+  @override
+  String get viewingStatusDeclined => 'Viewing declined';
+
+  @override
+  String get viewingStatusExpired => 'Proposal expired';
+
+  @override
+  String get viewingStatusCancelled => 'Viewing cancelled';
+
+  @override
+  String get viewingYourTurn => 'Your turn';
+
+  @override
+  String get viewingWaitingOnBuyer => 'Waiting on the buyer';
+
+  @override
+  String get viewingWaitingOnSeller => 'Waiting on the seller';
+
+  @override
+  String get viewingProposedByYou => 'You proposed';
+
+  @override
+  String get viewingProposedByBuyer => 'The buyer proposed';
+
+  @override
+  String get viewingProposedBySeller => 'The seller offered';
+
+  @override
+  String get viewingTimesOnTable => 'Times on the table';
+
+  @override
+  String viewingConfirmedFor(Object time) {
+    return 'Confirmed for $time';
+  }
+
+  @override
+  String viewingRespondBy(Object time) {
+    return 'Reply by $time';
+  }
+
+  @override
+  String get viewingAcceptTime => 'Accept this time';
+
+  @override
+  String get viewingOfferOtherTimes => 'Offer other times';
+
+  @override
+  String get viewingProposeAnotherTime => 'Propose another time';
+
+  @override
+  String get viewingDeclineRequest => 'Decline';
+
+  @override
+  String get viewingDeclineQuestion => 'Decline this viewing?';
+
+  @override
+  String get viewingDeclineConfirmMessage =>
+      'The buyer will be told you cannot show the car at these times.';
+
+  @override
+  String get viewingDeclinedMessage => 'Viewing declined.';
+
+  @override
+  String viewingConfirmedMessage(Object time) {
+    return 'Viewing confirmed for $time.';
+  }
+
+  @override
+  String get viewingTimesSent => 'Your times were sent.';
+
+  @override
+  String get viewingActionFailed =>
+      'That could not be done right now. Try again.';
+
+  @override
+  String get viewingProposalExpiredNotice =>
+      'Nobody answered in time, so this proposal expired.';
+
+  @override
+  String get viewingNoMoreCounters =>
+      'This has gone back and forth enough - accept a time, decline, or cancel.';
+
+  @override
+  String get viewingClosedNotice =>
+      'This viewing is closed. Nothing on it can be changed.';
+
+  @override
+  String get viewingHistoryTitle => 'What has happened so far';
+
+  @override
+  String viewingHistoryEntryLine(Object who, Object action, Object when) {
+    return '$who • $action • $when';
+  }
+
+  @override
+  String get viewingActorYou => 'You';
+
+  @override
+  String get viewingActorBuyer => 'The buyer';
+
+  @override
+  String get viewingActorSeller => 'The seller';
+
+  @override
+  String get viewingHistoryActionProposed => 'proposal';
+
+  @override
+  String get viewingHistoryActionAccepted => 'acceptance';
+
+  @override
+  String get viewingHistoryActionDeclined => 'decline';
+
+  @override
+  String get viewingHistoryActionCancelled => 'cancellation';
+
+  @override
+  String get viewingProposalSheetTitleCustomer => 'Propose a viewing time';
+
+  @override
+  String get viewingProposalSheetTitleBusiness => 'Offer viewing times';
+
+  @override
+  String get viewingProposalSheetMessageCustomer =>
+      'Pick the time that suits you. The seller can accept it or offer other times.';
+
+  @override
+  String viewingProposalSheetMessageBusiness(Object count) {
+    return 'Offer up to $count times. The buyer picks one or comes back with another.';
+  }
+
+  @override
+  String get viewingRescheduleNotice =>
+      'Proposing a new time reopens the conversation, so the agreed appointment stops being confirmed.';
+
+  @override
+  String get viewingChooseTime => 'Choose a viewing time.';
+
+  @override
+  String viewingSlotsChosen(Object count, Object max) {
+    return '$count of $max times chosen';
+  }
+
+  @override
+  String get viewingSendProposal => 'Send';
 }
