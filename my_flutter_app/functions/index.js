@@ -5331,7 +5331,16 @@ async function sendPreferenceNotification({
       }))
       .filter((item) => item.token);
   const tokens = tokenDocs.map((item) => item.token);
-  if (!tokens.length) return;
+  if (!tokens.length) {
+    // Used to return silently, which made "this user never gets push" look
+    // identical to "push was sent fine" in the logs. If this fires, the
+    // client never registered a token - check the device, not this function.
+    logger.warn("Push skipped: user has no enabled FCM token", {
+      uid,
+      preferenceKey,
+    });
+    return;
+  }
 
   const response = await admin.messaging().sendEachForMulticast({
     tokens,

@@ -164,6 +164,9 @@ class AuthProvider extends ChangeNotifier {
       _clearProfileState();
       _userEmail = user.email;
       await _checkUserRole();
+      // Covers the restored-session cold start, which never runs authenticate()
+      // and so never re-registered a rotated FCM token. Does not prompt.
+      unawaited(_refreshPushRegistrationIfPossible());
     } else {
       _clearProfileState();
       _userEmail = null;
@@ -388,6 +391,14 @@ class AuthProvider extends ChangeNotifier {
       await _pushNotifications.requestPermissionAndRegister();
     } catch (error) {
       debugPrint('Push registration skipped: $error');
+    }
+  }
+
+  Future<void> _refreshPushRegistrationIfPossible() async {
+    try {
+      await _pushNotifications.refreshRegistrationIfPermitted();
+    } catch (error) {
+      debugPrint('Push token refresh skipped: $error');
     }
   }
 

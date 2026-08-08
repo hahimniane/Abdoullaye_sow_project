@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
+import '../services/push_notification_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 
@@ -51,7 +52,15 @@ class _SplashScreenState extends State<SplashScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed(targetRoute);
+      final navigator = Navigator.of(context);
+      navigator.pushReplacementNamed(targetRoute);
+      // A notification tap that cold-started the app was parked before any
+      // navigator existed. Open it now, on top of the real first screen, so
+      // Back lands on home rather than dropping the user out of the app.
+      final pending = PushNotificationService.instance.takePendingRoute();
+      if (pending != null) {
+        navigator.pushNamed(pending.name, arguments: pending.arguments);
+      }
     });
   }
 
