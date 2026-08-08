@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -866,6 +867,37 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     }
   }
 
+  /// Hands the payment link to the OS share sheet, so the lot can send it
+  /// through whatever the customer actually uses - iMessage, WhatsApp, email.
+  ///
+  /// Shares `checkoutUrl`, which is the Laawol-hosted link that stays valid
+  /// until the entry is paid or cancelled - never `stripeCheckoutUrl`, which
+  /// is a single Stripe session and dies with it.
+  Future<void> _sharePaymentLink(BusinessParkingEntryResult result) async {
+    final l10n = AppLocalizations.of(context)!;
+    final currency = NumberFormat.simpleCurrency(
+      locale: Localizations.localeOf(context).toString(),
+      name: 'USD',
+    );
+    final auth = context.read<AuthProvider>();
+    final message = l10n.paymentLinkShareMessage(
+      auth.businessName ?? BusinessProfile.defaultBusinessName,
+      [
+        _selectedYear,
+        _selectedMake,
+        _selectedModel,
+      ].where((part) => part != null && part.toString().isNotEmpty).join(' '),
+      result.trackingCode,
+      currency.format(result.amountDue),
+      result.checkoutUrl,
+    );
+    try {
+      await SharePlus.instance.share(ShareParams(text: message));
+    } catch (_) {
+      if (mounted) showErrorSnackBar(context, l10n.paymentLinkShareFailed);
+    }
+  }
+
   Future<void> _copyCheckoutUrl(String url) async {
     final l10n = AppLocalizations.of(context)!;
     try {
@@ -977,6 +1009,17 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
             SelectableText(
               result.checkoutUrl,
               style: const TextStyle(fontSize: 12.5),
+            ),
+            const SizedBox(height: 8),
+            // Share first: sending the link is what the lot actually needs to
+            // do next, and copying is only useful if they then paste it
+            // somewhere themselves.
+            AsyncActionButton.filled(
+              onPressed: result.checkoutUrl.isEmpty
+                  ? null
+                  : () => _sharePaymentLink(result),
+              icon: Icons.ios_share,
+              label: l10n.sharePaymentLink,
             ),
             const SizedBox(height: 8),
             AsyncActionButton.outlined(

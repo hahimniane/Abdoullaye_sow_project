@@ -10992,6 +10992,30 @@ abstract class AppLocalizations {
   /// **'Copy payment link'**
   String get copyPaymentLink;
 
+  /// No description provided for @sharePaymentLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Share payment link'**
+  String get sharePaymentLink;
+
+  /// No description provided for @paymentLinkShareFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the share sheet'**
+  String get paymentLinkShareFailed;
+
+  /// No description provided for @paymentLinkShareMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} parked your {car}. Tracking {code}. Amount due {amount}. Pay here: {link}'**
+  String paymentLinkShareMessage(
+    String business,
+    String car,
+    String code,
+    String amount,
+    String link,
+  );
+
   /// No description provided for @paymentLinkCopied.
   ///
   /// In en, this message translates to:

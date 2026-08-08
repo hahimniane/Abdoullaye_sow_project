@@ -2581,6 +2581,18 @@
   "directPaymentResultHint": "The customer pays your business directly. We record the amount and never bill it. Mark the payment received once the money arrives.",
   "paymentLinkLabel": "Payment link",
   "copyPaymentLink": "Copy payment link",
+  "sharePaymentLink": "Share payment link",
+  "paymentLinkShareFailed": "Could not open the share sheet",
+  "paymentLinkShareMessage": "{business} parked your {car}. Tracking {code}. Amount due {amount}. Pay here: {link}",
+  "@paymentLinkShareMessage": {
+    "placeholders": {
+      "business": {"type": "String"},
+      "car": {"type": "String"},
+      "code": {"type": "String"},
+      "amount": {"type": "String"},
+      "link": {"type": "String"}
+    }
+  },
   "paymentLinkCopied": "Payment link copied",
   "amountDue": "Amount due",
   "amountRecorded": "Amount recorded",

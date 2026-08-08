@@ -20,6 +20,19 @@ class StripeConfigService {
       _applied = true;
       return;
     }
+    // A release build must be told its key. The fallback below is a test key,
+    // and silently shipping it in a release is the worst possible outcome:
+    // the app looks fine and every payment fails against live PaymentIntents,
+    // because the client and the backend are in different Stripe modes.
+    // Failing the build's first run instead makes a forgotten --dart-define
+    // impossible to miss.
+    if (kReleaseMode && _configuredPublishableKey.isEmpty) {
+      throw StateError(
+        'Release build has no STRIPE_PUBLISHABLE_KEY. Rebuild with '
+        '--dart-define=STRIPE_PUBLISHABLE_KEY=pk_live_... (or pk_test_... for '
+        'a test-mode release).',
+      );
+    }
     final key = _configuredPublishableKey.isNotEmpty
         ? _configuredPublishableKey
         : _fallbackTestPublishableKey;

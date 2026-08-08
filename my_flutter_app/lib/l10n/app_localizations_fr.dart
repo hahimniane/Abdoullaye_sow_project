@@ -6222,6 +6222,23 @@ class AppLocalizationsFr extends AppLocalizations {
   String get copyPaymentLink => 'Copier le lien de paiement';
 
   @override
+  String get sharePaymentLink => 'Partager le lien de paiement';
+
+  @override
+  String get paymentLinkShareFailed => 'Impossible d’ouvrir le partage';
+
+  @override
+  String paymentLinkShareMessage(
+    String business,
+    String car,
+    String code,
+    String amount,
+    String link,
+  ) {
+    return '$business a garé votre $car. Suivi $code. Montant dû $amount. Payez ici : $link';
+  }
+
+  @override
   String get paymentLinkCopied => 'Lien de paiement copié';
 
   @override

@@ -15,3 +15,7 @@ release_artifacts/*
 # Temp manifests written per-process by deploy/backend-deploy.mjs while it
 # batches function deploys. Run artifacts, not source.
 my_flutter_app/.firebase-batch-*.json
+
+# Local-only Stripe build config. Never committed - holds the publishable
+# key passed to release builds via --dart-define.
+my_flutter_app/.env.stripe.local

@@ -228,6 +228,11 @@ setGlobalOptions({maxInstances: 3});
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
 const businessProPriceId = defineSecret("BUSINESS_PRO_PRICE_ID");
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
+// Second destination: Stripe signs connected-account deliveries with its own
+// secret. Optional - unset until a Connect destination exists.
+const stripeConnectWebhookSecret = defineSecret(
+    "STRIPE_CONNECT_WEBHOOK_SECRET",
+);
 const anthropicApiKey = defineSecret("ANTHROPIC_API_KEY");
 const deepseekApiKey = defineSecret("DEEPSEEK_API_KEY");
 // Twilio for SMS to walk-up parking customers (owner-approved 2026-08-06).
@@ -4690,6 +4695,58 @@ async function expireStripeCheckoutSession(sessionId, connectedAccountId) {
   );
 }
 
+/**
+ * Verifies against any one of the configured signing secrets.
+ *
+ * The six events this project handles live in two Stripe scopes: the
+ * subscription and checkout events belong to the platform account, while
+ * `account.updated` - which is how a business's payouts/charges status is
+ * refreshed after Connect onboarding - is only delivered to a
+ * connected-accounts destination. Stripe issues a separate signing secret per
+ * destination, so a single-secret check silently rejects every delivery from
+ * whichever destination it was not given.
+ *
+ * @param {object} req The raw request, whose rawBody is signed.
+ * @param {...string} secrets One or more `whsec_` secrets; empty ones are
+ *   ignored so a project that has only configured one still works.
+ */
+/**
+ * Reads an optional secret without throwing when it has never been set.
+ *
+ * `defineSecret(...).value()` throws if the secret is not bound, which would
+ * turn "no Connect destination configured yet" into a 500 on every webhook
+ * delivery rather than a clean fall-through to the primary secret.
+ *
+ * @param {object} secret A defineSecret() handle.
+ * @return {string} The value, or "" when it is not configured.
+ */
+function safeSecretValue(secret) {
+  try {
+    return secret.value() || "";
+  } catch (_) {
+    return "";
+  }
+}
+
+function verifyStripeWebhookSignatureFromAny(req, ...secrets) {
+  const usable = secrets.filter(
+      (secret) => typeof secret === "string" && secret.startsWith("whsec_"),
+  );
+  if (usable.length === 0) {
+    throw new Error("Stripe webhook secret is not configured");
+  }
+  let lastError;
+  for (const secret of usable) {
+    try {
+      verifyStripeWebhookSignature(req, secret);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
 function verifyStripeWebhookSignature(req, secret) {
   if (!secret || !secret.startsWith("whsec_")) {
     throw new Error("Stripe webhook secret is not configured");
@@ -7125,6 +7182,7 @@ exports.handleBusinessProStripeWebhook = onRequest(
       maxInstances: 10,
       secrets: [
         stripeWebhookSecret,
+        stripeConnectWebhookSecret,
         stripeSecretKey,
         twilioAccountSid,
         twilioAuthToken,
@@ -7137,7 +7195,11 @@ exports.handleBusinessProStripeWebhook = onRequest(
         return;
       }
       try {
-        verifyStripeWebhookSignature(req, stripeWebhookSecret.value());
+        verifyStripeWebhookSignatureFromAny(
+            req,
+            stripeWebhookSecret.value(),
+            safeSecretValue(stripeConnectWebhookSecret),
+        );
       } catch (error) {
         logger.warn("Rejected Stripe webhook", {detail: error.message});
         res.status(400).send("Invalid Stripe signature");

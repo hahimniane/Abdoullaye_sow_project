@@ -92,6 +92,13 @@ describe("payment runtime configuration", () => {
     });
     assert.deepEqual(JSON.parse(output), [
       "STRIPE_WEBHOOK_SECRET",
+      // The six handled events span two Stripe destination scopes, and Stripe
+      // signs each destination with its own secret. account.updated - which
+      // refreshes a business's payouts/charges status after Connect
+      // onboarding - only arrives on a connected-accounts destination, so its
+      // secret has to be bound too or every one of those deliveries is
+      // rejected as an invalid signature.
+      "STRIPE_CONNECT_WEBHOOK_SECRET",
       "STRIPE_SECRET_KEY",
       // Twilio: the webhook sends the customer their SMS receipt when a
       // payment settles, so it needs the sender credentials bound.
