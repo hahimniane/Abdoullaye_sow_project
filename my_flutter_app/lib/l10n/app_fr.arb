@@ -508,6 +508,8 @@
   "enterCarTransportDetails": "Entrez les détails du transport de voiture",
   "cars": "Voitures",
   "myPurchases": "Mes achats",
+  "myCarViewings": "Visites de voitures",
+  "noCarViewingsYet": "Aucune visite pour le moment. Demandez \u00e0 voir une voiture depuis son annonce.",
   "noPurchasesYet": "Aucun achat de voiture pour le moment.",
   "purchaseHistoryUnavailable": "Nous n'avons pas pu charger votre historique d'achats pour le moment. Veuillez réessayer après la synchronisation de votre compte.",
   "depositPaid": "Paiement : {amount} ({status})",

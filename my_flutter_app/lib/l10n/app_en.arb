@@ -507,6 +507,8 @@
   "enterCarTransportDetails": "Enter car transport details",
   "cars": "Cars",
   "myPurchases": "My Purchases",
+  "myCarViewings": "Car viewings",
+  "noCarViewingsYet": "No car viewings yet. Ask to see a car from its listing.",
   "noPurchasesYet": "No car purchases yet.",
   "purchaseHistoryUnavailable": "We could not load your purchase history right now. Please try again after your account finishes syncing.",
   "depositPaid": "Payment: {amount} ({status})",

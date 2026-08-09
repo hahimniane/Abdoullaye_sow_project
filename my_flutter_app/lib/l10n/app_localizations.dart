@@ -2444,6 +2444,18 @@ abstract class AppLocalizations {
   /// **'My Purchases'**
   String get myPurchases;
 
+  /// No description provided for @myCarViewings.
+  ///
+  /// In en, this message translates to:
+  /// **'Car viewings'**
+  String get myCarViewings;
+
+  /// No description provided for @noCarViewingsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No car viewings yet. Ask to see a car from its listing.'**
+  String get noCarViewingsYet;
+
   /// No description provided for @noPurchasesYet.
   ///
   /// In en, this message translates to:

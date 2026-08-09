@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
+import 'my_purchases_screen.dart' show PurchaseListScope;
 import '../models/car_purchase.dart';
 import '../providers/auth_provider.dart';
 import '../services/car_viewing_service.dart';
@@ -15,8 +16,22 @@ import '../widgets/car_viewing_negotiation.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/support_entry_button.dart';
 
-class StaffPurchaseManagementScreen extends StatelessWidget {
+class StaffPurchaseManagementScreen extends StatefulWidget {
   const StaffPurchaseManagementScreen({super.key});
+
+  @override
+  State<StaffPurchaseManagementScreen> createState() =>
+      _StaffPurchaseManagementScreenState();
+}
+
+class _StaffPurchaseManagementScreenState
+    extends State<StaffPurchaseManagementScreen> {
+  // Staff work both queues from this screen, so they stay side by side rather
+  // than becoming separate destinations: a viewing request and the hold on the
+  // same car are usually looked at together.
+  PurchaseListScope _scope = PurchaseListScope.purchases;
+
+  bool get _isViewings => _scope == PurchaseListScope.viewings;
 
   Future<void> _callPurchaseAction(
     BuildContext context,
@@ -191,13 +206,28 @@ class StaffPurchaseManagementScreen extends StatelessWidget {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
+          final all = snapshot.data!.docs
+              .map(CarPurchase.fromFirestore)
+              .toList();
           final purchases =
-              snapshot.data!.docs.map(CarPurchase.fromFirestore).toList()
+              all
+                  .where(
+                    (purchase) =>
+                        purchase.isViewingReservation == _isViewings,
+                  )
+                  .toList()
                 ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-          if (purchases.isEmpty) {
-            return Center(child: Text(l10n.noPurchasesYet));
-          }
-          return ListView.separated(
+          final viewingCount = all
+              .where((purchase) => purchase.isViewingReservation)
+              .length;
+          final purchaseCount = all.length - viewingCount;
+          final list = purchases.isEmpty
+              ? Center(
+                  child: Text(
+                    _isViewings ? l10n.noCarViewingsYet : l10n.noPurchasesYet,
+                  ),
+                )
+              : ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: purchases.length,
             separatorBuilder: (_, _) => const SizedBox(height: 12),
@@ -214,6 +244,32 @@ class StaffPurchaseManagementScreen extends StatelessWidget {
                     _decideExtension(context, purchase, 'rejected'),
               );
             },
+                );
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: SegmentedButton<PurchaseListScope>(
+                  segments: <ButtonSegment<PurchaseListScope>>[
+                    ButtonSegment(
+                      value: PurchaseListScope.purchases,
+                      label: Text('${l10n.myPurchases} ($purchaseCount)'),
+                      icon: const Icon(Icons.receipt_long_outlined),
+                    ),
+                    ButtonSegment(
+                      value: PurchaseListScope.viewings,
+                      label: Text('${l10n.myCarViewings} ($viewingCount)'),
+                      icon: const Icon(Icons.event_available_outlined),
+                    ),
+                  ],
+                  selected: <PurchaseListScope>{_scope},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (selection) =>
+                      setState(() => _scope = selection.first),
+                ),
+              ),
+              Expanded(child: list),
+            ],
           );
         },
       ),

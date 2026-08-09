@@ -1302,6 +1302,13 @@ class AppLocalizationsFr extends AppLocalizations {
   String get myPurchases => 'Mes achats';
 
   @override
+  String get myCarViewings => 'Visites de voitures';
+
+  @override
+  String get noCarViewingsYet =>
+      'Aucune visite pour le moment. Demandez à voir une voiture depuis son annonce.';
+
+  @override
   String get noPurchasesYet => 'Aucun achat de voiture pour le moment.';
 
   @override

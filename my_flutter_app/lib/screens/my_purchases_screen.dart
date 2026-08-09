@@ -17,10 +17,24 @@ import '../widgets/language_toggle.dart';
 import '../widgets/support_entry_button.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
 
+/// Which queue this screen is showing.
+///
+/// A viewing is an appointment, not a purchase - nothing is bought and no
+/// money moves - so buyers reach them from their own destination. One widget
+/// serves both so the two lists cannot drift apart.
+enum PurchaseListScope { purchases, viewings }
+
 class MyPurchasesScreen extends StatelessWidget {
-  const MyPurchasesScreen({super.key, this.showBackButton = false});
+  const MyPurchasesScreen({
+    super.key,
+    this.showBackButton = false,
+    this.scope = PurchaseListScope.purchases,
+  });
 
   final bool showBackButton;
+  final PurchaseListScope scope;
+
+  bool get _isViewings => scope == PurchaseListScope.viewings;
 
   /// The viewing negotiation lives in [CarViewingNegotiationPanel], which both
   /// sides of the conversation share. There is deliberately no "edit viewing"
@@ -128,7 +142,7 @@ class MyPurchasesScreen extends StatelessWidget {
           if (snapshot.hasError) {
             return SafeArea(
               child: _EmptyPurchasesState(
-                title: l10n.myPurchases,
+                title: _isViewings ? l10n.myCarViewings : l10n.myPurchases,
                 message: l10n.purchaseHistoryUnavailable,
                 icon: Icons.lock_outline,
                 showBackButton: showBackButton,
@@ -139,13 +153,21 @@ class MyPurchasesScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           final purchases =
-              snapshot.data!.docs.map(CarPurchase.fromFirestore).toList()
+              snapshot.data!.docs
+                  .map(CarPurchase.fromFirestore)
+                  .where(
+                    (purchase) =>
+                        purchase.isViewingReservation == _isViewings,
+                  )
+                  .toList()
                 ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
           if (purchases.isEmpty) {
             return SafeArea(
               child: _EmptyPurchasesState(
-                title: l10n.myPurchases,
-                message: l10n.noPurchasesYet,
+                title: _isViewings ? l10n.myCarViewings : l10n.myPurchases,
+                message: _isViewings
+                    ? l10n.noCarViewingsYet
+                    : l10n.noPurchasesYet,
                 showBackButton: showBackButton,
               ),
             );
@@ -154,7 +176,7 @@ class MyPurchasesScreen extends StatelessWidget {
             child: Column(
               children: [
                 _PurchasesHeader(
-                  title: l10n.myPurchases,
+                  title: _isViewings ? l10n.myCarViewings : l10n.myPurchases,
                   showBackButton: showBackButton,
                 ),
                 Expanded(

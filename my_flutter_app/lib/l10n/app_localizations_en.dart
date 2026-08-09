@@ -1278,6 +1278,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get myPurchases => 'My Purchases';
 
   @override
+  String get myCarViewings => 'Car viewings';
+
+  @override
+  String get noCarViewingsYet =>
+      'No car viewings yet. Ask to see a car from its listing.';
+
+  @override
   String get noPurchasesYet => 'No car purchases yet.';
 
   @override

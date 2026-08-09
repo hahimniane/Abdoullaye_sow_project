@@ -102,8 +102,16 @@ void main() {
       expect(route, isNull);
     });
 
-    test('routes a car viewing update to My Purchases', () {
+    test('routes a car viewing update to its own destination', () {
+      // Deliberately not /my-purchases: a buyer opening a notification about
+      // an appointment should not land in a list of money they have paid.
       final route = routeForNotificationData({'type': 'car_viewing_status'});
+
+      expect(route?.name, '/my-viewings');
+    });
+
+    test('still routes a car purchase update to My Purchases', () {
+      final route = routeForNotificationData({'type': 'car_purchase_status'});
 
       expect(route?.name, '/my-purchases');
     });

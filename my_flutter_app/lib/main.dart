@@ -217,6 +217,13 @@ class MyApp extends StatelessWidget {
               },
               '/my-purchases': (context) =>
                   const MyPurchasesScreen(showBackButton: true),
+              // A viewing is an appointment, not a purchase, so buyers reach
+              // it from its own destination rather than through a list of
+              // money they have paid.
+              '/my-viewings': (context) => const MyPurchasesScreen(
+                showBackButton: true,
+                scope: PurchaseListScope.viewings,
+              ),
               '/orders': (context) => const OrdersScreen(showBackButton: true),
               '/leave-review': (context) {
                 final args =
