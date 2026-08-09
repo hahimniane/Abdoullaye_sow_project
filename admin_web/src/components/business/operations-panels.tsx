@@ -4821,7 +4821,11 @@ function ViewingNegotiation({
   );
 }
 
-export function PurchasesPanel({ businessId, previewMode = false }: PanelProps) {
+export function PurchasesPanel({
+  businessId,
+  previewMode = false,
+  scope = "purchases",
+}: PanelProps & {scope?: "purchases" | "viewings"}) {
   const enabled = Boolean(businessId && !previewMode);
   const purchases = useBusinessRows("carPurchases", businessId, enabled, 250);
   // Read for one field: a viewing on a listing that is no longer active can
@@ -4847,9 +4851,21 @@ export function PurchasesPanel({ businessId, previewMode = false }: PanelProps) 
     [cars.rows],
   );
 
+  // A viewing is an appointment, not a sale. Splitting here rather than at
+  // render keeps search, the filters and the needs-action count talking about
+  // the queue in front of the operator instead of the whole collection.
+  const scopedRows = useMemo(
+    () => purchases.rows.filter((row) =>
+      scope === "viewings" ?
+        purchaseKind(row) === "viewing" :
+        purchaseKind(row) !== "viewing",
+    ),
+    [purchases.rows, scope],
+  );
+
   const searched = useMemo(
-    () => filterRows(purchases.rows, search, ["carTitle", "buyerName", "buyerEmail", "buyerPhone", "customerName", "purchaseStatus", "paymentStatus", "destinationCountryName"]),
-    [purchases.rows, search],
+    () => filterRows(scopedRows, search, ["carTitle", "buyerName", "buyerEmail", "buyerPhone", "customerName", "purchaseStatus", "paymentStatus", "destinationCountryName"]),
+    [scopedRows, search],
   );
   const filteredRows = useMemo(() => {
     if (filter === "all") return searched;
@@ -4859,7 +4875,7 @@ export function PurchasesPanel({ businessId, previewMode = false }: PanelProps) 
     return searched.filter((row) => text(row.purchaseStatus, "") === filter);
   }, [searched, filter]);
 
-  const actionCount = useMemo(() => purchases.rows.filter(purchaseNeedsAction).length, [purchases.rows]);
+  const actionCount = useMemo(() => scopedRows.filter(purchaseNeedsAction).length, [scopedRows]);
 
   async function runHold(
     purchaseId: string,

@@ -10,6 +10,7 @@ import {
   BarChart3,
   Banknote,
   Building2,
+  CalendarClock,
   Car,
   ClipboardList,
   ExternalLink,
@@ -564,6 +565,13 @@ export function BusinessConsole({
           )}
           {activeTab === "purchases" && (
             <PurchasesPanel businessId={businessId} previewMode={previewMode} />
+          )}
+          {activeTab === "viewings" && (
+            <PurchasesPanel
+              businessId={businessId}
+              previewMode={previewMode}
+              scope="viewings"
+            />
           )}
           {activeTab === "barrels" && (
             <BarrelsPanel
@@ -1493,6 +1501,7 @@ function tabIcon(tab: BusinessTab) {
     profile: <Building2 {...props} />,
     listings: <Car {...props} />,
     purchases: <ClipboardList {...props} />,
+    viewings: <CalendarClock {...props} />,
     barrels: <Package {...props} />,
     freight: <Package {...props} />,
     transport: <Truck {...props} />,

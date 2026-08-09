@@ -46,7 +46,10 @@ describe("business sidebar navigation", () => {
     const serviceGroups = buildBusinessSidebarGroups(businessSidebarTabs, [], "carSales");
     assert.deepEqual(
       serviceGroups.flatMap((group) => group.tabs.map((tab) => tab.id)),
-      ["listings", "purchases"],
+      // Viewings is a carSales tab too: same records and same staff as
+      // purchases, but its own queue, because an appointment request is not a
+      // sale and gets lost among holds and deposits.
+      ["listings", "purchases", "viewings"],
     );
   });
 
