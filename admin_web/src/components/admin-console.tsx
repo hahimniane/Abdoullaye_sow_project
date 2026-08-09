@@ -128,6 +128,12 @@ import {
   destinationServiceAvailability,
   type DestinationServiceAvailability,
 } from "@/lib/destination-pricing";
+import {
+  adminAreaIds,
+  roleCapabilityAreas,
+  roleEditableAreas,
+  type AdminCapability,
+} from "@/lib/admin-areas";
 import type { FirestoreRow, Role, UserProfile } from "@/types/admin";
 import { SupportCasesPanel } from "@/components/support/support-cases-panel";
 import {
@@ -136,20 +142,9 @@ import {
   type ActionRunner,
 } from "@/lib/action-confirmation";
 
-const tabs = [
-  "today",
-  "businesses",
-  "people",
-  "marketplace",
-  "operations",
-  "finance",
-  "support",
-  "website",
-  "tools",
-  "settings",
-] as const;
+const tabs = adminAreaIds;
 
-type Tab = (typeof tabs)[number];
+type Tab = string;
 
 function tabForNotification(type: string): Tab {
   switch (type) {
@@ -228,49 +223,31 @@ function businessOffersService(
 // are stored in Firestore (platformConfig/permissions). Each role grants each
 // console SECTION an access level ("none" | "view" | "manage") AND may be
 // limited to a set of platform SERVICES. The backend reads the same config.
-type AdminCapability =
-  | "users"
-  | "businesses"
-  | "marketplace"
-  | "operations"
-  | "finance"
-  | "support"
-  | "website";
 type AccessLevel = "none" | "view" | "manage";
 
+// Derived, never hand-listed: a new area declared in admin-areas.ts becomes
+// something a role can be granted without anyone editing this file. Getting
+// that wrong shipped areas no role could ever reach.
 const EDITABLE_SECTIONS: Array<{
   tab: Tab;
   key: string;
   cap: AdminCapability;
   label: string;
-}> = [
-  { tab: "people", key: "people", cap: "users", label: "People & access" },
-  {
-    tab: "businesses",
-    key: "businesses",
-    cap: "businesses",
-    label: "Businesses",
-  },
-  {
-    tab: "marketplace",
-    key: "marketplace",
-    cap: "marketplace",
-    label: "Marketplace",
-  },
-  {
-    tab: "operations",
-    key: "operations",
-    cap: "operations",
-    label: "Operations",
-  },
-  { tab: "finance", key: "finance", cap: "finance", label: "Finance" },
-  { tab: "website", key: "website", cap: "website", label: "Website" },
-];
+}> = roleEditableAreas.map((area) => ({
+  tab: area.id,
+  key: area.id,
+  cap: area.cap as AdminCapability,
+  label: area.label,
+}));
 const EDITABLE_CAPS: Array<{
   key: string;
   cap: AdminCapability;
   label: string;
-}> = [{ key: "support", cap: "support", label: "Reply to support requests" }];
+}> = roleCapabilityAreas.map((area) => ({
+  key: area.id,
+  cap: area.cap as AdminCapability,
+  label: area.label,
+}));
 const ACCESS_LEVELS: AccessLevel[] = ["none", "view", "manage"];
 
 // Canonical platform services a role can be scoped to.
@@ -358,18 +335,7 @@ const DEFAULT_ROLES: Record<string, RoleConfig> = {
   },
 };
 
-const SUPER_ADMIN_TABS: Tab[] = [
-  "today",
-  "businesses",
-  "people",
-  "marketplace",
-  "operations",
-  "finance",
-  "support",
-  "website",
-  "tools",
-  "settings",
-];
+const SUPER_ADMIN_TABS: Tab[] = adminAreaIds;
 
 type Perms = {
   role: string;
