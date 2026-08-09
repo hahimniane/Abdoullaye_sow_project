@@ -12237,5 +12237,15 @@ button[data-loading="true"]::before {
 
 .service-rule-tabs .segment {
   align-items: flex-start;
+  cursor: pointer;
   flex: 0 1 auto;
+}
+
+/* The description beside each label. .service-segments styles a <b> count
+   badge for the operations view; these carry words instead, so they need
+   toning down against the bold label they sit next to. */
+.service-rule-tabs .segment small {
+  font-size: 12.5px;
+  font-weight: 400;
+  opacity: 0.75;
 }

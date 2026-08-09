@@ -818,7 +818,7 @@ export function BusinessServicesPanel({
               off never shows one. */}
           <div
             aria-label="Service rules"
-            className="service-rule-tabs"
+            className="service-segments service-rule-tabs"
             role="tablist"
           >
             {/* Spans rather than buttons, for the same reason FieldInfo uses
