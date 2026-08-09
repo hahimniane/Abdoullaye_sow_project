@@ -12223,3 +12223,19 @@ button[data-loading="true"]::before {
   display: inline-flex;
   gap: 2px;
 }
+
+/* Service rules, one group at a time. Same segmented control the admin
+   settings and operations views use, so it reads as the same idea rather than
+   a new one. Wraps rather than scrolls: a business with five services should
+   see every tab without hunting for the rest. */
+.service-rule-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 14px 0;
+}
+
+.service-rule-tabs .segment {
+  align-items: flex-start;
+  flex: 0 1 auto;
+}

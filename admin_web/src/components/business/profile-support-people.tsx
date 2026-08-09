@@ -652,6 +652,37 @@ export function BusinessServicesPanel({
     ),
   );
   const offersPickup = enabledPickupServices.length > 0;
+
+  // Built from what the business offers, so a tab never appears for a service
+  // that is switched off, and turning one on makes its rules reachable without
+  // anything else changing.
+  const ruleTabs = useMemo(() => {
+    const tabs: Array<{id: string; label: string; hint: string}> = [];
+    if (offersCarSales) {
+      tabs.push({id: "carSales", label: "Car sales", hint: "Paid holds"});
+    }
+    if (offersFreight) {
+      tabs.push({id: "freight", label: "Freight", hint: "What you carry"});
+    }
+    if (offersParking) {
+      tabs.push({id: "parking", label: "Car parking", hint: "Facility"});
+    }
+    if (offersPickup) {
+      tabs.push({id: "pickup", label: "Home pickup", hint: "All services"});
+    }
+    return tabs;
+  }, [offersCarSales, offersFreight, offersParking, offersPickup]);
+
+  const [activeRuleTab, setActiveRuleTab] = useState("");
+  // Keep the selection valid: a business that turns off the service it was
+  // looking at would otherwise be left staring at an empty panel.
+  useEffect(() => {
+    if (ruleTabs.length === 0) return;
+    if (!ruleTabs.some((tab) => tab.id === activeRuleTab)) {
+      setActiveRuleTab(ruleTabs[0].id);
+    }
+  }, [ruleTabs, activeRuleTab]);
+
   const parkingIsUnitedStates =
     draft.parkingCountry.trim() === "United States";
   const language = currentWebLanguage() === "fr" ? "fr" : "en";
@@ -779,8 +810,46 @@ export function BusinessServicesPanel({
             </div>
           )}
 
+          {/* One group at a time. These four cards used to stack into a single
+              scroll, so a business changing its freight prices scrolled past
+              hold fees, pickup rules and parking capacity to reach them - and
+              the card it wanted was the one furthest down. Tabs are built from
+              what the business actually offers, so a service that is switched
+              off never shows one. */}
+          <div
+            aria-label="Service rules"
+            className="service-rule-tabs"
+            role="tablist"
+          >
+            {/* Spans rather than buttons, for the same reason FieldInfo uses
+                one: this panel wraps its form in a disabled fieldset for
+                read-only viewers, and a disabled fieldset disables every
+                descendant form control. As buttons these tabs stopped working
+                for exactly the people who can only read - leaving them worse
+                off than the single scroll this replaced. Choosing what to look
+                at is navigation, not editing. */}
+            {ruleTabs.map((tab) => (
+              <span
+                aria-selected={activeRuleTab === tab.id}
+                className={`segment ${activeRuleTab === tab.id ? "active" : ""}`}
+                key={tab.id}
+                onClick={() => setActiveRuleTab(tab.id)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  setActiveRuleTab(tab.id);
+                }}
+                role="tab"
+                tabIndex={0}
+              >
+                <span>{tab.label}</span>
+                <small>{tab.hint}</small>
+              </span>
+            ))}
+          </div>
+
           <div className="service-config-grid">
-            {offersCarSales && (
+            {offersCarSales && activeRuleTab === "carSales" && (
               <article className="service-config-card">
                 <header className="service-config-card-head">
                   <span className="service-config-icon"><Car size={21} /></span>
@@ -851,7 +920,7 @@ export function BusinessServicesPanel({
               </article>
             )}
 
-            {offersPickup && (
+            {offersPickup && activeRuleTab === "pickup" && (
               <article className="service-config-card service-config-card-wide">
                 <header className="service-config-card-head">
                   <span className="service-config-icon"><Truck size={21} /></span>
@@ -939,7 +1008,7 @@ export function BusinessServicesPanel({
               </article>
             )}
 
-            {offersFreight && (
+            {offersFreight && activeRuleTab === "freight" && (
               <FreightGoodsEditor
                 draft={draft.freight}
                 onAddCategory={() =>
@@ -963,7 +1032,7 @@ export function BusinessServicesPanel({
               />
             )}
 
-            {offersParking && (
+            {offersParking && activeRuleTab === "parking" && (
               <article className="service-config-card service-config-card-wide">
                 <header className="service-config-card-head">
                   <span className="service-config-icon">
