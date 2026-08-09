@@ -31,7 +31,7 @@ import {
   getYears,
 } from "@/lib/car-catalog";
 import { DESTINATION_COUNTRIES } from "@/lib/destination-countries";
-import { Car, CircleAlert, CircleDollarSign, ClipboardList, Headphones, Home, LogOut, Menu, PackageSearch, Pencil, Settings, ShieldCheck, Ship, Star, Truck, UserRound } from "lucide-react";
+import { CalendarClock, Car, CircleAlert, CircleDollarSign, ClipboardList, Headphones, Home, LogOut, Menu, PackageSearch, Pencil, Settings, ShieldCheck, Ship, Star, Truck, UserRound } from "lucide-react";
 
 import { auth, db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
@@ -69,6 +69,7 @@ type CustomerTab =
   | "services"
   | "parkingPools"
   | "cars"
+  | "viewings"
   | "orders"
   | "support"
   | "profile";
@@ -114,6 +115,7 @@ const tabs: Array<{
   { id: "services", label: "Shipping services", description: "Barrels, freight, and car transport", icon: Ship },
   { id: "parkingPools", label: "Parking & shared barrels", description: "Reserve space or join a pool", icon: PackageSearch },
   { id: "cars", label: "Browse cars", description: "Listings from approved businesses", icon: Car },
+  { id: "viewings", label: "Car viewings", description: "Appointments to see a car", icon: CalendarClock },
   { id: "orders", label: "Orders & tracking", description: "Shipping and vehicle services", icon: ClipboardList },
   { id: "support", label: "Support", description: "Messages about your orders", icon: Headphones },
   { id: "profile", label: "Profile", description: "Account and security", icon: UserRound },
@@ -141,6 +143,10 @@ function targetForNotification(
     case "support_message":
     case "support_escalated":
       return {tab: "support"};
+    case "car_viewing_status":
+      // Viewings are not purchases and no longer live under Orders. Without
+      // this case the type fell through to the default and landed on Home.
+      return {tab: "viewings", focus};
     case "car_purchase_status":
     case "barrel_shipment_status":
     case "freight_shipment_status":
@@ -200,6 +206,18 @@ export function CustomerConsole({
       ...tagRows(purchases.rows, "Car purchase", "carPurchases", CircleDollarSign),
     ].sort((a, b) => rowTime(b.row) - rowTime(a.row)),
     [freight.rows, parking.rows, purchases.rows, shipments.rows, transports.rows],
+  );
+
+  // A viewing is an appointment, not a purchase: nothing is bought and no
+  // money moves. Mixing the two put "arrange to see a car" in the same list as
+  // "money you have paid", which read as though a viewing were an order.
+  const viewingOrders = useMemo(
+    () => allOrders.filter((order) => carPurchaseIsViewing(order.row)),
+    [allOrders],
+  );
+  const nonViewingOrders = useMemo(
+    () => allOrders.filter((order) => !carPurchaseIsViewing(order.row)),
+    [allOrders],
   );
 
   const dataLoading = [shipments, freight, transports, parking, purchases].some(
@@ -358,12 +376,20 @@ export function CustomerConsole({
               profile={profile}
             />
           )}
+          {activeTab === "viewings" && (
+            <OrderPanel
+              loading={dataLoading}
+              orders={viewingOrders}
+              title="Car viewings"
+              uid={firebaseUser.uid}
+            />
+          )}
           {activeTab === "orders" && (
             <OrdersView
               focusedRecord={focusedRecord}
               onFocusConsumed={() => setFocusedRecord(null)}
               loading={dataLoading}
-              orders={allOrders}
+              orders={nonViewingOrders}
               trackedShipments={[
                 ...shipments.rows.map((row) => ({
                   ...row,

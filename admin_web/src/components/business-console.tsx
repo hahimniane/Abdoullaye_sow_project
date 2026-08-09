@@ -127,6 +127,10 @@ function tabForNotification(
       return "freight";
     case "parking_reservation_status":
       return "parking";
+    case "car_viewing_status":
+      // Viewing requests are worked from the purchases queue, where the
+      // negotiation controls live. Unmapped, this fell through to "today".
+      return "purchases";
     case "transport_opportunity":
     case "transport_request_status":
     case "transport_quote_won":
