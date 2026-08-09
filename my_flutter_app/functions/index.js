@@ -22781,8 +22781,10 @@ async function viewingActorFor(uid, purchase) {
   if (uid && uid === String(purchase.buyerUid || "")) {
     return VIEWING_ACTOR_CUSTOMER;
   }
+  // "purchases" is the section these records live under, and the permission
+  // staff are actually granted - there is no "sales" section in this system.
   await requireBusinessPermission(uid, String(purchase.businessId || ""),
-      "sales");
+      "purchases");
   return VIEWING_ACTOR_BUSINESS;
 }
 

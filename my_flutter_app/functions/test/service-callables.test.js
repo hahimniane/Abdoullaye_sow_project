@@ -2532,7 +2532,7 @@ describe("car sales service callable lifecycle", () => {
 
     // The business accepting is what actually schedules it.
     const sales = await seedFreightManager(businessId, {
-      permissions: ["sales"],
+      permissions: ["purchases"],
     });
     await functions.actOnCarViewing.run({
       auth: {uid: sales.uid},
