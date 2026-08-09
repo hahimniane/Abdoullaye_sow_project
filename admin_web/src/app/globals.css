@@ -12100,3 +12100,81 @@ button[data-loading="true"]::before {
   .assistant-widget-launcher,
   .assistant-widget-panel { transition: none; }
 }
+
+/* Detail on demand: an "i" beside a label, and the explanation it reveals.
+   See components/field-info.tsx for when to reach for this instead of a
+   permanent banner. */
+.field-info {
+  display: inline-flex;
+  position: relative;
+  vertical-align: middle;
+}
+
+.field-info-button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid rgba(15, 118, 110, 0.35);
+  border-radius: 999px;
+  color: #0f766e;
+  cursor: pointer;
+  display: inline-flex;
+  height: 20px;
+  justify-content: center;
+  margin-left: 6px;
+  padding: 0;
+  width: 20px;
+}
+
+.field-info-button:hover,
+.field-info-button.active {
+  background: rgba(15, 118, 110, 0.12);
+}
+
+.field-info-button:focus-visible {
+  outline: 2px solid #0f766e;
+  outline-offset: 2px;
+}
+
+.field-info-bubble {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  color: #334155;
+  display: block;
+  font-size: 13px;
+  font-weight: 400;
+  left: 0;
+  line-height: 1.5;
+  max-width: min(320px, 78vw);
+  padding: 10px 12px;
+  position: absolute;
+  top: 26px;
+  width: max-content;
+  z-index: 40;
+}
+
+.field-info-bubble p {
+  margin: 0 0 6px;
+}
+
+.field-info-bubble p:last-child {
+  margin-bottom: 0;
+}
+
+/* One plain sentence above a form, replacing the amber banners that used to
+   explain fields in implementation terms. Detail lives behind .field-info. */
+.panel-lede {
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 14px 14px 0;
+}
+
+/* Keeps a field label and its "i" on one line, so the explanation opens
+   beside the label rather than on top of the input it describes. */
+.label-with-info {
+  align-items: center;
+  display: inline-flex;
+  gap: 2px;
+}

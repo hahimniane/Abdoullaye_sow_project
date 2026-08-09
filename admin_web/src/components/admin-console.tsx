@@ -135,6 +135,7 @@ import {
   type AdminCapability,
 } from "@/lib/admin-areas";
 import type { FirestoreRow, Role, UserProfile } from "@/types/admin";
+import { FieldInfo } from "@/components/field-info";
 import { SupportCasesPanel } from "@/components/support/support-cases-panel";
 import {
   confirmImportantAction,
@@ -5731,14 +5732,22 @@ function MoreSettings({
           </button>
         }
       >
-        <div className="info-band">
-          This percentage is kept by the platform from each paid customer
-          transaction before calculating the business payout. It is saved to the
-          live payment pricing record used by backend checkout functions.
-        </div>
         <div className="settings-form narrow">
           <label>
-            Platform fee (%)
+            <span className="label-with-info">
+              Platform fee (%)
+              <FieldInfo label="what the platform fee does">
+              <p>
+                Your cut of every customer payment. A 10% fee on a $200 job
+                keeps $20 and pays the business $180.
+              </p>
+              <p>
+                Applies to every service unless a business or a service has its
+                own rate. Changing it affects payments from now on, not ones
+                already taken.
+              </p>
+              </FieldInfo>
+            </span>
             <input
               inputMode="decimal"
               min="0.01"
@@ -5777,13 +5786,20 @@ function MoreSettings({
           </div>
         }
       >
-        <div className="info-band">
-          <span>
-            Business overrides are used before the default platform transaction
-            fee.
-          </span>{" "}
-          <span>Current default</span>: <b>{defaultPlatformFeeLabel}</b>.
-        </div>
+        <p className="panel-lede">
+          Charge one business a different rate from everyone else. Default
+          today is <b>{defaultPlatformFeeLabel}</b>.
+          <FieldInfo label="how a business rate is chosen">
+            <p>
+              A business with its own rate uses it. Everyone else uses the
+              platform default.
+            </p>
+            <p>
+              A per-service rate, set below, beats both - so a business could
+              pay 8% on most work and 5% on parking.
+            </p>
+          </FieldInfo>
+        </p>
         <div className="commission-toolbar">
           <SearchBox
             value={businessFeeSearch}
@@ -5991,21 +6007,21 @@ function MoreSettings({
           </button>
         }
       >
-        <div className="info-band">
-          <p>
-            A rate set here applies to one service only. Every other service
-            keeps the blanket rate for this business, and services with no rate
-            of their own fall back to the platform default.
-          </p>
-          <p>
-            <span>Leave a box empty to inherit</span>.{" "}
-            <span>
-              An empty box removes the override; 0% is a real rate that takes
-              nothing.
-            </span>{" "}
-            <span>Current default</span>: <b>{defaultPlatformFeeLabel}</b>.
-          </p>
-        </div>
+        <p className="panel-lede">
+          Charge a different rate for one service. Leave a box empty to use the
+          business&apos;s usual rate. Default today is{" "}
+          <b>{defaultPlatformFeeLabel}</b>.
+          <FieldInfo label="how per-service rates work">
+            <p>
+              A rate here applies to that service only. Everything else keeps
+              the business&apos;s usual rate.
+            </p>
+            <p>
+              Empty is not the same as zero. Empty means &quot;use the usual
+              rate&quot;; <b>0% means you take nothing</b> on that service.
+            </p>
+          </FieldInfo>
+        </p>
         <div className="commission-toolbar">
           <SearchableSelect
             emptyMessage="No businesses match your search."
