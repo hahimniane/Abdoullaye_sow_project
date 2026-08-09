@@ -4836,6 +4836,11 @@ export function PurchasesPanel({
   const [noteById, setNoteById] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  // A filter picked on one queue must not survive into the other, where it
+  // would match nothing and read as an empty queue rather than a stale filter.
+  useEffect(() => {
+    setFilter("all");
+  }, [scope]);
   const [message, setMessage] = useState("");
   const [busyId, setBusyId] = useState("");
   // One clock for the whole panel. Every viewing window is measured against
@@ -4928,7 +4933,12 @@ export function PurchasesPanel({
     );
   }
 
-  const statusFilters = ["all", "needs_action", "holds", "viewings", "reserved", "hold_review_required", "viewing_requested", "viewing_countered", "viewing_scheduled", "viewing_declined", "viewing_expired", "completed", "cancelled", "refunded", "no_show", "forfeited"];
+  // Each queue offers only filters that can actually match it. Leaving the
+  // viewing statuses on the purchases tab - or the hold ones on viewings -
+  // gives an operator options that silently return nothing.
+  const statusFilters = scope === "viewings" ?
+    ["all", "needs_action", "viewing_requested", "viewing_countered", "viewing_scheduled", "viewing_declined", "viewing_expired", "completed", "cancelled", "no_show"] :
+    ["all", "needs_action", "holds", "reserved", "hold_review_required", "completed", "cancelled", "refunded", "no_show", "forfeited"];
 
   return (
     <section className="lst">

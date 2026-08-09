@@ -72,7 +72,13 @@ test("a viewing waiting on the business is visible without going looking for it"
     operationsSource,
     /function purchaseNeedsAction[\s\S]*?viewingAwaitingParty\(text\(row\.purchaseStatus, ""\)\) === "business"/,
   );
-  // And each new status is filterable in its own right.
+  // And each new status is filterable in its own right. The filter list is
+  // split by queue - viewings and purchases each offer only what can match
+  // them - so the assertion is against the viewings branch.
+  const viewingFilters = operationsSource.match(
+    /scope === "viewings" \?\s*\[([^\]]*)\]/,
+  );
+  assert.ok(viewingFilters, "the viewings queue has no filter list");
   for (const status of [
     "viewing_requested",
     "viewing_countered",
@@ -80,12 +86,22 @@ test("a viewing waiting on the business is visible without going looking for it"
     "viewing_declined",
     "viewing_expired",
   ]) {
-    assert.match(
-      operationsSource,
-      new RegExp(`const statusFilters = \\[[^\\]]*"${status}"`),
-      `${status} is not offered as a filter`,
+    assert.ok(
+      viewingFilters[1].includes(`"${status}"`),
+      `${status} is not offered as a filter on the viewings queue`,
     );
   }
+
+  // The purchases queue must not offer them: they can never match there now
+  // that viewings have their own tab, so they would return an empty list.
+  const purchaseFilters = operationsSource.match(
+    /:\s*\["all", "needs_action", "holds"([^\]]*)\]/,
+  );
+  assert.ok(purchaseFilters, "the purchases queue has no filter list");
+  assert.ok(
+    !purchaseFilters[1].includes("viewing_"),
+    "the purchases queue still offers viewing filters that cannot match",
+  );
 });
 
 test("the business card shows who is waited on, by when, and what is on the table", () => {
