@@ -4955,12 +4955,14 @@ function SettingsView({
   }
 
   const roleKeys = Object.keys(draft);
+  const [settingsSection, setSettingsSection] =
+    useState<SettingsSection>("access");
 
   return (
     <div className="stack">
       <SectionIntro
         title="Settings"
-        description="Configure how the console works. Create roles, decide what each one can see and do, and limit them to specific services."
+        description="Configure how the console works. Pick a group below - each one holds the settings that answer the same question."
         stats={[
           ["Roles", String(roleKeys.length + 1)],
           ["Services", String(PLATFORM_SERVICES.length)],
@@ -4968,6 +4970,27 @@ function SettingsView({
         ]}
       />
 
+      <div
+        className="service-segments"
+        role="tablist"
+        aria-label="Settings groups"
+      >
+        {settingsSections.map((entry) => (
+          <button
+            key={entry.id}
+            aria-selected={settingsSection === entry.id}
+            className={`segment ${settingsSection === entry.id ? "active" : ""}`}
+            onClick={() => setSettingsSection(entry.id)}
+            role="tab"
+            type="button"
+          >
+            <span>{entry.label}</span>
+            <small>{entry.hint}</small>
+          </button>
+        ))}
+      </div>
+
+      {settingsSection === "access" && (
       <Panel
         title="Roles & permissions"
         icon={<Shield size={18} />}
@@ -5133,8 +5156,10 @@ function SettingsView({
           })}
         </div>
       </Panel>
+      )}
 
       <MoreSettings
+        section={settingsSection}
         businesses={businesses}
         currentUserId={currentUserId}
         notificationDeliveries={notificationDeliveries}
@@ -5295,6 +5320,27 @@ function mergeGeneral(
   };
 }
 
+/**
+ * Settings used to be one continuous scroll of eleven unrelated panels -
+ * roles, rates, branding, notifications - about 1,700 lines of it, with the
+ * permissions matrix alone tall enough that everything after it was below a
+ * wall. Nothing here changes what any setting does; it groups them by the
+ * question being answered so one is in view at a time and new settings have an
+ * obvious home instead of the bottom of the page.
+ */
+type SettingsSection = "access" | "money" | "platform" | "notifications";
+
+const settingsSections: Array<{
+  id: SettingsSection;
+  label: string;
+  hint: string;
+}> = [
+  {id: "access", label: "Roles & access", hint: "Who can do what"},
+  {id: "money", label: "Fees & commission", hint: "What the platform takes"},
+  {id: "platform", label: "Platform", hint: "Branding, features, applications"},
+  {id: "notifications", label: "Notifications", hint: "Delivery and preferences"},
+];
+
 function MoreSettings({
   businesses,
   currentUserId,
@@ -5304,6 +5350,7 @@ function MoreSettings({
   pricing,
   previewMode,
   runAction,
+  section,
 }: {
   businesses: FirestoreRow[];
   currentUserId: string;
@@ -5313,6 +5360,7 @@ function MoreSettings({
   pricing: FirestoreRow[];
   previewMode: boolean;
   runAction: ActionRunner;
+  section: SettingsSection;
 }) {
   const [draft, setDraft] = useState<GeneralSettings>(() =>
     mergeGeneral(undefined),
@@ -5661,6 +5709,7 @@ function MoreSettings({
 
   return (
     <>
+      {section === "platform" && (
       <Panel
         title="Feature availability"
         icon={<SlidersHorizontal size={18} />}
@@ -5693,7 +5742,9 @@ function MoreSettings({
           />
         </div>
       </Panel>
+      )}
 
+      {section === "money" && (
       <Panel
         title="Platform transaction fee"
         icon={<BadgeDollarSign size={18} />}
@@ -5735,7 +5786,9 @@ function MoreSettings({
           </label>
         </div>
       </Panel>
+      )}
 
+      {section === "money" && (
       <Panel
         title="Business commission overrides"
         icon={<Building2 size={18} />}
@@ -5945,7 +5998,9 @@ function MoreSettings({
           )}
         </div>
       </Panel>
+      )}
 
+      {section === "money" && (
       <Panel
         title="Per-service commission overrides"
         icon={<BadgeDollarSign size={18} />}
@@ -6096,7 +6151,9 @@ function MoreSettings({
           </div>
         )}
       </Panel>
+      )}
 
+      {section === "platform" && (
       <Panel
         title="Internal platform branding"
         icon={<Store size={18} />}
@@ -6166,7 +6223,9 @@ function MoreSettings({
           </label>
         </div>
       </Panel>
+      )}
 
+      {section === "platform" && (
       <Panel
         title="Business application requirements"
         icon={<Building2 size={18} />}
@@ -6220,7 +6279,9 @@ function MoreSettings({
           />
         </div>
       </Panel>
+      )}
 
+      {section === "notifications" && (
       <Panel
         title="Notifications & email preferences"
         icon={<Send size={18} />}
@@ -6426,7 +6487,9 @@ function MoreSettings({
           />
         </div>
       </Panel>
+      )}
 
+      {section === "notifications" && (
       <Panel
         title="Notification delivery audit"
         icon={<ClipboardList size={18} />}
@@ -6565,6 +6628,7 @@ function MoreSettings({
           )}
         </div>
       </Panel>
+      )}
     </>
   );
 }
