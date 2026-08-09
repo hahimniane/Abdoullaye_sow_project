@@ -2444,6 +2444,12 @@ abstract class AppLocalizations {
   /// **'My Purchases'**
   String get myPurchases;
 
+  /// No description provided for @hubViewingsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Appointments to see a car'**
+  String get hubViewingsSubtitle;
+
   /// No description provided for @myCarViewings.
   ///
   /// In en, this message translates to:
@@ -12185,6 +12191,198 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Send'**
   String get viewingSendProposal;
+
+  /// No description provided for @freightCategoryQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'What\'s in the parcel?'**
+  String get freightCategoryQuestion;
+
+  /// No description provided for @freightCategoryHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Businesses charge more for what costs more to replace.'**
+  String get freightCategoryHelp;
+
+  /// No description provided for @freightCategoryGeneral.
+  ///
+  /// In en, this message translates to:
+  /// **'General goods'**
+  String get freightCategoryGeneral;
+
+  /// No description provided for @freightCategoryGeneralHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Household items, gifts, anything not listed below'**
+  String get freightCategoryGeneralHint;
+
+  /// No description provided for @freightCategoryClothing.
+  ///
+  /// In en, this message translates to:
+  /// **'Clothes and fabric'**
+  String get freightCategoryClothing;
+
+  /// No description provided for @freightCategoryClothingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Clothing, shoes, cloth, bedding'**
+  String get freightCategoryClothingHint;
+
+  /// No description provided for @freightCategoryFood.
+  ///
+  /// In en, this message translates to:
+  /// **'Food'**
+  String get freightCategoryFood;
+
+  /// No description provided for @freightCategoryFoodHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Dry and packaged food only'**
+  String get freightCategoryFoodHint;
+
+  /// No description provided for @freightCategoryDocuments.
+  ///
+  /// In en, this message translates to:
+  /// **'Documents'**
+  String get freightCategoryDocuments;
+
+  /// No description provided for @freightCategoryDocumentsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Papers, certificates, printed matter'**
+  String get freightCategoryDocumentsHint;
+
+  /// No description provided for @freightCategoryCosmetics.
+  ///
+  /// In en, this message translates to:
+  /// **'Cosmetics and liquids'**
+  String get freightCategoryCosmetics;
+
+  /// No description provided for @freightCategoryCosmeticsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Creams, perfumes, hair products'**
+  String get freightCategoryCosmeticsHint;
+
+  /// No description provided for @freightCategoryElectronics.
+  ///
+  /// In en, this message translates to:
+  /// **'Electronics'**
+  String get freightCategoryElectronics;
+
+  /// No description provided for @freightCategoryElectronicsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Phones, laptops, tablets, chargers'**
+  String get freightCategoryElectronicsHint;
+
+  /// No description provided for @freightCategoryFragile.
+  ///
+  /// In en, this message translates to:
+  /// **'Fragile items'**
+  String get freightCategoryFragile;
+
+  /// No description provided for @freightCategoryFragileHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Glass, ceramics, anything breakable'**
+  String get freightCategoryFragileHint;
+
+  /// No description provided for @freightCategoryStandardRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Standard rate'**
+  String get freightCategoryStandardRate;
+
+  /// No description provided for @freightCategoryRateMultiplier.
+  ///
+  /// In en, this message translates to:
+  /// **'{multiplier} the per-kg rate'**
+  String freightCategoryRateMultiplier(Object multiplier);
+
+  /// No description provided for @freightCoverageNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No coverage'**
+  String get freightCoverageNone;
+
+  /// No description provided for @freightCoverageCoversUpTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Covers up to {amount} · {rate}'**
+  String freightCoverageCoversUpTo(Object amount, Object rate);
+
+  /// No description provided for @freightCoverageCoversLoss.
+  ///
+  /// In en, this message translates to:
+  /// **'Covers loss · {rate}'**
+  String freightCoverageCoversLoss(Object rate);
+
+  /// No description provided for @freightCoverageSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'If it goes missing'**
+  String get freightCoverageSectionTitle;
+
+  /// No description provided for @freightCoverageQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Is anything worth more than {amount}?'**
+  String freightCoverageQuestion(Object amount);
+
+  /// No description provided for @freightCoverageQuestionHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Only you know what is in the box, so only you can say what it would cost to replace.'**
+  String get freightCoverageQuestionHelp;
+
+  /// No description provided for @freightDeclaredValueLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Replacement value'**
+  String get freightDeclaredValueLabel;
+
+  /// No description provided for @freightDeclaredValueHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'What you declare is also the most that can be paid back, so declare it honestly.'**
+  String get freightDeclaredValueHelper;
+
+  /// No description provided for @freightCoverageFeeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Coverage fee'**
+  String get freightCoverageFeeLabel;
+
+  /// No description provided for @freightCoverageEnterValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter what it is worth to see the coverage fee.'**
+  String get freightCoverageEnterValue;
+
+  /// No description provided for @freightCoveragePaysUpTo.
+  ///
+  /// In en, this message translates to:
+  /// **'{businessName} pays you up to {amount} if this parcel is lost.'**
+  String freightCoveragePaysUpTo(Object businessName, Object amount);
+
+  /// No description provided for @freightCoverageWhoPays.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol records this agreement. {businessName} is the business that pays.'**
+  String freightCoverageWhoPays(Object businessName);
+
+  /// No description provided for @freightCoverageNotOffered.
+  ///
+  /// In en, this message translates to:
+  /// **'{businessName} does not cover lost parcels. If this parcel goes missing, nothing is paid back.'**
+  String freightCoverageNotOffered(Object businessName);
+
+  /// No description provided for @freightCoverageCarriesUpTo.
+  ///
+  /// In en, this message translates to:
+  /// **'{businessName} carries parcels worth up to {amount}.'**
+  String freightCoverageCarriesUpTo(Object businessName, Object amount);
 }
 
 class _AppLocalizationsDelegate

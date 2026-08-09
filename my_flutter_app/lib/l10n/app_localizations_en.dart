@@ -1278,6 +1278,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get myPurchases => 'My Purchases';
 
   @override
+  String get hubViewingsSubtitle => 'Appointments to see a car';
+
+  @override
   String get myCarViewings => 'Car viewings';
 
   @override
@@ -6802,4 +6805,124 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get viewingSendProposal => 'Send';
+
+  @override
+  String get freightCategoryQuestion => 'What\'s in the parcel?';
+
+  @override
+  String get freightCategoryHelp =>
+      'Businesses charge more for what costs more to replace.';
+
+  @override
+  String get freightCategoryGeneral => 'General goods';
+
+  @override
+  String get freightCategoryGeneralHint =>
+      'Household items, gifts, anything not listed below';
+
+  @override
+  String get freightCategoryClothing => 'Clothes and fabric';
+
+  @override
+  String get freightCategoryClothingHint => 'Clothing, shoes, cloth, bedding';
+
+  @override
+  String get freightCategoryFood => 'Food';
+
+  @override
+  String get freightCategoryFoodHint => 'Dry and packaged food only';
+
+  @override
+  String get freightCategoryDocuments => 'Documents';
+
+  @override
+  String get freightCategoryDocumentsHint =>
+      'Papers, certificates, printed matter';
+
+  @override
+  String get freightCategoryCosmetics => 'Cosmetics and liquids';
+
+  @override
+  String get freightCategoryCosmeticsHint => 'Creams, perfumes, hair products';
+
+  @override
+  String get freightCategoryElectronics => 'Electronics';
+
+  @override
+  String get freightCategoryElectronicsHint =>
+      'Phones, laptops, tablets, chargers';
+
+  @override
+  String get freightCategoryFragile => 'Fragile items';
+
+  @override
+  String get freightCategoryFragileHint =>
+      'Glass, ceramics, anything breakable';
+
+  @override
+  String get freightCategoryStandardRate => 'Standard rate';
+
+  @override
+  String freightCategoryRateMultiplier(Object multiplier) {
+    return '$multiplier the per-kg rate';
+  }
+
+  @override
+  String get freightCoverageNone => 'No coverage';
+
+  @override
+  String freightCoverageCoversUpTo(Object amount, Object rate) {
+    return 'Covers up to $amount · $rate';
+  }
+
+  @override
+  String freightCoverageCoversLoss(Object rate) {
+    return 'Covers loss · $rate';
+  }
+
+  @override
+  String get freightCoverageSectionTitle => 'If it goes missing';
+
+  @override
+  String freightCoverageQuestion(Object amount) {
+    return 'Is anything worth more than $amount?';
+  }
+
+  @override
+  String get freightCoverageQuestionHelp =>
+      'Only you know what is in the box, so only you can say what it would cost to replace.';
+
+  @override
+  String get freightDeclaredValueLabel => 'Replacement value';
+
+  @override
+  String get freightDeclaredValueHelper =>
+      'What you declare is also the most that can be paid back, so declare it honestly.';
+
+  @override
+  String get freightCoverageFeeLabel => 'Coverage fee';
+
+  @override
+  String get freightCoverageEnterValue =>
+      'Enter what it is worth to see the coverage fee.';
+
+  @override
+  String freightCoveragePaysUpTo(Object businessName, Object amount) {
+    return '$businessName pays you up to $amount if this parcel is lost.';
+  }
+
+  @override
+  String freightCoverageWhoPays(Object businessName) {
+    return 'Laawol records this agreement. $businessName is the business that pays.';
+  }
+
+  @override
+  String freightCoverageNotOffered(Object businessName) {
+    return '$businessName does not cover lost parcels. If this parcel goes missing, nothing is paid back.';
+  }
+
+  @override
+  String freightCoverageCarriesUpTo(Object businessName, Object amount) {
+    return '$businessName carries parcels worth up to $amount.';
+  }
 }

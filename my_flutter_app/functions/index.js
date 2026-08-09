@@ -10,6 +10,34 @@ const {defineSecret} = require("firebase-functions/params");
 const crypto = require("crypto");
 const QRCode = require("qrcode");
 const {buildTrackingCode} = require("./tracking_code");
+/** Category setting refusals, in words a business owner can act on. */
+const FREIGHT_CATEGORY_ERRORS = {
+  unknown_category: "That is not one of the standard categories",
+  multiplier_out_of_range: "A rate must be between 0.5x and 10x",
+  too_many_categories: "You can add up to six categories of your own",
+  duplicate_category: "Two of your categories have the same name",
+  custom_category_invalid: "Every category needs a name",
+  rates_invalid: "Those category rates could not be read",
+  custom_invalid: "Your category list could not be read",
+};
+/** Coverage setting refusals, likewise. */
+const FREIGHT_COVERAGE_ERRORS = {
+  rate_out_of_range: "Coverage can cost between 0% and 10% of declared value",
+  max_out_of_range: "The most you can carry is $10,000 per parcel",
+  rate_required_when_covering:
+    "Set what coverage costs, or turn coverage off - covering parcels at no " +
+    "charge means paying out money you never collected",
+};
+const {
+  freightCategoriesForBusiness,
+  freightCategoryMultiplier,
+  validateFreightCategorySettings,
+} = require("./freight_categories");
+const {
+  freightCoveragePolicy,
+  quoteFreightCoverage,
+  validateFreightCoverageSettings,
+} = require("./freight_coverage");
 const {
   VIEWING_REQUESTED,
   VIEWING_SCHEDULED,
@@ -2972,6 +3000,21 @@ exports.listActiveBarrelDestinationOptions = onCall(
             businessStatus: "approved",
             freightPickupAvailable: offersFreight && pickupConfig.enabled,
             freightPickupModel: pickupConfig.model,
+            // What is in the parcel changes the price, and the customer has
+            // to be able to see how before choosing a business. Per business
+            // rather than per destination: a business charges the same for
+            // electronics wherever it is sending them.
+            freightCategories: offersFreight ?
+              freightCategoriesForBusiness(business) :
+              [],
+            // Shown before a business is chosen, not after. A customer
+            // comparing two businesses should be able to see that one stands
+            // behind the parcel and the other does not - and the business
+            // that does not has to say so before the parcel is lost rather
+            // than after.
+            freightCoverage: offersFreight ?
+              freightCoveragePolicy(business) :
+              null,
             reviewCount: Math.max(0, Math.trunc(Number(
                 business.reviewCount || 0,
             ))),
@@ -8955,6 +8998,9 @@ exports.updateBusinessProfile = onCall(
         freightPickupOriginLat,
         freightPickupOriginLng,
         freightPickupBoroughPrices,
+        freightCategoryRates,
+        freightCustomCategories,
+        freightCoverage,
         pickupPlan,
       } = request.data || {};
       const user = await requireBusinessManager(callerUid, businessId);
@@ -9107,6 +9153,44 @@ exports.updateBusinessProfile = onCall(
         freightPickupBoroughPrices: sanitizeBoroughPrices(
             freightPickupBoroughPrices ?? current.freightPickupBoroughPrices,
         ),
+        // What a business charges for each kind of goods, and whether it
+        // stands behind the parcel. Both are refused outright rather than
+        // silently corrected: a rate saved wrong is money, and a coverage
+        // promise saved wrong is money the business did not collect for.
+        ...(freightCategoryRates === undefined &&
+          freightCustomCategories === undefined ? {} : (() => {
+            const result = validateFreightCategorySettings({
+              rates: freightCategoryRates ?? current.freightCategoryRates ?? {},
+              custom: freightCustomCategories ??
+                current.freightCustomCategories ?? [],
+            });
+            if (!result.ok) {
+              throw new HttpsError(
+                  "invalid-argument",
+                  FREIGHT_CATEGORY_ERRORS[result.error] ||
+                    "Those category settings are not valid",
+              );
+            }
+            return {
+              freightCategoryRates: result.rates,
+              freightCustomCategories: result.custom,
+            };
+          })()),
+        ...(freightCoverage === undefined ? {} : (() => {
+          const result = validateFreightCoverageSettings(freightCoverage);
+          if (!result.ok) {
+            throw new HttpsError(
+                "invalid-argument",
+                FREIGHT_COVERAGE_ERRORS[result.error] ||
+                  "Those coverage settings are not valid",
+            );
+          }
+          return {
+            freightCoverageEnabled: result.freightCoverageEnabled,
+            freightCoverageRatePct: result.freightCoverageRatePct,
+            freightMaxDeclaredValue: result.freightMaxDeclaredValue,
+          };
+        })()),
         ...(pickupPlan === undefined ? {} : (() => {
           // Reject an incomplete plan outright rather than storing a config
           // that silently prices pickup at $0 or blocks every customer.
@@ -20141,6 +20225,8 @@ exports.createFreightShipmentPaymentIntent = onCall(
         businessId,
         mode,
         weightKg,
+        itemCategoryId,
+        declaredValue,
         pickupRequested,
         pickupAddress,
         pickupBorough,
@@ -20222,11 +20308,34 @@ exports.createFreightShipmentPaymentIntent = onCall(
           key: googleMapsApiKey.value(),
         }) :
         {fee: 0, model: null, distanceKm: null, borough: null};
+      // A kilo of phones and a kilo of cloth used to cost the same, which
+      // meant the parcel that is expensive to replace paid nothing extra
+      // toward replacing it. The multiplier rides on top of the destination's
+      // per-kg rate; an unknown or absent category resolves to 1, so a client
+      // that does not send one is priced exactly as before.
+      const categoryMultiplier = freightCategoryMultiplier(
+          business,
+          itemCategoryId,
+      );
       const shippingFee =
-        Math.round(parcelWeightKg * pricePerKg * 100) / 100;
+        Math.round(parcelWeightKg * pricePerKg * categoryMultiplier * 100) /
+        100;
+      // Only the sender knows what is in the box - an iPhone 17 and an old
+      // Samsung are the same category and the same weight. The declared value
+      // is also the cap on what can be paid back, which is what makes the
+      // answer trustworthy without anyone having to check it.
+      const coverage = quoteFreightCoverage({business, declaredValue});
+      if (!coverage.ok) {
+        throw new HttpsError(
+            "failed-precondition",
+            coverage.error === "above_max_declared_value" ?
+              "This business does not carry parcels worth that much" :
+              "That declared value is too high to ship",
+        );
+      }
       const shippingFeeCents = Math.round(shippingFee * 100);
       const pickupFeeCents = Math.round(pickup.fee * 100);
-      const total = shippingFee + pickup.fee;
+      const total = shippingFee + pickup.fee + coverage.coverageFee;
       if (!Number.isFinite(total) || total <= 0) {
         throw new HttpsError("failed-precondition", "Invalid shipment total");
       }
@@ -20275,6 +20384,16 @@ exports.createFreightShipmentPaymentIntent = onCall(
           weightKg: parcelWeightKg,
           pricePerKg,
           pricePerKgCents: Math.round(pricePerKg * 100),
+          itemCategoryId: String(itemCategoryId || ""),
+          itemCategoryMultiplier: categoryMultiplier,
+          declaredValueCents: coverage.declaredValueCents,
+          coverageFeeCents: coverage.coverageFeeCents,
+          coverageCovered: coverage.covered,
+          coveragePayoutCapCents: coverage.payoutCapCents,
+          // A snapshot, not a reference: a claim argued six weeks later has
+          // to be judged on the terms in force when the parcel was handed
+          // over, and a business can change its policy at any time.
+          coveragePolicyAtBooking: coverage.policy,
           customerUid,
           customerEmail: userRecord.email || "",
           pickupRequested: wantsPickup,

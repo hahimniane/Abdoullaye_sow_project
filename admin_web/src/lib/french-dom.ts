@@ -3723,6 +3723,156 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Viewing and action are required": "La visite et l’action sont obligatoires",
 });
 
+// What is in the parcel, what it is worth, and who stands behind it. Three
+// screens share these strings: the business's own settings, the freight
+// booking form, and the card a customer compares businesses on. The category
+// names and hints come back from the server (functions/freight_categories.js)
+// and are rendered verbatim, so they need French here or a French customer
+// picks from an English list.
+Object.assign(TEXT_TRANSLATIONS, {
+  // The platform's category list, as both consoles show it.
+  "General goods": "Marchandises générales",
+  "Household items, gifts, anything not listed below":
+    "Articles ménagers, cadeaux, tout ce qui n’est pas listé ci-dessous",
+  "Clothes and fabric": "Vêtements et tissus",
+  "Clothing, shoes, cloth, bedding":
+    "Vêtements, chaussures, tissu, literie",
+  Food: "Alimentation",
+  "Dry and packaged food only":
+    "Aliments secs et emballés uniquement",
+  "Papers, certificates, printed matter":
+    "Papiers, certificats, imprimés",
+  "Cosmetics and liquids": "Cosmétiques et liquides",
+  "Creams, perfumes, hair products":
+    "Crèmes, parfums, produits capillaires",
+  Electronics: "Électronique",
+  "Phones, laptops, tablets, chargers":
+    "Téléphones, ordinateurs portables, tablettes, chargeurs",
+  "Fragile items": "Objets fragiles",
+  "Glass, ceramics, anything breakable":
+    "Verre, céramique, tout ce qui est cassable",
+  // The business's settings card.
+  "Freight · what you carry": "Fret · ce que vous transportez",
+  "Price each kind of goods, and say whether you pay for a parcel you lose.":
+    "Tarifez chaque type de marchandise et indiquez si vous remboursez un colis perdu.",
+  "Item categories": "Catégories d’articles",
+  "A multiplier rides on top of your per-kg rate for the destination. 2 means a kilo of that costs twice a kilo of general goods; 1 means it costs the same.":
+    "Un multiplicateur s’ajoute à votre tarif au kilo pour la destination. 2 signifie qu’un kilo de cette catégorie coûte deux fois un kilo de marchandises générales ; 1 signifie le même prix.",
+  "The list is the platform’s, so a customer can compare you with another business on the same words. You set what each row is worth to you.":
+    "La liste appartient à la plateforme, afin qu’un client puisse vous comparer à une autre entreprise avec les mêmes mots. Vous fixez ce que chaque ligne vaut pour vous.",
+  "Leave a row at the number it starts on and nothing about your prices changes.":
+    "Laissez une ligne sur son nombre de départ et rien ne change à vos tarifs.",
+  "Your own categories": "Vos propres catégories",
+  "Add one only for goods the standard list genuinely misses - auto parts, building materials, live plants.":
+    "N’en ajoutez que pour des marchandises que la liste standard oublie vraiment : pièces auto, matériaux de construction, plantes vivantes.",
+  "Customers see your extra rows after the standard ones. Up to 6.":
+    "Les clients voient vos lignes supplémentaires après les lignes standard. Jusqu’à 6.",
+  "Category name": "Nom de la catégorie",
+  "Price multiplier": "Multiplicateur de prix",
+  "What it covers": "Ce qu’elle couvre",
+  "Remove this category": "Supprimer cette catégorie",
+  "Add a category": "Ajouter une catégorie",
+  "If a parcel is lost": "Si un colis est perdu",
+  "The customer says what the parcel is worth to replace. You charge a percentage of that, and if it goes missing you pay back what was declared - never more.":
+    "Le client indique ce que coûte le remplacement du colis. Vous facturez un pourcentage de ce montant et, s’il disparaît, vous remboursez la valeur déclarée — jamais davantage.",
+  "Only the sender knows what is in the box, so the declared value is also the cap. Understating it to save a few dollars caps their own payout, which is what makes the answer honest without anyone opening the parcel.":
+    "Seul l’expéditeur sait ce que contient le carton : la valeur déclarée sert donc aussi de plafond. La sous-évaluer pour économiser quelques dollars plafonne son propre remboursement, ce qui rend la réponse honnête sans que personne n’ouvre le colis.",
+  "You pay the customer back, not Laawol. The most you can owe on one parcel is the value that customer declared, and the policy in force on the day they booked is the one that is judged.":
+    "C’est vous qui remboursez le client, pas Laawol. Le maximum que vous pouvez devoir sur un colis est la valeur déclarée par ce client, et c’est la politique en vigueur le jour de la réservation qui fait foi.",
+  "Do you pay for a lost parcel?": "Remboursez-vous un colis perdu ?",
+  "No, parcels are not covered": "Non, les colis ne sont pas couverts",
+  "Yes, I pay back what was declared":
+    "Oui, je rembourse la valeur déclarée",
+  "Coverage rate (% of declared value)":
+    "Taux de couverture (% de la valeur déclarée)",
+  "What you charge for cover. 2% on a $1,000 parcel collects $20.":
+    "Ce que vous facturez pour la couverture. 2 % sur un colis de 1 000 $ rapporte 20 $.",
+  "Set a rate above 0%. Cover at no price is money you never collected for, and it will not save.":
+    "Fixez un taux supérieur à 0 %. Une couverture gratuite est de l’argent que vous n’avez jamais encaissé, et elle ne sera pas enregistrée.",
+  "Most you will carry (USD)": "Maximum que vous transportez (USD)",
+  "A parcel declared above this is refused before payment, whether or not you cover loss. It says what you are willing to carry, not only what you insure.":
+    "Un colis déclaré au-dessus de ce montant est refusé avant le paiement, que vous couvriez la perte ou non. Cela indique ce que vous acceptez de transporter, pas seulement ce que vous assurez.",
+  "0 means no ceiling of your own. The platform never accepts a single parcel declared above $10,000.":
+    "0 signifie aucun plafond de votre part. La plateforme n’accepte jamais un colis déclaré au-dessus de 10 000 $.",
+  // Refusals the settings form raises before the server can.
+  "You can add up to 6 categories of your own.":
+    "Vous pouvez ajouter jusqu’à 6 catégories qui vous sont propres.",
+  "Give every item category you add a name.":
+    "Donnez un nom à chaque catégorie d’articles que vous ajoutez.",
+  "A category you add cannot reuse the name of a standard category.":
+    "Une catégorie que vous ajoutez ne peut pas reprendre le nom d’une catégorie standard.",
+  "Two of the categories you added have the same name. Give each one its own.":
+    "Deux des catégories que vous avez ajoutées portent le même nom. Donnez-en un propre à chacune.",
+  "The coverage rate must be between 0% and 10%.":
+    "Le taux de couverture doit être compris entre 0 % et 10 %.",
+  "The most you will carry must be between $0 and $10,000.":
+    "Le maximum que vous transportez doit être compris entre 0 $ et 10 000 $.",
+  "Set a coverage rate above 0%, or turn off cover for lost parcels. Cover at no price is money you never collected for.":
+    "Fixez un taux de couverture supérieur à 0 %, ou désactivez la couverture des colis perdus. Une couverture gratuite est de l’argent que vous n’avez jamais encaissé.",
+  // The freight booking form.
+  "What are you sending?": "Qu’envoyez-vous ?",
+  "The price per kilo depends on what is in the parcel.":
+    "Le prix au kilo dépend du contenu du colis.",
+  "does not pay for a lost parcel.": "ne rembourse pas un colis perdu.",
+  "Nothing is charged for cover, and nothing is owed if the parcel goes missing.":
+    "Rien n’est facturé pour la couverture, et rien n’est dû si le colis disparaît.",
+  "It will not carry a parcel worth more than":
+    "Elle ne transporte pas de colis valant plus de",
+  "Is anything in this parcel worth more than":
+    "Y a-t-il dans ce colis un article valant plus de",
+  "The business pays you back, not Laawol. Cover costs":
+    "C’est l’entreprise qui vous rembourse, pas Laawol. La couverture coûte",
+  "% of the value you declare.": "% de la valeur que vous déclarez.",
+  "What would it cost to replace? (USD)":
+    "Combien coûterait son remplacement ? (USD)",
+  "This business does not carry parcels worth more than":
+    "Cette entreprise ne transporte pas de colis valant plus de",
+  "The most any business carries on one parcel is $10,000.":
+    "Le maximum qu’une entreprise transporte sur un seul colis est de 10 000 $.",
+  "Cover for loss": "Couverture en cas de perte",
+  "We pay up to": "Nous remboursons jusqu’à",
+  "if it is lost — the value you declared, never more. The business pays you back, not Laawol.":
+    "s’il est perdu — la valeur que vous avez déclarée, jamais plus. C’est l’entreprise qui vous rembourse, pas Laawol.",
+  "What you are sending": "Ce que vous envoyez",
+  "Declared value": "Valeur déclarée",
+  "Paid back up to": "Remboursé jusqu’à",
+  "This business does not pay for a lost parcel. The value you declared is recorded as what it agreed to carry, and nothing was charged for cover.":
+    "Cette entreprise ne rembourse pas un colis perdu. La valeur que vous avez déclarée est enregistrée comme ce qu’elle a accepté de transporter, et rien n’a été facturé pour la couverture.",
+  // Refusals the server throws on a declared value, shown word for word.
+  "This business does not carry parcels worth that much":
+    "Cette entreprise ne transporte pas de colis d’une telle valeur",
+  "That declared value is too high to ship":
+    "Cette valeur déclarée est trop élevée pour être expédiée",
+  // The one line that lets a customer compare cover before choosing.
+  "If your parcel is lost": "Si votre colis est perdu",
+  "No coverage": "Aucune couverture",
+  "Covers up to": "Couvre jusqu’à",
+  "Covers what you declare": "Couvre ce que vous déclarez",
+});
+
+// "<category>: enter a price multiplier between 0.5 and 10." - the settings
+// form names the row it is complaining about, and the standard names are the
+// platform's, so both halves are known ahead of time. A name the business
+// invented itself falls through to substring translation, which leaves the
+// name alone and translates the sentence around it.
+const FREIGHT_MULTIPLIER_MESSAGE =
+  "enter a price multiplier between 0.5 and 10.";
+const FREIGHT_MULTIPLIER_MESSAGE_FR =
+  "saisissez un multiplicateur de prix entre 0,5 et 10.";
+TEXT_TRANSLATIONS[FREIGHT_MULTIPLIER_MESSAGE] = FREIGHT_MULTIPLIER_MESSAGE_FR;
+for (const [label, frLabel] of Object.entries({
+  "General goods": "Marchandises générales",
+  "Clothes and fabric": "Vêtements et tissus",
+  Food: "Alimentation",
+  Documents: "Documents",
+  "Cosmetics and liquids": "Cosmétiques et liquides",
+  Electronics: "Électronique",
+  "Fragile items": "Objets fragiles",
+})) {
+  TEXT_TRANSLATIONS[`${label}: ${FREIGHT_MULTIPLIER_MESSAGE}`] =
+    `${frLabel} : ${FREIGHT_MULTIPLIER_MESSAGE_FR}`;
+}
+
 const PICKUP_ERROR_LABELS: Record<string, string> = {
   "Shared pickup plan": "Plan de collecte partagé",
   "Barrel shipping pickup": "Collecte expédition de barils",

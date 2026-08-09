@@ -22,6 +22,7 @@ import {
   Package,
   ParkingCircle,
   Plane,
+  Plus,
   RefreshCw,
   Save,
   Send,
@@ -32,6 +33,7 @@ import {
   Users,
 } from "lucide-react";
 
+import { FieldInfo } from "@/components/field-info";
 import { SearchableSelect } from "@/components/searchable-select";
 import {
   accessInvitationDeliveryNote,
@@ -73,6 +75,13 @@ import {
   type PickupServiceChoice,
 } from "@/lib/business-service-settings";
 import { COUNTRY_CATALOG } from "@/lib/country-catalog";
+import {
+  MAX_CUSTOM_FREIGHT_CATEGORIES,
+  STANDARD_FREIGHT_CATEGORIES,
+  emptyFreightCustomCategory,
+  type FreightCustomCategoryDraft,
+  type FreightSettingsDraft,
+} from "@/lib/freight-categories";
 import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import { db, functions, storage } from "@/lib/firebase";
 import { formatDate, text } from "@/lib/format";
@@ -572,6 +581,35 @@ export function BusinessServicesPanel({
     });
   }
 
+  function updateFreight(patch: Partial<FreightSettingsDraft>) {
+    setDraft((current) => ({...current, freight: {...current.freight, ...patch}}));
+  }
+
+  function updateCategoryRate(categoryId: string, value: string) {
+    setDraft((current) => ({
+      ...current,
+      freight: {
+        ...current.freight,
+        categoryRates: {...current.freight.categoryRates, [categoryId]: value},
+      },
+    }));
+  }
+
+  function updateCustomCategory(
+    index: number,
+    patch: Partial<FreightCustomCategoryDraft>,
+  ) {
+    setDraft((current) => ({
+      ...current,
+      freight: {
+        ...current.freight,
+        customCategories: current.freight.customCategories.map((row, position) =>
+          position === index ? {...row, ...patch} : row,
+        ),
+      },
+    }));
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await run(
@@ -604,6 +642,7 @@ export function BusinessServicesPanel({
   const activeServiceSummary = `${activeServiceCount} of 6 services active`;
   const offersCarSales = draft.enabledServices.includes("carSales");
   const offersParking = draft.enabledServices.includes("carParking");
+  const offersFreight = draft.enabledServices.includes("freight");
   const businessIsNewYork = isNewYorkState(business?.state);
   const enabledPickupServices = PICKUP_PLAN_SERVICES.filter((service) =>
     draft.enabledServices.some(
@@ -727,7 +766,7 @@ export function BusinessServicesPanel({
             })}
           </div>
 
-          {(offersCarSales || offersPickup || offersParking) && (
+          {(offersCarSales || offersPickup || offersParking || offersFreight) && (
             <div className="service-settings-summary service-rules-summary">
               <div>
                 <strong>Service rules</strong>
@@ -898,6 +937,30 @@ export function BusinessServicesPanel({
                   })}
                 </div>
               </article>
+            )}
+
+            {offersFreight && (
+              <FreightGoodsEditor
+                draft={draft.freight}
+                onAddCategory={() =>
+                  updateFreight({
+                    customCategories: [
+                      ...draft.freight.customCategories,
+                      emptyFreightCustomCategory(),
+                    ],
+                  })
+                }
+                onChange={updateFreight}
+                onCategoryRate={updateCategoryRate}
+                onCustomCategory={updateCustomCategory}
+                onRemoveCategory={(index) =>
+                  updateFreight({
+                    customCategories: draft.freight.customCategories.filter(
+                      (_, position) => position !== index,
+                    ),
+                  })
+                }
+              />
             )}
 
             {offersParking && (
@@ -1082,6 +1145,259 @@ export function BusinessServicesPanel({
         </fieldset>
       </form>
     </section>
+  );
+}
+
+/**
+ * What a business charges for each kind of goods, and whether it pays for a
+ * parcel it loses.
+ *
+ * Two settings, one card, because they answer the same question for the owner:
+ * "what am I willing to carry, and at what price." They stay separate for the
+ * customer - the category says what is in the box, the declared value says
+ * what it costs to replace - but an owner sets them in one sitting.
+ */
+function FreightGoodsEditor({
+  draft,
+  onAddCategory,
+  onChange,
+  onCategoryRate,
+  onCustomCategory,
+  onRemoveCategory,
+}: {
+  draft: FreightSettingsDraft;
+  onAddCategory: () => void;
+  onChange: (patch: Partial<FreightSettingsDraft>) => void;
+  onCategoryRate: (categoryId: string, value: string) => void;
+  onCustomCategory: (
+    index: number,
+    patch: Partial<FreightCustomCategoryDraft>,
+  ) => void;
+  onRemoveCategory: (index: number) => void;
+}) {
+  const coverageRate = Number(draft.coverageRatePct || 0);
+  const roomForMore =
+    draft.customCategories.length < MAX_CUSTOM_FREIGHT_CATEGORIES;
+
+  return (
+    <article className="service-config-card service-config-card-wide">
+      <header className="service-config-card-head">
+        <span className="service-config-icon"><Package size={21} /></span>
+        <div>
+          <strong>Freight · what you carry</strong>
+          <span>
+            Price each kind of goods, and say whether you pay for a parcel you
+            lose.
+          </span>
+        </div>
+      </header>
+      <div className="lst-form-grid service-config-fields">
+        <p className="service-config-note wide">
+          <span className="label-with-info">
+            Item categories
+            <FieldInfo label="how item categories change your price">
+              <p>
+                A multiplier rides on top of your per-kg rate for the
+                destination. 2 means a kilo of that costs twice a kilo of
+                general goods; 1 means it costs the same.
+              </p>
+              <p>
+                The list is the platform&rsquo;s, so a customer can compare you
+                with another business on the same words. You set what each row
+                is worth to you.
+              </p>
+              <p>
+                Leave a row at the number it starts on and nothing about your
+                prices changes.
+              </p>
+            </FieldInfo>
+          </span>
+        </p>
+        {STANDARD_FREIGHT_CATEGORIES.map((category) => (
+          <label className="lst-field" key={category.id}>
+            <span>{category.label}</span>
+            <small>{category.hint}</small>
+            <input
+              inputMode="decimal"
+              max="10"
+              min="0.5"
+              onChange={(event) =>
+                onCategoryRate(category.id, event.target.value)
+              }
+              step="0.1"
+              type="number"
+              value={draft.categoryRates[category.id] ?? ""}
+            />
+          </label>
+        ))}
+
+        <p className="service-config-note wide">
+          <span className="label-with-info">
+            Your own categories
+            <FieldInfo label="when to add a category of your own">
+              <p>
+                Add one only for goods the standard list genuinely misses -
+                auto parts, building materials, live plants.
+              </p>
+              <p>
+                Customers see your extra rows after the standard ones. Up to 6.
+              </p>
+            </FieldInfo>
+          </span>
+        </p>
+        {draft.customCategories.map((row, index) => (
+          <div className="lst-form-grid wide" key={`custom-${index}`}>
+            <label className="lst-field">
+              <span>Category name</span>
+              <input
+                maxLength={60}
+                onChange={(event) =>
+                  onCustomCategory(index, {label: event.target.value})
+                }
+                placeholder="e.g. Auto parts"
+                type="text"
+                value={row.label}
+              />
+            </label>
+            <label className="lst-field">
+              <span>Price multiplier</span>
+              <input
+                inputMode="decimal"
+                max="10"
+                min="0.5"
+                onChange={(event) =>
+                  onCustomCategory(index, {multiplier: event.target.value})
+                }
+                step="0.1"
+                type="number"
+                value={row.multiplier}
+              />
+            </label>
+            <label className="lst-field wide">
+              <span>What it covers</span>
+              <input
+                maxLength={120}
+                onChange={(event) =>
+                  onCustomCategory(index, {hint: event.target.value})
+                }
+                placeholder="Shown to the customer under the name"
+                type="text"
+                value={row.hint}
+              />
+            </label>
+            <div className="lst-field wide">
+              <button
+                className="ghost-button"
+                onClick={() => onRemoveCategory(index)}
+                type="button"
+              >
+                Remove this category
+              </button>
+            </div>
+          </div>
+        ))}
+        <div className="lst-field wide">
+          <button
+            className="secondary-button"
+            disabled={!roomForMore}
+            onClick={onAddCategory}
+            type="button"
+          >
+            <Plus size={15} /> Add a category
+          </button>
+          {!roomForMore && (
+            <small>You can add up to 6 categories of your own.</small>
+          )}
+        </div>
+
+        <p className="service-config-note wide">
+          <span className="label-with-info">
+            If a parcel is lost
+            <FieldInfo label="how cover for a lost parcel works">
+              <p>
+                The customer says what the parcel is worth to replace. You
+                charge a percentage of that, and if it goes missing you pay
+                back what was declared - never more.
+              </p>
+              <p>
+                Only the sender knows what is in the box, so the declared value
+                is also the cap. Understating it to save a few dollars caps
+                their own payout, which is what makes the answer honest without
+                anyone opening the parcel.
+              </p>
+            </FieldInfo>
+          </span>
+        </p>
+        <div className="customer-inline-note wide">
+          You pay the customer back, not Laawol. The most you can owe on one
+          parcel is the value that customer declared, and the policy in force
+          on the day they booked is the one that is judged.
+        </div>
+        <label className="lst-field">
+          <span>Do you pay for a lost parcel?</span>
+          <select
+            onChange={(event) =>
+              onChange({coversLoss: event.target.value === "yes"})
+            }
+            value={draft.coversLoss ? "yes" : "no"}
+          >
+            <option value="no">No, parcels are not covered</option>
+            <option value="yes">Yes, I pay back what was declared</option>
+          </select>
+        </label>
+        <label className="lst-field">
+          <span>Coverage rate (% of declared value)</span>
+          <small>
+            What you charge for cover. 2% on a $1,000 parcel collects $20.
+          </small>
+          <input
+            disabled={!draft.coversLoss}
+            inputMode="decimal"
+            max="10"
+            min="0"
+            onChange={(event) =>
+              onChange({coverageRatePct: event.target.value})
+            }
+            step="0.1"
+            type="number"
+            value={draft.coverageRatePct}
+          />
+        </label>
+        {draft.coversLoss && !(coverageRate > 0) && (
+          <div className="customer-inline-note error wide">
+            Set a rate above 0%. Cover at no price is money you never collected
+            for, and it will not save.
+          </div>
+        )}
+        <label className="lst-field wide">
+          <span className="label-with-info">
+            Most you will carry (USD)
+            <FieldInfo label="what the ceiling on declared value does">
+              <p>
+                A parcel declared above this is refused before payment, whether
+                or not you cover loss. It says what you are willing to carry,
+                not only what you insure.
+              </p>
+              <p>
+                0 means no ceiling of your own. The platform never accepts a
+                single parcel declared above $10,000.
+              </p>
+            </FieldInfo>
+          </span>
+          <input
+            inputMode="decimal"
+            max="10000"
+            min="0"
+            onChange={(event) =>
+              onChange({maxDeclaredValue: event.target.value})
+            }
+            step="50"
+            type="number"
+            value={draft.maxDeclaredValue}
+          />
+        </label>
+      </div>
+    </article>
   );
 }
 

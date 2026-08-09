@@ -70,6 +70,16 @@ Route<dynamic>? _customerTabRoute(RouteSettings settings) {
     case '/my-purchases':
       page = const MyPurchasesScreen(showBackButton: true);
       break;
+    // Registered here as well as in main.dart for the same reason as
+    // /leave-review below: a route pushed from inside the tab navigator is
+    // resolved by this table, and an unknown one falls through to the tab
+    // root - which reads as "tapping my viewing took me back to Activity".
+    case '/my-viewings':
+      page = const MyPurchasesScreen(
+        showBackButton: true,
+        scope: PurchaseListScope.viewings,
+      );
+      break;
     case '/orders':
       page = const OrdersScreen(showBackButton: true);
       break;

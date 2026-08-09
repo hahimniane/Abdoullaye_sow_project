@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../services/freight_categories.dart';
+import '../services/freight_coverage.dart';
 import 'business_profile.dart';
 import 'business_service.dart';
 import 'destination_country.dart';
@@ -20,6 +22,8 @@ class BusinessDestinationOption {
     this.businessStatus = 'approved',
     this.freightPickupAvailable = false,
     this.freightPickupModel = 'distance',
+    this.freightCategories = const <FreightCategory>[],
+    this.freightCoverage,
     this.reviewCount = 0,
     this.reviewAverage = 0,
     this.reviewWeightedScore = 0,
@@ -49,6 +53,21 @@ class BusinessDestinationOption {
   /// pricing model (`'distance'` or `'borough'`), as computed server-side.
   final bool freightPickupAvailable;
   final String freightPickupModel;
+
+  /// What this business will carry and what each kind of parcel is worth to
+  /// it. Priced per business, not per destination: a business charges the same
+  /// for electronics wherever it is sending them. Empty when it does not offer
+  /// freight.
+  final List<FreightCategory> freightCategories;
+
+  /// Whether this business pays the customer back for a parcel it loses, and
+  /// on what terms. Null when it does not offer freight - which is not the
+  /// same as offering freight and covering nothing.
+  final FreightCoveragePolicy? freightCoverage;
+
+  /// The one line the option card shows about who stands behind the parcel.
+  FreightCoverageSummary get freightCoverageSummary =>
+      freightCoverageSummaryOf(freightCoverage);
 
   bool get isApprovedActive => businessStatus == 'approved' && country.isActive;
 
@@ -102,6 +121,8 @@ class BusinessDestinationOption {
       freightPickupModel: (data['freightPickupModel'] as String?) == 'borough'
           ? 'borough'
           : 'distance',
+      freightCategories: FreightCategory.listFromWire(data['freightCategories']),
+      freightCoverage: FreightCoveragePolicy.fromWire(data['freightCoverage']),
       reviewCount: (data['reviewCount'] as num?)?.toInt() ?? 0,
       reviewAverage: (data['reviewAverage'] as num?)?.toDouble() ?? 0,
       reviewWeightedScore:
@@ -182,6 +203,18 @@ class BusinessDestinationOption {
         (data['businessName'] as String?) ??
         (business['name'] as String?) ??
         BusinessProfile.defaultBusinessName;
+    final services = normalizeBusinessServices(
+      businessData == null ? data['enabledServices'] : business['enabledServices'],
+    );
+    // Categories and coverage are business-wide settings, so they are read off
+    // the business document when we have one. This path only runs where the
+    // callable is unavailable; it exists so those customers are quoted the
+    // same prices and shown the same promise as everyone else.
+    final freightSettings = businessData ?? data;
+    final offersFreight = hasBusinessService(
+      services,
+      BusinessServiceKey.freight,
+    );
 
     return BusinessDestinationOption(
       id: '${businessId}_${doc.id}',
@@ -207,11 +240,7 @@ class BusinessDestinationOption {
                 .whereType<String>()
                 .where((part) => part.trim().isNotEmpty)
                 .join(', '),
-      enabledServices: normalizeBusinessServices(
-        businessData == null
-            ? data['enabledServices']
-            : business['enabledServices'],
-      ),
+      enabledServices: services,
       serviceNote:
           data['serviceNote'] as String? ?? business['serviceNote'] as String?,
       businessStatus:
@@ -230,6 +259,12 @@ class BusinessDestinationOption {
             : business['freightPickupModel'],
         businessData == null ? data['state'] : business['state'],
       ),
+      freightCategories: offersFreight
+          ? freightCategoriesFromBusinessData(freightSettings)
+          : const <FreightCategory>[],
+      freightCoverage: offersFreight
+          ? FreightCoveragePolicy.fromBusinessData(freightSettings)
+          : null,
       reviewCount:
           ((businessData == null ? data['reviewCount'] : business['reviewCount'])
                   as num?)

@@ -1,3 +1,9 @@
+import {
+  buildFreightSettingsPayload,
+  freightSettingsFromRow,
+  validateFreightSettings,
+  type FreightSettingsDraft,
+} from "./freight-categories.ts";
 import type { FirestoreRow } from "@/types/admin";
 
 export const BUSINESS_SERVICE_IDS = [
@@ -70,6 +76,10 @@ export type BusinessServiceSettingsDraft = {
   freightPickupMaxKm: string;
   freightPickupOriginAddress: string;
   freightPickupBoroughPrices: Record<string, string>;
+  // What each kind of goods costs, and whether the business pays for a parcel
+  // it loses. Both are freight-only, so they ride with the rest of the freight
+  // settings rather than in a panel of their own.
+  freight: FreightSettingsDraft;
   parkingAddressLine1: string;
   parkingCity: string;
   parkingCountry: string;
@@ -192,6 +202,7 @@ export function businessServiceSettingsFromRow(
         numberText(boroughPrices[borough]),
       ]),
     ),
+    freight: freightSettingsFromRow(business),
     parkingAddressLine1: stringValue(
       business?.parkingAddressLine1 ?? business?.addressLine1,
     ),
@@ -386,6 +397,11 @@ export function validateBusinessServiceSettings(
   const pickupError = validatePickupPlanDraft(draft, options);
   if (pickupError) return pickupError;
 
+  if (draft.enabledServices.includes("freight")) {
+    const freightError = validateFreightSettings(draft.freight);
+    if (freightError) return freightError;
+  }
+
   if (draft.enabledServices.includes("carParking")) {
     const totalSpaces = numberValue(draft.parkingTotalSpaces);
     const blockedSpaces = numberValue(draft.parkingBlockedSpaces);
@@ -446,9 +462,16 @@ export function buildBusinessServiceSettingsPayload(
     ([current, next]) => stringValue(current) !== next.trim(),
   );
   const pickupPlan = buildPickupPlanPayload(draft, business);
+  // Category prices and the loss policy belong to freight. A business that
+  // does not offer it sends neither, so turning freight off for a season keeps
+  // the prices it spent time setting rather than resetting them to nothing.
+  const freight = draft.enabledServices.includes("freight")
+    ? buildFreightSettingsPayload(draft.freight)
+    : undefined;
 
   return {
     ...(pickupPlan === undefined ? {} : {pickupPlan}),
+    ...(freight === undefined ? {} : freight),
     enabledServices: normalizedServices(draft.enabledServices),
     carHoldPricingMode: draft.carHoldPricingMode,
     carHoldFlatFee: numberValue(draft.carHoldFlatFee),

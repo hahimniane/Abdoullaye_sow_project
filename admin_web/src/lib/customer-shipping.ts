@@ -146,6 +146,11 @@ export type FreightShipmentFields = {
   weightKg: number;
   pickup: PickupDetails;
   officeLocationId?: string;
+  // What is in the parcel, and what it would cost to replace. Both optional:
+  // a client that sends neither is priced exactly as freight was before
+  // categories existed, which is what makes them safe to add here.
+  itemCategoryId?: string;
+  declaredValue?: number;
 };
 
 export type TransportRequestFields = {
@@ -673,6 +678,15 @@ export function buildFreightShipmentPayload(
     businessId: trimmed(fields.businessId),
     mode: fields.mode,
     weightKg: fields.weightKg,
+    ...(fields.itemCategoryId?.trim() && {
+      itemCategoryId: trimmed(fields.itemCategoryId),
+    }),
+    // Sent only when the customer actually declared something. Zero and "not
+    // asked" mean the same thing to the server, and omitting the key keeps
+    // that visible in the request rather than implied by a 0.
+    ...(Number(fields.declaredValue) > 0 && {
+      declaredValue: Number(fields.declaredValue),
+    }),
     ...pickupPayload(fields.pickup),
     ...(!fields.pickup.requested &&
       fields.officeLocationId && { officeLocationId: fields.officeLocationId }),

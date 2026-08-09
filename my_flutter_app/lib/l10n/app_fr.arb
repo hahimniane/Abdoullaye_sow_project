@@ -508,6 +508,7 @@
   "enterCarTransportDetails": "Entrez les détails du transport de voiture",
   "cars": "Voitures",
   "myPurchases": "Mes achats",
+  "hubViewingsSubtitle": "Rendez-vous pour voir une voiture",
   "myCarViewings": "Visites de voitures",
   "noCarViewingsYet": "Aucune visite pour le moment. Demandez \u00e0 voir une voiture depuis son annonce.",
   "noPurchasesYet": "Aucun achat de voiture pour le moment.",
@@ -2361,11 +2362,41 @@
   "pickupPlanServiceParking": "Stationnement",
   "pickupPlanServiceCarTransport": "Transport de voitures",
   "pickupPlanErrorCapRequired": "Saisissez la distance maximale de collecte en miles pour {section}.",
+  "@pickupPlanErrorCapRequired": {
+    "placeholders": {
+      "section": {}
+    }
+  },
   "pickupPlanErrorFlatFee": "Saisissez le tarif fixe de collecte pour {section}.",
+  "@pickupPlanErrorFlatFee": {
+    "placeholders": {
+      "section": {}
+    }
+  },
   "pickupPlanErrorDistanceFees": "Saisissez les frais de base, au mile et minimum pour {section}.",
+  "@pickupPlanErrorDistanceFees": {
+    "placeholders": {
+      "section": {}
+    }
+  },
   "pickupPlanErrorOrigin": "Saisissez l'adresse de départ de la collecte pour {section}.",
+  "@pickupPlanErrorOrigin": {
+    "placeholders": {
+      "section": {}
+    }
+  },
   "pickupPlanErrorBoroughPrice": "Définissez un tarif de collecte pour au moins un arrondissement pour {section}.",
+  "@pickupPlanErrorBoroughPrice": {
+    "placeholders": {
+      "section": {}
+    }
+  },
   "pickupPlanErrorBoroughRequiresNewYork": "La collecte par arrondissement n'est disponible que pour les entreprises de New York ({section}).",
+  "@pickupPlanErrorBoroughRequiresNewYork": {
+    "placeholders": {
+      "section": {}
+    }
+  },
   "freightPickupSectionTitle": "Enlèvement du fret",
   "freightPickupSectionSubtitle": "Proposez de récupérer les colis à l'adresse de votre client et choisissez le mode de calcul des frais.",
   "freightPickupOfferToggle": "Proposer l'enlèvement du fret",
@@ -2557,6 +2588,15 @@
   "sharePaymentLink": "Partager le lien de paiement",
   "paymentLinkShareFailed": "Impossible d\u2019ouvrir le partage",
   "paymentLinkShareMessage": "{business} a gar\u00e9 votre {car}. Suivi {code}. Montant d\u00fb {amount}. Payez ici : {link}",
+  "@paymentLinkShareMessage": {
+    "placeholders": {
+      "business": {"type": "String"},
+      "car": {"type": "String"},
+      "code": {"type": "String"},
+      "amount": {"type": "String"},
+      "link": {"type": "String"}
+    }
+  },
   "paymentLinkCopied": "Lien de paiement copié",
   "amountDue": "Montant dû",
   "amountRecorded": "Montant enregistré",
@@ -2818,5 +2858,80 @@
       "max": {}
     }
   },
-  "viewingSendProposal": "Envoyer"
+  "viewingSendProposal": "Envoyer",
+  "freightCategoryQuestion": "Que contient le colis ?",
+  "freightCategoryHelp": "Les entreprises facturent plus cher ce qui coûte plus cher à remplacer.",
+  "freightCategoryGeneral": "Marchandises générales",
+  "freightCategoryGeneralHint": "Articles ménagers, cadeaux, tout ce qui n’est pas listé ci-dessous",
+  "freightCategoryClothing": "Vêtements et tissus",
+  "freightCategoryClothingHint": "Vêtements, chaussures, tissu, literie",
+  "freightCategoryFood": "Alimentation",
+  "freightCategoryFoodHint": "Aliments secs et emballés uniquement",
+  "freightCategoryDocuments": "Documents",
+  "freightCategoryDocumentsHint": "Papiers, certificats, imprimés",
+  "freightCategoryCosmetics": "Cosmétiques et liquides",
+  "freightCategoryCosmeticsHint": "Crèmes, parfums, produits capillaires",
+  "freightCategoryElectronics": "Électronique",
+  "freightCategoryElectronicsHint": "Téléphones, ordinateurs portables, tablettes, chargeurs",
+  "freightCategoryFragile": "Objets fragiles",
+  "freightCategoryFragileHint": "Verre, céramique, tout ce qui est cassable",
+  "freightCategoryStandardRate": "Tarif standard",
+  "freightCategoryRateMultiplier": "{multiplier} le tarif au kilo",
+  "@freightCategoryRateMultiplier": {
+    "placeholders": {
+      "multiplier": {}
+    }
+  },
+  "freightCoverageNone": "Aucune couverture",
+  "freightCoverageCoversUpTo": "Couvre jusqu’à {amount} · {rate}",
+  "@freightCoverageCoversUpTo": {
+    "placeholders": {
+      "amount": {},
+      "rate": {}
+    }
+  },
+  "freightCoverageCoversLoss": "Couvre la perte · {rate}",
+  "@freightCoverageCoversLoss": {
+    "placeholders": {
+      "rate": {}
+    }
+  },
+  "freightCoverageSectionTitle": "En cas de perte",
+  "freightCoverageQuestion": "Y a-t-il quelque chose valant plus de {amount} ?",
+  "@freightCoverageQuestion": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "freightCoverageQuestionHelp": "Vous seul savez ce qu’il y a dans le colis, donc vous seul pouvez dire ce qu’il coûterait à remplacer.",
+  "freightDeclaredValueLabel": "Valeur de remplacement",
+  "freightDeclaredValueHelper": "Ce que vous déclarez est aussi le maximum qui peut être remboursé : déclarez-le honnêtement.",
+  "freightCoverageFeeLabel": "Frais de couverture",
+  "freightCoverageEnterValue": "Indiquez la valeur pour voir les frais de couverture.",
+  "freightCoveragePaysUpTo": "{businessName} vous rembourse jusqu’à {amount} si ce colis est perdu.",
+  "@freightCoveragePaysUpTo": {
+    "placeholders": {
+      "businessName": {},
+      "amount": {}
+    }
+  },
+  "freightCoverageWhoPays": "Laawol enregistre cet accord. C’est {businessName} qui rembourse.",
+  "@freightCoverageWhoPays": {
+    "placeholders": {
+      "businessName": {}
+    }
+  },
+  "freightCoverageNotOffered": "{businessName} ne couvre pas les colis perdus. En cas de perte, rien n’est remboursé.",
+  "@freightCoverageNotOffered": {
+    "placeholders": {
+      "businessName": {}
+    }
+  },
+  "freightCoverageCarriesUpTo": "{businessName} accepte les colis d’une valeur maximale de {amount}.",
+  "@freightCoverageCarriesUpTo": {
+    "placeholders": {
+      "businessName": {},
+      "amount": {}
+    }
+  }
 }

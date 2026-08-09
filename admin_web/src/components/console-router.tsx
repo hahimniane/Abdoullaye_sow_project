@@ -96,6 +96,20 @@ const previewBusiness: FirestoreRow = {
     Queens: 55,
     "Staten Island": 65,
   },
+  // Only the rows this business disagrees with. Everything else stays on the
+  // platform's starting number, which is what most businesses will look like.
+  freightCategoryRates: {electronics: 2.5},
+  freightCustomCategories: [
+    {
+      id: "auto-parts",
+      label: "Auto parts",
+      hint: "Brake pads, filters, small engine parts",
+      multiplier: 1.4,
+    },
+  ],
+  freightCoverageEnabled: true,
+  freightCoverageRatePct: 2,
+  freightMaxDeclaredValue: 2000,
   parkingAddressLine1: "410 East 138th Street",
   parkingCity: "Bronx",
   parkingCountry: "United States",

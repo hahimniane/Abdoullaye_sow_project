@@ -29,6 +29,13 @@ class FreightShipmentService {
     required String businessId,
     required String mode,
     required double weightKg,
+    /// What is in the parcel. The server re-derives the multiplier from the
+    /// business's own settings; sending nothing prices the parcel exactly as
+    /// freight was priced before categories existed.
+    String? itemCategoryId,
+    /// What the customer says it costs to replace, in plain dollars. Also the
+    /// cap on any payout, which is what makes it trustworthy unchecked.
+    double? declaredValue,
     bool useWalletBalance = false,
     bool pickupRequested = false,
     String? pickupAddress,
@@ -47,6 +54,10 @@ class FreightShipmentService {
           'businessId': businessId,
           'mode': mode,
           'weightKg': weightKg,
+          if ((itemCategoryId ?? '').trim().isNotEmpty)
+            'itemCategoryId': itemCategoryId!.trim(),
+          if (declaredValue != null && declaredValue > 0)
+            'declaredValue': declaredValue,
           'pickupRequested': pickupRequested,
           'pickupAddress': ?pickupAddress,
           'pickupBorough': ?pickupBorough,

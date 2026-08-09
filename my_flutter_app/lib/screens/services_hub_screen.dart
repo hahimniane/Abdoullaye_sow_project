@@ -198,6 +198,16 @@ class ActivityTab extends StatelessWidget {
                     AppColors.cobaltMid,
                     '/orders',
                   ),
+                  // Its own row rather than a filter inside My orders: a
+                  // viewing needs answering, sometimes today, and burying it
+                  // among barrels and freight is how a proposal goes stale.
+                  _HubItem(
+                    l10n.myCarViewings,
+                    l10n.hubViewingsSubtitle,
+                    Icons.event_available_outlined,
+                    AppColors.sage,
+                    '/my-viewings',
+                  ),
                 ],
               ),
             ),

@@ -54,16 +54,28 @@ export function FieldInfo({
 
   return (
     <span className="field-info" ref={wrapRef}>
-      <button
+      {/* Deliberately not a <button>. Read-only screens wrap their form in a
+          disabled <fieldset>, which disables every descendant form control -
+          so the "i" became unpressable for exactly the people most likely to
+          need it: staff who can look but not edit. A span with the button role
+          is not a form control, so it stays available, and the key handlers
+          below keep it operable from the keyboard. */}
+      <span
         aria-controls={id}
         aria-expanded={open}
         aria-label={open ? `Hide explanation: ${label}` : `Explain ${label}`}
         className={`field-info-button ${open ? "active" : ""}`}
         onClick={() => setOpen((value) => !value)}
-        type="button"
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          setOpen((value) => !value);
+        }}
+        role="button"
+        tabIndex={0}
       >
         <Info size={14} />
-      </button>
+      </span>
       {open && (
         <span className="field-info-bubble" id={id} role="note">
           {children}

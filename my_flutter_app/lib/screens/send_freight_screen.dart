@@ -12,8 +12,11 @@ import '../models/office_location.dart';
 import '../models/structured_address.dart';
 import '../services/barrel_shipment_service.dart';
 import '../services/business_service.dart';
+import '../services/freight_categories.dart';
+import '../services/freight_coverage.dart';
 import '../services/freight_shipment_service.dart';
 import '../services/office_location_service.dart';
+import '../utils/freight_localization.dart';
 import '../utils/receiver_phone_rules.dart';
 import '../widgets/business_reviews_sheet.dart';
 import '../widgets/country_phone_field.dart';
@@ -45,6 +48,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   final _receiverController = TextEditingController();
   final _phoneController = TextEditingController();
   final _weightController = TextEditingController();
+  final _declaredValueController = TextEditingController();
   // Street line only. The rest of the address lives in _pickupAddress; the
   // composed line is what reaches the pricing and checkout callables.
   final _pickupAddressController = TextEditingController();
@@ -58,6 +62,12 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   bool _loadFailed = false;
   bool _busy = false;
   bool _receiverPhoneIsWhatsappOnly = false;
+
+  // What is in the parcel, and what the customer says it would cost to
+  // replace. Two different questions on purpose: the category is what the
+  // business charges by, the declared value is what it pays back by.
+  String _categoryId = '';
+  bool _declaresValue = false;
 
   // Freight home-pickup state for the selected business.
   bool _pickupOffered = false;
@@ -89,6 +99,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     _receiverController.dispose();
     _phoneController.dispose();
     _weightController.dispose();
+    _declaredValueController.dispose();
     _pickupAddressController.dispose();
     super.dispose();
   }
@@ -159,6 +170,22 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       _pickupError = null;
     }
     _pickupOffered = fresh.freightPickupAvailable;
+    // A business can retire a category or stop covering loss while this screen
+    // is open. Quoting a category it no longer offers, or charging a coverage
+    // fee for a promise it has withdrawn, would be a price the server refuses
+    // to honour.
+    if (freightCategoryLookup(fresh.freightCategories, _categoryId) == null) {
+      _categoryId = defaultFreightCategoryId(fresh.freightCategories);
+    }
+    if (!_worthAskingDeclaredValue(fresh)) _resetDeclaredValue();
+  }
+
+  bool _worthAskingDeclaredValue(BusinessDestinationOption option) =>
+      option.freightCoverage?.worthAskingDeclaredValue == true;
+
+  void _resetDeclaredValue() {
+    _declaresValue = false;
+    _declaredValueController.clear();
   }
 
   List<BusinessDestinationOption> get _filtered {
@@ -183,9 +210,42 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
 
   double get _weightKg => double.tryParse(_weightController.text.trim()) ?? 0;
   double get _ratePerKg => _selected?.country.freightRatePerKg(_mode) ?? 0;
-  double get _price => _weightKg > 0 ? _weightKg * _ratePerKg : 0;
+
+  List<FreightCategory> get _categories =>
+      _selected?.freightCategories ?? const <FreightCategory>[];
+
+  FreightCategory? get _category =>
+      freightCategoryLookup(_categories, _categoryId);
+
+  /// The per-kg rate the customer is actually paying, category included. The
+  /// destination's rate never changes; the category rides on top of it.
+  double get _effectiveRatePerKg =>
+      _ratePerKg * freightCategoryMultiplier(_categories, _categoryId);
+
+  double get _price => freightShippingFee(
+    weightKg: _weightKg,
+    ratePerKg: _ratePerKg,
+    multiplier: freightCategoryMultiplier(_categories, _categoryId),
+  );
+
+  /// What the customer says the parcel would cost to replace. Zero unless they
+  /// said there was something worth declaring - the question is optional and a
+  /// stale number in a hidden field must not reach the server.
+  double get _declaredValue => _declaresValue
+      ? (double.tryParse(_declaredValueController.text.trim()) ?? 0)
+      : 0;
+
+  /// Priced locally so the fee and the promise are on screen before payment.
+  /// The callable re-prices it against a freshly read business document and
+  /// has the final word.
+  FreightCoverageQuote get _coverageQuote => quoteFreightCoverage(
+    policy: _selected?.freightCoverage ?? FreightCoveragePolicy.none,
+    declaredValue: _declaredValue,
+  );
+
   double get _appliedPickupFee => _pickupRequested ? (_pickupFee ?? 0) : 0;
-  double get _totalPrice => _price + _appliedPickupFee;
+  double get _totalPrice =>
+      _price + _appliedPickupFee + _coverageQuote.coverageFee;
 
   /// Pickup is blocking the order only when it's requested but not yet resolved
   /// (still quoting, errored, or missing required details).
@@ -207,6 +267,10 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       _mode = modes.contains(_mode)
           ? _mode
           : (modes.isNotEmpty ? modes.first : 'sea');
+      // Categories and coverage are per business, so nothing carries over from
+      // whichever business was open before.
+      _categoryId = defaultFreightCategoryId(o.freightCategories);
+      _resetDeclaredValue();
       _resetPickup();
       // Pickup availability + model are resolved server-side and travel with
       // the option, so no extra (rule-blocked) business read is needed here.
@@ -401,6 +465,8 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         businessId: option.businessId,
         mode: _mode,
         weightKg: _weightKg,
+        itemCategoryId: _categoryId,
+        declaredValue: _declaredValue > 0 ? _declaredValue : null,
         pickupRequested: _pickupRequested,
         pickupAddress: _pickupRequested ? _pickupAddress.composeLine() : null,
         pickupDateTime: _pickupRequested
@@ -424,13 +490,28 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
           : const <String, dynamic>{};
       final message = details['reason'] == 'invalid_freight_mode'
           ? l10n.invalidFreightMode
-          : l10n.freightBookingFailed;
+          // The server refuses a declared value in its own words, because only
+          // it knows what this business will carry ("This business does not
+          // carry parcels worth that much"). Replacing that with a generic
+          // failure would leave the customer changing random fields.
+          : _declaredValueRefusal(error) ?? l10n.freightBookingFailed;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// The server's own sentence when it turned down the declared value, or null
+  /// when this failure was about something else. Shown verbatim: it is the only
+  /// party that knows the ceiling, and a paraphrase would risk contradicting it.
+  String? _declaredValueRefusal(Object error) {
+    if (_declaredValue <= 0) return null;
+    if (error is! FirebaseFunctionsException) return null;
+    if (error.code != 'failed-precondition') return null;
+    final message = (error.message ?? '').trim();
+    return message.isEmpty ? null : message;
   }
 
   void _snack(String m) =>
@@ -634,6 +715,11 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                               '\$${o.country.freightSeaPricePerKg.toStringAsFixed(2)}',
                             ),
                           ),
+                        // Before the business is chosen, not after: a customer
+                        // should be able to pick partly on whether anyone
+                        // stands behind the parcel, and the business that does
+                        // not has to say so while it can still be avoided.
+                        if (o.freightCoverage != null) _coveragePill(theme, o),
                         _ratePill(
                           theme,
                           Icons.verified_outlined,
@@ -696,21 +782,48 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     return days.map(label).join(', ');
   }
 
-  Widget _ratePill(ThemeData theme, IconData icon, String label) {
+  Widget _ratePill(
+    ThemeData theme,
+    IconData icon,
+    String label, {
+    Color? background,
+    Color? foreground,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
+        color: background ?? theme.colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14),
+          Icon(icon, size: 14, color: foreground),
           const SizedBox(width: 6),
-          Text(label, style: theme.textTheme.labelMedium),
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(color: foreground),
+          ),
         ],
       ),
+    );
+  }
+
+  /// "Covers up to $2,000 · 2%" against "No coverage", on the card the customer
+  /// chooses from.
+  Widget _coveragePill(ThemeData theme, BusinessDestinationOption o) {
+    final l10n = AppLocalizations.of(context)!;
+    final covers = o.freightCoverage?.coversLoss == true;
+    return _ratePill(
+      theme,
+      covers ? Icons.shield_outlined : Icons.gpp_maybe_outlined,
+      freightCoverageSummaryText(l10n, o.freightCoverage),
+      background: covers
+          ? theme.colorScheme.primaryContainer
+          : theme.colorScheme.surfaceContainerHighest,
+      foreground: covers
+          ? theme.colorScheme.onPrimaryContainer
+          : theme.hintColor,
     );
   }
 
@@ -837,6 +950,263 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     );
   }
 
+  /// What is in the parcel. The platform owns the list so two businesses can be
+  /// compared on the same words; this business owns the price, so the effect on
+  /// the per-kg rate is shown here rather than discovered on the receipt.
+  Widget _categorySection(ThemeData theme, AppLocalizations l10n) {
+    final categories = _categories;
+    final selected = _category;
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              l10n.freightCategoryQuestion,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              l10n.freightCategoryHelp,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.hintColor,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final category in categories)
+                  ChoiceChip(
+                    label: Text(
+                      category.changesPrice
+                          ? '${freightCategoryLabel(l10n, category)} · '
+                                '${freightMultiplierText(category.multiplier)}'
+                          : freightCategoryLabel(l10n, category),
+                    ),
+                    selected: category.id == _categoryId,
+                    onSelected: _busy
+                        ? null
+                        : (_) => setState(() => _categoryId = category.id),
+                  ),
+              ],
+            ),
+            if (selected != null) ...[
+              const SizedBox(height: 10),
+              if (freightCategoryHint(l10n, selected).isNotEmpty)
+                Text(
+                  freightCategoryHint(l10n, selected),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.hintColor,
+                  ),
+                ),
+              const SizedBox(height: 4),
+              Text(
+                '${freightCategoryRateText(l10n, selected)} · '
+                '${l10n.pricePerKg('\$${_effectiveRatePerKg.toStringAsFixed(2)}')}',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Who stands behind the parcel, and the one question only the customer can
+  /// answer. Asked once, and only where the answer changes something: a
+  /// business that neither covers loss nor states a ceiling does nothing with
+  /// it, so it is told plainly instead of being asked.
+  Widget _coverageSection(ThemeData theme, AppLocalizations l10n) {
+    final option = _selected!;
+    final policy = option.freightCoverage;
+    if (policy == null) return const SizedBox.shrink();
+    final quote = _coverageQuote;
+    final asks = policy.worthAskingDeclaredValue;
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  policy.coversLoss
+                      ? Icons.shield_outlined
+                      : Icons.gpp_maybe_outlined,
+                  size: 18,
+                  color: policy.coversLoss
+                      ? theme.colorScheme.primary
+                      : theme.hintColor,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  l10n.freightCoverageSectionTitle,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            // A business that will not pay for a lost parcel says so here,
+            // before the parcel is handed over, rather than after it is lost.
+            if (!policy.coversLoss)
+              Text(
+                l10n.freightCoverageNotOffered(option.businessName),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.hintColor,
+                ),
+              ),
+            if (asks) ...[
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _declaresValue,
+                onChanged: _busy
+                    ? null
+                    : (value) => setState(() {
+                        _declaresValue = value;
+                        if (!value) _declaredValueController.clear();
+                      }),
+                title: Text(
+                  l10n.freightCoverageQuestion(
+                    freightMoney(policy.declarationThreshold),
+                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(l10n.freightCoverageQuestionHelp),
+              ),
+              if (_declaresValue) ...[
+                TextField(
+                  controller: _declaredValueController,
+                  enabled: !_busy,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    labelText: l10n.freightDeclaredValueLabel,
+                    helperText: l10n.freightDeclaredValueHelper,
+                    helperMaxLines: 3,
+                    prefixText: '\$',
+                    prefixIcon: const Icon(Icons.attach_money),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _coverageStatus(theme, l10n, option, policy, quote),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _coverageStatus(
+    ThemeData theme,
+    AppLocalizations l10n,
+    BusinessDestinationOption option,
+    FreightCoveragePolicy policy,
+    FreightCoverageQuote quote,
+  ) {
+    // The ceiling is a statement about what this business is willing to carry,
+    // so it is shown whether or not the business sells coverage. When the
+    // declared value is over it the same sentence turns red - the server owns
+    // the refusal wording and there is no point inventing a second one.
+    final ceilingLine = policy.hasCeiling
+        ? Text(
+            l10n.freightCoverageCarriesUpTo(
+              option.businessName,
+              freightMoney(policy.maxDeclaredValue),
+            ),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: quote.error == FreightCoverageError.aboveMaxDeclaredValue
+                  ? theme.colorScheme.error
+                  : theme.hintColor,
+              fontWeight:
+                  quote.error == FreightCoverageError.aboveMaxDeclaredValue
+                  ? FontWeight.w700
+                  : FontWeight.w400,
+            ),
+          )
+        : null;
+
+    if (_declaredValue <= 0) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.freightCoverageEnterValue,
+            style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+          ),
+          if (ceilingLine != null) ...[const SizedBox(height: 4), ceilingLine],
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (quote.covered) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.freightCoverageFeeLabel,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.hintColor,
+                  ),
+                ),
+              ),
+              Text(
+                '\$${quote.coverageFee.toStringAsFixed(2)}',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            l10n.freightCoveragePaysUpTo(
+              option.businessName,
+              freightMoney(quote.payoutCap),
+            ),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          // The platform is not the insurer, and the customer should know
+          // whose promise this is before relying on it.
+          Text(
+            l10n.freightCoverageWhoPays(option.businessName),
+            style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+          ),
+        ],
+        if (ceilingLine != null) ...[
+          if (quote.covered) const SizedBox(height: 4),
+          ceilingLine,
+        ],
+      ],
+    );
+  }
+
   // ---- Step 2: booking form for the selected option ----
   Widget _bookingForm(ThemeData theme) {
     final l10n = AppLocalizations.of(context)!;
@@ -901,6 +1271,14 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
             prefixIcon: const Icon(Icons.scale_outlined),
           ),
         ),
+        if (_categories.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          _categorySection(theme, l10n),
+        ],
+        if (o.freightCoverage != null) ...[
+          const SizedBox(height: 14),
+          _coverageSection(theme, l10n),
+        ],
         const SizedBox(height: 14),
         TextField(
           controller: _senderController,
@@ -972,12 +1350,20 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                       Text(
                         _weightKg > 0
                             ? '${_weightKg.toStringAsFixed(1)} kg × '
-                                  '\$${_ratePerKg.toStringAsFixed(2)}'
+                                  '\$${_effectiveRatePerKg.toStringAsFixed(2)}'
                             : l10n.enterWeightToSeePrice,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.hintColor,
                         ),
                       ),
+                      if (_coverageQuote.coverageFee > 0)
+                        Text(
+                          '+ \$${_coverageQuote.coverageFee.toStringAsFixed(2)} '
+                          '${l10n.freightCoverageFeeLabel}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.hintColor,
+                          ),
+                        ),
                       if (_appliedPickupFee > 0)
                         Text(
                           '+ \$${_appliedPickupFee.toStringAsFixed(2)} '

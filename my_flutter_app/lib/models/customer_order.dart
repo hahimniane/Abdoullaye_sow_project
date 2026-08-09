@@ -247,7 +247,11 @@ class CustomerOrder {
       currency: _str(d, 'depositCurrency', 'usd'),
       status: normalizeStatus(statusRaw),
       createdAt: _date(d, 'createdAt'),
-      detailRoute: '/my-purchases',
+      // A viewing no longer lives in My Purchases, so sending it there would
+      // open a list that deliberately excludes it.
+      detailRoute: _str(d, 'paymentType') == 'viewing_reservation'
+          ? '/my-viewings'
+          : '/my-purchases',
     );
   }
 

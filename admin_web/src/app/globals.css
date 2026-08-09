@@ -7526,6 +7526,33 @@ button[data-loading="true"]::before {
   margin-top: 0;
 }
 
+/* Each business's loss policy, on the card the customer chooses from. It sits
+   full width rather than in the two-column rate grid because "no coverage" is
+   the thing a reader must not miss while comparing, and a half-width cell
+   beside a price reads as a footnote. */
+.customer-destination-coverage {
+  align-items: center;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  color: var(--brand-strong);
+  display: flex;
+  gap: 7px;
+  padding: 8px;
+}
+.customer-destination-coverage > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.customer-destination-coverage small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+.customer-destination-coverage strong {
+  font-size: 12px;
+}
+
 .customer-approved-label {
   align-items: center;
   color: var(--brand-strong);
@@ -7648,6 +7675,16 @@ button[data-loading="true"]::before {
   line-height: 1.5;
   padding: 11px;
   resize: vertical;
+}
+
+/* A hint under a field - what a chosen item category covers, or the ceiling a
+   business puts on declared value. Without this it inherits the label's weight
+   and reads as a second label rather than as the explanation of the first. */
+.customer-shipping-form-grid > label > small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.4;
 }
 
 .customer-shipping-form-grid select:focus,
@@ -9561,6 +9598,14 @@ button[data-loading="true"]::before {
 }
 .service-config-fields {
   padding: 16px;
+}
+/* A row inside a service card that spans both columns - a nested group of
+   fields, an on-screen warning, or a heading for the block below it. Without
+   this it silently renders half-width and the block reads as one column of
+   two unrelated things. */
+.service-config-fields > .wide,
+.service-config-fields .lst-form-grid > .wide {
+  grid-column: 1 / -1;
 }
 .service-config-note,
 .service-config-empty {

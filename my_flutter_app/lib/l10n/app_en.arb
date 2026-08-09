@@ -1,4 +1,5 @@
 {
+  "@@locale": "en",
   "welcomeBack": "Welcome Back",
   "signInToAccount": "Sign in to your account",
   "accountLoginTitle": "Account Login",
@@ -507,6 +508,7 @@
   "enterCarTransportDetails": "Enter car transport details",
   "cars": "Cars",
   "myPurchases": "My Purchases",
+  "hubViewingsSubtitle": "Appointments to see a car",
   "myCarViewings": "Car viewings",
   "noCarViewingsYet": "No car viewings yet. Ask to see a car from its listing.",
   "noPurchasesYet": "No car purchases yet.",
@@ -2856,5 +2858,80 @@
       "max": {}
     }
   },
-  "viewingSendProposal": "Send"
+  "viewingSendProposal": "Send",
+  "freightCategoryQuestion": "What's in the parcel?",
+  "freightCategoryHelp": "Businesses charge more for what costs more to replace.",
+  "freightCategoryGeneral": "General goods",
+  "freightCategoryGeneralHint": "Household items, gifts, anything not listed below",
+  "freightCategoryClothing": "Clothes and fabric",
+  "freightCategoryClothingHint": "Clothing, shoes, cloth, bedding",
+  "freightCategoryFood": "Food",
+  "freightCategoryFoodHint": "Dry and packaged food only",
+  "freightCategoryDocuments": "Documents",
+  "freightCategoryDocumentsHint": "Papers, certificates, printed matter",
+  "freightCategoryCosmetics": "Cosmetics and liquids",
+  "freightCategoryCosmeticsHint": "Creams, perfumes, hair products",
+  "freightCategoryElectronics": "Electronics",
+  "freightCategoryElectronicsHint": "Phones, laptops, tablets, chargers",
+  "freightCategoryFragile": "Fragile items",
+  "freightCategoryFragileHint": "Glass, ceramics, anything breakable",
+  "freightCategoryStandardRate": "Standard rate",
+  "freightCategoryRateMultiplier": "{multiplier} the per-kg rate",
+  "@freightCategoryRateMultiplier": {
+    "placeholders": {
+      "multiplier": {}
+    }
+  },
+  "freightCoverageNone": "No coverage",
+  "freightCoverageCoversUpTo": "Covers up to {amount} · {rate}",
+  "@freightCoverageCoversUpTo": {
+    "placeholders": {
+      "amount": {},
+      "rate": {}
+    }
+  },
+  "freightCoverageCoversLoss": "Covers loss · {rate}",
+  "@freightCoverageCoversLoss": {
+    "placeholders": {
+      "rate": {}
+    }
+  },
+  "freightCoverageSectionTitle": "If it goes missing",
+  "freightCoverageQuestion": "Is anything worth more than {amount}?",
+  "@freightCoverageQuestion": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "freightCoverageQuestionHelp": "Only you know what is in the box, so only you can say what it would cost to replace.",
+  "freightDeclaredValueLabel": "Replacement value",
+  "freightDeclaredValueHelper": "What you declare is also the most that can be paid back, so declare it honestly.",
+  "freightCoverageFeeLabel": "Coverage fee",
+  "freightCoverageEnterValue": "Enter what it is worth to see the coverage fee.",
+  "freightCoveragePaysUpTo": "{businessName} pays you up to {amount} if this parcel is lost.",
+  "@freightCoveragePaysUpTo": {
+    "placeholders": {
+      "businessName": {},
+      "amount": {}
+    }
+  },
+  "freightCoverageWhoPays": "Laawol records this agreement. {businessName} is the business that pays.",
+  "@freightCoverageWhoPays": {
+    "placeholders": {
+      "businessName": {}
+    }
+  },
+  "freightCoverageNotOffered": "{businessName} does not cover lost parcels. If this parcel goes missing, nothing is paid back.",
+  "@freightCoverageNotOffered": {
+    "placeholders": {
+      "businessName": {}
+    }
+  },
+  "freightCoverageCarriesUpTo": "{businessName} carries parcels worth up to {amount}.",
+  "@freightCoverageCarriesUpTo": {
+    "placeholders": {
+      "businessName": {},
+      "amount": {}
+    }
+  }
 }
