@@ -117,3 +117,64 @@ When you split a list, check what the split leaves behind: filters, counts and
 search that referred to the whole set now describe only part of it. Splitting
 viewings out of purchases left the purchases filter still offering viewing
 statuses that could no longer match anything.
+
+---
+
+## 6. Navigation must not be a form control inside a read-only form
+
+Several panels wrap their form in `<fieldset disabled>` for viewers who may
+look but not edit. A disabled fieldset disables **every descendant form
+control**, so any `<button>` inside it silently stops working — including
+buttons that have nothing to do with editing.
+
+This has now caused the same bug twice in one file:
+
+- `FieldInfo`'s "i" became unpressable, for exactly the people most likely to
+  need an explanation and least able to discover things by experimenting.
+- The service-rule tabs, added an hour later, silently refused to switch —
+  leaving read-only viewers **worse off than the single scroll the tabs
+  replaced**. At least you can scroll.
+
+**The rule:** if a control changes *what you are looking at* rather than *what
+is saved*, it is navigation. Render it as a `<span role="button" tabIndex={0}>`
+with `onClick` and an `onKeyDown` handling Enter and Space. It stays operable
+inside a disabled fieldset and remains reachable from the keyboard.
+
+Genuine inputs — anything that writes — should stay inside the fieldset and
+stay disabled. That is the fieldset doing its job.
+
+---
+
+## 7. A new container class means no styling
+
+Every `.segment` rule in `globals.css` is scoped under `.service-segments`.
+Reusing the control means reusing **that class**, not inventing a sibling.
+
+The service-rule tabs shipped as unstyled run-together text because the
+container got a fresh class of its own. The markup was right, the behaviour was
+right, and none of the appearance applied.
+
+Before adding a class for a control you are reusing, grep for how the existing
+rules are scoped. If they hang off a parent class, use the parent class and add
+your own alongside it for the handful of properties that genuinely differ:
+
+```tsx
+className="service-segments service-rule-tabs"
+```
+
+---
+
+## 8. Reading the DOM is not looking at the screen
+
+The tab bug above was "verified" by querying state out of the page with
+JavaScript — which confirmed the right card rendered for each tab, and said
+nothing about the tabs being unstyled text. Behaviour was correct, appearance
+was broken, and only one of them was being checked. The user spotted it from a
+screenshot immediately.
+
+Scripted checks are good for state, routing and geometry. They cannot tell you
+something looks wrong. **Take a screenshot, or say plainly that you did not.**
+
+If the screenshot tooling fails — it does — measuring computed styles is a
+reasonable fallback, but report it as measurement rather than as having seen it,
+and ask someone to glance at the screen.
