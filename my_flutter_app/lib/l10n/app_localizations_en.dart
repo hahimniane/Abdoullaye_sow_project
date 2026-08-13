@@ -3558,6 +3558,64 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get cancelOrderTitle => 'Cancel this order?';
+
+  @override
+  String get cancelOrderHeldBody =>
+      'Your card was never charged — the hold is released and you pay nothing.';
+
+  @override
+  String get cancelOrderCapturedBody =>
+      'Your payment is refunded minus the card processing fee, as stated at checkout.';
+
+  @override
+  String get cancelWholeOrderHeldBody =>
+      'This shipment was paid together with the rest of its order, so the whole order is cancelled. Your card was never charged — you pay nothing.';
+
+  @override
+  String get cancelWholeOrderCapturedBody =>
+      'This shipment was paid together with the rest of its order, so the whole order is cancelled. Your payment is refunded minus the card processing fee.';
+
+  @override
+  String get keepOrder => 'Keep order';
+
+  @override
+  String get cancelOrderConfirm => 'Cancel order';
+
+  @override
+  String get cancelOrderFreeAction => 'Cancel order (free)';
+
+  @override
+  String get cancelOrderRefundAction => 'Cancel order (refund minus card fee)';
+
+  @override
+  String get orderCancelledFree =>
+      'Order cancelled. Your card was never charged.';
+
+  @override
+  String get orderRefunded =>
+      'Order cancelled. Your refund is on its way, minus the card fee.';
+
+  @override
+  String get genericError => 'Something went wrong. Please try again.';
+
+  @override
+  String get paymentHoldNotice =>
+      'No charge today — the amount is reserved on your card and charged when the reservation window ends (5–7 days for most cards). Cancelling before then is free; after that, refunds lose the card processing fee.';
+
+  @override
+  String get freightSortBestRated => 'Best rated';
+
+  @override
+  String get freightSortCheapest => 'Cheapest';
+
+  @override
+  String get freightSortBestCover => 'Best cover';
+
+  @override
+  String get freightSortFastest => 'Fastest';
+
+  @override
   String get searchBusinessOrCountry => 'Search a business or country';
 
   @override

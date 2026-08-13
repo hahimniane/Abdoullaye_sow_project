@@ -6524,6 +6524,108 @@ abstract class AppLocalizations {
   /// **'Sea delivery: {minimum}-{maximum} days'**
   String freightSeaDeliveryEstimateDays(int minimum, int maximum);
 
+  /// No description provided for @cancelOrderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel this order?'**
+  String get cancelOrderTitle;
+
+  /// No description provided for @cancelOrderHeldBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your card was never charged — the hold is released and you pay nothing.'**
+  String get cancelOrderHeldBody;
+
+  /// No description provided for @cancelOrderCapturedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your payment is refunded minus the card processing fee, as stated at checkout.'**
+  String get cancelOrderCapturedBody;
+
+  /// No description provided for @cancelWholeOrderHeldBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This shipment was paid together with the rest of its order, so the whole order is cancelled. Your card was never charged — you pay nothing.'**
+  String get cancelWholeOrderHeldBody;
+
+  /// No description provided for @cancelWholeOrderCapturedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This shipment was paid together with the rest of its order, so the whole order is cancelled. Your payment is refunded minus the card processing fee.'**
+  String get cancelWholeOrderCapturedBody;
+
+  /// No description provided for @keepOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep order'**
+  String get keepOrder;
+
+  /// No description provided for @cancelOrderConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel order'**
+  String get cancelOrderConfirm;
+
+  /// No description provided for @cancelOrderFreeAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel order (free)'**
+  String get cancelOrderFreeAction;
+
+  /// No description provided for @cancelOrderRefundAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel order (refund minus card fee)'**
+  String get cancelOrderRefundAction;
+
+  /// No description provided for @orderCancelledFree.
+  ///
+  /// In en, this message translates to:
+  /// **'Order cancelled. Your card was never charged.'**
+  String get orderCancelledFree;
+
+  /// No description provided for @orderRefunded.
+  ///
+  /// In en, this message translates to:
+  /// **'Order cancelled. Your refund is on its way, minus the card fee.'**
+  String get orderRefunded;
+
+  /// No description provided for @genericError.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Please try again.'**
+  String get genericError;
+
+  /// No description provided for @paymentHoldNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'No charge today — the amount is reserved on your card and charged when the reservation window ends (5–7 days for most cards). Cancelling before then is free; after that, refunds lose the card processing fee.'**
+  String get paymentHoldNotice;
+
+  /// No description provided for @freightSortBestRated.
+  ///
+  /// In en, this message translates to:
+  /// **'Best rated'**
+  String get freightSortBestRated;
+
+  /// No description provided for @freightSortCheapest.
+  ///
+  /// In en, this message translates to:
+  /// **'Cheapest'**
+  String get freightSortCheapest;
+
+  /// No description provided for @freightSortBestCover.
+  ///
+  /// In en, this message translates to:
+  /// **'Best cover'**
+  String get freightSortBestCover;
+
+  /// No description provided for @freightSortFastest.
+  ///
+  /// In en, this message translates to:
+  /// **'Fastest'**
+  String get freightSortFastest;
+
   /// No description provided for @searchBusinessOrCountry.
   ///
   /// In en, this message translates to:

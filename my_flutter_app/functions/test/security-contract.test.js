@@ -185,7 +185,12 @@ test("payment cancellation never cancels a successful or in-flight charge",
         assert.match(source, /retrieveStripePaymentIntent/);
         assert.match(source, /intent\.status === "succeeded"/);
         assert.match(source, /intent\.status === "processing"/);
-        assert.match(source, /intent\.status === "requires_capture"/);
+        // Contract changed 2026-08-10 with the hold-first payment model:
+        // requires_capture is a HELD payment, and cancelling it releases the
+        // hold for free - that is the customer promise of the model. Only
+        // genuinely in-flight ("processing") payments stay uncancellable, so
+        // requires_capture must NOT appear in the refusal branch.
+        assert.doesNotMatch(source, /intent\.status === "requires_capture"/);
         assert.match(source, /cancelStripePaymentIntent/);
         assert.match(source, /recoveredPayment:\s*true/);
       }

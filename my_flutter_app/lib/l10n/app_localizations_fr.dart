@@ -3638,6 +3638,65 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get cancelOrderTitle => 'Annuler cette commande ?';
+
+  @override
+  String get cancelOrderHeldBody =>
+      'Votre carte n’a jamais été débitée — la réservation est libérée et vous ne payez rien.';
+
+  @override
+  String get cancelOrderCapturedBody =>
+      'Votre paiement est remboursé moins les frais bancaires, comme indiqué au moment du paiement.';
+
+  @override
+  String get cancelWholeOrderHeldBody =>
+      'Cet envoi a été payé avec le reste de sa commande : toute la commande est annulée. Votre carte n’a jamais été débitée — vous ne payez rien.';
+
+  @override
+  String get cancelWholeOrderCapturedBody =>
+      'Cet envoi a été payé avec le reste de sa commande : toute la commande est annulée. Votre paiement est remboursé moins les frais bancaires.';
+
+  @override
+  String get keepOrder => 'Garder la commande';
+
+  @override
+  String get cancelOrderConfirm => 'Annuler la commande';
+
+  @override
+  String get cancelOrderFreeAction => 'Annuler la commande (gratuit)';
+
+  @override
+  String get cancelOrderRefundAction =>
+      'Annuler la commande (remboursement moins frais)';
+
+  @override
+  String get orderCancelledFree =>
+      'Commande annulée. Votre carte n’a jamais été débitée.';
+
+  @override
+  String get orderRefunded =>
+      'Commande annulée. Votre remboursement arrive, moins les frais bancaires.';
+
+  @override
+  String get genericError => 'Une erreur est survenue. Veuillez réessayer.';
+
+  @override
+  String get paymentHoldNotice =>
+      'Aucun débit aujourd’hui — le montant est réservé sur votre carte et débité à la fin de la période de réservation (5 à 7 jours pour la plupart des cartes). Annulation gratuite avant le débit ; ensuite, les remboursements perdent les frais bancaires.';
+
+  @override
+  String get freightSortBestRated => 'Mieux noté';
+
+  @override
+  String get freightSortCheapest => 'Moins cher';
+
+  @override
+  String get freightSortBestCover => 'Meilleure couverture';
+
+  @override
+  String get freightSortFastest => 'Plus rapide';
+
+  @override
   String get searchBusinessOrCountry => 'Rechercher une entreprise ou un pays';
 
   @override

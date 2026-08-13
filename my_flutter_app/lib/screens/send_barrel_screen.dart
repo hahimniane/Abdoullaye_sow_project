@@ -15,6 +15,7 @@ import '../models/structured_address.dart';
 import '../services/barrel_pricing_service.dart';
 import '../services/barrel_shipment_service.dart';
 import '../services/business_service.dart';
+import '../services/service_ranking.dart';
 import '../services/payment_flow_safety.dart';
 import '../utils/barrel_receipt_generator.dart';
 import '../utils/action_confirmation.dart';
@@ -295,6 +296,7 @@ class _SendBarrelScreenState extends State<SendBarrelScreen>
       context,
       providerNames: providerNames,
       transactionSummary: l10n.sendBarrels,
+      showHoldNotice: true,
     );
     if (marketplaceAcceptance == null || !mounted) return;
 
@@ -1146,7 +1148,7 @@ class _InlineNotice extends StatelessWidget {
   }
 }
 
-class _BusinessOptionSelector extends StatelessWidget {
+class _BusinessOptionSelector extends StatefulWidget {
   const _BusinessOptionSelector({
     required this.countryId,
     required this.value,
@@ -1156,6 +1158,28 @@ class _BusinessOptionSelector extends StatelessWidget {
   final String countryId;
   final BusinessDestinationOption? value;
   final ValueChanged<BusinessDestinationOption?> onChanged;
+
+  @override
+  State<_BusinessOptionSelector> createState() =>
+      _BusinessOptionSelectorState();
+}
+
+class _BusinessOptionSelectorState extends State<_BusinessOptionSelector> {
+  // Which order the businesses are shown in. Held here rather than passed
+  // down, because it changes what the customer is looking at and nothing else.
+  ServiceSort _sort = kDefaultServiceSort;
+
+  String get countryId => widget.countryId;
+  BusinessDestinationOption? get value => widget.value;
+  ValueChanged<BusinessDestinationOption?> get onChanged => widget.onChanged;
+
+  static String _sortLabel(AppLocalizations l10n, ServiceSort sort) =>
+      switch (sort) {
+        ServiceSort.cheapest => l10n.freightSortCheapest,
+        ServiceSort.coverage => l10n.freightSortBestCover,
+        ServiceSort.fastest => l10n.freightSortFastest,
+        ServiceSort.rated => l10n.freightSortBestRated,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -1171,7 +1195,13 @@ class _BusinessOptionSelector extends StatelessWidget {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final options = snapshot.data!;
+        // Ranked on one barrel each: the quantity field sits further down the
+        // form, and one apiece is still a fair comparison between businesses.
+        final options = sortServiceOptions(
+          snapshot.data!,
+          service: 'barrelShipping',
+          sort: _sort,
+        );
         if (options.isEmpty) {
           return _InlineNotice(
             message: l10n.noApprovedBusinessShippingDestination,
@@ -1205,6 +1235,27 @@ class _BusinessOptionSelector extends StatelessWidget {
                   ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 8),
+                if (shouldOfferServiceSort(options, 'barrelShipping'))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (final sort in sortsForService('barrelShipping'))
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ChoiceChip(
+                                label: Text(_sortLabel(l10n, sort)),
+                                selected: _sort == sort,
+                                onSelected: (_) =>
+                                    setState(() => _sort = sort),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
                 for (final option in options) ...[
                   _BusinessOptionCard(
                     option: option,

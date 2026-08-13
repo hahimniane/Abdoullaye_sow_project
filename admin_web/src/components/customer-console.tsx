@@ -521,11 +521,19 @@ function OrderPanel({
     () => orders.find((order) => orderKey(order) === selectedKey) ?? null,
     [orders, selectedKey],
   );
-  const cancelAction = selected ? pendingOrderCancellation(selected) : null;
+  const cancelAction = selected
+    ? (pendingOrderCancellation(selected) ?? securedOrderCancellation(selected))
+    : null;
   const reviewedKeys = useReviewedOrderKeys(uid);
 
   async function cancelSelectedOrder() {
     if (!selected || !cancelAction) return;
+    // Secured cancellations move money, so they say what will happen and ask
+    // first; pending ones never charged anything and keep the old one-click.
+    if ("confirm" in cancelAction && cancelAction.confirm &&
+        !window.confirm(cancelAction.confirm)) {
+      return;
+    }
     await httpsCallable(functions, cancelAction.callable)(cancelAction.payload);
   }
 
@@ -566,6 +574,10 @@ function OrderPanel({
         </div>
       </section>
       <OrderDetailDrawer
+        cancelLabel={
+          (cancelAction && "label" in cancelAction && cancelAction.label) ||
+          "Cancel request"
+        }
         onCancelOrder={cancelAction ? cancelSelectedOrder : undefined}
         onClose={() => {
           setSelectedKey("");
@@ -721,6 +733,70 @@ const TRANSPORT_QUOTED_FIELDS = [
   "requestedTransportMethod",
   "destinationCountryId",
 ] as const;
+
+/**
+ * Cancellation for an order that is already PAID (secured), shipping flows
+ * only. The money outcome is decided server-side by cancelSecuredCustomerOrder:
+ * still-held payments release for free; captured ones refund minus the card
+ * fee. The label and confirm copy here mirror those two outcomes so the
+ * customer knows which one they are choosing before they press anything.
+ */
+function securedOrderCancellation(order: TaggedRow) {
+  const status = text(order.row.status, "").toLowerCase();
+  const paymentStatus = text(order.row.paymentStatus, "").toLowerCase();
+  if (status !== "pending" || paymentStatus !== "succeeded") return null;
+
+  const held = text(order.row.paymentHoldStatus, "") === "held";
+  const copy = held
+    ? {
+        label: "Cancel order (free)",
+        confirm:
+          "Cancel this order? Your card was never charged - the hold is " +
+          "released and you pay nothing.",
+      }
+    : {
+        label: "Cancel order (refund minus card fee)",
+        confirm:
+          "Cancel this order? Your payment is refunded minus the card " +
+          "processing fee, as stated at checkout.",
+      };
+
+  switch (order.collectionName) {
+    case "freightShipments":
+      return {
+        callable: "cancelSecuredCustomerOrder",
+        payload: { orderType: "freightShipment", recordId: order.row.id },
+        ...copy,
+      };
+    case "barrelShipments": {
+      // A shipment born from a multi-destination order shares one payment
+      // with its siblings, so the cancellable unit is the whole order.
+      const orderId = text(order.row.orderId, "");
+      if (orderId) {
+        return {
+          callable: "cancelSecuredCustomerOrder",
+          payload: { orderType: "barrelOrder", recordId: orderId },
+          label: held
+            ? "Cancel whole order (free)"
+            : "Cancel whole order (refund minus card fee)",
+          confirm:
+            "This shipment was paid together with the rest of its order, " +
+            "so the whole order is cancelled. " +
+            (held
+              ? "Your card was never charged - you pay nothing."
+              : "Your payment is refunded minus the card processing fee."),
+        };
+      }
+      return {
+        callable: "cancelSecuredCustomerOrder",
+        payload: { orderType: "barrelShipment", recordId: order.row.id },
+        ...copy,
+      };
+    }
+    default:
+      return null;
+  }
+}
 
 function pendingOrderCancellation(order: TaggedRow) {
   // A marketplace transport request sits at "quote_requested", not "pending",

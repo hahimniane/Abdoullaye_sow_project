@@ -500,6 +500,11 @@ function paymentStateFromStripe({eventType, intent}) {
   }
   const eventStates = {
     "payment_intent.succeeded": PAYMENT_STATES.SUCCEEDED,
+    // A manual-capture intent never emits payment_intent.succeeded at
+    // confirmation - this is its "customer has paid" event. The money is
+    // reserved on the card and capture cannot fail the way a fresh charge
+    // can, so it counts as success (see payment_hold.js).
+    "payment_intent.amount_capturable_updated": PAYMENT_STATES.SUCCEEDED,
     "payment_intent.processing": PAYMENT_STATES.PROCESSING,
     "payment_intent.payment_failed": PAYMENT_STATES.FAILED,
     "payment_intent.canceled": PAYMENT_STATES.CANCELLED,
@@ -512,7 +517,11 @@ function paymentStateFromStripe({eventType, intent}) {
     requires_payment_method: PAYMENT_STATES.FAILED,
     requires_action: PAYMENT_STATES.PROCESSING,
     requires_confirmation: PAYMENT_STATES.PROCESSING,
-    requires_capture: PAYMENT_STATES.PROCESSING,
+    // Held, not merely in flight: the bank has reserved the funds. Mapping
+    // this to PROCESSING (as before 2026-08-10) left every held order
+    // permanently pending, because a hold never becomes "succeeded" on its
+    // own - capture is OUR move, made later by the hold scheduler.
+    requires_capture: PAYMENT_STATES.SUCCEEDED,
   };
   return statusStates[clean(intent?.status)] || PAYMENT_STATES.PENDING;
 }

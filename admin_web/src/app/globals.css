@@ -12228,6 +12228,20 @@ button[data-loading="true"]::before {
    settings and operations views use, so it reads as the same idea rather than
    a new one. Wraps rather than scrolls: a business with five services should
    see every tab without hunting for the rest. */
+/* Ordering the businesses on offer for any service. Sits on .service-segments for the
+   chip styling; only the sizing and the cursor differ, because the base class
+   dresses full service tiles rather than a row of small controls. */
+.service-sort-segments {
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.service-sort-segments .segment {
+  cursor: pointer;
+  font-size: 13.5px;
+  padding: 8px 14px;
+}
+
 .service-rule-tabs {
   display: flex;
   flex-wrap: wrap;

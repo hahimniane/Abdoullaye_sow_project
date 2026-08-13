@@ -164,7 +164,45 @@ className="service-segments service-rule-tabs"
 
 ---
 
-## 8. Reading the DOM is not looking at the screen
+## 8. A service only offers the sorts it can answer
+
+Customers order businesses with a row of chips — Cheapest, Best cover,
+Fastest, Best rated. **Which chips appear is declared once**, per service, in
+`functions/service_ranking.js` and its two mirrors. Screens call
+`sortsForService(id)`; none of them keeps a list.
+
+The declaration is derived from what the data holds, not from what would be
+nice to offer:
+
+| Service | Sorts |
+|---|---|
+| Freight | Cheapest, Best cover, Fastest, Best rated |
+| Barrel shipping, shared barrels | Cheapest, Fastest, Best rated |
+| Car parking | Cheapest, Best rated |
+| Car transport, car sales | Best rated only — so **no control at all** |
+
+Car transport is priced by bid after the request is reviewed, so there is no
+price to be cheapest by; a car's price is on the listing, not the business; and
+freight is the only service with a loss policy. Rating works everywhere.
+
+**Two rules fall out of this, and both matter:**
+
+- **A control with one choice is not a control.** `shouldOfferServiceSort`
+  returns false when a service has fewer than two sorts, which is why car
+  transport shows nothing rather than a lone "Best rated" chip.
+- **The starting sort must be one the service supports.** Defaulting car
+  transport to "cheapest" would order it by a number that does not exist.
+  `defaultSortForService` falls back to the first supported sort.
+
+Missing data sinks to the bottom rather than tying at zero — a business that
+never stated a delivery time must not rank fastest for a promise it never made.
+The exception is rating, which is Bayesian-damped platform-side: an unrated
+business sits at the prior, so "Best rated" reads as "no reason to prefer
+either" rather than punishing every new business.
+
+---
+
+## 9. Reading the DOM is not looking at the screen
 
 The tab bug above was "verified" by querying state out of the page with
 JavaScript — which confirmed the right card rendered for each tab, and said

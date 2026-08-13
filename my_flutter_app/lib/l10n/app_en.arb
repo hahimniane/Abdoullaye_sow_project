@@ -1498,6 +1498,23 @@
       }
     }
   },
+  "cancelOrderTitle": "Cancel this order?",
+  "cancelOrderHeldBody": "Your card was never charged — the hold is released and you pay nothing.",
+  "cancelOrderCapturedBody": "Your payment is refunded minus the card processing fee, as stated at checkout.",
+  "cancelWholeOrderHeldBody": "This shipment was paid together with the rest of its order, so the whole order is cancelled. Your card was never charged — you pay nothing.",
+  "cancelWholeOrderCapturedBody": "This shipment was paid together with the rest of its order, so the whole order is cancelled. Your payment is refunded minus the card processing fee.",
+  "keepOrder": "Keep order",
+  "cancelOrderConfirm": "Cancel order",
+  "cancelOrderFreeAction": "Cancel order (free)",
+  "cancelOrderRefundAction": "Cancel order (refund minus card fee)",
+  "orderCancelledFree": "Order cancelled. Your card was never charged.",
+  "orderRefunded": "Order cancelled. Your refund is on its way, minus the card fee.",
+  "genericError": "Something went wrong. Please try again.",
+  "paymentHoldNotice": "No charge today \u2014 the amount is reserved on your card and charged when the reservation window ends (5\u20137 days for most cards). Cancelling before then is free; after that, refunds lose the card processing fee.",
+  "freightSortBestRated": "Best rated",
+  "freightSortCheapest": "Cheapest",
+  "freightSortBestCover": "Best cover",
+  "freightSortFastest": "Fastest",
   "searchBusinessOrCountry": "Search a business or country",
   "noMatchFor": "No match for \"{query}\"",
   "@noMatchFor": {

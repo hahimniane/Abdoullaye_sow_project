@@ -22,6 +22,7 @@ import {
 
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
+import { PaymentHoldNotice } from "@/components/payment-hold-notice";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ServiceRequestForm } from "@/components/service-request-form";
 import { marketplaceDisclosure } from "@/lib/disclosures";
@@ -29,6 +30,14 @@ import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import { db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
 import { isValidPhone } from "@/lib/phone";
+import {
+  SERVICE_SORT_LABELS,
+  defaultSortForService,
+  shouldOfferServiceSort,
+  sortServiceOptions,
+  sortsForService,
+  type ServiceSort,
+} from "@/lib/service-ranking.ts";
 import { startCheckout } from "@/lib/use-checkout";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
 
@@ -58,6 +67,7 @@ type ParkingOption = {
   address: string;
   availableSpaces: number;
   estimatedTotal: number;
+  reviewWeightedScore: number;
   dailyRate: number;
   weeklyRate: number;
   monthlyRate: number;
@@ -173,6 +183,15 @@ function ParkingWorkspace({
   const [error, setError] = useState("");
   const [options, setOptions] = useState<ParkingOption[]>([]);
   const [selected, setSelected] = useState<ParkingOption | null>(null);
+  const [sort, setSort] = useState<ServiceSort>(
+    defaultSortForService("carParking") as ServiceSort,
+  );
+  // Ranked on the total the search already priced for these dates, which
+  // accounts for the minimum stay and whichever rate applies.
+  const sortedOptions = useMemo(
+    () => sortServiceOptions(options, { service: "carParking", sort }),
+    [options, sort],
+  );
 
   const validSearch =
     city.trim().length > 1 &&
@@ -294,9 +313,37 @@ function ParkingWorkspace({
         </div>
       )}
 
+      {options.length > 0 && shouldOfferServiceSort(options, "carParking") && (
+        <div
+          aria-label="Order businesses by"
+          className="service-segments service-sort-segments"
+          role="tablist"
+        >
+          {/* Spans rather than buttons: choosing an order changes what you are
+              looking at, not what gets saved. */}
+          {sortsForService("carParking").map((option) => (
+            <span
+              aria-selected={sort === option}
+              className={`segment ${sort === option ? "active" : ""}`}
+              key={option}
+              onClick={() => setSort(option)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                setSort(option);
+              }}
+              role="tab"
+              tabIndex={0}
+            >
+              {SERVICE_SORT_LABELS[option]}
+            </span>
+          ))}
+        </div>
+      )}
+
       {options.length > 0 && (
         <section aria-label="Available parking" className="customer-option-grid">
-          {options.map((option) => (
+          {sortedOptions.map((option) => (
             <article className="customer-option-card" key={option.businessId}>
               <div className="customer-option-card-head">
                 <div className="customer-option-icon">
@@ -462,6 +509,7 @@ function ParkingReservationForm({
             value={formatMoney(option.estimatedTotal)}
           />
           <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
+          <PaymentHoldNotice />
         </dl>
       }
       submitLabel={
@@ -1500,6 +1548,7 @@ function parkingOptionFromData(value: unknown): ParkingOption {
     address: text(data.address, ""),
     availableSpaces: numberValue(data.availableSpaces),
     estimatedTotal: numberValue(data.estimatedTotal),
+    reviewWeightedScore: numberValue(data.reviewWeightedScore),
     dailyRate: numberValue(data.dailyRate),
     weeklyRate: numberValue(data.weeklyRate),
     monthlyRate: numberValue(data.monthlyRate),

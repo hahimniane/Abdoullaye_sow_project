@@ -33,6 +33,7 @@ import {
 } from "@/components/address-autocomplete";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
+import { PaymentHoldNotice } from "@/components/payment-hold-notice";
 import { RecipientNameField } from "@/components/recipient-name-field";
 import { ServiceRequestForm } from "@/components/service-request-form";
 import { SearchableSelect } from "@/components/searchable-select";
@@ -86,6 +87,14 @@ import {
   type FreightCategoryOption,
   type FreightCoveragePolicy,
 } from "@/lib/freight-categories";
+import {
+  SERVICE_SORT_LABELS,
+  defaultSortForService,
+  shouldOfferServiceSort,
+  sortServiceOptions,
+  sortsForService,
+  type ServiceSort,
+} from "@/lib/service-ranking.ts";
 import { db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
 import { currentWebLanguage } from "@/lib/language";
@@ -100,6 +109,18 @@ import type { FirestoreRow, UserProfile } from "@/types/admin";
 const CALL_TIMEOUT_MS = 30_000;
 
 type ShippingService = "barrel" | "freight" | "transport";
+
+/**
+ * This screen names its services for the customer ("barrel"); the platform
+ * names them for the business ("barrelShipping"). The ranking rules are
+ * declared against the platform ids, so translate once here rather than
+ * teaching the ranking module a second vocabulary.
+ */
+const BUSINESS_SERVICE_BY_SHIPPING_SERVICE: Record<ShippingService, string> = {
+  barrel: "barrelShipping",
+  freight: "freight",
+  transport: "carTransport",
+};
 
 type DeliveryEstimateService = "barrelShipping" | "freightAir" | "freightSea";
 
@@ -675,9 +696,19 @@ function BarrelShipmentForm({
     () => barrelDestinationCountries(options),
     [options],
   );
+  const [providerSort, setProviderSort] = useState<ServiceSort>(
+    defaultSortForService("barrelShipping") as ServiceSort,
+  );
+  // Ranked on what the customer has said so far. The quantity field sits
+  // below this picker, so a first pass compares one barrel each - which is
+  // still a fair comparison, and re-ranks as soon as they change it.
   const providers = useMemo(
-    () => barrelProvidersForCountry(options, destinationCountryId),
-    [destinationCountryId, options],
+    () =>
+      sortServiceOptions(
+        barrelProvidersForCountry(options, destinationCountryId),
+        { quantity, service: "barrelShipping", sort: providerSort },
+      ),
+    [destinationCountryId, options, providerSort, quantity],
   );
   // Only one business serves this country: choosing from a list of one is
   // busywork, and freight already behaves this way (item 6).
@@ -907,6 +938,7 @@ function BarrelShipmentForm({
             value={pickup.requested ? pickup.address : "Drop off"}
           />
           <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
+          <PaymentHoldNotice />
         </ReviewGrid>
       }
       submitLabel={
@@ -975,6 +1007,12 @@ function BarrelShipmentForm({
               <p aria-live="polite" className="sr-only">
                 {providers.length} approved businesses available
               </p>
+              <ServiceSortChips
+                onChange={setProviderSort}
+                options={providers}
+                service="barrelShipping"
+                value={providerSort}
+              />
               {providers.map((option) => {
                 const rate = shippingProviderRate(option.country, "barrel");
                 return (
@@ -1249,9 +1287,19 @@ function BarrelOrderForm({
     () => barrelDestinationCountries(options),
     [options],
   );
+  const [providerSort, setProviderSort] = useState<ServiceSort>(
+    defaultSortForService("barrelShipping") as ServiceSort,
+  );
+  // Ranked on what the customer has said so far. The quantity field sits
+  // below this picker, so a first pass compares one barrel each - which is
+  // still a fair comparison, and re-ranks as soon as they change it.
   const providers = useMemo(
-    () => barrelProvidersForCountry(options, destinationCountryId),
-    [destinationCountryId, options],
+    () =>
+      sortServiceOptions(
+        barrelProvidersForCountry(options, destinationCountryId),
+        { quantity, service: "barrelShipping", sort: providerSort },
+      ),
+    [destinationCountryId, options, providerSort, quantity],
   );
   // Only one business serves this country: choosing from a list of one is
   // busywork, and freight already behaves this way (item 6).
@@ -1631,6 +1679,7 @@ function BarrelOrderForm({
             value={formatMoney(totals.total)}
           />
           <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
+          <PaymentHoldNotice />
         </ReviewGrid>
       }
       submitLabel={
@@ -1789,6 +1838,12 @@ function BarrelOrderForm({
             {selectedCountry && (
               <fieldset className="customer-barrel-providers">
                 <legend>Choose a shipping business</legend>
+                <ServiceSortChips
+                  onChange={setProviderSort}
+                  options={providers}
+                  service="barrelShipping"
+                  value={providerSort}
+                />
                 {providers.map((option) => {
                   const rate = shippingProviderRate(option.country, "barrel");
                   return (
@@ -2235,6 +2290,9 @@ function FreightShipmentForm({
   const [itemCategoryId, setItemCategoryId] = useState("");
   const [declaresValue, setDeclaresValue] = useState(false);
   const [declaredValueText, setDeclaredValueText] = useState("");
+  const [providerSort, setProviderSort] = useState<ServiceSort>(
+    defaultSortForService("freight") as ServiceSort,
+  );
   const [pickup, setPickup] = useState<PickupDetails>({
     requested: false,
     address: "",
@@ -2315,6 +2373,28 @@ function FreightShipmentForm({
   });
   const coverageFee = coverage.ok ? coverage.coverageFee : 0;
   const coverageRefusal = coverage.ok ? "" : coverage.message;
+  // Ranked on the parcel as described so far. The weight, category and value
+  // fields sit below this picker, so a first pass ranks on the per-kg rate and
+  // the cover; filling them in re-ranks on the real quote.
+  const sortedProviderOptions = useMemo(
+    () =>
+      sortServiceOptions(providerOptions, {
+        declaredValue,
+        itemCategoryId,
+        mode,
+        service: "freight",
+        sort: providerSort,
+        weightKg,
+      }),
+    [
+      declaredValue,
+      itemCategoryId,
+      mode,
+      providerOptions,
+      providerSort,
+      weightKg,
+    ],
+  );
   // The subtotal the customer is shown has to be the one the server charges,
   // so the category multiplier replaces the plain rate × weight rather than
   // being bolted on beside it.
@@ -2638,6 +2718,7 @@ function FreightShipmentForm({
                 weighs less, you&rsquo;ll be refunded automatically.
               </div>
               <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
+              <PaymentHoldNotice />
             </ReviewGrid>
           }
           submitLabel={
@@ -2698,8 +2779,10 @@ function FreightShipmentForm({
                   setSelectionNotice("");
                 }}
                 mode={mode}
-                options={providerOptions}
+                onSortChange={setProviderSort}
+                options={sortedProviderOptions}
                 service="freight"
+                sort={providerSort}
                 value={destinationOptionId}
               />
             )}
@@ -4125,21 +4208,77 @@ function CustomerTransportQuotes({
   );
 }
 
-function DestinationPicker({
-  label,
-  mode = "air",
+/**
+ * The row of chips a customer orders businesses with.
+ *
+ * Which chips appear is declared per service in service-ranking.ts, so a
+ * service that can only be ordered one way shows nothing rather than a
+ * control with a single choice.
+ */
+function ServiceSortChips({
   onChange,
   options,
   service,
   value,
 }: {
+  onChange: (value: ServiceSort) => void;
+  options: readonly unknown[];
+  service: string;
+  value: ServiceSort;
+}) {
+  if (!shouldOfferServiceSort(options, service)) return null;
+
+  return (
+    <div
+      aria-label="Order businesses by"
+      className="service-segments service-sort-segments"
+      role="tablist"
+    >
+      {/* Spans rather than buttons: choosing an order changes what you are
+          looking at, not what gets saved, and these pickers sit inside
+          fieldsets that go disabled while a booking submits. */}
+      {sortsForService(service).map((sort) => (
+        <span
+          aria-selected={value === sort}
+          className={`segment ${value === sort ? "active" : ""}`}
+          key={sort}
+          onClick={() => onChange(sort)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            onChange(sort);
+          }}
+          role="tab"
+          tabIndex={0}
+        >
+          {SERVICE_SORT_LABELS[sort]}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function DestinationPicker({
+  label,
+  mode = "air",
+  onChange,
+  onSortChange,
+  options,
+  service,
+  sort,
+  value,
+}: {
   label: string;
   mode?: "air" | "sea";
   onChange: (value: string) => void;
+  onSortChange?: (value: ServiceSort) => void;
   options: DestinationOption[];
   service: ShippingService;
+  sort?: ServiceSort;
   value: string;
 }) {
+  const businessService = BUSINESS_SERVICE_BY_SHIPPING_SERVICE[service];
+
   return (
     <fieldset className="customer-destination-picker customer-form-span">
       <legend>{label}</legend>
@@ -4147,6 +4286,14 @@ function DestinationPicker({
         Choose an approved provider. Each rate comes directly from that
         business.
       </p>
+      {onSortChange && sort && (
+        <ServiceSortChips
+          onChange={onSortChange}
+          options={options}
+          service={businessService}
+          value={sort}
+        />
+      )}
       {options.length === 0 && (
         <div aria-live="polite" className="customer-inline-note">
           No approved businesses currently have a rate for this freight mode.

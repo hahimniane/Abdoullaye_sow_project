@@ -188,6 +188,16 @@ const {
   requireCustomerCheckoutAction,
 } = require("./customer_checkout");
 const {
+  holdCaptureMethod,
+  paymentIntentSecured,
+  checkoutSessionSecured,
+  holdAction,
+  cancellationOutcome,
+  newHoldRecord,
+  captureDeadlineMs,
+  estimateProcessingFeeCents,
+} = require("./payment_hold");
+const {
   publicOpenBarrelOption,
   publicParkingOption,
 } = require("./public_service_options");
@@ -4435,6 +4445,19 @@ async function createStripePaymentIntent(params) {
   body.set("amount", String(params.amount));
   body.set("currency", params.currency);
   body.set("automatic_payment_methods[enabled]", "true");
+  // Booking payments hold instead of charging (docs/PLAN-payment-timing-and-
+  // cancellation.md). Derived from metadata.paymentType right here so no
+  // create callable can forget to opt in - the flow's type IS the decision.
+  // Extended authorization is requested opportunistically: on eligible
+  // Visa/Mastercard the hold lives ~30 days instead of 7, and if the account
+  // or card is not eligible Stripe simply ignores it.
+  if (holdCaptureMethod(params.metadata?.paymentType)) {
+    body.set("capture_method", "manual");
+    body.set(
+        "payment_method_options[card][request_extended_authorization]",
+        "if_available",
+    );
+  }
   // A connectedAccountId + applicationFeeAmount together make this a Stripe
   // "direct charge": the PaymentIntent is created directly on the business's
   // connected account (via the Stripe-Account header below), so Stripe's own
@@ -4512,6 +4535,96 @@ async function retrieveStripeCheckoutSession(sessionId, connectedAccountId) {
         }),
       },
   );
+}
+
+// Same Stripe-Account rule as retrieveStripePaymentIntent: a direct-charge
+// intent only resolves with the connected account's header present.
+async function captureStripePaymentIntent(paymentIntentId, connectedAccountId) {
+  return stripeFormRequest(
+      `/payment_intents/${paymentIntentId}/capture`,
+      new URLSearchParams(),
+      {
+        idempotencyKey: `laawol-capture-v1-${paymentIntentId}`,
+        ...(connectedAccountId && {
+          headers: {"Stripe-Account": connectedAccountId},
+        }),
+      },
+  );
+}
+
+async function retrieveStripeBalanceTransaction(id, connectedAccountId) {
+  return stripeRequest(`/balance_transactions/${encodeURIComponent(id)}`, {
+    ...(connectedAccountId && {
+      headers: {"Stripe-Account": connectedAccountId},
+    }),
+  });
+}
+
+async function retrieveStripeCharge(chargeId, connectedAccountId) {
+  return stripeRequest(`/charges/${encodeURIComponent(chargeId)}`, {
+    ...(connectedAccountId && {
+      headers: {"Stripe-Account": connectedAccountId},
+    }),
+  });
+}
+
+/**
+ * Records a held payment so the hold scheduler can warn the customer and
+ * capture before the card network releases the funds.
+ *
+ * Called from every settle path right after the money is verified. A no-op
+ * for captured intents, so callers don't branch. Idempotent: keyed by the
+ * intent id, and re-securing the same payment rewrites the same facts.
+ *
+ * @param {object} params Inputs.
+ * @param {object} params.intent The verified PaymentIntent.
+ * @param {string} [params.connectedAccountId] Set for direct charges.
+ * @return {Promise<boolean>} True when the payment is a registered hold.
+ */
+async function registerHeldPayment({intent, connectedAccountId}) {
+  if (!intent || intent.status !== "requires_capture") return false;
+  const intentId = String(intent.id || "");
+  if (!intentId.startsWith("pi_")) return false;
+
+  // capture_before lives on the charge, not the intent. If the charge cannot
+  // be read, fall back to the shortest network window (5 days from now) -
+  // capturing early is a non-event, capturing late is the whole payment.
+  let charge = null;
+  const chargeId = typeof intent.latest_charge === "string" ?
+    intent.latest_charge :
+    String(intent.latest_charge?.id || "");
+  if (typeof intent.latest_charge === "object" && intent.latest_charge) {
+    charge = intent.latest_charge;
+  } else if (chargeId.startsWith("ch_")) {
+    try {
+      charge = await retrieveStripeCharge(chargeId, connectedAccountId);
+    } catch (error) {
+      logger.error("Held charge lookup failed; using shortest window", {
+        paymentIntentId: intentId,
+        detail: error.message,
+      });
+    }
+  }
+
+  const nowMs = Date.now();
+  const record = newHoldRecord({
+    paymentIntentId: intentId,
+    connectedAccountId: connectedAccountId || "",
+    amountCents: Number(intent.amount || 0),
+    captureBeforeMs: captureDeadlineMs(charge, nowMs),
+    orderType: String(intent.metadata?.paymentType || ""),
+    collection: "",
+    recordId: String(intent.metadata?.checkoutRecordId ||
+      intent.metadata?.recordId || ""),
+    customerUid: String(intent.metadata?.customerUid || ""),
+    nowMs,
+  });
+  await admin.firestore().collection("paymentHolds").doc(intentId).set({
+    ...record,
+    createdAt: FirestoreFieldValue.serverTimestamp(),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  }, {merge: true});
+  return true;
 }
 
 async function cancelStripePaymentIntent(paymentIntentId, connectedAccountId) {
@@ -4644,6 +4757,12 @@ async function createStripeRefund(params) {
   const body = new URLSearchParams();
   body.set("payment_intent", params.paymentIntentId);
   body.set("amount", String(params.amount));
+  // Returns the platform commission to the business whose balance funds this
+  // refund - without it a direct-charge business ends a cancelled job out of
+  // pocket by our commission (see cancellationOutcome in payment_hold.js).
+  if (params.refundApplicationFee) {
+    body.set("refund_application_fee", "true");
+  }
   Object.entries(params.metadata || {}).forEach(([key, value]) => {
     body.set(`metadata[${key}]`, String(value));
   });
@@ -4681,6 +4800,17 @@ async function createStripeCustomerCheckoutSession(params) {
   const body = new URLSearchParams();
   body.set("mode", "payment");
   body.set("client_reference_id", params.recordId);
+  // Same hold rule as createStripePaymentIntent, derived from the same
+  // metadata, so the web redirect flow and the in-app flow cannot disagree
+  // about whether an order holds. A held session completes with
+  // payment_status "unpaid" - see checkoutSessionSecured.
+  if (holdCaptureMethod(params.metadata?.paymentType)) {
+    body.set("payment_intent_data[capture_method]", "manual");
+    body.set(
+        "payment_method_options[card][request_extended_authorization]",
+        "if_available",
+    );
+  }
   body.set("success_url", params.successUrl);
   body.set("cancel_url", params.cancelUrl);
   body.set("line_items[0][quantity]", "1");
@@ -7460,6 +7590,345 @@ async function recordPaymentReconciliationFailure(scan, snapshot, error) {
       }, {merge: true});
 }
 
+/**
+ * Notification key for a hold's pre-capture warning, chosen by what the
+ * money bought so the customer's real toggles apply.
+ *
+ * @param {string} paymentType The intent's metadata.paymentType.
+ * @return {string} An existing notification preference key.
+ */
+function holdNoticePreferenceKey(paymentType) {
+  return ["parking_deposit", "reservation_deposit", "full_purchase"]
+      .includes(paymentType) ? "carActivity" : "shipmentActivity";
+}
+
+/**
+ * Warns the customer, then captures, every held payment - before the card
+ * network releases the funds.
+ *
+ * Runs every 30 minutes because the windows are hours wide (warn at 24h out,
+ * capture at 6h out). The order of operations inside holdAction is the
+ * safety property: capture wins over everything, because a missed warning is
+ * an apology while a missed capture is the entire payment.
+ *
+ * Self-healing: the intent is re-read before any capture, so a hold whose
+ * intent was cancelled elsewhere (customer cancelled - the free path) or
+ * captured elsewhere is marked released/captured instead of erroring.
+ */
+/**
+ * The paid orders a customer may cancel themselves, and when.
+ *
+ * Only the single-intent shipping flows for now: one payment, one record,
+ * one clean reversal. Parking has a start date to reason about and cancelling
+ * a car purchase un-sells a car - both deserve their own design rather than a
+ * generic one that guesses.
+ */
+const CUSTOMER_CANCELLABLE_ORDERS = Object.freeze({
+  barrelShipment: {collection: "barrelShipments", cancellableStatus: "pending"},
+  barrelOrder: {collection: "barrelOrders", cancellableStatus: "pending",
+    cancelsShipmentsByOrderId: true},
+  freightShipment: {collection: "freightShipments",
+    cancellableStatus: "pending"},
+});
+
+/**
+ * A customer cancels an order they already paid for.
+ *
+ * The outcome is whatever the money's state makes true, decided by
+ * cancellationOutcome in payment_hold.js:
+ *
+ * - still a hold: the hold is released. Free - nothing was ever charged.
+ * - captured: refunded minus Stripe's REAL fee (read from the balance
+ *   transaction, never estimated), with the platform commission returned to
+ *   the business so only the canceller pays anything.
+ *
+ * Only orders the business has not started working ("pending") can be
+ * cancelled here; a collected parcel is a job, not a booking.
+ */
+exports.cancelSecuredCustomerOrder = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const orderType = String(request.data?.orderType || "").trim();
+      const recordId = String(request.data?.recordId || "").trim();
+      const config = CUSTOMER_CANCELLABLE_ORDERS[orderType];
+      if (!config || !recordId) {
+        throw new HttpsError(
+            "invalid-argument",
+            "This order cannot be cancelled from here.",
+        );
+      }
+
+      const db = admin.firestore();
+      const ref = db.collection(config.collection).doc(recordId);
+      const snapshot = await ref.get();
+      if (!snapshot.exists) {
+        throw new HttpsError("not-found", "Order not found");
+      }
+      const record = snapshot.data() || {};
+      if (record.customerUid !== customerUid) {
+        throw new HttpsError("permission-denied", "Order access denied");
+      }
+      if (record.status !== config.cancellableStatus ||
+          record.paymentStatus !== "succeeded") {
+        throw new HttpsError(
+            "failed-precondition",
+            "This order is already being processed and can no longer be " +
+            "cancelled from the app. Contact the business directly.",
+        );
+      }
+
+      const cancelPatch = {
+        status: "cancelled",
+        cancelledBy: "customer",
+        cancelledAt: FirestoreFieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      };
+      const cancelLinkedShipments = async () => {
+        if (!config.cancelsShipmentsByOrderId) return;
+        const shipments = await db.collection("barrelShipments")
+            .where("orderId", "==", recordId)
+            .get();
+        const batch = db.batch();
+        shipments.docs.forEach((doc) => batch.update(doc.ref, cancelPatch));
+        await batch.commit();
+      };
+
+      if (SIMULATE_PAYMENTS ||
+          String(record.stripePaymentIntentId || "")
+              .startsWith("simulated_")) {
+        await ref.update({...cancelPatch, paymentStatus: "cancelled"});
+        await cancelLinkedShipments();
+        return {success: true, outcome: "released", refundCents: 0};
+      }
+
+      const intentId = String(record.stripePaymentIntentId || "");
+      if (!intentId) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This order has no payment to cancel. Contact support.",
+        );
+      }
+      const connectedAccountId = stripeAccountIdForRetrieval(record);
+      const intent = await retrieveStripePaymentIntent(
+          intentId, connectedAccountId,
+      );
+
+      if (intent.status === "requires_capture" ||
+          intent.status === "canceled") {
+        // Still a hold (or already released): cancelling costs nothing,
+        // because nothing ever settled. The promise of the whole model.
+        if (intent.status === "requires_capture") {
+          await cancelStripePaymentIntent(intentId, connectedAccountId);
+        }
+        await ref.update({
+          ...cancelPatch,
+          paymentStatus: "cancelled",
+          paymentHoldStatus: "released",
+        });
+        await cancelLinkedShipments();
+        await db.collection("paymentHolds").doc(intentId).set({
+          status: "released",
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }, {merge: true});
+        return {success: true, outcome: "released", refundCents: 0};
+      }
+
+      if (intent.status !== "succeeded") {
+        throw new HttpsError(
+            "failed-precondition",
+            "The payment is still settling. Try again in a few minutes.",
+        );
+      }
+
+      // Captured. A platform-mode order already paid out moved real money to
+      // the business by transfer; unwinding that needs a person, not a guess.
+      if (record.stripeChargeType !== "direct" &&
+          record.payoutStatus === "paid") {
+        throw new HttpsError(
+            "failed-precondition",
+            "This order was already paid out to the business. Contact " +
+            "support to cancel it.",
+        );
+      }
+
+      const chargeId = typeof intent.latest_charge === "string" ?
+        intent.latest_charge :
+        String(intent.latest_charge?.id || "");
+      const charge = await retrieveStripeCharge(chargeId, connectedAccountId);
+      const balanceTx = await retrieveStripeBalanceTransaction(
+          String(charge.balance_transaction || ""), connectedAccountId,
+      );
+      const outcome = cancellationOutcome({
+        cancelledBy: "customer",
+        captured: true,
+        amountCents: Number(intent.amount || 0),
+        stripeFeeCents: Number(balanceTx.fee || 0),
+      });
+      if (outcome.refundCents > 0) {
+        await createStripeRefund({
+          paymentIntentId: intentId,
+          amount: outcome.refundCents,
+          refundApplicationFee: outcome.refundApplicationFee,
+          connectedAccountId,
+          idempotencyKey: `laawol-cancel-refund-v1-${intentId}`,
+          metadata: {
+            reason: "customer_cancelled",
+            orderType,
+            recordId,
+          },
+        });
+      }
+      await ref.update({
+        ...cancelPatch,
+        paymentStatus: "refunded",
+        refundedAmountCents: outcome.refundCents,
+        refundStripeFeeCents: Number(balanceTx.fee || 0),
+      });
+      await cancelLinkedShipments();
+      return {
+        success: true,
+        outcome: "refunded_minus_fee",
+        refundCents: outcome.refundCents,
+        stripeFeeCents: Number(balanceTx.fee || 0),
+      };
+    },
+);
+
+exports.captureExpiringPaymentHolds = onSchedule(
+    {
+      schedule: "every 30 minutes",
+      timeZone: "America/New_York",
+      timeoutSeconds: 540,
+      secrets: [stripeSecretKey],
+    },
+    async () => {
+      const db = admin.firestore();
+      const holds = await db.collection("paymentHolds")
+          .where("status", "==", "held")
+          .limit(200)
+          .get();
+      if (holds.empty) return;
+      const nowMs = Date.now();
+
+      for (const holdDoc of holds.docs) {
+        const hold = holdDoc.data() || {};
+        const decision = holdAction({
+          captureBeforeMs: Number(hold.captureBeforeMs || 0),
+          nowMs,
+          noticeSent: hold.noticeSent === true,
+        });
+        if (decision.action === "wait") continue;
+
+        try {
+          if (decision.action === "notify") {
+            const amount = (Number(hold.amountCents || 0) / 100).toFixed(2);
+            const fee = (estimateProcessingFeeCents(
+                Number(hold.amountCents || 0)) / 100).toFixed(2);
+            await sendPreferenceNotification({
+              uid: hold.customerUid,
+              preferenceKey: holdNoticePreferenceKey(hold.orderType),
+              title: "Your card will be charged tomorrow",
+              body: `The $${amount} you reserved will be charged in about ` +
+                "24 hours. Cancelling before then is free; after that, " +
+                `refunds lose the card fee (about $${fee}).`,
+              data: {
+                type: "payment_hold_capture_notice",
+                paymentIntentId: hold.paymentIntentId,
+                recordId: hold.recordId || "",
+              },
+            });
+            await holdDoc.ref.update({
+              noticeSent: true,
+              noticeSentAtMs: nowMs,
+              updatedAt: FirestoreFieldValue.serverTimestamp(),
+            });
+            continue;
+          }
+
+          if (decision.action === "overdue") {
+            // The network has released the funds; this payment is gone and a
+            // person has to decide what happens to the order. Loud on purpose.
+            logger.error("Payment hold expired uncaptured", {
+              paymentIntentId: hold.paymentIntentId,
+              orderType: hold.orderType,
+              amountCents: hold.amountCents,
+            });
+            await holdDoc.ref.update({
+              status: "expired",
+              updatedAt: FirestoreFieldValue.serverTimestamp(),
+            });
+            continue;
+          }
+
+          // decision.action === "capture". Re-read before acting: the intent
+          // may have been cancelled (free cancellation) or captured elsewhere
+          // since this hold was written.
+          const connectedAccountId = hold.connectedAccountId || undefined;
+          const fresh = await retrieveStripePaymentIntent(
+              hold.paymentIntentId, connectedAccountId,
+          );
+          if (fresh.status === "canceled") {
+            await holdDoc.ref.update({
+              status: "released",
+              updatedAt: FirestoreFieldValue.serverTimestamp(),
+            });
+            continue;
+          }
+          if (fresh.status === "requires_capture") {
+            await captureStripePaymentIntent(
+                hold.paymentIntentId, connectedAccountId,
+            );
+          }
+          const captured = await retrieveStripePaymentIntent(
+              hold.paymentIntentId, connectedAccountId,
+          );
+          if (captured.status !== "succeeded") {
+            // Capture did not land; leave the hold for the next run (the
+            // idempotency key makes the retry safe) and say why.
+            logger.error("Payment hold capture did not settle", {
+              paymentIntentId: hold.paymentIntentId,
+              status: captured.status,
+            });
+            continue;
+          }
+
+          // Re-run the flow's own completion against the now-captured
+          // intent. Doc updates are idempotent and the deferred payout runs
+          // here, exactly as it would have on an immediate charge.
+          const target = routePaymentIntentMetadata(captured.metadata);
+          target.customerUid = hold.customerUid ||
+            String(captured.metadata?.customerUid || "");
+          await runPaymentCompletion(target);
+          await Promise.all([
+            holdDoc.ref.update({
+              status: "captured",
+              capturedAtMs: nowMs,
+              updatedAt: FirestoreFieldValue.serverTimestamp(),
+            }),
+            db.doc(target.path).set({
+              paymentHoldStatus: "captured",
+              paymentCapturedAt: FirestoreFieldValue.serverTimestamp(),
+              updatedAt: FirestoreFieldValue.serverTimestamp(),
+            }, {merge: true}),
+          ]);
+        } catch (error) {
+          // One broken hold must not stop the sweep - the rest of the queue
+          // still has deadlines.
+          logger.error("Payment hold processing failed", {
+            paymentIntentId: hold.paymentIntentId,
+            action: decision.action,
+            detail: error.message,
+          });
+        }
+      }
+    },
+);
+
 exports.reconcileStaleStripePayments = onSchedule(
     {
       schedule: "every 10 minutes",
@@ -7511,7 +7980,10 @@ exports.reconcileStaleStripePayments = onSchedule(
                     sessionId,
                     stalePaymentConnectedAccountId(scan, staleData),
                 );
-                if (session?.payment_status !== "paid") continue;
+                // Secured, not "paid": a held session completes with
+                // payment_status "unpaid" (see payment_hold.js), and the
+                // sweep exists precisely to rescue records like it.
+                if (!checkoutSessionSecured(session)) continue;
                 intentId = typeof session.payment_intent === "string" ?
                   session.payment_intent :
                   String(session.payment_intent?.id || "");
@@ -9833,7 +10305,7 @@ exports.completeParkingReservation = onCall(
           reservation.stripePaymentIntentId,
           stripeAccountIdForRetrieval(reservation),
       );
-      if (intent.status !== "succeeded") {
+      if (!paymentIntentSecured(intent.status)) {
         await reservationRef.update({
           paymentStatus: intent.status,
           updatedAt: FirestoreFieldValue.serverTimestamp(),
@@ -9843,21 +10315,32 @@ exports.completeParkingReservation = onCall(
             `Payment is ${intent.status}`,
         );
       }
+      const paymentHeld = await registerHeldPayment({
+        intent,
+        connectedAccountId: stripeAccountIdForRetrieval(reservation),
+      });
       await reservationRef.update({
         status: "reserved",
         paymentStatus: "succeeded",
+        ...(paymentHeld && {paymentHoldStatus: "held"}),
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
-      await issueBusinessPayoutTransfer({
-        ref: reservationRef,
-        data: {
-          ...reservation,
-          status: "reserved",
-          paymentStatus: "succeeded",
-        },
-        sourceTransaction: stripeSourceTransactionFromIntent(intent),
-        serviceType: "parking_reservation",
-      });
+      // A held payment has no settled charge to pay out from; the hold
+      // scheduler re-runs this completion after capture and the payout
+      // happens then (issueBusinessPayoutTransfer is idempotent by
+      // payoutStatus, so the re-run is safe).
+      if (!paymentHeld) {
+        await issueBusinessPayoutTransfer({
+          ref: reservationRef,
+          data: {
+            ...reservation,
+            status: "reserved",
+            paymentStatus: "succeeded",
+          },
+          sourceTransaction: stripeSourceTransactionFromIntent(intent),
+          serviceType: "parking_reservation",
+        });
+      }
       return {success: true, reservationId: cleanReservationId};
     },
 );
@@ -9920,8 +10403,10 @@ exports.cancelPendingParkingReservation = onCall(
             recoveredPayment: true,
           };
         }
-        if (intent.status === "processing" ||
-            intent.status === "requires_capture") {
+        // requires_capture is a HELD payment, not one in flight: cancelling
+        // now releases the hold below, free, which is the entire promise of
+        // the hold model. Only genuinely in-flight payments stay uncancellable.
+        if (intent.status === "processing") {
           await ref.update({
             paymentStatus: intent.status,
             updatedAt: FirestoreFieldValue.serverTimestamp(),
@@ -17103,8 +17588,10 @@ exports.cancelPendingBarrelPoolDeposit = onCall(
           });
           return {success: true, poolId, recoveredPayment: true};
         }
-        if (intent.status === "processing" ||
-            intent.status === "requires_capture") {
+        // requires_capture is a HELD payment, not one in flight: cancelling
+        // now releases the hold below, free, which is the entire promise of
+        // the hold model. Only genuinely in-flight payments stay uncancellable.
+        if (intent.status === "processing") {
           await Promise.all([
             participantRef.update({
               paymentStatus: intent.status,
@@ -19849,7 +20336,7 @@ exports.completeBarrelShipmentPayment = onCall(
           shipment.stripePaymentIntentId,
           stripeAccountIdForRetrieval(shipment),
       );
-      if (intent.status !== "succeeded") {
+      if (!paymentIntentSecured(intent.status)) {
         await shipmentRef.update({
           paymentStatus: intent.status,
           updatedAt: FirestoreFieldValue.serverTimestamp(),
@@ -19859,22 +20346,31 @@ exports.completeBarrelShipmentPayment = onCall(
             `Payment is ${intent.status}`,
         );
       }
+      const paymentHeld = await registerHeldPayment({
+        intent,
+        connectedAccountId: stripeAccountIdForRetrieval(shipment),
+      });
 
       await shipmentRef.update({
         paymentStatus: "succeeded",
         status: "pending",
+        ...(paymentHeld && {paymentHoldStatus: "held"}),
         paidAt: FirestoreFieldValue.serverTimestamp(),
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
-      await issueBarrelShipmentTransfer({
-        shipmentRef,
-        shipment: {
-          ...shipment,
-          paymentStatus: "succeeded",
-          status: "pending",
-        },
-        sourceTransaction: stripeSourceTransactionFromIntent(intent),
-      });
+      // Held payments pay out after capture, when the hold scheduler re-runs
+      // this completion against the captured intent.
+      if (!paymentHeld) {
+        await issueBarrelShipmentTransfer({
+          shipmentRef,
+          shipment: {
+            ...shipment,
+            paymentStatus: "succeeded",
+            status: "pending",
+          },
+          sourceTransaction: stripeSourceTransactionFromIntent(intent),
+        });
+      }
 
       return {
         success: true,
@@ -19928,8 +20424,10 @@ exports.cancelPendingBarrelShipment = onCall(
           });
           return {success: true, shipmentId, recoveredPayment: true};
         }
-        if (intent.status === "processing" ||
-            intent.status === "requires_capture") {
+        // requires_capture is a HELD payment, not one in flight: cancelling
+        // now releases the hold below, free, which is the entire promise of
+        // the hold model. Only genuinely in-flight payments stay uncancellable.
+        if (intent.status === "processing") {
           await shipmentRef.update({
             paymentStatus: intent.status,
             updatedAt: FirestoreFieldValue.serverTimestamp(),
@@ -19978,6 +20476,7 @@ exports.completeBarrelOrderPayment = onCall(
       }
 
       let sourceTransaction = "";
+      let orderPaymentHeld = false;
       if (!SIMULATE_PAYMENTS) {
         const orderIntentId = String(order.stripePaymentIntentId || "");
         if (!orderIntentId) {
@@ -19996,7 +20495,7 @@ exports.completeBarrelOrderPayment = onCall(
             orderIntentId,
             stripeAccountIdForRetrieval(order),
         );
-        if (intent.status !== "succeeded") {
+        if (!paymentIntentSecured(intent.status)) {
           await orderRef.update({
             paymentStatus: intent.status,
             updatedAt: FirestoreFieldValue.serverTimestamp(),
@@ -20006,6 +20505,10 @@ exports.completeBarrelOrderPayment = onCall(
               `Payment is ${intent.status}`,
           );
         }
+        orderPaymentHeld = await registerHeldPayment({
+          intent,
+          connectedAccountId: stripeAccountIdForRetrieval(order),
+        });
         if (!callerUid) {
           const metadata = intent.metadata || {};
           const metadataOrderId = String(metadata.orderId || "");
@@ -20033,6 +20536,7 @@ exports.completeBarrelOrderPayment = onCall(
       batch.update(orderRef, {
         paymentStatus: "succeeded",
         status: "pending",
+        ...(orderPaymentHeld && {paymentHoldStatus: "held"}),
         paidAt: now,
         updatedAt: now,
       });
@@ -20046,7 +20550,12 @@ exports.completeBarrelOrderPayment = onCall(
       });
       await batch.commit();
 
-      await issueBarrelOrderTransfers({orderId, sourceTransaction});
+      // A held payment has no settled charge to transfer from; the hold
+      // scheduler re-runs this completion after capture and the per-line
+      // transfers (idempotent by payout status) happen then.
+      if (!orderPaymentHeld) {
+        await issueBarrelOrderTransfers({orderId, sourceTransaction});
+      }
 
       return {
         success: true,
@@ -20101,8 +20610,10 @@ exports.cancelPendingBarrelOrder = onCall(
           });
           return {success: true, orderId, recoveredPayment: true};
         }
-        if (intent.status === "processing" ||
-            intent.status === "requires_capture") {
+        // requires_capture is a HELD payment, not one in flight: cancelling
+        // now releases the hold below, free, which is the entire promise of
+        // the hold model. Only genuinely in-flight payments stay uncancellable.
+        if (intent.status === "processing") {
           await orderRef.update({
             paymentStatus: intent.status,
             updatedAt: FirestoreFieldValue.serverTimestamp(),
@@ -20602,7 +21113,7 @@ exports.completeFreightShipmentPayment = onCall(
           shipment.stripePaymentIntentId,
           stripeAccountIdForRetrieval(shipment),
       );
-      if (intent.status !== "succeeded") {
+      if (!paymentIntentSecured(intent.status)) {
         await shipmentRef.update({
           paymentStatus: intent.status,
           updatedAt: FirestoreFieldValue.serverTimestamp(),
@@ -20612,11 +21123,16 @@ exports.completeFreightShipmentPayment = onCall(
             `Payment is ${intent.status}`,
         );
       }
+      const paymentHeld = await registerHeldPayment({
+        intent,
+        connectedAccountId: stripeAccountIdForRetrieval(shipment),
+      });
 
       await shipmentRef.update({
         paymentStatus: "succeeded",
         ...settlementUpdate,
         status: paidStatus,
+        ...(paymentHeld && {paymentHoldStatus: "held"}),
         paidAt: FirestoreFieldValue.serverTimestamp(),
         // Saved so a later weight-adjustment balance can be charged
         // automatically (see attemptAutomaticFreightBalanceCharge) without
@@ -20630,7 +21146,7 @@ exports.completeFreightShipmentPayment = onCall(
         stripeCustomerId: intent.customer || shipment.stripeCustomerId || "",
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
-      if (!versionTwo) {
+      if (!versionTwo && !paymentHeld) {
         await issueBusinessPayoutTransfer({
           ref: shipmentRef,
           data: {...shipment, paymentStatus: "succeeded", status: paidStatus},
@@ -20643,6 +21159,215 @@ exports.completeFreightShipmentPayment = onCall(
         success: true,
         shipmentId,
         trackingCode: shipment.trackingCode,
+      };
+    },
+);
+
+/**
+ * The shipping flows a customer may cancel AFTER paying, and where their
+ * sibling shipments live. Car flows are deliberately absent: un-selling a
+ * car reverses listing state and buyer-reliability counters and deserves its
+ * own design, not a generic path.
+ */
+const SECURED_CANCELLABLE_ORDERS = Object.freeze({
+  barrelShipment: {collection: "barrelShipments"},
+  barrelOrder: {collection: "barrelOrders", cancelsSiblingShipments: true},
+  freightShipment: {collection: "freightShipments"},
+});
+
+/**
+ * Stripe's own processing fee on a charge, in cents - and ONLY Stripe's.
+ *
+ * On a direct charge the connected account's balance transaction bundles the
+ * platform's application fee into `fee`, and the promise at checkout was
+ * "refunds lose the card fee", not "the card fee plus our commission". So the
+ * fee is summed from fee_details entries of type "stripe_fee", falling back
+ * to the bundled total only when the breakdown is missing.
+ *
+ * @param {object} balanceTransaction The charge's balance transaction.
+ * @return {number} The Stripe processing fee in cents.
+ */
+function stripeOnlyFeeCents(balanceTransaction) {
+  const details = Array.isArray(balanceTransaction?.fee_details) ?
+    balanceTransaction.fee_details :
+    [];
+  const stripeFees = details.filter((row) => row?.type === "stripe_fee");
+  if (stripeFees.length > 0) {
+    return stripeFees.reduce(
+        (total, row) => total + Math.max(0, Number(row.amount) || 0), 0,
+    );
+  }
+  return Math.max(0, Number(balanceTransaction?.fee) || 0);
+}
+
+/**
+ * Cancels a PAID shipping order - the customer promise of the hold model.
+ *
+ * The money outcome depends only on whether the payment is still a hold:
+ * held releases for free (nothing ever settled), captured refunds minus
+ * Stripe's fee, exactly as stated at checkout. The commission returns to the
+ * business either way - see cancellationOutcome in payment_hold.js for the
+ * ledger.
+ */
+exports.cancelSecuredCustomerOrder = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const orderType = cleanText(request.data?.orderType, 40);
+      const recordId = cleanText(request.data?.recordId, 180);
+      const config = SECURED_CANCELLABLE_ORDERS[orderType];
+      if (!config || !recordId) {
+        throw new HttpsError(
+            "invalid-argument", "Unsupported order type or missing id",
+        );
+      }
+
+      const db = admin.firestore();
+      const ref = db.collection(config.collection).doc(recordId);
+      const doc = await ref.get();
+      if (!doc.exists) throw new HttpsError("not-found", "Order not found");
+      const record = doc.data() || {};
+      if (record.customerUid !== customerUid) {
+        throw new HttpsError("permission-denied", "Order access denied");
+      }
+      // "pending" is paid-but-not-started. Anything past it means the
+      // business has begun the work, and taking the money back out from
+      // under a barrel already in a container is a support case, not a
+      // button.
+      if (record.status !== "pending" ||
+          record.paymentStatus !== "succeeded") {
+        throw new HttpsError(
+            "failed-precondition",
+            "This order can no longer be cancelled from here. Contact " +
+            "support if you need help.",
+        );
+      }
+
+      const cancelPatch = (extra) => ({
+        status: "cancelled",
+        cancelledBy: "customer",
+        cancelledAt: FirestoreFieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+        ...extra,
+      });
+      const applyCancellation = async (extra) => {
+        const batch = db.batch();
+        batch.update(ref, cancelPatch(extra));
+        if (config.cancelsSiblingShipments) {
+          const siblings = await db.collection("barrelShipments")
+              .where("orderId", "==", recordId).get();
+          siblings.docs.forEach((sibling) => {
+            batch.update(sibling.ref, cancelPatch(extra));
+          });
+        }
+        await batch.commit();
+      };
+
+      const intentId = String(record.stripePaymentIntentId || "");
+      if (SIMULATE_PAYMENTS) {
+        await applyCancellation({paymentStatus: "cancelled"});
+        return {success: true, outcome: "released", refundCents: 0};
+      }
+      if (intentId.startsWith("simulated_")) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Simulated shipping payments are disabled",
+        );
+      }
+      if (!intentId) {
+        throw new HttpsError(
+            "failed-precondition", "Payment intent is missing",
+        );
+      }
+
+      const connectedAccountId = stripeAccountIdForRetrieval(record);
+      const intent = await retrieveStripePaymentIntent(
+          intentId, connectedAccountId,
+      );
+
+      if (intent.status === "requires_capture" ||
+          intent.status === "canceled") {
+        // Still a hold (or already released elsewhere): nothing settled, so
+        // cancelling is free. This is the outcome the model exists to make
+        // common.
+        if (intent.status !== "canceled") {
+          await cancelStripePaymentIntent(intentId, connectedAccountId);
+        }
+        await applyCancellation({
+          paymentStatus: "cancelled",
+          paymentHoldStatus: "released",
+        });
+        await db.collection("paymentHolds").doc(intentId).set({
+          status: "released",
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }, {merge: true});
+        return {success: true, outcome: "released", refundCents: 0};
+      }
+
+      if (intent.status !== "succeeded") {
+        throw new HttpsError(
+            "failed-precondition", `Payment is ${intent.status}`,
+        );
+      }
+
+      // Captured. A platform-mode charge whose payout transfer has already
+      // moved is a manual reversal - refuse rather than refund from the
+      // platform's pocket while the business keeps the payout.
+      if (record.stripeChargeType !== "direct" &&
+          record.payoutStatus === "paid") {
+        throw new HttpsError(
+            "failed-precondition",
+            "This order was already paid out to the business. Contact " +
+            "support to cancel it.",
+        );
+      }
+
+      const chargeId = typeof intent.latest_charge === "string" ?
+        intent.latest_charge :
+        String(intent.latest_charge?.id || "");
+      const charge = await retrieveStripeCharge(chargeId, connectedAccountId);
+      const balanceTransaction = await retrieveStripeBalanceTransaction(
+          String(charge.balance_transaction || ""), connectedAccountId,
+      );
+      const feeCents = stripeOnlyFeeCents(balanceTransaction);
+      const outcome = cancellationOutcome({
+        cancelledBy: "customer",
+        captured: true,
+        amountCents: Number(intent.amount || 0),
+        stripeFeeCents: feeCents,
+      });
+      if (outcome.refundCents > 0) {
+        await createStripeRefund({
+          paymentIntentId: intentId,
+          amount: outcome.refundCents,
+          // Only a direct charge carries an application fee to give back;
+          // asking Stripe to refund one that does not exist is an error.
+          refundApplicationFee: outcome.refundApplicationFee &&
+            record.stripeChargeType === "direct",
+          connectedAccountId,
+          idempotencyKey: `laawol-secured-cancel-v1-${intentId}`,
+          metadata: {
+            reason: "customer_cancelled",
+            orderType,
+            recordId,
+            customerUid,
+          },
+        });
+      }
+      await applyCancellation({
+        paymentStatus: "refunded",
+        refundedAmountCents: outcome.refundCents,
+        refundStripeFeeCents: feeCents,
+      });
+      return {
+        success: true,
+        outcome: "refunded_minus_fee",
+        refundCents: outcome.refundCents,
+        feeCents,
       };
     },
 );
@@ -20691,8 +21416,10 @@ exports.cancelPendingFreightShipment = onCall(
           });
           return {success: true, shipmentId, recoveredPayment: true};
         }
-        if (intent.status === "processing" ||
-            intent.status === "requires_capture") {
+        // requires_capture is a HELD payment, not one in flight: cancelling
+        // now releases the hold below, free, which is the entire promise of
+        // the hold model. Only genuinely in-flight payments stay uncancellable.
+        if (intent.status === "processing") {
           await shipmentRef.update({
             paymentStatus: intent.status,
             updatedAt: FirestoreFieldValue.serverTimestamp(),
@@ -22402,10 +23129,9 @@ exports.cancelPendingBarrelDestinationChange = onCall(
             recoveredPayment: true,
           };
         }
-        if (
-          intent.status === "processing" ||
-          intent.status === "requires_capture"
-        ) {
+        // Only genuinely in-flight payments are uncancellable; a held one
+        // (requires_capture) falls through and is released below, free.
+        if (intent.status === "processing") {
           await shipmentRef.update({
             destinationAdjustmentPaymentStatus: intent.status,
             updatedAt: FirestoreFieldValue.serverTimestamp(),
@@ -23661,7 +24387,7 @@ exports.completeCarPurchase = onCall(
           purchase.stripePaymentIntentId,
           stripeAccountIdForRetrieval(purchase),
       );
-      if (intent.status !== "succeeded") {
+      if (!paymentIntentSecured(intent.status)) {
         await purchaseRef.update({
           paymentStatus: intent.status,
           updatedAt: FirestoreFieldValue.serverTimestamp(),
@@ -23671,6 +24397,10 @@ exports.completeCarPurchase = onCall(
             `Payment is ${intent.status}`,
         );
       }
+      const paymentHeld = await registerHeldPayment({
+        intent,
+        connectedAccountId: stripeAccountIdForRetrieval(purchase),
+      });
 
       const carRef = db.collection("cars").doc(purchase.carId);
       await db.runTransaction(async (transaction) => {
@@ -23692,6 +24422,7 @@ exports.completeCarPurchase = onCall(
         transaction.update(purchaseRef, {
           paymentStatus: "succeeded",
           purchaseStatus: "completed",
+          ...(paymentHeld && {paymentHoldStatus: "held"}),
           updatedAt: now,
         });
         transaction.update(carRef, {
@@ -23710,16 +24441,20 @@ exports.completeCarPurchase = onCall(
           updatedAt: now,
         });
       });
-      await issueBusinessPayoutTransfer({
-        ref: purchaseRef,
-        data: {
-          ...purchase,
-          paymentStatus: "succeeded",
-          purchaseStatus: "completed",
-        },
-        sourceTransaction: stripeSourceTransactionFromIntent(intent),
-        serviceType: "car_purchase",
-      });
+      // Held payments pay out after capture, when the hold scheduler re-runs
+      // this completion against the captured intent.
+      if (!paymentHeld) {
+        await issueBusinessPayoutTransfer({
+          ref: purchaseRef,
+          data: {
+            ...purchase,
+            paymentStatus: "succeeded",
+            purchaseStatus: "completed",
+          },
+          sourceTransaction: stripeSourceTransactionFromIntent(intent),
+          serviceType: "car_purchase",
+        });
+      }
 
       return {
         success: true,
@@ -23777,8 +24512,10 @@ exports.cancelPendingCarPurchase = onCall(
           });
           return {success: true, purchaseId, recoveredPayment: true};
         }
-        if (intent.status === "processing" ||
-            intent.status === "requires_capture") {
+        // requires_capture is a HELD payment, not one in flight: cancelling
+        // now releases the hold below, free, which is the entire promise of
+        // the hold model. Only genuinely in-flight payments stay uncancellable.
+        if (intent.status === "processing") {
           await purchaseRef.update({
             paymentStatus: intent.status,
             updatedAt: FirestoreFieldValue.serverTimestamp(),
@@ -23873,7 +24610,7 @@ exports.completeCarDepositReservation = onCall(
           purchase.stripePaymentIntentId,
           stripeAccountIdForRetrieval(purchase),
       );
-      if (intent.status !== "succeeded") {
+      if (!paymentIntentSecured(intent.status)) {
         await purchaseRef.update({
           paymentStatus: intent.status,
           updatedAt: FirestoreFieldValue.serverTimestamp(),
@@ -23883,6 +24620,10 @@ exports.completeCarDepositReservation = onCall(
             `Payment is ${intent.status}`,
         );
       }
+      const paymentHeld = await registerHeldPayment({
+        intent,
+        connectedAccountId: stripeAccountIdForRetrieval(purchase),
+      });
 
       const carRef = db.collection("cars").doc(purchase.carId);
       await db.runTransaction(async (transaction) => {
@@ -23904,6 +24645,7 @@ exports.completeCarDepositReservation = onCall(
         transaction.update(purchaseRef, {
           paymentStatus: "succeeded",
           purchaseStatus: "reserved",
+          ...(paymentHeld && {paymentHoldStatus: "held"}),
           updatedAt: now,
         });
         transaction.update(carRef, {
@@ -23918,16 +24660,20 @@ exports.completeCarDepositReservation = onCall(
           "carBuyerReliability.updatedAt": now,
         }, {merge: true});
       });
-      await issueBusinessPayoutTransfer({
-        ref: purchaseRef,
-        data: {
-          ...purchase,
-          paymentStatus: "succeeded",
-          purchaseStatus: "reserved",
-        },
-        sourceTransaction: stripeSourceTransactionFromIntent(intent),
-        serviceType: "car_deposit",
-      });
+      // Held payments pay out after capture, when the hold scheduler re-runs
+      // this completion against the captured intent.
+      if (!paymentHeld) {
+        await issueBusinessPayoutTransfer({
+          ref: purchaseRef,
+          data: {
+            ...purchase,
+            paymentStatus: "succeeded",
+            purchaseStatus: "reserved",
+          },
+          sourceTransaction: stripeSourceTransactionFromIntent(intent),
+          serviceType: "car_deposit",
+        });
+      }
 
       return {
         success: true,

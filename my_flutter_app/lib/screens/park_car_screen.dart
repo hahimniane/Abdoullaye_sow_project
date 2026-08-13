@@ -464,6 +464,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
       context,
       providerNames: option.businessName,
       transactionSummary: l10n.parkingReviewHeading,
+      showHoldNotice: true,
     );
     if (marketplaceAcceptance == null || !mounted) return;
 

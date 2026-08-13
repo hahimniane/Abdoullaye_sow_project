@@ -172,6 +172,23 @@ class BarrelShipmentService {
     );
   }
 
+  /// Cancels a PAID shipping order. The server decides the money outcome:
+  /// a still-held payment is released for free; a captured one is refunded
+  /// minus the card fee, exactly as disclosed at checkout.
+  Future<Map<String, dynamic>> cancelSecuredOrder({
+    required String orderType,
+    required String recordId,
+  }) async {
+    await _refreshAuthTokenIfAvailable();
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('cancelSecuredCustomerOrder')
+        .call<Map<String, dynamic>>({
+      'orderType': orderType,
+      'recordId': recordId,
+    });
+    return Map<String, dynamic>.from(result.data);
+  }
+
   Future<BarrelShipment> payForShipment({
     required String senderName,
     required String receiverName,

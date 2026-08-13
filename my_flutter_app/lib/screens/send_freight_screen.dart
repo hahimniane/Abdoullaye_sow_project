@@ -14,6 +14,7 @@ import '../services/barrel_shipment_service.dart';
 import '../services/business_service.dart';
 import '../services/freight_categories.dart';
 import '../services/freight_coverage.dart';
+import '../services/service_ranking.dart';
 import '../services/freight_shipment_service.dart';
 import '../services/office_location_service.dart';
 import '../utils/freight_localization.dart';
@@ -67,6 +68,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   // replace. Two different questions on purpose: the category is what the
   // business charges by, the declared value is what it pays back by.
   String _categoryId = '';
+  ServiceSort _sort = kDefaultServiceSort;
   bool _declaresValue = false;
 
   // Freight home-pickup state for the selected business.
@@ -188,16 +190,38 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     _declaredValueController.clear();
   }
 
+  /// The chip label for a sort. Declared here rather than in the ranking
+  /// module so the wording stays with the screen that shows it.
+  static String _sortLabel(AppLocalizations l10n, ServiceSort sort) =>
+      switch (sort) {
+        ServiceSort.cheapest => l10n.freightSortCheapest,
+        ServiceSort.coverage => l10n.freightSortBestCover,
+        ServiceSort.fastest => l10n.freightSortFastest,
+        ServiceSort.rated => l10n.freightSortBestRated,
+      };
+
   List<BusinessDestinationOption> get _filtered {
     final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return _options;
-    return _options
-        .where(
-          (o) =>
-              o.businessName.toLowerCase().contains(q) ||
-              o.country.name.toLowerCase().contains(q),
-        )
-        .toList();
+    final matches = q.isEmpty
+        ? _options
+        : _options
+              .where(
+                (o) =>
+                    o.businessName.toLowerCase().contains(q) ||
+                    o.country.name.toLowerCase().contains(q),
+              )
+              .toList();
+    // Ranked on the parcel as described so far. At this step the customer has
+    // not said what they are sending or how, so an empty mode judges each
+    // business on whichever of air or sea it does best, and the weight stands
+    // in at one kilo - enough to order the per-kg rates against each other.
+    return sortServiceOptions(
+      matches,
+      service: 'freight',
+      sort: _sort,
+      weightKg: _weightKg > 0 ? _weightKg : 1,
+      mode: '',
+    );
   }
 
   List<String> _availableModes(BusinessDestinationOption? o) {
@@ -453,6 +477,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       providerNames: option.businessName,
       transactionSummary: l10n.sendFreight,
       additionalBody: l10n.freightAutoChargeDisclosureBody,
+      showHoldNotice: true,
     );
     if (marketplaceAcceptance == null || !mounted) return;
     setState(() => _busy = true);
@@ -619,6 +644,33 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
             ),
           ),
         ),
+        // Only worth offering once there is genuinely something to order. A
+        // sort control over one result advertises a choice that does not
+        // exist.
+        if (shouldOfferServiceSort(results, 'freight'))
+          Align(
+            alignment: Alignment.centerLeft,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(
+                children: [
+                  for (final entry in <(ServiceSort, String)>[
+                    for (final sort in sortsForService('freight'))
+                      (sort, _sortLabel(l10n, sort)),
+                  ])
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(entry.$2),
+                        selected: _sort == entry.$1,
+                        onSelected: (_) => setState(() => _sort = entry.$1),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
         Expanded(
           child: results.isEmpty
               ? Center(

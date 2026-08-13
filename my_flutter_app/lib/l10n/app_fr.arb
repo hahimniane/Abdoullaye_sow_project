@@ -1498,6 +1498,23 @@
       }
     }
   },
+  "cancelOrderTitle": "Annuler cette commande ?",
+  "cancelOrderHeldBody": "Votre carte n’a jamais été débitée — la réservation est libérée et vous ne payez rien.",
+  "cancelOrderCapturedBody": "Votre paiement est remboursé moins les frais bancaires, comme indiqué au moment du paiement.",
+  "cancelWholeOrderHeldBody": "Cet envoi a été payé avec le reste de sa commande : toute la commande est annulée. Votre carte n’a jamais été débitée — vous ne payez rien.",
+  "cancelWholeOrderCapturedBody": "Cet envoi a été payé avec le reste de sa commande : toute la commande est annulée. Votre paiement est remboursé moins les frais bancaires.",
+  "keepOrder": "Garder la commande",
+  "cancelOrderConfirm": "Annuler la commande",
+  "cancelOrderFreeAction": "Annuler la commande (gratuit)",
+  "cancelOrderRefundAction": "Annuler la commande (remboursement moins frais)",
+  "orderCancelledFree": "Commande annulée. Votre carte n’a jamais été débitée.",
+  "orderRefunded": "Commande annulée. Votre remboursement arrive, moins les frais bancaires.",
+  "genericError": "Une erreur est survenue. Veuillez réessayer.",
+  "paymentHoldNotice": "Aucun d\u00e9bit aujourd\u2019hui \u2014 le montant est r\u00e9serv\u00e9 sur votre carte et d\u00e9bit\u00e9 \u00e0 la fin de la p\u00e9riode de r\u00e9servation (5 \u00e0 7 jours pour la plupart des cartes). Annulation gratuite avant le d\u00e9bit ; ensuite, les remboursements perdent les frais bancaires.",
+  "freightSortBestRated": "Mieux noté",
+  "freightSortCheapest": "Moins cher",
+  "freightSortBestCover": "Meilleure couverture",
+  "freightSortFastest": "Plus rapide",
   "searchBusinessOrCountry": "Rechercher une entreprise ou un pays",
   "noMatchFor": "Aucun résultat pour « {query} »",
   "@noMatchFor": {

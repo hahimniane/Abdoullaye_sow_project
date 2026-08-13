@@ -639,6 +639,7 @@ class CarDetailsScreen extends StatelessWidget {
                                         context,
                                         providerNames: car.businessName,
                                         transactionSummary: l10n.reserveThisCar,
+                                        showHoldNotice: true,
                                       );
                                   if (marketplaceAcceptance == null ||
                                       !context.mounted) {
@@ -974,6 +975,7 @@ class CarDetailsScreen extends StatelessWidget {
                                         context,
                                         providerNames: car.businessName,
                                         transactionSummary: l10n.reserveThisCar,
+                                        showHoldNotice: true,
                                       );
                                   if (marketplaceAcceptance == null ||
                                       !context.mounted) {
@@ -1188,6 +1190,7 @@ class CarDetailsScreen extends StatelessWidget {
                                         providerNames: car.businessName,
                                         transactionSummary:
                                             l10n.purchaseThisCar,
+                                            showHoldNotice: true,
                                       );
                                   if (marketplaceAcceptance == null ||
                                       !context.mounted) {

@@ -37,6 +37,7 @@ import {
   transmissionOptions,
 } from "@/components/business/operations-panels";
 import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
+import { PaymentHoldNotice } from "@/components/payment-hold-notice";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { ServiceRequestForm } from "@/components/service-request-form";
 import { marketplaceDisclosure } from "@/lib/disclosures";
@@ -1006,7 +1007,10 @@ function CarActionForm({
           </label>
         )}
         {paid && (
-          <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
+          <>
+            <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
+            <PaymentHoldNotice />
+          </>
         )}
       </div>
     </ServiceRequestForm>
