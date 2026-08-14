@@ -1,0 +1,123 @@
+/**
+ * A shipment's journey, as a customer thinks about it.
+ *
+ * The status vocabulary is written for staff ("pending",
+ * "awaiting_weight_confirmation"), and a customer reading "pending" learns
+ * nothing about where their barrel is. These four stages are what they
+ * actually want to know: is it booked, has it left, is it nearly there, can
+ * I collect it.
+ *
+ * Freight's payment-settlement statuses all sit inside "Booked" on purpose -
+ * they are billing steps, not movement, and a customer watching for their
+ * parcel does not care which one is in progress.
+ */
+
+export type JourneyStageId = "booked" | "in_transit" | "arrived" | "delivered";
+
+export type JourneyStage = {
+  id: JourneyStageId;
+  label: string;
+  /** What the customer should understand this stage to mean. */
+  hint: string;
+};
+
+export const JOURNEY_STAGES: readonly JourneyStage[] = [
+  {id: "booked", label: "Booked", hint: "Your booking is confirmed"},
+  {id: "in_transit", label: "On its way", hint: "Shipped and travelling"},
+  {id: "arrived", label: "Arrived", hint: "Landed at the destination"},
+  {id: "delivered", label: "Delivered", hint: "Handed over"},
+];
+
+const STAGE_BY_STATUS: Record<string, JourneyStageId> = {
+  pending_payment: "booked",
+  awaiting_weight_confirmation: "booked",
+  awaiting_balance_payment: "booked",
+  settlement_processing: "booked",
+  pending: "booked",
+  in_transit: "in_transit",
+  ready_for_pickup: "arrived",
+  completed: "delivered",
+};
+
+/**
+ * Which stage a shipment is in, and how far along that is.
+ *
+ * A cancelled shipment has no stage - it left the journey - so callers get
+ * null and show their own cancelled treatment rather than a stalled bar.
+ *
+ * @param status The shipment's stored status.
+ * @return The stage id and its index, or null when there is no journey.
+ */
+export function journeyStageFor(status: string): {
+  id: JourneyStageId;
+  index: number;
+} | null {
+  const key = String(status || "").trim();
+  if (key === "cancelled") return null;
+  const id = STAGE_BY_STATUS[key] ?? "booked";
+  return {id, index: JOURNEY_STAGES.findIndex((stage) => stage.id === id)};
+}
+
+/**
+ * A short, human sentence for how long ago something happened.
+ *
+ * "2 days ago" tells a customer whether their shipment is moving; a raw date
+ * makes them do the arithmetic themselves.
+ *
+ * @param value A Firestore timestamp, Date, or ISO string.
+ * @param nowMs Current time, injectable so this is testable.
+ * @return A relative phrase, or "" when there is no usable date.
+ */
+export function relativeTime(value: unknown, nowMs = Date.now()): string {
+  const ms = toMillis(value);
+  if (!ms) return "";
+  const diff = nowMs - ms;
+  if (diff < 0) return "just now";
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return days === 1 ? "yesterday" : `${days} days ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return weeks === 1 ? "1 week ago" : `${weeks} weeks ago`;
+  const months = Math.floor(days / 30);
+  return months <= 1 ? "1 month ago" : `${months} months ago`;
+}
+
+function toMillis(value: unknown): number {
+  if (!value) return 0;
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  const record = value as {seconds?: number; toDate?: () => Date};
+  if (typeof record.toDate === "function") {
+    const date = record.toDate();
+    return date instanceof Date ? date.getTime() : 0;
+  }
+  if (typeof record.seconds === "number") return record.seconds * 1000;
+  return 0;
+}
+
+/**
+ * The delivery window a customer was quoted, as one readable phrase.
+ *
+ * @param row A shipment row.
+ * @return e.g. "10-20 days", or "" when the business never stated one.
+ */
+export function deliveryWindowLabel(
+    row: Record<string, unknown>,
+): string {
+  const label = String(row.deliveryEstimateLabel || "").trim();
+  if (label) return label;
+  const min = Number(row.deliveryEstimateMinDays);
+  const max = Number(row.deliveryEstimateMaxDays);
+  if (Number.isFinite(min) && min > 0 && Number.isFinite(max) && max >= min) {
+    return `${min}-${max} days`;
+  }
+  if (Number.isFinite(min) && min > 0) return `${min}+ days`;
+  return "";
+}

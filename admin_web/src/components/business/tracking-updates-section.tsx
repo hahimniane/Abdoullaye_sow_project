@@ -9,7 +9,12 @@ import { db, functions } from "@/lib/firebase";
 import { formatDate, text } from "@/lib/format";
 import type { FirestoreRow } from "@/types/admin";
 
-function useTrackingEvents(relatedCollection: string, relatedId: string) {
+// Exported so the customer tracking card can subscribe to the same events
+// without also inheriting the staff UI around them.
+export function useTrackingEvents(
+  relatedCollection: string,
+  relatedId: string,
+) {
   const [rows, setRows] = useState<FirestoreRow[]>([]);
   const [loading, setLoading] = useState(true);
 

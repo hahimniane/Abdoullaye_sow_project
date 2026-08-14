@@ -11365,6 +11365,16 @@ button[data-loading="true"]::before {
     flex-direction: column;
     width: 100%;
   }
+  /* Tracking journey: two rows of two on a phone. Each row's track has to
+     stop at its own last dot rather than appear to jump the gap. */
+  .trk-journey { grid-template-columns: repeat(2, 1fr); gap: 14px 6px; }
+  .trk-step:nth-child(2)::before {
+    border-radius: 3px;
+    right: auto;
+    width: 8px;
+  }
+  .trk-step:nth-child(3)::before { border-radius: 3px 0 0 3px; }
+
 }
 
 /* People & access — unified master/detail workspace */
@@ -12262,4 +12272,183 @@ button[data-loading="true"]::before {
   font-size: 12.5px;
   font-weight: 400;
   opacity: 0.75;
+}
+
+/* ── Customer shipment tracking ─────────────────────────────────────────
+   The customer used to be shown the staff milestone list: an inline-styled
+   log headed "Tracking updates" that said "No updates yet". It answered a
+   question nobody asked. What a customer wants is where their barrel is, so
+   the card leads with a four-stage journey, then the latest event, then the
+   history. Tokens only - no new colours. */
+
+.trk-journey {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  list-style: none;
+  margin: 2px 0 4px;
+  padding: 0;
+}
+
+.trk-step {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+
+/* The connector sits behind the dots and stops at the last step, so the
+   line reads as a route rather than a border. */
+.trk-step::before {
+  background: var(--rule);
+  content: "";
+  height: 3px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 6px;
+}
+.trk-step:first-child::before { border-radius: 3px 0 0 3px; }
+/* The track ends AT the final dot, not at the edge of the column - a line
+   running past "Delivered" reads as though the journey continues. */
+.trk-step:last-child::before {
+  border-radius: 3px;
+  right: auto;
+  width: 8px;
+}
+.trk-step.done::before,
+.trk-step.current::before { background: var(--brand); }
+.trk-step.current::before {
+  background: linear-gradient(90deg, var(--brand) 55%, var(--rule) 55%);
+}
+
+.trk-step-dot {
+  align-items: center;
+  background: var(--paper);
+  border: 3px solid var(--rule);
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  height: 15px;
+  justify-content: center;
+  position: relative;
+  width: 15px;
+  z-index: 1;
+}
+.trk-step.done .trk-step-dot {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+.trk-step.current .trk-step-dot {
+  background: var(--paper);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.16);
+}
+
+.trk-step-text { display: flex; flex-direction: column; gap: 1px; }
+.trk-step-text strong {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.trk-step.done .trk-step-text strong,
+.trk-step.current .trk-step-text strong { color: var(--ink); }
+.trk-step-text small { color: var(--brand); font-size: 11px; font-weight: 600; }
+
+.trk-journey-cancelled {
+  background: rgba(220, 38, 38, 0.06);
+  border-radius: 10px;
+  color: var(--danger);
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 12px;
+}
+
+.trk-headline {
+  align-items: center;
+  background: rgba(13, 148, 136, 0.06);
+  border-radius: 11px;
+  color: var(--brand-strong);
+  display: flex;
+  gap: 9px;
+  padding: 10px 12px;
+}
+.trk-headline.muted { background: #f6f8fa; color: var(--muted); }
+.trk-headline span { display: flex; flex-direction: column; gap: 1px; }
+.trk-headline strong { font-size: 13.5px; }
+.trk-headline small { color: var(--muted); font-size: 11.5px; }
+
+.trk-container {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  gap: 7px;
+}
+.trk-container strong { color: var(--ink); font-family: ui-monospace, monospace; }
+.trk-live {
+  background: rgba(13, 148, 136, 0.12);
+  border-radius: 999px;
+  color: var(--brand-strong);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+}
+
+.trk-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0 0 0 4px;
+}
+
+.trk-event { display: flex; gap: 10px; position: relative; }
+/* The spine joins each dot to the next; the last event ends it. */
+.trk-event:not(:last-child)::before {
+  background: var(--rule);
+  content: "";
+  left: 10px;
+  position: absolute;
+  top: 21px;
+  bottom: -13px;
+  width: 2px;
+}
+
+.trk-event-icon {
+  align-items: center;
+  background: #f6f8fa;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--muted);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 21px;
+  justify-content: center;
+  width: 21px;
+}
+.trk-event.latest .trk-event-icon {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
+.trk-event-body { display: flex; flex-direction: column; gap: 2px; }
+.trk-event-body strong { color: var(--ink); font-size: 13px; }
+.trk-event.latest .trk-event-body strong { color: var(--brand-strong); }
+.trk-event-detail { color: var(--muted); font-size: 12px; }
+.trk-event-when { color: var(--muted); font-size: 11px; }
+
+.trk-empty {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 12.5px;
+  gap: 8px;
+  line-height: 1.45;
+  padding: 4px 0 2px;
 }

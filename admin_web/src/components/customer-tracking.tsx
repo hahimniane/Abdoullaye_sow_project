@@ -5,7 +5,13 @@ import { Check, Clipboard, MapPin, PackageSearch, Search, Star } from "lucide-re
 
 import { formatDate, text } from "@/lib/format";
 import { trackingCodeFor } from "@/lib/phase5-customer-actions";
-import { TrackingUpdatesSection } from "@/components/business/tracking-updates-section";
+import { useTrackingEvents } from "@/components/business/tracking-updates-section";
+import {
+  ContainerLine,
+  JourneyProgress,
+  TrackingHeadline,
+  TrackingTimeline,
+} from "@/components/customer-tracking-journey";
 import {
   ReviewComposerDrawer,
   useReviewedOrderKeys,
@@ -50,6 +56,31 @@ function CopyTrackingNumber({ code }: { code: string }) {
       </button>
       {copyError && <small className="phase5-inline-error">{copyError}</small>}
     </div>
+  );
+}
+
+/**
+ * One card's live milestone feed. Split out so each card owns its own
+ * subscription and the list re-renders independently.
+ */
+function ShipmentUpdates({
+  record,
+  relatedCollection,
+}: {
+  record: FirestoreRow;
+  relatedCollection: "barrelShipments" | "freightShipments";
+}) {
+  const events = useTrackingEvents(relatedCollection, record.id);
+  const latest = events.rows[0] ?? null;
+  return (
+    <>
+      <TrackingHeadline row={record} latest={latest} />
+      <TrackingTimeline
+        events={events.rows}
+        loading={events.loading}
+        trackingActive={text(record.trackingProvider, "") === "carrier_api"}
+      />
+    </>
   );
 }
 
@@ -157,12 +188,13 @@ export function CustomerTracking({
                   <span>{text(record.businessName, "Service provider")}</span>
                   <span>{formatDate(record.updatedAt ?? record.createdAt)}</span>
                 </div>
+                <JourneyProgress status={text(record.status, "")} />
+                <ContainerLine row={record} />
                 <CopyTrackingNumber code={trackingCodeFor(record)} />
                 {relatedCollection && (
-                  <TrackingUpdatesSection
-                    canEdit={false}
+                  <ShipmentUpdates
+                    record={record}
                     relatedCollection={relatedCollection}
-                    relatedId={record.id}
                   />
                 )}
                 {isCompleted && (
