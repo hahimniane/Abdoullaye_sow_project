@@ -264,6 +264,51 @@ const colorOptions = ["black", "white", "silver", "gray", "red", "blue", "green"
 const featureOptions = ["backup_camera", "bluetooth", "leather_seats", "sunroof", "navigation", "heated_seats", "apple_carplay", "android_auto", "blind_spot", "third_row", "remote_start", "keyless_entry"];
 
 const ACRONYMS = new Set(["suv", "cvt", "vin", "fwd", "rwd", "awd", "4wd"]);
+/**
+ * What cancelling a paid booking does to the customer's money, in the words
+ * the business needs before they press it.
+ *
+ * Only "pending" (paid, work not started) can be cancelled here. The outcome
+ * is decided server-side by cancelSecuredBusinessOrder - this only has to
+ * describe it honestly, and the two cases are very different for the
+ * customer: a held payment was never charged, a captured one has to be
+ * refunded.
+ */
+export function businessCancelAction(row: FirestoreRow, collection:
+  "barrelShipments" | "freightShipments") {
+  const status = text(row.status, "");
+  const paymentStatus = text(row.paymentStatus, "");
+  if (status !== "pending" || paymentStatus !== "succeeded") return null;
+
+  const held = text(row.paymentHoldStatus, "") === "held";
+  const amount = formatMoney(row.price);
+  // A barrel shipment paid as part of a multi-destination order shares one
+  // payment with its siblings, so the whole order is what gets cancelled.
+  const orderId = collection === "barrelShipments" ?
+    text(row.orderId, "") :
+    "";
+  const orderType = orderId ?
+    "barrelOrder" :
+    (collection === "barrelShipments" ? "barrelShipment" : "freightShipment");
+
+  return {
+    orderType,
+    recordId: orderId || row.id,
+    label: held ? "Cancel — customer keeps their money" : "Cancel & refund",
+    confirmEn: held ?
+      "Cancel this booking? The customer was never charged, so nothing is " +
+      "refunded and it costs them nothing." :
+      `Cancel this booking? ${amount} is refunded to the customer in full, ` +
+      "and the platform commission is returned to you. You still pay the " +
+      "card processing fee.",
+    confirmFr: held ?
+      "Annuler cette réservation ? Le client n’a jamais été débité." :
+      `Annuler cette réservation ? ${amount} sera intégralement remboursé ` +
+      "au client et la commission vous sera restituée.",
+    wholeOrder: Boolean(orderId),
+  };
+}
+
 export function optionLabel(value: string) {
   const labels: Record<"en" | "fr", Record<string, string>> = {
     en: {
@@ -2964,6 +3009,32 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
                     {barrelStatuses.map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}
                   </select>
                 </label>
+                {(() => {
+                  const cancel = businessCancelAction(row, "barrelShipments");
+                  if (!cancel) return null;
+                  return (
+                    <button
+                      className="lst-btn ghost danger"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => run(
+                        row.id,
+                        "Booking cancelled and the customer refunded.",
+                        () => httpsCallable(
+                            functions, "cancelSecuredBusinessOrder",
+                        )({orderType: cancel.orderType,
+                          recordId: cancel.recordId}),
+                        cancel.confirmEn,
+                        cancel.confirmFr,
+                      )}
+                      title={cancel.wholeOrder ?
+                        "This shipment was paid with its order, so the whole " +
+                        "order is cancelled" : undefined}
+                    >
+                      {cancel.label}
+                    </button>
+                  );
+                })()}
               </div>
 
               <ContainerTrackingCard
@@ -3020,6 +3091,28 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
       setMessage("Freight shipment updated.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Update failed.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function cancelBooking(
+      row: FirestoreRow,
+      cancel: NonNullable<ReturnType<typeof businessCancelAction>>,
+  ) {
+    if (!(await confirmImportantAction(cancel.confirmEn, cancel.confirmFr))) {
+      return;
+    }
+    setBusyId(row.id);
+    setMessage("");
+    try {
+      await httpsCallable(functions, "cancelSecuredBusinessOrder")({
+        orderType: cancel.orderType,
+        recordId: cancel.recordId,
+      });
+      setMessage("Booking cancelled and the customer refunded.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Cancel failed.");
     } finally {
       setBusyId("");
     }
@@ -3114,6 +3207,20 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
               <div className="pur-actions">
                 {versionTwo && verifiedWeight <= 0 && <label className="bar-field"><span>Enter verified weight</span><input aria-label="Enter verified weight" inputMode="decimal" value={weightDrafts[row.id] ?? ""} onChange={(event) => setWeightDrafts((current) => ({ ...current, [row.id]: event.target.value }))} placeholder="0.0" /><button className="lst-btn primary" type="button" disabled={busy || !paymentReady} onClick={() => confirmWeight(row)}>Confirm weight and final price</button></label>}
                 <label className="bar-field"><span>Update status</span><select value={status} disabled={busy || !paymentReady || !settlementReady} onChange={(event) => updateStatus(row, event.target.value)}>{["pending_payment", "awaiting_weight_confirmation", "awaiting_balance_payment", "settlement_processing", "pending", "in_transit", "ready_for_pickup", "completed", "cancelled"].map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}</select></label>
+                {(() => {
+                  const cancel = businessCancelAction(row, "freightShipments");
+                  if (!cancel) return null;
+                  return (
+                    <button
+                      className="lst-btn ghost danger"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => cancelBooking(row, cancel)}
+                    >
+                      {cancel.label}
+                    </button>
+                  );
+                })()}
               </div>
 
               {text(row.mode ?? row.freightMode, "") === "sea" && (
