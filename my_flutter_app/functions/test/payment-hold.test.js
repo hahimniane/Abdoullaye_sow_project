@@ -235,3 +235,40 @@ describe("the hold registry record", () => {
     assert.equal(record.amountCents, 22000);
   });
 });
+
+describe("what may be sent to Stripe", () => {
+  const indexSource = require("node:fs")
+      .readFileSync(require("node:path").join(__dirname, "..", "index.js"),
+          "utf8");
+
+  it("never asks Stripe for extended authorization at all", () => {
+    // "if_available" does NOT degrade gracefully on a Checkout Session: an
+    // account that is not on IC+ pricing gets
+    // "This account is not eligible for the requested card features" and the
+    // session is never created. This took down every web booking on
+    // 2026-08-14. The PaymentIntent path accepts the same parameter fine,
+    // so only the session builder is forbidden from sending it.
+    // Both builders: the Checkout Session rejects the parameter at CREATE,
+    // and the PaymentIntent accepts it at create then rejects at CONFIRM -
+    // which is worse, because it passes any test that stops at creation.
+    const start = indexSource.indexOf(
+        "async function createStripeCustomerCheckoutSession");
+    const end = indexSource.indexOf(
+        "async function expireStripeCheckoutSession", start);
+    const piStart = indexSource.indexOf(
+        "async function createStripePaymentIntent");
+    const piEnd = indexSource.indexOf("function stripeFormRequest", piStart);
+    assert.ok(start > 0 && end > start, "session builder not found");
+    assert.ok(piStart > 0 && piEnd > piStart, "intent builder not found");
+    const session = indexSource.slice(start, end) +
+      indexSource.slice(piStart, piEnd);
+    // Asserts on what is SENT, not on prose - the comment above the fix
+    // names the parameter deliberately so the reason survives.
+    const sent = session
+        .split("\n")
+        .filter((line) => !line.trim().startsWith("//"))
+        .join("\n");
+    assert.match(sent, /payment_intent_data\[capture_method\]/);
+    assert.doesNotMatch(sent, /request_extended_authorization/);
+  });
+});

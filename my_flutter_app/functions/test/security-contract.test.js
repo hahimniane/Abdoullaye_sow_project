@@ -290,3 +290,20 @@ test("support attachment access evaluates admin permissions once", () => {
       /canManageBusinessSupport\(firestore\.get/,
   );
 });
+
+test("no callable is exported twice", () => {
+  // A duplicate `exports.x = onCall(...)` is silently legal in JS: the last
+  // definition wins and the earlier one becomes dead code that still reads
+  // like it runs. That happened to cancelSecuredCustomerOrder on 2026-08-14 -
+  // two versions were written and committed, and only re-reading the file
+  // caught it. Deployment gives no warning, so the guard lives here.
+  const names = [...indexSource.matchAll(/^exports\.([A-Za-z0-9_]+)\s*=/gm)]
+      .map((m) => m[1]);
+  const seen = new Set();
+  const duplicates = [];
+  for (const name of names) {
+    if (seen.has(name)) duplicates.push(name);
+    seen.add(name);
+  }
+  assert.deepEqual(duplicates, [], `duplicate exports: ${duplicates}`);
+});

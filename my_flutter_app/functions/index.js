@@ -4451,12 +4451,14 @@ async function createStripePaymentIntent(params) {
   // Extended authorization is requested opportunistically: on eligible
   // Visa/Mastercard the hold lives ~30 days instead of 7, and if the account
   // or card is not eligible Stripe simply ignores it.
+  // NO request_extended_authorization. It is accepted when the intent is
+  // CREATED and then rejected at CONFIRM with "This account is not eligible
+  // for the requested card features" unless the platform is on IC+ pricing -
+  // so it looks fine in every test that stops at creation, and breaks every
+  // real payment. Found 2026-08-14 by confirming one. Re-add only after
+  // Stripe confirms extended authorization is enabled on the account.
   if (holdCaptureMethod(params.metadata?.paymentType)) {
     body.set("capture_method", "manual");
-    body.set(
-        "payment_method_options[card][request_extended_authorization]",
-        "if_available",
-    );
   }
   // A connectedAccountId + applicationFeeAmount together make this a Stripe
   // "direct charge": the PaymentIntent is created directly on the business's
@@ -4549,6 +4551,36 @@ async function captureStripePaymentIntent(paymentIntentId, connectedAccountId) {
           headers: {"Stripe-Account": connectedAccountId},
         }),
       },
+  );
+}
+
+/**
+ * Returns the platform's commission to the business IN FULL.
+ *
+ * `refund_application_fee: true` on a refund only returns the commission in
+ * PROPORTION to the amount refunded. A customer cancellation refunds
+ * everything except Stripe's fee - about 96.8% - so the proportional rule
+ * hands back 96.8% of the commission and silently leaves the business a few
+ * cents out of pocket on a cancellation it did not cause, with the platform
+ * keeping the difference. Measured on a real $110 order: business -$0.35,
+ * platform +$0.35.
+ *
+ * Refunding the fee object directly returns all of it, so the business lands
+ * at exactly zero and the platform keeps nothing from a cancelled job.
+ *
+ * @param {string} applicationFeeId The fee to refund (fee_...).
+ * @param {string} idempotencyKey Stable key for safe retries.
+ * @return {Promise<object|null>} The refund, or null when there is no fee.
+ */
+async function refundApplicationFeeInFull(applicationFeeId, idempotencyKey) {
+  const id = String(applicationFeeId || "").trim();
+  if (!id.startsWith("fee_")) return null;
+  // Deliberately NOT on the connected account: an application fee belongs to
+  // the platform, so this call is made as the platform.
+  return stripeFormRequest(
+      `/application_fees/${encodeURIComponent(id)}/refunds`,
+      new URLSearchParams(),
+      {idempotencyKey},
   );
 }
 
@@ -4804,12 +4836,16 @@ async function createStripeCustomerCheckoutSession(params) {
   // metadata, so the web redirect flow and the in-app flow cannot disagree
   // about whether an order holds. A held session completes with
   // payment_status "unpaid" - see checkoutSessionSecured.
+  //
+  // NO request_extended_authorization here, unlike the PaymentIntent path.
+  // On a Checkout Session that parameter HARD-FAILS with
+  // "This account is not eligible for the requested card features" when the
+  // account is not on IC+ pricing - "if_available" does not degrade, it
+  // errors, and it took down every web booking until it was removed
+  // (2026-08-14). Re-add it only after Stripe confirms IC+ / extended
+  // authorization is enabled on the platform account.
   if (holdCaptureMethod(params.metadata?.paymentType)) {
     body.set("payment_intent_data[capture_method]", "manual");
-    body.set(
-        "payment_method_options[card][request_extended_authorization]",
-        "if_available",
-    );
   }
   body.set("success_url", params.successUrl);
   body.set("cancel_url", params.cancelUrl);
@@ -7623,182 +7659,6 @@ function holdNoticePreferenceKey(paymentType) {
  * a car purchase un-sells a car - both deserve their own design rather than a
  * generic one that guesses.
  */
-const CUSTOMER_CANCELLABLE_ORDERS = Object.freeze({
-  barrelShipment: {collection: "barrelShipments", cancellableStatus: "pending"},
-  barrelOrder: {collection: "barrelOrders", cancellableStatus: "pending",
-    cancelsShipmentsByOrderId: true},
-  freightShipment: {collection: "freightShipments",
-    cancellableStatus: "pending"},
-});
-
-/**
- * A customer cancels an order they already paid for.
- *
- * The outcome is whatever the money's state makes true, decided by
- * cancellationOutcome in payment_hold.js:
- *
- * - still a hold: the hold is released. Free - nothing was ever charged.
- * - captured: refunded minus Stripe's REAL fee (read from the balance
- *   transaction, never estimated), with the platform commission returned to
- *   the business so only the canceller pays anything.
- *
- * Only orders the business has not started working ("pending") can be
- * cancelled here; a collected parcel is a job, not a booking.
- */
-exports.cancelSecuredCustomerOrder = onCall(
-    {
-      enforceAppCheck: ENFORCE_APP_CHECK,
-      cors: true,
-      secrets: [stripeSecretKey],
-    },
-    async (request) => {
-      const customerUid = requireAuth(request);
-      const orderType = String(request.data?.orderType || "").trim();
-      const recordId = String(request.data?.recordId || "").trim();
-      const config = CUSTOMER_CANCELLABLE_ORDERS[orderType];
-      if (!config || !recordId) {
-        throw new HttpsError(
-            "invalid-argument",
-            "This order cannot be cancelled from here.",
-        );
-      }
-
-      const db = admin.firestore();
-      const ref = db.collection(config.collection).doc(recordId);
-      const snapshot = await ref.get();
-      if (!snapshot.exists) {
-        throw new HttpsError("not-found", "Order not found");
-      }
-      const record = snapshot.data() || {};
-      if (record.customerUid !== customerUid) {
-        throw new HttpsError("permission-denied", "Order access denied");
-      }
-      if (record.status !== config.cancellableStatus ||
-          record.paymentStatus !== "succeeded") {
-        throw new HttpsError(
-            "failed-precondition",
-            "This order is already being processed and can no longer be " +
-            "cancelled from the app. Contact the business directly.",
-        );
-      }
-
-      const cancelPatch = {
-        status: "cancelled",
-        cancelledBy: "customer",
-        cancelledAt: FirestoreFieldValue.serverTimestamp(),
-        updatedAt: FirestoreFieldValue.serverTimestamp(),
-      };
-      const cancelLinkedShipments = async () => {
-        if (!config.cancelsShipmentsByOrderId) return;
-        const shipments = await db.collection("barrelShipments")
-            .where("orderId", "==", recordId)
-            .get();
-        const batch = db.batch();
-        shipments.docs.forEach((doc) => batch.update(doc.ref, cancelPatch));
-        await batch.commit();
-      };
-
-      if (SIMULATE_PAYMENTS ||
-          String(record.stripePaymentIntentId || "")
-              .startsWith("simulated_")) {
-        await ref.update({...cancelPatch, paymentStatus: "cancelled"});
-        await cancelLinkedShipments();
-        return {success: true, outcome: "released", refundCents: 0};
-      }
-
-      const intentId = String(record.stripePaymentIntentId || "");
-      if (!intentId) {
-        throw new HttpsError(
-            "failed-precondition",
-            "This order has no payment to cancel. Contact support.",
-        );
-      }
-      const connectedAccountId = stripeAccountIdForRetrieval(record);
-      const intent = await retrieveStripePaymentIntent(
-          intentId, connectedAccountId,
-      );
-
-      if (intent.status === "requires_capture" ||
-          intent.status === "canceled") {
-        // Still a hold (or already released): cancelling costs nothing,
-        // because nothing ever settled. The promise of the whole model.
-        if (intent.status === "requires_capture") {
-          await cancelStripePaymentIntent(intentId, connectedAccountId);
-        }
-        await ref.update({
-          ...cancelPatch,
-          paymentStatus: "cancelled",
-          paymentHoldStatus: "released",
-        });
-        await cancelLinkedShipments();
-        await db.collection("paymentHolds").doc(intentId).set({
-          status: "released",
-          updatedAt: FirestoreFieldValue.serverTimestamp(),
-        }, {merge: true});
-        return {success: true, outcome: "released", refundCents: 0};
-      }
-
-      if (intent.status !== "succeeded") {
-        throw new HttpsError(
-            "failed-precondition",
-            "The payment is still settling. Try again in a few minutes.",
-        );
-      }
-
-      // Captured. A platform-mode order already paid out moved real money to
-      // the business by transfer; unwinding that needs a person, not a guess.
-      if (record.stripeChargeType !== "direct" &&
-          record.payoutStatus === "paid") {
-        throw new HttpsError(
-            "failed-precondition",
-            "This order was already paid out to the business. Contact " +
-            "support to cancel it.",
-        );
-      }
-
-      const chargeId = typeof intent.latest_charge === "string" ?
-        intent.latest_charge :
-        String(intent.latest_charge?.id || "");
-      const charge = await retrieveStripeCharge(chargeId, connectedAccountId);
-      const balanceTx = await retrieveStripeBalanceTransaction(
-          String(charge.balance_transaction || ""), connectedAccountId,
-      );
-      const outcome = cancellationOutcome({
-        cancelledBy: "customer",
-        captured: true,
-        amountCents: Number(intent.amount || 0),
-        stripeFeeCents: Number(balanceTx.fee || 0),
-      });
-      if (outcome.refundCents > 0) {
-        await createStripeRefund({
-          paymentIntentId: intentId,
-          amount: outcome.refundCents,
-          refundApplicationFee: outcome.refundApplicationFee,
-          connectedAccountId,
-          idempotencyKey: `laawol-cancel-refund-v1-${intentId}`,
-          metadata: {
-            reason: "customer_cancelled",
-            orderType,
-            recordId,
-          },
-        });
-      }
-      await ref.update({
-        ...cancelPatch,
-        paymentStatus: "refunded",
-        refundedAmountCents: outcome.refundCents,
-        refundStripeFeeCents: Number(balanceTx.fee || 0),
-      });
-      await cancelLinkedShipments();
-      return {
-        success: true,
-        outcome: "refunded_minus_fee",
-        refundCents: outcome.refundCents,
-        stripeFeeCents: Number(balanceTx.fee || 0),
-      };
-    },
-);
-
 exports.captureExpiringPaymentHolds = onSchedule(
     {
       schedule: "every 30 minutes",
@@ -20544,6 +20404,12 @@ exports.completeBarrelOrderPayment = onCall(
         batch.update(doc.ref, {
           paymentStatus: "succeeded",
           status: "pending",
+          // The customer console lists SHIPMENTS, not orders, and decides
+          // between "cancel free" and "cancel minus card fee" from this
+          // field. Without it every held multi-destination order told the
+          // customer they would lose the card fee on a hold that releases
+          // for nothing.
+          ...(orderPaymentHeld && {paymentHoldStatus: "held"}),
           paidAt: now,
           updatedAt: now,
         });
@@ -21209,6 +21075,232 @@ function stripeOnlyFeeCents(balanceTransaction) {
  * business either way - see cancellationOutcome in payment_hold.js for the
  * ledger.
  */
+/**
+ * Which permission section governs cancelling each order type, so a staff
+ * account can only call off work it is trusted with.
+ */
+const SECURED_CANCEL_SECTIONS = Object.freeze({
+  barrelShipment: "barrels",
+  barrelOrder: "barrels",
+  freightShipment: "barrels",
+});
+
+/**
+ * Tells the customer their booking was cancelled by the business, and what
+ * happened to their money. A cancellation they did not ask for is exactly
+ * where silence becomes a support case.
+ *
+ * @param {object} params Inputs.
+ * @param {object} params.record The order document.
+ * @param {string} params.recordId Its id.
+ * @param {string} params.orderType The customer-checkout order type.
+ * @param {number} params.refundCents What is being returned.
+ * @param {boolean} params.held Whether the payment was still a hold.
+ */
+async function notifyBusinessCancellation({
+  record, recordId, orderType, refundCents, held,
+}) {
+  const uid = String(record.customerUid || "");
+  if (!uid) return;
+  const amount = (Number(refundCents || 0) / 100).toFixed(2);
+  await sendPreferenceNotification({
+    uid,
+    preferenceKey: "shipmentActivity",
+    title: "Your booking was cancelled",
+    body: held ?
+      "The business cancelled this booking. Your card was never charged, " +
+      "so there is nothing to refund." :
+      `The business cancelled this booking. $${amount} has been refunded ` +
+      "in full.",
+    data: {
+      type: "secured_order_cancelled_by_business",
+      orderType,
+      recordId,
+    },
+  });
+}
+
+/**
+ * A BUSINESS cancels an order it cannot perform.
+ *
+ * The customer pays nothing for someone else's failure: a held payment is
+ * released, a captured one is refunded IN FULL, and the platform returns its
+ * commission either way. Stripe's processing fee lands on the business -
+ * Stripe's own default on a direct charge, and the right incentive, since a
+ * business that takes bookings it cannot fulfil should carry that cost rather
+ * than the customer or the platform.
+ */
+exports.cancelSecuredBusinessOrder = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const actorUid = requireAuth(request);
+      const orderType = cleanText(request.data?.orderType, 40);
+      const recordId = cleanText(request.data?.recordId, 180);
+      const reason = cleanText(request.data?.reason, 300);
+      const config = SECURED_CANCELLABLE_ORDERS[orderType];
+      if (!config || !recordId) {
+        throw new HttpsError(
+            "invalid-argument", "Unsupported order type or missing id",
+        );
+      }
+
+      const db = admin.firestore();
+      const ref = db.collection(config.collection).doc(recordId);
+      const doc = await ref.get();
+      if (!doc.exists) throw new HttpsError("not-found", "Order not found");
+      const record = doc.data() || {};
+
+      // A barrel ORDER carries no businessId of its own - the businesses live
+      // on its shipment lines, and one order can span several of them. One
+      // payment covers the whole order, so a business may only call off an
+      // order it owns outright; a mixed order needs a partial refund, which
+      // is a different feature.
+      let businessIds = [String(record.businessId || "")].filter(Boolean);
+      if (config.cancelsSiblingShipments) {
+        const lines = await db.collection("barrelShipments")
+            .where("orderId", "==", recordId).get();
+        businessIds = [...new Set(lines.docs
+            .map((line) => String(line.data()?.businessId || ""))
+            .filter(Boolean))];
+      }
+      if (businessIds.length === 0) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This order has no business that could cancel it",
+        );
+      }
+      if (businessIds.length > 1) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This order covers more than one business and cannot be " +
+            "cancelled by one of them. Contact support.",
+        );
+      }
+      await requireBusinessPermission(
+          actorUid, businessIds[0],
+          SECURED_CANCEL_SECTIONS[orderType] || "barrels",
+      );
+
+      if (record.status !== "pending" ||
+          record.paymentStatus !== "succeeded") {
+        throw new HttpsError(
+            "failed-precondition",
+            "This order can no longer be cancelled from here.",
+        );
+      }
+
+      const cancelPatch = (extra) => ({
+        status: "cancelled",
+        cancelledBy: "business",
+        cancelledByUid: actorUid,
+        ...(reason && {cancellationReason: reason}),
+        cancelledAt: FirestoreFieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+        ...extra,
+      });
+      const applyCancellation = async (extra) => {
+        const batch = db.batch();
+        batch.update(ref, cancelPatch(extra));
+        if (config.cancelsSiblingShipments) {
+          const siblings = await db.collection("barrelShipments")
+              .where("orderId", "==", recordId).get();
+          siblings.docs.forEach((sibling) => {
+            batch.update(sibling.ref, cancelPatch(extra));
+          });
+        }
+        await batch.commit();
+      };
+
+      const intentId = String(record.stripePaymentIntentId || "");
+      if (SIMULATE_PAYMENTS) {
+        await applyCancellation({paymentStatus: "cancelled"});
+        return {success: true, outcome: "released", refundCents: 0};
+      }
+      if (intentId.startsWith("simulated_")) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Simulated shipping payments are disabled",
+        );
+      }
+      if (!intentId) {
+        throw new HttpsError(
+            "failed-precondition", "Payment intent is missing",
+        );
+      }
+
+      const connectedAccountId = stripeAccountIdForRetrieval(record);
+      const intent = await retrieveStripePaymentIntent(
+          intentId, connectedAccountId,
+      );
+
+      if (intent.status === "requires_capture" ||
+          intent.status === "canceled") {
+        if (intent.status !== "canceled") {
+          await cancelStripePaymentIntent(intentId, connectedAccountId);
+        }
+        await applyCancellation({
+          paymentStatus: "cancelled",
+          paymentHoldStatus: "released",
+        });
+        await db.collection("paymentHolds").doc(intentId).set({
+          status: "released",
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }, {merge: true});
+        await notifyBusinessCancellation({
+          record, recordId, orderType, refundCents: 0, held: true,
+        });
+        return {success: true, outcome: "released", refundCents: 0};
+      }
+
+      if (intent.status !== "succeeded") {
+        throw new HttpsError(
+            "failed-precondition", `Payment is ${intent.status}`,
+        );
+      }
+
+      // Captured: everything goes back, commission included. No fee is
+      // deducted - the customer did not cause this.
+      const outcome = cancellationOutcome({
+        cancelledBy: "business",
+        captured: true,
+        amountCents: Number(intent.amount || 0),
+      });
+      if (outcome.refundCents > 0) {
+        await createStripeRefund({
+          paymentIntentId: intentId,
+          amount: outcome.refundCents,
+          refundApplicationFee: outcome.refundApplicationFee &&
+            record.stripeChargeType === "direct",
+          connectedAccountId,
+          idempotencyKey: `laawol-business-cancel-v1-${intentId}`,
+          metadata: {
+            reason: "business_cancelled",
+            orderType,
+            recordId,
+            actorUid,
+          },
+        });
+      }
+      await applyCancellation({
+        paymentStatus: "refunded",
+        refundedAmountCents: outcome.refundCents,
+      });
+      await notifyBusinessCancellation({
+        record, recordId, orderType,
+        refundCents: outcome.refundCents, held: false,
+      });
+      return {
+        success: true,
+        outcome: "refunded_full",
+        refundCents: outcome.refundCents,
+      };
+    },
+);
+
 exports.cancelSecuredCustomerOrder = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
@@ -21344,10 +21436,6 @@ exports.cancelSecuredCustomerOrder = onCall(
         await createStripeRefund({
           paymentIntentId: intentId,
           amount: outcome.refundCents,
-          // Only a direct charge carries an application fee to give back;
-          // asking Stripe to refund one that does not exist is an error.
-          refundApplicationFee: outcome.refundApplicationFee &&
-            record.stripeChargeType === "direct",
           connectedAccountId,
           idempotencyKey: `laawol-secured-cancel-v1-${intentId}`,
           metadata: {
@@ -21357,6 +21445,16 @@ exports.cancelSecuredCustomerOrder = onCall(
             customerUid,
           },
         });
+        // The commission goes back in FULL, not in proportion to a partial
+        // refund - see refundApplicationFeeInFull. Only a direct charge has
+        // one to return.
+        if (outcome.refundApplicationFee &&
+            record.stripeChargeType === "direct") {
+          await refundApplicationFeeInFull(
+              charge.application_fee,
+              `laawol-secured-cancel-fee-v1-${intentId}`,
+          );
+        }
       }
       await applyCancellation({
         paymentStatus: "refunded",
