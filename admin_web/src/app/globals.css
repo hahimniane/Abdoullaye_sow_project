@@ -6453,7 +6453,10 @@ button[data-loading="true"]::before {
   align-items: start;
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  /* 300px is the narrowest column that still fits the four stage names on one
+     line at 11px; below it "On its way" wraps and every card in the row grows
+     a line. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
 }
 
 .phase5-tracking-card {
