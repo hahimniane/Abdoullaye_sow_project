@@ -2,7 +2,7 @@
 
 import { useConsoleDocumentTitle } from "@/lib/document-title";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
@@ -1002,6 +1002,8 @@ function PayoutsPanel({
   >("");
   const [error, setError] = useState("");
   const [autoRefreshKey, setAutoRefreshKey] = useState("");
+  const [autoCheckFailed, setAutoCheckFailed] = useState(false);
+  const lastAutoCheck = useRef(0);
   const [feeSettings, setFeeSettings] = useState<BusinessFeeSettings | null>(
     null,
   );
@@ -1070,8 +1072,15 @@ function PayoutsPanel({
           functions,
           "refreshBusinessStripeAccountStatus",
         )({ businessId });
+        setAutoCheckFailed(false);
     } catch (err) {
-      if (!silent) {
+      if (silent) {
+        // A silently swallowed failure here is indistinguishable from
+        // "Stripe still says no": the business finishes onboarding and this
+        // panel goes on telling them to finish onboarding, forever, with no
+        // hint that the check itself never ran.
+        setAutoCheckFailed(true);
+      } else {
           setError(
             err instanceof Error
               ? err.message
@@ -1097,8 +1106,31 @@ function PayoutsPanel({
     const key = `${businessId}:${payoutStatus.stripeAccountId}`;
     if (autoRefreshKey === key) return;
     setAutoRefreshKey(key);
+    lastAutoCheck.current = Date.now();
     void refresh({silent: true});
   }, [autoRefreshKey, businessId, payoutStatus.state, payoutStatus.stripeAccountId, previewMode, refresh]);
+
+  // Stripe onboarding is finished on Stripe's own site, so the answer almost
+  // always arrives while this tab is in the background. The once-per-account
+  // check above has already run by then and will not run again, which is why
+  // a business that has genuinely finished still gets told to finish. Check
+  // again whenever they come back to the tab.
+  useEffect(() => {
+    if (!businessId || previewMode || payoutStatus.state === "ready") return;
+    function recheck() {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastAutoCheck.current < 10_000) return;
+      lastAutoCheck.current = now;
+      void refresh({silent: true});
+    }
+    window.addEventListener("focus", recheck);
+    document.addEventListener("visibilitychange", recheck);
+    return () => {
+      window.removeEventListener("focus", recheck);
+      document.removeEventListener("visibilitychange", recheck);
+    };
+  }, [businessId, payoutStatus.state, previewMode, refresh]);
 
   const actionLabel = busy
     ? busyAction === "refresh" || busyAction === "auto"
@@ -1148,6 +1180,13 @@ function PayoutsPanel({
           </button>
         )}
       </div>
+      {autoCheckFailed && payoutStatus.state !== "ready" && (
+        <div className="info-band">
+          We could not check your Stripe status automatically, so the status
+          above may be out of date. If you have finished with Stripe, press
+          {" "}<strong>{payoutStatus.refreshLabel}</strong>.
+        </div>
+      )}
       {payoutStatus.helperText && (
         <div className="info-band">{payoutStatus.helperText}</div>
       )}
