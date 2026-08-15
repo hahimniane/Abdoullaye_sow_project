@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, Clipboard, MapPin, PackageSearch, Search, Star } from "lucide-react";
+import {
+  Check,
+  Clipboard,
+  MapPin,
+  PackageSearch,
+  ReceiptText,
+  Search,
+  Star,
+} from "lucide-react";
 
 import { formatDate, text } from "@/lib/format";
 import { trackingCodeFor } from "@/lib/phase5-customer-actions";
@@ -43,7 +51,7 @@ function CopyTrackingNumber({ code }: { code: string }) {
 
   if (!code) return null;
   return (
-    <div className="phase5-tracking-actions">
+    <>
       <button
         aria-label="Copy tracking number"
         className="secondary-button"
@@ -56,7 +64,7 @@ function CopyTrackingNumber({ code }: { code: string }) {
         {copied ? "Tracking number copied" : "Copy tracking number"}
       </button>
       {copyError && <small className="phase5-inline-error">{copyError}</small>}
-    </div>
+    </>
   );
 }
 
@@ -88,11 +96,17 @@ function ShipmentUpdates({
 export function CustomerTracking({
   focusedRecordId = "",
   onFocusConsumed,
+  onOpenDetails,
   records,
   uid,
 }: {
   focusedRecordId?: string;
   onFocusConsumed?: () => void;
+  /**
+   * Opens this shipment's order drawer, where paying, cancelling and
+   * reviewing live. Optional so the panel still renders on its own.
+   */
+  onOpenDetails?: (record: FirestoreRow) => void;
   records: FirestoreRow[];
   uid: string;
 }) {
@@ -153,7 +167,13 @@ export function CustomerTracking({
         />
       </label>
       {filtered.length === 0 ? (
-        <div className="empty-state">No tracked shipments match your search.</div>
+        // Blaming an empty result on a search the customer never typed reads
+        // as though their shipments had gone missing.
+        <div className="empty-state">
+          {search.trim()
+            ? "No tracked shipments match your search."
+            : "Nothing to track yet. Your barrels and freight appear here once they are booked."}
+        </div>
       ) : (
         <div className="phase5-tracking-grid">
           {filtered.map((record) => {
@@ -191,7 +211,18 @@ export function CustomerTracking({
                 </div>
                 <JourneyProgress status={text(record.status, "")} />
                 <ContainerLine row={record} />
-                <CopyTrackingNumber code={trackingCodeFor(record)} />
+                <div className="phase5-tracking-actions">
+                  <CopyTrackingNumber code={trackingCodeFor(record)} />
+                  {onOpenDetails && (
+                    <button
+                      className="secondary-button"
+                      onClick={() => onOpenDetails(record)}
+                      type="button"
+                    >
+                      <ReceiptText size={16} /> Order details
+                    </button>
+                  )}
+                </div>
                 {relatedCollection && (
                   <ShipmentUpdates
                     record={record}

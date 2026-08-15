@@ -485,13 +485,34 @@ function OrdersView({
   trackedShipments: FirestoreRow[];
   uid: string;
 }) {
+  // A barrel used to appear twice on this page: once as a row here and once
+  // as a tracking card below, under the same BS- number. One shipment is one
+  // thing, so it gets one card - and that card opens this panel's drawer for
+  // the actions (pay, cancel, review) the row used to carry.
+  const [openKey, setOpenKey] = useState("");
+  const untracked = useMemo(
+    () => orders.filter((order) => !TRACKED_COLLECTIONS.has(order.collectionName)),
+    [orders],
+  );
+
   return (
     <div className="stack">
-      <OrderPanel loading={loading} orders={orders} title="Orders & tracking" uid={uid} />
+      <OrderPanel
+        loading={loading}
+        onOpenHandled={() => setOpenKey("")}
+        openKey={openKey}
+        orders={orders}
+        title="Parking, cars & transport"
+        uid={uid}
+        visibleOrders={untracked}
+      />
       {!loading && (
         <CustomerTracking
           focusedRecordId={focusedRecord?.id ?? ""}
           onFocusConsumed={onFocusConsumed}
+          onOpenDetails={(record) =>
+            setOpenKey(`${text(record.relatedCollection, "")}:${record.id}`)
+          }
           records={trackedShipments}
           uid={uid}
         />
@@ -500,16 +521,35 @@ function OrdersView({
   );
 }
 
+// The collections that render as tracking cards, and so must not also be
+// listed as plain order rows on the same page.
+const TRACKED_COLLECTIONS = new Set(["barrelShipments", "freightShipments"]);
+
 function OrderPanel({
   loading,
+  onOpenHandled,
+  openKey = "",
   orders,
   title,
   uid,
+  visibleOrders,
 }: {
   loading: boolean;
+  /** Called once an externally requested `openKey` has been opened. */
+  onOpenHandled?: () => void;
+  /** An order to open from outside the panel, e.g. from a tracking card. */
+  openKey?: string;
+  /** Every order the drawer may need to look up, listed or not. */
   orders: TaggedRow[];
   title: string;
   uid: string;
+  /**
+   * The subset to list, when something else on the page already shows the
+   * rest. The panel hides itself entirely rather than render an empty box:
+   * a customer whose only activity is barrels should not be told they have
+   * no parking.
+   */
+  visibleOrders?: TaggedRow[];
 }) {
   // The open record is held by key and looked up from the live rows, never
   // kept as a snapshot: a car viewing changes status while its drawer is open
@@ -518,6 +558,15 @@ function OrderPanel({
   const [selectedKey, setSelectedKey] = useState("");
   const [reviewing, setReviewing] = useState(false);
   const [editing, setEditing] = useState(false);
+  // A tracking card asks for its own order by key. Consumed immediately so a
+  // later manual close does not reopen it.
+  useEffect(() => {
+    if (!openKey) return;
+    setSelectedKey(openKey);
+    setReviewing(false);
+    onOpenHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openKey]);
   const selected = useMemo(
     () => orders.find((order) => orderKey(order) === selectedKey) ?? null,
     [orders, selectedKey],
@@ -538,16 +587,22 @@ function OrderPanel({
     await httpsCallable(functions, cancelAction.callable)(cancelAction.payload);
   }
 
+  const listed = visibleOrders ?? orders;
+  // The drawer must stay mounted even when the list is hidden - a tracking
+  // card can open an order whose row is not rendered here at all.
+  const showSection = visibleOrders === undefined || listed.length > 0;
+
   return (
     <>
+      {showSection && (
       <section className="panel">
         <div className="panel-header"><div><ClipboardList size={18} /><h2>{title}</h2></div></div>
         {loading && <div className="empty-state">Loading your activity...</div>}
-        {!loading && orders.length === 0 && (
+        {!loading && listed.length === 0 && (
           <div className="empty-state">You do not have any activity here yet.</div>
         )}
         <div className="row-list">
-          {orders.map((order) => {
+          {listed.map((order) => {
             const { row, label, icon: Icon } = order;
             return (
               <button
@@ -574,6 +629,7 @@ function OrderPanel({
           })}
         </div>
       </section>
+      )}
       <OrderDetailDrawer
         cancelLabel={
           (cancelAction && "label" in cancelAction && cancelAction.label) ||
