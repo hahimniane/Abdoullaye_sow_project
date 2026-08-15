@@ -35,6 +35,7 @@ import { CalendarClock, Car, CircleAlert, CircleDollarSign, ClipboardList, Headp
 
 import { auth, db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
+import { statusLabel } from "@/lib/tracking-journey";
 import {
   carPurchaseIsViewing,
   viewingStatusLabel,
@@ -1276,8 +1277,20 @@ function orderKey(order: TaggedRow) {
 // has always shown.
 function orderStatusLabel(order: TaggedRow) {
   const status = text(order.row.status ?? order.row.purchaseStatus, "Pending");
-  if (order.collectionName !== "carPurchases") return status;
-  return viewingStatusLabel(status) || status;
+  if (order.collectionName === "carPurchases") {
+    return viewingStatusLabel(status) || status;
+  }
+  // Shipments already have customer-facing wording for every status they can
+  // reach; without this the order list prints the raw enum ("in_transit")
+  // while the tracking card below says "On its way" about the same barrel.
+  // Deliberately not applied to the other collections: their statuses are a
+  // different vocabulary, and "completed" means delivered for a shipment but
+  // not for a parking booking.
+  if (order.collectionName === "barrelShipments" ||
+      order.collectionName === "freightShipments") {
+    return statusLabel(status);
+  }
+  return status;
 }
 
 function tagRows(
