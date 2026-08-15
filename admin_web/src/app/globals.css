@@ -6446,9 +6446,14 @@ button[data-loading="true"]::before {
 }
 
 .phase5-tracking-grid {
+  /* Each card is as tall as its own contents. Without this the grid stretches
+     every card in a row to match the tallest, so one shipment with a long
+     history padded its cancelled neighbours with hundreds of pixels of
+     nothing. */
+  align-items: start;
   display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr));
 }
 
 .phase5-tracking-card {
