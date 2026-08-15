@@ -6,6 +6,7 @@ import { formatDate, text } from "@/lib/format";
 import {
   JOURNEY_STAGES,
   deliveryWindowLabel,
+  eventDetail,
   journeyStageFor,
   relativeTime,
 } from "@/lib/tracking-journey";
@@ -89,10 +90,8 @@ export function TrackingTimeline({
   return (
     <ol className="trk-timeline">
       {events.map((event, index) => {
-        const carrier = text(event.source) === "carrier_api";
-        const detail = [text(event.location), text(event.description)]
-          .filter(Boolean)
-          .join(" · ");
+        const carrier = text(event.source, "") === "carrier_api";
+        const detail = eventDetail(event);
         const when = relativeTime(event.timestamp);
         return (
           <li
@@ -103,7 +102,7 @@ export function TrackingTimeline({
               {carrier ? <Ship size={13} /> : <Flag size={13} />}
             </span>
             <div className="trk-event-body">
-              <strong>{text(event.label)}</strong>
+              <strong>{text(event.label, "Shipment update")}</strong>
               {detail && <span className="trk-event-detail">{detail}</span>}
               <span className="trk-event-when">
                 {when ? `${when} · ` : ""}

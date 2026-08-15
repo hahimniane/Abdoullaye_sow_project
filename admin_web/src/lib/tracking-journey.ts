@@ -103,6 +103,23 @@ function toMillis(value: unknown): number {
 }
 
 /**
+ * The secondary line under a milestone: where it happened and what happened.
+ *
+ * Carrier events always arrive with an empty location - Terminal49 reports a
+ * status, not a place - so this must drop blanks rather than let a "Unknown"
+ * placeholder through. Every carrier milestone would carry one otherwise.
+ *
+ * @param event One trackingEvents document.
+ * @return "Newark, NJ · Loaded", "Container MSCU1234567", or "".
+ */
+export function eventDetail(event: Record<string, unknown>): string {
+  return [event.location, event.description]
+      .map((value) => (typeof value === "string" ? value.trim() : ""))
+      .filter(Boolean)
+      .join(" · ");
+}
+
+/**
  * The delivery window a customer was quoted, as one readable phrase.
  *
  * @param row A shipment row.

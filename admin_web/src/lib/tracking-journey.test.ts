@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   JOURNEY_STAGES,
   deliveryWindowLabel,
+  eventDetail,
   journeyStageFor,
   relativeTime,
 } from "./tracking-journey.ts";
@@ -71,4 +72,32 @@ test("delivery window prefers the stated label, then the day range", () => {
     {deliveryEstimateMinDays: 10, deliveryEstimateMaxDays: 20}), "10-20 days");
   assert.equal(deliveryWindowLabel({deliveryEstimateMinDays: 10}), "10+ days");
   assert.equal(deliveryWindowLabel({}), "");
+});
+
+test("a carrier event with no location does not read as 'Unknown'", () => {
+  // This is exactly what the Terminal49 poller writes: a status, a container
+  // in the description, and location: "". Passing that through the generic
+  // text() helper stamps "Unknown · " on the front of every single carrier
+  // milestone - the whole reason the integration exists.
+  assert.equal(eventDetail({
+    label: "Loaded on vessel",
+    description: "Container MSCU4837261",
+    location: "",
+    source: "carrier_api",
+  }), "Container MSCU4837261");
+});
+
+test("a staff event joins where it happened to what happened", () => {
+  assert.equal(eventDetail({
+    location: "Newark, NJ",
+    description: "Consolidated into container MSCU4837261.",
+  }), "Newark, NJ · Consolidated into container MSCU4837261.");
+});
+
+test("an event with nothing to add says nothing", () => {
+  for (const event of [{}, {location: "", description: ""},
+    {location: "   ", description: null}, {description: 42}]) {
+    assert.equal(eventDetail(event as Record<string, unknown>), "",
+      JSON.stringify(event));
+  }
 });
