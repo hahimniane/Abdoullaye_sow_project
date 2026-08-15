@@ -6,6 +6,7 @@ import { Check, Clipboard, MapPin, PackageSearch, Search, Star } from "lucide-re
 import { formatDate, text } from "@/lib/format";
 import { trackingCodeFor } from "@/lib/phase5-customer-actions";
 import { useTrackingEvents } from "@/components/business/tracking-updates-section";
+import { statusLabel } from "@/lib/tracking-journey";
 import {
   ContainerLine,
   JourneyProgress,
@@ -176,7 +177,7 @@ export function CustomerTracking({
                 <div className="phase5-tracking-topline">
                   <span className="section-kicker">Tracking number</span>
                   <span className="status-pill compact">
-                    {text(record.status, "Pending")}
+                    {statusLabel(text(record.status, ""))}
                   </span>
                 </div>
                 <h3>{code}</h3>

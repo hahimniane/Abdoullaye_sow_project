@@ -7,6 +7,7 @@ import {
   eventDetail,
   journeyStageFor,
   relativeTime,
+  statusLabel,
 } from "./tracking-journey.ts";
 
 test("staff statuses map onto the four customer stages", () => {
@@ -100,4 +101,21 @@ test("an event with nothing to add says nothing", () => {
     assert.equal(eventDetail(event as Record<string, unknown>), "",
       JSON.stringify(event));
   }
+});
+
+test("the status pill speaks to the customer, not to staff", () => {
+  // "in_transit" sat next to a progress bar reading "On its way" in the same
+  // card. The stored value is a database enum; the pill is customer-facing.
+  assert.equal(statusLabel("in_transit"), "On its way");
+  assert.equal(statusLabel("pending_payment"), "Payment pending");
+  assert.equal(statusLabel("awaiting_balance_payment"), "Balance due");
+  assert.equal(statusLabel("completed"), "Delivered");
+  assert.equal(statusLabel("cancelled"), "Cancelled");
+});
+
+test("an unmapped status degrades to something readable", () => {
+  // A status added to the backend later must not render as an empty pill or
+  // leak an underscore.
+  assert.equal(statusLabel("held_at_customs"), "held at customs");
+  assert.equal(statusLabel(""), "Booked");
 });

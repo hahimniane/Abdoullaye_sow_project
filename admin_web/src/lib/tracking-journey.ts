@@ -102,6 +102,35 @@ function toMillis(value: unknown): number {
   return 0;
 }
 
+const STATUS_LABEL: Record<string, string> = {
+  pending_payment: "Payment pending",
+  awaiting_weight_confirmation: "Awaiting weight check",
+  awaiting_balance_payment: "Balance due",
+  settlement_processing: "Payment processing",
+  pending: "Booked",
+  in_transit: "On its way",
+  ready_for_pickup: "Ready for pickup",
+  completed: "Delivered",
+  cancelled: "Cancelled",
+};
+
+/**
+ * The status pill's wording, for a customer rather than for staff.
+ *
+ * The stored value is a database enum - "in_transit", "pending_payment" - and
+ * printing it raw puts "in_transit" beside a progress bar that says "On its
+ * way" in the same card. Anything unrecognised falls back to the underscored
+ * value made readable, so a status added later degrades instead of vanishing.
+ *
+ * @param status The shipment's stored status.
+ * @return Wording safe to show a customer.
+ */
+export function statusLabel(status: string): string {
+  const key = String(status || "").trim();
+  if (!key) return "Booked";
+  return STATUS_LABEL[key] ?? key.replace(/_/g, " ");
+}
+
 /**
  * The secondary line under a milestone: where it happened and what happened.
  *
