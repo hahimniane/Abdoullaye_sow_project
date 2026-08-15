@@ -81,14 +81,14 @@ function ShipmentUpdates({
 }) {
   const events = useTrackingEvents(relatedCollection, record.id);
   const latest = events.rows[0] ?? null;
+  // A cancelled shipment has no next update to wait for and no journey left
+  // to narrate. Showing it a headline and an empty feed made a dead card as
+  // tall as a live one.
+  if (text(record.status, "") === "cancelled") return null;
   return (
     <>
       <TrackingHeadline row={record} latest={latest} />
-      <TrackingTimeline
-        events={events.rows}
-        loading={events.loading}
-        trackingActive={text(record.trackingProvider, "") === "carrier_api"}
-      />
+      <TrackingTimeline events={events.rows} />
     </>
   );
 }
@@ -194,24 +194,33 @@ export function CustomerTracking({
                 id={`tracking-${record.id}`}
                 key={record.id}
               >
-                <div className="phase5-tracking-topline">
-                  <span className="section-kicker">Tracking number</span>
+                {/* The tracking number and its status on one line: the
+                    "Tracking number" kicker cost a whole row to label a
+                    value the Copy button already names. */}
+                <div className="trk-head">
+                  <h3>{code}</h3>
                   <span className="status-pill compact">
                     {statusLabel(text(record.status, ""))}
                   </span>
                 </div>
-                <h3>{code}</h3>
-                <p>
-                  <MapPin size={15} aria-hidden="true" />
-                  {destination}
+                <p className="trk-where">
+                  <MapPin size={14} aria-hidden="true" />
+                  <span>
+                    {destination} · {text(record.businessName, "Service provider")}
+                  </span>
+                  <time>{formatDate(record.updatedAt ?? record.createdAt)}</time>
                 </p>
-                <div className="phase5-tracking-meta">
-                  <span>{text(record.businessName, "Service provider")}</span>
-                  <span>{formatDate(record.updatedAt ?? record.createdAt)}</span>
-                </div>
                 <JourneyProgress status={text(record.status, "")} />
                 <ContainerLine row={record} />
-                <div className="phase5-tracking-actions">
+                {relatedCollection && (
+                  <ShipmentUpdates
+                    record={record}
+                    relatedCollection={relatedCollection}
+                  />
+                )}
+                {/* Actions sit at the foot so the card reads status first and
+                    the buttons do not split it in half. */}
+                <div className="trk-actions">
                   <CopyTrackingNumber code={trackingCodeFor(record)} />
                   {onOpenDetails && (
                     <button
@@ -219,19 +228,11 @@ export function CustomerTracking({
                       onClick={() => onOpenDetails(record)}
                       type="button"
                     >
-                      <ReceiptText size={16} /> Order details
+                      <ReceiptText size={15} /> Order details
                     </button>
                   )}
-                </div>
-                {relatedCollection && (
-                  <ShipmentUpdates
-                    record={record}
-                    relatedCollection={relatedCollection}
-                  />
-                )}
-                {isCompleted && (
-                  <div style={{ marginTop: 10 }}>
-                    {reviewed ? (
+                  {isCompleted &&
+                    (reviewed ? (
                       <span className="status-pill compact">Review submitted</span>
                     ) : (
                       <button
@@ -241,9 +242,8 @@ export function CustomerTracking({
                       >
                         <Star size={15} /> Leave a review
                       </button>
-                    )}
-                  </div>
-                )}
+                    ))}
+                </div>
               </article>
             );
           })}

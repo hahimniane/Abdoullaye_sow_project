@@ -1,6 +1,7 @@
 "use client";
 
-import { Anchor, Check, Flag, MapPin, Package, Ship, Truck } from "lucide-react";
+import { useState } from "react";
+import { Anchor, Check, Flag, MapPin, Ship, Truck } from "lucide-react";
 
 import { formatDate, text } from "@/lib/format";
 import {
@@ -11,6 +12,9 @@ import {
   relativeTime,
 } from "@/lib/tracking-journey";
 import type { FirestoreRow } from "@/types/admin";
+
+/** Milestones shown before the timeline folds the rest behind a toggle. */
+const VISIBLE_EVENTS = 3;
 
 /**
  * The four-stage progress bar at the top of a tracking card.
@@ -37,14 +41,15 @@ export function JourneyProgress({ status }: { status: string }) {
           <li
             className={`trk-step${done ? " done" : ""}${current ? " current" : ""}`}
             key={item.id}
+            // The hint explains the stage without costing a line of card
+            // height - it wrapped to two lines in a narrow column, on every
+            // card, to say what the label had already said.
+            title={item.hint}
           >
             <span className="trk-step-dot" aria-hidden="true">
               {done ? <Check size={12} strokeWidth={3} /> : null}
             </span>
-            <span className="trk-step-text">
-              <strong>{item.label}</strong>
-              {current && <small>{item.hint}</small>}
-            </span>
+            <strong className="trk-step-text">{item.label}</strong>
           </li>
         );
       })}
@@ -61,35 +66,21 @@ export function JourneyProgress({ status }: { status: string }) {
  * rather than from the business - a customer trusts "the vessel departed"
  * differently from "the shop says it left".
  */
-export function TrackingTimeline({
-  events,
-  loading,
-  trackingActive,
-}: {
-  events: FirestoreRow[];
-  loading?: boolean;
-  trackingActive?: boolean;
-}) {
-  if (loading) {
-    return <p className="trk-empty">Loading updates…</p>;
-  }
+export function TrackingTimeline({ events }: { events: FirestoreRow[] }) {
+  // Most shipments sit at two or three milestones, but a long voyage can
+  // reach a dozen, and an unbounded list makes one card taller than the
+  // screen. The recent ones answer "is it moving"; the rest is history.
+  const [expanded, setExpanded] = useState(false);
   if (events.length === 0) {
-    // An empty log is the normal state for a brand-new booking, so it should
-    // read as "not yet" rather than as something being broken.
-    return (
-      <div className="trk-empty">
-        <Package size={16} aria-hidden="true" />
-        <span>
-          {trackingActive
-            ? "No movement reported yet. Updates appear here as your shipment travels."
-            : "Updates will appear here once your shipment is on its way."}
-        </span>
-      </div>
-    );
+    // The headline above already says an un-started shipment is waiting, and
+    // saying it twice was most of the height of an empty card.
+    return null;
   }
+  const visible = expanded ? events : events.slice(0, VISIBLE_EVENTS);
   return (
+    <>
     <ol className="trk-timeline">
-      {events.map((event, index) => {
+      {visible.map((event, index) => {
         const carrier = text(event.source, "") === "carrier_api";
         const detail = eventDetail(event);
         const when = relativeTime(event.timestamp);
@@ -114,6 +105,16 @@ export function TrackingTimeline({
         );
       })}
     </ol>
+    {events.length > VISIBLE_EVENTS && (
+      <button
+        className="trk-more"
+        onClick={() => setExpanded(!expanded)}
+        type="button"
+      >
+        {expanded ? "Show fewer updates" : `Show all ${events.length} updates`}
+      </button>
+    )}
+    </>
   );
 }
 
