@@ -172,9 +172,14 @@ export function CustomerConsole({
   profile,
   onSignOut,
 }: CustomerConsoleProps) {
-  const [activeTab, setActiveTab] = useState<CustomerTab>(() =>
-    firebaseUser.phoneNumber ? "home" : "profile",
-  );
+  // Always Home. This used to open on Profile whenever the Auth user had no
+  // phoneNumber - which is every customer who signed up with an email and
+  // never did SMS verification, i.e. nearly all of them. It fired on every
+  // page load and on the return from Stripe, so paying for a barrel dropped
+  // the customer on an account form. A verified phone is a precondition for
+  // shared barrels, and that feature asks for it where it is needed; it is
+  // not a reason to withhold the rest of the console.
+  const [activeTab, setActiveTab] = useState<CustomerTab>("home");
   useConsoleDocumentTitle(
     "customer",
     tabs.find((item) => item.id === activeTab)?.label,
@@ -353,8 +358,10 @@ export function CustomerConsole({
               customerName={text(profile.fullName, "there")}
               loading={dataLoading}
               orders={allOrders}
+              needsPhoneVerification={profile?.phoneVerified !== true}
               onOpenCars={() => setActiveTab("cars")}
               onOpenOrders={() => setActiveTab("orders")}
+              onOpenProfile={() => setActiveTab("profile")}
               uid={firebaseUser.uid}
             />
           )}
@@ -426,16 +433,21 @@ export function CustomerConsole({
 function CustomerHome({
   customerName,
   loading,
+  needsPhoneVerification,
   orders,
   onOpenCars,
   onOpenOrders,
+  onOpenProfile,
   uid,
 }: {
   customerName: string;
   loading: boolean;
+  /** Phone not yet verified, so shared barrels would refuse this account. */
+  needsPhoneVerification: boolean;
   orders: TaggedRow[];
   onOpenCars: () => void;
   onOpenOrders: () => void;
+  onOpenProfile: () => void;
   uid: string;
 }) {
   const openOrders = orders.filter(({ row }) => !isFinalStatus(text(row.status, ""))).length;
@@ -456,6 +468,20 @@ function CustomerHome({
           </button>
         </div>
       </section>
+      {/* Phone verification stays discoverable without hijacking navigation:
+          it is offered here, on the page the customer asked for, instead of
+          replacing it with the account form on every single load. */}
+      {needsPhoneVerification && (
+        <section className="info-band customer-phone-prompt">
+          <span>
+            Verify your phone number to join shared barrels and get delivery
+            updates by SMS.
+          </span>
+          <button className="secondary-button" onClick={onOpenProfile} type="button">
+            <UserRound size={15} /> Verify phone
+          </button>
+        </section>
+      )}
       <div className="metric-grid">
         <Metric label="Open orders" value={loading ? "…" : String(openOrders)} />
         <Metric label="All activity" value={loading ? "…" : String(orders.length)} />

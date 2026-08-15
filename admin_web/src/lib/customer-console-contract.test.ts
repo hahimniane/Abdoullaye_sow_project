@@ -56,3 +56,12 @@ test("the orders panel is titled for what is left in it", () => {
   assert.doesNotMatch(source, /title="Orders & tracking"/);
   assert.match(source, /title="Parking, cars & transport"/);
 });
+
+test("the console opens on Home, never on the profile form", () => {
+  // It used to open on Profile whenever the Auth user had no phoneNumber -
+  // true for every customer who signed up by email and never did SMS
+  // verification. It fired on every reload AND on the return from Stripe, so
+  // paying for a barrel landed the customer on an account form.
+  assert.match(source, /useState<CustomerTab>\("home"\)/);
+  assert.doesNotMatch(source, /firebaseUser\.phoneNumber \? "home" : "profile"/);
+});

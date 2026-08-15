@@ -6,11 +6,18 @@ import { phoneVerificationErrorMessage } from "./phone-verification.ts";
 
 const source = readFileSync("src/components/customer-console.tsx", "utf8");
 
-test("an unverified customer opens on Profile so phone verification is discoverable", () => {
-  assert.match(
-    source,
-    /useState<CustomerTab>\(\(\) =>\s*firebaseUser\.phoneNumber\s*\?\s*"home"\s*:\s*"profile",?\s*\)/,
-  );
+test("phone verification is discoverable without hijacking navigation", () => {
+  // The console used to OPEN on Profile whenever the Auth user had no
+  // phoneNumber - true of every customer who signed up by email and never
+  // did SMS verification. It fired on every reload and on the return from
+  // Stripe, so paying for a barrel landed the customer on an account form.
+  // The goal (make verification findable) is kept; the mechanism is a prompt
+  // on Home, which the customer can act on or ignore.
+  assert.match(source, /useState<CustomerTab>\("home"\)/);
+  assert.doesNotMatch(source, /firebaseUser\.phoneNumber \? "home" : "profile"/);
+  assert.match(source, /needsPhoneVerification=\{profile\?\.phoneVerified !== true\}/);
+  assert.match(source, /needsPhoneVerification && \(/);
+  assert.match(source, /onClick=\{onOpenProfile\}/);
 });
 
 test("a valid international phone exposes the send-code action", () => {
