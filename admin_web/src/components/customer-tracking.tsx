@@ -60,8 +60,12 @@ function CopyTrackingNumber({ code }: { code: string }) {
         onClick={() => void copyTrackingCode()}
         type="button"
       >
-        {copied ? <Check size={16} /> : <Clipboard size={16} />}
-        {copied ? "Tracking number copied" : "Copy tracking number"}
+        {copied ? <Check size={15} /> : <Clipboard size={15} />}
+        {/* Short on purpose: "Copy tracking number" pushed this button and
+            "Order details" onto separate lines in a card column, costing a
+            row of height on every shipment. The full phrase stays in the
+            aria-label, and the number it copies is the card's heading. */}
+        {copied ? "Copied" : "Copy number"}
       </button>
       {copyError && <small className="phase5-inline-error">{copyError}</small>}
     </>
