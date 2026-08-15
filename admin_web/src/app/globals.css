@@ -6453,7 +6453,7 @@ button[data-loading="true"]::before {
   align-items: start;
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
 }
 
 .phase5-tracking-card {
@@ -12410,16 +12410,19 @@ button[data-loading="true"]::before {
   box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.16);
 }
 
-.trk-step-text { display: block; }
-.trk-step-text strong {
+.trk-step-text {
   color: var(--muted);
-  font-size: 12px;
+  display: block;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.01em;
+  /* "On its way" broke across two lines in a narrow column and pushed every
+     card in the row taller. The stage names are short enough to sit on one
+     line once the column has room for them. */
+  white-space: nowrap;
 }
-.trk-step.done .trk-step-text strong,
-.trk-step.current .trk-step-text strong { color: var(--ink); }
-.trk-step-text small { color: var(--brand); font-size: 11px; font-weight: 600; }
+.trk-step.done .trk-step-text,
+.trk-step.current .trk-step-text { color: var(--ink); }
 
 .trk-journey-cancelled {
   background: rgba(220, 38, 38, 0.06);
