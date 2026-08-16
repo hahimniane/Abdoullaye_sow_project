@@ -229,15 +229,22 @@ test("translating a large realistic payload stays within the time budget", () =>
   );
 });
 
-test("translates the notice shown once Stripe setup is already done", () => {
-  // The banner used to tell a business to complete Stripe setup even when the
-  // payouts panel beside it said the setup was complete. The reassuring
-  // variant needs French too, or it silently falls back to English.
+test("translates both post-Stripe variants of the business notice", () => {
+  // Stripe going green does not mean the business is done: the platform still
+  // wants a document per service. Both outcomes need French, or they fall
+  // back to English on the one screen a new partner reads most carefully.
   assert.equal(
     translateValue(
-      "This business is currently pending. Stripe setup is complete, so nothing more is needed from you while it waits for platform approval.",
+      "This business is currently pending. Stripe setup is complete. Open Business to upload the verification documents we still need before it can be approved.",
       "fr",
     ),
-    "Cette entreprise est en attente. La configuration Stripe est terminée : vous n’avez plus rien à faire pendant l’attente de l’approbation de la plateforme.",
+    "Cette entreprise est en attente. La configuration Stripe est terminée. Ouvrez Entreprise pour téléverser les documents de vérification qu’il nous manque avant l’approbation.",
+  );
+  assert.equal(
+    translateValue(
+      "This business is currently pending. Stripe setup and your documents are in, so nothing more is needed from you while it waits for platform approval.",
+      "fr",
+    ),
+    "Cette entreprise est en attente. La configuration Stripe et vos documents sont enregistrés : vous n’avez plus rien à faire pendant l’attente de l’approbation de la plateforme.",
   );
 });

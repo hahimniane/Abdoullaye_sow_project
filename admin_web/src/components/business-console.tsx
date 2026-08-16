@@ -62,6 +62,7 @@ import {
   type BusinessTab,
 } from "@/lib/business-sidebar";
 import { summarizeBusinessEarnings } from "@/lib/business-earnings";
+import { buildBusinessVerificationChecklist } from "@/lib/business-verification";
 import { db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
 import {
@@ -224,6 +225,14 @@ export function BusinessConsole({
     previewBusiness,
   );
   const [businessError, setBusinessError] = useState("");
+  // Only work that is actually the business's to do. A document sitting in
+  // "submitted" is waiting on our review, not on them, and telling them to go
+  // upload it again would be its own kind of wrong.
+  const documentsOutstanding = useMemo(() => {
+    if (!business) return false;
+    const {summary} = buildBusinessVerificationChecklist(business);
+    return summary.missing > 0 || summary.needsChanges > 0;
+  }, [business]);
   const enabled = Boolean(businessId && !previewMode);
 
   const handleSignOut = useCallback(async () => {
@@ -525,7 +534,11 @@ export function BusinessConsole({
           )}
           {!isApproved && businessId && (
             <div className="info-band">
-              {businessStatusNotice(status, payoutStatus.state === "ready")}
+              {businessStatusNotice(
+                status,
+                payoutStatus.state === "ready",
+                documentsOutstanding,
+              )}
             </div>
           )}
 
@@ -1624,13 +1637,27 @@ function statusLabel(value: unknown) {
       .join(" ");
 }
 
-function businessStatusNotice(status: unknown, stripeReady = false) {
+/**
+ * What the business still has to do, in one sentence.
+ *
+ * Stripe is only half of getting approved: the platform also requires a
+ * document per service (shipping authority, dealer license, transport
+ * insurance...). Saying "nothing more is needed" the moment Stripe goes green
+ * is as wrong as the old copy that demanded Stripe setup after it was done -
+ * a business would sit and wait for an approval that cannot come until they
+ * upload something nobody told them about.
+ */
+function businessStatusNotice(
+  status: unknown,
+  stripeReady = false,
+  documentsOutstanding = false,
+) {
   const state = statusLabel(status).toLowerCase();
-  // Telling a business to complete Stripe setup they have already completed
-  // reads as though their work did not register - especially with the payouts
-  // panel on the same screen saying it is done.
-  if (stripeReady) {
-    return `This business is currently ${state}. Stripe setup is complete, so nothing more is needed from you while it waits for platform approval.`;
+  if (!stripeReady) {
+    return `This business is currently ${state}. Complete Stripe setup and any requested profile details while it waits for platform approval.`;
   }
-  return `This business is currently ${state}. Complete Stripe setup and any requested profile details while it waits for platform approval.`;
+  if (documentsOutstanding) {
+    return `This business is currently ${state}. Stripe setup is complete. Open Business to upload the verification documents we still need before it can be approved.`;
+  }
+  return `This business is currently ${state}. Stripe setup and your documents are in, so nothing more is needed from you while it waits for platform approval.`;
 }
