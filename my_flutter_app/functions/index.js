@@ -4492,9 +4492,16 @@ exports.completeTransportJobPayment = onCall(
         throw new HttpsError("unauthenticated", "Authentication required");
       }
 
+      // The capture scheduler re-runs this completion days after the first
+      // run, by which time the carrier has usually scheduled or started the
+      // job. Rewriting status to "pending" then would regress what every
+      // customer-facing view reads while fulfillmentStatus kept the truth.
+      // Only the first completion moves the job out of pending_payment.
+      const jobAdvanced = ["scheduled", "in_transit", "delivered", "cancelled"]
+          .includes(String(job.fulfillmentStatus || ""));
       await requestRef.update({
         paymentStatus: "succeeded",
-        status: "pending",
+        ...(jobAdvanced ? {} : {status: "pending"}),
         ...(paymentHeld && {paymentHoldStatus: "held"}),
         paidAt: FirestoreFieldValue.serverTimestamp(),
         updatedAt: FirestoreFieldValue.serverTimestamp(),

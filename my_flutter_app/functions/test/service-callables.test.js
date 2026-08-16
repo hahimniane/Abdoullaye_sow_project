@@ -1343,6 +1343,22 @@ describe("car transport service callable lifecycle", () => {
         const paid = await transportRequestData(created.id);
         assert.equal(paid.paymentStatus, "succeeded");
         assert.equal(paid.status, "pending");
+
+        // The capture scheduler re-runs the completion days later, when the
+        // carrier has usually already scheduled the job. The first live
+        // capture regressed status back to "pending" while
+        // fulfillmentStatus kept the truth - so the customer's view lied.
+        await functions.updateTransportFulfillmentStatus.run({
+          auth: manager,
+          data: {requestId: created.id, status: "scheduled", businessId},
+        });
+        await functions.completeTransportJobPayment.run({
+          auth: {uid: CUSTOMER_UID},
+          data: {requestId: created.id},
+        });
+        const rerun = await transportRequestData(created.id);
+        assert.equal(rerun.status, "scheduled");
+        assert.equal(rerun.fulfillmentStatus, "scheduled");
       });
 
   it("allows only the selected provider to advance fulfillment",
