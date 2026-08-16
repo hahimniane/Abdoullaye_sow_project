@@ -45,3 +45,13 @@ test("the carrier panel offers only cancel while payment is pending", () => {
     /\.filter\(\s*\(next\) => next === "cancelled",?\s*\)/,
   );
 });
+
+test("a won or dead opportunity leaves the Quote opportunities tab", () => {
+  // A selected opportunity lives in Accepted jobs; listing it under Quote
+  // opportunities too made every accepted job appear twice, and closed or
+  // cancelled ones sat there forever as clutter.
+  assert.match(
+    businessPanel,
+    /status !== "selected" && status !== "closed" &&\s*status !== "cancelled"/,
+  );
+});

@@ -3287,15 +3287,27 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
   );
   const filteredOpportunities = useMemo(
     () =>
-      filterRows(opportunities.rows, search, [
-        "trackingCode",
-        "carMake",
-        "carModel",
-        "carYear",
-        "pickupArea",
-        "destinationCountryName",
-        "status",
-      ]),
+      filterRows(
+        // Only work a quote can still win. A won opportunity lives in
+        // Accepted jobs - showing it here too made every job appear twice -
+        // and a closed or cancelled one is finished business, not an
+        // opportunity.
+        opportunities.rows.filter((row) => {
+          const status = text(row.status, "open");
+          return status !== "selected" && status !== "closed" &&
+            status !== "cancelled";
+        }),
+        search,
+        [
+          "trackingCode",
+          "carMake",
+          "carModel",
+          "carYear",
+          "pickupArea",
+          "destinationCountryName",
+          "status",
+        ],
+      ),
     [opportunities.rows, search],
   );
 
