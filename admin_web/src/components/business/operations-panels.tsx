@@ -3285,30 +3285,32 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
       ),
     [businessQuotes.rows],
   );
+  // Only work a quote can still win. A won opportunity lives in Accepted
+  // jobs - showing it here too made every job appear twice - and a closed or
+  // cancelled one is finished business, not an opportunity. Split from the
+  // search filter so the tab count and the empty states describe THIS list,
+  // not the raw collection.
+  const openOpportunities = useMemo(
+    () =>
+      opportunities.rows.filter((row) => {
+        const status = text(row.status, "open");
+        return status !== "selected" && status !== "closed" &&
+          status !== "cancelled";
+      }),
+    [opportunities.rows],
+  );
   const filteredOpportunities = useMemo(
     () =>
-      filterRows(
-        // Only work a quote can still win. A won opportunity lives in
-        // Accepted jobs - showing it here too made every job appear twice -
-        // and a closed or cancelled one is finished business, not an
-        // opportunity.
-        opportunities.rows.filter((row) => {
-          const status = text(row.status, "open");
-          return status !== "selected" && status !== "closed" &&
-            status !== "cancelled";
-        }),
-        search,
-        [
-          "trackingCode",
-          "carMake",
-          "carModel",
-          "carYear",
-          "pickupArea",
-          "destinationCountryName",
-          "status",
-        ],
-      ),
-    [opportunities.rows, search],
+      filterRows(openOpportunities, search, [
+        "trackingCode",
+        "carMake",
+        "carModel",
+        "carYear",
+        "pickupArea",
+        "destinationCountryName",
+        "status",
+      ]),
+    [openOpportunities, search],
   );
 
   // The rows stream in from Firestore, so the target card usually does not
@@ -3517,7 +3519,7 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
           type="button"
         >
           Quote opportunities
-          <span>{opportunities.rows.length}</span>
+          <span>{openOpportunities.length}</span>
         </button>
         <button
           aria-selected={view === "jobs"}
@@ -3560,7 +3562,7 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
       {view === "opportunities" && (
         <>
           {(opportunities.loading || businessQuotes.loading) && <LoadingState />}
-          {!opportunities.loading && opportunities.rows.length === 0 && (
+          {!opportunities.loading && openOpportunities.length === 0 && (
             <div className="lst-empty">
               <div className="lst-empty-icon"><ClipboardList size={30} /></div>
               <h3>No quote opportunities right now</h3>
@@ -3568,7 +3570,7 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
             </div>
           )}
           {!opportunities.loading &&
-            opportunities.rows.length > 0 &&
+            openOpportunities.length > 0 &&
             filteredOpportunities.length === 0 && (
               <EmptyState text="No quote opportunities match this search." />
             )}
