@@ -75,7 +75,9 @@ const STANDARD_CATEGORY_IDS = Object.freeze(
     STANDARD_FREIGHT_CATEGORIES.map((category) => category.id),
 );
 
-/** Nothing outside this band. A typo should not make a parcel free or absurd. */
+/**
+ * Nothing outside this band. A typo should not make a parcel free or absurd.
+ */
 const MIN_MULTIPLIER = 0.5;
 const MAX_MULTIPLIER = 10;
 

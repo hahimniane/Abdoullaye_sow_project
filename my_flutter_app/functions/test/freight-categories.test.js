@@ -48,7 +48,7 @@ describe("what a business charges", () => {
     assert.equal(freightCategoryMultiplier(business, "fragile"), 1.5);
   });
 
-  it("prices a parcel with no category exactly as before categories existed", () => {
+  it("prices a no-category parcel exactly as before categories existed", () => {
     // An older app sends no category. It must still get a correct quote, not
     // an error and not a surcharge.
     assert.equal(freightCategoryMultiplier({}, ""), 1);
