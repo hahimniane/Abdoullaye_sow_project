@@ -4137,10 +4137,28 @@ exports.selectTransportQuote = onCall(
           );
         }
         const now = FirestoreFieldValue.serverTimestamp();
+        const totalCents =
+          quote.amountCents + Number(quote.pickupFeeCents || 0);
+        // Selecting a carrier is a commitment, so it charges - the same
+        // hold-first model as every other service (decision of 2026-08-06).
+        // The job stays pending_payment, invisible to the fulfilment state
+        // machine, until the customer's card is actually secured.
+        const connectReady = !!provider.business.stripeAccountId &&
+          provider.business.payoutsEnabled === true;
+        const platformFeePct =
+          Number(provider.business.platformFeePct ?? 0.10);
         transaction.update(requestRef, {
           quoteStatus: "selected",
-          status: "pending",
+          status: "pending_payment",
+          paymentStatus: "pending",
           fulfillmentStatus: "pending",
+          platformFeePct,
+          ...servicePayoutFields({
+            grossCents: totalCents,
+            platformFeePct,
+            connectReady,
+            business: provider.business,
+          }),
           businessId,
           businessName:
             String(provider.business.name || businessId).trim(),
@@ -4152,11 +4170,9 @@ exports.selectTransportQuote = onCall(
           amountCents: quote.amountCents,
           // Pickup is a separate line on the quote; the customer owes both.
           pickupFeeCents: Number(quote.pickupFeeCents || 0),
-          totalCents: quote.amountCents + Number(quote.pickupFeeCents || 0),
+          totalCents,
           currency: quote.currency,
-          price: dollarsFromCents(
-              quote.amountCents + Number(quote.pickupFeeCents || 0),
-          ),
+          price: dollarsFromCents(totalCents),
           transportMethod: quote.transportMethod,
           estimatedPickupDate: quote.estimatedPickupDate || null,
           estimatedDeliveryDate: quote.estimatedDeliveryDate || null,
@@ -4216,8 +4232,9 @@ exports.selectTransportQuote = onCall(
               "Your transport quote was accepted" :
               "Transport quote not selected",
             body: won ?
-              "The customer chose your quote. Open the job to arrange " +
-              "pickup and start posting tracking updates." :
+              "The customer chose your quote and is completing payment. " +
+              "You will be notified as soon as the job is paid and ready " +
+              "to schedule." :
               "The customer chose another carrier for this request.",
             data: {
               type: won ? "transport_quote_won" : "transport_quote_lost",
@@ -4307,6 +4324,295 @@ exports.cancelTransportQuoteRequest = onCall(
     },
 );
 
+/**
+ * The PaymentIntent behind an accepted transport quote.
+ *
+ * Selection already priced the job and froze the charge routing; this only
+ * mints the intent, so a customer who abandons Stripe's page can come back
+ * and pay without re-selecting. A fresh intent per attempt: an unconfirmed
+ * manual-capture intent holds nothing, so the abandoned ones just expire.
+ */
+exports.createTransportJobPaymentIntent = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const requestId =
+        requireTransportDocumentId(request.data?.requestId,
+            "Transport request");
+      const db = admin.firestore();
+      const requestRef = db.collection("transportRequests").doc(requestId);
+      const requestDoc = await requestRef.get();
+      if (!requestDoc.exists) {
+        throw new HttpsError("not-found", "Transport request not found");
+      }
+      const job = requestDoc.data() || {};
+      if (job.customerUid !== customerUid) {
+        throw new HttpsError(
+            "permission-denied", "Transport request access denied",
+        );
+      }
+      if (job.quoteStatus !== "selected") {
+        throw new HttpsError(
+            "failed-precondition",
+            "Select a transport quote before paying",
+        );
+      }
+      if (job.paymentStatus === "succeeded") {
+        return {requestId, alreadySettled: true};
+      }
+      const totalCents = Number(job.totalCents || 0);
+      if (!Number.isSafeInteger(totalCents) || totalCents <= 0) {
+        throw new HttpsError(
+            "failed-precondition", "Transport job amount is invalid",
+        );
+      }
+
+      if (SIMULATE_PAYMENTS) {
+        await requestRef.update({
+          paymentStatus: "succeeded",
+          status: "pending",
+          stripePaymentIntentId: `simulated_transport_${requestId}`,
+          paidAt: FirestoreFieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+        return {requestId, simulatedPayment: true};
+      }
+
+      const paymentIntent = await createStripePaymentIntent({
+        amount: totalCents,
+        currency: String(job.currency || SHIPMENT_CURRENCY),
+        connectedAccountId: job.stripeChargeType === "direct" ?
+          job.stripeConnectedAccountId || undefined :
+          undefined,
+        applicationFeeAmount: job.stripeChargeType === "direct" ?
+          clampedApplicationFeeAmount(
+              Number(job.platformFeeCents || 0), totalCents,
+          ) :
+          undefined,
+        metadata: {
+          requestId,
+          customerUid,
+          businessId: String(job.businessId || ""),
+          paymentType: "transport_job",
+        },
+      });
+      await requestRef.update({
+        stripePaymentIntentId: paymentIntent.id,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      return {
+        requestId,
+        clientSecret: paymentIntent.client_secret,
+        stripeConnectedAccountId: clientStripeAccountId(
+            job.stripeChargeType === "direct" ?
+              job.stripeConnectedAccountId :
+              "",
+        ),
+        amountCents: totalCents,
+      };
+    },
+);
+
+/**
+ * Marks an accepted transport job paid once its intent is secured.
+ *
+ * "Secured" includes requires_capture: the hold IS the payment model. Runs as
+ * the customer from the console, and uncredentialed from the payment
+ * reconciliation/webhook path, where the intent's own metadata vouches for
+ * the identity - the same contract as completeBarrelOrderPayment.
+ */
+exports.completeTransportJobPayment = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const callerUid = request.auth?.uid || "";
+      const requestId =
+        requireTransportDocumentId(request.data?.requestId,
+            "Transport request");
+      const db = admin.firestore();
+      const requestRef = db.collection("transportRequests").doc(requestId);
+      const requestDoc = await requestRef.get();
+      if (!requestDoc.exists) {
+        throw new HttpsError("not-found", "Transport request not found");
+      }
+      const job = requestDoc.data() || {};
+      if (callerUid && job.customerUid !== callerUid) {
+        throw new HttpsError(
+            "permission-denied", "Transport request access denied",
+        );
+      }
+
+      let sourceTransaction = "";
+      let paymentHeld = false;
+      if (!SIMULATE_PAYMENTS) {
+        const intentId = String(job.stripePaymentIntentId || "");
+        if (!intentId) {
+          throw new HttpsError(
+              "failed-precondition", "Payment intent is missing",
+          );
+        }
+        if (intentId.startsWith("simulated_")) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Simulated transport payments are disabled",
+          );
+        }
+        const intent = await retrieveStripePaymentIntent(
+            intentId, stripeAccountIdForRetrieval(job),
+        );
+        if (!paymentIntentSecured(intent.status)) {
+          await requestRef.update({
+            paymentStatus: intent.status,
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          });
+          throw new HttpsError(
+              "failed-precondition", `Payment is ${intent.status}`,
+          );
+        }
+        paymentHeld = await registerHeldPayment({
+          intent,
+          connectedAccountId: stripeAccountIdForRetrieval(job),
+        });
+        if (!callerUid) {
+          const metadata = intent.metadata || {};
+          if (String(metadata.requestId || "") !== requestId ||
+              String(metadata.customerUid || "") !== job.customerUid) {
+            throw new HttpsError("unauthenticated", "Authentication required");
+          }
+        }
+        sourceTransaction = stripeSourceTransactionFromIntent(intent);
+      } else if (!callerUid) {
+        throw new HttpsError("unauthenticated", "Authentication required");
+      }
+
+      await requestRef.update({
+        paymentStatus: "succeeded",
+        status: "pending",
+        ...(paymentHeld && {paymentHoldStatus: "held"}),
+        paidAt: FirestoreFieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+
+      // A held payment has no settled charge to pay out from; the hold
+      // scheduler re-runs this completion after capture and the transfer
+      // (idempotent by payoutStatus) happens then.
+      if (!paymentHeld) {
+        const settled = await requestRef.get();
+        await issueBusinessPayoutTransfer({
+          ref: requestRef,
+          data: settled.data() || {},
+          sourceTransaction,
+          serviceType: "car_transport",
+        });
+      }
+
+      // This, not selection, is when the carrier may actually start - so
+      // this is when they hear about it.
+      const ownerUid = await db.collection("businesses")
+          .doc(String(job.businessId || ""))
+          .get()
+          .then((doc) => String(doc.data()?.ownerUid || ""))
+          .catch(() => "");
+      if (ownerUid) {
+        await safeSendPreferenceNotification({
+          uid: ownerUid,
+          preferenceKey: "businessActivity",
+          title: "Transport job paid",
+          body: "The customer's payment is secured. Open the job to " +
+            "schedule pickup and start posting updates.",
+          data: {
+            type: "transport_job_paid",
+            requestId,
+            businessId: String(job.businessId || ""),
+            trackingCode: String(job.trackingCode || ""),
+          },
+        });
+      }
+
+      return {
+        success: true,
+        requestId,
+        simulatedPayment: SIMULATE_PAYMENTS,
+      };
+    },
+);
+
+/**
+ * Abandoned checkout for a transport job - the customer backed out of
+ * Stripe's page without paying.
+ *
+ * The selection SURVIVES: unlike a barrel order, the record was not created
+ * for this payment attempt, and cancelling the whole job because someone
+ * closed a tab would throw away the carrier they chose. The intent is
+ * cancelled, the job stays pending_payment, and the console offers Pay
+ * again. If the money actually arrived (or is held), this recovers it into
+ * a completion instead - the same protection the barrel path has.
+ */
+exports.cancelPendingTransportJobPayment = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const requestId =
+        requireTransportDocumentId(request.data?.requestId,
+            "Transport request");
+      const db = admin.firestore();
+      const requestRef = db.collection("transportRequests").doc(requestId);
+      const requestDoc = await requestRef.get();
+      if (!requestDoc.exists) return {success: true, requestId};
+      const job = requestDoc.data() || {};
+      if (job.customerUid !== customerUid) {
+        throw new HttpsError(
+            "permission-denied", "Transport request access denied",
+        );
+      }
+      if (job.paymentStatus !== "pending") {
+        return {success: true, requestId};
+      }
+
+      if (!SIMULATE_PAYMENTS && job.stripePaymentIntentId) {
+        const intentId = String(job.stripePaymentIntentId);
+        if (intentId.startsWith("simulated_")) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Simulated transport payments are disabled",
+          );
+        }
+        const intent = await retrieveStripePaymentIntent(
+            intentId, stripeAccountIdForRetrieval(job),
+        );
+        if (paymentIntentSecured(intent.status)) {
+          await exports.completeTransportJobPayment.run({
+            auth: request.auth,
+            data: {requestId},
+          });
+          return {success: true, requestId, recoveredPayment: true};
+        }
+        if (intent.status !== "canceled") {
+          await cancelStripePaymentIntent(
+              intentId, stripeAccountIdForRetrieval(job),
+          );
+        }
+      }
+
+      await requestRef.update({
+        paymentStatus: "cancelled",
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      return {success: true, requestId};
+    },
+);
+
 exports.updateTransportFulfillmentStatus = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
@@ -4346,6 +4652,11 @@ exports.updateTransportFulfillmentStatus = onCall(
           businessId,
           nextStatus,
           submittedContainerNumber: data.containerNumber,
+          // Secured means completeTransportJobPayment ran: hold or capture,
+          // the money is on the card. SIMULATE short-circuits like every
+          // other payment path.
+          paymentSecured: SIMULATE_PAYMENTS ||
+            requestData.paymentStatus === "succeeded",
         });
         if (decision.error) {
           throw new HttpsError(
@@ -6895,6 +7206,7 @@ const PAYMENT_COMPLETION_EXPORTS = Object.freeze({
   barrel_order: "completeBarrelOrderPayment",
   freight_shipment: "completeFreightShipmentPayment",
   freight_settlement_adjustment: "completeFreightSettlementPayment",
+  transport_job: "completeTransportJobPayment",
   reservation_deposit: "completeCarDepositReservation",
   full_purchase: "completeCarPurchase",
   hold_extension: "completePaidHoldExtensionPayment",
@@ -6923,6 +7235,7 @@ const PAYMENT_CANCELLATION_EXPORTS = Object.freeze({
   barrel_destination_change: "cancelPendingBarrelDestinationChange",
   barrel_order: "cancelPendingBarrelOrder",
   freight_shipment: "cancelPendingFreightShipment",
+  transport_job: "cancelPendingTransportJobPayment",
   reservation_deposit: "cancelPendingCarPurchase",
   full_purchase: "cancelPendingCarPurchase",
 });
@@ -6952,6 +7265,8 @@ function paymentCompletionData(target) {
       };
     case "barrel_order":
       return {orderId: identity.orderId};
+    case "transport_job":
+      return {requestId: identity.requestId};
     case "reservation_deposit":
     case "full_purchase":
     case "hold_extension":
@@ -6979,6 +7294,8 @@ function paymentCancellationData(target) {
       };
     case "barrel_order":
       return {orderId: identity.orderId};
+    case "transport_job":
+      return {requestId: identity.requestId};
     case "reservation_deposit":
     case "full_purchase":
       return {purchaseId: identity.purchaseId};
@@ -7634,8 +7951,10 @@ async function recordPaymentReconciliationFailure(scan, snapshot, error) {
  * @return {string} An existing notification preference key.
  */
 function holdNoticePreferenceKey(paymentType) {
-  return ["parking_deposit", "reservation_deposit", "full_purchase"]
-      .includes(paymentType) ? "carActivity" : "shipmentActivity";
+  return [
+    "parking_deposit", "reservation_deposit", "full_purchase",
+    "transport_job",
+  ].includes(paymentType) ? "carActivity" : "shipmentActivity";
 }
 
 /**
@@ -21039,6 +21358,13 @@ const SECURED_CANCELLABLE_ORDERS = Object.freeze({
   barrelShipment: {collection: "barrelShipments"},
   barrelOrder: {collection: "barrelOrders", cancelsSiblingShipments: true},
   freightShipment: {collection: "freightShipments"},
+  // The fulfilment state machine reads fulfillmentStatus first, so a
+  // cancelled transport job must close BOTH fields or the carrier's panel
+  // would keep offering "schedule" on a job whose money was returned.
+  transportJob: {
+    collection: "transportRequests",
+    alsoSet: {fulfillmentStatus: "cancelled", quoteStatus: "cancelled"},
+  },
 });
 
 /**
@@ -21197,6 +21523,7 @@ exports.cancelSecuredBusinessOrder = onCall(
         status: "cancelled",
         cancelledBy: "business",
         cancelledByUid: actorUid,
+        ...(config.alsoSet || {}),
         ...(reason && {cancellationReason: reason}),
         cancelledAt: FirestoreFieldValue.serverTimestamp(),
         updatedAt: FirestoreFieldValue.serverTimestamp(),
@@ -21342,6 +21669,7 @@ exports.cancelSecuredCustomerOrder = onCall(
       const cancelPatch = (extra) => ({
         status: "cancelled",
         cancelledBy: "customer",
+        ...(config.alsoSet || {}),
         cancelledAt: FirestoreFieldValue.serverTimestamp(),
         updatedAt: FirestoreFieldValue.serverTimestamp(),
         ...extra,

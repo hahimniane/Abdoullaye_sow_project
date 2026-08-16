@@ -1,0 +1,47 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+// Accepting a transport quote now charges (hold-first, like every service).
+// These pin the three client-side halves of that contract: the customer pays
+// at acceptance, an unpaid job can be paid again, and the carrier is not
+// offered work the server will refuse.
+
+const services = readFileSync(
+  "src/components/customer-shipping-services.tsx",
+  "utf8",
+);
+const console_ = readFileSync("src/components/customer-console.tsx", "utf8");
+const businessPanel = readFileSync(
+  "src/components/business/operations-panels.tsx",
+  "utf8",
+);
+
+test("accepting a transport quote leads straight into payment", () => {
+  assert.match(
+    services,
+    /callFunction\("selectTransportQuote"[\s\S]{0,400}startCheckout\("transportJob", \{requestId: activeRequest\.id\}\)/,
+  );
+});
+
+test("an accepted-but-unpaid job offers Pay now, not silence", () => {
+  // The customer can abandon Stripe's page; without a retry button the job
+  // would sit at pending_payment forever with no way back in.
+  assert.match(services, /"succeeded" && \(/);
+  assert.match(services, /payForJob/);
+});
+
+test("a paid transport job cancels through the secured path", () => {
+  assert.match(
+    console_,
+    /case "transportRequests":[\s\S]{0,600}orderType: "transportJob"/,
+  );
+});
+
+test("the carrier panel offers only cancel while payment is pending", () => {
+  assert.match(businessPanel, /awaitingPayment/);
+  assert.match(
+    businessPanel,
+    /\.filter\(\s*\(next\) => next === "cancelled",?\s*\)/,
+  );
+});

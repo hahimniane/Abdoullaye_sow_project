@@ -194,6 +194,7 @@ function classifyTransportFulfillmentChange({
   businessId,
   nextStatus,
   submittedContainerNumber,
+  paymentSecured = false,
 }) {
   const row = requestData || {};
   const status = String(nextStatus || "").trim().toLowerCase();
@@ -229,6 +230,25 @@ function classifyTransportFulfillmentChange({
     return refuse(
         "failed-precondition",
         `Transport cannot move from ${currentStatus} to ${status}`,
+    );
+  }
+
+  // A marketplace job is not work until the customer's money is secured -
+  // without this gate a carrier could haul the car and mark it delivered on a
+  // job the platform never collected a cent for, which is exactly what
+  // happened before acceptance charged anything. Cancelling stays open so a
+  // business can walk away from a job the customer never paid. Legacy
+  // (flowVersion 1) records predate the payment model entirely and keep
+  // their old behaviour.
+  if (
+    isMarketplaceTransportRecord(row) &&
+    !paymentSecured &&
+    status !== "cancelled"
+  ) {
+    return refuse(
+        "failed-precondition",
+        "The customer has not completed payment for this transport job yet",
+        {reason: "awaiting_customer_payment"},
     );
   }
 

@@ -52,6 +52,8 @@ function directPaymentPath(
       return ["barrelOrders", recordId];
     case "freightShipment":
       return ["freightShipments", recordId];
+    case "transportJob":
+      return ["transportRequests", recordId];
     case "carDeposit":
     case "carPurchase":
     case "holdExtension":

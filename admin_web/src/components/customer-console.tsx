@@ -851,6 +851,16 @@ function securedOrderCancellation(order: TaggedRow) {
         payload: { orderType: "freightShipment", recordId: order.row.id },
         ...copy,
       };
+    case "transportRequests":
+      // Paid transport uses the same secured path as shipping: "pending"
+      // here means paid-but-not-scheduled. Once the carrier moves the job
+      // to scheduled the status changes and this window closes, exactly as
+      // the server enforces.
+      return {
+        callable: "cancelSecuredCustomerOrder",
+        payload: { orderType: "transportJob", recordId: order.row.id },
+        ...copy,
+      };
     case "barrelShipments": {
       // A shipment born from a multi-destination order shares one payment
       // with its siblings, so the cancellable unit is the whole order.

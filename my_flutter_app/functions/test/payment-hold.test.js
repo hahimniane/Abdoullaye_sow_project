@@ -272,3 +272,13 @@ describe("what may be sent to Stripe", () => {
     assert.doesNotMatch(sent, /request_extended_authorization/);
   });
 });
+
+describe("which payments hold", () => {
+  it("holds a transport job like every other service", () => {
+    // Accepting a quote is the commitment point, so it uses the same
+    // hold-first model - the customer pays nothing until capture, and a
+    // cancellation during the hold is free (decision of 2026-08-06).
+    const {holdCaptureMethod} = require("../payment_hold");
+    assert.equal(holdCaptureMethod("transport_job"), "manual");
+  });
+});

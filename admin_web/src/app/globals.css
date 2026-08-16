@@ -8403,6 +8403,32 @@ button[data-loading="true"]::before {
   padding: 0 34px 0 11px;
 }
 
+.customer-transport-pay-note {
+  align-items: center;
+  background: rgba(13, 148, 136, 0.07);
+  border: 1px solid rgba(13, 148, 136, 0.25);
+  border-radius: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+.customer-transport-pay-note > div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 240px;
+}
+.customer-transport-pay-note strong { color: var(--brand-strong); }
+.customer-transport-pay-note span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.customer-transport-pay-note .primary-button { flex-shrink: 0; }
+
 .customer-transport-request-summary {
   align-items: center;
   background: var(--paper-soft);

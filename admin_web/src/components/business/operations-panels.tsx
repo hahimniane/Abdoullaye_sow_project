@@ -3669,7 +3669,19 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
               // showed a stale value on every job the callable had moved.
               const status = transportJobCurrentStatus(row);
               const known = transportFulfillmentStatusIsKnown(status);
-              const nextStatuses = transportFulfillmentNextStatuses(status);
+              // A marketplace job is not workable until the customer's money
+              // is secured - the server refuses everything but cancelling, so
+              // offering more here would only manufacture refusals.
+              const awaitingPayment =
+                Number(row.flowVersion ?? 1) === 2 &&
+                text(row.quoteStatus, "") === "selected" &&
+                text(row.paymentStatus, "") !== "succeeded" &&
+                status !== "cancelled";
+              const nextStatuses = awaitingPayment
+                ? transportFulfillmentNextStatuses(status).filter(
+                    (next) => next === "cancelled",
+                  )
+                : transportFulfillmentNextStatuses(status);
               const container = normalizeTransportContainerNumber(row.containerNumber);
               const busyRow = busyId.startsWith(`${row.id}:`);
               const selectedAmountCents = Number(row.selectedAmountCents ?? 0);
@@ -3701,6 +3713,13 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
                   </div>
                   <div className="pur-actions transport-job-move">
                     <span className="transport-job-move-title">Update job status</span>
+                    {awaitingPayment && (
+                      <p className="transport-job-move-note">
+                        The customer has accepted your quote and payment is
+                        being secured. You can schedule the job as soon as it
+                        is paid — you will get a notification.
+                      </p>
+                    )}
                     {!known ? (
                       <p className="transport-job-move-note">
                         This job is on a status the transport workflow did not set, so no transport action applies here.

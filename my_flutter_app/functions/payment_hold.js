@@ -46,6 +46,7 @@ const HOLD_PAYMENT_TYPES = Object.freeze([
   "freight_shipment",
   "reservation_deposit",
   "full_purchase",
+  "transport_job",
 ]);
 
 /**

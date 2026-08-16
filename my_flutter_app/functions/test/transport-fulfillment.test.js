@@ -59,6 +59,9 @@ function move(requestData, nextStatus, extra = {}) {
     requestData,
     businessId: BUSINESS_ID,
     nextStatus,
+    // Paid by default: most of this file describes what a business may do
+    // with a normal, funded job. The payment gate has its own describe block.
+    paymentSecured: true,
     ...extra,
   });
 }
@@ -321,5 +324,46 @@ describe("the state machine has exactly one implementation", () => {
         "\"updateTransportFulfillmentStatus\",?\\s*\\)",
     );
     assert.match(consoleSource, callable);
+  });
+});
+
+describe("the payment gate", () => {
+  it("refuses to start a marketplace job the customer has not paid", () => {
+    // The entire reason acceptance now charges: before this gate a carrier
+    // could haul the car to delivered on a job the platform never collected
+    // a cent for.
+    for (const destination of ["scheduled", "in_transit"]) {
+      const decision = move(marketplaceRecord(), destination, {
+        paymentSecured: false,
+        submittedContainerNumber: "MSCU1234567",
+      });
+      assert.equal(decision.error?.code, "failed-precondition", destination);
+      assert.equal(
+          decision.error?.details?.reason,
+          "awaiting_customer_payment",
+          destination,
+      );
+    }
+  });
+
+  it("still lets a business walk away from an unpaid job", () => {
+    const decision = move(marketplaceRecord(), "cancelled", {
+      paymentSecured: false,
+    });
+    assert.equal(decision.error, null);
+  });
+
+  it("opens the job once the payment is secured", () => {
+    const decision = move(marketplaceRecord(), "scheduled", {
+      paymentSecured: true,
+    });
+    assert.equal(decision.error, null);
+  });
+
+  it("never applies to legacy records, which predate the model", () => {
+    const decision = move(legacyRecord(), "scheduled", {
+      paymentSecured: false,
+    });
+    assert.equal(decision.error, null);
   });
 });

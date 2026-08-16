@@ -3254,6 +3254,9 @@ type CustomerTransportRequest = FirestoreRow & {
   trackingCode?: string;
   status?: string;
   quoteStatus?: string;
+  paymentStatus?: string;
+  totalCents?: number;
+  currency?: string;
   pickupArea?: string;
   pickupAddress?: string;
   destinationCountryName?: string;
@@ -3973,8 +3976,11 @@ function CustomerTransportQuotes({
   async function selectQuote(quote: TransportQuote) {
     if (!activeRequest || busyAction) return;
     const confirmed = await confirmImportantAction(
-      "Choose this carrier and quoted total?",
-      "Choisir ce transporteur et ce montant ?",
+      "Choose this carrier and pay the quoted total? The amount is held on " +
+        "your card, not charged, and cancelling while it is held is free.",
+      "Choisir ce transporteur et payer le montant du devis ? Le montant " +
+        "est réservé sur votre carte, pas débité, et l’annulation pendant " +
+        "la réservation est gratuite.",
     );
     if (!confirmed) return;
     setBusyAction(`select:${quote.id}`);
@@ -3984,9 +3990,27 @@ function CustomerTransportQuotes({
         requestId: activeRequest.id,
         quoteId: quote.id,
       });
+      // Selection holds the job at pending_payment; the money is the next
+      // step, not a later one. startCheckout navigates away on success.
+      await startCheckout("transportJob", {requestId: activeRequest.id});
     } catch {
-      setActionError("The carrier could not be selected. Try again.");
+      setActionError(
+        "The carrier was selected but payment could not be started. Use " +
+          "Pay now below to finish.",
+      );
     } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function payForJob() {
+    if (!activeRequest || busyAction) return;
+    setBusyAction("pay");
+    setActionError("");
+    try {
+      await startCheckout("transportJob", {requestId: activeRequest.id});
+    } catch {
+      setActionError("The payment could not be started. Try again.");
       setBusyAction("");
     }
   }
@@ -4085,6 +4109,32 @@ function CustomerTransportQuotes({
         </div>
       )}
 
+      {requestSelected && !requestCancelled &&
+        text(activeRequest.paymentStatus, "") !== "succeeded" && (
+        <div className="customer-transport-pay-note" role="status">
+          <div>
+            <strong>Pay to confirm your carrier</strong>
+            <span>
+              {formatMoney(
+                Number(activeRequest.totalCents ?? 0) / 100,
+                text(activeRequest.currency, "USD"),
+              )}{" "}
+              is held on your card — not charged — and the carrier can only
+              start once it is secured. Cancelling while held is free.
+            </span>
+          </div>
+          <button
+            aria-busy={busyAction === "pay"}
+            className="primary-button"
+            disabled={Boolean(busyAction)}
+            onClick={() => void payForJob()}
+            type="button"
+          >
+            {busyAction === "pay" ? "Opening secure payment..." : "Pay now"}
+          </button>
+        </div>
+      )}
+
       {quotes.loading ? (
         <div className="customer-transport-quote-grid" aria-live="polite">
           {[0, 1].map((item) => (
@@ -4139,7 +4189,7 @@ function CustomerTransportQuotes({
                       text(quote.currency, "USD"),
                     )}
                   </strong>
-                  <span>No payment due until the next confirmed step.</span>
+                  <span>Held on your card when you accept — cancelling while held is free.</span>
                 </div>
                 <dl>
                   <div>

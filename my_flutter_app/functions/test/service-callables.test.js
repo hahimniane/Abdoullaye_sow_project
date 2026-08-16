@@ -1314,7 +1314,12 @@ describe("car transport service callable lifecycle", () => {
         const request = await transportRequestData(created.id);
         const quote = await transportQuoteData(created.id, businessId);
         assert.equal(request.quoteStatus, "selected");
-        assert.equal(request.status, "pending");
+        // Selection is a commitment, so it now charges: the job sits in
+        // pending_payment until the customer's card is secured, and only
+        // the payment completion opens it to the fulfilment machine.
+        assert.equal(request.status, "pending_payment");
+        assert.equal(request.paymentStatus, "pending");
+        assert.equal(request.totalCents, 145500);
         assert.equal(request.selectedQuoteId, quoteId);
         assert.equal(request.selectedBusinessId, businessId);
         assert.equal(request.businessId, businessId);
@@ -1322,6 +1327,22 @@ describe("car transport service callable lifecycle", () => {
         assert.equal(request.amountCents, 145500);
         assert.equal(request.price, 1455);
         assert.equal(quote.status, "selected");
+
+        await assert.rejects(
+            () => functions.createTransportJobPaymentIntent.run({
+              auth: {uid: OTHER_UID},
+              data: {requestId: created.id},
+            }),
+            /permission|denied/i,
+        );
+        const payment = await functions.createTransportJobPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: {requestId: created.id},
+        });
+        assert.equal(payment.simulatedPayment, true);
+        const paid = await transportRequestData(created.id);
+        assert.equal(paid.paymentStatus, "succeeded");
+        assert.equal(paid.status, "pending");
       });
 
   it("allows only the selected provider to advance fulfillment",

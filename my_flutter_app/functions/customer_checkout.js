@@ -69,6 +69,12 @@ const CUSTOMER_CHECKOUT_ACTIONS = Object.freeze({
     productName: "Laawol vehicle purchase",
     collection: "carPurchases",
   }),
+  transportJob: Object.freeze({
+    createFunction: "createTransportJobPaymentIntent",
+    recordIdKey: "requestId",
+    productName: "Laawol car transport",
+    collection: "transportRequests",
+  }),
   holdExtension: Object.freeze({
     createFunction: "createPaidHoldExtensionPaymentIntent",
     recordIdKey: "purchaseId",
