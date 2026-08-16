@@ -525,7 +525,7 @@ export function BusinessConsole({
           )}
           {!isApproved && businessId && (
             <div className="info-band">
-              {businessStatusNotice(status)}
+              {businessStatusNotice(status, payoutStatus.state === "ready")}
             </div>
           )}
 
@@ -1624,6 +1624,13 @@ function statusLabel(value: unknown) {
       .join(" ");
 }
 
-function businessStatusNotice(status: unknown) {
-  return `This business is currently ${statusLabel(status).toLowerCase()}. Complete Stripe setup and any requested profile details while it waits for platform approval.`;
+function businessStatusNotice(status: unknown, stripeReady = false) {
+  const state = statusLabel(status).toLowerCase();
+  // Telling a business to complete Stripe setup they have already completed
+  // reads as though their work did not register - especially with the payouts
+  // panel on the same screen saying it is done.
+  if (stripeReady) {
+    return `This business is currently ${state}. Stripe setup is complete, so nothing more is needed from you while it waits for platform approval.`;
+  }
+  return `This business is currently ${state}. Complete Stripe setup and any requested profile details while it waits for platform approval.`;
 }

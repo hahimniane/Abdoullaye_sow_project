@@ -228,3 +228,16 @@ test("translating a large realistic payload stays within the time budget", () =>
       `grown — the class of bug that froze the admin console.`,
   );
 });
+
+test("translates the notice shown once Stripe setup is already done", () => {
+  // The banner used to tell a business to complete Stripe setup even when the
+  // payouts panel beside it said the setup was complete. The reassuring
+  // variant needs French too, or it silently falls back to English.
+  assert.equal(
+    translateValue(
+      "This business is currently pending. Stripe setup is complete, so nothing more is needed from you while it waits for platform approval.",
+      "fr",
+    ),
+    "Cette entreprise est en attente. La configuration Stripe est terminée : vous n’avez plus rien à faire pendant l’attente de l’approbation de la plateforme.",
+  );
+});

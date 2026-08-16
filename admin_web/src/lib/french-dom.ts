@@ -1980,6 +1980,12 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Des modifications ont été demandées pour cette entreprise. Terminez la configuration Stripe et complétez les informations de profil demandées pendant l’attente de l’approbation de la plateforme.",
   "This business is currently pending. Complete Stripe setup and any requested profile details while it waits for platform approval.":
     "Cette entreprise est en attente. Terminez la configuration Stripe et complétez les informations de profil demandées pendant l’attente de l’approbation de la plateforme.",
+  "This business is currently changes requested. Stripe setup is complete, so nothing more is needed from you while it waits for platform approval.":
+    "Des modifications ont été demandées pour cette entreprise. La configuration Stripe est terminée : vous n’avez plus rien à faire pendant l’attente de l’approbation de la plateforme.",
+  "This business is currently pending. Stripe setup is complete, so nothing more is needed from you while it waits for platform approval.":
+    "Cette entreprise est en attente. La configuration Stripe est terminée : vous n’avez plus rien à faire pendant l’attente de l’approbation de la plateforme.",
+  "This business is currently rejected. Stripe setup is complete, so nothing more is needed from you while it waits for platform approval.":
+    "Cette entreprise a été refusée. La configuration Stripe est terminée ; contactez l’assistance Laawol si vous avez besoin d’aide.",
   "This business is currently rejected. Complete Stripe setup and any requested profile details while it waits for platform approval.":
     "Cette entreprise a été refusée. Consultez les informations demandées et contactez l’assistance Laawol si vous avez besoin d’aide.",
   "Upgrade to Pro to unlock the advisor.":
