@@ -253,3 +253,30 @@ This is what makes the fee defensible, and it is how hotels and car rental do
 it. Per `UI-CONVENTIONS.md` rule 1, this belongs **on the screen, not behind an
 "i"** — anything about money moving or an action that cannot be undone is never
 hidden behind detail-on-demand.
+
+---
+
+## 7. Car transport joined the model (2026-08-16)
+
+Transport was the one service whose money never touched the platform:
+accepting a quote set statuses and stopped, and the carrier could drive the
+job to `delivered` on money nobody collected.
+
+Accepting a quote now charges, hold-first, exactly like every other service:
+
+- **Selection** prices the job (quote + pickup fee), freezes charge routing
+  (direct charge when the business absorbs fees and payouts are enabled),
+  and parks the request at `pending_payment`.
+- **Payment** uses `paymentType: transport_job` through the shared plumbing —
+  hold type, reconciliation route, checkout action, completion and
+  cancellation dispatch — so the capture scheduler, webhook path and the
+  24-hour notice needed no changes.
+- **The fulfilment machine refuses to start an unpaid marketplace job.**
+  Cancelling stays open, and legacy (flowVersion 1) records are exempt.
+- **Cancellation** is the standard secured ledger: held releases free,
+  captured refunds minus the card fee, business cancels refund in full. The
+  `transportJob` entry also closes `fulfillmentStatus` and `quoteStatus` so
+  the carrier panel stops offering work on a refunded job.
+- **An abandoned Stripe page keeps the selection.** The record predates the
+  payment attempt (unlike a barrel order), so only the intent is cancelled
+  and the console offers "Pay now".
