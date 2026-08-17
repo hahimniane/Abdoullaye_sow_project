@@ -9,7 +9,8 @@ const functions = require("../index");
 // businesses that real customers could see. Fail closed instead.
 if (!process.env.FIRESTORE_EMULATOR_HOST) {
   throw new Error(
-      "Run this through `npm run test:platform-admin` (firebase emulators:exec). " +
+      "Run this through `npm run test:platform-admin` " +
+      "(firebase emulators:exec). " +
       "A direct node --test run would write its fixtures into the " +
       "real project.");
 }

@@ -3776,6 +3776,19 @@ export function TransportPanel({ businessId, previewMode = false, focusRequestId
                       </>
                     )}
                   </div>
+                  {/* A transported car gets the same milestone feed and
+                      carrier subscription as a barrel - the customer's
+                      journey card reads from exactly this. */}
+                  <ContainerTrackingCard
+                    relatedCollection="transportRequests"
+                    relatedId={row.id}
+                    containerNumber={container}
+                    trackingProvider={text(row.trackingProvider, "")}
+                  />
+                  <TrackingUpdatesSection
+                    relatedCollection="transportRequests"
+                    relatedId={row.id}
+                  />
                 </article>
               );
             })}

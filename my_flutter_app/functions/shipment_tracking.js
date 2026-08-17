@@ -60,6 +60,33 @@ const CONTAINER_STATUS_TO_SHIPMENT_STATUS = {
   empty_returned: "completed",
 };
 
+// A transport job speaks a different status language: its state machine is
+// pending -> scheduled -> in_transit -> delivered, and knows nothing of
+// "ready_for_pickup" or "completed". Writing the barrel vocabulary onto a
+// transportRequests doc would strand the job on a status the machine cannot
+// move from - the business panel shows a warning badge and offers nothing.
+const CONTAINER_STATUS_TO_TRANSPORT_STATUS = {
+  new: null,
+  on_ship: "in_transit",
+  grounded: "in_transit",
+  // Landed but still with the carrier: the job is not delivered until the
+  // car is handed over, and the transport machine has no arrival state.
+  available: "in_transit",
+  not_available: "in_transit",
+  awaiting_inland_transfer: "in_transit",
+  on_rail: "in_transit",
+  off_dock: "in_transit",
+  picked_up: "delivered",
+  delivered: "delivered",
+  empty_returned: "delivered",
+};
+
+const STATUS_MAP_BY_COLLECTION = {
+  barrelShipments: CONTAINER_STATUS_TO_SHIPMENT_STATUS,
+  freightShipments: CONTAINER_STATUS_TO_SHIPMENT_STATUS,
+  transportRequests: CONTAINER_STATUS_TO_TRANSPORT_STATUS,
+};
+
 const CONTAINER_STATUS_LABEL = {
   new: "Tracking request received",
   on_ship: "Loaded on vessel",
@@ -77,12 +104,17 @@ const CONTAINER_STATUS_LABEL = {
 // Builds the customer-visible milestone for a container's current_status, or
 // null if the status is unrecognized (new statuses Terminal49 adds later
 // fail closed instead of writing a garbled event).
-function milestoneForContainerStatus(currentStatus) {
+function milestoneForContainerStatus(
+    currentStatus,
+    relatedCollection = "barrelShipments",
+) {
   const label = CONTAINER_STATUS_LABEL[currentStatus];
   if (!label) return null;
+  const statusMap = STATUS_MAP_BY_COLLECTION[relatedCollection] ||
+    CONTAINER_STATUS_TO_SHIPMENT_STATUS;
   return {
     label,
-    shipmentStatus: CONTAINER_STATUS_TO_SHIPMENT_STATUS[currentStatus] || null,
+    shipmentStatus: statusMap[currentStatus] || null,
   };
 }
 

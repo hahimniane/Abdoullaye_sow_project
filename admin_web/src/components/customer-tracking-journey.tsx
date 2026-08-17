@@ -6,10 +6,12 @@ import { Anchor, Check, Flag, MapPin, Ship, Truck } from "lucide-react";
 import { formatDate, text } from "@/lib/format";
 import {
   JOURNEY_STAGES,
+  TRANSPORT_JOURNEY_STAGES,
   deliveryWindowLabel,
   eventDetail,
   journeyStageFor,
   relativeTime,
+  transportJourneyStageFor,
 } from "@/lib/tracking-journey";
 import type { FirestoreRow } from "@/types/admin";
 
@@ -23,18 +25,33 @@ const VISIBLE_EVENTS = 3;
  * not answer that - it needs a position on a journey. Stages behind the
  * current one are filled so progress reads at a glance without counting.
  */
-export function JourneyProgress({ status }: { status: string }) {
-  const stage = journeyStageFor(status);
+export function JourneyProgress({
+  status,
+  service = "shipment",
+}: {
+  status: string;
+  /** Which journey vocabulary this record speaks. */
+  service?: "shipment" | "transport";
+}) {
+  const transport = service === "transport";
+  const stage = transport
+    ? transportJourneyStageFor(status)
+    : journeyStageFor(status);
+  const stages = transport ? TRANSPORT_JOURNEY_STAGES : JOURNEY_STAGES;
   if (!stage) {
     return (
       <div className="trk-journey trk-journey-cancelled">
-        <span>This shipment was cancelled.</span>
+        <span>
+          {transport
+            ? "This transport job was cancelled."
+            : "This shipment was cancelled."}
+        </span>
       </div>
     );
   }
   return (
     <ol className="trk-journey" aria-label="Shipment progress">
-      {JOURNEY_STAGES.map((item, index) => {
+      {stages.map((item, index) => {
         const done = index < stage.index;
         const current = index === stage.index;
         return (

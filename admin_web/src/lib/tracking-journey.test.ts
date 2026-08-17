@@ -3,12 +3,14 @@ import test from "node:test";
 
 import {
   JOURNEY_STAGES,
+  TRANSPORT_JOURNEY_STAGES,
   deliveryWindowLabel,
   eventDetail,
   journeyStageFor,
   relativeTime,
   statusBucket,
   statusLabel,
+  transportJourneyStageFor,
 } from "./tracking-journey.ts";
 
 test("staff statuses map onto the four customer stages", () => {
@@ -138,4 +140,16 @@ test("statuses file into four customer buckets", () => {
   // Anything the backend invents later stays visible under In progress
   // rather than vanishing from every chip.
   assert.equal(statusBucket("held_at_customs"), "active");
+});
+
+test("a transported car walks its own four stages", () => {
+  // Mirrored by my_flutter_app/test/transport_journey_stages_test.dart -
+  // web and app must place the same job on the same stage.
+  assert.equal(transportJourneyStageFor("quote_requested")?.index, 0);
+  assert.equal(transportJourneyStageFor("pending_payment")?.index, 0);
+  assert.equal(transportJourneyStageFor("scheduled")?.index, 1);
+  assert.equal(transportJourneyStageFor("in_transit")?.index, 2);
+  assert.equal(transportJourneyStageFor("delivered")?.index, 3);
+  assert.equal(transportJourneyStageFor("cancelled"), null);
+  assert.equal(TRANSPORT_JOURNEY_STAGES.length, 4);
 });

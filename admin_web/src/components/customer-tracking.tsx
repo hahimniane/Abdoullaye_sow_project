@@ -81,7 +81,7 @@ function ShipmentUpdates({
   relatedCollection,
 }: {
   record: FirestoreRow;
-  relatedCollection: "barrelShipments" | "freightShipments";
+  relatedCollection: "barrelShipments" | "freightShipments" | "transportRequests";
 }) {
   const events = useTrackingEvents(relatedCollection, record.id);
   const latest = events.rows[0] ?? null;
@@ -188,7 +188,14 @@ export function CustomerTracking({
             );
             const relatedCollection = text(record.relatedCollection, "") as
               | "barrelShipments"
-              | "freightShipments";
+              | "freightShipments"
+              | "transportRequests";
+            const isTransport = relatedCollection === "transportRequests";
+            // The transport machine reads fulfillmentStatus first; status can
+            // trail it (and did, before the capture re-run fix).
+            const journeyStatus = isTransport
+              ? text(record.fulfillmentStatus, "") || text(record.status, "")
+              : text(record.status, "");
             const isCompleted = text(record.status, "") === "completed";
             const reviewKey = `${relatedCollection}_${record.id}`;
             const reviewed = reviewedKeys.has(reviewKey);
@@ -204,7 +211,12 @@ export function CustomerTracking({
                 <div className="trk-head">
                   <h3>{code}</h3>
                   <span className="status-pill compact">
-                    {statusLabel(text(record.status, ""))}
+                    {statusLabel(
+                      isTransport
+                        ? text(record.fulfillmentStatus, "") ||
+                            text(record.status, "")
+                        : text(record.status, ""),
+                    )}
                   </span>
                 </div>
                 <p className="trk-where">
@@ -214,7 +226,10 @@ export function CustomerTracking({
                   </span>
                   <time>{formatDate(record.updatedAt ?? record.createdAt)}</time>
                 </p>
-                <JourneyProgress status={text(record.status, "")} />
+                <JourneyProgress
+                  service={isTransport ? "transport" : "shipment"}
+                  status={journeyStatus}
+                />
                 <ContainerLine row={record} />
                 {relatedCollection && (
                   <ShipmentUpdates

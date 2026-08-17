@@ -55,3 +55,22 @@ test("a won or dead opportunity leaves the Quote opportunities tab", () => {
     /status !== "selected" && status !== "closed" &&\s*status !== "cancelled"/,
   );
 });
+
+test("a transported car is tracked like a barrel", () => {
+  // Journey card, milestone feed and carrier subscription all speak
+  // transportRequests now - customers watch the car, carriers post updates.
+  const consoleSource = readFileSync(
+    "src/components/customer-console.tsx",
+    "utf8",
+  );
+  assert.match(consoleSource, /relatedCollection: "transportRequests"/);
+  assert.match(consoleSource, /id: "transport" as const/);
+  assert.match(
+    businessPanel,
+    /TrackingUpdatesSection[\s\S]{0,120}relatedCollection="transportRequests"/,
+  );
+  assert.match(
+    businessPanel,
+    /ContainerTrackingCard[\s\S]{0,120}relatedCollection="transportRequests"/,
+  );
+});

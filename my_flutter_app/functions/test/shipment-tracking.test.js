@@ -184,3 +184,44 @@ test("inferRequestType falls back to bill_of_lading for anything else", () => {
   assert.equal(inferRequestType("BOOKING123456"), "bill_of_lading");
   assert.equal(inferRequestType("MSCUABC1234"), "bill_of_lading");
 });
+
+test("carrier statuses keep the barrel vocabulary for shipments", () => {
+  assert.equal(
+      milestoneForContainerStatus("available", "barrelShipments")
+          .shipmentStatus,
+      "ready_for_pickup",
+  );
+  assert.equal(
+      milestoneForContainerStatus("delivered", "freightShipments")
+          .shipmentStatus,
+      "completed",
+  );
+});
+
+test("carrier statuses never strand a transport job", () => {
+  // "ready_for_pickup" and "completed" are not transport statuses: writing
+  // them onto a transportRequests doc leaves the job on a warning badge
+  // with no actions. Cars stay in_transit until genuinely handed over.
+  assert.equal(
+      milestoneForContainerStatus("available", "transportRequests")
+          .shipmentStatus,
+      "in_transit",
+  );
+  assert.equal(
+      milestoneForContainerStatus("delivered", "transportRequests")
+          .shipmentStatus,
+      "delivered",
+  );
+  assert.equal(
+      milestoneForContainerStatus("picked_up", "transportRequests")
+          .shipmentStatus,
+      "delivered",
+  );
+});
+
+test("carrier statuses default to the shipment vocabulary", () => {
+  assert.equal(
+      milestoneForContainerStatus("on_ship").shipmentStatus,
+      "in_transit",
+  );
+});

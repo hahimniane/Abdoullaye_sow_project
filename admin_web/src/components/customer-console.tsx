@@ -412,6 +412,14 @@ export function CustomerConsole({
                   ...row,
                   relatedCollection: "freightShipments",
                 })),
+                // A transported car is tracked exactly like a barrel: same
+                // journey card, same trackingEvents feed, same carrier
+                // integration - the backend has carried transportRequests in
+                // its tracking section map all along.
+                ...transports.rows.map((row) => ({
+                  ...row,
+                  relatedCollection: "transportRequests",
+                })),
               ]}
               uid={firebaseUser.uid}
             />
@@ -543,22 +551,34 @@ function OrdersView({
       ),
     [trackedShipments],
   );
+  const transportJobs = useMemo(
+    () =>
+      trackedShipments.filter(
+        (row) => text(row.relatedCollection, "") === "transportRequests",
+      ),
+    [trackedShipments],
+  );
   const tabs = useMemo(
     () =>
       [
         {id: "barrels" as const, label: "Barrels", count: barrels.length},
         {id: "freight" as const, label: "Freight", count: freight.length},
         {
+          id: "transport" as const,
+          label: "Car transport",
+          count: transportJobs.length,
+        },
+        {
           id: "cars" as const,
           label: "Cars & parking",
           count: untracked.length,
         },
       ].filter((tab) => tab.count > 0),
-    [barrels.length, freight.length, untracked.length],
+    [barrels.length, freight.length, transportJobs.length, untracked.length],
   );
-  const [activeTab, setActiveTab] = useState<"barrels" | "freight" | "cars">(
-    "barrels",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "barrels" | "freight" | "transport" | "cars"
+  >("barrels");
   const [bucket, setBucket] = useState<"all" | StatusBucket>("all");
   const shownTab = tabs.some((tab) => tab.id === activeTab)
     ? activeTab
@@ -572,11 +592,19 @@ function OrdersView({
     if (focusedRecord.collection === "barrelShipments") setActiveTab("barrels");
     else if (focusedRecord.collection === "freightShipments") {
       setActiveTab("freight");
+    } else if (focusedRecord.collection === "transportRequests") {
+      setActiveTab("transport");
     } else setActiveTab("cars");
   }, [focusedRecord]);
 
   const tabRecords =
-    shownTab === "barrels" ? barrels : shownTab === "freight" ? freight : [];
+    shownTab === "barrels"
+      ? barrels
+      : shownTab === "freight"
+        ? freight
+        : shownTab === "transport"
+          ? transportJobs
+          : [];
   const bucketMatches = (status: string) =>
     bucket === "all" || statusBucket(status) === bucket;
   const shownRecords = tabRecords.filter((row) =>
@@ -669,7 +697,11 @@ function OrdersView({
 
 // The collections that render as tracking cards, and so must not also be
 // listed as plain order rows on the same page.
-const TRACKED_COLLECTIONS = new Set(["barrelShipments", "freightShipments"]);
+const TRACKED_COLLECTIONS = new Set([
+  "barrelShipments",
+  "freightShipments",
+  "transportRequests",
+]);
 
 function OrderPanel({
   loading,

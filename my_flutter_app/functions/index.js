@@ -2154,7 +2154,9 @@ async function pollOneCarrierTrackedShipment(
   const eventsRef = shipmentRef.collection("trackingEvents");
   let latestShipmentStatus = null;
   for (const container of containers) {
-    const milestone = milestoneForContainerStatus(container.currentStatus);
+    const milestone = milestoneForContainerStatus(
+        container.currentStatus, relatedCollection,
+    );
     if (!milestone) continue;
     const eventId = carrierEventDocId(
         container.number, container.currentStatus,
@@ -2184,6 +2186,12 @@ async function pollOneCarrierTrackedShipment(
   if (latestShipmentStatus && latestShipmentStatus !== shipment.status) {
     await shipmentRef.update({
       status: latestShipmentStatus,
+      // The transport state machine reads fulfillmentStatus first; leaving
+      // it behind would freeze the carrier's panel on the old step while
+      // the customer's view moved on.
+      ...(relatedCollection === "transportRequests" ?
+        {fulfillmentStatus: latestShipmentStatus} :
+        {}),
       statusUpdatedAt: FirestoreFieldValue.serverTimestamp(),
       updatedAt: FirestoreFieldValue.serverTimestamp(),
     });

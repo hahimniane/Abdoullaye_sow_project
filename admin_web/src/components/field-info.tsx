@@ -1,7 +1,8 @@
 "use client";
 
 import { Info } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 /**
  * An "i" a reader can press to get the explanation, and press again to put it
@@ -33,6 +34,50 @@ export function FieldInfo({
   const [open, setOpen] = useState(false);
   const id = useId();
   const wrapRef = useRef<HTMLSpanElement>(null);
+  const bubbleRef = useRef<HTMLSpanElement>(null);
+  // Fixed-position coordinates for the bubble. The bubble used to be
+  // absolutely positioned inside the label, which put it UNDER whatever
+  // ancestor had overflow clipping - readers got half an explanation sliced
+  // mid-sentence, laid over the very input it described. A portal to <body>
+  // with fixed positioning escapes every clipping ancestor.
+  const [position, setPosition] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPosition(null);
+      return undefined;
+    }
+    function place() {
+      const anchor = wrapRef.current?.getBoundingClientRect();
+      if (!anchor) return;
+      const width = Math.min(320, window.innerWidth * 0.78);
+      const left = Math.min(
+        Math.max(8, anchor.left),
+        window.innerWidth - width - 8,
+      );
+      const bubbleHeight = bubbleRef.current?.offsetHeight ?? 0;
+      const below = anchor.bottom + 6;
+      // Flip above the icon when the explanation would run off the bottom.
+      const top =
+        bubbleHeight > 0 && below + bubbleHeight > window.innerHeight - 8
+          ? Math.max(8, anchor.top - bubbleHeight - 6)
+          : below;
+      setPosition({top, left});
+    }
+    place();
+    // Re-measure once the bubble has a size (first pass has no ref yet).
+    const raf = requestAnimationFrame(place);
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -42,7 +87,13 @@ export function FieldInfo({
       if (event.key === "Escape") setOpen(false);
     }
     function onClick(event: MouseEvent) {
-      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (
+        !wrapRef.current?.contains(target) &&
+        !bubbleRef.current?.contains(target)
+      ) {
+        setOpen(false);
+      }
     }
     document.addEventListener("keydown", onKey);
     document.addEventListener("mousedown", onClick);
@@ -76,11 +127,24 @@ export function FieldInfo({
       >
         <Info size={14} />
       </span>
-      {open && (
-        <span className="field-info-bubble" id={id} role="note">
-          {children}
-        </span>
-      )}
+      {open &&
+        createPortal(
+          <span
+            className="field-info-bubble"
+            id={id}
+            ref={bubbleRef}
+            role="note"
+            style={{
+              position: "fixed",
+              top: position?.top ?? -9999,
+              left: position?.left ?? -9999,
+              visibility: position ? "visible" : "hidden",
+            }}
+          >
+            {children}
+          </span>,
+          document.body,
+        )}
     </span>
   );
 }

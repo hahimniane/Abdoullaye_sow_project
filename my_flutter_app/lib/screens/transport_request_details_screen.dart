@@ -16,6 +16,7 @@ import '../services/transport_service.dart';
 import '../widgets/destination_country_field.dart';
 import '../utils/transport_receipt_generator.dart';
 import '../widgets/app_back_button.dart';
+import '../widgets/transport_journey.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/support_entry_button.dart';
@@ -373,6 +374,19 @@ class _TransportRequestDetailsScreenState
                             ],
                           ),
                           const SizedBox(height: 16),
+                          // The same journey-and-timeline answer barrels
+                          // give: where is it, and what just happened.
+                          if (_request.hasSelectedQuote) ...[
+                            TransportJourneyBar(
+                              status: _request.fulfillmentStatus.isNotEmpty
+                                  ? _request.fulfillmentStatus
+                                  : _request.status,
+                            ),
+                            TransportTrackingTimeline(
+                              requestId: _request.id,
+                            ),
+                            const SizedBox(height: 16),
+                          ],
                           _CustomerRequestInfo(request: _request),
                           if (_request.usesQuoteMarketplace) ...[
                             const SizedBox(height: 16),

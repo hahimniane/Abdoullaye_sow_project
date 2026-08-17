@@ -23,7 +23,7 @@ export function ContainerTrackingCard({
   containerNumber,
   trackingProvider,
 }: {
-  relatedCollection: "barrelShipments" | "freightShipments";
+  relatedCollection: "barrelShipments" | "freightShipments" | "transportRequests";
   relatedId: string;
   containerNumber: string;
   trackingProvider: string;

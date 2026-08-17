@@ -40,6 +40,47 @@ const STAGE_BY_STATUS: Record<string, JourneyStageId> = {
 };
 
 /**
+ * A transported car's journey. Same four-beat shape as a barrel's, but the
+ * middle beat is the carrier committing to a date - a car is not "at sea"
+ * by default, someone has to come and get it.
+ */
+export const TRANSPORT_JOURNEY_STAGES: readonly JourneyStage[] = [
+  {id: "booked", label: "Booked", hint: "Carrier chosen and paid"},
+  {id: "in_transit", label: "Scheduled", hint: "Pickup is arranged"},
+  {id: "arrived", label: "On its way", hint: "Your car is travelling"},
+  {id: "delivered", label: "Delivered", hint: "Handed over"},
+];
+
+const TRANSPORT_STAGE_BY_STATUS: Record<string, JourneyStageId> = {
+  quote_requested: "booked",
+  pending_payment: "booked",
+  pending: "booked",
+  scheduled: "in_transit",
+  in_transit: "arrived",
+  delivered: "delivered",
+};
+
+/**
+ * Which transport stage a job is in. Cancelled jobs get null, exactly like
+ * shipments - a stalled bar reads as broken.
+ *
+ * @param status The job's stored status (fulfillmentStatus preferred).
+ * @return The stage id and index, or null when there is no journey.
+ */
+export function transportJourneyStageFor(status: string): {
+  id: JourneyStageId;
+  index: number;
+} | null {
+  const key = String(status || "").trim();
+  if (key === "cancelled") return null;
+  const id = TRANSPORT_STAGE_BY_STATUS[key] ?? "booked";
+  return {
+    id,
+    index: TRANSPORT_JOURNEY_STAGES.findIndex((stage) => stage.id === id),
+  };
+}
+
+/**
  * Which stage a shipment is in, and how far along that is.
  *
  * A cancelled shipment has no stage - it left the journey - so callers get
@@ -108,6 +149,8 @@ const STATUS_LABEL: Record<string, string> = {
   awaiting_balance_payment: "Balance due",
   settlement_processing: "Payment processing",
   pending: "Booked",
+  quote_requested: "Collecting quotes",
+  scheduled: "Pickup scheduled",
   in_transit: "On its way",
   ready_for_pickup: "Ready for pickup",
   completed: "Delivered",

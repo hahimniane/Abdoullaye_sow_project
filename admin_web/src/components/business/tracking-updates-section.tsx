@@ -45,7 +45,7 @@ export function TrackingUpdatesSection({
   relatedId,
   canEdit = true,
 }: {
-  relatedCollection: "barrelShipments" | "freightShipments";
+  relatedCollection: "barrelShipments" | "freightShipments" | "transportRequests";
   relatedId: string;
   canEdit?: boolean;
 }) {

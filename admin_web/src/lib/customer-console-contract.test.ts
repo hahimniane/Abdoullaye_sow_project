@@ -29,7 +29,10 @@ test("a shipment appears once on the orders page, not twice", () => {
   // Barrels used to be listed as plain order rows AND rendered as tracking
   // cards on the same screen, both headed by the same BS- number, so the
   // page read as though every shipment existed twice.
-  assert.match(source, /TRACKED_COLLECTIONS = new Set\(\[\s*"barrelShipments",\s*"freightShipments",?\s*\]\)/);
+  assert.match(
+    source,
+    /TRACKED_COLLECTIONS = new Set\(\[\s*"barrelShipments",\s*"freightShipments",\s*"transportRequests",?\s*\]\)/,
+  );
   assert.match(
     source,
     /orders\.filter\(\(order\) => !TRACKED_COLLECTIONS\.has\(order\.collectionName\)\)/,
