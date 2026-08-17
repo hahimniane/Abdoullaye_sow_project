@@ -10,7 +10,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { MailCheck, RefreshCw, Send, ShieldCheck } from "lucide-react";
 
 import { AdminConsole } from "@/components/admin-console";
@@ -220,6 +220,8 @@ export function ConsoleRouter() {
   const [previewConsole, setPreviewConsole] = useState<"admin" | "business" | "customer">("admin");
   const [previewStripeState, setPreviewStripeState] = useState<PreviewStripeState>("none");
   const [profileRetry, setProfileRetry] = useState(0);
+  // Unsubscribe for the live profile follower; swapped on re-auth.
+  const profileFollowRef = useRef<(() => void) | null>(null);
   const [serviceIntent, setServiceIntent] = useState(
     null as ReturnType<typeof customerServiceFromSearch>,
   );
@@ -271,6 +273,18 @@ export function ConsoleRouter() {
         }
         setProfileMissing(false);
         setProfile({id: snap.id, ...snap.data()} as UserProfile);
+        // The one-time load above decides the ROLE quickly (with a timeout),
+        // but a session-long copy goes stale the moment the profile changes
+        // server-side: verify a phone and the console kept saying "Not
+        // verified" - banner and badge contradicting each other on the same
+        // screen - until a full reload. Keep following the document for the
+        // rest of the session.
+        const follow = onSnapshot(doc(db, "users", user.uid), (live) => {
+          if (!active || !live.exists()) return;
+          setProfile({id: live.id, ...live.data()} as UserProfile);
+        });
+        profileFollowRef.current?.();
+        profileFollowRef.current = follow;
       } catch {
         if (!active) return;
         setAuthError("The connection is slow. We could not safely load your account role.");
@@ -280,6 +294,8 @@ export function ConsoleRouter() {
     });
     return () => {
       active = false;
+      profileFollowRef.current?.();
+      profileFollowRef.current = null;
       unsubscribe();
     };
   }, [profileRetry]);

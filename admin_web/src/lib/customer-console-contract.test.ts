@@ -89,3 +89,14 @@ test("the orders page is organised by service tab with status chips", () => {
     /focusedRecord\.collection === "barrelShipments"\) setActiveTab\("barrels"\)/,
   );
 });
+
+test("the profile follows its Firestore document for the whole session", () => {
+  // The profile used to be fetched once at sign-in. Verify a phone and the
+  // console kept saying "Not verified" - a success banner and a stale badge
+  // contradicting each other on the same screen - until a full reload.
+  const router = readFileSync("src/components/console-router.tsx", "utf8");
+  assert.match(router, /onSnapshot\(doc\(db, "users", user\.uid\)/);
+  // The follower must die with the session, or a sign-out leaks a listener
+  // that resurrects the previous user's profile.
+  assert.match(router, /profileFollowRef\.current\?\.\(\);/);
+});
