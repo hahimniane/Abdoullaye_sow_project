@@ -131,6 +131,41 @@ export function statusLabel(status: string): string {
   return STATUS_LABEL[key] ?? key.replace(/_/g, " ");
 }
 
+export type StatusBucket = "payment" | "active" | "completed" | "cancelled";
+
+export const STATUS_BUCKETS: ReadonlyArray<{
+  id: StatusBucket;
+  label: string;
+}> = [
+  {id: "payment", label: "Needs payment"},
+  {id: "active", label: "In progress"},
+  {id: "completed", label: "Completed"},
+  {id: "cancelled", label: "Cancelled"},
+];
+
+/**
+ * Which filter bucket a record belongs to, across every service.
+ *
+ * Four buckets, not one per status: a customer filtering their orders wants
+ * "which ones need me", "which are moving", "which are done" - not a chip
+ * for every word the backend can write. "Needs payment" is first because it
+ * is the only bucket where the next action is the customer's.
+ *
+ * @param status The record's stored status.
+ * @return The bucket the record files under.
+ */
+export function statusBucket(status: string): StatusBucket {
+  const key = String(status || "").trim().toLowerCase();
+  if (key === "pending_payment" || key === "awaiting_balance_payment") {
+    return "payment";
+  }
+  if (key === "cancelled" || key === "refunded") return "cancelled";
+  if (["completed", "delivered", "sold", "picked_up"].includes(key)) {
+    return "completed";
+  }
+  return "active";
+}
+
 /**
  * The secondary line under a milestone: where it happened and what happened.
  *

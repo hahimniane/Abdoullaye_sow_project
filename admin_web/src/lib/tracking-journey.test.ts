@@ -7,6 +7,7 @@ import {
   eventDetail,
   journeyStageFor,
   relativeTime,
+  statusBucket,
   statusLabel,
 } from "./tracking-journey.ts";
 
@@ -118,4 +119,23 @@ test("an unmapped status degrades to something readable", () => {
   // leak an underscore.
   assert.equal(statusLabel("held_at_customs"), "held at customs");
   assert.equal(statusLabel(""), "Booked");
+});
+
+test("statuses file into four customer buckets", () => {
+  // The orders page filters by these chips. "Needs payment" is the bucket
+  // where the next action is the customer's - it must catch both the
+  // accepted-unpaid transport job and a freight balance.
+  assert.equal(statusBucket("pending_payment"), "payment");
+  assert.equal(statusBucket("awaiting_balance_payment"), "payment");
+  assert.equal(statusBucket("in_transit"), "active");
+  assert.equal(statusBucket("quote_requested"), "active");
+  assert.equal(statusBucket("scheduled"), "active");
+  assert.equal(statusBucket("completed"), "completed");
+  assert.equal(statusBucket("delivered"), "completed");
+  assert.equal(statusBucket("sold"), "completed");
+  assert.equal(statusBucket("cancelled"), "cancelled");
+  assert.equal(statusBucket("refunded"), "cancelled");
+  // Anything the backend invents later stays visible under In progress
+  // rather than vanishing from every chip.
+  assert.equal(statusBucket("held_at_customs"), "active");
 });

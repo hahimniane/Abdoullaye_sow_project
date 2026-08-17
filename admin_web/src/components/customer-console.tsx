@@ -35,7 +35,12 @@ import { CalendarClock, Car, CircleAlert, CircleDollarSign, ClipboardList, Headp
 
 import { auth, db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
-import { statusLabel } from "@/lib/tracking-journey";
+import {
+  STATUS_BUCKETS,
+  type StatusBucket,
+  statusBucket,
+  statusLabel,
+} from "@/lib/tracking-journey";
 import {
   carPurchaseIsViewing,
   viewingStatusLabel,
@@ -521,25 +526,140 @@ function OrdersView({
     [orders],
   );
 
+  // One tab per service, so a customer with barrels AND a car in transit is
+  // not reading both interleaved. Tabs a customer has nothing in do not
+  // render - an empty "Freight" tab is noise, not navigation.
+  const barrels = useMemo(
+    () =>
+      trackedShipments.filter(
+        (row) => text(row.relatedCollection, "") === "barrelShipments",
+      ),
+    [trackedShipments],
+  );
+  const freight = useMemo(
+    () =>
+      trackedShipments.filter(
+        (row) => text(row.relatedCollection, "") === "freightShipments",
+      ),
+    [trackedShipments],
+  );
+  const tabs = useMemo(
+    () =>
+      [
+        {id: "barrels" as const, label: "Barrels", count: barrels.length},
+        {id: "freight" as const, label: "Freight", count: freight.length},
+        {
+          id: "cars" as const,
+          label: "Cars & parking",
+          count: untracked.length,
+        },
+      ].filter((tab) => tab.count > 0),
+    [barrels.length, freight.length, untracked.length],
+  );
+  const [activeTab, setActiveTab] = useState<"barrels" | "freight" | "cars">(
+    "barrels",
+  );
+  const [bucket, setBucket] = useState<"all" | StatusBucket>("all");
+  const shownTab = tabs.some((tab) => tab.id === activeTab)
+    ? activeTab
+    : tabs[0]?.id ?? "barrels";
+
+  // A notification deep-link names one record; it must land on the tab that
+  // record lives in, with no filter hiding it.
+  useEffect(() => {
+    if (!focusedRecord) return;
+    setBucket("all");
+    if (focusedRecord.collection === "barrelShipments") setActiveTab("barrels");
+    else if (focusedRecord.collection === "freightShipments") {
+      setActiveTab("freight");
+    } else setActiveTab("cars");
+  }, [focusedRecord]);
+
+  const tabRecords =
+    shownTab === "barrels" ? barrels : shownTab === "freight" ? freight : [];
+  const bucketMatches = (status: string) =>
+    bucket === "all" || statusBucket(status) === bucket;
+  const shownRecords = tabRecords.filter((row) =>
+    bucketMatches(text(row.status, "")),
+  );
+  const shownOrders = untracked.filter((order) =>
+    bucketMatches(
+      text(order.row.status ?? order.row.purchaseStatus, ""),
+    ),
+  );
+  // Chips only for buckets that exist on this tab: a chip that always shows
+  // an empty list is a dead end, not a filter.
+  const presentBuckets = new Set(
+    (shownTab === "cars"
+      ? untracked.map((order) =>
+          text(order.row.status ?? order.row.purchaseStatus, ""),
+        )
+      : tabRecords.map((row) => text(row.status, ""))
+    ).map(statusBucket),
+  );
+
   return (
     <div className="stack">
+      {tabs.length > 0 && (
+        <div className="customer-orders-tabs" role="tablist">
+          {tabs.map((tab) => (
+            <button
+              aria-selected={shownTab === tab.id}
+              className={shownTab === tab.id ? "active" : ""}
+              key={tab.id}
+              onClick={() => {
+                setActiveTab(tab.id);
+                setBucket("all");
+              }}
+              role="tab"
+              type="button"
+            >
+              {tab.label}
+              <span>{tab.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {tabs.length > 0 && presentBuckets.size > 1 && (
+        <div className="customer-orders-chips" role="group" aria-label="Filter by status">
+          <button
+            className={bucket === "all" ? "active" : ""}
+            onClick={() => setBucket("all")}
+            type="button"
+          >
+            All
+          </button>
+          {STATUS_BUCKETS.filter((item) => presentBuckets.has(item.id)).map(
+            (item) => (
+              <button
+                className={bucket === item.id ? "active" : ""}
+                key={item.id}
+                onClick={() => setBucket(item.id)}
+                type="button"
+              >
+                {item.label}
+              </button>
+            ),
+          )}
+        </div>
+      )}
       <OrderPanel
         loading={loading}
         onOpenHandled={() => setOpenKey("")}
         openKey={openKey}
         orders={orders}
-        title="Parking, cars & transport"
+        title="Cars, transport & parking"
         uid={uid}
-        visibleOrders={untracked}
+        visibleOrders={shownTab === "cars" ? shownOrders : []}
       />
-      {!loading && (
+      {!loading && shownTab !== "cars" && (
         <CustomerTracking
           focusedRecordId={focusedRecord?.id ?? ""}
           onFocusConsumed={onFocusConsumed}
           onOpenDetails={(record) =>
             setOpenKey(`${text(record.relatedCollection, "")}:${record.id}`)
           }
-          records={trackedShipments}
+          records={shownRecords}
           uid={uid}
         />
       )}

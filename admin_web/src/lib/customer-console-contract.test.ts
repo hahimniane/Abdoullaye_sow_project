@@ -34,8 +34,17 @@ test("a shipment appears once on the orders page, not twice", () => {
     source,
     /orders\.filter\(\(order\) => !TRACKED_COLLECTIONS\.has\(order\.collectionName\)\)/,
   );
-  // The list the panel renders must be the filtered one.
-  assert.match(source, /visibleOrders=\{untracked\}/);
+  // The list the panel renders must come from the untracked set - now
+  // additionally filtered by the active tab and status chip, never the raw
+  // orders array.
+  assert.match(
+    source,
+    /visibleOrders=\{shownTab === "cars" \? shownOrders : \[\]\}/,
+  );
+  assert.match(
+    source,
+    /const shownOrders = untracked\.filter/,
+  );
 });
 
 test("removing the rows does not remove the actions they carried", () => {
@@ -54,7 +63,7 @@ test("the orders panel is titled for what is left in it", () => {
   // With shipments gone it holds parking, car purchases and transport, so
   // "Orders & tracking" would name a panel that has no tracking in it.
   assert.doesNotMatch(source, /title="Orders & tracking"/);
-  assert.match(source, /title="Parking, cars & transport"/);
+  assert.match(source, /title="Cars, transport & parking"/);
 });
 
 test("the console opens on Home, never on the profile form", () => {
@@ -64,4 +73,19 @@ test("the console opens on Home, never on the profile form", () => {
   // paying for a barrel landed the customer on an account form.
   assert.match(source, /useState<CustomerTab>\("home"\)/);
   assert.doesNotMatch(source, /firebaseUser\.phoneNumber \? "home" : "profile"/);
+});
+
+test("the orders page is organised by service tab with status chips", () => {
+  // One tab per service, so barrels and a car in transit are not
+  // interleaved; chips filter by bucket within the tab. Empty tabs are
+  // hidden - an empty Freight tab is noise, not navigation.
+  assert.match(source, /\.filter\(\(tab\) => tab\.count > 0\)/);
+  assert.match(source, /customer-orders-tabs/);
+  assert.match(source, /customer-orders-chips/);
+  assert.match(source, /statusBucket\(/);
+  // A notification deep-link must land on the tab its record lives in.
+  assert.match(
+    source,
+    /focusedRecord\.collection === "barrelShipments"\) setActiveTab\("barrels"\)/,
+  );
 });
