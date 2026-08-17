@@ -1660,13 +1660,22 @@
   "selectTransportQuote": "Choose this quote",
   "selectingTransportQuote": "Selecting quote...",
   "confirmTransportQuoteTitle": "Choose this transporter?",
-  "confirmTransportQuoteMessage": "Choose {businessName} for {price}? This closes the request to other businesses.",
+  "confirmTransportQuoteMessage": "Choose {businessName} for {price}? The amount is held on your card, not charged, and cancelling while it is held is free. This closes the request to other businesses.",
   "@confirmTransportQuoteMessage": {
     "placeholders": {
       "businessName": {},
       "price": {}
     }
   },
+  "transportPaymentTitle": "Pay to confirm your carrier",
+  "transportPaymentBody": "{price} is held on your card — not charged — and the carrier can only start once it is secured. Cancelling while held is free.",
+  "@transportPaymentBody": {
+    "placeholders": {
+      "price": {}
+    }
+  },
+  "transportPayNow": "Pay now",
+  "transportPaymentFailed": "The payment could not be completed. Nothing was charged — try again.",
   "keepComparing": "Keep comparing",
   "chooseThisBusiness": "Choose this business",
   "couldNotSelectTransportQuote": "This quote could not be selected. Check that it is still available and try again.",

@@ -34,6 +34,8 @@ class TransportRequest {
     this.requestedTransportMethod = 'open',
     this.flexibleDates = true,
     this.containerNumber = '',
+    this.paymentStatus = '',
+    this.totalCents = 0,
   });
 
   final String id;
@@ -79,9 +81,24 @@ class TransportRequest {
   /// the business needs to know whether the job already carries it.
   final String containerNumber;
 
+  /// The hold-first payment on an accepted quote. Selection parks the request
+  /// at `pending_payment`; only `succeeded` lets the carrier start.
+  final String paymentStatus;
+
+  /// Quote plus pickup fee, in cents - what the customer actually pays.
+  final int totalCents;
+
   bool get usesQuoteMarketplace => flowVersion >= 2;
   bool get hasSelectedQuote =>
       selectedQuoteId.isNotEmpty && selectedBusinessId.isNotEmpty;
+
+  /// Accepted but not yet paid: the one state where the customer owes an
+  /// action before anything else can happen.
+  bool get awaitingPayment =>
+      usesQuoteMarketplace &&
+      hasSelectedQuote &&
+      status != 'cancelled' &&
+      paymentStatus != 'succeeded';
 
   /// True when a customer submitted this and no price has been set yet.
   bool get awaitingQuote => usesQuoteMarketplace
@@ -158,6 +175,8 @@ class TransportRequest {
           (data['requestedTransportMethod'] ?? 'open') as String,
       flexibleDates: data['flexibleDates'] != false,
       containerNumber: (data['containerNumber'] ?? '') as String,
+      paymentStatus: (data['paymentStatus'] ?? '') as String,
+      totalCents: (data['totalCents'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -268,6 +287,8 @@ class TransportRequest {
           requestedTransportMethod ?? this.requestedTransportMethod,
       flexibleDates: flexibleDates ?? this.flexibleDates,
       containerNumber: containerNumber ?? this.containerNumber,
+      paymentStatus: paymentStatus,
+      totalCents: totalCents,
     );
   }
 }

@@ -1660,13 +1660,22 @@
   "selectTransportQuote": "Choisir ce devis",
   "selectingTransportQuote": "Sélection du devis...",
   "confirmTransportQuoteTitle": "Choisir ce transporteur ?",
-  "confirmTransportQuoteMessage": "Choisir {businessName} pour {price} ? Cette action ferme la demande aux autres entreprises.",
+  "confirmTransportQuoteMessage": "Choisir {businessName} pour {price} ? Le montant est réservé sur votre carte, pas débité, et l’annulation pendant la réservation est gratuite. Cette action ferme la demande aux autres entreprises.",
   "@confirmTransportQuoteMessage": {
     "placeholders": {
       "businessName": {},
       "price": {}
     }
   },
+  "transportPaymentTitle": "Payez pour confirmer votre transporteur",
+  "transportPaymentBody": "{price} est réservé sur votre carte — pas débité — et le transporteur ne peut commencer qu’une fois le montant sécurisé. L’annulation pendant la réservation est gratuite.",
+  "@transportPaymentBody": {
+    "placeholders": {
+      "price": {}
+    }
+  },
+  "transportPayNow": "Payer maintenant",
+  "transportPaymentFailed": "Le paiement n’a pas pu être finalisé. Rien n’a été débité — réessayez.",
   "keepComparing": "Continuer à comparer",
   "chooseThisBusiness": "Choisir cette entreprise",
   "couldNotSelectTransportQuote": "Impossible de sélectionner ce devis. Vérifiez qu’il est encore disponible et réessayez.",

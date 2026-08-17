@@ -619,6 +619,7 @@ class _TransportQuoteSectionState extends State<_TransportQuoteSection> {
   String _error = '';
   bool _cancelling = false;
   bool _savingEdit = false;
+  bool _paying = false;
 
   Future<void> _selectQuote(TransportQuote quote) async {
     final l10n = AppLocalizations.of(context)!;
@@ -657,8 +658,30 @@ class _TransportQuoteSectionState extends State<_TransportQuoteSection> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _error = l10n.couldNotSelectTransportQuote);
+      return;
     } finally {
       if (mounted) setState(() => _selectingQuoteId = '');
+    }
+    // Accepting is a commitment, so the money is the next step, not a later
+    // one. A failure here is recoverable: the selection stands and the
+    // details screen keeps offering Pay now.
+    await _payForJob();
+  }
+
+  Future<void> _payForJob() async {
+    if (_paying || !mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    setState(() {
+      _paying = true;
+      _error = '';
+    });
+    try {
+      await _service.payForJob(requestId: widget.request.id);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = l10n.transportPaymentFailed);
+    } finally {
+      if (mounted) setState(() => _paying = false);
     }
   }
 
@@ -1053,6 +1076,50 @@ class _TransportQuoteSectionState extends State<_TransportQuoteSection> {
       final price = NumberFormat.simpleCurrency(
         name: widget.request.currency.toUpperCase(),
       ).format(widget.request.selectedAmountCents / 100);
+      if (widget.request.awaitingPayment) {
+        // Accepted but unpaid: the customer owes an action before the
+        // carrier can start, so this is a call to action, not a notice.
+        final total = NumberFormat.simpleCurrency(
+          name: widget.request.currency.toUpperCase(),
+        ).format(
+          (widget.request.totalCents > 0
+                  ? widget.request.totalCents
+                  : widget.request.selectedAmountCents) /
+              100,
+        );
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _QuoteNotice(
+              icon: Icons.lock_clock_outlined,
+              title: l10n.transportPaymentTitle,
+              message: l10n.transportPaymentBody(total),
+            ),
+            if (_error.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                _error,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: _paying ? null : () => _payForJob(),
+              icon: _paying
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.lock_outline),
+              label: Text(l10n.transportPayNow),
+            ),
+          ],
+        );
+      }
       return _QuoteNotice(
         icon: Icons.verified_outlined,
         title: l10n.transportQuoteSelectedTitle,

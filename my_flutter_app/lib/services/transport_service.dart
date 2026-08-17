@@ -1,13 +1,18 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart' show ThemeMode;
+import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../models/business_destination_option.dart';
 import '../models/business_service.dart';
 import '../models/transport_quote.dart';
+import 'payment_flow_safety.dart';
+import 'stripe_config_service.dart';
 
 /// Customer-facing car-transport requests. Businesses that enable the
 /// `carTransport` service receive these requests and quote a price; the
-/// customer never pays at request time.
+/// customer pays when they accept one - the amount is held, not charged,
+/// under the same hold-first model as every other service.
 class TransportService {
   TransportService({FirebaseFunctions? functions, FirebaseFirestore? firestore})
     : _functions = functions ?? FirebaseFunctions.instance,
@@ -156,6 +161,56 @@ class TransportService {
       'requestId': requestId,
       'quoteId': quoteId,
     });
+  }
+
+  /// Pays for an accepted transport job - the step selection now requires.
+  ///
+  /// Selection parks the request at `pending_payment`; nothing is charged
+  /// and the carrier cannot start until this completes. Safe to call again
+  /// after an abandoned payment sheet: the server mints a fresh intent per
+  /// attempt, and an unconfirmed manual-capture intent holds nothing.
+  Future<void> payForJob({required String requestId}) async {
+    final response = await _functions
+        .httpsCallable('createTransportJobPaymentIntent')
+        .call<Map<String, dynamic>>({'requestId': requestId});
+    final data = Map<String, dynamic>.from(response.data);
+    if (data['simulatedPayment'] == true || data['alreadySettled'] == true) {
+      return;
+    }
+    final clientSecret = data['clientSecret'] as String?;
+    if (clientSecret == null || clientSecret.isEmpty) {
+      throw Exception('Payment could not be initialized.');
+    }
+
+    await StripeConfigService.ensureConfigured();
+    await withStripeConnectedAccount(
+      (data['stripeConnectedAccountId'] as String?) ?? '',
+      () async {
+        await Stripe.instance.initPaymentSheet(
+          paymentSheetParameters: SetupPaymentSheetParameters(
+            paymentIntentClientSecret: clientSecret,
+            merchantDisplayName: 'Laawol',
+            style: ThemeMode.light,
+          ),
+        );
+        await completePaymentFlowSafely(
+          presentPaymentSheet: Stripe.instance.presentPaymentSheet,
+          completeTransaction: () async {
+            await _functions
+                .httpsCallable('completeTransportJobPayment')
+                .call<void>({'requestId': requestId});
+          },
+          // Abandoning the sheet keeps the carrier selected - the request
+          // predates the payment attempt - so only the intent is cancelled
+          // and the job stays payable.
+          cancelPendingTransaction: () async {
+            await _functions
+                .httpsCallable('cancelPendingTransportJobPayment')
+                .call<void>({'requestId': requestId});
+          },
+        );
+      },
+    );
   }
 
   Future<void> cancelRequest(String requestId) async {

@@ -3898,8 +3898,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String confirmTransportQuoteMessage(Object businessName, Object price) {
-    return 'Choose $businessName for $price? This closes the request to other businesses.';
+    return 'Choose $businessName for $price? The amount is held on your card, not charged, and cancelling while it is held is free. This closes the request to other businesses.';
   }
+
+  @override
+  String get transportPaymentTitle => 'Pay to confirm your carrier';
+
+  @override
+  String transportPaymentBody(Object price) {
+    return '$price is held on your card — not charged — and the carrier can only start once it is secured. Cancelling while held is free.';
+  }
+
+  @override
+  String get transportPayNow => 'Pay now';
+
+  @override
+  String get transportPaymentFailed =>
+      'The payment could not be completed. Nothing was charged — try again.';
 
   @override
   String get keepComparing => 'Keep comparing';

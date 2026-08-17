@@ -72,4 +72,62 @@ void main() {
     expect(request.businessId, isEmpty);
     expect(request.selectedBusinessId, 'business-1');
   });
+
+  TransportRequest paymentFixture(Map<String, Object?> overrides) {
+    return TransportRequest.fromMap(
+      id: 'transport-pay-1',
+      data: {
+        'flowVersion': 2,
+        'trackingCode': 'TR-PAY',
+        'ownerName': 'Customer',
+        'carMake': 'Toyota',
+        'carModel': 'Camry',
+        'carYear': '2019',
+        'status': 'pending_payment',
+        'quoteStatus': 'selected',
+        'selectedQuoteId': 'req__biz',
+        'selectedBusinessId': 'biz',
+        'paymentStatus': 'pending',
+        'totalCents': 80000,
+        ...overrides,
+      },
+    );
+  }
+
+  test('an accepted-but-unpaid marketplace job awaits payment', () {
+    // Selection now charges (hold-first). This getter is what the details
+    // screen renders the Pay panel from - if it lies, a customer accepts a
+    // carrier and is never asked for the money.
+    final request = paymentFixture({});
+    expect(request.awaitingPayment, isTrue);
+    expect(request.totalCents, 80000);
+  });
+
+  test('payment settles or cancellation ends the wait', () {
+    expect(
+      paymentFixture({'paymentStatus': 'succeeded', 'status': 'pending'})
+          .awaitingPayment,
+      isFalse,
+    );
+    expect(
+      paymentFixture({'status': 'cancelled'}).awaitingPayment,
+      isFalse,
+    );
+  });
+
+  test('legacy jobs never wait on a payment that does not exist', () {
+    final legacy = TransportRequest.fromMap(
+      id: 'transport-legacy-pay',
+      data: {
+        'trackingCode': 'TR-LEG',
+        'ownerName': 'Customer',
+        'carMake': 'Honda',
+        'carModel': 'Civic',
+        'carYear': '2015',
+        'status': 'pending',
+        'price': 950,
+      },
+    );
+    expect(legacy.awaitingPayment, isFalse);
+  });
 }

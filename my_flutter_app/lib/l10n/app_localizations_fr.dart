@@ -3982,8 +3982,23 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String confirmTransportQuoteMessage(Object businessName, Object price) {
-    return 'Choisir $businessName pour $price ? Cette action ferme la demande aux autres entreprises.';
+    return 'Choisir $businessName pour $price ? Le montant est réservé sur votre carte, pas débité, et l’annulation pendant la réservation est gratuite. Cette action ferme la demande aux autres entreprises.';
   }
+
+  @override
+  String get transportPaymentTitle => 'Payez pour confirmer votre transporteur';
+
+  @override
+  String transportPaymentBody(Object price) {
+    return '$price est réservé sur votre carte — pas débité — et le transporteur ne peut commencer qu’une fois le montant sécurisé. L’annulation pendant la réservation est gratuite.';
+  }
+
+  @override
+  String get transportPayNow => 'Payer maintenant';
+
+  @override
+  String get transportPaymentFailed =>
+      'Le paiement n’a pas pu être finalisé. Rien n’a été débité — réessayez.';
 
   @override
   String get keepComparing => 'Continuer à comparer';

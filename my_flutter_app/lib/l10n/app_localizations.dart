@@ -7109,8 +7109,32 @@ abstract class AppLocalizations {
   /// No description provided for @confirmTransportQuoteMessage.
   ///
   /// In en, this message translates to:
-  /// **'Choose {businessName} for {price}? This closes the request to other businesses.'**
+  /// **'Choose {businessName} for {price}? The amount is held on your card, not charged, and cancelling while it is held is free. This closes the request to other businesses.'**
   String confirmTransportQuoteMessage(Object businessName, Object price);
+
+  /// No description provided for @transportPaymentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay to confirm your carrier'**
+  String get transportPaymentTitle;
+
+  /// No description provided for @transportPaymentBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{price} is held on your card — not charged — and the carrier can only start once it is secured. Cancelling while held is free.'**
+  String transportPaymentBody(Object price);
+
+  /// No description provided for @transportPayNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay now'**
+  String get transportPayNow;
+
+  /// No description provided for @transportPaymentFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment could not be completed. Nothing was charged — try again.'**
+  String get transportPaymentFailed;
 
   /// No description provided for @keepComparing.
   ///
