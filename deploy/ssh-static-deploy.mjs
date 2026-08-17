@@ -77,7 +77,16 @@ const ssh = [
 
 const dest = `${cfg.user}@${cfg.host}:${cfg.remoteRoot}`;
 const customerDest = `${cfg.user}@${cfg.host}:${cfg.remoteCustomer}`;
-const common = ["-rtz", "--delete", "--omit-dir-times", "--no-perms", "-e", ssh];
+// --delete keeps the tree true to the build - but a browser tab opened
+// before a deploy still lazy-loads hashed chunks from the PREVIOUS build.
+// Deleting those made every open session shatter on navigation (unstyled
+// panels, dead tooltips) until a hard refresh. Hashed assets are immutable
+// and tiny: protect them from deletion and let deploys accumulate them.
+const common = [
+  "-rtz", "--delete", "--omit-dir-times", "--no-perms",
+  "--filter=P _next/static/**",
+  "-e", ssh,
+];
 
 console.log(`\nPublishing marketing site -> ${dest}/`);
 run("rsync", [

@@ -5,6 +5,17 @@ const admin = require("firebase-admin");
 // These handlers run directly against the Firestore emulator instead of
 // through the Functions emulator, so declare the runtime explicitly before
 // loading index.js.
+// This suite writes with ADMIN credentials. Without the emulator env
+// those writes land in PRODUCTION - on 2026-08-16 a direct `node
+// --test` run did exactly that, seeding 68 approved fixture
+// businesses that real customers could see. Fail closed instead.
+if (!process.env.FIRESTORE_EMULATOR_HOST) {
+  throw new Error(
+      "Run this through `npm run test:services` (firebase emulators:exec). " +
+      "A direct node --test run would write its fixtures into the " +
+      "real project.");
+}
+
 process.env.FUNCTIONS_EMULATOR = "true";
 
 const CUSTOMER_UID = "service-test-customer";

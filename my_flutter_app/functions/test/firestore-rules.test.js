@@ -1,6 +1,17 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const assert = require("node:assert/strict");
+// This suite writes with ADMIN credentials. Without the emulator env
+// those writes land in PRODUCTION - on 2026-08-16 a direct `node
+// --test` run did exactly that, seeding 68 approved fixture
+// businesses that real customers could see. Fail closed instead.
+if (!process.env.FIRESTORE_EMULATOR_HOST) {
+  throw new Error(
+      "Run this through `npm run test:rules` (firebase emulators:exec). " +
+      "A direct node --test run would write its fixtures into the " +
+      "real project.");
+}
+
 const {
   after,
   before,
