@@ -84,7 +84,10 @@ test("the orders page is organised by service tab with status chips", () => {
   // hidden - an empty Freight tab is noise, not navigation.
   assert.match(source, /\.filter\(\(tab\) => tab\.count > 0\)/);
   assert.match(source, /customer-orders-tabs/);
-  assert.match(source, /customer-orders-chips/);
+  // The status filter reuses the services screen's segment pills - one
+  // "narrow this list" design across the console, not a second one.
+  assert.match(source, /service-segments service-sort-segments/);
+  assert.doesNotMatch(source, /customer-orders-chips/);
   assert.match(source, /statusBucket\(/);
   // A notification deep-link must land on the tab its record lives in.
   assert.match(

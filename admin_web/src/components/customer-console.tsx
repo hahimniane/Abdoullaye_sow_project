@@ -648,27 +648,36 @@ function OrdersView({
           ))}
         </div>
       )}
-      {tabs.length > 0 && presentBuckets.size > 1 && (
-        <div className="customer-orders-chips" role="group" aria-label="Filter by status">
-          <button
-            className={bucket === "all" ? "active" : ""}
-            onClick={() => setBucket("all")}
-            type="button"
-          >
-            All
-          </button>
-          {STATUS_BUCKETS.filter((item) => presentBuckets.has(item.id)).map(
-            (item) => (
-              <button
-                className={bucket === item.id ? "active" : ""}
-                key={item.id}
-                onClick={() => setBucket(item.id)}
-                type="button"
-              >
-                {item.label}
-              </button>
-            ),
-          )}
+      {/* Same segment pills the services screen sorts providers with -
+          one design for "narrow what I'm looking at" everywhere. Always
+          visible when the tab has records: a filter that hides itself
+          when it would show one chip is a filter nobody learns exists. */}
+      {tabs.length > 0 &&
+        (shownTab === "cars" ? untracked : tabRecords).length > 0 && (
+        <div
+          aria-label="Filter by status"
+          className="service-segments service-sort-segments"
+          role="tablist"
+        >
+          {[{id: "all" as const, label: "All"},
+            ...STATUS_BUCKETS.filter((item) => presentBuckets.has(item.id)),
+          ].map((item) => (
+            <span
+              aria-selected={bucket === item.id}
+              className={`segment ${bucket === item.id ? "active" : ""}`}
+              key={item.id}
+              onClick={() => setBucket(item.id)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                setBucket(item.id);
+              }}
+              role="tab"
+              tabIndex={0}
+            >
+              {item.label}
+            </span>
+          ))}
         </div>
       )}
       <OrderPanel
