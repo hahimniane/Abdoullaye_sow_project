@@ -1401,11 +1401,13 @@ function FreightGoodsEditor({
             </FieldInfo>
           </span>
         </p>
-        <div className="customer-inline-note wide">
-          You pay the customer back, not Laawol. The most you can owe on one
-          parcel is the value that customer declared, and the policy in force
-          on the day they booked is the one that is judged.
-        </div>
+        {draft.coversLoss && (
+          <div className="customer-inline-note wide">
+            You pay the customer back, not Laawol. The most you can owe on
+            one parcel is the payback you published for that item, and the
+            policy in force on the day they booked is the one that is judged.
+          </div>
+        )}
         <label className="lst-field">
           <span>Do you pay for a lost parcel?</span>
           <select
@@ -1418,24 +1420,25 @@ function FreightGoodsEditor({
             <option value="yes">Yes, I pay back what was declared</option>
           </select>
         </label>
-        <label className="lst-field">
-          <span>Coverage rate (% of declared value)</span>
-          <small>
-            What you charge for cover. 2% on a $1,000 parcel collects $20.
-          </small>
-          <input
-            disabled={!draft.coversLoss}
-            inputMode="decimal"
-            max="10"
-            min="0"
-            onChange={(event) =>
-              onChange({coverageRatePct: event.target.value})
-            }
-            step="0.1"
-            type="number"
-            value={draft.coverageRatePct}
-          />
-        </label>
+        {draft.coversLoss && (
+          <label className="lst-field">
+            <span>Coverage rate (% of the item's payback)</span>
+            <small>
+              What you charge for protection. 2% on a $400 item collects $8.
+            </small>
+            <input
+              inputMode="decimal"
+              max="10"
+              min="0"
+              onChange={(event) =>
+                onChange({coverageRatePct: event.target.value})
+              }
+              step="0.1"
+              type="number"
+              value={draft.coverageRatePct}
+            />
+          </label>
+        )}
         {draft.coversLoss && !(coverageRate > 0) && (
           <div className="customer-inline-note error wide">
             Set a rate above 0%. Cover at no price is money you never collected
@@ -1476,11 +1479,10 @@ function FreightGoodsEditor({
               What each item pays back
               <FieldInfo label="how the payback list works">
                 <p>
-                  Customers no longer type what their parcel is worth - you
-                  publish what each item pays back if it is lost, and that
-                  number is the promise. An item you have not listed cannot
-                  be booked instantly; the customer asks you for a quote
-                  instead.
+                  You publish what each item pays back if it is lost, and
+                  that number is the promise the customer sees. An item you
+                  have not listed cannot be booked instantly; the customer
+                  asks you for a quote instead.
                 </p>
                 <p>
                   The coverage fee a customer pays is your rate above,

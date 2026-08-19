@@ -69,3 +69,26 @@ test("protection reads as reassurance, never as loss-talk in the face", () => {
   // The typed declared value is gone wherever a table exists.
   assert.match(customer, /usesItemPricing \? \{itemId\} : \{declaredValue\}/);
 });
+
+test("the form follows its own answer, and never narrates history", () => {
+  // "No, parcels are not covered" must not be followed by a coverage-rate
+  // field and a payback-obligation warning - a form that ignores the answer
+  // it just received reads as broken. And pre-launch copy never frames a
+  // feature against a previous version nobody ever saw.
+  const business = readFileSync(
+    new URL(
+      "../components/business/profile-support-people.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.match(
+    business,
+    /\{draft\.coversLoss && \(\s*<label className="lst-field">\s*<span>Coverage rate/,
+  );
+  assert.match(
+    business,
+    /\{draft\.coversLoss && \(\s*<div className="customer-inline-note wide">/,
+  );
+  assert.doesNotMatch(business, /no longer type/);
+});
