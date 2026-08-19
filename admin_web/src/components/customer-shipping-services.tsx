@@ -31,6 +31,7 @@ import {
   StructuredAddressFields,
   type AddressSuggestion,
 } from "@/components/address-autocomplete";
+import { FieldInfo } from "@/components/field-info";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
 import { PaymentHoldNotice } from "@/components/payment-hold-notice";
@@ -103,6 +104,10 @@ import {
   receiverPhoneIsDifferentCountry,
   validateReceiverPhone,
 } from "@/lib/receiver-phone-rules";
+import {
+  coverageFeeCentsFor,
+  freightPaybackFor,
+} from "@/lib/freight-payback";
 import { startCheckout } from "@/lib/use-checkout";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
 
@@ -2288,6 +2293,7 @@ function FreightShipmentForm({
   const [destinationOptionId, setDestinationOptionId] = useState("");
   const [weightKg, setWeightKg] = useState(1);
   const [itemCategoryId, setItemCategoryId] = useState("");
+  const [itemId, setItemId] = useState("");
   const [declaresValue, setDeclaresValue] = useState(false);
   const [declaredValueText, setDeclaredValueText] = useState("");
   const [providerSort, setProviderSort] = useState<ServiceSort>(
@@ -2366,13 +2372,43 @@ function FreightShipmentForm({
         multiplier: selectedCategory?.multiplier ?? 1,
       })
     : null;
-  const declaredValue = declaresValue ? Number(declaredValueText || 0) : 0;
+  // A business that has published a payback table prices protection from
+  // its own rows; the sender's typed value survives only for businesses that
+  // have not. The number the customer sees is the business's promise, and
+  // the server re-prices it regardless.
+  const paybackTable = (destination as unknown as {
+    freightPaybackTable?: Record<string, unknown>;
+  } | null)?.freightPaybackTable;
+  const usesItemPricing = Boolean(
+    paybackTable && Object.keys(paybackTable).length > 0,
+  );
+  const itemLookup = usesItemPricing
+    ? freightPaybackFor({
+        table: paybackTable,
+        categoryId: itemCategoryId,
+        itemId,
+      })
+    : null;
+  const declaredValue =
+    !usesItemPricing && declaresValue ? Number(declaredValueText || 0) : 0;
   const coverage = quoteFreightCoverage({
     policy: coveragePolicy,
     declaredValue,
   });
-  const coverageFee = coverage.ok ? coverage.coverageFee : 0;
-  const coverageRefusal = coverage.ok ? "" : coverage.message;
+  const itemCoverageFeeCents =
+    itemLookup?.listed && coveragePolicy?.coversLoss
+      ? coverageFeeCentsFor(itemLookup.paybackAmount, coveragePolicy.ratePct)
+      : 0;
+  const coverageFee = usesItemPricing
+    ? itemCoverageFeeCents / 100
+    : coverage.ok
+      ? coverage.coverageFee
+      : 0;
+  const coverageRefusal = usesItemPricing
+    ? ""
+    : coverage.ok
+      ? ""
+      : coverage.message;
   // Ranked on the parcel as described so far. The weight, category and value
   // fields sit below this picker, so a first pass ranks on the per-kg rate and
   // the cover; filling them in re-ranks on the real quote.
@@ -2558,7 +2594,7 @@ function FreightShipmentForm({
             mode,
             weightKg,
             itemCategoryId,
-            declaredValue,
+            ...(usesItemPricing ? {itemId} : {declaredValue}),
             pickup: {
               ...pickup,
               ...(pickup.dateTime && {
@@ -2857,7 +2893,16 @@ function FreightShipmentForm({
                 value={itemCategoryId}
               />
             )}
-            {destination && (
+            {destination && usesItemPricing && itemCategoryId && (
+              <FreightItemField
+                coverageFeeCents={itemCoverageFeeCents}
+                covered={coveragePolicy?.coversLoss === true}
+                entry={paybackTable?.[itemCategoryId]}
+                onChange={setItemId}
+                value={itemId}
+              />
+            )}
+            {destination && !usesItemPricing && (
               <FreightValueField
                 businessName={destination.businessName}
                 coverageFee={coverageFee}
@@ -2953,7 +2998,14 @@ function FreightShipmentForm({
                   ...(coverageFee > 0
                     ? [
                         {
-                          label: "Cover for loss",
+                          // Insurance language, not loss-talk: the same fee
+                          // used to be labelled "Cover for loss", which put
+                          // the losing in the customer's face on every
+                          // booking summary.
+                          label:
+                            usesItemPricing && itemLookup?.listed
+                              ? `Protection included · up to ${formatMoney(itemLookup.paybackAmount)}`
+                              : "Protection",
                           value: formatMoney(coverageFee),
                         },
                       ]
@@ -3051,6 +3103,88 @@ function FreightCategoryField({
  * "i". A business that does not cover loss says so here rather than leaving
  * the customer to find out after the parcel is gone.
  */
+/**
+ * What is in the parcel, from the business's own payback list.
+ *
+ * Replaces the typed declared value wherever a business has published one:
+ * the customer's only input is WHAT the item is, and the number attached to
+ * it is the business's promise. Protection reads as reassurance ("covered up
+ * to...") behind the "i", never as loss-talk in the customer's face - and it
+ * is stated plainly on the review step and the receipt, because a promise
+ * nobody was shown is a dispute waiting to happen.
+ */
+function FreightItemField({
+  coverageFeeCents,
+  covered,
+  entry,
+  onChange,
+  value,
+}: {
+  coverageFeeCents: number;
+  covered: boolean;
+  entry: unknown;
+  onChange: (itemId: string) => void;
+  value: string;
+}) {
+  const record =
+    entry && typeof entry === "object"
+      ? (entry as {items?: unknown; otherPaybackAmount?: unknown})
+      : {};
+  const items = (Array.isArray(record.items) ? record.items : []) as Array<{
+    id: string;
+    label: string;
+    paybackAmount: number;
+  }>;
+  const otherAmount = Number(record.otherPaybackAmount) || 0;
+  if (items.length === 0 && otherAmount <= 0) {
+    return (
+      <div className="customer-inline-note customer-form-span">
+        <span>
+          This business does not list items in this category yet. Pick a
+          different category, or another business.
+        </span>
+      </div>
+    );
+  }
+  return (
+    <label className="customer-form-span">
+      <span className="label-with-info">
+        What is the item?
+        {covered && (
+          <FieldInfo label="what happens if the parcel is lost">
+            <p>
+              This business protects what it carries: if this item is lost,
+              the business pays you back the amount it has published for it
+              {coverageFeeCents > 0
+                ? ` (a small protection fee of ${formatMoney(coverageFeeCents / 100)} is included in your total)`
+                : ""}
+              .
+            </p>
+            <p>
+              The exact amount is shown on your booking summary and receipt.
+            </p>
+          </FieldInfo>
+        )}
+      </span>
+      <select
+        onChange={(event) => onChange(event.target.value)}
+        required
+        value={value}
+      >
+        <option value="">Choose the item</option>
+        {items.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.label}
+          </option>
+        ))}
+        {otherAmount > 0 && (
+          <option value="">Something else in this category</option>
+        )}
+      </select>
+    </label>
+  );
+}
+
 function FreightValueField({
   businessName,
   coverageFee,

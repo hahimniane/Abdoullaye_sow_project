@@ -453,10 +453,16 @@ test("both consoles are wired to the freight category and coverage contract", ()
     new URL("../components/customer-shipping-services.tsx", import.meta.url),
     "utf8",
   );
-  // The booking form asks both questions and sends both answers.
+  // The booking form asks both questions and sends the answer that fits the
+  // business: the item row when it has a payback table, the typed value only
+  // for businesses that predate one.
   assert.match(customer, /<FreightCategoryField/);
+  assert.match(customer, /<FreightItemField/);
   assert.match(customer, /<FreightValueField/);
-  assert.match(customer, /itemCategoryId,\s*\n\s*declaredValue,/);
+  assert.match(
+    customer,
+    /\.\.\.\(usesItemPricing \? \{itemId\} : \{declaredValue\}\)/,
+  );
   // The comparison surface: coverage on the card, before a business is picked.
   assert.match(customer, /freightCoverageComparisonLine\(/);
   assert.match(customer, /customer-destination-coverage/);

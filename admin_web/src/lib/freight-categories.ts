@@ -371,6 +371,17 @@ export type FreightCustomCategoryDraft = {
   multiplier: string;
 };
 
+export type FreightPaybackItemDraft = {
+  id: string;
+  label: string;
+  amount: string;
+};
+
+export type FreightPaybackCategoryDraft = {
+  items: FreightPaybackItemDraft[];
+  otherAmount: string;
+};
+
 export type FreightSettingsDraft = {
   /** Only the standard rows the business has actually moved. */
   categoryRates: Record<string, string>;
@@ -378,6 +389,8 @@ export type FreightSettingsDraft = {
   coversLoss: boolean;
   coverageRatePct: string;
   maxDeclaredValue: string;
+  /** What each item pays back if lost - the business's numbers, per row. */
+  payback: Record<string, FreightPaybackCategoryDraft>;
 };
 
 function recordValue(value: unknown): Record<string, unknown> {
@@ -439,7 +452,31 @@ export function freightSettingsFromRow(
     coversLoss: business?.freightCoverageEnabled === true,
     coverageRatePct: numberText(business?.freightCoverageRatePct, "0"),
     maxDeclaredValue: numberText(business?.freightMaxDeclaredValue, "0"),
+    payback: paybackDraftFrom(business?.freightPaybackTable),
   };
+}
+
+function paybackDraftFrom(
+  table: unknown,
+): Record<string, FreightPaybackCategoryDraft> {
+  const source = recordValue(table);
+  const draft: Record<string, FreightPaybackCategoryDraft> = {};
+  for (const [categoryId, raw] of Object.entries(source)) {
+    const entry = recordValue(raw);
+    const items = Array.isArray(entry.items) ? entry.items : [];
+    draft[categoryId] = {
+      items: items.map((item) => {
+        const row = recordValue(item);
+        return {
+          id: trimmedString(row.id),
+          label: trimmedString(row.label),
+          amount: numberText(row.paybackAmount, "0"),
+        };
+      }),
+      otherAmount: numberText(entry.otherPaybackAmount, "0"),
+    };
+  }
+  return draft;
 }
 
 export function emptyFreightCustomCategory(): FreightCustomCategoryDraft {
@@ -530,6 +567,13 @@ export type FreightSettingsPayload = {
     ratePct: number;
     maxDeclaredValue: number;
   };
+  freightPaybackTable: Record<
+    string,
+    {
+      items: Array<{id: string; label: string; paybackAmount: number}>;
+      otherPaybackAmount: number;
+    }
+  >;
 };
 
 /**
@@ -564,5 +608,29 @@ export function buildFreightSettingsPayload(
       ratePct: Number(draft.coverageRatePct || 0) || 0,
       maxDeclaredValue: Number(draft.maxDeclaredValue || 0) || 0,
     },
+    freightPaybackTable: Object.fromEntries(
+      Object.entries(draft.payback)
+        .map(([categoryId, entry]) => [
+          categoryId,
+          {
+            items: entry.items
+              .filter((item) => item.label.trim())
+              .map((item) => ({
+                id:
+                  item.id.trim() ||
+                  item.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+                label: item.label.trim(),
+                paybackAmount: Number(item.amount || 0) || 0,
+              })),
+            otherPaybackAmount: Number(entry.otherAmount || 0) || 0,
+          },
+        ])
+        // An untouched category is not sent as an empty promise.
+        .filter(
+          ([, entry]) =>
+            (entry as {items: unknown[]}).items.length > 0 ||
+            (entry as {otherPaybackAmount: number}).otherPaybackAmount > 0,
+        ),
+    ),
   };
 }

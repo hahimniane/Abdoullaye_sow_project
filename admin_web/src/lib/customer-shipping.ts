@@ -150,6 +150,7 @@ export type FreightShipmentFields = {
   // a client that sends neither is priced exactly as freight was before
   // categories existed, which is what makes them safe to add here.
   itemCategoryId?: string;
+  itemId?: string;
   declaredValue?: number;
 };
 
@@ -681,6 +682,9 @@ export function buildFreightShipmentPayload(
     ...(fields.itemCategoryId?.trim() && {
       itemCategoryId: trimmed(fields.itemCategoryId),
     }),
+    // The business's payback row, when one was picked - the server prices
+    // protection from its own table and refuses to trust anything else.
+    ...(fields.itemId?.trim() && {itemId: trimmed(fields.itemId)}),
     // Sent only when the customer actually declared something. Zero and "not
     // asked" mean the same thing to the server, and omitting the key keeps
     // that visible in the request rather than implied by a 0.

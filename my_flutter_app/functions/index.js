@@ -3048,6 +3048,13 @@ exports.listActiveBarrelDestinationOptions = onCall(
             freightCoverage: offersFreight ?
               freightCoveragePolicy(business) :
               null,
+            // The payback table doubles as a service catalog: the same rows
+            // the business priced are the rows a customer's item picker
+            // matches on. Empty table means this business still prices by
+            // the legacy declared-value path.
+            freightPaybackTable: offersFreight ?
+              (business.freightPaybackTable || {}) :
+              {},
             reviewCount: Math.max(0, Math.trunc(Number(
                 business.reviewCount || 0,
             ))),

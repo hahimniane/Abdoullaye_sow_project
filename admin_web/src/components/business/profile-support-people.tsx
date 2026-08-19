@@ -31,6 +31,7 @@ import {
   Upload,
   UserPlus,
   Users,
+  X,
 } from "lucide-react";
 
 import { FieldInfo } from "@/components/field-info";
@@ -78,10 +79,13 @@ import { COUNTRY_CATALOG } from "@/lib/country-catalog";
 import {
   MAX_CUSTOM_FREIGHT_CATEGORIES,
   STANDARD_FREIGHT_CATEGORIES,
+  type FreightPaybackCategoryDraft,
+  resolvedFreightCategoryId,
   emptyFreightCustomCategory,
   type FreightCustomCategoryDraft,
   type FreightSettingsDraft,
 } from "@/lib/freight-categories";
+import { STANDARD_FREIGHT_ITEMS } from "@/lib/freight-payback";
 import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import { db, functions, storage } from "@/lib/firebase";
 import { formatDate, text } from "@/lib/format";
@@ -1465,8 +1469,186 @@ function FreightGoodsEditor({
             value={draft.maxDeclaredValue}
           />
         </label>
+
+        <div className="wide">
+          <p className="service-config-note">
+            <span className="label-with-info">
+              What each item pays back
+              <FieldInfo label="how the payback list works">
+                <p>
+                  Customers no longer type what their parcel is worth - you
+                  publish what each item pays back if it is lost, and that
+                  number is the promise. An item you have not listed cannot
+                  be booked instantly; the customer asks you for a quote
+                  instead.
+                </p>
+                <p>
+                  The coverage fee a customer pays is your rate above,
+                  applied to your payback. $400 iPhone at 2% collects $8.
+                </p>
+              </FieldInfo>
+            </span>
+          </p>
+          <FreightPaybackEditor draft={draft} onChange={onChange} />
+        </div>
       </div>
     </article>
+  );
+}
+
+/**
+ * The payback list: per category, the items this business will stand behind
+ * and what each pays back if lost. The same rows double as the customer's
+ * item picker, so an empty list here is an item nobody can instant-book.
+ */
+function FreightPaybackEditor({
+  draft,
+  onChange,
+}: {
+  draft: FreightSettingsDraft;
+  onChange: (patch: Partial<FreightSettingsDraft>) => void;
+}) {
+  const categories = [
+    ...STANDARD_FREIGHT_CATEGORIES.map((category) => ({
+      id: category.id,
+      label: category.label,
+    })),
+    ...draft.customCategories
+      .filter((row) => row.label.trim())
+      .map((row) => ({
+        id: resolvedFreightCategoryId(row),
+        label: row.label.trim(),
+      })),
+  ];
+
+  function patchCategory(
+    categoryId: string,
+    patch: Partial<FreightPaybackCategoryDraft>,
+  ) {
+    const current = draft.payback[categoryId] ?? {items: [], otherAmount: "0"};
+    onChange({
+      payback: {
+        ...draft.payback,
+        [categoryId]: {...current, ...patch},
+      },
+    });
+  }
+
+  return (
+    <div className="payback-editor">
+      {categories.map((category) => {
+        const entry = draft.payback[category.id] ?? {
+          items: [],
+          otherAmount: "0",
+        };
+        const suggestions = (STANDARD_FREIGHT_ITEMS[category.id] ?? []).filter(
+          (suggestion) =>
+            !entry.items.some((item) => item.id === suggestion.id),
+        );
+        return (
+          <details className="payback-category" key={category.id}>
+            <summary>
+              {category.label}
+              <span>
+                {entry.items.length > 0
+                  ? `${entry.items.length} item${entry.items.length === 1 ? "" : "s"}`
+                  : "No items yet"}
+              </span>
+            </summary>
+            {entry.items.map((item, index) => (
+              <div className="payback-item-row" key={`${category.id}-${index}`}>
+                <input
+                  aria-label="Item name"
+                  onChange={(event) => {
+                    const items = [...entry.items];
+                    items[index] = {...item, label: event.target.value};
+                    patchCategory(category.id, {items});
+                  }}
+                  placeholder="e.g. iPhone"
+                  value={item.label}
+                />
+                <input
+                  aria-label="Payback amount (USD)"
+                  inputMode="decimal"
+                  min="0"
+                  onChange={(event) => {
+                    const items = [...entry.items];
+                    items[index] = {...item, amount: event.target.value};
+                    patchCategory(category.id, {items});
+                  }}
+                  type="number"
+                  value={item.amount}
+                />
+                <button
+                  aria-label={`Remove ${item.label || "item"}`}
+                  className="lst-icon-btn"
+                  onClick={() =>
+                    patchCategory(category.id, {
+                      items: entry.items.filter((_, i) => i !== index),
+                    })
+                  }
+                  type="button"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            ))}
+            <div className="payback-category-actions">
+              <button
+                className="lst-btn ghost"
+                onClick={() =>
+                  patchCategory(category.id, {
+                    items: [...entry.items, {id: "", label: "", amount: "0"}],
+                  })
+                }
+                type="button"
+              >
+                Add an item
+              </button>
+              {suggestions.map((suggestion) => (
+                <button
+                  className="lst-btn ghost"
+                  key={suggestion.id}
+                  onClick={() =>
+                    patchCategory(category.id, {
+                      items: [
+                        ...entry.items,
+                        {id: suggestion.id, label: suggestion.label, amount: "0"},
+                      ],
+                    })
+                  }
+                  type="button"
+                >
+                  + {suggestion.label}
+                </button>
+              ))}
+            </div>
+            <label className="lst-field payback-other">
+              <span className="label-with-info">
+                Anything else in this category pays back (USD)
+                <FieldInfo label="what the catch-all amount does">
+                  <p>
+                    0 means an item you have not listed cannot be booked
+                    instantly - the customer asks you for a quote instead.
+                    Any other number covers everything in this category you
+                    did not name.
+                  </p>
+                </FieldInfo>
+              </span>
+              <input
+                inputMode="decimal"
+                min="0"
+                onChange={(event) =>
+                  patchCategory(category.id, {otherAmount: event.target.value})
+                }
+                type="number"
+                value={entry.otherAmount}
+              />
+            </label>
+          </details>
+        );
+      })}
+    </div>
   );
 }
 
