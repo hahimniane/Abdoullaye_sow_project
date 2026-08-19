@@ -4,7 +4,9 @@ import test from "node:test";
 
 import {
   coverageFeeCentsFor,
+  freightItemChoicesFor,
   freightPaybackFor,
+  providerQualifiesForItem,
 } from "./freight-payback.ts";
 
 // Twin of functions/test/freight-payback.test.js and
@@ -67,7 +69,10 @@ test("protection reads as reassurance, never as loss-talk in the face", () => {
   assert.match(customer, /Protection included · up to/);
   assert.doesNotMatch(customer, /label:\s*"Cover for loss"/);
   // The typed declared value is gone wherever a table exists.
-  assert.match(customer, /usesItemPricing \? \{itemId\} : \{declaredValue\}/);
+  assert.match(
+    customer,
+    /usesItemPricing\s*\n?\s*\? \{itemId: itemId === OTHER_ITEM_ID \? "" : itemId\}/,
+  );
 });
 
 test("the form follows its own answer, and never narrates history", () => {
@@ -91,4 +96,54 @@ test("the form follows its own answer, and never narrates history", () => {
     /\{draft\.coversLoss && \(\s*<div className="customer-inline-note wide">/,
   );
   assert.doesNotMatch(business, /no longer type/);
+});
+
+test("the funnel unions items across providers and matches honestly", () => {
+  const withTable = {
+    freightPaybackTable: {
+      electronics: {
+        items: [{id: "iphone", label: "iPhone", paybackAmount: 400}],
+        otherPaybackAmount: 0,
+      },
+    },
+  };
+  const withCatchAll = {
+    freightPaybackTable: {
+      electronics: {items: [], otherPaybackAmount: 50},
+    },
+  };
+  const legacy = {};
+
+  const choices = freightItemChoicesFor(
+    [withTable, withCatchAll],
+    "electronics",
+  );
+  assert.deepEqual(
+    choices.map((choice) => choice.id),
+    ["iphone", "__other"],
+  );
+
+  // One provider listing the row is enough for the item to be pickable;
+  // matching then filters to who can actually take it.
+  assert.equal(
+    providerQualifiesForItem(withTable, "electronics", "iphone"),
+    true,
+  );
+  assert.equal(
+    providerQualifiesForItem(withCatchAll, "electronics", "iphone"),
+    true, // its catch-all covers unlisted rows
+  );
+  assert.equal(
+    providerQualifiesForItem(withTable, "electronics", "__other"),
+    false, // no catch-all: it takes only what it listed
+  );
+  assert.equal(
+    providerQualifiesForItem(legacy, "electronics", "anything"),
+    true, // no table means it carries anything, priced by declared value
+  );
+  // "Something else" disappears when nobody would take it.
+  assert.deepEqual(
+    freightItemChoicesFor([withTable], "clothing"),
+    [],
+  );
 });

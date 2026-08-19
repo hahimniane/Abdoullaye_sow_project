@@ -108,3 +108,80 @@ export function coverageFeeCentsFor(
   if (paybackCents <= 0 || rate <= 0) return 0;
   return Math.round(paybackCents * (rate / 100));
 }
+
+/** The funnel's synthetic id for "something not on anyone's list". */
+export const OTHER_ITEM_ID = "__other";
+
+type ProviderLike = {
+  freightPaybackTable?: unknown;
+};
+
+function providerTable(option: ProviderLike): Record<string, unknown> | null {
+  const table = option?.freightPaybackTable;
+  if (!table || typeof table !== "object") return null;
+  return Object.keys(table as object).length > 0
+    ? (table as Record<string, unknown>)
+    : null;
+}
+
+/**
+ * The item choices for a category, across every provider serving the route.
+ *
+ * The funnel asks what the customer is sending BEFORE showing businesses, so
+ * the choices are the union of every provider's rows - one provider listing
+ * "iPhone" is enough for it to be pickable. "Something else" appears when any
+ * provider would still take an unlisted item: a category catch-all, or a
+ * business with no table at all (which carries anything).
+ */
+export function freightItemChoicesFor(
+  options: ReadonlyArray<ProviderLike>,
+  categoryId: string,
+): Array<{id: string; label: string}> {
+  const seen = new Map<string, string>();
+  let anyCatchAll = false;
+  for (const option of options) {
+    const table = providerTable(option);
+    if (!table) {
+      anyCatchAll = true;
+      continue;
+    }
+    const entry = table[String(categoryId || "").trim()] as
+      | {items?: unknown; otherPaybackAmount?: unknown}
+      | undefined;
+    if (!entry || typeof entry !== "object") continue;
+    for (const raw of Array.isArray(entry.items) ? entry.items : []) {
+      const row = raw as {id?: unknown; label?: unknown};
+      const id = String(row?.id || "").trim();
+      const label = String(row?.label || "").trim();
+      if (id && label && !seen.has(id)) seen.set(id, label);
+    }
+    if ((Number(entry.otherPaybackAmount) || 0) > 0) anyCatchAll = true;
+  }
+  const choices = [...seen.entries()].map(([id, label]) => ({id, label}));
+  choices.sort((a, b) => a.label.localeCompare(b.label));
+  if (anyCatchAll) {
+    choices.push({id: OTHER_ITEM_ID, label: "Something else"});
+  }
+  return choices;
+}
+
+/**
+ * Whether one provider can instant-book this item.
+ *
+ * A provider with no table carries anything (it prices by declared value);
+ * a provider with a table qualifies through the exact row or its category
+ * catch-all - the same resolution the server prices with.
+ */
+export function providerQualifiesForItem(
+  option: ProviderLike,
+  categoryId: string,
+  itemId: string,
+): boolean {
+  const table = providerTable(option);
+  if (!table) return true;
+  return freightPaybackFor({
+    table,
+    categoryId,
+    itemId: itemId === OTHER_ITEM_ID ? "" : itemId,
+  }).listed;
+}

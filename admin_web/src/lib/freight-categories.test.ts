@@ -453,16 +453,14 @@ test("both consoles are wired to the freight category and coverage contract", ()
     new URL("../components/customer-shipping-services.tsx", import.meta.url),
     "utf8",
   );
-  // The booking form asks both questions and sends the answer that fits the
-  // business: the item row when it has a payback table, the typed value only
-  // for businesses that predate one.
-  assert.match(customer, /<FreightCategoryField/);
-  assert.match(customer, /<FreightItemField/);
+  // The funnel asks what is being sent BEFORE showing businesses, and the
+  // payload sends the answer that fits the chosen one: the item row when it
+  // has a payback table, the typed value only for businesses without one.
+  assert.match(customer, /What are you sending\?/);
+  assert.match(customer, /funnelItems\.map/);
+  assert.match(customer, /itemStepSatisfied && qualifiedProviderOptions/);
   assert.match(customer, /<FreightValueField/);
-  assert.match(
-    customer,
-    /\.\.\.\(usesItemPricing \? \{itemId\} : \{declaredValue\}\)/,
-  );
+  assert.match(customer, /usesItemPricing\s*\n?\s*\? \{itemId: itemId === OTHER_ITEM_ID \? "" : itemId\}/);
   // The comparison surface: coverage on the card, before a business is picked.
   assert.match(customer, /freightCoverageComparisonLine\(/);
   assert.match(customer, /customer-destination-coverage/);

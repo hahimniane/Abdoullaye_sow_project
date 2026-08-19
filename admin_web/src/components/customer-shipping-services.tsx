@@ -105,8 +105,11 @@ import {
   validateReceiverPhone,
 } from "@/lib/receiver-phone-rules";
 import {
+  OTHER_ITEM_ID,
   coverageFeeCentsFor,
+  freightItemChoicesFor,
   freightPaybackFor,
+  providerQualifiesForItem,
 } from "@/lib/freight-payback";
 import { startCheckout } from "@/lib/use-checkout";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
@@ -2323,6 +2326,55 @@ function FreightShipmentForm({
       ),
     [availableOptions, destinationCountryId],
   );
+  // The funnel: country, then WHAT is being sent, then the businesses that
+  // can take it. Category choices are the union across every provider on the
+  // route - deliberately without prices, because at this stage no business
+  // has been chosen and every price would be a guess about a decision the
+  // customer has not made yet.
+  const funnelCategories = useMemo(() => {
+    const seen = new Map<string, {id: string; label: string; hint: string}>();
+    for (const option of providerOptions) {
+      for (const category of freightCategoryOptionsFrom(
+        option.freightCategories,
+      )) {
+        if (!seen.has(category.id)) {
+          seen.set(category.id, {
+            id: category.id,
+            label: category.label,
+            hint: category.hint,
+          });
+        }
+      }
+    }
+    return [...seen.values()];
+  }, [providerOptions]);
+  const funnelItems = useMemo(
+    () =>
+      itemCategoryId
+        ? freightItemChoicesFor(
+            providerOptions as Array<{freightPaybackTable?: unknown}>,
+            itemCategoryId,
+          )
+        : [],
+    [itemCategoryId, providerOptions],
+  );
+  // A category with no listed items anywhere still has legacy businesses
+  // that carry anything - the funnel must not dead-end on it.
+  const itemStepSatisfied =
+    Boolean(itemCategoryId) && (funnelItems.length === 0 || Boolean(itemId));
+  const qualifiedProviderOptions = useMemo(
+    () =>
+      itemStepSatisfied
+        ? providerOptions.filter((option) =>
+            providerQualifiesForItem(
+              option as {freightPaybackTable?: unknown},
+              itemCategoryId,
+              itemId,
+            ),
+          )
+        : [],
+    [itemCategoryId, itemId, itemStepSatisfied, providerOptions],
+  );
   const destination = selectedOption(providerOptions, destinationOptionId);
   const selectedCountry = countries.find(
     (country) => country.id === destinationCountryId,
@@ -2414,7 +2466,7 @@ function FreightShipmentForm({
   // the cover; filling them in re-ranks on the real quote.
   const sortedProviderOptions = useMemo(
     () =>
-      sortServiceOptions(providerOptions, {
+      sortServiceOptions(qualifiedProviderOptions, {
         declaredValue,
         itemCategoryId,
         mode,
@@ -2426,7 +2478,7 @@ function FreightShipmentForm({
       declaredValue,
       itemCategoryId,
       mode,
-      providerOptions,
+      qualifiedProviderOptions,
       providerSort,
       weightKg,
     ],
@@ -2527,6 +2579,10 @@ function FreightShipmentForm({
         Number.isFinite(weightKg) &&
         weightKg > 0,
     ) &&
+    // The funnel's answers, in the funnel's order: a booking without a
+    // category (and an item, when any provider lists one) never reaches
+    // the server.
+    itemStepSatisfied &&
     phoneValidation.valid &&
     quoteReady &&
     // The server refuses a parcel worth more than the business carries, so the
@@ -2594,7 +2650,9 @@ function FreightShipmentForm({
             mode,
             weightKg,
             itemCategoryId,
-            ...(usesItemPricing ? {itemId} : {declaredValue}),
+            ...(usesItemPricing
+              ? {itemId: itemId === OTHER_ITEM_ID ? "" : itemId}
+              : {declaredValue}),
             pickup: {
               ...pickup,
               ...(pickup.dateTime && {
@@ -2792,6 +2850,8 @@ function FreightShipmentForm({
               listLabel="Destination country options"
               onChange={(value) => {
                 setDestinationCountryId(value);
+                setItemCategoryId("");
+                setItemId("");
                 setDestinationOptionId("");
                 setReceiverPhoneIsWhatsappOnly(false);
                 setReceiverPhoneTouched(false);
@@ -2806,7 +2866,68 @@ function FreightShipmentForm({
               placeholder="Search or choose a country"
               value={destinationCountryId}
             />
-            {destinationCountryId && (
+            {destinationCountryId && funnelCategories.length > 0 && (
+              <label className="customer-form-span">
+                What are you sending?
+                <select
+                  onChange={(event) => {
+                    setItemCategoryId(event.target.value);
+                    setItemId("");
+                    setDestinationOptionId("");
+                    setQuote(null);
+                    setSelectionNotice("");
+                  }}
+                  required
+                  value={itemCategoryId}
+                >
+                  <option value="">Choose a category</option>
+                  {funnelCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.label}
+                    </option>
+                  ))}
+                </select>
+                {itemCategoryId && (
+                  <small>
+                    {funnelCategories.find(
+                      (category) => category.id === itemCategoryId,
+                    )?.hint ?? ""}
+                  </small>
+                )}
+              </label>
+            )}
+            {itemCategoryId && funnelItems.length > 0 && (
+              <label className="customer-form-span">
+                What is the item?
+                <select
+                  onChange={(event) => {
+                    setItemId(event.target.value);
+                    setDestinationOptionId("");
+                    setQuote(null);
+                    setSelectionNotice("");
+                  }}
+                  required
+                  value={itemId}
+                >
+                  <option value="">Choose the item</option>
+                  {funnelItems.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {itemStepSatisfied && qualifiedProviderOptions.length === 0 && (
+              <div className="customer-inline-note customer-form-span">
+                <span>
+                  No approved business currently takes this item to this
+                  destination. Try a different item, or check back soon -
+                  more businesses are joining.
+                </span>
+              </div>
+            )}
+            {itemStepSatisfied && qualifiedProviderOptions.length > 0 && (
               <DestinationPicker
                 label="Choose a shipping business"
                 onChange={(value) => {
@@ -2885,23 +3006,6 @@ function FreightShipmentForm({
                 value={weightKg}
               />
             </label>
-            {destination && categories.length > 0 && (
-              <FreightCategoryField
-                baseRatePerKg={pricing?.rate ?? null}
-                categories={categories}
-                onChange={setItemCategoryId}
-                value={itemCategoryId}
-              />
-            )}
-            {destination && usesItemPricing && itemCategoryId && (
-              <FreightItemField
-                coverageFeeCents={itemCoverageFeeCents}
-                covered={coveragePolicy?.coversLoss === true}
-                entry={paybackTable?.[itemCategoryId]}
-                onChange={setItemId}
-                value={itemId}
-              />
-            )}
             {destination && !usesItemPricing && (
               <FreightValueField
                 businessName={destination.businessName}
@@ -3103,88 +3207,6 @@ function FreightCategoryField({
  * "i". A business that does not cover loss says so here rather than leaving
  * the customer to find out after the parcel is gone.
  */
-/**
- * What is in the parcel, from the business's own payback list.
- *
- * Replaces the typed declared value wherever a business has published one:
- * the customer's only input is WHAT the item is, and the number attached to
- * it is the business's promise. Protection reads as reassurance ("covered up
- * to...") behind the "i", never as loss-talk in the customer's face - and it
- * is stated plainly on the review step and the receipt, because a promise
- * nobody was shown is a dispute waiting to happen.
- */
-function FreightItemField({
-  coverageFeeCents,
-  covered,
-  entry,
-  onChange,
-  value,
-}: {
-  coverageFeeCents: number;
-  covered: boolean;
-  entry: unknown;
-  onChange: (itemId: string) => void;
-  value: string;
-}) {
-  const record =
-    entry && typeof entry === "object"
-      ? (entry as {items?: unknown; otherPaybackAmount?: unknown})
-      : {};
-  const items = (Array.isArray(record.items) ? record.items : []) as Array<{
-    id: string;
-    label: string;
-    paybackAmount: number;
-  }>;
-  const otherAmount = Number(record.otherPaybackAmount) || 0;
-  if (items.length === 0 && otherAmount <= 0) {
-    return (
-      <div className="customer-inline-note customer-form-span">
-        <span>
-          This business does not list items in this category yet. Pick a
-          different category, or another business.
-        </span>
-      </div>
-    );
-  }
-  return (
-    <label className="customer-form-span">
-      <span className="label-with-info">
-        What is the item?
-        {covered && (
-          <FieldInfo label="what happens if the parcel is lost">
-            <p>
-              This business protects what it carries: if this item is lost,
-              the business pays you back the amount it has published for it
-              {coverageFeeCents > 0
-                ? ` (a small protection fee of ${formatMoney(coverageFeeCents / 100)} is included in your total)`
-                : ""}
-              .
-            </p>
-            <p>
-              The exact amount is shown on your booking summary and receipt.
-            </p>
-          </FieldInfo>
-        )}
-      </span>
-      <select
-        onChange={(event) => onChange(event.target.value)}
-        required
-        value={value}
-      >
-        <option value="">Choose the item</option>
-        {items.map((item) => (
-          <option key={item.id} value={item.id}>
-            {item.label}
-          </option>
-        ))}
-        {otherAmount > 0 && (
-          <option value="">Something else in this category</option>
-        )}
-      </select>
-    </label>
-  );
-}
-
 function FreightValueField({
   businessName,
   coverageFee,
