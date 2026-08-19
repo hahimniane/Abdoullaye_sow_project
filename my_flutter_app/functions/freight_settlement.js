@@ -21,12 +21,22 @@ function calculateFreightSettlement({
   verifiedWeightKg,
   pricePerKg,
   pickupFeeCents = 0,
+  coverageFeeCents = 0,
 }) {
   const estimatedCents = positiveMoneyCents(
       estimatedTotalCents,
       "estimatedTotalCents",
   );
   const pickupCents = positiveMoneyCents(pickupFeeCents, "pickupFeeCents");
+  // The estimate the customer paid INCLUDED the coverage fee; a final total
+  // computed without it "refunded" that fee at every weight confirmation,
+  // leaving the parcel covered for free. Coverage is not weight-priced, so
+  // the fee rides through settlement unchanged - or repriced upstream when
+  // staff corrected what the item actually is.
+  const coverageCents = positiveMoneyCents(
+      coverageFeeCents,
+      "coverageFeeCents",
+  );
   const weight = Number(verifiedWeightKg);
   const rate = Number(pricePerKg);
   if (!Number.isFinite(weight) || weight <= 0) {
@@ -37,7 +47,7 @@ function calculateFreightSettlement({
   }
 
   const finalShippingFeeCents = Math.round(weight * rate * 100);
-  const finalTotalCents = finalShippingFeeCents + pickupCents;
+  const finalTotalCents = finalShippingFeeCents + pickupCents + coverageCents;
   const adjustmentCents = finalTotalCents - estimatedCents;
   const refundDueCents = Math.max(0, -adjustmentCents);
 

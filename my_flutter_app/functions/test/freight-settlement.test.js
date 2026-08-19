@@ -84,3 +84,33 @@ describe("freight settlement arithmetic", () => {
     }), /integer number of cents/);
   });
 });
+
+describe("coverage through settlement", () => {
+  it("no longer refunds the coverage fee as an overpayment", () => {
+    // Booked: 10kg × $2 + $8 cover = $28 paid. Verified at exactly 10kg.
+    // The old math computed a $20 final against a $28 estimate and sent $8
+    // "back" - the customer ended up covered for free on every accurate
+    // estimate.
+    const result = calculateFreightSettlement({
+      estimatedTotalCents: 2800,
+      verifiedWeightKg: 10,
+      pricePerKg: 2,
+      coverageFeeCents: 800,
+    });
+    assert.equal(result.finalTotalCents, 2800);
+    assert.equal(result.refundDueCents, 0);
+    assert.equal(result.priceSettlementStatus, "settled");
+  });
+
+  it("keeps the corrected fee when staff corrected the item", () => {
+    // Customer said Samsung ($5 fee), staff found an iPhone ($8 fee): the
+    // balance owes the weight difference AND the fee difference.
+    const result = calculateFreightSettlement({
+      estimatedTotalCents: 2500,
+      verifiedWeightKg: 10,
+      pricePerKg: 2,
+      coverageFeeCents: 800,
+    });
+    assert.equal(result.balanceDueCents, 300);
+  });
+});

@@ -39,6 +39,21 @@ const {
   validateFreightCoverageSettings,
 } = require("./freight_coverage");
 const {
+  quoteFreightItemCoverage,
+  validateFreightPaybackTable,
+} = require("./freight_payback");
+
+// Told to the business in its own words when a payback table will not save.
+const FREIGHT_PAYBACK_ERRORS = {
+  table_invalid: "Those payback settings are not valid",
+  category_invalid: "One of the categories is not valid",
+  too_many_items: "A category can hold at most 30 items",
+  item_invalid: "Every item needs a name",
+  item_duplicated: "Two items in one category share the same id",
+  payback_out_of_range:
+    "Payback amounts must be between $0 and $10,000",
+};
+const {
   VIEWING_REQUESTED,
   VIEWING_SCHEDULED,
   VIEWING_EXPIRED,
@@ -9667,6 +9682,7 @@ exports.updateBusinessProfile = onCall(
         freightCategoryRates,
         freightCustomCategories,
         freightCoverage,
+        freightPaybackTable,
         pickupPlan,
       } = request.data || {};
       const user = await requireBusinessManager(callerUid, businessId);
@@ -9856,6 +9872,17 @@ exports.updateBusinessProfile = onCall(
             freightCoverageRatePct: result.freightCoverageRatePct,
             freightMaxDeclaredValue: result.freightMaxDeclaredValue,
           };
+        })()),
+        ...(freightPaybackTable === undefined ? {} : (() => {
+          const result = validateFreightPaybackTable(freightPaybackTable);
+          if (!result.ok) {
+            throw new HttpsError(
+                "invalid-argument",
+                FREIGHT_PAYBACK_ERRORS[result.error] ||
+                  "Those payback settings are not valid",
+            );
+          }
+          return {freightPaybackTable: result.table};
         })()),
         ...(pickupPlan === undefined ? {} : (() => {
           // Reject an incomplete plan outright rather than storing a config
@@ -20937,6 +20964,7 @@ exports.createFreightShipmentPaymentIntent = onCall(
         mode,
         weightKg,
         itemCategoryId,
+        itemId,
         declaredValue,
         pickupRequested,
         pickupAddress,
@@ -21031,18 +21059,51 @@ exports.createFreightShipmentPaymentIntent = onCall(
       const shippingFee =
         Math.round(parcelWeightKg * pricePerKg * categoryMultiplier * 100) /
         100;
-      // Only the sender knows what is in the box - an iPhone 17 and an old
-      // Samsung are the same category and the same weight. The declared value
-      // is also the cap on what can be paid back, which is what makes the
-      // answer trustworthy without anyone having to check it.
-      const coverage = quoteFreightCoverage({business, declaredValue});
-      if (!coverage.ok) {
-        throw new HttpsError(
-            "failed-precondition",
-            coverage.error === "above_max_declared_value" ?
-              "This business does not carry parcels worth that much" :
-              "That declared value is too high to ship",
-        );
+      // The payback is the BUSINESS's number, published per item type -
+      // the first real freight partner refused sender-declared values on
+      // sight, because the sender's number is a lie in whichever direction
+      // pays them. The old declared-value path stays only for app builds
+      // that predate the item picker; it dies with them.
+      const policyNow = freightCoveragePolicy(business);
+      const wantsItemPricing = Boolean(String(itemId || "").trim()) ||
+        Boolean(business.freightPaybackTable);
+      let coverage;
+      let itemSnapshot = null;
+      if (wantsItemPricing) {
+        const itemQuote = quoteFreightItemCoverage({
+          business,
+          policy: policyNow,
+          categoryId: itemCategoryId,
+          itemId,
+        });
+        if (!itemQuote.ok) {
+          // A routing answer for the client: this item needs a quote from
+          // the business, not an instant booking.
+          throw new HttpsError(
+              "failed-precondition",
+              "item_not_listed",
+          );
+        }
+        itemSnapshot = itemQuote;
+        coverage = {
+          ok: true,
+          declaredValueCents: 0,
+          coverageFee: itemQuote.coverageFee,
+          coverageFeeCents: itemQuote.coverageFeeCents,
+          covered: itemQuote.covered,
+          payoutCapCents: itemQuote.payoutCapCents,
+          policy: policyNow,
+        };
+      } else {
+        coverage = quoteFreightCoverage({business, declaredValue});
+        if (!coverage.ok) {
+          throw new HttpsError(
+              "failed-precondition",
+              coverage.error === "above_max_declared_value" ?
+                "This business does not carry parcels worth that much" :
+                "That declared value is too high to ship",
+          );
+        }
       }
       const shippingFeeCents = Math.round(shippingFee * 100);
       const pickupFeeCents = Math.round(pickup.fee * 100);
@@ -21097,6 +21158,11 @@ exports.createFreightShipmentPaymentIntent = onCall(
           pricePerKgCents: Math.round(pricePerKg * 100),
           itemCategoryId: String(itemCategoryId || ""),
           itemCategoryMultiplier: categoryMultiplier,
+          ...(itemSnapshot ? {
+            itemId: String(itemId || ""),
+            paybackAmountCents: itemSnapshot.paybackAmountCents,
+            paybackSource: itemSnapshot.paybackSource,
+          } : {}),
           declaredValueCents: coverage.declaredValueCents,
           coverageFeeCents: coverage.coverageFeeCents,
           coverageCovered: coverage.covered,
@@ -22063,6 +22129,13 @@ exports.confirmFreightShipmentWeight = onCall(
       const callerUid = requireAuth(request);
       const shipmentId = String(request.data?.shipmentId || "").trim();
       const verifiedWeightKg = Number(request.data?.verifiedWeightKg);
+      // Staff may correct WHAT the item is at the same counter where they
+      // verify what it weighs - the customer's "Samsung" that is actually an
+      // iPhone gets the iPhone's payback and the iPhone's coverage fee.
+      const correctedItemId =
+        String(request.data?.correctedItemId || "").trim();
+      const correctedCategoryId =
+        String(request.data?.correctedCategoryId || "").trim();
       if (!shipmentId) {
         throw new HttpsError("invalid-argument", "Shipment ID is required");
       }
@@ -22126,6 +22199,45 @@ exports.confirmFreightShipmentWeight = onCall(
           return;
         }
 
+        // The fee the customer already paid rides through settlement -
+        // unless staff corrected the item, in which case the corrected row
+        // is repriced under the RATE snapshotted at booking. The policy is
+        // frozen; only the identification moved.
+        let coverageFeeCents = Number(shipment.coverageFeeCents || 0);
+        let itemCorrection = null;
+        if (correctedItemId || correctedCategoryId) {
+          const snapshotPolicy = shipment.coveragePolicyAtBooking || {};
+          const corrected = quoteFreightItemCoverage({
+            business,
+            policy: {
+              coversLoss: snapshotPolicy.coversLoss === true,
+              ratePct: Number(snapshotPolicy.ratePct || 0),
+            },
+            categoryId: correctedCategoryId ||
+              String(shipment.itemCategoryId || ""),
+            itemId: correctedItemId,
+          });
+          if (!corrected.ok) {
+            throw new HttpsError(
+                "failed-precondition",
+                "The corrected item is not in your payback list. Add it " +
+                  "under Services before confirming.",
+            );
+          }
+          coverageFeeCents = corrected.coverageFeeCents;
+          itemCorrection = {
+            itemId: correctedItemId ||
+              String(shipment.itemId || ""),
+            itemCategoryId: correctedCategoryId ||
+              String(shipment.itemCategoryId || ""),
+            paybackAmountCents: corrected.paybackAmountCents,
+            coverageFeeCents: corrected.coverageFeeCents,
+            coveragePayoutCapCents: corrected.payoutCapCents,
+            coverageCovered: corrected.covered,
+            itemCorrectedBy: callerUid,
+          };
+        }
+
         let calculation;
         try {
           calculation = calculateFreightSettlement({
@@ -22138,6 +22250,7 @@ exports.confirmFreightShipmentWeight = onCall(
             pickupFeeCents: Number(
                 shipment.pickupFeeCents ?? centsFromDollars(shipment.pickupFee),
             ),
+            coverageFeeCents,
           });
         } catch (error) {
           throw new HttpsError("failed-precondition", error.message);
@@ -22195,6 +22308,9 @@ exports.confirmFreightShipmentWeight = onCall(
         transaction.update(shipmentRef, {
           settlementId,
           settlementVersion: 1,
+          // The corrected identification, when staff made one - payback and
+          // fee move with it, all under the policy frozen at booking.
+          ...(itemCorrection || {}),
           verifiedWeightKg: calculation.verifiedWeightKg,
           finalShippingFeeCents: calculation.finalShippingFeeCents,
           finalShippingFee: dollarsFromCents(
