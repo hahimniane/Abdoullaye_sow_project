@@ -147,3 +147,16 @@ test("the funnel unions items across providers and matches honestly", () => {
     [],
   );
 });
+
+test("nothing snaps the funnel's category back to a default", () => {
+  // Picking a category resets the provider, which empties the provider's
+  // own category list - and an old effect keyed on that list fired on
+  // exactly this reset, stomping every choice back to "general". The
+  // customer picked Electronics and watched it revert.
+  const customer = readFileSync(
+    "src/components/customer-shipping-services.tsx",
+    "utf8",
+  );
+  assert.doesNotMatch(customer, /defaultFreightCategoryId/);
+  assert.match(customer, /The funnel owns the category now/);
+});

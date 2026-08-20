@@ -77,7 +77,6 @@ import {
 } from "@/lib/customer-shipping";
 import { marketplaceDisclosure } from "@/lib/disclosures";
 import {
-  defaultFreightCategoryId,
   formatMultiplier,
   freightCategoryById,
   freightCategoryOptionsFrom,
@@ -2493,16 +2492,12 @@ function FreightShipmentForm({
       ? null
       : shippingSubtotal + (pricing.pickupFee ?? 0) + coverageFee;
 
-  // A business's categories are its own, so a choice made against one business
-  // cannot follow the customer to another. Start on "general", which is the
-  // honest answer for most parcels.
-  useEffect(() => {
-    setItemCategoryId((current) =>
-      categories.some((category) => category.id === current)
-        ? current
-        : defaultFreightCategoryId(categories),
-    );
-  }, [categories]);
+  // Deliberately NO effect guarding itemCategoryId against the destination's
+  // category list. The funnel owns the category now - it is chosen from the
+  // union across providers BEFORE any provider is picked, and picking one
+  // resets the provider, which briefly empties `categories`. The old guard
+  // fired on exactly that reset and snapped every choice back to "general":
+  // the customer picked Electronics and watched it revert.
 
   // Nothing to declare against a business that will not carry it: dropping the
   // answer when the business changes stops a value quietly surviving onto a
