@@ -322,6 +322,24 @@ void main() {
       );
     });
 
+    test('the booking sheet never re-asks what the funnel answered', () {
+      // The chips let a customer who picked Electronics/iPhone switch the
+      // parcel to "Clothes and fabric" - a category no business on the
+      // route takes - and the form kept quoting. The category question is
+      // asked once, in the funnel; the sheet only states the price effect,
+      // and the funnel's answer reaches the server verbatim (the server
+      // resolves payback AND multiplier from the submitted category, so a
+      // default substituted here misfiles the item).
+      expect(
+        screen,
+        isNot(contains('setState(() => _categoryId = category.id)')),
+      );
+      expect(
+        screen,
+        contains('_categoryId = _activeFunnelCategoryId.isNotEmpty'),
+      );
+    });
+
     test('a refusal from the server is repeated verbatim', () {
       // Only the server knows what this business will carry; paraphrasing its
       // refusal would leave the customer changing fields at random.

@@ -180,11 +180,12 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       _pickupError = null;
     }
     _pickupOffered = fresh.freightPickupAvailable;
-    // A business can retire a category or stop covering loss while this screen
-    // is open. Quoting a category it no longer offers, or charging a coverage
-    // fee for a promise it has withdrawn, would be a price the server refuses
-    // to honour.
-    if (freightCategoryLookup(fresh.freightCategories, _categoryId) == null) {
+    // A business can stop covering loss while this screen is open. The
+    // category, though, is the funnel's answer - it survives a refresh
+    // verbatim (the server prices an unknown category at 1x); only a
+    // legacy flow with no funnel answer falls back to the default.
+    if (_activeFunnelCategoryId.isEmpty &&
+        freightCategoryLookup(fresh.freightCategories, _categoryId) == null) {
       _categoryId = defaultFreightCategoryId(fresh.freightCategories);
     }
     if (!_worthAskingDeclaredValue(fresh)) _resetDeclaredValue();
@@ -382,12 +383,13 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       _mode = modes.contains(_mode)
           ? _mode
           : (modes.isNotEmpty ? modes.first : 'sea');
-      // The funnel already answered what is being sent; the business's own
-      // category list only decides the multiplier. Fall back to the default
-      // when this business does not price the funnel's category.
-      _categoryId =
-          freightCategoryLookup(o.freightCategories, _activeFunnelCategoryId) !=
-              null
+      // The funnel already answered what is being sent, and the server
+      // resolves BOTH the payback row and the multiplier from the submitted
+      // category (unknown prices at 1x). Substituting the business's default
+      // here moved a listed item under the wrong category and got the
+      // booking refused at payment - the funnel's answer travels verbatim,
+      // exactly as on web.
+      _categoryId = _activeFunnelCategoryId.isNotEmpty
           ? _activeFunnelCategoryId
           : defaultFreightCategoryId(o.freightCategories);
       _resetDeclaredValue();
@@ -1192,12 +1194,13 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     );
   }
 
-  /// What is in the parcel. The platform owns the list so two businesses can be
-  /// compared on the same words; this business owns the price, so the effect on
-  /// the per-kg rate is shown here rather than discovered on the receipt.
+  /// What is in the parcel, as the funnel already answered it. The question
+  /// is asked exactly once - re-asking here let the customer switch to a
+  /// category no business on the route takes, contradicting the item they
+  /// picked. This card only states the price effect of their answer.
   Widget _categorySection(ThemeData theme, AppLocalizations l10n) {
-    final categories = _categories;
     final selected = _category;
+    if (selected == null) return const SizedBox.shrink();
     return Card(
       margin: EdgeInsets.zero,
       elevation: 0,
@@ -1207,58 +1210,45 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              l10n.freightCategoryQuestion,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              l10n.freightCategoryHelp,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.hintColor,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            Row(
               children: [
-                for (final category in categories)
-                  ChoiceChip(
-                    label: Text(
-                      category.changesPrice
-                          ? '${freightCategoryLabel(l10n, category)} · '
-                                '${freightMultiplierText(category.multiplier)}'
-                          : freightCategoryLabel(l10n, category),
+                Icon(
+                  Icons.inventory_2_outlined,
+                  size: 18,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    selected.changesPrice
+                        ? '${freightCategoryLabel(l10n, selected)} · '
+                              '${freightMultiplierText(selected.multiplier)}'
+                        : freightCategoryLabel(l10n, selected),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
                     ),
-                    selected: category.id == _categoryId,
-                    onSelected: _busy
-                        ? null
-                        : (_) => setState(() => _categoryId = category.id),
-                  ),
-              ],
-            ),
-            if (selected != null) ...[
-              const SizedBox(height: 10),
-              if (freightCategoryHint(l10n, selected).isNotEmpty)
-                Text(
-                  freightCategoryHint(l10n, selected),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.hintColor,
                   ),
                 ),
-              const SizedBox(height: 4),
+              ],
+            ),
+            if (freightCategoryHint(l10n, selected).isNotEmpty) ...[
+              const SizedBox(height: 6),
               Text(
-                '${freightCategoryRateText(l10n, selected)} · '
-                '${l10n.pricePerKg('\$${_effectiveRatePerKg.toStringAsFixed(2)}')}',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: theme.colorScheme.primary,
+                freightCategoryHint(l10n, selected),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.hintColor,
                 ),
               ),
             ],
+            const SizedBox(height: 4),
+            Text(
+              '${freightCategoryRateText(l10n, selected)} · '
+              '${l10n.pricePerKg('\$${_effectiveRatePerKg.toStringAsFixed(2)}')}',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: theme.colorScheme.primary,
+              ),
+            ),
           ],
         ),
       ),
