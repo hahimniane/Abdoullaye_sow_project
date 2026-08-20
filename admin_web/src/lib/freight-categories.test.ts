@@ -259,9 +259,9 @@ test("the comparison line says what a customer is choosing between", () => {
       freightCoveragePolicyFrom({coversLoss: false, ratePct: 0}),
       money,
     ),
-    "No coverage",
+    "No protection offered",
   );
-  assert.equal(freightCoverageComparisonLine(null, money), "No coverage");
+  assert.equal(freightCoverageComparisonLine(null, money), "No protection offered");
   assert.equal(formatMultiplier(2), "2");
   assert.equal(formatMultiplier(1.5), "1.5");
 });
@@ -413,11 +413,17 @@ test("everything the two screens say has French", () => {
     "Téléphones, ordinateurs portables, tablettes, chargeurs",
   );
   // The comparison line, which is the whole point of showing cover early.
-  assert.equal(translateValue("No coverage", "fr"), "Aucune couverture");
-  assert.equal(translateValue("Covers up to", "fr"), "Couvre jusqu’à");
   assert.equal(
-    translateValue("If your parcel is lost", "fr"),
-    "Si votre colis est perdu",
+    translateValue("No protection offered", "fr"),
+    "Aucune protection proposée",
+  );
+  assert.equal(translateValue("Covers up to", "fr"), "Couvre jusqu’à");
+  // The card header is "Protection" now - loss-talk left the browsing
+  // stage with the declared-value flow.
+  assert.equal(translateValue("Protection", "fr"), "Protection");
+  assert.equal(
+    translateValue("Protection included", "fr"),
+    "Protection incluse",
   );
   // Refusals the server throws are shown word for word, so they need French
   // or a French customer gets an English refusal at the payment step.
@@ -489,4 +495,19 @@ test("both consoles are wired to the freight category and coverage contract", ()
   );
   assert.match(settings, /buildFreightSettingsPayload/);
   assert.match(settings, /validateFreightSettings/);
+});
+
+test("a payback-table business never shows declared-value wording", () => {
+  // Customers of a table business declare nothing - the card must not
+  // describe a flow that no longer exists for them.
+  const money = (value: number) => `$${value}`;
+  assert.equal(
+    freightCoverageComparisonLine(
+      {coversLoss: true, ratePct: 2, maxDeclaredValue: 0,
+        declarationThreshold: 200},
+      money,
+      true,
+    ),
+    "Protection included · 2% of the item's covered amount",
+  );
 });

@@ -172,6 +172,7 @@ type DestinationOption = {
   // are read through the normalizers rather than trusted as typed.
   freightCategories?: unknown;
   freightCoverage?: unknown;
+  freightPaybackTable?: unknown;
   country: DestinationCountry;
 };
 
@@ -4605,11 +4606,17 @@ function DestinationPicker({
                 <span className="customer-destination-coverage">
                   <ShieldCheck aria-hidden="true" size={14} />
                   <span>
-                    <small>If your parcel is lost</small>
+                    <small>Protection</small>
                     <strong>
                       {freightCoverageComparisonLine(
                         freightCoveragePolicyFrom(option.freightCoverage),
                         (amount) => formatMoney(amount),
+                        Boolean(
+                          option.freightPaybackTable &&
+                            Object.keys(
+                              option.freightPaybackTable as object,
+                            ).length > 0,
+                        ),
                       )}
                     </strong>
                   </span>

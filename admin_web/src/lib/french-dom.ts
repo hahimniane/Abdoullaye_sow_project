@@ -3859,6 +3859,10 @@ Object.assign(TEXT_TRANSLATIONS, {
   "If your parcel is lost": "Si votre colis est perdu",
   "No coverage": "Aucune couverture",
   "Covers up to": "Couvre jusqu’à",
+  "Protection": "Protection",
+  "Protection included": "Protection incluse",
+  "of the item's covered amount": "du montant couvert de l’article",
+  "No protection offered": "Aucune protection proposée",
   "Covers what you declare": "Couvre ce que vous déclarez",
 });
 

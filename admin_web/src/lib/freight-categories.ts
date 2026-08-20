@@ -344,16 +344,25 @@ export function formatMultiplier(value: number): string {
 }
 
 /**
- * The one line that lets a customer compare two businesses on cover before
- * choosing either. Money is formatted by the caller so this stays pure and
- * the customer's locale still decides how a dollar looks.
+ * The one line that lets a customer compare two businesses on protection
+ * before choosing either. Money is formatted by the caller so this stays
+ * pure and the customer's locale still decides how a dollar looks.
+ *
+ * A business with a payback table protects at ITS published amounts - the
+ * customer declares nothing, so "covers what you declare" would describe a
+ * flow that no longer exists for them. The declared-value wording survives
+ * only for businesses still on the old model.
  */
 export function freightCoverageComparisonLine(
   policy: FreightCoveragePolicy | null,
   money: (value: number) => string,
+  hasPaybackTable = false,
 ): string {
-  if (!policy || !policy.coversLoss) return "No coverage";
+  if (!policy || !policy.coversLoss) return "No protection offered";
   const rate = `${formatMultiplier(policy.ratePct)}%`;
+  if (hasPaybackTable) {
+    return `Protection included · ${rate} of the item's covered amount`;
+  }
   return policy.maxDeclaredValue > 0
     ? `Covers up to ${money(policy.maxDeclaredValue)} · ${rate}`
     : `Covers what you declare · ${rate}`;
