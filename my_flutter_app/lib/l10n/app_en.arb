@@ -2885,6 +2885,15 @@
     }
   },
   "viewingSendProposal": "Send",
+  "protectionIncludedUpTo": "Protection included · up to {amount}",
+  "@protectionIncludedUpTo": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "whatIsTheItem": "What is the item?",
+  "somethingElseInCategory": "Something else in this category",
+  "noBusinessTakesItem": "No approved business currently takes this item to this destination. Try a different item, or check back soon.",
   "freightCategoryQuestion": "What's in the parcel?",
   "freightCategoryHelp": "Businesses charge more for what costs more to replace.",
   "freightCategoryGeneral": "General goods",

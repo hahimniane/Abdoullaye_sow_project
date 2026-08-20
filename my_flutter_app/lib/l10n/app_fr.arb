@@ -2885,6 +2885,15 @@
     }
   },
   "viewingSendProposal": "Envoyer",
+  "protectionIncludedUpTo": "Protection incluse · jusqu’à {amount}",
+  "@protectionIncludedUpTo": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "whatIsTheItem": "Quel est l’article ?",
+  "somethingElseInCategory": "Autre chose dans cette catégorie",
+  "noBusinessTakesItem": "Aucune entreprise approuvée n’accepte cet article vers cette destination pour le moment. Essayez un autre article ou revenez bientôt.",
   "freightCategoryQuestion": "Que contient le colis ?",
   "freightCategoryHelp": "Les entreprises facturent plus cher ce qui coûte plus cher à remplacer.",
   "freightCategoryGeneral": "Marchandises générales",

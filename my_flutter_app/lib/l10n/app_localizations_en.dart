@@ -6880,6 +6880,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get viewingSendProposal => 'Send';
 
   @override
+  String protectionIncludedUpTo(Object amount) {
+    return 'Protection included · up to $amount';
+  }
+
+  @override
+  String get whatIsTheItem => 'What is the item?';
+
+  @override
+  String get somethingElseInCategory => 'Something else in this category';
+
+  @override
+  String get noBusinessTakesItem =>
+      'No approved business currently takes this item to this destination. Try a different item, or check back soon.';
+
+  @override
   String get freightCategoryQuestion => 'What\'s in the parcel?';
 
   @override

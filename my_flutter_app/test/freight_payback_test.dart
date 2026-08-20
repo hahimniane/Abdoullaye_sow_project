@@ -52,4 +52,34 @@ void main() {
     expect(coverageFeeCentsFor(0, 2), 0);
     expect(coverageFeeCentsFor(400, 0), 0);
   });
+
+  test('the funnel unions items and matches like the web', () {
+    const withTable = <String, dynamic>{
+      'electronics': {
+        'items': [
+          {'id': 'iphone', 'label': 'iPhone', 'paybackAmount': 400},
+        ],
+        'otherPaybackAmount': 0,
+      },
+    };
+    const withCatchAll = <String, dynamic>{
+      'electronics': {'items': <Object>[], 'otherPaybackAmount': 50},
+    };
+
+    final choices =
+        freightItemChoicesFor([withTable, withCatchAll], 'electronics');
+    expect(choices.map((c) => c.id).toList(), ['iphone', otherItemId]);
+
+    expect(providerQualifiesForItem(withTable, 'electronics', 'iphone'), true);
+    expect(
+      providerQualifiesForItem(withCatchAll, 'electronics', 'iphone'),
+      true,
+    );
+    expect(
+      providerQualifiesForItem(withTable, 'electronics', otherItemId),
+      false,
+    );
+    expect(providerQualifiesForItem(null, 'electronics', 'anything'), true);
+    expect(freightItemChoicesFor([withTable], 'clothing'), isEmpty);
+  });
 }

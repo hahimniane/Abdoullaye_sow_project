@@ -24,6 +24,7 @@ class BusinessDestinationOption {
     this.freightPickupModel = 'distance',
     this.freightCategories = const <FreightCategory>[],
     this.freightCoverage,
+    this.freightPaybackTable,
     this.reviewCount = 0,
     this.reviewAverage = 0,
     this.reviewWeightedScore = 0,
@@ -64,6 +65,10 @@ class BusinessDestinationOption {
   /// on what terms. Null when it does not offer freight - which is not the
   /// same as offering freight and covering nothing.
   final FreightCoveragePolicy? freightCoverage;
+
+  /// What the business pays back per item type - the reason customers no
+  /// longer declare a value. Raw wire shape; read through freight_payback.
+  final Map<String, dynamic>? freightPaybackTable;
 
   /// The one line the option card shows about who stands behind the parcel.
   FreightCoverageSummary get freightCoverageSummary =>
@@ -122,6 +127,9 @@ class BusinessDestinationOption {
           ? 'borough'
           : 'distance',
       freightCategories: FreightCategory.listFromWire(data['freightCategories']),
+      freightPaybackTable: data['freightPaybackTable'] is Map
+          ? Map<String, dynamic>.from(data['freightPaybackTable'] as Map)
+          : null,
       freightCoverage: FreightCoveragePolicy.fromWire(data['freightCoverage']),
       reviewCount: (data['reviewCount'] as num?)?.toInt() ?? 0,
       reviewAverage: (data['reviewAverage'] as num?)?.toDouble() ?? 0,

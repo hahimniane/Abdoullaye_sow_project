@@ -7001,6 +7001,21 @@ class AppLocalizationsFr extends AppLocalizations {
   String get viewingSendProposal => 'Envoyer';
 
   @override
+  String protectionIncludedUpTo(Object amount) {
+    return 'Protection incluse · jusqu’à $amount';
+  }
+
+  @override
+  String get whatIsTheItem => 'Quel est l’article ?';
+
+  @override
+  String get somethingElseInCategory => 'Autre chose dans cette catégorie';
+
+  @override
+  String get noBusinessTakesItem =>
+      'Aucune entreprise approuvée n’accepte cet article vers cette destination pour le moment. Essayez un autre article ou revenez bientôt.';
+
+  @override
   String get freightCategoryQuestion => 'Que contient le colis ?';
 
   @override

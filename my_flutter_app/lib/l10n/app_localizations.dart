@@ -12318,6 +12318,30 @@ abstract class AppLocalizations {
   /// **'Send'**
   String get viewingSendProposal;
 
+  /// No description provided for @protectionIncludedUpTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Protection included · up to {amount}'**
+  String protectionIncludedUpTo(Object amount);
+
+  /// No description provided for @whatIsTheItem.
+  ///
+  /// In en, this message translates to:
+  /// **'What is the item?'**
+  String get whatIsTheItem;
+
+  /// No description provided for @somethingElseInCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Something else in this category'**
+  String get somethingElseInCategory;
+
+  /// No description provided for @noBusinessTakesItem.
+  ///
+  /// In en, this message translates to:
+  /// **'No approved business currently takes this item to this destination. Try a different item, or check back soon.'**
+  String get noBusinessTakesItem;
+
   /// No description provided for @freightCategoryQuestion.
   ///
   /// In en, this message translates to:

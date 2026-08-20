@@ -33,6 +33,7 @@ class FreightShipmentService {
     /// business's own settings; sending nothing prices the parcel exactly as
     /// freight was priced before categories existed.
     String? itemCategoryId,
+    String? itemId,
     /// What the customer says it costs to replace, in plain dollars. Also the
     /// cap on any payout, which is what makes it trustworthy unchecked.
     double? declaredValue,
@@ -56,6 +57,10 @@ class FreightShipmentService {
           'weightKg': weightKg,
           if ((itemCategoryId ?? '').trim().isNotEmpty)
             'itemCategoryId': itemCategoryId!.trim(),
+          // Present-but-empty means "the category catch-all": the server
+          // resolves '' to the business's other-payback row, and absent
+          // means the legacy declared-value path.
+          if (itemId != null) 'itemId': itemId.trim(),
           if (declaredValue != null && declaredValue > 0)
             'declaredValue': declaredValue,
           'pickupRequested': pickupRequested,

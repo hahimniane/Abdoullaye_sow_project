@@ -275,8 +275,23 @@ void main() {
     });
 
     test('the declared value and its fee reach the total and the callable', () {
-      expect(screen, contains('declaredValue: _declaredValue > 0'));
-      expect(screen, contains('_coverageQuote.coverageFee'));
+      // Only for businesses still on the old model: a payback-table business
+      // prices from its own published row and sends itemId instead - the
+      // customer declares nothing.
+      expect(
+        screen,
+        contains('declaredValue: !_usesItemPricing && _declaredValue > 0'),
+      );
+      expect(screen, contains('_coverageFeeApplied'));
+    });
+
+    test('a payback business asks for the item, never a value', () {
+      expect(screen, contains('_usesItemPricing'));
+      expect(screen, contains('protectionIncludedUpTo'));
+      expect(
+        screen,
+        contains("itemId: _usesItemPricing"),
+      );
     });
 
     test('a refusal from the server is repeated verbatim', () {

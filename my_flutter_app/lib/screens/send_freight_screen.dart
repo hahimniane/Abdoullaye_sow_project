@@ -14,6 +14,7 @@ import '../services/barrel_shipment_service.dart';
 import '../services/business_service.dart';
 import '../services/freight_categories.dart';
 import '../services/freight_coverage.dart';
+import '../utils/freight_payback.dart';
 import '../services/service_ranking.dart';
 import '../services/freight_shipment_service.dart';
 import '../services/office_location_service.dart';
@@ -65,6 +66,13 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   bool _receiverPhoneIsWhatsappOnly = false;
 
   // What is in the parcel, and what the customer says it would cost to
+  // The funnel's answers, taken BEFORE any business is shown - the same
+  // country -> category -> item -> qualifying-businesses order as the web
+  // console, so both clients walk the customer identically.
+  String _funnelCountryId = '';
+  String _funnelCategoryId = '';
+  String _funnelItemId = '';
+
   // replace. Two different questions on purpose: the category is what the
   // business charges by, the declared value is what it pays back by.
   String _categoryId = '';
@@ -200,11 +208,39 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         ServiceSort.rated => l10n.freightSortBestRated,
       };
 
+  List<BusinessDestinationOption> get _countryOptions => _funnelCountryId.isEmpty
+      ? const <BusinessDestinationOption>[]
+      : _options.where((o) => o.country.id == _funnelCountryId).toList();
+
+  List<FreightItemChoice> get _funnelItems => _funnelCategoryId.isEmpty
+      ? const <FreightItemChoice>[]
+      : freightItemChoicesFor(
+          [for (final o in _countryOptions) o.freightPaybackTable],
+          _funnelCategoryId,
+        );
+
+  /// The funnel is answered: a category, and an item whenever any provider
+  /// lists one for it.
+  bool get _funnelSatisfied =>
+      _funnelCountryId.isNotEmpty &&
+      _funnelCategoryId.isNotEmpty &&
+      (_funnelItems.isEmpty || _funnelItemId.isNotEmpty);
+
   List<BusinessDestinationOption> get _filtered {
+    if (!_funnelSatisfied) return const <BusinessDestinationOption>[];
     final q = _query.trim().toLowerCase();
+    final qualified = _countryOptions
+        .where(
+          (o) => providerQualifiesForItem(
+            o.freightPaybackTable,
+            _funnelCategoryId,
+            _funnelItemId,
+          ),
+        )
+        .toList();
     final matches = q.isEmpty
-        ? _options
-        : _options
+        ? qualified
+        : qualified
               .where(
                 (o) =>
                     o.businessName.toLowerCase().contains(q) ||
@@ -267,9 +303,31 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     declaredValue: _declaredValue,
   );
 
+  /// The business publishes what each item pays back; the customer only says
+  /// what the item is. Mirrors the web console exactly - see freight_payback.
+  bool get _usesItemPricing =>
+      (_selected?.freightPaybackTable?.isNotEmpty ?? false);
+
+  FreightPaybackLookup get _itemPayback => freightPaybackFor(
+    table: _selected?.freightPaybackTable,
+    categoryId: _funnelCategoryId.isNotEmpty ? _funnelCategoryId : _categoryId,
+    itemId: _funnelItemId == otherItemId ? '' : _funnelItemId,
+  );
+
+  double get _itemCoverageFee {
+    if (!_usesItemPricing) return 0;
+    final policy = _selected?.freightCoverage;
+    if (policy == null || !policy.coversLoss) return 0;
+    final lookup = _itemPayback;
+    if (!lookup.listed) return 0;
+    return coverageFeeCentsFor(lookup.paybackAmount, policy.ratePct) / 100;
+  }
+
+  double get _coverageFeeApplied =>
+      _usesItemPricing ? _itemCoverageFee : _coverageQuote.coverageFee;
+
   double get _appliedPickupFee => _pickupRequested ? (_pickupFee ?? 0) : 0;
-  double get _totalPrice =>
-      _price + _appliedPickupFee + _coverageQuote.coverageFee;
+  double get _totalPrice => _price + _appliedPickupFee + _coverageFeeApplied;
 
   /// Pickup is blocking the order only when it's requested but not yet resolved
   /// (still quoting, errored, or missing required details).
@@ -291,9 +349,13 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       _mode = modes.contains(_mode)
           ? _mode
           : (modes.isNotEmpty ? modes.first : 'sea');
-      // Categories and coverage are per business, so nothing carries over from
-      // whichever business was open before.
-      _categoryId = defaultFreightCategoryId(o.freightCategories);
+      // The funnel already answered what is being sent; the business's own
+      // category list only decides the multiplier. Fall back to the default
+      // when this business does not price the funnel's category.
+      _categoryId =
+          freightCategoryLookup(o.freightCategories, _funnelCategoryId) != null
+          ? _funnelCategoryId
+          : defaultFreightCategoryId(o.freightCategories);
       _resetDeclaredValue();
       _resetPickup();
       // Pickup availability + model are resolved server-side and travel with
@@ -491,7 +553,12 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         mode: _mode,
         weightKg: _weightKg,
         itemCategoryId: _categoryId,
-        declaredValue: _declaredValue > 0 ? _declaredValue : null,
+        itemId: _usesItemPricing
+            ? (_funnelItemId == otherItemId ? '' : _funnelItemId)
+            : null,
+        declaredValue: !_usesItemPricing && _declaredValue > 0
+            ? _declaredValue
+            : null,
         pickupRequested: _pickupRequested,
         pickupAddress: _pickupRequested ? _pickupAddress.composeLine() : null,
         pickupDateTime: _pickupRequested
@@ -618,12 +685,100 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     );
   }
 
-  // ---- Step 1: search + pick a business/destination ----
+  // ---- Step 1: the funnel - country, category, item - then businesses ----
+  Widget _funnelDropdowns(ThemeData theme, AppLocalizations l10n) {
+    final countries = <String, String>{};
+    for (final o in _options) {
+      countries.putIfAbsent(o.country.id, () => o.country.name);
+    }
+    final categorySeen = <String, FreightCategory>{};
+    for (final o in _countryOptions) {
+      for (final category in o.freightCategories) {
+        categorySeen.putIfAbsent(category.id, () => category);
+      }
+    }
+    final items = _funnelItems;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DropdownButtonFormField<String>(
+            initialValue: _funnelCountryId.isEmpty ? null : _funnelCountryId,
+            decoration: InputDecoration(labelText: l10n.destinationCountry),
+            items: [
+              for (final entry in countries.entries)
+                DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+            ],
+            onChanged: (value) => setState(() {
+              _funnelCountryId = value ?? '';
+              _funnelCategoryId = '';
+              _funnelItemId = '';
+            }),
+          ),
+          if (_funnelCountryId.isNotEmpty && categorySeen.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue:
+                  _funnelCategoryId.isEmpty ? null : _funnelCategoryId,
+              decoration:
+                  InputDecoration(labelText: l10n.freightCategoryQuestion),
+              items: [
+                for (final category in categorySeen.values)
+                  DropdownMenuItem(
+                    value: category.id,
+                    child: Text(freightCategoryLabel(l10n, category)),
+                  ),
+              ],
+              onChanged: (value) => setState(() {
+                _funnelCategoryId = value ?? '';
+                _funnelItemId = '';
+              }),
+            ),
+          ],
+          if (_funnelCategoryId.isNotEmpty && items.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: _funnelItemId.isEmpty ? null : _funnelItemId,
+              decoration: InputDecoration(labelText: l10n.whatIsTheItem),
+              items: [
+                for (final item in items)
+                  DropdownMenuItem(
+                    value: item.id,
+                    child: Text(
+                      item.id == otherItemId
+                          ? l10n.somethingElseInCategory
+                          : item.label,
+                    ),
+                  ),
+              ],
+              onChanged: (value) =>
+                  setState(() => _funnelItemId = value ?? ''),
+            ),
+          ],
+          if (_funnelSatisfied && _filtered.isEmpty && _query.isEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              l10n.noBusinessTakesItem,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.hintColor,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _searchList(ThemeData theme) {
     final l10n = AppLocalizations.of(context)!;
     final results = _filtered;
     return Column(
       children: [
+        _funnelDropdowns(theme, l10n),
+        if (!_funnelSatisfied)
+          const Expanded(child: SizedBox.shrink())
+        else ...[
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
           child: TextField(
@@ -690,6 +845,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                   itemBuilder: (context, i) => _optionCard(theme, results[i]),
                 ),
         ),
+        ],
       ],
     );
   }
@@ -1082,6 +1238,53 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   Widget _coverageSection(ThemeData theme, AppLocalizations l10n) {
     final option = _selected!;
     final policy = option.freightCoverage;
+    if (_usesItemPricing) {
+      // The business's table decides the payback; there is nothing to ask.
+      // Reassurance framing only - no loss-talk in the customer's face,
+      // exactly as on the web.
+      final lookup = _itemPayback;
+      if (policy == null ||
+          !policy.coversLoss ||
+          !lookup.listed ||
+          lookup.paybackAmount <= 0) {
+        return const SizedBox.shrink();
+      }
+      return Card(
+        margin: EdgeInsets.zero,
+        elevation: 0,
+        color: theme.colorScheme.surfaceContainerHighest,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Icon(
+                Icons.verified_user_outlined,
+                size: 18,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  l10n.protectionIncludedUpTo(
+                    freightMoney(lookup.paybackAmount),
+                  ),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (_itemCoverageFee > 0)
+                Text(
+                  '+ \$${_itemCoverageFee.toStringAsFixed(2)}',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.hintColor,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
     if (policy == null) return const SizedBox.shrink();
     final quote = _coverageQuote;
     final asks = policy.worthAskingDeclaredValue;
@@ -1408,9 +1611,9 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                           color: theme.hintColor,
                         ),
                       ),
-                      if (_coverageQuote.coverageFee > 0)
+                      if (_coverageFeeApplied > 0)
                         Text(
-                          '+ \$${_coverageQuote.coverageFee.toStringAsFixed(2)} '
+                          '+ \$${_coverageFeeApplied.toStringAsFixed(2)} '
                           '${l10n.freightCoverageFeeLabel}',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.hintColor,

@@ -67,3 +67,78 @@ int coverageFeeCentsFor(double paybackAmount, double ratePct) {
   if (paybackCents <= 0 || ratePct <= 0) return 0;
   return (paybackCents * (ratePct / 100)).round();
 }
+
+/// The funnel's synthetic id for "something not on anyone's list".
+const otherItemId = '__other';
+
+Map<String, dynamic>? _providerTable(Map<String, dynamic>? table) {
+  if (table == null || table.isEmpty) return null;
+  return table;
+}
+
+class FreightItemChoice {
+  const FreightItemChoice({required this.id, required this.label});
+
+  final String id;
+  final String label;
+}
+
+/// The item choices for a category, across every provider serving the
+/// route. Mirror of `freightItemChoicesFor` in the web lib and the
+/// functions authority - the funnel asks WHAT before WHO on every client.
+List<FreightItemChoice> freightItemChoicesFor(
+  List<Map<String, dynamic>?> tables,
+  String categoryId,
+) {
+  final seen = <String, String>{};
+  var anyCatchAll = false;
+  for (final raw in tables) {
+    final table = _providerTable(raw);
+    if (table == null) {
+      anyCatchAll = true;
+      continue;
+    }
+    final entry = table[categoryId.trim()];
+    if (entry is! Map) continue;
+    final items = entry['items'];
+    if (items is List) {
+      for (final row in items) {
+        if (row is! Map) continue;
+        final id = (row['id'] ?? '').toString().trim();
+        final label = (row['label'] ?? '').toString().trim();
+        if (id.isNotEmpty && label.isNotEmpty && !seen.containsKey(id)) {
+          seen[id] = label;
+        }
+      }
+    }
+    if (((entry['otherPaybackAmount'] as num?)?.toDouble() ?? 0) > 0) {
+      anyCatchAll = true;
+    }
+  }
+  final choices = seen.entries
+      .map((e) => FreightItemChoice(id: e.key, label: e.value))
+      .toList()
+    ..sort((a, b) => a.label.compareTo(b.label));
+  if (anyCatchAll) {
+    choices.add(
+      const FreightItemChoice(id: otherItemId, label: 'Something else'),
+    );
+  }
+  return choices;
+}
+
+/// Whether one provider can instant-book this item - the same resolution
+/// the server prices with.
+bool providerQualifiesForItem(
+  Map<String, dynamic>? table,
+  String categoryId,
+  String itemId,
+) {
+  final resolved = _providerTable(table);
+  if (resolved == null) return true;
+  return freightPaybackFor(
+    table: resolved,
+    categoryId: categoryId,
+    itemId: itemId == otherItemId ? '' : itemId,
+  ).listed;
+}
