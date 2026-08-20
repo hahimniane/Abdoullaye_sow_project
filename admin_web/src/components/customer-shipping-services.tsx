@@ -2346,34 +2346,51 @@ function FreightShipmentForm({
         }
       }
     }
-    return [...seen.values()];
+    // Only categories someone would actually take. freightItemChoicesFor
+    // already speaks for catch-alls and legacy no-table businesses
+    // ("Something else"), so an empty choice list means nobody on the route
+    // takes anything in that category - a guaranteed dead end the customer
+    // must never be offered.
+    return [...seen.values()].filter(
+      (category) =>
+        freightItemChoicesFor(
+          providerOptions as Array<{freightPaybackTable?: unknown}>,
+          category.id,
+        ).length > 0,
+    );
   }, [providerOptions]);
+  // The stored answers, unless a data refresh withdrew them from the offered
+  // lists - then they count as unanswered rather than dangling.
+  const activeCategoryId = funnelCategories.some((c) => c.id === itemCategoryId)
+    ? itemCategoryId
+    : "";
   const funnelItems = useMemo(
     () =>
-      itemCategoryId
+      activeCategoryId
         ? freightItemChoicesFor(
             providerOptions as Array<{freightPaybackTable?: unknown}>,
-            itemCategoryId,
+            activeCategoryId,
           )
         : [],
-    [itemCategoryId, providerOptions],
+    [activeCategoryId, providerOptions],
   );
-  // A category with no listed items anywhere still has legacy businesses
-  // that carry anything - the funnel must not dead-end on it.
-  const itemStepSatisfied =
-    Boolean(itemCategoryId) && (funnelItems.length === 0 || Boolean(itemId));
+  const activeItemId = funnelItems.some((i) => i.id === itemId) ? itemId : "";
+  // The funnel is answered only by an actual item choice. Every offered
+  // category has at least one - "Something else" stands in for catch-alls
+  // and legacy businesses - so there is no empty-items shortcut.
+  const itemStepSatisfied = Boolean(activeCategoryId) && Boolean(activeItemId);
   const qualifiedProviderOptions = useMemo(
     () =>
       itemStepSatisfied
         ? providerOptions.filter((option) =>
             providerQualifiesForItem(
               option as {freightPaybackTable?: unknown},
-              itemCategoryId,
-              itemId,
+              activeCategoryId,
+              activeItemId,
             ),
           )
         : [],
-    [itemCategoryId, itemId, itemStepSatisfied, providerOptions],
+    [activeCategoryId, activeItemId, itemStepSatisfied, providerOptions],
   );
   const destination = selectedOption(providerOptions, destinationOptionId);
   const selectedCountry = countries.find(
@@ -2416,7 +2433,7 @@ function FreightShipmentForm({
     () => freightCoveragePolicyFrom(destination?.freightCoverage),
     [destination],
   );
-  const selectedCategory = freightCategoryById(categories, itemCategoryId);
+  const selectedCategory = freightCategoryById(categories, activeCategoryId);
   const categoryPricing = pricing
     ? freightCategoryPricing({
         baseRatePerKg: pricing.rate,
@@ -2437,8 +2454,8 @@ function FreightShipmentForm({
   const itemLookup = usesItemPricing
     ? freightPaybackFor({
         table: paybackTable,
-        categoryId: itemCategoryId,
-        itemId,
+        categoryId: activeCategoryId,
+        itemId: activeItemId === OTHER_ITEM_ID ? "" : activeItemId,
       })
     : null;
   const declaredValue =
@@ -2468,7 +2485,7 @@ function FreightShipmentForm({
     () =>
       sortServiceOptions(qualifiedProviderOptions, {
         declaredValue,
-        itemCategoryId,
+        itemCategoryId: activeCategoryId,
         mode,
         service: "freight",
         sort: providerSort,
@@ -2476,7 +2493,7 @@ function FreightShipmentForm({
       }),
     [
       declaredValue,
-      itemCategoryId,
+      activeCategoryId,
       mode,
       qualifiedProviderOptions,
       providerSort,
@@ -2654,9 +2671,9 @@ function FreightShipmentForm({
             businessId: destination.businessId,
             mode,
             weightKg,
-            itemCategoryId,
+            itemCategoryId: activeCategoryId,
             ...(usesItemPricing
-              ? {itemId: itemId === OTHER_ITEM_ID ? "" : itemId}
+              ? {itemId: activeItemId === OTHER_ITEM_ID ? "" : activeItemId}
               : {declaredValue}),
             pickup: {
               ...pickup,
@@ -2884,7 +2901,7 @@ function FreightShipmentForm({
                     setSelectionNotice("");
                   }}
                   required
-                  value={itemCategoryId}
+                  value={activeCategoryId}
                 >
                   <option value="">Choose a category</option>
                   {funnelCategories.map((category) => (
@@ -2893,16 +2910,16 @@ function FreightShipmentForm({
                     </option>
                   ))}
                 </select>
-                {itemCategoryId && (
+                {activeCategoryId && (
                   <small>
                     {funnelCategories.find(
-                      (category) => category.id === itemCategoryId,
+                      (category) => category.id === activeCategoryId,
                     )?.hint ?? ""}
                   </small>
                 )}
               </label>
             )}
-            {itemCategoryId && funnelItems.length > 0 && (
+            {activeCategoryId && funnelItems.length > 0 && (
               <label className="customer-form-span">
                 What is the item?
                 <select
@@ -2913,7 +2930,7 @@ function FreightShipmentForm({
                     setSelectionNotice("");
                   }}
                   required
-                  value={itemId}
+                  value={activeItemId}
                 >
                   <option value="">Choose the item</option>
                   {funnelItems.map((item) => (

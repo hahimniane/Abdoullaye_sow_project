@@ -466,7 +466,7 @@ test("both consoles are wired to the freight category and coverage contract", ()
   assert.match(customer, /funnelItems\.map/);
   assert.match(customer, /itemStepSatisfied && qualifiedProviderOptions/);
   assert.match(customer, /<FreightValueField/);
-  assert.match(customer, /usesItemPricing\s*\n?\s*\? \{itemId: itemId === OTHER_ITEM_ID \? "" : itemId\}/);
+  assert.match(customer, /usesItemPricing\s*\n?\s*\? \{itemId: activeItemId === OTHER_ITEM_ID \? "" : activeItemId\}/);
   // The comparison surface: coverage on the card, before a business is picked.
   assert.match(customer, /freightCoverageComparisonLine\(/);
   assert.match(customer, /customer-destination-coverage/);

@@ -71,7 +71,7 @@ test("protection reads as reassurance, never as loss-talk in the face", () => {
   // The typed declared value is gone wherever a table exists.
   assert.match(
     customer,
-    /usesItemPricing\s*\n?\s*\? \{itemId: itemId === OTHER_ITEM_ID \? "" : itemId\}/,
+    /usesItemPricing\s*\n?\s*\? \{itemId: activeItemId === OTHER_ITEM_ID \? "" : activeItemId\}/,
   );
 });
 
@@ -159,6 +159,30 @@ test("nothing snaps the funnel's category back to a default", () => {
   );
   assert.doesNotMatch(customer, /defaultFreightCategoryId/);
   assert.match(customer, /The funnel owns the category now/);
+});
+
+test("the funnel never offers a category nobody would take", () => {
+  // Canada offered "Clothes and fabric" because a provider PRICES that
+  // category - but every provider on the route had a payback table and none
+  // listed anything under it. The customer picked it and was told "no
+  // business takes this" without ever being asked what the item was, over a
+  // search box with nothing to search. A category with no item choices
+  // anywhere (no rows, no catch-all, no legacy business) is a guaranteed
+  // dead end and must never appear; and the funnel is answered only by an
+  // actual item choice - there is no empty-items shortcut.
+  const customer = readFileSync(
+    "src/components/customer-shipping-services.tsx",
+    "utf8",
+  );
+  assert.match(
+    customer,
+    /\[\.\.\.seen\.values\(\)\]\.filter\(/,
+  );
+  assert.match(
+    customer,
+    /itemStepSatisfied = Boolean\(activeCategoryId\) && Boolean\(activeItemId\)/,
+  );
+  assert.doesNotMatch(customer, /funnelItems\.length === 0 \|\|/);
 });
 
 test("the freight form reveals itself one answered question at a time", () => {

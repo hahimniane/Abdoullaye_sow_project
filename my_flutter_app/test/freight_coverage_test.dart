@@ -294,6 +294,34 @@ void main() {
       );
     });
 
+    test('the funnel never offers a category nobody would take', () {
+      // Canada offered "Clothes and fabric" because a provider PRICES that
+      // category, while no provider's payback table would take anything in
+      // it - the customer was told "no business takes this" without ever
+      // being asked what the item was, over a search box with nothing to
+      // search. Categories are filtered to ones with item choices, the
+      // funnel is answered only by an actual item pick, and a withdrawn
+      // selection counts as unanswered rather than dangling.
+      expect(screen, contains('_funnelCategoryChoices'));
+      expect(
+        screen,
+        contains('if (freightItemChoicesFor(tables, category.id).isNotEmpty)'),
+      );
+      expect(
+        screen,
+        contains(
+          '_funnelCountryId.isNotEmpty && _activeFunnelItemId.isNotEmpty',
+        ),
+      );
+      expect(screen, isNot(contains('_funnelItems.isEmpty ||')));
+      // No stacked empty-states: the search box hides when there is nothing
+      // to narrow.
+      expect(
+        screen,
+        contains('if (!_funnelSatisfied || (results.isEmpty && _query.isEmpty))'),
+      );
+    });
+
     test('a refusal from the server is repeated verbatim', () {
       // Only the server knows what this business will carry; paraphrasing its
       // refusal would leave the customer changing fields at random.

@@ -212,19 +212,50 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       ? const <BusinessDestinationOption>[]
       : _options.where((o) => o.country.id == _funnelCountryId).toList();
 
-  List<FreightItemChoice> get _funnelItems => _funnelCategoryId.isEmpty
-      ? const <FreightItemChoice>[]
-      : freightItemChoicesFor(
-          [for (final o in _countryOptions) o.freightPaybackTable],
-          _funnelCategoryId,
-        );
+  /// Categories worth offering: someone on the route would actually take an
+  /// item in them. `freightItemChoicesFor` already speaks for catch-alls and
+  /// legacy no-table businesses ("Something else"), so an empty choice list
+  /// means nobody takes anything in that category - a guaranteed dead end
+  /// the customer must never be offered.
+  List<FreightCategory> get _funnelCategoryChoices {
+    final tables = [for (final o in _countryOptions) o.freightPaybackTable];
+    final seen = <String, FreightCategory>{};
+    for (final o in _countryOptions) {
+      for (final category in o.freightCategories) {
+        seen.putIfAbsent(category.id, () => category);
+      }
+    }
+    return [
+      for (final category in seen.values)
+        if (freightItemChoicesFor(tables, category.id).isNotEmpty) category,
+    ];
+  }
 
-  /// The funnel is answered: a category, and an item whenever any provider
-  /// lists one for it.
+  /// The stored selection, unless a data refresh withdrew it from the
+  /// offered list - then it counts as unanswered rather than dangling.
+  String get _activeFunnelCategoryId =>
+      _funnelCategoryChoices.any((c) => c.id == _funnelCategoryId)
+      ? _funnelCategoryId
+      : '';
+
+  List<FreightItemChoice> get _funnelItems {
+    final categoryId = _activeFunnelCategoryId;
+    return categoryId.isEmpty
+        ? const <FreightItemChoice>[]
+        : freightItemChoicesFor(
+            [for (final o in _countryOptions) o.freightPaybackTable],
+            categoryId,
+          );
+  }
+
+  String get _activeFunnelItemId =>
+      _funnelItems.any((i) => i.id == _funnelItemId) ? _funnelItemId : '';
+
+  /// The funnel is answered only by an actual item choice. Every offered
+  /// category has at least one - "Something else" stands in for catch-alls
+  /// and legacy businesses - so there is no empty-items shortcut.
   bool get _funnelSatisfied =>
-      _funnelCountryId.isNotEmpty &&
-      _funnelCategoryId.isNotEmpty &&
-      (_funnelItems.isEmpty || _funnelItemId.isNotEmpty);
+      _funnelCountryId.isNotEmpty && _activeFunnelItemId.isNotEmpty;
 
   List<BusinessDestinationOption> get _filtered {
     if (!_funnelSatisfied) return const <BusinessDestinationOption>[];
@@ -233,8 +264,8 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         .where(
           (o) => providerQualifiesForItem(
             o.freightPaybackTable,
-            _funnelCategoryId,
-            _funnelItemId,
+            _activeFunnelCategoryId,
+            _activeFunnelItemId,
           ),
         )
         .toList();
@@ -310,8 +341,10 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
 
   FreightPaybackLookup get _itemPayback => freightPaybackFor(
     table: _selected?.freightPaybackTable,
-    categoryId: _funnelCategoryId.isNotEmpty ? _funnelCategoryId : _categoryId,
-    itemId: _funnelItemId == otherItemId ? '' : _funnelItemId,
+    categoryId: _activeFunnelCategoryId.isNotEmpty
+        ? _activeFunnelCategoryId
+        : _categoryId,
+    itemId: _activeFunnelItemId == otherItemId ? '' : _activeFunnelItemId,
   );
 
   double get _itemCoverageFee {
@@ -353,8 +386,9 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       // category list only decides the multiplier. Fall back to the default
       // when this business does not price the funnel's category.
       _categoryId =
-          freightCategoryLookup(o.freightCategories, _funnelCategoryId) != null
-          ? _funnelCategoryId
+          freightCategoryLookup(o.freightCategories, _activeFunnelCategoryId) !=
+              null
+          ? _activeFunnelCategoryId
           : defaultFreightCategoryId(o.freightCategories);
       _resetDeclaredValue();
       _resetPickup();
@@ -554,7 +588,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         weightKg: _weightKg,
         itemCategoryId: _categoryId,
         itemId: _usesItemPricing
-            ? (_funnelItemId == otherItemId ? '' : _funnelItemId)
+            ? (_activeFunnelItemId == otherItemId ? '' : _activeFunnelItemId)
             : null,
         declaredValue: !_usesItemPricing && _declaredValue > 0
             ? _declaredValue
@@ -691,12 +725,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     for (final o in _options) {
       countries.putIfAbsent(o.country.id, () => o.country.name);
     }
-    final categorySeen = <String, FreightCategory>{};
-    for (final o in _countryOptions) {
-      for (final category in o.freightCategories) {
-        categorySeen.putIfAbsent(category.id, () => category);
-      }
-    }
+    final categories = _funnelCategoryChoices;
     final items = _funnelItems;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
@@ -716,15 +745,16 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
               _funnelItemId = '';
             }),
           ),
-          if (_funnelCountryId.isNotEmpty && categorySeen.isNotEmpty) ...[
+          if (_funnelCountryId.isNotEmpty && categories.isNotEmpty) ...[
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
-              initialValue:
-                  _funnelCategoryId.isEmpty ? null : _funnelCategoryId,
+              initialValue: _activeFunnelCategoryId.isEmpty
+                  ? null
+                  : _activeFunnelCategoryId,
               decoration:
                   InputDecoration(labelText: l10n.freightCategoryQuestion),
               items: [
-                for (final category in categorySeen.values)
+                for (final category in categories)
                   DropdownMenuItem(
                     value: category.id,
                     child: Text(freightCategoryLabel(l10n, category)),
@@ -736,10 +766,11 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
               }),
             ),
           ],
-          if (_funnelCategoryId.isNotEmpty && items.isNotEmpty) ...[
+          if (_activeFunnelCategoryId.isNotEmpty && items.isNotEmpty) ...[
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
-              initialValue: _funnelItemId.isEmpty ? null : _funnelItemId,
+              initialValue:
+                  _activeFunnelItemId.isEmpty ? null : _activeFunnelItemId,
               decoration: InputDecoration(labelText: l10n.whatIsTheItem),
               items: [
                 for (final item in items)
@@ -776,7 +807,10 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     return Column(
       children: [
         _funnelDropdowns(theme, l10n),
-        if (!_funnelSatisfied)
+        // The search box exists to narrow a list. With no businesses and no
+        // query there is nothing to narrow - showing it under the dead-end
+        // note would pair two empty-states on one screen.
+        if (!_funnelSatisfied || (results.isEmpty && _query.isEmpty))
           const Expanded(child: SizedBox.shrink())
         else ...[
         Padding(
