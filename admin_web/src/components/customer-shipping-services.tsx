@@ -2549,15 +2549,24 @@ function FreightShipmentForm({
       );
       return;
     }
-    // Only one business serves this destination: choosing from a list of
-    // one is busywork, so make the choice for them.
-    if (!destinationOptionId && providerOptions.length === 1) {
-      setDestinationOptionId(providerOptions[0].id);
+    // Only one business can take this item: choosing from a list of one is
+    // busywork, so make the choice for them - but never before the funnel's
+    // questions are answered. Auto-selecting off the raw route list chose a
+    // provider while "What are you sending?" still said Choose a category,
+    // and the whole rest of the form followed it onto the screen.
+    if (
+      !destinationOptionId &&
+      itemStepSatisfied &&
+      qualifiedProviderOptions.length === 1
+    ) {
+      setDestinationOptionId(qualifiedProviderOptions[0].id);
     }
   }, [
     countries,
     destinationCountryId,
     destinationOptionId,
+    itemStepSatisfied,
+    qualifiedProviderOptions,
     providerOptions,
   ]);
 
@@ -2705,6 +2714,7 @@ function FreightShipmentForm({
         />
       ) : (
         <ServiceRequestForm
+          footerVisible={Boolean(destination)}
           canReview={valid}
           error={error}
           intro="Choose air or sea freight. The approved business verifies the final weight before settlement."
@@ -2939,6 +2949,11 @@ function FreightShipmentForm({
                 value={destinationOptionId}
               />
             )}
+            {/* Nothing below exists until a business is chosen: a receiver,
+                a weight and a pickup all describe a booking WITH someone,
+                and showing them first walked the customer through half a
+                form that could still dead-end at "no business takes this". */}
+            {destination && (<>
             <RecipientNameField
               id="freight-receiver-name"
               onChange={setReceiverName}
@@ -3136,6 +3151,7 @@ function FreightShipmentForm({
             <div className="customer-form-span">
               <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
             </div>
+            </>)}
           </div>
         </ServiceRequestForm>
       )}

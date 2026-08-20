@@ -160,3 +160,23 @@ test("nothing snaps the funnel's category back to a default", () => {
   assert.doesNotMatch(customer, /defaultFreightCategoryId/);
   assert.match(customer, /The funnel owns the category now/);
 });
+
+test("the freight form reveals itself one answered question at a time", () => {
+  // With no category chosen, the customer saw receiver fields, a weight, a
+  // pickup choice, an auto-selected provider and a Review button - half a
+  // form for a booking that could still dead-end at "no business takes
+  // this". Each block now waits for the answer before it.
+  const customer = readFileSync(
+    "src/components/customer-shipping-services.tsx",
+    "utf8",
+  );
+  // Receiver/weight/pickup live behind the chosen business.
+  assert.match(customer, /\{destination && \(<>/);
+  // The shared footer hides until then too.
+  assert.match(customer, /footerVisible=\{Boolean\(destination\)\}/);
+  // And the single-provider auto-select waits for the funnel.
+  assert.match(
+    customer,
+    /itemStepSatisfied &&\s*\n\s*qualifiedProviderOptions\.length === 1/,
+  );
+});
