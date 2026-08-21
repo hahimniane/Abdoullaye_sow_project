@@ -1,4 +1,4 @@
-// What is in the parcel, what it is worth, and who stands behind it.
+// What is in the parcel, and who stands behind it.
 //
 // The client is not the authority on any of this - the server prices the
 // shipment and the server refuses the ones it will not carry. These tests
@@ -8,8 +8,8 @@
 //
 // So the properties locked in here are agreement with
 // functions/freight_categories.js and functions/freight_coverage.js: the same
-// default multipliers, the same rounding, the same ceilings, and the same
-// refusal sentences word for word.
+// default multipliers, the same rounding, and the same one-question coverage
+// policy that charges the customer nothing.
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -17,9 +17,7 @@ import test from "node:test";
 
 import { translateValue } from "./french-dom.ts";
 import {
-  DECLARATION_THRESHOLD,
   MAX_CUSTOM_FREIGHT_CATEGORIES,
-  PLATFORM_MAX_DECLARED_VALUE,
   STANDARD_FREIGHT_CATEGORIES,
   buildFreightSettingsPayload,
   defaultFreightCategoryId,
@@ -32,7 +30,6 @@ import {
   freightCoverageComparisonLine,
   freightCoveragePolicyFrom,
   freightSettingsFromRow,
-  quoteFreightCoverage,
   validateFreightSettings,
   type FreightSettingsDraft,
 } from "./freight-categories.ts";
@@ -106,36 +103,25 @@ test("the picker starts on general, or on whatever is first", () => {
   assert.equal(defaultFreightCategoryId([]), "");
 });
 
-test("ticking cover without a rate is not cover, on the client either", () => {
+test("the coverage policy is one flag, and it never narrows a promise", () => {
   assert.equal(freightCoveragePolicyFrom(null), null);
+  // A business that answered yes covers loss, full stop. Numbers left on a
+  // stale document must not qualify that: a rate of 0 alongside the flag
+  // once meant "not really covered", and reading it here would quietly deny
+  // a payout the business is promising today.
   assert.deepEqual(
     freightCoveragePolicyFrom({
       coversLoss: true,
       ratePct: 0,
       maxDeclaredValue: 0,
-      declarationThreshold: 200,
     }),
-    {
-      coversLoss: false,
-      ratePct: 0,
-      maxDeclaredValue: 0,
-      declarationThreshold: 200,
-    },
+    {coversLoss: true},
   );
-  // Whatever a stale document says, neither number may exceed the platform's.
   assert.deepEqual(
-    freightCoveragePolicyFrom({
-      coversLoss: true,
-      ratePct: 40,
-      maxDeclaredValue: 999999,
-    }),
-    {
-      coversLoss: true,
-      ratePct: 10,
-      maxDeclaredValue: PLATFORM_MAX_DECLARED_VALUE,
-      declarationThreshold: DECLARATION_THRESHOLD,
-    },
+    freightCoveragePolicyFrom({coversLoss: false, ratePct: 40}),
+    {coversLoss: false},
   );
+  assert.deepEqual(freightCoveragePolicyFrom({}), {coversLoss: false});
 });
 
 test("the price shown is the price the server computes", () => {
@@ -166,104 +152,49 @@ test("the price shown is the price the server computes", () => {
   );
 });
 
-test("a declared value buys a capped payout, and the cap is the declaration", () => {
-  const policy = freightCoveragePolicyFrom({
-    coversLoss: true,
-    ratePct: 2,
-    maxDeclaredValue: 2000,
-  });
-  assert.deepEqual(quoteFreightCoverage({policy, declaredValue: 1000}), {
-    ok: true,
-    declaredValue: 1000,
-    coverageFee: 20,
-    covered: true,
-    payoutCap: 1000,
-  });
-  // Nothing declared costs nothing and promises nothing.
-  assert.deepEqual(quoteFreightCoverage({policy, declaredValue: 0}), {
-    ok: true,
-    declaredValue: 0,
-    coverageFee: 0,
-    covered: false,
-    payoutCap: 0,
-  });
-});
-
-test("the client refuses only what the server refuses, in the server's words", () => {
-  const capped = freightCoveragePolicyFrom({
-    coversLoss: true,
-    ratePct: 2,
-    maxDeclaredValue: 2000,
-  });
-  assert.deepEqual(quoteFreightCoverage({policy: capped, declaredValue: 2500}), {
-    ok: false,
-    message: "This business does not carry parcels worth that much",
-  });
-  const uncapped = freightCoveragePolicyFrom({
-    coversLoss: true,
-    ratePct: 2,
-    maxDeclaredValue: 0,
-  });
-  assert.deepEqual(
-    quoteFreightCoverage({policy: uncapped, declaredValue: 25000}),
-    {ok: false, message: "That declared value is too high to ship"},
-  );
-  // The ceiling is about what a business will carry, not about what it
-  // insures: a business that covers nothing still refuses the parcel.
-  const noCover = freightCoveragePolicyFrom({
-    coversLoss: false,
-    ratePct: 0,
-    maxDeclaredValue: 500,
-  });
-  assert.deepEqual(quoteFreightCoverage({policy: noCover, declaredValue: 900}), {
-    ok: false,
-    message: "This business does not carry parcels worth that much",
-  });
-  // Under the ceiling it is recorded but nothing is charged or promised.
-  assert.deepEqual(quoteFreightCoverage({policy: noCover, declaredValue: 300}), {
-    ok: true,
-    declaredValue: 300,
-    coverageFee: 0,
-    covered: false,
-    payoutCap: 0,
-  });
-});
-
 test("the comparison line says what a customer is choosing between", () => {
+  const covers = freightCoveragePolicyFrom({coversLoss: true});
+  // The promise is the business's whole published payback for the item the
+  // customer already picked, stated in full - a proportion of it would
+  // understate what is actually owed.
   assert.equal(
-    freightCoverageComparisonLine(
-      freightCoveragePolicyFrom({
-        coversLoss: true,
-        ratePct: 2,
-        maxDeclaredValue: 2000,
-      }),
-      money,
-    ),
-    "Covers up to $2,000 · 2%",
+    freightCoverageComparisonLine(covers, money, 400),
+    "Protection included · up to $400",
   );
+  // No amount to state yet: still protected, and never a price.
   assert.equal(
-    freightCoverageComparisonLine(
-      freightCoveragePolicyFrom({
-        coversLoss: true,
-        ratePct: 1.5,
-        maxDeclaredValue: 0,
-      }),
-      money,
-    ),
-    "Covers what you declare · 1.5%",
+    freightCoverageComparisonLine(covers, money, 0),
+    "Protection included",
   );
+  assert.equal(freightCoverageComparisonLine(covers, money), "Protection included");
   // The business that stands behind nothing has to say so on the same card,
   // before the choice, not after the parcel is gone.
   assert.equal(
     freightCoverageComparisonLine(
-      freightCoveragePolicyFrom({coversLoss: false, ratePct: 0}),
+      freightCoveragePolicyFrom({coversLoss: false}),
       money,
+      400,
     ),
-    "No protection offered",
+    "This business does not pay for a lost parcel",
   );
-  assert.equal(freightCoverageComparisonLine(null, money), "No protection offered");
+  assert.equal(
+    freightCoverageComparisonLine(null, money),
+    "This business does not pay for a lost parcel",
+  );
   assert.equal(formatMultiplier(2), "2");
   assert.equal(formatMultiplier(1.5), "1.5");
+});
+
+test("no line the customer reads ever prices cover", () => {
+  const covers = freightCoveragePolicyFrom({coversLoss: true});
+  for (const amount of [0, 1, 250, 10000]) {
+    const line = freightCoverageComparisonLine(covers, money, amount);
+    assert.doesNotMatch(line, /%/);
+    assert.doesNotMatch(line, /fee|rate|charge/i);
+  }
+  // And nothing about the policy can produce a number to charge: the type
+  // carries one boolean, so there is nothing for a price to be derived from.
+  assert.deepEqual(Object.keys(covers ?? {}), ["coversLoss"]);
 });
 
 test("a business's stored settings round-trip into the form", () => {
@@ -274,8 +205,8 @@ test("a business's stored settings round-trip into the form", () => {
       {id: "auto-parts", label: "Auto parts", hint: "Brakes", multiplier: 1.4},
     ],
     freightCoverageEnabled: true,
-    freightCoverageRatePct: 2,
-    freightMaxDeclaredValue: 2000,
+    freightDestinationDeliveryAvailable: true,
+    freightDestinationDeliveryFee: 15,
   });
   assert.equal(settings.categoryRates.electronics, "2.5");
   // A row it never touched shows the platform's starting number, not a blank.
@@ -284,12 +215,17 @@ test("a business's stored settings round-trip into the form", () => {
     {id: "auto-parts", label: "Auto parts", hint: "Brakes", multiplier: "1.4"},
   ]);
   assert.equal(settings.coversLoss, true);
-  assert.equal(settings.coverageRatePct, "2");
-  assert.equal(settings.maxDeclaredValue, "2000");
-  // A business that has set nothing covers nothing and accepts anything -
-  // exactly how freight behaved before any of this existed.
+  assert.equal(settings.destinationDelivery, true);
+  assert.equal(settings.destinationDeliveryFee, "15");
+  // Cover is one answer: there is no rate or ceiling left for the form to
+  // round-trip, and reading one would put a price back on the screen.
+  assert.ok(!("coverageRatePct" in settings));
+  assert.ok(!("maxDeclaredValue" in settings));
+  // A business that has set nothing covers nothing, holds the parcel for
+  // collection, and accepts anything.
   const untouched = freightSettingsFromRow(null);
   assert.equal(untouched.coversLoss, false);
+  assert.equal(untouched.destinationDelivery, false);
   assert.deepEqual(untouched.customCategories, []);
   assert.deepEqual(buildFreightSettingsPayload(untouched).freightCategoryRates, {});
 });
@@ -305,8 +241,8 @@ test("only the rows a business actually moved are saved", () => {
         {id: "", label: " Auto Parts ", hint: " Brakes ", multiplier: "1.4"},
       ],
       coversLoss: true,
-      coverageRatePct: "2",
-      maxDeclaredValue: "2000",
+      destinationDelivery: true,
+      destinationDeliveryFee: "15",
     }),
   );
   // Storing a row that equals today's default would pin this business to it
@@ -315,10 +251,12 @@ test("only the rows a business actually moved are saved", () => {
   assert.deepEqual(payload.freightCustomCategories, [
     {id: "auto-parts", label: "Auto Parts", hint: "Brakes", multiplier: 1.4},
   ]);
-  assert.deepEqual(payload.freightCoverage, {
-    coversLoss: true,
-    ratePct: 2,
-    maxDeclaredValue: 2000,
+  // One key, because there is one question. A rate or a ceiling reaching the
+  // callable would be a fee the customer never agreed to.
+  assert.deepEqual(payload.freightCoverage, {coversLoss: true});
+  assert.deepEqual(payload.freightDestinationDelivery, {
+    available: true,
+    fee: 15,
   });
   assert.equal(freightCategorySlug("Building materials!"), "building-materials");
   assert.equal(freightCategorySlug("   "), "");
@@ -387,19 +325,28 @@ test("the settings form refuses what the server would refuse", () => {
     ),
     "You can add up to 6 categories of your own.",
   );
+  // Cover is savable on its own answer: it is free, so there is no number to
+  // be out of range and no reason to refuse a business that says yes.
+  assert.equal(validateFreightSettings(draft({coversLoss: true})), null);
+  // Delivery, unlike cover, does cost money - and an opted-in business with
+  // no fee is an unfinished setting rather than free delivery.
   assert.equal(
-    validateFreightSettings(draft({coverageRatePct: "25"})),
-    "The coverage rate must be between 0% and 10%.",
+    validateFreightSettings(
+      draft({destinationDelivery: true, destinationDeliveryFee: ""}),
+    ),
+    "Set a delivery fee, or turn destination delivery off.",
   );
   assert.equal(
-    validateFreightSettings(draft({maxDeclaredValue: "50000"})),
-    "The most you will carry must be between $0 and $10,000.",
+    validateFreightSettings(
+      draft({destinationDelivery: true, destinationDeliveryFee: "900"}),
+    ),
+    "The delivery fee must be between $0 and $500.",
   );
-  // The one refusal that is not about a number being out of range: a promise
-  // to pay, with nothing collected for it.
   assert.equal(
-    validateFreightSettings(draft({coversLoss: true, coverageRatePct: "0"})),
-    "Set a coverage rate above 0%, or turn off cover for lost parcels. Cover at no price is money you never collected for.",
+    validateFreightSettings(
+      draft({destinationDelivery: true, destinationDeliveryFee: "15"}),
+    ),
+    null,
   );
 });
 
@@ -412,25 +359,23 @@ test("everything the two screens say has French", () => {
     translateValue("Phones, laptops, tablets, chargers", "fr"),
     "Téléphones, ordinateurs portables, tablettes, chargeurs",
   );
-  // The comparison line, which is the whole point of showing cover early.
+  // The comparison line, which is the whole point of showing cover early -
+  // including the half of it a French customer most needs to understand.
   assert.equal(
-    translateValue("No protection offered", "fr"),
-    "Aucune protection proposée",
+    translateValue("This business does not pay for a lost parcel", "fr"),
+    "Cette entreprise ne rembourse pas un colis perdu",
   );
-  assert.equal(translateValue("Covers up to", "fr"), "Couvre jusqu’à");
-  // The card header is "Protection" now - loss-talk left the browsing
-  // stage with the declared-value flow.
   assert.equal(translateValue("Protection", "fr"), "Protection");
   assert.equal(
     translateValue("Protection included", "fr"),
     "Protection incluse",
   );
-  // Refusals the server throws are shown word for word, so they need French
-  // or a French customer gets an English refusal at the payment step.
   assert.equal(
-    translateValue("This business does not carry parcels worth that much", "fr"),
-    "Cette entreprise ne transporte pas de colis d’une telle valeur",
+    translateValue("Protection included · up to", "fr"),
+    "Protection incluse · jusqu’à",
   );
+  // What protection costs, said in the price column of the estimate.
+  assert.equal(translateValue("Free", "fr"), "Offert");
   // Refusals the settings form raises itself.
   assert.equal(
     translateValue(
@@ -441,10 +386,10 @@ test("everything the two screens say has French", () => {
   );
   assert.equal(
     translateValue(
-      "Set a coverage rate above 0%, or turn off cover for lost parcels. Cover at no price is money you never collected for.",
+      "Set a delivery fee, or turn destination delivery off.",
       "fr",
     ),
-    "Fixez un taux de couverture supérieur à 0 %, ou désactivez la couverture des colis perdus. Une couverture gratuite est de l’argent que vous n’avez jamais encaissé.",
+    "Fixez des frais de livraison, ou désactivez la livraison à l’arrivée.",
   );
   // A category a business invented is left alone; the sentence around it is
   // still translated, so the refusal is readable either way.
@@ -460,19 +405,21 @@ test("both consoles are wired to the freight category and coverage contract", ()
     "utf8",
   );
   // The funnel asks what is being sent BEFORE showing businesses, and the
-  // payload sends the answer that fits the chosen one: the item row when it
-  // has a payback table, the typed value only for businesses without one.
+  // payload sends the business's own item row - the only thing that decides
+  // what a lost parcel pays back.
   assert.match(customer, /What are you sending\?/);
   assert.match(customer, /funnelItems\.map/);
   assert.match(customer, /itemStepSatisfied && qualifiedProviderOptions/);
-  assert.match(customer, /<FreightValueField/);
-  assert.match(customer, /usesItemPricing\s*\n?\s*\? \{itemId: activeItemId === OTHER_ITEM_ID \? "" : activeItemId\}/);
+  assert.match(
+    customer,
+    /usesItemPricing && \{\s*itemId: activeItemId === OTHER_ITEM_ID \? "" : activeItemId,/,
+  );
   // The comparison surface: coverage on the card, before a business is picked.
   assert.match(customer, /freightCoverageComparisonLine\(/);
   assert.match(customer, /customer-destination-coverage/);
-  // The cap is on the screen, not behind an "i": UI convention 1 forbids
-  // hiding anything the reader needs to avoid a mistake, and a payout cap is
-  // exactly that.
+  // The amount is on the screen, not behind an "i": UI convention 1 forbids
+  // hiding anything the reader needs to avoid a mistake, and what a business
+  // owes on a lost parcel is exactly that.
   assert.match(customer, /We pay up to/);
   assert.doesNotMatch(customer, /<FieldInfo[\s\S]{0,400}We pay up to/);
 
@@ -486,7 +433,7 @@ test("both consoles are wired to the freight category and coverage contract", ()
   assert.match(business, /FieldInfo label="how cover for a lost parcel works"/);
   // What a business owes on a lost parcel is money moving, so it stays on the
   // screen whether or not anyone presses the "i".
-  assert.match(business, /You pay the customer back, not Laawol\./);
+  assert.match(business, /You pay the customer back, not Laawol/);
 
   // Both halves ride on the one callable that already carries them.
   const settings = readFileSync(
@@ -497,17 +444,28 @@ test("both consoles are wired to the freight category and coverage contract", ()
   assert.match(settings, /validateFreightSettings/);
 });
 
-test("a payback-table business never shows declared-value wording", () => {
-  // Customers of a table business declare nothing - the card must not
-  // describe a flow that no longer exists for them.
-  const money = (value: number) => `$${value}`;
-  assert.equal(
-    freightCoverageComparisonLine(
-      {coversLoss: true, ratePct: 2, maxDeclaredValue: 0,
-        declarationThreshold: 200},
-      money,
-      true,
-    ),
-    "Protection included · 2% of the item's covered amount",
+test("nothing on either screen asks the customer what the parcel is worth", () => {
+  const customer = readFileSync(
+    new URL("../components/customer-shipping-services.tsx", import.meta.url),
+    "utf8",
   );
+  const business = readFileSync(
+    new URL("../components/business/profile-support-people.tsx", import.meta.url),
+    "utf8",
+  );
+  // A sender's own valuation was either a guess or an incentive, and pricing
+  // off it made the honest customer subsidise the optimistic one. There is
+  // no input for it, no state behind one, and no ceiling to compare it to.
+  for (const source of [customer, business]) {
+    assert.doesNotMatch(source, /declaredValue|declaresValue|maxDeclaredValue/);
+    assert.doesNotMatch(source, /coverageRatePct|coverageFee|ratePct/);
+  }
+  assert.doesNotMatch(customer, /What would it cost to replace/);
+  assert.doesNotMatch(business, /Most you will carry/);
+  // And the payload cannot carry one even if a caller tried.
+  const shipping = readFileSync(
+    new URL("./customer-shipping.ts", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(shipping, /declaredValue/);
 });

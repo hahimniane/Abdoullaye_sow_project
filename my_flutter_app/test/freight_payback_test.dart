@@ -47,10 +47,15 @@ void main() {
     );
   });
 
-  test('the fee comes from the business payback, never a claim', () {
-    expect(coverageFeeCentsFor(400, 2), 800);
-    expect(coverageFeeCentsFor(0, 2), 0);
-    expect(coverageFeeCentsFor(400, 0), 0);
+  test('the payback is the published amount, whole', () {
+    // What a covering business pays back is the row it published, not a
+    // proportion of it - and it costs the customer nothing to be owed it.
+    final listed = freightPaybackFor(
+      table: table, categoryId: 'electronics', itemId: 'iphone',
+    );
+    expect(listed.paybackAmount, 400);
+    expect(listed.source, 'item');
+    expect(listed.label, 'iPhone');
   });
 
   test('the funnel unions items and matches like the web', () {

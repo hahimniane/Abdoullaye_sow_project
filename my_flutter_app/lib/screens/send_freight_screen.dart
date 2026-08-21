@@ -13,7 +13,7 @@ import '../models/structured_address.dart';
 import '../services/barrel_shipment_service.dart';
 import '../services/business_service.dart';
 import '../services/freight_categories.dart';
-import '../services/freight_coverage.dart';
+import '../utils/freight_delivery.dart';
 import '../utils/freight_payback.dart';
 import '../services/service_ranking.dart';
 import '../services/freight_shipment_service.dart';
@@ -50,11 +50,14 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   final _receiverController = TextEditingController();
   final _phoneController = TextEditingController();
   final _weightController = TextEditingController();
-  final _declaredValueController = TextEditingController();
   // Street line only. The rest of the address lives in _pickupAddress; the
   // composed line is what reaches the pricing and checkout callables.
   final _pickupAddressController = TextEditingController();
   StructuredAddress _pickupAddress = StructuredAddress.empty;
+  // Free text, one field. Conakry, Dakar and Bamako addresses are a
+  // neighbourhood and a landmark rather than a house number on a named street,
+  // so the structured US fields have nothing to put them in.
+  final _receiverAddressController = TextEditingController();
 
   List<BusinessDestinationOption> _options = const [];
   BusinessDestinationOption? _selected;
@@ -65,7 +68,6 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   bool _busy = false;
   bool _receiverPhoneIsWhatsappOnly = false;
 
-  // What is in the parcel, and what the customer says it would cost to
   // The funnel's answers, taken BEFORE any business is shown - the same
   // country -> category -> item -> qualifying-businesses order as the web
   // console, so both clients walk the customer identically.
@@ -73,11 +75,19 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   String _funnelCategoryId = '';
   String _funnelItemId = '';
 
-  // replace. Two different questions on purpose: the category is what the
-  // business charges by, the declared value is what it pays back by.
+  /// The customer chose to pay after arrival. Only meaningful while the
+  /// selected business offers it; reset on every business change.
+  bool _payOnArrival = false;
+
+  /// The receiver has it brought to their address instead of collecting it.
+  /// Only meaningful while the selected business offers it; reset on every
+  /// business change, like every other per-business choice on this screen.
+  bool _destinationDelivery = false;
+
+  /// What is in the parcel, as the funnel answered it. It is what the business
+  /// charges by, and what its published table pays back by.
   String _categoryId = '';
   ServiceSort _sort = kDefaultServiceSort;
-  bool _declaresValue = false;
 
   // Freight home-pickup state for the selected business.
   bool _pickupOffered = false;
@@ -109,8 +119,8 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     _receiverController.dispose();
     _phoneController.dispose();
     _weightController.dispose();
-    _declaredValueController.dispose();
     _pickupAddressController.dispose();
+    _receiverAddressController.dispose();
     super.dispose();
   }
 
@@ -180,23 +190,21 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       _pickupError = null;
     }
     _pickupOffered = fresh.freightPickupAvailable;
-    // A business can stop covering loss while this screen is open. The
-    // category, though, is the funnel's answer - it survives a refresh
-    // verbatim (the server prices an unknown category at 1x); only a
-    // legacy flow with no funnel answer falls back to the default.
+    // A business can withdraw destination delivery while this screen is open;
+    // the address goes with it so a stale one cannot reach the callable.
+    if (!fresh.freightDelivery.offered) _resetDestinationDelivery();
+    // The category is the funnel's answer - it survives a refresh verbatim
+    // (the server prices an unknown category at 1x); only a flow with no
+    // funnel answer falls back to the default.
     if (_activeFunnelCategoryId.isEmpty &&
         freightCategoryLookup(fresh.freightCategories, _categoryId) == null) {
       _categoryId = defaultFreightCategoryId(fresh.freightCategories);
     }
-    if (!_worthAskingDeclaredValue(fresh)) _resetDeclaredValue();
   }
 
-  bool _worthAskingDeclaredValue(BusinessDestinationOption option) =>
-      option.freightCoverage?.worthAskingDeclaredValue == true;
-
-  void _resetDeclaredValue() {
-    _declaresValue = false;
-    _declaredValueController.clear();
+  void _resetDestinationDelivery() {
+    _destinationDelivery = false;
+    _receiverAddressController.clear();
   }
 
   /// The chip label for a sort. Declared here rather than in the ranking
@@ -320,21 +328,6 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     multiplier: freightCategoryMultiplier(_categories, _categoryId),
   );
 
-  /// What the customer says the parcel would cost to replace. Zero unless they
-  /// said there was something worth declaring - the question is optional and a
-  /// stale number in a hidden field must not reach the server.
-  double get _declaredValue => _declaresValue
-      ? (double.tryParse(_declaredValueController.text.trim()) ?? 0)
-      : 0;
-
-  /// Priced locally so the fee and the promise are on screen before payment.
-  /// The callable re-prices it against a freshly read business document and
-  /// has the final word.
-  FreightCoverageQuote get _coverageQuote => quoteFreightCoverage(
-    policy: _selected?.freightCoverage ?? FreightCoveragePolicy.none,
-    declaredValue: _declaredValue,
-  );
-
   /// The business publishes what each item pays back; the customer only says
   /// what the item is. Mirrors the web console exactly - see freight_payback.
   bool get _usesItemPricing =>
@@ -348,20 +341,27 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     itemId: _activeFunnelItemId == otherItemId ? '' : _activeFunnelItemId,
   );
 
-  double get _itemCoverageFee {
-    if (!_usesItemPricing) return 0;
-    final policy = _selected?.freightCoverage;
-    if (policy == null || !policy.coversLoss) return 0;
-    final lookup = _itemPayback;
-    if (!lookup.listed) return 0;
-    return coverageFeeCentsFor(lookup.paybackAmount, policy.ratePct) / 100;
-  }
+  /// The choice only survives while the chosen business actually offers it -
+  /// a business switch submits pay-now, whatever the toggle said before.
+  bool get _payOnArrivalChosen =>
+      (_selected?.freightPayOnArrival ?? false) && _payOnArrival;
 
-  double get _coverageFeeApplied =>
-      _usesItemPricing ? _itemCoverageFee : _coverageQuote.coverageFee;
+  FreightDeliveryPolicy get _deliveryPolicy =>
+      _selected?.freightDelivery ??
+      const FreightDeliveryPolicy(offered: false, fee: 0, feeCents: 0);
+
+  /// Same rule as pay-on-arrival: a business that does not deliver gets a
+  /// booking with no delivery on it, whatever the radio said before the swap.
+  bool get _deliveryChosen => _deliveryPolicy.offered && _destinationDelivery;
+
+  String get _receiverAddress => _receiverAddressController.text.trim();
 
   double get _appliedPickupFee => _pickupRequested ? (_pickupFee ?? 0) : 0;
-  double get _totalPrice => _price + _appliedPickupFee + _coverageFeeApplied;
+  double get _appliedDeliveryFee => _deliveryChosen ? _deliveryPolicy.fee : 0;
+
+  /// Cover is not a line here: the business already priced the risk into what
+  /// it charges to carry this item.
+  double get _totalPrice => _price + _appliedPickupFee + _appliedDeliveryFee;
 
   /// Pickup is blocking the order only when it's requested but not yet resolved
   /// (still quoting, errored, or missing required details).
@@ -375,10 +375,18 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     return false;
   }
 
+  /// An address is the whole point of choosing delivery, so an incomplete one
+  /// holds the order here rather than being refused at the callable.
+  bool get _deliveryBlocksSubmit => !deliveryChoiceIsComplete(
+    wantsDelivery: _deliveryChosen,
+    receiverAddress: _receiverAddress,
+  );
+
   void _select(BusinessDestinationOption o) {
     setState(() {
       _selected = o;
       _receiverPhoneIsWhatsappOnly = false;
+      _payOnArrival = false;
       final modes = _availableModes(o);
       _mode = modes.contains(_mode)
           ? _mode
@@ -392,7 +400,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       _categoryId = _activeFunnelCategoryId.isNotEmpty
           ? _activeFunnelCategoryId
           : defaultFreightCategoryId(o.freightCategories);
-      _resetDeclaredValue();
+      _resetDestinationDelivery();
       _resetPickup();
       // Pickup availability + model are resolved server-side and travel with
       // the option, so no extra (rule-blocked) business read is needed here.
@@ -540,6 +548,14 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       _snack(l10n.enterParcelWeightKg);
       return;
     }
+    if (_deliveryBlocksSubmit) {
+      _snack(
+        _receiverAddress.length > maxReceiverAddressLength
+            ? l10n.freightReceiverAddressTooLong
+            : l10n.freightReceiverAddressRequired,
+      );
+      return;
+    }
     if (_pickupRequested) {
       if (_pickupAddress.composeLine().isEmpty) {
         _snack(l10n.freightPickupEnterDetailsForFee);
@@ -574,8 +590,13 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       context,
       providerNames: option.businessName,
       transactionSummary: l10n.sendFreight,
-      additionalBody: l10n.freightAutoChargeDisclosureBody,
-      showHoldNotice: true,
+      // Pay-on-arrival saves a card instead of charging one, so the hold
+      // notice and the weight-adjustment auto-charge copy would both be
+      // describing a payment that is not happening today.
+      additionalBody: _payOnArrivalChosen
+          ? l10n.payOnArrivalExplainer(option.businessName)
+          : l10n.freightAutoChargeDisclosureBody,
+      showHoldNotice: !_payOnArrivalChosen,
     );
     if (marketplaceAcceptance == null || !mounted) return;
     setState(() => _busy = true);
@@ -592,15 +613,15 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         itemId: _usesItemPricing
             ? (_activeFunnelItemId == otherItemId ? '' : _activeFunnelItemId)
             : null,
-        declaredValue: !_usesItemPricing && _declaredValue > 0
-            ? _declaredValue
-            : null,
+        destinationDelivery: _deliveryChosen,
+        receiverAddress: _deliveryChosen ? _receiverAddress : null,
         pickupRequested: _pickupRequested,
         pickupAddress: _pickupRequested ? _pickupAddress.composeLine() : null,
         pickupDateTime: _pickupRequested
             ? _pickupDateTime!.toUtc().toIso8601String()
             : null,
         officeLocationId: _pickupRequested ? null : _officeLocationId,
+        paymentTiming: _payOnArrivalChosen ? 'arrival' : null,
         marketplaceAcceptance: marketplaceAcceptance,
       );
       if (!mounted) return;
@@ -618,11 +639,11 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
           : const <String, dynamic>{};
       final message = details['reason'] == 'invalid_freight_mode'
           ? l10n.invalidFreightMode
-          // The server refuses a declared value in its own words, because only
-          // it knows what this business will carry ("This business does not
-          // carry parcels worth that much"). Replacing that with a generic
-          // failure would leave the customer changing random fields.
-          : _declaredValueRefusal(error) ?? l10n.freightBookingFailed;
+          // The server refuses in its own words, because only it has read the
+          // live business document ("This business does not deliver to the
+          // receiver's address"). Replacing that with a generic failure would
+          // leave the customer changing random fields.
+          : _serverRefusal(error) ?? l10n.freightBookingFailed;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
@@ -631,11 +652,11 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     }
   }
 
-  /// The server's own sentence when it turned down the declared value, or null
-  /// when this failure was about something else. Shown verbatim: it is the only
-  /// party that knows the ceiling, and a paraphrase would risk contradicting it.
-  String? _declaredValueRefusal(Object error) {
-    if (_declaredValue <= 0) return null;
+  /// The server's own sentence when it turned the booking down on the terms it
+  /// alone can check, or null when this failure was about something else. Shown
+  /// verbatim: a paraphrase would risk contradicting the one party that read
+  /// the live business document.
+  String? _serverRefusal(Object error) {
     if (error is! FirebaseFunctionsException) return null;
     if (error.code != 'failed-precondition') return null;
     final message = (error.message ?? '').trim();
@@ -1053,8 +1074,8 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     );
   }
 
-  /// "Covers up to $2,000 · 2%" against "No coverage", on the card the customer
-  /// chooses from.
+  /// "Covers loss" against "No coverage", on the card the customer chooses
+  /// from.
   Widget _coveragePill(ThemeData theme, BusinessDestinationOption o) {
     final l10n = AppLocalizations.of(context)!;
     final covers = o.freightCoverage?.coversLoss == true;
@@ -1255,63 +1276,74 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     );
   }
 
-  /// Who stands behind the parcel, and the one question only the customer can
-  /// answer. Asked once, and only where the answer changes something: a
-  /// business that neither covers loss nor states a ceiling does nothing with
-  /// it, so it is told plainly instead of being asked.
+  /// When the customer pays - only shown for a business that opted in to
+  /// being paid after the parcel reaches the destination.
+  Widget _paymentTimingSection(
+    ThemeData theme,
+    AppLocalizations l10n,
+    BusinessDestinationOption option,
+  ) {
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+              child: Text(
+                l10n.whenDoYouPay,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            RadioListTile<bool>(
+              value: false,
+              // ignore: deprecated_member_use
+              groupValue: _payOnArrival,
+              dense: true,
+              title: Text(l10n.payNowOption),
+              // ignore: deprecated_member_use
+              onChanged: _busy
+                  ? null
+                  : (value) => setState(() => _payOnArrival = value ?? false),
+            ),
+            RadioListTile<bool>(
+              value: true,
+              // ignore: deprecated_member_use
+              groupValue: _payOnArrival,
+              dense: true,
+              title: Text(l10n.payOnArrivalOption),
+              subtitle: _payOnArrival
+                  ? Text(l10n.payOnArrivalExplainer(option.businessName))
+                  : null,
+              // ignore: deprecated_member_use
+              onChanged: _busy
+                  ? null
+                  : (value) => setState(() => _payOnArrival = value ?? false),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Who stands behind the parcel. There is nothing to ask and nothing to
+  /// charge: the business publishes what each item pays back, so this states
+  /// the promise - or its absence - while the business can still be swapped
+  /// for another.
   Widget _coverageSection(ThemeData theme, AppLocalizations l10n) {
     final option = _selected!;
     final policy = option.freightCoverage;
-    if (_usesItemPricing) {
-      // The business's table decides the payback; there is nothing to ask.
-      // Reassurance framing only - no loss-talk in the customer's face,
-      // exactly as on the web.
-      final lookup = _itemPayback;
-      if (policy == null ||
-          !policy.coversLoss ||
-          !lookup.listed ||
-          lookup.paybackAmount <= 0) {
-        return const SizedBox.shrink();
-      }
-      return Card(
-        margin: EdgeInsets.zero,
-        elevation: 0,
-        color: theme.colorScheme.surfaceContainerHighest,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Icon(
-                Icons.verified_user_outlined,
-                size: 18,
-                color: theme.colorScheme.primary,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  l10n.protectionIncludedUpTo(
-                    freightMoney(lookup.paybackAmount),
-                  ),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              if (_itemCoverageFee > 0)
-                Text(
-                  '+ \$${_itemCoverageFee.toStringAsFixed(2)}',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.hintColor,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      );
-    }
     if (policy == null) return const SizedBox.shrink();
-    final quote = _coverageQuote;
-    final asks = policy.worthAskingDeclaredValue;
+
+    final lookup = _itemPayback;
+    final covers = policy.coversLoss;
+    final payback = covers && lookup.listed ? lookup.paybackAmount : 0.0;
     return Card(
       margin: EdgeInsets.zero,
       elevation: 0,
@@ -1324,19 +1356,19 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
             Row(
               children: [
                 Icon(
-                  policy.coversLoss
-                      ? Icons.shield_outlined
-                      : Icons.gpp_maybe_outlined,
+                  covers ? Icons.verified_user_outlined : Icons.gpp_maybe_outlined,
                   size: 18,
-                  color: policy.coversLoss
-                      ? theme.colorScheme.primary
-                      : theme.hintColor,
+                  color: covers ? theme.colorScheme.primary : theme.hintColor,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  l10n.freightCoverageSectionTitle,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
+                Expanded(
+                  child: Text(
+                    covers && payback > 0
+                        ? l10n.protectionIncludedUpTo(freightMoney(payback))
+                        : l10n.freightCoverageSectionTitle,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ],
@@ -1344,50 +1376,41 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
             const SizedBox(height: 6),
             // A business that will not pay for a lost parcel says so here,
             // before the parcel is handed over, rather than after it is lost.
-            if (!policy.coversLoss)
+            if (!covers)
               Text(
                 l10n.freightCoverageNotOffered(option.businessName),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.hintColor,
                 ),
-              ),
-            if (asks) ...[
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: _declaresValue,
-                onChanged: _busy
-                    ? null
-                    : (value) => setState(() {
-                        _declaresValue = value;
-                        if (!value) _declaredValueController.clear();
-                      }),
-                title: Text(
-                  l10n.freightCoverageQuestion(
-                    freightMoney(policy.declarationThreshold),
-                  ),
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+              )
+            else ...[
+              Text(
+                payback > 0
+                    ? l10n.freightCoveragePaysUpTo(
+                        option.businessName,
+                        freightMoney(payback),
+                      )
+                    : l10n.freightCoveragePaysForLoss(option.businessName),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
-                subtitle: Text(l10n.freightCoverageQuestionHelp),
               ),
-              if (_declaresValue) ...[
-                TextField(
-                  controller: _declaredValueController,
-                  enabled: !_busy,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    labelText: l10n.freightDeclaredValueLabel,
-                    helperText: l10n.freightDeclaredValueHelper,
-                    helperMaxLines: 3,
-                    prefixText: '\$',
-                    prefixIcon: const Icon(Icons.attach_money),
-                  ),
+              const SizedBox(height: 2),
+              Text(
+                l10n.freightCoverageNoExtraCharge,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.hintColor,
                 ),
-                const SizedBox(height: 10),
-                _coverageStatus(theme, l10n, option, policy, quote),
-              ],
+              ),
+              const SizedBox(height: 2),
+              // The platform is not the insurer, and the customer should know
+              // whose promise this is before relying on it.
+              Text(
+                l10n.freightCoverageWhoPays(option.businessName),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.hintColor,
+                ),
+              ),
             ],
           ],
         ),
@@ -1395,94 +1418,89 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     );
   }
 
-  Widget _coverageStatus(
-    ThemeData theme,
-    AppLocalizations l10n,
-    BusinessDestinationOption option,
-    FreightCoveragePolicy policy,
-    FreightCoverageQuote quote,
-  ) {
-    // The ceiling is a statement about what this business is willing to carry,
-    // so it is shown whether or not the business sells coverage. When the
-    // declared value is over it the same sentence turns red - the server owns
-    // the refusal wording and there is no point inventing a second one.
-    final ceilingLine = policy.hasCeiling
-        ? Text(
-            l10n.freightCoverageCarriesUpTo(
-              option.businessName,
-              freightMoney(policy.maxDeclaredValue),
-            ),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: quote.error == FreightCoverageError.aboveMaxDeclaredValue
-                  ? theme.colorScheme.error
-                  : theme.hintColor,
-              fontWeight:
-                  quote.error == FreightCoverageError.aboveMaxDeclaredValue
-                  ? FontWeight.w700
-                  : FontWeight.w400,
-            ),
-          )
-        : null;
-
-    if (_declaredValue <= 0) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.freightCoverageEnterValue,
-            style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
-          ),
-          if (ceilingLine != null) ...[const SizedBox(height: 4), ceilingLine],
-        ],
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (quote.covered) ...[
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  l10n.freightCoverageFeeLabel,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.hintColor,
-                  ),
-                ),
-              ),
-              Text(
-                '\$${quote.coverageFee.toStringAsFixed(2)}',
+  /// How the receiver gets the parcel at the other end: they collect it from
+  /// the business, or the business brings it to them for a flat published fee.
+  ///
+  /// The address is one free-text field on purpose. A destination address is a
+  /// neighbourhood and a landmark rather than a house number on a named street,
+  /// so the structured fields the US pickup flow uses have nowhere to put it.
+  Widget _destinationDeliverySection(ThemeData theme, AppLocalizations l10n) {
+    final option = _selected!;
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+              child: Text(
+                l10n.freightDestinationDeliveryTitle,
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            l10n.freightCoveragePaysUpTo(
-              option.businessName,
-              freightMoney(quote.payoutCap),
             ),
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w700,
+            RadioListTile<bool>(
+              value: false,
+              // ignore: deprecated_member_use
+              groupValue: _destinationDelivery,
+              dense: true,
+              title: Text(l10n.freightDestinationDeliveryCollect),
+              subtitle: Text(
+                l10n.freightDestinationDeliveryCollectHelp(option.businessName),
+              ),
+              // ignore: deprecated_member_use
+              onChanged: _busy
+                  ? null
+                  : (value) => setState(() {
+                      _destinationDelivery = value ?? false;
+                      if (!_destinationDelivery) {
+                        _receiverAddressController.clear();
+                      }
+                    }),
             ),
-          ),
-          const SizedBox(height: 2),
-          // The platform is not the insurer, and the customer should know
-          // whose promise this is before relying on it.
-          Text(
-            l10n.freightCoverageWhoPays(option.businessName),
-            style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
-          ),
-        ],
-        if (ceilingLine != null) ...[
-          if (quote.covered) const SizedBox(height: 4),
-          ceilingLine,
-        ],
-      ],
+            RadioListTile<bool>(
+              value: true,
+              // ignore: deprecated_member_use
+              groupValue: _destinationDelivery,
+              dense: true,
+              title: Text(
+                l10n.freightDestinationDeliveryToAddress(
+                  freightMoney(_deliveryPolicy.fee),
+                ),
+              ),
+              // ignore: deprecated_member_use
+              onChanged: _busy
+                  ? null
+                  : (value) => setState(() => _destinationDelivery = value ?? false),
+            ),
+            if (_destinationDelivery)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                child: TextField(
+                  controller: _receiverAddressController,
+                  enabled: !_busy,
+                  minLines: 3,
+                  maxLines: 5,
+                  maxLength: maxReceiverAddressLength,
+                  textCapitalization: TextCapitalization.sentences,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    labelText: l10n.freightReceiverAddressLabel,
+                    hintText: l10n.freightReceiverAddressHint,
+                    helperText: l10n.freightReceiverAddressHelper,
+                    helperMaxLines: 3,
+                    alignLabelWithHint: true,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1558,6 +1576,10 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
           const SizedBox(height: 14),
           _coverageSection(theme, l10n),
         ],
+        if (o.freightPayOnArrival) ...[
+          const SizedBox(height: 14),
+          _paymentTimingSection(theme, l10n, o),
+        ],
         const SizedBox(height: 14),
         TextField(
           controller: _senderController,
@@ -1609,6 +1631,10 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
           const SizedBox(height: 8),
           _pickupSection(theme, l10n),
         ],
+        if (_deliveryPolicy.offered) ...[
+          const SizedBox(height: 8),
+          _destinationDeliverySection(theme, l10n),
+        ],
         const SizedBox(height: 18),
         Card(
           elevation: 0,
@@ -1635,18 +1661,18 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                           color: theme.hintColor,
                         ),
                       ),
-                      if (_coverageFeeApplied > 0)
-                        Text(
-                          '+ \$${_coverageFeeApplied.toStringAsFixed(2)} '
-                          '${l10n.freightCoverageFeeLabel}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.hintColor,
-                          ),
-                        ),
                       if (_appliedPickupFee > 0)
                         Text(
                           '+ \$${_appliedPickupFee.toStringAsFixed(2)} '
                           '${l10n.freightPickupFeeLabel}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.hintColor,
+                          ),
+                        ),
+                      if (_appliedDeliveryFee > 0)
+                        Text(
+                          '+ \$${_appliedDeliveryFee.toStringAsFixed(2)} '
+                          '${l10n.freightDestinationDeliveryFeeLabel}',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.hintColor,
                           ),
@@ -1672,7 +1698,9 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         ),
         const SizedBox(height: 18),
         FilledButton.icon(
-          onPressed: _busy || _price <= 0 || _pickupBlocksSubmit
+          onPressed:
+              _busy || _price <= 0 || _pickupBlocksSubmit ||
+                  _deliveryBlocksSubmit
               ? null
               : _submit,
           icon: _busy
@@ -1682,7 +1710,9 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.local_shipping_outlined),
-          label: Text(l10n.payEstimate),
+          label: Text(
+            _payOnArrivalChosen ? l10n.saveCardAndBook : l10n.payEstimate,
+          ),
         ),
         const SizedBox(height: 8),
         Text(

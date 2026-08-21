@@ -1541,7 +1541,7 @@ function orderStatusLabel(order: TaggedRow) {
   // not for a parking booking.
   if (order.collectionName === "barrelShipments" ||
       order.collectionName === "freightShipments") {
-    return statusLabel(status);
+    return statusLabel(status, order.row.destinationDelivery === true);
   }
   return status;
 }

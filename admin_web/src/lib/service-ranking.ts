@@ -18,7 +18,6 @@ import {
   freightCategoryOptionsFrom,
   freightCategoryPricing,
   freightCoveragePolicyFrom,
-  quoteFreightCoverage,
 } from "./freight-categories.ts";
 
 export const SERVICE_SORTS = [
@@ -103,7 +102,6 @@ export type ServiceSortInputs = {
   mode?: "air" | "sea";
   weightKg?: unknown;
   itemCategoryId?: string;
-  declaredValue?: unknown;
   /** Barrels and shares. */
   quantity?: unknown;
   /** Parking. */
@@ -202,7 +200,7 @@ function serviceSpeedRank(
 
 function freightTotal(
   option: RankableServiceOption,
-  { weightKg, mode, itemCategoryId, declaredValue }: ServiceSortInputs,
+  { weightKg, mode, itemCategoryId }: ServiceSortInputs,
 ): number {
   const ratePerKg = Number(
     mode === "sea"
@@ -221,15 +219,10 @@ function freightTotal(
   });
   if (!pricing) return UNKNOWN_SORT_VALUE;
 
-  const coverage = quoteFreightCoverage({
-    policy: freightCoveragePolicyFrom(option.freightCoverage),
-    declaredValue,
-  });
-  // A declared value this business will not accept does not make it cheapest.
-  // Its own refusal is shown on the card; ranking it first would be a lie.
-  if (!coverage.ok) return UNKNOWN_SORT_VALUE;
-
-  return pricing.shippingSubtotal + coverage.coverageFee;
+  // Cover adds nothing to the bill, so cheapest is the shipping line alone.
+  // A business that stands behind the parcel is not therefore dearer, which
+  // is why cover has its own sort rather than a thumb on this one.
+  return pricing.shippingSubtotal;
 }
 
 /**
@@ -330,18 +323,14 @@ export function sortServiceOptions<T extends RankableServiceOption>(
 /**
  * How good a business's loss policy is, as a sortable key.
  *
- * Covers loss beats does not; higher ceiling beats lower; at the same ceiling
- * the cheaper rate wins. No stated ceiling counts as the highest, because that
- * business has set no limit on what it will carry.
+ * One comparison, because there is one thing to compare: a business that
+ * pays for a parcel it loses beats one that does not. What it pays is that
+ * business's published payback for the item, and the customer already picked
+ * the item - so the amount belongs on the card, not in the ordering.
  */
 export function freightCoverageRank(option: RankableServiceOption): number[] {
   const policy = freightCoveragePolicyFrom(option.freightCoverage);
-  if (!policy?.coversLoss) return [1, 0, 0];
-  const ceiling =
-    policy.maxDeclaredValue > 0
-      ? policy.maxDeclaredValue
-      : Number.MAX_SAFE_INTEGER;
-  return [0, -ceiling, policy.ratePct];
+  return [policy?.coversLoss ? 0 : 1];
 }
 
 /**

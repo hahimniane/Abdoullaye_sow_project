@@ -1,6 +1,8 @@
 /**
  * What a lost parcel pays back - the business's table, not the sender's
- * claim.
+ * claim. A covering business owes the whole published amount; the customer
+ * is charged nothing for that promise, because the item was already priced
+ * for what it is worth to carry.
  *
  * Mirror of my_flutter_app/functions/freight_payback.js (the authority) and
  * my_flutter_app/lib/utils/freight_payback.dart. All three clients must
@@ -95,20 +97,6 @@ export function freightPaybackFor({
   return {listed: false, paybackAmount: 0, source: null};
 }
 
-/**
- * The coverage fee for a payback amount under the business's rate - the
- * only arithmetic a client is trusted to preview.
- */
-export function coverageFeeCentsFor(
-  paybackAmount: number,
-  ratePct: number,
-): number {
-  const paybackCents = Math.round((Number(paybackAmount) || 0) * 100);
-  const rate = Number(ratePct) || 0;
-  if (paybackCents <= 0 || rate <= 0) return 0;
-  return Math.round(paybackCents * (rate / 100));
-}
-
 /** The funnel's synthetic id for "something not on anyone's list". */
 export const OTHER_ITEM_ID = "__other";
 
@@ -168,9 +156,9 @@ export function freightItemChoicesFor(
 /**
  * Whether one provider can instant-book this item.
  *
- * A provider with no table carries anything (it prices by declared value);
- * a provider with a table qualifies through the exact row or its category
- * catch-all - the same resolution the server prices with.
+ * A provider with no table carries anything; a provider with a table
+ * qualifies through the exact row or its category catch-all - the same
+ * resolution the server prices with.
  */
 export function providerQualifiesForItem(
   option: ProviderLike,

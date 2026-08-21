@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
-  coverageFeeCentsFor,
   freightItemChoicesFor,
   freightPaybackFor,
   providerQualifiesForItem,
@@ -53,33 +52,25 @@ test("falls back to the catch-all, and says unlisted otherwise", () => {
   );
 });
 
-test("the fee comes from the business's payback, never a claim", () => {
-  assert.equal(coverageFeeCentsFor(400, 2), 800);
-  assert.equal(coverageFeeCentsFor(0, 2), 0);
-  assert.equal(coverageFeeCentsFor(400, 0), 0);
-});
-
-test("protection reads as reassurance, never as loss-talk in the face", () => {
-  // The owner's rule: don't lead with "if we lose your item". Browsing gets
-  // the "i"; the review line is insurance language with the promise stated.
+test("the payback is what the customer is promised, and it costs nothing", () => {
+  // The business's published amount reaches the screen in full, beside a
+  // price column that says outright there is no charge for it.
   const customer = readFileSync(
     new URL("../components/customer-shipping-services.tsx", import.meta.url),
     "utf8",
   );
-  assert.match(customer, /Protection included · up to/);
+  assert.match(customer, /Protection included · up to \$\{formatMoney\(paybackAmount\)\}/);
+  assert.match(customer, /value: "Free"/);
   assert.doesNotMatch(customer, /label:\s*"Cover for loss"/);
-  // The typed declared value is gone wherever a table exists.
-  assert.match(
-    customer,
-    /usesItemPricing\s*\n?\s*\? \{itemId: activeItemId === OTHER_ITEM_ID \? "" : activeItemId\}/,
-  );
+  // Nothing anywhere in the estimate adds a cover line to the total.
+  assert.doesNotMatch(customer, /\+ coverageFee/);
 });
 
 test("the form follows its own answer, and never narrates history", () => {
-  // "No, parcels are not covered" must not be followed by a coverage-rate
-  // field and a payback-obligation warning - a form that ignores the answer
-  // it just received reads as broken. And pre-launch copy never frames a
-  // feature against a previous version nobody ever saw.
+  // A form that ignores the answer it just received reads as broken: the
+  // obligation warning belongs to businesses that said yes, and the delivery
+  // fee to businesses that said they deliver. And pre-launch copy never
+  // frames a feature against a previous version nobody ever saw.
   const business = readFileSync(
     new URL(
       "../components/business/profile-support-people.tsx",
@@ -89,13 +80,16 @@ test("the form follows its own answer, and never narrates history", () => {
   );
   assert.match(
     business,
-    /\{draft\.coversLoss && \(\s*<label className="lst-field">\s*<span>Coverage rate/,
+    /\{draft\.coversLoss && \(\s*<div className="customer-inline-note wide">/,
   );
   assert.match(
     business,
-    /\{draft\.coversLoss && \(\s*<div className="customer-inline-note wide">/,
+    /\{draft\.destinationDelivery && \(\s*<label className="lst-field wide">/,
   );
   assert.doesNotMatch(business, /no longer type/);
+  for (const source of [business]) {
+    assert.doesNotMatch(source, /no longer|previously|we['’]ve changed/i);
+  }
 });
 
 test("the funnel unions items across providers and matches honestly", () => {
@@ -139,7 +133,7 @@ test("the funnel unions items across providers and matches honestly", () => {
   );
   assert.equal(
     providerQualifiesForItem(legacy, "electronics", "anything"),
-    true, // no table means it carries anything, priced by declared value
+    true, // no table means it carries anything
   );
   // "Something else" disappears when nobody would take it.
   assert.deepEqual(

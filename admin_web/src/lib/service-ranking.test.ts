@@ -28,16 +28,12 @@ function option(
     airDays,
     airMaxDays,
     coversLoss = false,
-    ratePct = 0,
-    maxDeclaredValue = 0,
     categoryRates = {},
   }: {
     airRate?: number;
     airDays?: number;
     airMaxDays?: number;
     coversLoss?: boolean;
-    ratePct?: number;
-    maxDeclaredValue?: number;
     categoryRates?: Record<string, number>;
   } = {},
 ): RankableServiceOption & { businessId: string } {
@@ -46,11 +42,7 @@ function option(
     freightCategories: Object.entries(categoryRates).map(
       ([id, multiplier]) => ({ id, label: id, multiplier }),
     ),
-    freightCoverage: {
-      coversLoss,
-      ratePct,
-      maxDeclaredValue,
-    },
+    freightCoverage: { coversLoss },
     country: {
       freightAirPricePerKg: airRate,
       // The delivery estimate, not freightAirDepartureDays - that field holds
@@ -90,42 +82,13 @@ test("ranks on the real quote, not the headline rate", () => {
   );
 });
 
-test("counts the coverage fee, because the customer pays it", () => {
-  const withCover = option("covers", {
-    airRate: 10,
-    coversLoss: true,
-    ratePct: 2,
-    maxDeclaredValue: 2000,
-  });
-  // 1kg at $10, plus 2% of $1,000 declared = $30.
-  assert.equal(
-    serviceOptionTotal(withCover, { ...air, declaredValue: 1000 }),
-    30,
-  );
-});
-
-test("does not rank a business first when it would refuse the parcel", () => {
-  // Declaring $3,000 at a business capped at $1,000 is a booking the server
-  // rejects. Cheapest-first must not walk the customer into that.
-  const inputs = { ...air, declaredValue: 3000 };
-  const capped = option("capped", {
-    airRate: 1,
-    coversLoss: true,
-    ratePct: 1,
-    maxDeclaredValue: 1000,
-  });
-  const takesIt = option("dearer-but-takes-it", {
-    airRate: 50,
-    coversLoss: true,
-    ratePct: 1,
-    maxDeclaredValue: 5000,
-  });
-
-  assert.equal(serviceOptionTotal(capped, inputs), UNKNOWN_SORT_VALUE);
-  assert.deepEqual(
-    ids(sortServiceOptions([capped, takesIt], inputs)),
-    ["dearer-but-takes-it", "capped"],
-  );
+test("cover never touches the price a business is ranked on", () => {
+  // The business that stands behind the parcel must not sort as the dearer
+  // one: cover is free, and the risk is already inside its per-kg rate.
+  const withCover = option("covers", { airRate: 10, coversLoss: true });
+  const without = option("bare", { airRate: 10 });
+  assert.equal(serviceOptionTotal(withCover, air), 10);
+  assert.equal(serviceOptionTotal(without, air), 10);
 });
 
 test("reads the delivery estimate, not the departure weekdays", () => {
@@ -164,38 +127,26 @@ test("best cover puts the business that stands behind the parcel first", () => {
   const sorted = sortServiceOptions(
     [
       option("bare", { airRate: 5 }),
-      option("covers", {
-        airRate: 30,
-        coversLoss: true,
-        ratePct: 2,
-        maxDeclaredValue: 1000,
-      }),
+      option("covers", { airRate: 30, coversLoss: true }),
     ],
     { ...air, sort: "coverage" },
   );
   assert.deepEqual(ids(sorted), ["covers", "bare"]);
 });
 
-test("prefers a higher ceiling, then a cheaper rate", () => {
+test("cover is one comparison, and price breaks the tie beneath it", () => {
+  // There is nothing left to grade a covering business by: it owes the full
+  // published payback for the item, and the customer already picked the
+  // item. So the sort falls through to the tiebreakers it always had.
   const sorted = sortServiceOptions(
     [
-      option("low-ceiling", {
-        coversLoss: true, ratePct: 1, maxDeclaredValue: 500,
-      }),
-      option("high-ceiling", {
-        coversLoss: true, ratePct: 3, maxDeclaredValue: 5000,
-      }),
-      option("same-ceiling-cheaper", {
-        coversLoss: true, ratePct: 1, maxDeclaredValue: 5000,
-      }),
+      option("dear-cover", { airRate: 40, coversLoss: true }),
+      option("bare", { airRate: 1 }),
+      option("cheap-cover", { airRate: 5, coversLoss: true }),
     ],
     { ...air, sort: "coverage" },
   );
-  assert.deepEqual(ids(sorted), [
-    "same-ceiling-cheaper",
-    "high-ceiling",
-    "low-ceiling",
-  ]);
+  assert.deepEqual(ids(sorted), ["cheap-cover", "dear-cover", "bare"]);
 });
 
 test("gives the same order every time when everything ties", () => {

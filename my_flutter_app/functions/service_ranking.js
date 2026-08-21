@@ -42,8 +42,6 @@ const {BAYESIAN_PRIOR_MEAN} = require("./business_review");
 function coverageSettings(option) {
   return {
     freightCoverageEnabled: option?.freightCoverage?.coversLoss,
-    freightCoverageRatePct: option?.freightCoverage?.ratePct,
-    freightMaxDeclaredValue: option?.freightCoverage?.maxDeclaredValue,
   };
 }
 
@@ -169,37 +167,31 @@ function freightOptionTotalCents({
   const shippingCents = Math.round(kg * ratePerKg * multiplier * 100);
 
   // Priced through the same quote the booking will use, so the order of the
-  // list and the bill can never disagree. A declared value this business will
-  // not accept sinks the option rather than making it look cheapest: ranking a
-  // business first when it would refuse the parcel sends the customer to a
-  // dead end.
+  // list and the bill can never disagree. Cover adds nothing to either - the
+  // business already priced the item for what it is worth to carry - so what
+  // a parcel costs is what it costs to ship it.
   const quote = quoteFreightCoverage({
     business: coverageSettings(option),
     declaredValue,
   });
   if (!quote.ok) return UNKNOWN;
-  return shippingCents + quote.coverageFeeCents;
+  return shippingCents;
 }
 
 /**
  * How good a business's loss policy is, as a sortable rank.
  *
- * The rule, stated rather than left to intuition: a business that covers loss
- * beats one that does not; among those that do, a higher ceiling beats a lower
- * one; and at the same ceiling, the cheaper rate wins. "No stated ceiling"
- * counts as the highest, because that business has set no limit on what it
- * will carry.
+ * One question decides it: does this business make good on a parcel it
+ * loses? There is no rate to break ties on any more, and no ceiling - a
+ * covering business pays the full payback it published for the item, so the
+ * remaining tie-breaks are the list's own (price, rating), applied after.
  *
  * @param {object} option A business option row.
  * @return {Array<number>} Comparable key, lower is better.
  */
 function freightCoverageRank(option) {
   const policy = freightCoveragePolicy(coverageSettings(option));
-  if (!policy.coversLoss) return [1, 0, 0];
-  const ceiling = policy.maxDeclaredValue > 0 ?
-    policy.maxDeclaredValue :
-    Number.MAX_SAFE_INTEGER;
-  return [0, -ceiling, policy.ratePct];
+  return policy.coversLoss ? [0] : [1];
 }
 
 /**

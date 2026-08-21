@@ -218,6 +218,44 @@ describe("business service settings workspace", () => {
     );
   });
 
+  it("sends the freight coverage answer and the delivery offer, nothing else", () => {
+    const draft = businessServiceSettingsFromRow({
+      id: "business-9",
+      enabledServices: ["freight"],
+      freightCoverageEnabled: true,
+      // Numbers a business set under a priced-coverage policy. They must not
+      // survive into the payload: cover is free, and re-sending a rate would
+      // put a charge back on a customer's bill.
+      freightCoverageRatePct: 2,
+      freightMaxDeclaredValue: 2000,
+      freightDestinationDeliveryAvailable: true,
+      freightDestinationDeliveryFee: 15,
+    });
+    const payload = buildBusinessServiceSettingsPayload(draft) as Record<
+      string,
+      unknown
+    >;
+    assert.deepEqual(payload.freightCoverage, {coversLoss: true});
+    assert.deepEqual(payload.freightDestinationDelivery, {
+      available: true,
+      fee: 15,
+    });
+    assert.doesNotMatch(JSON.stringify(payload), /ratePct|maxDeclaredValue/);
+
+    // An opted-in business with no fee is an unfinished setting, and the
+    // console refuses it here rather than letting the callable do it.
+    assert.equal(
+      validateBusinessServiceSettings(
+        {
+          ...draft,
+          freight: {...draft.freight, destinationDeliveryFee: ""},
+        },
+        {isNewYorkBusiness: false},
+      ),
+      "Set a delivery fee, or turn destination delivery off.",
+    );
+  });
+
   it("keeps profile details separate and renders settings with coverage", () => {
     const profile = fs.readFileSync(
       path.join(root, "components/business/profile-support-people.tsx"),

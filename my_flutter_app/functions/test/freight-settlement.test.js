@@ -114,3 +114,55 @@ describe("coverage through settlement", () => {
     assert.equal(result.balanceDueCents, 300);
   });
 });
+
+describe("destination delivery through settlement", () => {
+  it("never refunds the delivery fee as an overpayment", () => {
+    // The coverage-fee bug's twin: booked 10kg × $2 + $15 delivery = $35.
+    // Leaving delivery out of the final total would send $15 "back" and
+    // deliver the parcel to the door for free.
+    const result = calculateFreightSettlement({
+      estimatedTotalCents: 3500,
+      verifiedWeightKg: 10,
+      pricePerKg: 2,
+      destinationDeliveryFeeCents: 1500,
+    });
+    assert.equal(result.finalTotalCents, 3500);
+    assert.equal(result.refundDueCents, 0);
+    assert.equal(result.priceSettlementStatus, "settled");
+  });
+
+  it("charges the weight difference only, not the delivery again", () => {
+    // Delivering to an address costs the same whatever the parcel weighs,
+    // so a heavier parcel owes exactly the extra kilos.
+    const result = calculateFreightSettlement({
+      estimatedTotalCents: 3500,
+      verifiedWeightKg: 12,
+      pricePerKg: 2,
+      destinationDeliveryFeeCents: 1500,
+    });
+    assert.equal(result.finalTotalCents, 3900);
+    assert.equal(result.balanceDueCents, 400);
+  });
+
+  it("stacks with pickup and coverage without double counting", () => {
+    const result = calculateFreightSettlement({
+      estimatedTotalCents: 5300,
+      verifiedWeightKg: 10,
+      pricePerKg: 2,
+      pickupFeeCents: 1000,
+      coverageFeeCents: 800,
+      destinationDeliveryFeeCents: 1500,
+    });
+    assert.equal(result.finalTotalCents, 5300);
+    assert.equal(result.adjustmentCents, 0);
+  });
+
+  it("settles a shipment booked before delivery existed at zero", () => {
+    const result = calculateFreightSettlement({
+      estimatedTotalCents: 2000,
+      verifiedWeightKg: 10,
+      pricePerKg: 2,
+    });
+    assert.equal(result.finalTotalCents, 2000);
+  });
+});

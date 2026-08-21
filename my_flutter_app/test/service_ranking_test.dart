@@ -15,8 +15,6 @@ BusinessDestinationOption option(
   int? airMaxDays,
   int? seaDays,
   bool coversLoss = false,
-  double ratePct = 0,
-  double maxDeclaredValue = 0,
   Map<String, double> categoryRates = const {},
   double barrelPrice = 0,
   int? barrelDays,
@@ -50,11 +48,7 @@ BusinessDestinationOption option(
           multiplier: entry.value,
         ),
     ],
-    freightCoverage: FreightCoveragePolicy(
-      coversLoss: coversLoss,
-      ratePct: ratePct,
-      maxDeclaredValue: maxDeclaredValue,
-    ),
+    freightCoverage: FreightCoveragePolicy(coversLoss: coversLoss),
   );
 }
 
@@ -101,67 +95,24 @@ void main() {
       );
     });
 
-    test('counts the coverage fee, because the customer pays it', () {
-      final withCover = option(
-        'covers',
-        airRate: 10,
-        coversLoss: true,
-        ratePct: 2,
-        maxDeclaredValue: 2000,
-      );
-      // 1kg at $10, plus 2% of $1,000 declared = $30.
-      expect(
-        serviceOptionTotal(
-          withCover,
-          service: 'freight',
-          weightKg: 1,
-          mode: 'air',
-          declaredValue: 1000,
-        ),
-        30,
-      );
-    });
-
-    test('does not rank a business first when it would refuse the parcel', () {
-      // Declaring $3,000 at a business capped at $1,000 is a booking the
-      // server rejects. Cheapest-first must not walk the customer into that.
-      final capped = option(
-        'capped',
-        airRate: 1,
-        coversLoss: true,
-        ratePct: 1,
-        maxDeclaredValue: 1000,
-      );
-      final takesIt = option(
-        'dearer-but-takes-it',
-        airRate: 50,
-        coversLoss: true,
-        ratePct: 1,
-        maxDeclaredValue: 5000,
-      );
-
-      expect(
-        serviceOptionTotal(
-          capped,
-          service: 'freight',
-          weightKg: 1,
-          mode: 'air',
-          declaredValue: 3000,
-        ),
-        kUnknownSortValue,
-      );
-      expect(
-        ids(
-          sortServiceOptions(
+    test('charges nothing for cover, so it changes no price', () {
+      // The business prices the risk into what it charges to carry the item,
+      // so two businesses on the same rate cost the same whether or not one
+      // of them pays for a lost parcel.
+      final covers = option('covers', airRate: 10, coversLoss: true);
+      final bare = option('bare', airRate: 10);
+      for (final row in [covers, bare]) {
+        expect(
+          serviceOptionTotal(
+            row,
             service: 'freight',
-            [capped, takesIt],
             weightKg: 1,
             mode: 'air',
-            declaredValue: 3000,
           ),
-        ),
-        ['dearer-but-takes-it', 'capped'],
-      );
+          10,
+          reason: row.businessId,
+        );
+      }
     });
   });
 
@@ -236,13 +187,7 @@ void main() {
         service: 'freight',
         [
           option('bare', airRate: 5),
-          option(
-            'covers',
-            airRate: 30,
-            coversLoss: true,
-            ratePct: 2,
-            maxDeclaredValue: 1000,
-          ),
+          option('covers', airRate: 30, coversLoss: true),
         ],
         sort: ServiceSort.coverage,
         weightKg: 1,
@@ -251,38 +196,21 @@ void main() {
       expect(ids(sorted), ['covers', 'bare']);
     });
 
-    test('prefers a higher ceiling, then a cheaper rate', () {
+    test('breaks a tie between two covering businesses on price', () {
+      // One question, one rank: both stand behind the parcel, so the only
+      // thing left to prefer is the cheaper of the two.
       final sorted = sortServiceOptions(
         service: 'freight',
         [
-          option(
-            'low-ceiling',
-            coversLoss: true,
-            ratePct: 1,
-            maxDeclaredValue: 500,
-          ),
-          option(
-            'high-ceiling',
-            coversLoss: true,
-            ratePct: 3,
-            maxDeclaredValue: 5000,
-          ),
-          option(
-            'same-ceiling-cheaper',
-            coversLoss: true,
-            ratePct: 1,
-            maxDeclaredValue: 5000,
-          ),
+          option('dear', airRate: 30, coversLoss: true),
+          option('cheap', airRate: 5, coversLoss: true),
+          option('bare', airRate: 1),
         ],
         sort: ServiceSort.coverage,
         weightKg: 1,
         mode: 'air',
       );
-      expect(ids(sorted), [
-        'same-ceiling-cheaper',
-        'high-ceiling',
-        'low-ceiling',
-      ]);
+      expect(ids(sorted), ['cheap', 'dear', 'bare']);
     });
   });
 

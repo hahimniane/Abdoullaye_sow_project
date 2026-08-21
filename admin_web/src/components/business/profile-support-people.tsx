@@ -85,6 +85,10 @@ import {
   type FreightCustomCategoryDraft,
   type FreightSettingsDraft,
 } from "@/lib/freight-categories";
+import {
+  MAX_DESTINATION_DELIVERY_FEE,
+  deliverySettingsError,
+} from "@/lib/freight-delivery";
 import { STANDARD_FREIGHT_ITEMS } from "@/lib/freight-payback";
 import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import { db, functions, storage } from "@/lib/firebase";
@@ -1227,8 +1231,8 @@ export function BusinessServicesPanel({
  *
  * Two settings, one card, because they answer the same question for the owner:
  * "what am I willing to carry, and at what price." They stay separate for the
- * customer - the category says what is in the box, the declared value says
- * what it costs to replace - but an owner sets them in one sitting.
+ * customer - the category says what is in the box, the payback row says what
+ * this business owes if it loses one - but an owner sets them in one sitting.
  */
 function FreightGoodsEditor({
   draft,
@@ -1248,7 +1252,10 @@ function FreightGoodsEditor({
   ) => void;
   onRemoveCategory: (index: number) => void;
 }) {
-  const coverageRate = Number(draft.coverageRatePct || 0);
+  const deliveryFeeError = deliverySettingsError({
+    available: draft.destinationDelivery,
+    fee: Number(draft.destinationDeliveryFee || 0),
+  });
   const roomForMore =
     draft.customCategories.length < MAX_CUSTOM_FREIGHT_CATEGORIES;
 
@@ -1388,24 +1395,24 @@ function FreightGoodsEditor({
             If a parcel is lost
             <FieldInfo label="how cover for a lost parcel works">
               <p>
-                The customer says what the parcel is worth to replace. You
-                charge a percentage of that, and if it goes missing you pay
-                back what was declared - never more.
+                Nothing extra is charged for this. You price each item above
+                according to what it is worth to carry, so the risk is
+                already in your rate.
               </p>
               <p>
-                Only the sender knows what is in the box, so the declared value
-                is also the cap. Understating it to save a few dollars caps
-                their own payout, which is what makes the answer honest without
-                anyone opening the parcel.
+                If you cover parcels and one goes missing, you pay the
+                customer the full payback you published for that item. If you
+                do not cover them, the customer gets nothing back, and they
+                are told so before they book.
               </p>
             </FieldInfo>
           </span>
         </p>
         {draft.coversLoss && (
           <div className="customer-inline-note wide">
-            You pay the customer back, not Laawol. The most you can owe on
-            one parcel is the payback you published for that item, and the
-            policy in force on the day they booked is the one that is judged.
+            You pay the customer back, not Laawol - the full payback you
+            published for that item, and the policy in force on the day they
+            booked is the one that is judged.
           </div>
         )}
         <label className="lst-field">
@@ -1417,62 +1424,83 @@ function FreightGoodsEditor({
             value={draft.coversLoss ? "yes" : "no"}
           >
             <option value="no">No, parcels are not covered</option>
-            <option value="yes">Yes, I pay back what was declared</option>
+            <option value="yes">
+              Yes, I pay back the full published amount
+            </option>
           </select>
         </label>
-        {draft.coversLoss && (
-          <label className="lst-field">
-            <span>Coverage rate (% of the item's payback)</span>
-            <small>
-              What you charge for protection. 2% on a $400 item collects $8.
-            </small>
-            <input
-              inputMode="decimal"
-              max="10"
-              min="0"
-              onChange={(event) =>
-                onChange({coverageRatePct: event.target.value})
-              }
-              step="0.1"
-              type="number"
-              value={draft.coverageRatePct}
-            />
-          </label>
-        )}
-        {draft.coversLoss && !(coverageRate > 0) && (
-          <div className="customer-inline-note error wide">
-            Set a rate above 0%. Cover at no price is money you never collected
-            for, and it will not save.
-          </div>
-        )}
         <label className="lst-field wide">
           <span className="label-with-info">
-            Most you will carry (USD)
-            <FieldInfo label="what the ceiling on declared value does">
+            Do customers pay you before shipping, or after arrival?
+            <FieldInfo label="how pay-on-arrival works">
               <p>
-                A parcel declared above this is refused before payment, whether
-                or not you cover loss. It says what you are willing to carry,
-                not only what you insure.
+                If you accept payment on arrival, customers of yours can
+                choose it at booking. Their card is saved and verified up
+                front - nothing is charged that day.
               </p>
               <p>
-                0 means no ceiling of your own. The platform never accepts a
-                single parcel declared above $10,000.
+                When you mark the shipment arrived, Laawol charges that card
+                automatically for the confirmed price. If the charge does
+                not go through, the customer is told to pay in the app, and
+                you decide whether to hand over the parcel before they do.
               </p>
             </FieldInfo>
           </span>
-          <input
-            inputMode="decimal"
-            max="10000"
-            min="0"
+          <select
             onChange={(event) =>
-              onChange({maxDeclaredValue: event.target.value})
+              onChange({payOnArrival: event.target.value === "yes"})
             }
-            step="50"
-            type="number"
-            value={draft.maxDeclaredValue}
-          />
+            value={draft.payOnArrival ? "yes" : "no"}
+          >
+            <option value="no">Before shipping only</option>
+            <option value="yes">They may also pay on arrival</option>
+          </select>
         </label>
-
+        <label className="lst-field wide">
+          <span className="label-with-info">
+            Do you deliver to the receiver at the destination?
+            <FieldInfo label="how destination delivery works">
+              <p>
+                By default the receiver collects the parcel from you at the
+                destination. If you deliver, customers of yours can choose
+                that at booking and give the receiver&rsquo;s address.
+              </p>
+              <p>
+                The fee is flat - the same wherever in that city you take it
+                - and is added to what the customer pays at booking. It is
+                not recalculated when you confirm the weight.
+              </p>
+            </FieldInfo>
+          </span>
+          <select
+            onChange={(event) =>
+              onChange({destinationDelivery: event.target.value === "yes"})
+            }
+            value={draft.destinationDelivery ? "yes" : "no"}
+          >
+            <option value="no">The receiver collects it from us</option>
+            <option value="yes">We can deliver to their address</option>
+          </select>
+        </label>
+        {draft.destinationDelivery && (
+          <label className="lst-field wide">
+            Delivery fee at the destination (USD)
+            <input
+              inputMode="decimal"
+              max={MAX_DESTINATION_DELIVERY_FEE}
+              min="0"
+              onChange={(event) =>
+                onChange({destinationDeliveryFee: event.target.value})
+              }
+              step="1"
+              type="number"
+              value={draft.destinationDeliveryFee}
+            />
+            {deliveryFeeError && (
+              <small className="field-error">{deliveryFeeError}</small>
+            )}
+          </label>
+        )}
         <div className="wide">
           <p className="service-config-note">
             <span className="label-with-info">
@@ -1485,8 +1513,10 @@ function FreightGoodsEditor({
                   asks you for a quote instead.
                 </p>
                 <p>
-                  The coverage fee a customer pays is your rate above,
-                  applied to your payback. $400 iPhone at 2% collects $8.
+                  If you cover lost parcels, the amount here is what you owe
+                  in full - a $400 iPhone pays back $400. The customer is
+                  charged nothing for that, so price each item above for what
+                  it is worth to you to carry.
                 </p>
               </FieldInfo>
             </span>

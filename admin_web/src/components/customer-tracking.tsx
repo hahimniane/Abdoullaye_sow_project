@@ -216,6 +216,7 @@ export function CustomerTracking({
                         ? text(record.fulfillmentStatus, "") ||
                             text(record.status, "")
                         : text(record.status, ""),
+                      record.destinationDelivery === true,
                     )}
                   </span>
                 </div>
@@ -227,6 +228,7 @@ export function CustomerTracking({
                   <time>{formatDate(record.updatedAt ?? record.createdAt)}</time>
                 </p>
                 <JourneyProgress
+                  destinationDelivery={record.destinationDelivery === true}
                   service={isTransport ? "transport" : "shipment"}
                   status={journeyStatus}
                 />

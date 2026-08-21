@@ -28,14 +28,6 @@ String freightMoney(num amount) {
   return format.format(value);
 }
 
-/// A percent without a pointless decimal: `2%`, but `2.5%` when it matters.
-String freightPercent(num value) {
-  final rate = value.toDouble();
-  return rate == rate.roundToDouble()
-      ? '${rate.toStringAsFixed(0)}%'
-      : '${rate.toStringAsFixed(1)}%';
-}
-
 /// A multiplier the way a customer can act on it: `1.2x`, `2x`.
 String freightMultiplierText(double multiplier) {
   return multiplier == multiplier.roundToDouble()
@@ -88,18 +80,12 @@ String freightCategoryRateText(
     : l10n.freightCategoryStandardRate;
 
 /// The one line about coverage on an option card, before a business is
-/// chosen: "Covers up to $2,000 · 2%" against "No coverage".
+/// chosen: "Covers loss" against "No coverage".
 String freightCoverageSummaryText(
   AppLocalizations l10n,
   FreightCoveragePolicy? policy,
 ) => switch (freightCoverageSummaryOf(policy)) {
   FreightCoverageSummary.notOffered ||
   FreightCoverageSummary.noCoverage => l10n.freightCoverageNone,
-  FreightCoverageSummary.coversWithCeiling => l10n.freightCoverageCoversUpTo(
-    freightMoney(policy!.maxDeclaredValue),
-    freightPercent(policy.ratePct),
-  ),
-  FreightCoverageSummary.coversNoCeiling => l10n.freightCoverageCoversLoss(
-    freightPercent(policy!.ratePct),
-  ),
+  FreightCoverageSummary.coversLoss => l10n.freightCoverageCoversLoss,
 };

@@ -676,7 +676,11 @@ class _ShipmentGroupCard extends StatelessWidget {
                   ),
                 ),
                 _StatusPill(
-                  label: _ShipmentCard.statusLabel(l10n, group.latest.status),
+                  label: _ShipmentCard.statusLabel(
+                    l10n,
+                    group.latest.status,
+                    destinationDelivery: group.latest.destinationDelivery,
+                  ),
                   color: _ShipmentCard.statusColor(group.latest.status),
                 ),
               ],
@@ -845,7 +849,11 @@ class _FreightNextStepCallout extends StatelessWidget {
         ? l10n.freightSettled
         : (shipment.status == 'in_transit' ||
               shipment.status == 'ready_for_pickup')
-        ? _ShipmentCard.statusLabel(l10n, shipment.status)
+        ? _ShipmentCard.statusLabel(
+            l10n,
+            shipment.status,
+            destinationDelivery: shipment.destinationDelivery,
+          )
         : l10n.estimatePaid;
     final nextStep = hasBalanceDue
         ? l10n.shipmentHeldForBalance
@@ -854,7 +862,11 @@ class _FreightNextStepCallout extends StatelessWidget {
         : shipment.status == 'in_transit'
         ? l10n.freightNextInTransit
         : shipment.status == 'ready_for_pickup'
-        ? l10n.freightNextReadyForPickup
+        // Nobody is collecting a parcel the business is driving to an
+        // address, so the arrival step reads as the journey it is on.
+        ? (shipment.destinationDelivery
+              ? l10n.freightNextOutForDelivery
+              : l10n.freightNextReadyForPickup)
         : shipment.status == 'awaiting_weight_confirmation'
         ? l10n.freightNextWeightReview
         : businessName.isEmpty
@@ -1086,7 +1098,11 @@ class _ShipmentCard extends StatelessWidget {
                     ),
                   ),
                   _StatusPill(
-                    label: statusLabel(l10n, shipment.status),
+                    label: statusLabel(
+                      l10n,
+                      shipment.status,
+                      destinationDelivery: shipment.destinationDelivery,
+                    ),
                     color: statusColor(shipment.status),
                   ),
                 ],
@@ -1225,7 +1241,14 @@ class _ShipmentCard extends StatelessWidget {
     );
   }
 
-  static String statusLabel(AppLocalizations l10n, String status) {
+  /// [destinationDelivery] only changes the arrival status: the same shipment
+  /// state is "ready for pickup" to a receiver collecting it and "out for
+  /// delivery" to one waiting at home.
+  static String statusLabel(
+    AppLocalizations l10n,
+    String status, {
+    bool destinationDelivery = false,
+  }) {
     switch (status) {
       case 'pending_payment':
         return l10n.pendingPayment;
@@ -1240,7 +1263,7 @@ class _ShipmentCard extends StatelessWidget {
       case 'in_transit':
         return l10n.inTransit;
       case 'ready_for_pickup':
-        return l10n.readyForPickup;
+        return destinationDelivery ? l10n.outForDelivery : l10n.readyForPickup;
       case 'completed':
         return l10n.completed;
       case 'cancelled':

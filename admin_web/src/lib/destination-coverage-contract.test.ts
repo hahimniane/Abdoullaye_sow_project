@@ -63,6 +63,37 @@ describe("business destination service coverage", () => {
     assert.match(customerSource, /Regular departure days/);
   });
 
+  it("adds destination delivery to the customer's total and its own line", () => {
+    // A fee shown in the breakdown but missing from the total is the bug
+    // customers notice at the card statement rather than at booking.
+    assert.match(customerSource, /\+ \(pricing\.pickupFee \?\? 0\) \+ deliveryFee/);
+    assert.match(customerSource, /label: "Delivery to the receiver"/);
+    assert.match(customerSource, /label="Delivery to the receiver"/);
+    // The choice is guarded by the shared rule, not a second opinion about
+    // what counts as a complete address.
+    assert.match(customerSource, /deliveryChoiceIsComplete\(\{wantsDelivery: deliveryChosen/);
+    // A destination address is free text: Conakry and Dakar are addressed by
+    // neighbourhood and landmark, and the US-shaped fields cannot hold that.
+    assert.match(customerSource, /Receiver&rsquo;s address\s*\n\s*<textarea/);
+    assert.doesNotMatch(
+      customerSource,
+      /<StructuredAddressFields[\s\S]{0,200}receiverAddress/,
+    );
+  });
+
+  it("quotes the weight adjustment against every fee that rides through", () => {
+    // The dialog is what the owner agrees to before money moves. A preview
+    // that drops a flat fee quotes a refund of a service still being given.
+    assert.match(
+      operationsSource,
+      /const finalTotal =\s*\n?\s*verifiedWeightKg \* rate \+ pickup \+ coverage \+ destinationDelivery;/,
+    );
+    // Coverage is read off the row, not assumed zero: it is zero on anything
+    // booked under the published-payback model and non-zero on older rows.
+    assert.match(operationsSource, /row\.coverageFeeCents \?\? 0/);
+    assert.match(operationsSource, /row\.destinationDeliveryFeeCents \?\? 0/);
+  });
+
   it("lets car-transport-only businesses open destination configuration", () => {
     assert.match(
       consoleSource,

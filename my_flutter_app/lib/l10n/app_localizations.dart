@@ -12336,6 +12336,36 @@ abstract class AppLocalizations {
   /// **'Something else in this category'**
   String get somethingElseInCategory;
 
+  /// No description provided for @whenDoYouPay.
+  ///
+  /// In en, this message translates to:
+  /// **'When do you pay?'**
+  String get whenDoYouPay;
+
+  /// No description provided for @payNowOption.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay now'**
+  String get payNowOption;
+
+  /// No description provided for @payOnArrivalOption.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay when it arrives'**
+  String get payOnArrivalOption;
+
+  /// No description provided for @payOnArrivalExplainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is charged today. Your card is saved and verified now, and charged automatically when {business} marks your shipment arrived. If that charge doesn\'t go through, you\'ll be asked to complete payment in the app.'**
+  String payOnArrivalExplainer(Object business);
+
+  /// No description provided for @saveCardAndBook.
+  ///
+  /// In en, this message translates to:
+  /// **'Save card & book'**
+  String get saveCardAndBook;
+
   /// No description provided for @noBusinessTakesItem.
   ///
   /// In en, this message translates to:
@@ -12456,17 +12486,11 @@ abstract class AppLocalizations {
   /// **'No coverage'**
   String get freightCoverageNone;
 
-  /// No description provided for @freightCoverageCoversUpTo.
-  ///
-  /// In en, this message translates to:
-  /// **'Covers up to {amount} · {rate}'**
-  String freightCoverageCoversUpTo(Object amount, Object rate);
-
   /// No description provided for @freightCoverageCoversLoss.
   ///
   /// In en, this message translates to:
-  /// **'Covers loss · {rate}'**
-  String freightCoverageCoversLoss(Object rate);
+  /// **'Covers loss'**
+  String get freightCoverageCoversLoss;
 
   /// No description provided for @freightCoverageSectionTitle.
   ///
@@ -12474,47 +12498,23 @@ abstract class AppLocalizations {
   /// **'If it goes missing'**
   String get freightCoverageSectionTitle;
 
-  /// No description provided for @freightCoverageQuestion.
-  ///
-  /// In en, this message translates to:
-  /// **'Is anything worth more than {amount}?'**
-  String freightCoverageQuestion(Object amount);
-
-  /// No description provided for @freightCoverageQuestionHelp.
-  ///
-  /// In en, this message translates to:
-  /// **'Only you know what is in the box, so only you can say what it would cost to replace.'**
-  String get freightCoverageQuestionHelp;
-
-  /// No description provided for @freightDeclaredValueLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Replacement value'**
-  String get freightDeclaredValueLabel;
-
-  /// No description provided for @freightDeclaredValueHelper.
-  ///
-  /// In en, this message translates to:
-  /// **'What you declare is also the most that can be paid back, so declare it honestly.'**
-  String get freightDeclaredValueHelper;
-
-  /// No description provided for @freightCoverageFeeLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Coverage fee'**
-  String get freightCoverageFeeLabel;
-
-  /// No description provided for @freightCoverageEnterValue.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter what it is worth to see the coverage fee.'**
-  String get freightCoverageEnterValue;
-
   /// No description provided for @freightCoveragePaysUpTo.
   ///
   /// In en, this message translates to:
-  /// **'{businessName} pays you up to {amount} if this parcel is lost.'**
+  /// **'{businessName} pays you {amount} if this parcel is lost.'**
   String freightCoveragePaysUpTo(Object businessName, Object amount);
+
+  /// No description provided for @freightCoveragePaysForLoss.
+  ///
+  /// In en, this message translates to:
+  /// **'{businessName} pays you back if this parcel is lost.'**
+  String freightCoveragePaysForLoss(Object businessName);
+
+  /// No description provided for @freightCoverageNoExtraCharge.
+  ///
+  /// In en, this message translates to:
+  /// **'Included in the price, at no extra charge.'**
+  String get freightCoverageNoExtraCharge;
 
   /// No description provided for @freightCoverageWhoPays.
   ///
@@ -12528,11 +12528,77 @@ abstract class AppLocalizations {
   /// **'{businessName} does not cover lost parcels. If this parcel goes missing, nothing is paid back.'**
   String freightCoverageNotOffered(Object businessName);
 
-  /// No description provided for @freightCoverageCarriesUpTo.
+  /// No description provided for @freightDestinationDeliveryTitle.
   ///
   /// In en, this message translates to:
-  /// **'{businessName} carries parcels worth up to {amount}.'**
-  String freightCoverageCarriesUpTo(Object businessName, Object amount);
+  /// **'How the receiver gets it'**
+  String get freightDestinationDeliveryTitle;
+
+  /// No description provided for @freightDestinationDeliveryCollect.
+  ///
+  /// In en, this message translates to:
+  /// **'Receiver collects it'**
+  String get freightDestinationDeliveryCollect;
+
+  /// No description provided for @freightDestinationDeliveryCollectHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'They pick the parcel up from {businessName} at the destination.'**
+  String freightDestinationDeliveryCollectHelp(Object businessName);
+
+  /// No description provided for @freightDestinationDeliveryToAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Deliver to their address · {amount}'**
+  String freightDestinationDeliveryToAddress(Object amount);
+
+  /// No description provided for @freightDestinationDeliveryFeeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery at destination'**
+  String get freightDestinationDeliveryFeeLabel;
+
+  /// No description provided for @freightReceiverAddressLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Receiver\'s address'**
+  String get freightReceiverAddressLabel;
+
+  /// No description provided for @freightReceiverAddressHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Neighbourhood, landmark, city'**
+  String get freightReceiverAddressHint;
+
+  /// No description provided for @freightReceiverAddressHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Include the neighbourhood and a landmark nearby, so the driver can find it.'**
+  String get freightReceiverAddressHelper;
+
+  /// No description provided for @freightReceiverAddressRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the address where the parcel should be delivered.'**
+  String get freightReceiverAddressRequired;
+
+  /// No description provided for @freightReceiverAddressTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'That address is too long. Keep it to the neighbourhood, a landmark and the city.'**
+  String get freightReceiverAddressTooLong;
+
+  /// No description provided for @outForDelivery.
+  ///
+  /// In en, this message translates to:
+  /// **'Out for delivery'**
+  String get outForDelivery;
+
+  /// No description provided for @freightNextOutForDelivery.
+  ///
+  /// In en, this message translates to:
+  /// **'Your parcel has arrived and is on its way to the receiver\'s address.'**
+  String get freightNextOutForDelivery;
 }
 
 class _AppLocalizationsDelegate

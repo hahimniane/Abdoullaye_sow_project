@@ -6891,6 +6891,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get somethingElseInCategory => 'Something else in this category';
 
   @override
+  String get whenDoYouPay => 'When do you pay?';
+
+  @override
+  String get payNowOption => 'Pay now';
+
+  @override
+  String get payOnArrivalOption => 'Pay when it arrives';
+
+  @override
+  String payOnArrivalExplainer(Object business) {
+    return 'Nothing is charged today. Your card is saved and verified now, and charged automatically when $business marks your shipment arrived. If that charge doesn\'t go through, you\'ll be asked to complete payment in the app.';
+  }
+
+  @override
+  String get saveCardAndBook => 'Save card & book';
+
+  @override
   String get noBusinessTakesItem =>
       'No approved business currently takes this item to this destination. Try a different item, or check back soon.';
 
@@ -6959,45 +6976,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get freightCoverageNone => 'No coverage';
 
   @override
-  String freightCoverageCoversUpTo(Object amount, Object rate) {
-    return 'Covers up to $amount · $rate';
-  }
-
-  @override
-  String freightCoverageCoversLoss(Object rate) {
-    return 'Covers loss · $rate';
-  }
+  String get freightCoverageCoversLoss => 'Covers loss';
 
   @override
   String get freightCoverageSectionTitle => 'If it goes missing';
 
   @override
-  String freightCoverageQuestion(Object amount) {
-    return 'Is anything worth more than $amount?';
-  }
-
-  @override
-  String get freightCoverageQuestionHelp =>
-      'Only you know what is in the box, so only you can say what it would cost to replace.';
-
-  @override
-  String get freightDeclaredValueLabel => 'Replacement value';
-
-  @override
-  String get freightDeclaredValueHelper =>
-      'What you declare is also the most that can be paid back, so declare it honestly.';
-
-  @override
-  String get freightCoverageFeeLabel => 'Coverage fee';
-
-  @override
-  String get freightCoverageEnterValue =>
-      'Enter what it is worth to see the coverage fee.';
-
-  @override
   String freightCoveragePaysUpTo(Object businessName, Object amount) {
-    return '$businessName pays you up to $amount if this parcel is lost.';
+    return '$businessName pays you $amount if this parcel is lost.';
   }
+
+  @override
+  String freightCoveragePaysForLoss(Object businessName) {
+    return '$businessName pays you back if this parcel is lost.';
+  }
+
+  @override
+  String get freightCoverageNoExtraCharge =>
+      'Included in the price, at no extra charge.';
 
   @override
   String freightCoverageWhoPays(Object businessName) {
@@ -7010,7 +7006,46 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String freightCoverageCarriesUpTo(Object businessName, Object amount) {
-    return '$businessName carries parcels worth up to $amount.';
+  String get freightDestinationDeliveryTitle => 'How the receiver gets it';
+
+  @override
+  String get freightDestinationDeliveryCollect => 'Receiver collects it';
+
+  @override
+  String freightDestinationDeliveryCollectHelp(Object businessName) {
+    return 'They pick the parcel up from $businessName at the destination.';
   }
+
+  @override
+  String freightDestinationDeliveryToAddress(Object amount) {
+    return 'Deliver to their address · $amount';
+  }
+
+  @override
+  String get freightDestinationDeliveryFeeLabel => 'Delivery at destination';
+
+  @override
+  String get freightReceiverAddressLabel => 'Receiver\'s address';
+
+  @override
+  String get freightReceiverAddressHint => 'Neighbourhood, landmark, city';
+
+  @override
+  String get freightReceiverAddressHelper =>
+      'Include the neighbourhood and a landmark nearby, so the driver can find it.';
+
+  @override
+  String get freightReceiverAddressRequired =>
+      'Enter the address where the parcel should be delivered.';
+
+  @override
+  String get freightReceiverAddressTooLong =>
+      'That address is too long. Keep it to the neighbourhood, a landmark and the city.';
+
+  @override
+  String get outForDelivery => 'Out for delivery';
+
+  @override
+  String get freightNextOutForDelivery =>
+      'Your parcel has arrived and is on its way to the receiver\'s address.';
 }

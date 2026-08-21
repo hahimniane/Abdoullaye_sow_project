@@ -28,6 +28,44 @@ export const JOURNEY_STAGES: readonly JourneyStage[] = [
   {id: "delivered", label: "Delivered", hint: "Handed over"},
 ];
 
+/**
+ * The same four beats, worded for a parcel the business is taking to the
+ * receiver's own address.
+ *
+ * A parcel on its way to someone's door is not waiting at a counter, and a
+ * receiver reading "collect it from the business" would go to the wrong
+ * place. The stage ids are identical on purpose: how a shipment ends is a
+ * property of the booking, not a new position in the journey, and inventing
+ * statuses for it would fan out through every hardcoded status list.
+ */
+export const DELIVERY_JOURNEY_STAGES: readonly JourneyStage[] = [
+  {id: "booked", label: "Booked", hint: "Your booking is confirmed"},
+  {id: "in_transit", label: "On its way", hint: "Shipped and travelling"},
+  {
+    id: "arrived",
+    label: "Arrived",
+    hint: "Landed, and on its way to the receiver's address",
+  },
+  {
+    id: "delivered",
+    label: "Delivered",
+    hint: "Delivered to the receiver's address",
+  },
+];
+
+/**
+ * The stage wording for one shipment.
+ *
+ * @param destinationDelivery Whether the business is taking it to the
+ *   receiver rather than holding it for collection.
+ * @return The four stages, worded for that ending.
+ */
+export function journeyStagesFor(
+  destinationDelivery = false,
+): readonly JourneyStage[] {
+  return destinationDelivery ? DELIVERY_JOURNEY_STAGES : JOURNEY_STAGES;
+}
+
 const STAGE_BY_STATUS: Record<string, JourneyStageId> = {
   pending_payment: "booked",
   awaiting_weight_confirmation: "booked",
@@ -158,6 +196,17 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 /**
+ * How the same statuses read on a shipment the business is delivering.
+ *
+ * Only the arrival beat differs: nobody is picking this parcel up, so the
+ * pill has to say what is actually happening to it instead of sending the
+ * receiver to a counter.
+ */
+const DELIVERY_STATUS_LABEL: Record<string, string> = {
+  ready_for_pickup: "Out for delivery",
+};
+
+/**
  * The status pill's wording, for a customer rather than for staff.
  *
  * The stored value is a database enum - "in_transit", "pending_payment" - and
@@ -166,11 +215,19 @@ const STATUS_LABEL: Record<string, string> = {
  * value made readable, so a status added later degrades instead of vanishing.
  *
  * @param status The shipment's stored status.
+ * @param destinationDelivery Whether the business is taking it to the
+ *   receiver rather than holding it for collection.
  * @return Wording safe to show a customer.
  */
-export function statusLabel(status: string): string {
+export function statusLabel(
+  status: string,
+  destinationDelivery = false,
+): string {
   const key = String(status || "").trim();
   if (!key) return "Booked";
+  if (destinationDelivery && DELIVERY_STATUS_LABEL[key]) {
+    return DELIVERY_STATUS_LABEL[key];
+  }
   return STATUS_LABEL[key] ?? key.replace(/_/g, " ");
 }
 

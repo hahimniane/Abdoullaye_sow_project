@@ -20,14 +20,12 @@ const FREIGHT_CATEGORY_ERRORS = {
   rates_invalid: "Those category rates could not be read",
   custom_invalid: "Your category list could not be read",
 };
-/** Coverage setting refusals, likewise. */
-const FREIGHT_COVERAGE_ERRORS = {
-  rate_out_of_range: "Coverage can cost between 0% and 10% of declared value",
-  max_out_of_range: "The most you can carry is $10,000 per parcel",
-  rate_required_when_covering:
-    "Set what coverage costs, or turn coverage off - covering parcels at no " +
-    "charge means paying out money you never collected",
-};
+/**
+ * Coverage setting refusals, likewise. There is nothing left to get wrong:
+ * cover is one yes/no question with no price attached, so the map stays for
+ * the shared call shape rather than for any message it still carries.
+ */
+const FREIGHT_COVERAGE_ERRORS = {};
 const {
   freightCategoriesForBusiness,
   freightCategoryMultiplier,
@@ -42,6 +40,12 @@ const {
   quoteFreightItemCoverage,
   validateFreightPaybackTable,
 } = require("./freight_payback");
+const {
+  FREIGHT_DELIVERY_ERRORS,
+  freightDeliveryPolicy,
+  quoteFreightDelivery,
+  validateFreightDeliverySettings,
+} = require("./freight_delivery");
 
 // Told to the business in its own words when a payback table will not save.
 const FREIGHT_PAYBACK_ERRORS = {
@@ -945,6 +949,37 @@ exports.notifyFreightShipmentPaid = onDocumentUpdated(
           requestId: event.params.shipmentId,
           trackingCode: after.trackingCode || "",
         },
+      });
+    },
+);
+
+// The collection point of pay-on-arrival: the business marking the shipment
+// arrived (ready_for_pickup) is the moment the customer agreed to pay. The
+// shipment flips from due_on_arrival to balance_due - which opens the
+// existing manual pay flows - and the saved card is charged off-session
+// through the same machinery a weight-adjustment balance uses.
+exports.chargeFreightPayOnArrival = onDocumentUpdated(
+    {
+      document: "freightShipments/{shipmentId}",
+      secrets: [stripeSecretKey],
+    },
+    async (event) => {
+      const before = event.data?.before?.data() || {};
+      const after = event.data?.after?.data() || {};
+      if (after.payOnArrival !== true) return;
+      if (before.status === after.status) return;
+      if (after.status !== "ready_for_pickup") return;
+      if (after.priceSettlementStatus !==
+          FreightSettlementStatus.DUE_ON_ARRIVAL) {
+        return;
+      }
+      await event.data.after.ref.update({
+        priceSettlementStatus: FreightSettlementStatus.BALANCE_DUE,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      await attemptAutomaticFreightBalanceCharge({
+        shipmentId: event.params.shipmentId,
+        customerUid: String(after.customerUid || ""),
       });
     },
 );
@@ -3033,6 +3068,20 @@ exports.listActiveBarrelDestinationOptions = onCall(
             businessStatus: "approved",
             freightPickupAvailable: offersFreight && pickupConfig.enabled,
             freightPickupModel: pickupConfig.model,
+            // The business chose to accept payment after arrival; customers
+            // of this business see the pay-now / pay-on-arrival choice at
+            // booking. The server re-checks the business doc at booking time
+            // regardless.
+            freightPayOnArrival: offersFreight &&
+              business.freightPayOnArrival === true,
+            // Whether the receiver can have the parcel brought to their own
+            // address instead of collecting it, and what that costs. An
+            // opted-in business with no fee set is not offering it yet.
+            freightDestinationDeliveryAvailable: offersFreight &&
+              freightDeliveryPolicy(business).offered,
+            freightDestinationDeliveryFee: offersFreight ?
+              freightDeliveryPolicy(business).fee :
+              0,
             // What is in the parcel changes the price, and the customer has
             // to be able to see how before choosing a business. Per business
             // rather than per destination: a business charges the same for
@@ -4840,6 +4889,79 @@ async function createStripePaymentIntent(params) {
         paymentType: params.metadata.paymentType,
         stableDomainIds: params.metadata,
       }),
+      ...(params.connectedAccountId && {
+        "Stripe-Account": params.connectedAccountId,
+      }),
+    },
+    body,
+  });
+}
+
+// A SetupIntent verifies and saves a card WITHOUT charging it - the booking
+// promise of pay-on-arrival freight. Created on the same account the future
+// charge will land on (the connected account for a direct-charge business),
+// because a payment method saved on one ledger cannot confirm an intent on
+// another.
+async function createStripeSetupIntent(params) {
+  const body = new URLSearchParams();
+  body.set("usage", "off_session");
+  body.set("automatic_payment_methods[enabled]", "true");
+  body.set("customer", params.customerId);
+  Object.entries(params.metadata || {}).forEach(([key, value]) => {
+    body.set(`metadata[${key}]`, value);
+  });
+  return stripeRequest("/setup_intents", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      ...(params.connectedAccountId && {
+        "Stripe-Account": params.connectedAccountId,
+      }),
+    },
+    body,
+  });
+}
+
+async function retrieveStripeSetupIntent(setupIntentId, connectedAccountId) {
+  return stripeRequest(
+      `/setup_intents/${encodeURIComponent(setupIntentId)}`,
+      {
+        ...(connectedAccountId && {
+          headers: {"Stripe-Account": connectedAccountId},
+        }),
+      },
+  );
+}
+
+async function cancelStripeSetupIntent(setupIntentId, connectedAccountId) {
+  return stripeFormRequest(
+      `/setup_intents/${encodeURIComponent(setupIntentId)}/cancel`,
+      new URLSearchParams(),
+      {
+        ...(connectedAccountId && {
+          headers: {"Stripe-Account": connectedAccountId},
+        }),
+      },
+  );
+}
+
+// The web-redirect twin of createStripeSetupIntent: a Checkout Session in
+// setup mode collects and verifies a card without charging it. The session
+// creates its own SetupIntent - completeFreightShipmentCardSave reads it
+// back off the session on return.
+async function createStripeSetupCheckoutSession(params) {
+  const body = new URLSearchParams();
+  body.set("mode", "setup");
+  body.set("customer", params.customerId);
+  body.set("success_url", params.successUrl);
+  body.set("cancel_url", params.cancelUrl);
+  Object.entries(params.metadata || {}).forEach(([key, value]) => {
+    body.set(`metadata[${key}]`, value);
+  });
+  return stripeRequest("/checkout/sessions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
       ...(params.connectedAccountId && {
         "Stripe-Account": params.connectedAccountId,
       }),
@@ -6921,6 +7043,54 @@ exports.createCustomerCheckoutSession = onCall(
           recordId,
           url: null,
           simulatedPayment: true,
+        };
+      }
+
+      // Pay-on-arrival books without a charge: the redirect goes to a
+      // setup-mode Checkout Session that verifies and saves the card. The
+      // web client completes it on return via
+      // completeFreightShipmentCardSave with the session id.
+      if (creationResult?.payOnArrival === true &&
+          orderType === "freightShipment") {
+        const shipmentSnapshot = await admin.firestore()
+            .collection("freightShipments").doc(recordId).get();
+        const shipmentRecord = shipmentSnapshot.data() || {};
+        const setupConnectedAccountId =
+          shipmentRecord.stripeChargeType === "direct" ?
+            (shipmentRecord.stripeConnectedAccountId || undefined) :
+            undefined;
+        // The same /pay return page every checkout uses; setup=1 routes its
+        // confirmation call to completeFreightShipmentCardSave instead of
+        // confirmCustomerCheckoutSession.
+        const consoleUrl = normalizedConsoleUrl(
+            process.env.CUSTOMER_CONSOLE_URL,
+        );
+        const returnBase = `${consoleUrl}/pay?type=freightShipment` +
+          `&id=${encodeURIComponent(recordId)}`;
+        const session = await createStripeSetupCheckoutSession({
+          customerId: shipmentRecord.stripeCustomerId,
+          connectedAccountId: setupConnectedAccountId,
+          successUrl: `${returnBase}&setup=1` +
+            `&session={CHECKOUT_SESSION_ID}`,
+          cancelUrl: `${returnBase}&status=cancel`,
+          metadata: {
+            shipmentId: recordId,
+            customerUid,
+            paymentType: "freight_pay_on_arrival_setup",
+          },
+        });
+        await admin.firestore().collection("freightShipments").doc(recordId)
+            .set({
+              checkoutSessionId: String(session.id || ""),
+              checkoutStatus: "open",
+              updatedAt: FirestoreFieldValue.serverTimestamp(),
+            }, {merge: true});
+        return {
+          recordId,
+          sessionId: session.id,
+          url: session.url,
+          simulatedPayment: false,
+          payOnArrival: true,
         };
       }
 
@@ -9677,6 +9847,8 @@ exports.updateBusinessProfile = onCall(
         parkingLatitude,
         parkingLongitude,
         freightPickupAvailable,
+        freightPayOnArrival,
+        freightDestinationDelivery,
         freightPickupModel,
         freightPickupBaseFee,
         freightPickupPerKm,
@@ -9814,6 +9986,13 @@ exports.updateBusinessProfile = onCall(
         freightPickupAvailable: freightPickupAvailable === undefined ?
           current.freightPickupAvailable === true :
           freightPickupAvailable === true,
+        // Whether this business accepts being paid AFTER the parcel reaches
+        // the destination. Opting in shows customers a pay-on-arrival choice
+        // at booking: the card is saved and verified up front, charged when
+        // the business marks the shipment arrived.
+        freightPayOnArrival: freightPayOnArrival === undefined ?
+          current.freightPayOnArrival === true :
+          freightPayOnArrival === true,
         freightPickupModel:
           String(freightPickupModel ?? current.freightPickupModel ?? "distance")
               .toLowerCase() === "borough" ? "borough" : "distance",
@@ -9890,6 +10069,19 @@ exports.updateBusinessProfile = onCall(
             );
           }
           return {freightPaybackTable: result.table};
+        })()),
+        ...(freightDestinationDelivery === undefined ? {} : (() => {
+          const result = validateFreightDeliverySettings(
+              freightDestinationDelivery,
+          );
+          if (!result.ok) {
+            throw new HttpsError(
+                "invalid-argument",
+                FREIGHT_DELIVERY_ERRORS[result.error] ||
+                  "Those delivery settings are not valid",
+            );
+          }
+          return result.settings || {};
         })()),
         ...(pickupPlan === undefined ? {} : (() => {
           // Reject an incomplete plan outright rather than storing a config
@@ -20980,7 +21172,12 @@ exports.createFreightShipmentPaymentIntent = onCall(
         pickupLongitude,
         pickupDateTime,
         officeLocationId,
+        paymentTiming,
+        destinationDelivery,
+        receiverAddress,
       } = request.data || {};
+      const payOnArrival = paymentTiming === "arrival";
+      const wantsDestinationDelivery = destinationDelivery === true;
 
       if (
         !senderName ||
@@ -21033,6 +21230,36 @@ exports.createFreightShipmentPaymentIntent = onCall(
         departureDays,
       } =
         freightDestination;
+
+      // Pay-on-arrival is the BUSINESS's risk to accept, re-checked here
+      // against the live business doc - a client remembering yesterday's
+      // opt-in cannot book on yesterday's terms.
+      if (payOnArrival && business.freightPayOnArrival !== true) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This business does not accept payment on arrival",
+        );
+      }
+
+      // Delivering to the receiver's address is likewise the business's own
+      // offer, re-priced here from the live business doc. A client-supplied
+      // fee is never trusted, and a delivery this business does not offer
+      // fails loudly rather than silently becoming office collection.
+      const deliveryQuote = quoteFreightDelivery({
+        business,
+        wantsDelivery: wantsDestinationDelivery,
+        receiverAddress,
+      });
+      if (!deliveryQuote.ok) {
+        throw new HttpsError(
+            "failed-precondition",
+            deliveryQuote.error === "delivery_not_offered" ?
+              "This business does not deliver to the receiver's address" :
+              deliveryQuote.error === "receiver_address_too_long" ?
+                "The receiver address is too long" :
+                "The receiver's delivery address is required",
+        );
+      }
 
       const platformFeePct = servicePlatformFeePctForBusiness(
           pricingDoc.data(),
@@ -21106,15 +21333,17 @@ exports.createFreightShipmentPaymentIntent = onCall(
         if (!coverage.ok) {
           throw new HttpsError(
               "failed-precondition",
-              coverage.error === "above_max_declared_value" ?
-                "This business does not carry parcels worth that much" :
-                "That declared value is too high to ship",
+              "That declared value is too high to ship",
           );
         }
       }
       const shippingFeeCents = Math.round(shippingFee * 100);
       const pickupFeeCents = Math.round(pickup.fee * 100);
-      const total = shippingFee + pickup.fee + coverage.coverageFee;
+      const destinationDeliveryFeeCents = deliveryQuote.feeCents;
+      // No coverage line: cover is free, and the business already priced the
+      // risk into what it charges to carry this item.
+      const total = shippingFee + pickup.fee +
+        destinationDeliveryFeeCents / 100;
       if (!Number.isFinite(total) || total <= 0) {
         throw new HttpsError("failed-precondition", "Invalid shipment total");
       }
@@ -21143,7 +21372,10 @@ exports.createFreightShipmentPaymentIntent = onCall(
         business,
       });
       await db.runTransaction(async (transaction) => {
-        const chargeCents = totalCents;
+        // Pay-on-arrival charges nothing at booking - the card is saved and
+        // verified instead, and the full verified price is collected when
+        // the business marks the shipment arrived.
+        const chargeCents = payOnArrival ? 0 : totalCents;
         transaction.set(shipmentRef, {
           trackingCode,
           senderName: String(senderName).trim(),
@@ -21193,6 +21425,13 @@ exports.createFreightShipmentPaymentIntent = onCall(
             officeLocationId: officeLocation.id,
             officeLocationLabel: officeLocation.label,
           }),
+          // How the parcel ends its journey. False means the receiver
+          // collects it from the business at the destination, which is what
+          // every shipment booked before this option did.
+          destinationDelivery: deliveryQuote.delivery,
+          destinationDeliveryFeeCents,
+          destinationDeliveryFee: destinationDeliveryFeeCents / 100,
+          receiverAddress: deliveryQuote.address,
           shippingFee,
           estimatedShippingFee: shippingFee,
           estimatedShippingFeeCents: shippingFeeCents,
@@ -21210,18 +21449,133 @@ exports.createFreightShipmentPaymentIntent = onCall(
           payoutStatus: "awaiting_settlement",
           cardChargeAmount: dollarsFromCents(chargeCents),
           cardChargeAmountCents: chargeCents,
-          paymentStatus: chargeCents === 0 ? "succeeded" : "pending",
-          priceSettlementStatus: chargeCents === 0 ?
-            FreightSettlementStatus.AWAITING_WEIGHT :
-            FreightSettlementStatus.AWAITING_ESTIMATE_PAYMENT,
-          weightVerificationStatus: "awaiting_business",
-          status: chargeCents === 0 ?
-            "awaiting_weight_confirmation" : "pending_payment",
-          ...(chargeCents === 0 && {paidAt: now}),
+          // A pay-on-arrival booking is "pending payment" until the card is
+          // saved and verified (completeFreightShipmentCardSave) - zero
+          // charged today is a promise made, not a payment skipped.
+          ...(payOnArrival ? {
+            payOnArrival: true,
+            paymentTiming: "arrival",
+            paymentStatus: "pending",
+            priceSettlementStatus:
+              FreightSettlementStatus.AWAITING_ESTIMATE_PAYMENT,
+            weightVerificationStatus: "awaiting_business",
+            status: "pending_payment",
+          } : {
+            paymentStatus: chargeCents === 0 ? "succeeded" : "pending",
+            priceSettlementStatus: chargeCents === 0 ?
+              FreightSettlementStatus.AWAITING_WEIGHT :
+              FreightSettlementStatus.AWAITING_ESTIMATE_PAYMENT,
+            weightVerificationStatus: "awaiting_business",
+            status: chargeCents === 0 ?
+              "awaiting_weight_confirmation" : "pending_payment",
+            ...(chargeCents === 0 && {paidAt: now}),
+          }),
           createdAt: now,
           updatedAt: now,
         });
       });
+
+      if (payOnArrival) {
+        if (SIMULATE_PAYMENTS) {
+          await shipmentRef.update({
+            paymentStatus: "card_saved",
+            priceSettlementStatus: FreightSettlementStatus.AWAITING_WEIGHT,
+            status: "awaiting_weight_confirmation",
+            stripeSetupIntentId: `simulated_setup_${shipmentRef.id}`,
+            stripePaymentMethodId: `simulated_pm_${shipmentRef.id}`,
+            cardSavedAt: FirestoreFieldValue.serverTimestamp(),
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          });
+          await rememberRecipient({
+            uid: customerUid,
+            receiverName,
+            receiverPhone,
+            destinationCountryId,
+            destinationCountryName: freightDestination.country?.name,
+            source: "freight",
+          });
+          return {
+            shipmentId: shipmentRef.id,
+            trackingCode,
+            simulatedPayment: true,
+            payOnArrival: true,
+            cardChargeAmount: 0,
+          };
+        }
+        // Unlike pay-now, where saving the card is a convenience, the whole
+        // pay-on-arrival booking IS the promise that a verified card exists
+        // to charge later - a failure here fails the booking.
+        let arrivalCustomerId = "";
+        try {
+          arrivalCustomerId = await ensureStripeCustomerId({
+            uid: customerUid,
+            email: userRecord.email || "",
+            connectedAccountId: payoutFields.stripeConnectedAccountId ||
+              undefined,
+          });
+        } catch (error) {
+          logger.error("Could not prepare a customer for pay-on-arrival", {
+            shipmentId: shipmentRef.id,
+            detail: error.message,
+          });
+        }
+        if (!arrivalCustomerId) {
+          await shipmentRef.update({
+            paymentStatus: "failed",
+            status: "cancelled",
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          });
+          throw new HttpsError(
+              "internal",
+              "The card could not be set up for pay-on-arrival",
+          );
+        }
+        let setupIntent;
+        try {
+          setupIntent = await createStripeSetupIntent({
+            customerId: arrivalCustomerId,
+            connectedAccountId: payoutFields.stripeConnectedAccountId ||
+              undefined,
+            metadata: {
+              shipmentId: shipmentRef.id,
+              trackingCode,
+              customerUid,
+              businessId: freightDestination.businessId,
+              paymentType: "freight_pay_on_arrival_setup",
+            },
+          });
+          await shipmentRef.update({
+            stripeSetupIntentId: setupIntent.id,
+            stripeCustomerId: arrivalCustomerId,
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          });
+        } catch (error) {
+          await shipmentRef.update({
+            paymentStatus: "failed",
+            status: "cancelled",
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          });
+          throw error;
+        }
+        await rememberRecipient({
+          uid: customerUid,
+          receiverName,
+          receiverPhone,
+          destinationCountryId,
+          destinationCountryName: freightDestination.country?.name,
+          source: "freight",
+        });
+        return {
+          shipmentId: shipmentRef.id,
+          trackingCode,
+          setupClientSecret: setupIntent.client_secret,
+          stripeConnectedAccountId: clientStripeAccountId(
+              payoutFields.stripeConnectedAccountId,
+          ),
+          payOnArrival: true,
+          cardChargeAmount: 0,
+        };
+      }
 
       const chargeCents = totalCents;
       if (chargeCents === 0) {
@@ -21433,6 +21787,122 @@ exports.completeFreightShipmentPayment = onCall(
         shipmentId,
         trackingCode: shipment.trackingCode,
       };
+    },
+);
+
+// The pay-on-arrival twin of completeFreightShipmentPayment: verifies that
+// the SetupIntent (mobile PaymentSheet) or setup-mode Checkout Session (web
+// redirect, via sessionId) actually saved a card, then arms the shipment.
+// Nothing is charged here - the saved payment method is charged by
+// chargeFreightPayOnArrival when the business marks the shipment arrived.
+exports.completeFreightShipmentCardSave = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      secrets: [stripeSecretKey],
+    },
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const {shipmentId, sessionId} = request.data || {};
+      if (!shipmentId) {
+        throw new HttpsError("invalid-argument", "Shipment ID is required");
+      }
+
+      const db = admin.firestore();
+      const shipmentRef = db.collection("freightShipments").doc(shipmentId);
+      const shipmentDoc = await shipmentRef.get();
+      if (!shipmentDoc.exists) {
+        throw new HttpsError("not-found", "Shipment not found");
+      }
+      const shipment = shipmentDoc.data();
+      if (shipment.customerUid !== customerUid) {
+        throw new HttpsError("permission-denied", "Shipment access denied");
+      }
+      if (shipment.payOnArrival !== true) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This shipment is not a pay-on-arrival booking",
+        );
+      }
+      if (shipment.paymentStatus === "card_saved") {
+        return {success: true, shipmentId, trackingCode: shipment.trackingCode};
+      }
+
+      if (SIMULATE_PAYMENTS) {
+        await shipmentRef.update({
+          paymentStatus: "card_saved",
+          priceSettlementStatus: FreightSettlementStatus.AWAITING_WEIGHT,
+          status: "awaiting_weight_confirmation",
+          stripePaymentMethodId: shipment.stripePaymentMethodId ||
+            `simulated_pm_${shipmentId}`,
+          cardSavedAt: FirestoreFieldValue.serverTimestamp(),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+        return {
+          success: true,
+          shipmentId,
+          trackingCode: shipment.trackingCode,
+          simulatedPayment: true,
+        };
+      }
+
+      const connectedAccountId = stripeAccountIdForRetrieval(shipment);
+      let setupIntentId = String(shipment.stripeSetupIntentId || "");
+      let sessionCustomerId = "";
+      if (sessionId) {
+        // Web redirect flow: the setup-mode Checkout Session created its own
+        // SetupIntent - trust the session only after proving it belongs to
+        // this shipment and this customer.
+        const session = await retrieveStripeCheckoutSession(
+            String(sessionId),
+            connectedAccountId,
+        );
+        if (
+          session?.mode !== "setup" ||
+          String(session?.metadata?.shipmentId || "") !== shipmentId ||
+          String(session?.metadata?.customerUid || "") !== customerUid
+        ) {
+          throw new HttpsError(
+              "permission-denied",
+              "This card setup does not belong to this shipment",
+          );
+        }
+        setupIntentId = String(session.setup_intent || "");
+        sessionCustomerId = String(session.customer || "");
+      }
+      if (!setupIntentId || setupIntentId.startsWith("simulated_")) {
+        throw new HttpsError(
+            "failed-precondition",
+            "No card setup was started for this shipment",
+        );
+      }
+      const setupIntent = await retrieveStripeSetupIntent(
+          setupIntentId,
+          connectedAccountId,
+      );
+      if (setupIntent?.status !== "succeeded") {
+        throw new HttpsError(
+            "failed-precondition",
+            `Card setup is ${setupIntent?.status || "unavailable"}`,
+        );
+      }
+
+      await shipmentRef.update({
+        paymentStatus: "card_saved",
+        priceSettlementStatus: FreightSettlementStatus.AWAITING_WEIGHT,
+        status: "awaiting_weight_confirmation",
+        // Read off the intent that actually succeeded, same reasoning as
+        // completeFreightShipmentPayment - the web session creates its own
+        // SetupIntent, so the one stored at booking is not necessarily the
+        // one the card landed on.
+        stripeSetupIntentId: setupIntentId,
+        stripePaymentMethodId: setupIntent.payment_method || "",
+        stripeCustomerId: setupIntent.customer || sessionCustomerId ||
+          shipment.stripeCustomerId || "",
+        cardSavedAt: FirestoreFieldValue.serverTimestamp(),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      return {success: true, shipmentId, trackingCode: shipment.trackingCode};
     },
 );
 
@@ -21911,6 +22381,31 @@ exports.cancelPendingFreightShipment = onCall(
         return {success: true, shipmentId};
       }
 
+      // A pay-on-arrival booking abandoned before its card was saved holds
+      // no money at all - cancel the SetupIntent and close the doc.
+      if (shipment.payOnArrival === true) {
+        if (!SIMULATE_PAYMENTS && shipment.stripeSetupIntentId &&
+            !String(shipment.stripeSetupIntentId).startsWith("simulated_")) {
+          try {
+            await cancelStripeSetupIntent(
+                shipment.stripeSetupIntentId,
+                stripeAccountIdForRetrieval(shipment),
+            );
+          } catch (error) {
+            logger.warn("Could not cancel a pay-on-arrival SetupIntent", {
+              shipmentId,
+              detail: error.message,
+            });
+          }
+        }
+        await shipmentRef.update({
+          paymentStatus: "cancelled",
+          status: "cancelled",
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+        return {success: true, shipmentId};
+      }
+
       if (!SIMULATE_PAYMENTS && shipment.stripePaymentIntentId) {
         if (String(shipment.stripePaymentIntentId)
             .startsWith("simulated_")) {
@@ -22180,13 +22675,19 @@ exports.confirmFreightShipmentWeight = onCall(
           .doc(settlementId);
 
       let result;
+      let payOnArrivalDeferred = false;
       await db.runTransaction(async (transaction) => {
         const [shipmentDoc, existingSettlementDoc] = await Promise.all([
           transaction.get(shipmentRef),
           transaction.get(settlementRef),
         ]);
         const shipment = shipmentDoc.data() || {};
-        if (shipment.paymentStatus !== "succeeded") {
+        // A pay-on-arrival booking is secured by its saved, verified card
+        // rather than a paid estimate - that is the deal the business opted
+        // into when it accepted being paid after the parcel lands.
+        const securedByCard = shipment.payOnArrival === true &&
+          shipment.paymentStatus === "card_saved";
+        if (shipment.paymentStatus !== "succeeded" && !securedByCard) {
           throw new HttpsError(
               "failed-precondition",
               "The estimate must be paid before weight confirmation",
@@ -22202,24 +22703,28 @@ exports.confirmFreightShipmentWeight = onCall(
                   "to correct it.",
             );
           }
+          // A re-confirmation must not charge a pay-on-arrival booking
+          // early - only arrival does that.
+          payOnArrivalDeferred = shipment.payOnArrival === true;
           result = existing;
           return;
         }
 
-        // The fee the customer already paid rides through settlement -
-        // unless staff corrected the item, in which case the corrected row
-        // is repriced under the RATE snapshotted at booking. The policy is
-        // frozen; only the identification moved.
-        let coverageFeeCents = Number(shipment.coverageFeeCents || 0);
+        // Whatever cover cost at booking rides through settlement unchanged.
+        // For anything booked since cover became free that is zero; older
+        // shipments keep the fee they actually paid, because refunding it
+        // here would settle them below what was charged.
+        const coverageFeeCents = Number(shipment.coverageFeeCents || 0);
         let itemCorrection = null;
         if (correctedItemId || correctedCategoryId) {
+          // Correcting the item moves the PROMISE, not the price - a
+          // corrected row pays back its own published amount, and the
+          // policy snapshotted at booking still decides whether it pays at
+          // all.
           const snapshotPolicy = shipment.coveragePolicyAtBooking || {};
           const corrected = quoteFreightItemCoverage({
             business,
-            policy: {
-              coversLoss: snapshotPolicy.coversLoss === true,
-              ratePct: Number(snapshotPolicy.ratePct || 0),
-            },
+            policy: {coversLoss: snapshotPolicy.coversLoss === true},
             categoryId: correctedCategoryId ||
               String(shipment.itemCategoryId || ""),
             itemId: correctedItemId,
@@ -22231,7 +22736,6 @@ exports.confirmFreightShipmentWeight = onCall(
                   "under Services before confirming.",
             );
           }
-          coverageFeeCents = corrected.coverageFeeCents;
           itemCorrection = {
             itemId: correctedItemId ||
               String(shipment.itemId || ""),
@@ -22248,7 +22752,11 @@ exports.confirmFreightShipmentWeight = onCall(
         let calculation;
         try {
           calculation = calculateFreightSettlement({
-            estimatedTotalCents: Number(
+            // Settlement math computes what is still OWED against what was
+            // PAID. A pay-on-arrival booking paid nothing at the estimate,
+            // so the whole verified price is the balance - the estimate
+            // fields on the doc stay untouched for display.
+            estimatedTotalCents: securedByCard ? 0 : Number(
                 shipment.estimatedTotalCents ??
                   centsFromDollars(shipment.price),
             ),
@@ -22258,6 +22766,12 @@ exports.confirmFreightShipmentWeight = onCall(
                 shipment.pickupFeeCents ?? centsFromDollars(shipment.pickupFee),
             ),
             coverageFeeCents,
+            // Same legacy-tolerant read: shipments booked before destination
+            // delivery existed carry neither field and settle at zero.
+            destinationDeliveryFeeCents: Number(
+                shipment.destinationDeliveryFeeCents ??
+                  centsFromDollars(shipment.destinationDeliveryFee) ?? 0,
+            ) || 0,
           });
         } catch (error) {
           throw new HttpsError("failed-precondition", error.message);
@@ -22280,9 +22794,21 @@ exports.confirmFreightShipmentWeight = onCall(
           stripeFeeMode: shipment.stripeFeeMode ||
             STRIPE_FEE_MODE_PLATFORM_ABSORBS,
         };
-        const shipmentStatus = calculation.balanceDueCents > 0 ?
+        // Pay-on-arrival: the full price is due, but deliberately not yet -
+        // the shipment progresses unpaid and the saved card is charged when
+        // the business marks it arrived (chargeFreightPayOnArrival).
+        const shipmentStatus = securedByCard ?
+          "pending" :
+          calculation.balanceDueCents > 0 ?
           "awaiting_balance_payment" :
           calculation.refundDueCents > 0 ? "settlement_processing" : "pending";
+        payOnArrivalDeferred = securedByCard &&
+          calculation.balanceDueCents > 0;
+        const shipmentSettlementStatus = securedByCard &&
+          calculation.priceSettlementStatus ===
+            FreightSettlementStatus.BALANCE_DUE ?
+          FreightSettlementStatus.DUE_ON_ARRIVAL :
+          calculation.priceSettlementStatus;
         const settlement = {
           settlementId,
           settlementVersion: 1,
@@ -22331,7 +22857,7 @@ exports.confirmFreightShipmentWeight = onCall(
           refundDueCents: calculation.refundDueCents,
           refundDue: dollarsFromCents(calculation.refundDueCents),
           refundCardCents: calculation.refundCardCents,
-          priceSettlementStatus: calculation.priceSettlementStatus,
+          priceSettlementStatus: shipmentSettlementStatus,
           weightVerificationStatus: "confirmed",
           weightConfirmedByUid: callerUid,
           weightConfirmedAt: now,
@@ -22371,7 +22897,7 @@ exports.confirmFreightShipmentWeight = onCall(
           idempotencySuffix: `${shipmentId}_freight_final_v1`,
         });
       } else if (result.priceSettlementStatus ===
-          FreightSettlementStatus.BALANCE_DUE) {
+          FreightSettlementStatus.BALANCE_DUE && !payOnArrivalDeferred) {
         const attempted = await attemptAutomaticFreightBalanceCharge({
           shipmentId,
           customerUid: result.customerUid,
@@ -22381,6 +22907,8 @@ exports.confirmFreightShipmentWeight = onCall(
           result = settledDoc.data() || result;
         }
       }
+      // payOnArrivalDeferred: nothing to do now by design - the saved card
+      // is charged when the business marks the shipment arrived.
       return freightSettlementResponse(result);
     },
 );
@@ -22408,7 +22936,18 @@ async function notifyFreightBalanceDue({
   const businessName = shipment.businessName || "The business";
   let title;
   let body;
-  if (autoChargeAttempted && autoChargeSucceeded) {
+  const payOnArrival = shipment.payOnArrival === true;
+  if (payOnArrival && autoChargeAttempted && autoChargeSucceeded) {
+    title = "Your shipment arrived - payment complete";
+    body = `${businessName} marked your shipment as arrived. As agreed at ` +
+      `booking, we charged your saved card $${amount}.`;
+  } else if (payOnArrival) {
+    title = "Action needed: pay for your arrived shipment";
+    body = `${businessName} marked your shipment as arrived. $${amount} is ` +
+      `due, as agreed at booking${autoChargeAttempted ?
+        ", and the charge to your saved card didn't go through" : ""} - ` +
+      `please open the app to complete this payment.`;
+  } else if (autoChargeAttempted && autoChargeSucceeded) {
     title = "Additional shipping charge";
     body = `${businessName} confirmed your shipment weighed more than ` +
       `estimated.${weightNote} We automatically charged your card an ` +
@@ -22655,6 +23194,14 @@ async function applyFreightSettlementPayment({
       settledAt: now,
       updatedAt: now,
     });
+    // A weight-adjustment balance settles a shipment still waiting to move,
+    // so "pending" is its next stop. A pay-on-arrival charge settles a
+    // shipment that already ARRIVED - stomping ready_for_pickup back to
+    // "pending" would un-arrive it on the tracking screen.
+    const fulfillmentStatus = String(shipmentForRouting.status || "");
+    const preservedStatus = [
+      "in_transit", "ready_for_pickup", "completed",
+    ].includes(fulfillmentStatus) ? fulfillmentStatus : "pending";
     transaction.update(shipmentRef, {
       priceSettlementStatus: FreightSettlementStatus.SETTLED,
       balancePaymentStatus: "succeeded",
@@ -22664,7 +23211,7 @@ async function applyFreightSettlementPayment({
       balanceDue: 0,
       balanceDueCents: 0,
       ...payoutFields,
-      status: "pending",
+      status: preservedStatus,
       settledAt: now,
       updatedAt: now,
     });

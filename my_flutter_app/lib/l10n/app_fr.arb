@@ -2893,6 +2893,16 @@
   },
   "whatIsTheItem": "Quel est l’article ?",
   "somethingElseInCategory": "Autre chose dans cette catégorie",
+  "whenDoYouPay": "Quand payez-vous ?",
+  "payNowOption": "Payer maintenant",
+  "payOnArrivalOption": "Payer à l'arrivée",
+  "payOnArrivalExplainer": "Rien n'est débité aujourd'hui. Votre carte est enregistrée et vérifiée maintenant, puis débitée automatiquement lorsque {business} marque votre colis comme arrivé. Si ce débit échoue, il vous sera demandé de finaliser le paiement dans l'application.",
+  "@payOnArrivalExplainer": {
+    "placeholders": {
+      "business": {}
+    }
+  },
+  "saveCardAndBook": "Enregistrer la carte et réserver",
   "noBusinessTakesItem": "Aucune entreprise approuvée n’accepte cet article vers cette destination pour le moment. Essayez un autre article ou revenez bientôt.",
   "freightCategoryQuestion": "Que contient le colis ?",
   "freightCategoryHelp": "Les entreprises facturent plus cher ce qui coûte plus cher à remplacer.",
@@ -2918,38 +2928,22 @@
     }
   },
   "freightCoverageNone": "Aucune couverture",
-  "freightCoverageCoversUpTo": "Couvre jusqu’à {amount} · {rate}",
-  "@freightCoverageCoversUpTo": {
-    "placeholders": {
-      "amount": {},
-      "rate": {}
-    }
-  },
-  "freightCoverageCoversLoss": "Couvre la perte · {rate}",
-  "@freightCoverageCoversLoss": {
-    "placeholders": {
-      "rate": {}
-    }
-  },
+  "freightCoverageCoversLoss": "Couvre la perte",
   "freightCoverageSectionTitle": "En cas de perte",
-  "freightCoverageQuestion": "Y a-t-il quelque chose valant plus de {amount} ?",
-  "@freightCoverageQuestion": {
-    "placeholders": {
-      "amount": {}
-    }
-  },
-  "freightCoverageQuestionHelp": "Vous seul savez ce qu’il y a dans le colis, donc vous seul pouvez dire ce qu’il coûterait à remplacer.",
-  "freightDeclaredValueLabel": "Valeur de remplacement",
-  "freightDeclaredValueHelper": "Ce que vous déclarez est aussi le maximum qui peut être remboursé : déclarez-le honnêtement.",
-  "freightCoverageFeeLabel": "Frais de couverture",
-  "freightCoverageEnterValue": "Indiquez la valeur pour voir les frais de couverture.",
-  "freightCoveragePaysUpTo": "{businessName} vous rembourse jusqu’à {amount} si ce colis est perdu.",
+  "freightCoveragePaysUpTo": "{businessName} vous rembourse {amount} si ce colis est perdu.",
   "@freightCoveragePaysUpTo": {
     "placeholders": {
       "businessName": {},
       "amount": {}
     }
   },
+  "freightCoveragePaysForLoss": "{businessName} vous rembourse si ce colis est perdu.",
+  "@freightCoveragePaysForLoss": {
+    "placeholders": {
+      "businessName": {}
+    }
+  },
+  "freightCoverageNoExtraCharge": "Compris dans le prix, sans frais supplémentaires.",
   "freightCoverageWhoPays": "Laawol enregistre cet accord. C’est {businessName} qui rembourse.",
   "@freightCoverageWhoPays": {
     "placeholders": {
@@ -2962,11 +2956,26 @@
       "businessName": {}
     }
   },
-  "freightCoverageCarriesUpTo": "{businessName} accepte les colis d’une valeur maximale de {amount}.",
-  "@freightCoverageCarriesUpTo": {
+  "freightDestinationDeliveryTitle": "Comment le destinataire le reçoit",
+  "freightDestinationDeliveryCollect": "Le destinataire vient le chercher",
+  "freightDestinationDeliveryCollectHelp": "Il récupère le colis chez {businessName} à destination.",
+  "@freightDestinationDeliveryCollectHelp": {
     "placeholders": {
-      "businessName": {},
+      "businessName": {}
+    }
+  },
+  "freightDestinationDeliveryToAddress": "Livrer à son adresse · {amount}",
+  "@freightDestinationDeliveryToAddress": {
+    "placeholders": {
       "amount": {}
     }
-  }
+  },
+  "freightDestinationDeliveryFeeLabel": "Livraison à destination",
+  "freightReceiverAddressLabel": "Adresse du destinataire",
+  "freightReceiverAddressHint": "Quartier, point de repère, ville",
+  "freightReceiverAddressHelper": "Indiquez le quartier et un point de repère proche, pour que le livreur trouve l’adresse.",
+  "freightReceiverAddressRequired": "Indiquez l’adresse où le colis doit être livré.",
+  "freightReceiverAddressTooLong": "Cette adresse est trop longue. Limitez-vous au quartier, à un point de repère et à la ville.",
+  "outForDelivery": "En cours de livraison",
+  "freightNextOutForDelivery": "Votre colis est arrivé et est en route vers l’adresse du destinataire."
 }

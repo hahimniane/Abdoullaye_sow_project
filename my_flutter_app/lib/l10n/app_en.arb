@@ -2893,6 +2893,16 @@
   },
   "whatIsTheItem": "What is the item?",
   "somethingElseInCategory": "Something else in this category",
+  "whenDoYouPay": "When do you pay?",
+  "payNowOption": "Pay now",
+  "payOnArrivalOption": "Pay when it arrives",
+  "payOnArrivalExplainer": "Nothing is charged today. Your card is saved and verified now, and charged automatically when {business} marks your shipment arrived. If that charge doesn't go through, you'll be asked to complete payment in the app.",
+  "@payOnArrivalExplainer": {
+    "placeholders": {
+      "business": {}
+    }
+  },
+  "saveCardAndBook": "Save card & book",
   "noBusinessTakesItem": "No approved business currently takes this item to this destination. Try a different item, or check back soon.",
   "freightCategoryQuestion": "What's in the parcel?",
   "freightCategoryHelp": "Businesses charge more for what costs more to replace.",
@@ -2918,38 +2928,22 @@
     }
   },
   "freightCoverageNone": "No coverage",
-  "freightCoverageCoversUpTo": "Covers up to {amount} · {rate}",
-  "@freightCoverageCoversUpTo": {
-    "placeholders": {
-      "amount": {},
-      "rate": {}
-    }
-  },
-  "freightCoverageCoversLoss": "Covers loss · {rate}",
-  "@freightCoverageCoversLoss": {
-    "placeholders": {
-      "rate": {}
-    }
-  },
+  "freightCoverageCoversLoss": "Covers loss",
   "freightCoverageSectionTitle": "If it goes missing",
-  "freightCoverageQuestion": "Is anything worth more than {amount}?",
-  "@freightCoverageQuestion": {
-    "placeholders": {
-      "amount": {}
-    }
-  },
-  "freightCoverageQuestionHelp": "Only you know what is in the box, so only you can say what it would cost to replace.",
-  "freightDeclaredValueLabel": "Replacement value",
-  "freightDeclaredValueHelper": "What you declare is also the most that can be paid back, so declare it honestly.",
-  "freightCoverageFeeLabel": "Coverage fee",
-  "freightCoverageEnterValue": "Enter what it is worth to see the coverage fee.",
-  "freightCoveragePaysUpTo": "{businessName} pays you up to {amount} if this parcel is lost.",
+  "freightCoveragePaysUpTo": "{businessName} pays you {amount} if this parcel is lost.",
   "@freightCoveragePaysUpTo": {
     "placeholders": {
       "businessName": {},
       "amount": {}
     }
   },
+  "freightCoveragePaysForLoss": "{businessName} pays you back if this parcel is lost.",
+  "@freightCoveragePaysForLoss": {
+    "placeholders": {
+      "businessName": {}
+    }
+  },
+  "freightCoverageNoExtraCharge": "Included in the price, at no extra charge.",
   "freightCoverageWhoPays": "Laawol records this agreement. {businessName} is the business that pays.",
   "@freightCoverageWhoPays": {
     "placeholders": {
@@ -2962,11 +2956,26 @@
       "businessName": {}
     }
   },
-  "freightCoverageCarriesUpTo": "{businessName} carries parcels worth up to {amount}.",
-  "@freightCoverageCarriesUpTo": {
+  "freightDestinationDeliveryTitle": "How the receiver gets it",
+  "freightDestinationDeliveryCollect": "Receiver collects it",
+  "freightDestinationDeliveryCollectHelp": "They pick the parcel up from {businessName} at the destination.",
+  "@freightDestinationDeliveryCollectHelp": {
     "placeholders": {
-      "businessName": {},
+      "businessName": {}
+    }
+  },
+  "freightDestinationDeliveryToAddress": "Deliver to their address · {amount}",
+  "@freightDestinationDeliveryToAddress": {
+    "placeholders": {
       "amount": {}
     }
-  }
+  },
+  "freightDestinationDeliveryFeeLabel": "Delivery at destination",
+  "freightReceiverAddressLabel": "Receiver's address",
+  "freightReceiverAddressHint": "Neighbourhood, landmark, city",
+  "freightReceiverAddressHelper": "Include the neighbourhood and a landmark nearby, so the driver can find it.",
+  "freightReceiverAddressRequired": "Enter the address where the parcel should be delivered.",
+  "freightReceiverAddressTooLong": "That address is too long. Keep it to the neighbourhood, a landmark and the city.",
+  "outForDelivery": "Out for delivery",
+  "freightNextOutForDelivery": "Your parcel has arrived and is on its way to the receiver's address."
 }

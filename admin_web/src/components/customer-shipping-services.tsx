@@ -77,16 +77,18 @@ import {
 } from "@/lib/customer-shipping";
 import { marketplaceDisclosure } from "@/lib/disclosures";
 import {
-  formatMultiplier,
   freightCategoryById,
   freightCategoryOptionsFrom,
   freightCategoryPricing,
   freightCoverageComparisonLine,
   freightCoveragePolicyFrom,
-  quoteFreightCoverage,
   type FreightCategoryOption,
-  type FreightCoveragePolicy,
 } from "@/lib/freight-categories";
+import {
+  MAX_RECEIVER_ADDRESS_LENGTH,
+  deliveryChoiceIsComplete,
+  freightDeliveryPolicy,
+} from "@/lib/freight-delivery";
 import {
   SERVICE_SORT_LABELS,
   defaultSortForService,
@@ -105,7 +107,6 @@ import {
 } from "@/lib/receiver-phone-rules";
 import {
   OTHER_ITEM_ID,
-  coverageFeeCentsFor,
   freightItemChoicesFor,
   freightPaybackFor,
   providerQualifiesForItem,
@@ -173,6 +174,11 @@ type DestinationOption = {
   freightCategories?: unknown;
   freightCoverage?: unknown;
   freightPaybackTable?: unknown;
+  freightPayOnArrival?: boolean;
+  // Whether the receiver can have the parcel brought to their own address
+  // instead of collecting it, and the flat fee for that.
+  freightDestinationDeliveryAvailable?: boolean;
+  freightDestinationDeliveryFee?: number;
   country: DestinationCountry;
 };
 
@@ -2297,8 +2303,14 @@ function FreightShipmentForm({
   const [weightKg, setWeightKg] = useState(1);
   const [itemCategoryId, setItemCategoryId] = useState("");
   const [itemId, setItemId] = useState("");
-  const [declaresValue, setDeclaresValue] = useState(false);
-  const [declaredValueText, setDeclaredValueText] = useState("");
+  // How the parcel ends its journey. Collection is the default because it is
+  // what a business does without opting in to anything.
+  const [wantsDelivery, setWantsDelivery] = useState(false);
+  const [receiverAddress, setReceiverAddress] = useState("");
+  // When the chosen business accepts payment after arrival, the customer
+  // picks WHEN they pay. "now" is the only value a business that has not
+  // opted in ever submits.
+  const [paymentTiming, setPaymentTiming] = useState<"now" | "arrival">("now");
   const [providerSort, setProviderSort] = useState<ServiceSort>(
     defaultSortForService("freight") as ServiceSort,
   );
@@ -2393,6 +2405,11 @@ function FreightShipmentForm({
     [activeCategoryId, activeItemId, itemStepSatisfied, providerOptions],
   );
   const destination = selectedOption(providerOptions, destinationOptionId);
+  // The choice only survives while the chosen business actually offers it -
+  // switching to a business that has not opted in submits "now", whatever
+  // the select said before the switch.
+  const payOnArrivalChosen =
+    destination?.freightPayOnArrival === true && paymentTiming === "arrival";
   const selectedCountry = countries.find(
     (country) => country.id === destinationCountryId,
   );
@@ -2441,10 +2458,9 @@ function FreightShipmentForm({
         multiplier: selectedCategory?.multiplier ?? 1,
       })
     : null;
-  // A business that has published a payback table prices protection from
-  // its own rows; the sender's typed value survives only for businesses that
-  // have not. The number the customer sees is the business's promise, and
-  // the server re-prices it regardless.
+  // Protection is the business's own published payback for the item the
+  // customer picked, and it is free: the business priced that item for what
+  // it is worth to carry, so the risk already sits in the shipping rate.
   const paybackTable = (destination as unknown as {
     freightPaybackTable?: Record<string, unknown>;
   } | null)?.freightPaybackTable;
@@ -2458,33 +2474,18 @@ function FreightShipmentForm({
         itemId: activeItemId === OTHER_ITEM_ID ? "" : activeItemId,
       })
     : null;
-  const declaredValue =
-    !usesItemPricing && declaresValue ? Number(declaredValueText || 0) : 0;
-  const coverage = quoteFreightCoverage({
-    policy: coveragePolicy,
-    declaredValue,
-  });
-  const itemCoverageFeeCents =
-    itemLookup?.listed && coveragePolicy?.coversLoss
-      ? coverageFeeCentsFor(itemLookup.paybackAmount, coveragePolicy.ratePct)
-      : 0;
-  const coverageFee = usesItemPricing
-    ? itemCoverageFeeCents / 100
-    : coverage.ok
-      ? coverage.coverageFee
-      : 0;
-  const coverageRefusal = usesItemPricing
-    ? ""
-    : coverage.ok
-      ? ""
-      : coverage.message;
-  // Ranked on the parcel as described so far. The weight, category and value
-  // fields sit below this picker, so a first pass ranks on the per-kg rate and
-  // the cover; filling them in re-ranks on the real quote.
+  const coversLoss = coveragePolicy?.coversLoss === true;
+  const paybackAmount =
+    coversLoss && itemLookup?.listed ? itemLookup.paybackAmount : 0;
+  const deliveryPolicy = freightDeliveryPolicy(destination);
+  const deliveryChosen = deliveryPolicy.offered && wantsDelivery;
+  const deliveryFee = deliveryChosen ? deliveryPolicy.fee : 0;
+  // Ranked on the parcel as described so far. The weight and category fields
+  // sit below this picker, so a first pass ranks on the per-kg rate and the
+  // cover; filling them in re-ranks on the real quote.
   const sortedProviderOptions = useMemo(
     () =>
       sortServiceOptions(qualifiedProviderOptions, {
-        declaredValue,
         itemCategoryId: activeCategoryId,
         mode,
         service: "freight",
@@ -2492,7 +2493,6 @@ function FreightShipmentForm({
         weightKg,
       }),
     [
-      declaredValue,
       activeCategoryId,
       mode,
       qualifiedProviderOptions,
@@ -2508,7 +2508,7 @@ function FreightShipmentForm({
   const estimatedTotal =
     pricing === null || pricing.total === null
       ? null
-      : shippingSubtotal + (pricing.pickupFee ?? 0) + coverageFee;
+      : shippingSubtotal + (pricing.pickupFee ?? 0) + deliveryFee;
 
   // Deliberately NO effect guarding itemCategoryId against the destination's
   // category list. The funnel owns the category now - it is chosen from the
@@ -2517,12 +2517,12 @@ function FreightShipmentForm({
   // fired on exactly that reset and snapped every choice back to "general":
   // the customer picked Electronics and watched it revert.
 
-  // Nothing to declare against a business that will not carry it: dropping the
-  // answer when the business changes stops a value quietly surviving onto a
-  // policy that never accepted it.
+  // Delivery is one business's offer, not a property of the parcel: keeping
+  // the answer across a change of business would book a delivery the new one
+  // never agreed to, which the server refuses at the payment step.
   useEffect(() => {
-    setDeclaresValue(false);
-    setDeclaredValueText("");
+    setWantsDelivery(false);
+    setReceiverAddress("");
   }, [destination?.businessId]);
   const officeLocations = useOfficeLocations(destination?.businessId ?? "");
   const [officeLocationId, setOfficeLocationId] = useState("");
@@ -2607,9 +2607,9 @@ function FreightShipmentForm({
     itemStepSatisfied &&
     phoneValidation.valid &&
     quoteReady &&
-    // The server refuses a parcel worth more than the business carries, so the
-    // form refuses it here rather than letting the payment step do it.
-    !coverageRefusal &&
+    // A delivery without somewhere to take it is refused by the server, so
+    // the form refuses it here rather than letting the payment step do it.
+    deliveryChoiceIsComplete({wantsDelivery: deliveryChosen, receiverAddress}) &&
     accepted;
 
   async function requestQuote() {
@@ -2672,9 +2672,14 @@ function FreightShipmentForm({
             mode,
             weightKg,
             itemCategoryId: activeCategoryId,
-            ...(usesItemPricing
-              ? {itemId: activeItemId === OTHER_ITEM_ID ? "" : activeItemId}
-              : {declaredValue}),
+            paymentTiming: payOnArrivalChosen ? "arrival" : "now",
+            ...(usesItemPricing && {
+              itemId: activeItemId === OTHER_ITEM_ID ? "" : activeItemId,
+            }),
+            ...(deliveryChosen && {
+              destinationDelivery: true,
+              receiverAddress,
+            }),
             pickup: {
               ...pickup,
               ...(pickup.dateTime && {
@@ -2742,8 +2747,8 @@ function FreightShipmentForm({
             setDestinationOptionId("");
             setReceiverPhoneIsWhatsappOnly(false);
             setReceiverPhoneTouched(false);
-            setDeclaresValue(false);
-            setDeclaredValueText("");
+            setWantsDelivery(false);
+            setReceiverAddress("");
             setAccepted(false);
           }}
           onSubmit={submit}
@@ -2790,23 +2795,11 @@ function FreightShipmentForm({
                 label="Estimated weight"
                 value={`${weightKg} kg`}
               />
-              {coverage.ok && coverage.declaredValue > 0 && (
+              {paybackAmount > 0 && (
                 <ReviewDetail
-                  label="Declared value"
-                  value={formatMoney(coverage.declaredValue)}
+                  label="Paid back if lost"
+                  value={formatMoney(paybackAmount)}
                 />
-              )}
-              {coverage.ok && coverage.covered && (
-                <>
-                  <ReviewDetail
-                    label="Cover for loss"
-                    value={formatMoney(coverage.coverageFee)}
-                  />
-                  <ReviewDetail
-                    label="Paid back up to"
-                    value={formatMoney(coverage.payoutCap)}
-                  />
-                </>
               )}
               <ReviewDetail
                 label="Pickup"
@@ -2818,24 +2811,52 @@ function FreightShipmentForm({
                   value={formatMoney(quote.fee, quote.currency || "USD")}
                 />
               )}
-              {coverage.ok && coverage.declaredValue > 0 && !coverage.covered && (
+              <ReviewDetail
+                label="At the destination"
+                value={
+                  deliveryChosen
+                    ? receiverAddress
+                    : "The receiver collects it"
+                }
+              />
+              {deliveryChosen && (
+                <ReviewDetail
+                  label="Delivery to the receiver"
+                  value={formatMoney(deliveryFee)}
+                />
+              )}
+              {destination && !coversLoss && (
                 <div className="customer-inline-note">
-                  This business does not pay for a lost parcel. The value you
-                  declared is recorded as what it agreed to carry, and nothing
-                  was charged for cover.
+                  <strong>{destination.businessName}</strong>{" "}
+                  <span>does not pay for a lost parcel.</span>{" "}
+                  <span>
+                    Nothing is charged for protection, and nothing is owed if
+                    the parcel goes missing.
+                  </span>
                 </div>
               )}
-              <div className="customer-inline-note">
-                The weight you enter is an estimate. If the business confirms
-                a different weight after pickup, Laawol will try to
-                automatically charge the card you use today for any
-                additional amount due. If that charge doesn&rsquo;t go
-                through, you&rsquo;ll need to open the app to complete
-                payment before your shipment can continue. If your shipment
-                weighs less, you&rsquo;ll be refunded automatically.
-              </div>
+              {payOnArrivalChosen ? (
+                <div className="customer-inline-note">
+                  You pay when it arrives. Nothing is charged today - your
+                  card is saved and verified now, and charged automatically
+                  for the confirmed price when the business marks your
+                  shipment arrived. If that charge doesn&rsquo;t go through,
+                  you&rsquo;ll be asked to complete payment in the app.
+                </div>
+              ) : (
+                <div className="customer-inline-note">
+                  The weight you enter is an estimate. If the business
+                  confirms a different weight after pickup, Laawol will try
+                  to automatically charge the card you use today for any
+                  additional amount due. If that charge doesn&rsquo;t go
+                  through, you&rsquo;ll need to open the app to complete
+                  payment before your shipment can continue. If your
+                  shipment weighs less, you&rsquo;ll be refunded
+                  automatically.
+                </div>
+              )}
               <DisclosureCheckbox accepted={accepted} onChange={setAccepted} />
-              <PaymentHoldNotice />
+              {!payOnArrivalChosen && <PaymentHoldNotice />}
             </ReviewGrid>
           }
           submitLabel={
@@ -2843,7 +2864,9 @@ function FreightShipmentForm({
               ? "Sign in to save & continue"
               : pickup.requested && !quote
                 ? "Calculate pickup & continue"
-                : "Continue to secure payment"
+                : payOnArrivalChosen
+                  ? "Continue to save your card"
+                  : "Continue to secure payment"
           }
           submitting={submitting}
           title="Send freight"
@@ -2958,6 +2981,8 @@ function FreightShipmentForm({
                   setQuote(null);
                   setSelectionNotice("");
                 }}
+                itemCategoryId={activeCategoryId}
+                itemId={activeItemId}
                 mode={mode}
                 onSortChange={setProviderSort}
                 options={sortedProviderOptions}
@@ -2971,6 +2996,31 @@ function FreightShipmentForm({
                 and showing them first walked the customer through half a
                 form that could still dead-end at "no business takes this". */}
             {destination && (<>
+            {destination.freightPayOnArrival === true && (
+              <label className="customer-form-span">
+                When do you pay?
+                <select
+                  onChange={(event) =>
+                    setPaymentTiming(
+                      event.target.value === "arrival" ? "arrival" : "now",
+                    )
+                  }
+                  value={paymentTiming}
+                >
+                  <option value="now">Pay now</option>
+                  <option value="arrival">
+                    Pay when it arrives
+                  </option>
+                </select>
+                {paymentTiming === "arrival" && (
+                  <small>
+                    Nothing is charged today. Your card is saved and
+                    verified now, and charged automatically when{" "}
+                    {destination.businessName} marks your shipment arrived.
+                  </small>
+                )}
+              </label>
+            )}
             <RecipientNameField
               id="freight-receiver-name"
               onChange={setReceiverName}
@@ -3034,20 +3084,23 @@ function FreightShipmentForm({
                 value={weightKg}
               />
             </label>
-            {destination && !usesItemPricing && (
-              <FreightValueField
+            {destination && (
+              <FreightProtectionNote
                 businessName={destination.businessName}
-                coverageFee={coverageFee}
-                covered={coverage.ok && coverage.covered}
-                declaring={declaresValue}
-                onDeclare={(next) => {
-                  setDeclaresValue(next);
-                  if (!next) setDeclaredValueText("");
+                covered={coversLoss}
+                paybackAmount={paybackAmount}
+              />
+            )}
+            {destination && deliveryPolicy.offered && (
+              <FreightDestinationDeliveryField
+                address={receiverAddress}
+                fee={deliveryPolicy.fee}
+                onAddressChange={setReceiverAddress}
+                onChoose={(next) => {
+                  setWantsDelivery(next);
+                  if (!next) setReceiverAddress("");
                 }}
-                onValueChange={setDeclaredValueText}
-                policy={coveragePolicy}
-                refusal={coverageRefusal}
-                value={declaredValueText}
+                wantsDelivery={wantsDelivery}
               />
             )}
             <PickupFields
@@ -3127,18 +3180,14 @@ function FreightShipmentForm({
                     label: "Shipping subtotal",
                     value: formatMoney(shippingSubtotal),
                   },
-                  ...(coverageFee > 0
+                  ...(paybackAmount > 0
                     ? [
                         {
-                          // Insurance language, not loss-talk: the same fee
-                          // used to be labelled "Cover for loss", which put
-                          // the losing in the customer's face on every
-                          // booking summary.
-                          label:
-                            usesItemPricing && itemLookup?.listed
-                              ? `Protection included · up to ${formatMoney(itemLookup.paybackAmount)}`
-                              : "Protection",
-                          value: formatMoney(coverageFee),
+                          // Insurance language, not loss-talk: the promise
+                          // reads as something the customer has, and the
+                          // price column says outright that it is free.
+                          label: `Protection included · up to ${formatMoney(paybackAmount)}`,
+                          value: "Free",
                         },
                       ]
                     : []),
@@ -3147,6 +3196,14 @@ function FreightShipmentForm({
                         {
                           label: "Pickup quote",
                           value: formatMoney(pricing.pickupFee),
+                        },
+                      ]
+                    : []),
+                  ...(deliveryChosen
+                    ? [
+                        {
+                          label: "Delivery to the receiver",
+                          value: formatMoney(deliveryFee),
                         },
                       ]
                     : []),
@@ -3227,133 +3284,111 @@ function FreightCategoryField({
 }
 
 /**
- * What the parcel is worth to replace, asked once and only when it matters.
+ * What this business owes if the parcel goes missing.
  *
- * Only the sender knows: an iPhone 17 and a five-year-old Samsung are the same
- * category and the same weight. The declared value is also the cap on any
- * payout, which is what makes the answer trustworthy without anyone opening
- * the box - and which is why the cap is on the screen rather than behind an
- * "i". A business that does not cover loss says so here rather than leaving
- * the customer to find out after the parcel is gone.
+ * The amount is on the screen rather than behind an "i": UI convention 1
+ * forbids hiding anything the reader needs to avoid a mistake, and choosing
+ * between two businesses without knowing which one stands behind the parcel
+ * is exactly that. The business that stands behind nothing says so here,
+ * while the parcel is still in the room.
  */
-function FreightValueField({
+function FreightProtectionNote({
   businessName,
-  coverageFee,
   covered,
-  declaring,
-  onDeclare,
-  onValueChange,
-  policy,
-  refusal,
-  value,
+  paybackAmount,
 }: {
   businessName: string;
-  coverageFee: number;
   covered: boolean;
-  declaring: boolean;
-  onDeclare: (declaring: boolean) => void;
-  onValueChange: (value: string) => void;
-  policy: FreightCoveragePolicy | null;
-  refusal: string;
-  value: string;
+  paybackAmount: number;
 }) {
-  if (!policy) return null;
-
-  if (!policy.coversLoss) {
+  if (!covered) {
     return (
       <div className="customer-inline-note customer-form-span">
         <strong>{businessName}</strong>{" "}
         <span>does not pay for a lost parcel.</span>{" "}
         <span>
-          Nothing is charged for cover, and nothing is owed if the parcel goes
-          missing.
+          Nothing is charged for protection, and nothing is owed if the parcel
+          goes missing.
         </span>
-        {policy.maxDeclaredValue > 0 && (
-          <>
-            {" "}
-            <span>It will not carry a parcel worth more than</span>{" "}
-            {formatMoney(policy.maxDeclaredValue)}.
-          </>
-        )}
       </div>
     );
   }
+  if (paybackAmount <= 0) return null;
+  return (
+    <div className="customer-quote-row customer-form-span">
+      <div>
+        <strong>Protection included</strong>
+        <small>
+          <span>We pay up to</span> {formatMoney(paybackAmount)}{" "}
+          <span>
+            if it is lost — the full amount this business publishes for this
+            item. The business pays you back, not Laawol.
+          </span>
+        </small>
+      </div>
+      <span className="customer-quote-value">Free</span>
+    </div>
+  );
+}
 
-  const declared = Number(value || 0);
-
+/**
+ * Where the parcel ends up at the destination.
+ *
+ * Collection is the default because it is what a business does without
+ * opting in to anything, and because the fee only becomes real once someone
+ * asks for delivery.
+ *
+ * The address is a free-text line rather than the structured US fields used
+ * for pickup: Conakry, Dakar and Bamako are addressed by neighbourhood and
+ * landmark, and a form demanding a state and a ZIP would be unanswerable.
+ */
+function FreightDestinationDeliveryField({
+  address,
+  fee,
+  onAddressChange,
+  onChoose,
+  wantsDelivery,
+}: {
+  address: string;
+  fee: number;
+  onAddressChange: (value: string) => void;
+  onChoose: (wantsDelivery: boolean) => void;
+  wantsDelivery: boolean;
+}) {
   return (
     <>
-      <label className="customer-choice-row customer-form-span">
-        <input
-          checked={declaring}
-          onChange={(event) => onDeclare(event.target.checked)}
-          type="checkbox"
-        />
-        <span>
-          <strong>
-            <span>Is anything in this parcel worth more than</span>{" "}
-            {formatMoney(policy.declarationThreshold)}?
-          </strong>
-          <small>
-            <span>The business pays you back, not Laawol. Cover costs</span>{" "}
-            {formatMultiplier(policy.ratePct)}
-            <span>% of the value you declare.</span>
-          </small>
-        </span>
+      <label className="customer-form-span">
+        Where does the receiver get it?
+        <select
+          onChange={(event) => onChoose(event.target.value === "delivery")}
+          value={wantsDelivery ? "delivery" : "collect"}
+        >
+          <option value="collect">The receiver collects it</option>
+          <option value="delivery">
+            {`Deliver it to their address · ${formatMoney(fee)}`}
+          </option>
+        </select>
+        <small>
+          {wantsDelivery
+            ? "The business takes the parcel to the receiver once it arrives."
+            : "The receiver picks the parcel up from the business at the destination."}
+        </small>
       </label>
-      {declaring && (
-        <>
-          <label className="customer-form-span">
-            What would it cost to replace? (USD)
-            <input
-              inputMode="decimal"
-              min="0"
-              onChange={(event) => onValueChange(event.target.value)}
-              step="10"
-              type="number"
-              value={value}
-            />
-            <small>
-              {policy.maxDeclaredValue > 0 ? (
-                <>
-                  <span>
-                    This business does not carry parcels worth more than
-                  </span>{" "}
-                  {formatMoney(policy.maxDeclaredValue)}.
-                </>
-              ) : (
-                <span>
-                  The most any business carries on one parcel is $10,000.
-                </span>
-              )}
-            </small>
-          </label>
-          {refusal && (
-            <div
-              aria-live="polite"
-              className="customer-inline-note error customer-form-span"
-            >
-              {refusal}
-            </div>
-          )}
-          {!refusal && covered && declared > 0 && (
-            <div className="customer-quote-row customer-form-span">
-              <div>
-                <strong>Cover for loss</strong>
-                <small>
-                  <span>We pay up to</span> {formatMoney(declared)}{" "}
-                  <span>
-                    if it is lost — the value you declared, never more. The
-                    business pays you back, not Laawol.
-                  </span>
-                </small>
-              </div>
-              <span className="customer-quote-value">
-                {formatMoney(coverageFee)}
-              </span>
-            </div>
-          )}
-        </>
+      {wantsDelivery && (
+        <label className="customer-form-span">
+          Receiver&rsquo;s address
+          <textarea
+            maxLength={MAX_RECEIVER_ADDRESS_LENGTH}
+            onChange={(event) => onAddressChange(event.target.value)}
+            required
+            rows={3}
+            value={address}
+          />
+          <small>
+            Include the neighbourhood and a landmark nearby, so the driver can
+            find it by asking.
+          </small>
+        </label>
       )}
     </>
   );
@@ -4494,6 +4529,8 @@ function ServiceSortChips({
 }
 
 function DestinationPicker({
+  itemCategoryId = "",
+  itemId = "",
   label,
   mode = "air",
   onChange,
@@ -4503,6 +4540,13 @@ function DestinationPicker({
   sort,
   value,
 }: {
+  /**
+   * Freight only. The funnel asks what is being sent before this list
+   * renders, so each card can state the protection this business publishes
+   * for that exact item instead of a range the customer cannot act on.
+   */
+  itemCategoryId?: string;
+  itemId?: string;
   label: string;
   mode?: "air" | "sea";
   onChange: (value: string) => void;
@@ -4644,12 +4688,15 @@ function DestinationPicker({
                       {freightCoverageComparisonLine(
                         freightCoveragePolicyFrom(option.freightCoverage),
                         (amount) => formatMoney(amount),
-                        Boolean(
-                          option.freightPaybackTable &&
-                            Object.keys(
-                              option.freightPaybackTable as object,
-                            ).length > 0,
-                        ),
+                        // The item is already chosen by the time this list
+                        // renders, so the promise can be the real number for
+                        // this parcel rather than a range nobody can act on.
+                        freightPaybackFor({
+                          table: option.freightPaybackTable,
+                          categoryId: itemCategoryId,
+                          itemId:
+                            itemId === OTHER_ITEM_ID ? "" : itemId,
+                        }).paybackAmount,
                       )}
                     </strong>
                   </span>

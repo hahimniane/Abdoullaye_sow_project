@@ -113,9 +113,10 @@ export function paymentReturnState(
   );
   if (
     values.some((value) =>
-      ["succeeded", "paid", "completed", "applied", "reserved"].includes(
-        value,
-      ),
+      // card_saved: a pay-on-arrival booking's terminal success - the card
+      // is verified and saved, and nothing is charged until arrival.
+      ["succeeded", "paid", "completed", "applied", "reserved", "card_saved"]
+          .includes(value),
     )
   ) {
     return "success";

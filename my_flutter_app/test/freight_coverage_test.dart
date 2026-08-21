@@ -5,48 +5,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/services/freight_coverage.dart';
 
 /// The app half of freight loss coverage. The same assertions
-/// `functions/test/freight-coverage.test.js` makes, because the fee shown
-/// before payment and the fee charged have to be the same number, and because
-/// the promise the customer reads ("we pay up to $X") is the promise the
-/// shipment record will carry.
-
-FreightCoveragePolicy policy({
-  bool coversLoss = true,
-  double ratePct = 2,
-  double maxDeclaredValue = 2000,
-}) => FreightCoveragePolicy(
-  coversLoss: coversLoss,
-  ratePct: ratePct,
-  maxDeclaredValue: maxDeclaredValue,
-);
+/// `functions/test/freight-coverage.test.js` makes, because the promise the
+/// customer reads ("we pay you $X") is the promise the shipment record will
+/// carry, and because cover is free: any fee reaching the total or the
+/// callable is a bug this file is here to catch.
 
 void main() {
   group('reading a policy', () {
-    test('a business that has set nothing covers nothing, accepts anything', () {
+    test('a business that has set nothing pays nothing back', () {
       final read = FreightCoveragePolicy.fromBusinessData(<String, dynamic>{});
       expect(read.coversLoss, isFalse);
-      expect(read.ratePct, 0);
-      expect(read.maxDeclaredValue, 0);
-      expect(read.hasCeiling, isFalse);
-      expect(read.declarationThreshold, freightDeclarationThreshold);
     });
 
-    test('ticking the box without a rate is not coverage', () {
+    test('the flag is the whole policy', () {
       final read = FreightCoveragePolicy.fromBusinessData({
         'freightCoverageEnabled': true,
-        'freightCoverageRatePct': 0,
       });
-      expect(read.coversLoss, isFalse);
-    });
-
-    test('a rate or ceiling beyond the platform maximum is clamped', () {
-      final read = FreightCoveragePolicy.fromBusinessData({
-        'freightCoverageEnabled': true,
-        'freightCoverageRatePct': 90,
-        'freightMaxDeclaredValue': 999999,
-      });
-      expect(read.ratePct, maxFreightCoverageRatePct);
-      expect(read.maxDeclaredValue, platformMaxDeclaredValue);
+      expect(read.coversLoss, isTrue);
     });
 
     test('null from the callable means the business has no freight at all', () {
@@ -54,164 +29,28 @@ void main() {
       expect(FreightCoveragePolicy.fromWire('none'), isNull);
     });
 
-    test('the wire policy is read whole', () {
-      final read = FreightCoveragePolicy.fromWire({
-        'coversLoss': true,
-        'ratePct': 2.5,
-        'maxDeclaredValue': 1500,
-        'declarationThreshold': 200,
-      })!;
-      expect(read.coversLoss, isTrue);
-      expect(read.ratePct, 2.5);
-      expect(read.maxDeclaredValue, 1500);
-      expect(read.declarationThreshold, 200);
-    });
-
-    test('a missing threshold falls back to the platform one', () {
-      final read = FreightCoveragePolicy.fromWire({'coversLoss': false})!;
-      expect(read.declarationThreshold, freightDeclarationThreshold);
-    });
-  });
-
-  group('whether the question is worth asking', () {
-    test('is asked when the business pays for a lost parcel', () {
-      expect(
-        policy(maxDeclaredValue: 0).worthAskingDeclaredValue,
-        isTrue,
-      );
-    });
-
-    test('is asked when the business states what it will carry', () {
-      expect(
-        policy(coversLoss: false, ratePct: 0).worthAskingDeclaredValue,
-        isTrue,
-      );
-    });
-
-    test('is not asked when the answer would change nothing', () {
-      // No cover and no ceiling: the value buys nothing, limits nothing and
-      // costs nothing. Asking anyway would be friction sold as protection.
-      const bare = FreightCoveragePolicy.none;
-      expect(bare.worthAskingDeclaredValue, isFalse);
-    });
-  });
-
-  group('pricing a declaration', () {
-    test('nothing declared is no fee, no cover and no cap', () {
-      final quote = quoteFreightCoverage(policy: policy(), declaredValue: 0);
-      expect(quote.ok, isTrue);
-      expect(quote.coverageFee, 0);
-      expect(quote.covered, isFalse);
-      expect(quote.payoutCap, 0);
-    });
-
-    test('the fee is the rate on the declared value, to the cent', () {
-      final quote = quoteFreightCoverage(
-        policy: policy(ratePct: 2),
-        declaredValue: 800,
-      );
-      expect(quote.coverageFee, 16);
-      expect(quote.covered, isTrue);
-    });
-
-    test('an awkward rate rounds the way the server rounds it', () {
-      // 333.33 x 2.5% = 8.33325 -> 8.33
-      final quote = quoteFreightCoverage(
-        policy: policy(ratePct: 2.5),
-        declaredValue: 333.33,
-      );
-      expect(quote.coverageFee, 8.33);
-    });
-
-    test('the payout cap is exactly what was declared', () {
-      final quote = quoteFreightCoverage(
-        policy: policy(),
-        declaredValue: 640,
-      );
-      // Understate it to save a few dollars and you have capped your own
-      // compensation. That is what makes an unchecked declaration workable.
-      expect(quote.payoutCap, 640);
-    });
-
-    test('a business that covers nothing still records the value', () {
-      final quote = quoteFreightCoverage(
-        policy: policy(coversLoss: false, ratePct: 0),
-        declaredValue: 900,
-      );
-      expect(quote.ok, isTrue);
-      expect(quote.declaredValue, 900);
-      expect(quote.coverageFee, 0);
-      expect(quote.covered, isFalse);
-      expect(quote.payoutCap, 0);
-    });
-
-    test('a value above the ceiling is refused, coverage or not', () {
-      for (final covers in [true, false]) {
-        final quote = quoteFreightCoverage(
-          policy: policy(coversLoss: covers, ratePct: covers ? 2 : 0),
-          declaredValue: 2500,
-        );
-        expect(quote.ok, isFalse);
-        expect(quote.error, FreightCoverageError.aboveMaxDeclaredValue);
-      }
-    });
-
-    test('a value at the ceiling exactly is still accepted', () {
-      final quote = quoteFreightCoverage(
-        policy: policy(maxDeclaredValue: 2000),
-        declaredValue: 2000,
-      );
-      expect(quote.ok, isTrue);
-      expect(quote.payoutCap, 2000);
-    });
-
-    test('no stated ceiling still stops at the platform maximum', () {
-      final quote = quoteFreightCoverage(
-        policy: policy(maxDeclaredValue: 0),
-        declaredValue: platformMaxDeclaredValue + 1,
-      );
-      expect(quote.ok, isFalse);
-      expect(quote.error, FreightCoverageError.abovePlatformMaximum);
-    });
-
-    test('a typed value arrives as text and is still priced', () {
-      final quote = quoteFreightCoverage(
-        policy: policy(ratePct: 2),
-        declaredValue: ' 500 ',
-      );
-      expect(quote.coverageFee, 10);
-    });
-
-    test('unreadable or negative text declares nothing', () {
-      for (final value in ['', 'lots', '-40']) {
-        final quote = quoteFreightCoverage(
-          policy: policy(),
-          declaredValue: value,
-        );
-        expect(quote.ok, isTrue, reason: 'for $value');
-        expect(quote.declaredValue, 0, reason: 'for $value');
-      }
+    test('the wire policy carries one field and nothing else', () {
+      expect(FreightCoveragePolicy.fromWire({'coversLoss': true})!.coversLoss,
+          isTrue);
+      expect(FreightCoveragePolicy.fromWire({'coversLoss': false})!.coversLoss,
+          isFalse);
+      // A business that offers freight and covers nothing is a policy, not an
+      // absent one - the option card has to say so out loud.
+      expect(FreightCoveragePolicy.fromWire(<String, Object?>{}), isNotNull);
     });
   });
 
   group('the line shown before a business is chosen', () {
-    test('names the ceiling and the rate when it covers loss', () {
+    test('says it covers loss when it pays for a lost parcel', () {
       expect(
-        freightCoverageSummaryOf(policy()),
-        FreightCoverageSummary.coversWithCeiling,
-      );
-    });
-
-    test('covers loss without a ceiling when none is stated', () {
-      expect(
-        freightCoverageSummaryOf(policy(maxDeclaredValue: 0)),
-        FreightCoverageSummary.coversNoCeiling,
+        freightCoverageSummaryOf(const FreightCoveragePolicy(coversLoss: true)),
+        FreightCoverageSummary.coversLoss,
       );
     });
 
     test('says so plainly when nothing is covered', () {
       expect(
-        freightCoverageSummaryOf(policy(coversLoss: false, ratePct: 0)),
+        freightCoverageSummaryOf(FreightCoveragePolicy.none),
         FreightCoverageSummary.noCoverage,
       );
     });
@@ -234,19 +73,14 @@ void main() {
       final fr = arb('fr');
       const keys = <String>[
         'freightCoverageNone',
-        'freightCoverageCoversUpTo',
         'freightCoverageCoversLoss',
         'freightCoverageSectionTitle',
-        'freightCoverageQuestion',
-        'freightCoverageQuestionHelp',
-        'freightDeclaredValueLabel',
-        'freightDeclaredValueHelper',
-        'freightCoverageFeeLabel',
-        'freightCoverageEnterValue',
+        'protectionIncludedUpTo',
         'freightCoveragePaysUpTo',
+        'freightCoveragePaysForLoss',
+        'freightCoverageNoExtraCharge',
         'freightCoverageWhoPays',
         'freightCoverageNotOffered',
-        'freightCoverageCarriesUpTo',
       ];
       for (final key in keys) {
         expect(en[key], isNotNull, reason: 'app_en.arb is missing $key');
@@ -256,6 +90,28 @@ void main() {
           isNotEmpty,
           reason: 'app_fr.arb has an empty $key',
         );
+      }
+    });
+
+    test('no string asks for a value or prices the promise', () {
+      for (final locale in ['en', 'fr']) {
+        final catalog = arb(locale);
+        for (final key in const [
+          'freightCoverageCoversUpTo',
+          'freightCoverageQuestion',
+          'freightCoverageQuestionHelp',
+          'freightDeclaredValueLabel',
+          'freightDeclaredValueHelper',
+          'freightCoverageFeeLabel',
+          'freightCoverageEnterValue',
+          'freightCoverageCarriesUpTo',
+        ]) {
+          expect(
+            catalog[key],
+            isNull,
+            reason: 'app_$locale.arb still carries $key',
+          );
+        }
       }
     });
   });
@@ -274,24 +130,53 @@ void main() {
       expect(screen, contains('freightCoverageSummaryText'));
     });
 
-    test('the declared value and its fee reach the total and the callable', () {
-      // Only for businesses still on the old model: a payback-table business
-      // prices from its own published row and sends itemId instead - the
-      // customer declares nothing.
+    test('the customer is never asked what the parcel is worth', () {
+      // The business already priced the item by what it is worth to carry, so
+      // a second valuation from the sender would price the same risk twice -
+      // and made the honest customer subsidise the optimistic one.
+      for (final gone in const [
+        '_declaresValue',
+        '_declaredValueController',
+        '_declaredValue',
+        '_resetDeclaredValue',
+        '_worthAskingDeclaredValue',
+        'declaredValue:',
+        'freightDeclaredValueLabel',
+      ]) {
+        expect(screen, isNot(contains(gone)), reason: gone);
+      }
+    });
+
+    test('no coverage fee reaches the total or the callable', () {
+      for (final gone in const [
+        '_coverageQuote',
+        '_itemCoverageFee',
+        '_coverageFeeApplied',
+        'coverageFeeCentsFor',
+        'freightCoverageFeeLabel',
+      ]) {
+        expect(screen, isNot(contains(gone)), reason: gone);
+      }
+      // The total is shipping, pickup and destination delivery. Nothing else.
       expect(
         screen,
-        contains('declaredValue: !_usesItemPricing && _declaredValue > 0'),
+        contains(
+          'double get _totalPrice => _price + _appliedPickupFee + '
+          '_appliedDeliveryFee;',
+        ),
       );
-      expect(screen, contains('_coverageFeeApplied'));
+    });
+
+    test('a covering business states the full payback, free of charge', () {
+      expect(screen, contains('protectionIncludedUpTo'));
+      expect(screen, contains('freightCoverageNoExtraCharge'));
+      // The full published amount, not a proportion of it.
+      expect(screen, contains('lookup.paybackAmount'));
     });
 
     test('a payback business asks for the item, never a value', () {
       expect(screen, contains('_usesItemPricing'));
-      expect(screen, contains('protectionIncludedUpTo'));
-      expect(
-        screen,
-        contains("itemId: _usesItemPricing"),
-      );
+      expect(screen, contains('itemId: _usesItemPricing'));
     });
 
     test('the funnel never offers a category nobody would take', () {
@@ -341,9 +226,9 @@ void main() {
     });
 
     test('a refusal from the server is repeated verbatim', () {
-      // Only the server knows what this business will carry; paraphrasing its
+      // Only the server has read the live business document; paraphrasing its
       // refusal would leave the customer changing fields at random.
-      expect(screen, contains('_declaredValueRefusal'));
+      expect(screen, contains('_serverRefusal'));
       expect(screen, contains('error.message'));
     });
   });

@@ -34,15 +34,22 @@ class FreightShipmentService {
     /// freight was priced before categories existed.
     String? itemCategoryId,
     String? itemId,
-    /// What the customer says it costs to replace, in plain dollars. Also the
-    /// cap on any payout, which is what makes it trustworthy unchecked.
-    double? declaredValue,
+    /// The receiver has the parcel brought to their own address at the
+    /// destination instead of collecting it. Only true for a business that
+    /// publishes the offer; the server re-prices the flat fee from the live
+    /// business document and refuses a delivery nobody offered.
+    bool destinationDelivery = false,
+    String? receiverAddress,
     bool useWalletBalance = false,
     bool pickupRequested = false,
     String? pickupAddress,
     String? pickupBorough,
     String? pickupDateTime,
     String? officeLocationId,
+    /// 'arrival' books without charging: the card is saved and verified via
+    /// a SetupIntent, and the server charges it when the business marks the
+    /// shipment arrived. Only businesses that opted in accept it.
+    String? paymentTiming,
     required MarketplaceDisclosureAcceptance marketplaceAcceptance,
   }) async {
     final response = await _functions
@@ -58,17 +65,17 @@ class FreightShipmentService {
           if ((itemCategoryId ?? '').trim().isNotEmpty)
             'itemCategoryId': itemCategoryId!.trim(),
           // Present-but-empty means "the category catch-all": the server
-          // resolves '' to the business's other-payback row, and absent
-          // means the legacy declared-value path.
+          // resolves '' to the business's other-payback row.
           if (itemId != null) 'itemId': itemId.trim(),
-          if (declaredValue != null && declaredValue > 0)
-            'declaredValue': declaredValue,
+          if (destinationDelivery) 'destinationDelivery': true,
+          'receiverAddress': ?receiverAddress,
           'pickupRequested': pickupRequested,
           'pickupAddress': ?pickupAddress,
           'pickupBorough': ?pickupBorough,
           'pickupDateTime': ?pickupDateTime,
           if (!pickupRequested && officeLocationId != null)
             'officeLocationId': officeLocationId,
+          if (paymentTiming == 'arrival') 'paymentTiming': 'arrival',
           'useWalletBalance': useWalletBalance,
           'marketplaceDisclosure': marketplaceAcceptance.toJson(),
         });
@@ -80,7 +87,39 @@ class FreightShipmentService {
     }
 
     final simulatedPayment = data['simulatedPayment'] == true;
-    if (!simulatedPayment) {
+    final setupClientSecret = data['setupClientSecret'] as String?;
+    if (!simulatedPayment && setupClientSecret != null &&
+        setupClientSecret.isNotEmpty) {
+      // Pay-on-arrival: the sheet verifies and saves the card via a
+      // SetupIntent - nothing is charged today. The server charges the saved
+      // card when the business marks the shipment arrived.
+      await StripeConfigService.ensureConfigured();
+      await withStripeConnectedAccount(
+        (data['stripeConnectedAccountId'] as String?) ?? '',
+        () async {
+          await Stripe.instance.initPaymentSheet(
+            paymentSheetParameters: SetupPaymentSheetParameters(
+              setupIntentClientSecret: setupClientSecret,
+              merchantDisplayName: 'Laawol',
+              style: ThemeMode.light,
+            ),
+          );
+          await completePaymentFlowSafely(
+            presentPaymentSheet: Stripe.instance.presentPaymentSheet,
+            completeTransaction: () async {
+              await _functions
+                  .httpsCallable('completeFreightShipmentCardSave')
+                  .call({'shipmentId': shipmentId});
+            },
+            cancelPendingTransaction: () async {
+              await _functions
+                  .httpsCallable('cancelPendingFreightShipment')
+                  .call({'shipmentId': shipmentId});
+            },
+          );
+        },
+      );
+    } else if (!simulatedPayment) {
       final clientSecret = data['clientSecret'] as String?;
       if (clientSecret == null || clientSecret.isEmpty) {
         throw Exception('Payment could not be initialized.');

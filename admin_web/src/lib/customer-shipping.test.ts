@@ -191,6 +191,105 @@ test("freight payload preserves the server-authoritative mode, weight, and picku
   );
 });
 
+test("pay-on-arrival travels only when chosen, and pay-now stays silent", () => {
+  // Silence means "now" to the server - the same thing every client built
+  // before this choice existed says. Sending paymentTiming: "now" would
+  // make old and new bookings distinguishable for no reason.
+  const base = {
+    senderName: "A",
+    receiverName: "B",
+    receiverPhone: "+12025550123",
+    destinationCountryId: "ca",
+    businessId: "business-2",
+    mode: "air" as const,
+    weightKg: 5,
+    pickup: {requested: false, address: "", borough: ""},
+  };
+  assert.equal(
+    "paymentTiming" in buildFreightShipmentPayload(base, disclosure),
+    false,
+  );
+  assert.equal(
+    "paymentTiming" in
+      buildFreightShipmentPayload(
+        {...base, paymentTiming: "now"},
+        disclosure,
+      ),
+    false,
+  );
+  assert.equal(
+    buildFreightShipmentPayload(
+      {...base, paymentTiming: "arrival"},
+      disclosure,
+    ).paymentTiming,
+    "arrival",
+  );
+});
+
+test("destination delivery travels with its address, or not at all", () => {
+  const base = {
+    senderName: "A",
+    receiverName: "B",
+    receiverPhone: "+12025550123",
+    destinationCountryId: "gn",
+    businessId: "business-2",
+    mode: "air" as const,
+    weightKg: 5,
+    pickup: {requested: false, address: "", borough: ""},
+  };
+  // Silence means "the receiver collects it", which is what every business
+  // does without opting in to anything.
+  const collected = buildFreightShipmentPayload(base, disclosure);
+  assert.equal("destinationDelivery" in collected, false);
+  assert.equal("receiverAddress" in collected, false);
+
+  // The server refuses a delivery with nowhere to take it, so the address is
+  // sent with the choice rather than as a separate optional field.
+  const delivered = buildFreightShipmentPayload(
+    {
+      ...base,
+      destinationDelivery: true,
+      receiverAddress: "  Kipé, behind the Total station, Conakry  ",
+    },
+    disclosure,
+  );
+  assert.equal(delivered.destinationDelivery, true);
+  assert.equal(
+    delivered.receiverAddress,
+    "Kipé, behind the Total station, Conakry",
+  );
+  // The fee is never client-supplied: the server re-prices it from the
+  // business document, so a payload carrying one would be ignored at best.
+  assert.equal("destinationDeliveryFee" in delivered, false);
+});
+
+test("the freight payload never carries what a parcel is worth", () => {
+  // A sender's own valuation priced nothing and promised nothing, and asking
+  // for it made the honest customer subsidise the optimistic one.
+  const payload = buildFreightShipmentPayload(
+    {
+      senderName: "A",
+      receiverName: "B",
+      receiverPhone: "+12025550123",
+      destinationCountryId: "gn",
+      businessId: "business-2",
+      mode: "air",
+      weightKg: 5,
+      itemCategoryId: "electronics",
+      itemId: "iphone",
+      pickup: {requested: false, address: "", borough: ""},
+    } as Parameters<typeof buildFreightShipmentPayload>[0] &
+      Record<string, unknown>,
+    disclosure,
+  );
+  assert.equal("declaredValue" in payload, false);
+  assert.equal("coverageFee" in payload, false);
+  // What the item is, on the other hand, is the whole input: the business's
+  // own published payback for that row is what a lost parcel pays.
+  assert.equal(payload.itemId, "iphone");
+  assert.equal(payload.itemCategoryId, "electronics");
+});
+
 test("transport and settlement builders use the exact callable keys", () => {
   assert.deepEqual(
     buildTransportRequestPayload({

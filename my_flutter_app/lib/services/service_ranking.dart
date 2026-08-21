@@ -12,7 +12,6 @@ library;
 
 import '../models/business_destination_option.dart';
 import 'freight_categories.dart';
-import 'freight_coverage.dart';
 
 /// Every way a customer can order the businesses on offer.
 enum ServiceSort { cheapest, coverage, fastest, rated }
@@ -85,7 +84,6 @@ double serviceOptionTotal(
   required double weightKg,
   required String mode,
   String categoryId = '',
-  double declaredValue = 0,
   int quantity = 1,
 }) {
   if (service == 'freight') {
@@ -94,7 +92,6 @@ double serviceOptionTotal(
       weightKg: weightKg,
       mode: mode,
       categoryId: categoryId,
-      declaredValue: declaredValue,
     );
   }
   if (service == 'barrelShipping') {
@@ -114,7 +111,6 @@ double freightOptionTotal(
   required double weightKg,
   required String mode,
   String categoryId = '',
-  double declaredValue = 0,
 }) {
   if (mode.isEmpty) {
     var best = kUnknownSortValue;
@@ -124,7 +120,6 @@ double freightOptionTotal(
         weightKg: weightKg,
         mode: candidate,
         categoryId: categoryId,
-        declaredValue: declaredValue,
       );
       if (total < best) best = total;
     }
@@ -134,22 +129,14 @@ double freightOptionTotal(
   final ratePerKg = option.country.freightRatePerKg(mode);
   if (ratePerKg <= 0 || weightKg <= 0) return kUnknownSortValue;
 
-  final shipping = freightShippingFee(
+  // Shipping is the whole comparable price. Cover is free and destination
+  // delivery is a flat fee the customer has not been offered yet at this
+  // point, so neither separates one business from another here.
+  return freightShippingFee(
     weightKg: weightKg,
     ratePerKg: ratePerKg,
     multiplier: freightCategoryMultiplier(option.freightCategories, categoryId),
   );
-
-  final quote = quoteFreightCoverage(
-    policy: option.freightCoverage ?? FreightCoveragePolicy.none,
-    declaredValue: declaredValue,
-  );
-  // A declared value this business will not accept sinks the option rather
-  // than making it look cheapest: ranking a business first when it would
-  // refuse the parcel sends the customer to a dead end.
-  if (quote.error != null) return kUnknownSortValue;
-
-  return shipping + quote.coverageFee;
 }
 
 /// How long this business says it takes - the near end of its estimate.
@@ -221,16 +208,14 @@ List<double> _speedRank(
 
 /// How good a business's loss policy is, as a sortable key.
 ///
-/// Covers loss beats does not; higher ceiling beats lower; at the same ceiling
-/// the cheaper rate wins. No stated ceiling counts as the highest, because
-/// that business has set no limit on what it will carry.
+/// One question, so one number: a business that pays for a parcel it loses
+/// beats one that does not. What it pays is the payback it published for the
+/// item, which the funnel has already pinned by the time this sorts, so there
+/// is no second term to break ties on - the caller appends price and rating.
 List<double> freightCoverageRank(BusinessDestinationOption option) {
-  final policy = option.freightCoverage;
-  if (policy == null || !policy.coversLoss) return const [1, 0, 0];
-  final ceiling = policy.maxDeclaredValue > 0
-      ? policy.maxDeclaredValue
-      : double.maxFinite;
-  return [0, -ceiling, policy.ratePct];
+  return option.freightCoverage?.coversLoss == true
+      ? const [0]
+      : const [1];
 }
 
 int _compareKeys(List<double> a, List<double> b) {
@@ -269,7 +254,6 @@ List<BusinessDestinationOption> sortServiceOptions(
   double weightKg = 1,
   String mode = '',
   String categoryId = '',
-  double declaredValue = 0,
   int quantity = 1,
 }) {
   final supported = sortsForService(service);
@@ -288,7 +272,6 @@ List<BusinessDestinationOption> sortServiceOptions(
       weightKg: weightKg,
       mode: mode,
       categoryId: categoryId,
-      declaredValue: declaredValue,
       quantity: quantity,
     );
     final speed = _speedRank(option, service, mode);

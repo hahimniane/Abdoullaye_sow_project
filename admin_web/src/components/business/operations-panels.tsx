@@ -3071,9 +3071,20 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
 
   async function updateStatus(row: FirestoreRow, status: string) {
     const versionTwo = Number(row.freightPricingVersion ?? 0) >= 2;
-    const settlementReady = !versionTwo || text(row.priceSettlementStatus, "") === "settled";
+    const settlement = text(row.priceSettlementStatus, "");
+    // due_on_arrival ships unpaid by the business's own choice: marking it
+    // arrived (ready_for_pickup) is what triggers the charge. Completing it
+    // still waits for settled - handing over before the money lands is a
+    // click the business should not make by accident.
+    const dueOnArrival = row.payOnArrival === true && settlement === "due_on_arrival";
+    const settlementReady = !versionTwo || settlement === "settled" ||
+      (dueOnArrival && ["in_transit", "ready_for_pickup"].includes(status));
     if (["in_transit", "ready_for_pickup", "completed"].includes(status) && !settlementReady) {
-      setMessage("Fulfillment is locked until the verified weight is settled.");
+      setMessage(
+        dueOnArrival
+          ? "Mark it arrived first - the customer's saved card is charged on arrival, and completion unlocks once it settles."
+          : "Fulfillment is locked until the verified weight is settled.",
+      );
       return;
     }
     if (["completed", "cancelled"].includes(status) && !(await confirmImportantAction(
@@ -3126,7 +3137,17 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
     }
     const rate = Number(row.pricePerKg ?? row.ratePerKg ?? 0);
     const pickup = Number(row.pickupFee ?? 0);
-    const finalTotal = verifiedWeightKg * rate + pickup;
+    // Everything the weight does not price rides through settlement
+    // unchanged. Leaving any of it out of this preview quotes an adjustment
+    // that refunds a fee the customer is still owed the service for, and the
+    // owner reads that number before agreeing to the charge. Coverage is
+    // read off the row rather than assumed: it is zero on anything booked
+    // under the published-payback model and non-zero on older shipments.
+    const coverage = Number(row.coverageFeeCents ?? 0) / 100;
+    const destinationDelivery =
+      Number(row.destinationDeliveryFeeCents ?? 0) / 100;
+    const finalTotal =
+      verifiedWeightKg * rate + pickup + coverage + destinationDelivery;
     const estimatedTotal = Number(row.estimatedTotal ?? row.price ?? 0);
     const difference = finalTotal - estimatedTotal;
     const adjustment = Math.abs(difference) < 0.005
@@ -3202,6 +3223,11 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
                 <div><span>Final total</span><b>{row.finalTotal == null ? "—" : formatMoney(row.finalTotal)}</b></div><div><span>Settlement</span><b>{statusLabel(settlementStatus)}</b></div>
                 <div><span>Payment</span><b>{statusLabel(paymentStatus)}</b></div><div><span>Created</span><b>{formatDate(row.createdAt)}</b></div>
               </div>
+              {/* The customer paid for delivery at booking, so where it goes
+                  is part of fulfillment, not a note buried in the total. */}
+              {row.destinationDelivery === true && (
+                <div className="pur-notice"><Truck size={15} /> <span>Deliver to the receiver</span> · {text(row.receiverAddress, "Address not provided")} · {formatMoney(row.destinationDeliveryFee)} <span>collected at booking</span></div>
+              )}
               {!paymentReady && <div className="pur-notice warn"><AlertTriangle size={15} /> Fulfillment is locked until payment succeeds.</div>}
               {paymentReady && !settlementReady && <div className="pur-notice warn"><AlertTriangle size={15} /> {settlementStatus === "balance_due" || settlementStatus === "balance_payment_pending" ? "Waiting for customer payment. Fulfillment remains locked." : settlementStatus === "needs_attention" ? "Settlement needs attention. Contact support before fulfillment." : "Confirm the parcel weight before fulfillment."}</div>}
               <div className="pur-actions">

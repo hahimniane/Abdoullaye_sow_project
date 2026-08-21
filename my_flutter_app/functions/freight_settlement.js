@@ -6,6 +6,11 @@ const FreightSettlementStatus = Object.freeze({
   REFUND_PROCESSING: "refund_processing",
   SETTLED: "settled",
   NEEDS_ATTENTION: "needs_attention",
+  // A pay-on-arrival booking: the business opted in to being paid after the
+  // parcel reaches the destination, so the full verified price is owed but
+  // deliberately not collected yet. The saved card is charged when the
+  // business marks the shipment arrived (ready_for_pickup).
+  DUE_ON_ARRIVAL: "due_on_arrival",
 });
 
 function positiveMoneyCents(value, field) {
@@ -22,6 +27,7 @@ function calculateFreightSettlement({
   pricePerKg,
   pickupFeeCents = 0,
   coverageFeeCents = 0,
+  destinationDeliveryFeeCents = 0,
 }) {
   const estimatedCents = positiveMoneyCents(
       estimatedTotalCents,
@@ -37,6 +43,14 @@ function calculateFreightSettlement({
       coverageFeeCents,
       "coverageFeeCents",
   );
+  // Delivering to the receiver's own address costs the same whatever the
+  // parcel finally weighs, so it rides through settlement exactly like the
+  // pickup and coverage fees. Leaving it out would refund the delivery at
+  // every weight confirmation - the coverage-fee bug above, verbatim.
+  const deliveryCents = positiveMoneyCents(
+      destinationDeliveryFeeCents,
+      "destinationDeliveryFeeCents",
+  );
   const weight = Number(verifiedWeightKg);
   const rate = Number(pricePerKg);
   if (!Number.isFinite(weight) || weight <= 0) {
@@ -47,7 +61,8 @@ function calculateFreightSettlement({
   }
 
   const finalShippingFeeCents = Math.round(weight * rate * 100);
-  const finalTotalCents = finalShippingFeeCents + pickupCents + coverageCents;
+  const finalTotalCents =
+    finalShippingFeeCents + pickupCents + coverageCents + deliveryCents;
   const adjustmentCents = finalTotalCents - estimatedCents;
   const refundDueCents = Math.max(0, -adjustmentCents);
 
@@ -84,7 +99,10 @@ function calculateFreightSettlement({
 }
 
 function freightMayProgress(status) {
-  return status === FreightSettlementStatus.SETTLED;
+  // due_on_arrival progresses unpaid by design: the business opted in to
+  // collecting after the parcel lands, so fulfillment cannot wait on money.
+  return status === FreightSettlementStatus.SETTLED ||
+    status === FreightSettlementStatus.DUE_ON_ARRIVAL;
 }
 
 module.exports = {

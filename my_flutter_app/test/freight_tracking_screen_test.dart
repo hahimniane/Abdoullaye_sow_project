@@ -195,6 +195,58 @@ void main() {
     expect(find.text('View all shipments'), findsOneWidget);
   });
 
+  testWidgets('arrival copy follows how the receiver gets the parcel', (
+    tester,
+  ) async {
+    Map<String, dynamic> arrived({required bool delivery}) => {
+      'trackingCode': 'FRT-ARRIVED-001',
+      'receiverName': 'Aissatou Diallo',
+      'destinationCountryName': 'Guinea',
+      'businessName': 'Laawol Freight',
+      'price': 125,
+      'estimatedTotal': 125,
+      'status': 'ready_for_pickup',
+      'paymentStatus': 'succeeded',
+      'mode': 'air',
+      'estimatedWeightKg': 10,
+      'destinationDelivery': delivery,
+    };
+
+    // Collected from the business at the destination.
+    await _pumpTracking(
+      tester,
+      _FakeTrackingRepository([
+        CustomerTrackingShipment.fromFreightData(
+          'freight-collect',
+          arrived(delivery: false),
+        ),
+      ]),
+    );
+    expect(find.text('Ready for pickup'), findsWidgets);
+    expect(find.text('Your parcel is ready for pickup.'), findsOneWidget);
+    expect(find.text('Out for delivery'), findsNothing);
+
+    // Nobody is collecting a parcel the business is driving to an address.
+    await _pumpTracking(
+      tester,
+      _FakeTrackingRepository([
+        CustomerTrackingShipment.fromFreightData(
+          'freight-deliver',
+          arrived(delivery: true),
+        ),
+      ]),
+    );
+    expect(find.text('Out for delivery'), findsWidgets);
+    expect(
+      find.text(
+        "Your parcel has arrived and is on its way to the receiver's address.",
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Ready for pickup'), findsNothing);
+    expect(find.text('Your parcel is ready for pickup.'), findsNothing);
+  });
+
   testWidgets('freight balance is visible and actionable in tracking', (
     tester,
   ) async {

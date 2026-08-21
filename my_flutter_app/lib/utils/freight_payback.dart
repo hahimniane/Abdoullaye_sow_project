@@ -60,14 +60,6 @@ FreightPaybackLookup freightPaybackFor({
   return const FreightPaybackLookup(listed: false, paybackAmount: 0);
 }
 
-/// The coverage fee in cents for a payback amount under the business's
-/// rate - the only arithmetic a client is trusted to preview.
-int coverageFeeCentsFor(double paybackAmount, double ratePct) {
-  final paybackCents = (paybackAmount * 100).round();
-  if (paybackCents <= 0 || ratePct <= 0) return 0;
-  return (paybackCents * (ratePct / 100)).round();
-}
-
 /// The funnel's synthetic id for "something not on anyone's list".
 const otherItemId = '__other';
 

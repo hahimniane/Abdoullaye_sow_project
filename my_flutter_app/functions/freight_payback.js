@@ -13,11 +13,13 @@
  * move the number after something goes wrong, which is exactly when people
  * start lying.
  *
- * The coverage fee derives from the same table: ratePct (the policy the
- * business already sets in freight_coverage.js) applied to the business's
- * payback, never to a customer claim. A snapshot of the row is written onto
- * the shipment so a claim argued weeks later is judged on the terms in force
- * when the parcel was handed over.
+ * The table is a promise, not a price. Cover costs the customer nothing:
+ * this business already charges for this item according to what it is worth
+ * to carry, so the risk is inside the shipping rate. Whether the promise is
+ * kept at all is the one flag in freight_coverage.js, and a business that
+ * keeps it pays the full published amount. A snapshot of the row is written
+ * onto the shipment so a claim argued weeks later is judged on the terms in
+ * force when the parcel was handed over.
  *
  * Mirrored by admin_web/src/lib/freight-payback.ts and
  * my_flutter_app/lib/utils/freight_payback.dart - all three clients must
@@ -181,16 +183,17 @@ function quoteFreightItemCoverage({business, policy, categoryId, itemId}) {
   }
   const paybackCents = Math.round(payback.paybackAmount * 100);
   const covered = policy.coversLoss === true && paybackCents > 0;
-  const coverageFeeCents = covered ?
-    Math.round(paybackCents * (policy.ratePct / 100)) :
-    0;
   return {
     ok: true,
     covered,
     paybackAmount: payback.paybackAmount,
     paybackAmountCents: paybackCents,
-    coverageFeeCents,
-    coverageFee: coverageFeeCents / 100,
+    // Cover costs the customer nothing. The business priced this item for
+    // what it is worth to carry, so the risk is already in the shipping
+    // rate - charging a percentage on top billed the same risk twice.
+    coverageFeeCents: 0,
+    coverageFee: 0,
+    // Covered means the FULL published payback, not a proportion of it.
     payoutCapCents: covered ? paybackCents : 0,
     paybackSource: payback.source,
   };

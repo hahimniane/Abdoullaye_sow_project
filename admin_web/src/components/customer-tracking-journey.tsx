@@ -5,11 +5,11 @@ import { Anchor, Check, Flag, MapPin, Ship, Truck } from "lucide-react";
 
 import { formatDate, text } from "@/lib/format";
 import {
-  JOURNEY_STAGES,
   TRANSPORT_JOURNEY_STAGES,
   deliveryWindowLabel,
   eventDetail,
   journeyStageFor,
+  journeyStagesFor,
   relativeTime,
   transportJourneyStageFor,
 } from "@/lib/tracking-journey";
@@ -28,16 +28,24 @@ const VISIBLE_EVENTS = 3;
 export function JourneyProgress({
   status,
   service = "shipment",
+  destinationDelivery = false,
 }: {
   status: string;
   /** Which journey vocabulary this record speaks. */
   service?: "shipment" | "transport";
+  /**
+   * Whether the business is taking this parcel to the receiver's address.
+   * The last two beats mean something different when nobody is collecting.
+   */
+  destinationDelivery?: boolean;
 }) {
   const transport = service === "transport";
   const stage = transport
     ? transportJourneyStageFor(status)
     : journeyStageFor(status);
-  const stages = transport ? TRANSPORT_JOURNEY_STAGES : JOURNEY_STAGES;
+  const stages = transport
+    ? TRANSPORT_JOURNEY_STAGES
+    : journeyStagesFor(destinationDelivery);
   if (!stage) {
     return (
       <div className="trk-journey trk-journey-cancelled">

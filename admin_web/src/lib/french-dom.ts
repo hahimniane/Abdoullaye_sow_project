@@ -3785,27 +3785,31 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Remove this category": "Supprimer cette catégorie",
   "Add a category": "Ajouter une catégorie",
   "If a parcel is lost": "Si un colis est perdu",
-  "The customer says what the parcel is worth to replace. You charge a percentage of that, and if it goes missing you pay back what was declared - never more.":
-    "Le client indique ce que coûte le remplacement du colis. Vous facturez un pourcentage de ce montant et, s’il disparaît, vous remboursez la valeur déclarée — jamais davantage.",
-  "Only the sender knows what is in the box, so the declared value is also the cap. Understating it to save a few dollars caps their own payout, which is what makes the answer honest without anyone opening the parcel.":
-    "Seul l’expéditeur sait ce que contient le carton : la valeur déclarée sert donc aussi de plafond. La sous-évaluer pour économiser quelques dollars plafonne son propre remboursement, ce qui rend la réponse honnête sans que personne n’ouvre le colis.",
-  "You pay the customer back, not Laawol. The most you can owe on one parcel is the value that customer declared, and the policy in force on the day they booked is the one that is judged.":
-    "C’est vous qui remboursez le client, pas Laawol. Le maximum que vous pouvez devoir sur un colis est la valeur déclarée par ce client, et c’est la politique en vigueur le jour de la réservation qui fait foi.",
+  "Nothing extra is charged for this. You price each item above according to what it is worth to carry, so the risk is already in your rate.":
+    "Rien n’est facturé en plus pour cela. Vous fixez le prix de chaque article ci-dessus selon ce qu’il vaut à transporter : le risque est donc déjà dans votre tarif.",
+  "If you cover parcels and one goes missing, you pay the customer the full payback you published for that item. If you do not cover them, the customer gets nothing back, and they are told so before they book.":
+    "Si vous couvrez les colis et que l’un d’eux disparaît, vous versez au client la totalité du remboursement que vous avez publié pour cet article. Si vous ne les couvrez pas, le client ne reçoit rien, et il en est informé avant de réserver.",
+  "You pay the customer back, not Laawol - the full payback you published for that item, and the policy in force on the day they booked is the one that is judged.":
+    "C’est vous qui remboursez le client, pas Laawol : la totalité du remboursement que vous avez publié pour cet article, et c’est la politique en vigueur le jour de la réservation qui fait foi.",
   "Do you pay for a lost parcel?": "Remboursez-vous un colis perdu ?",
   "No, parcels are not covered": "Non, les colis ne sont pas couverts",
-  "Yes, I pay back what was declared":
-    "Oui, je rembourse la valeur déclarée",
-  "Coverage rate (% of declared value)":
-    "Taux de couverture (% de la valeur déclarée)",
-  "What you charge for cover. 2% on a $1,000 parcel collects $20.":
-    "Ce que vous facturez pour la couverture. 2 % sur un colis de 1 000 $ rapporte 20 $.",
-  "Set a rate above 0%. Cover at no price is money you never collected for, and it will not save.":
-    "Fixez un taux supérieur à 0 %. Une couverture gratuite est de l’argent que vous n’avez jamais encaissé, et elle ne sera pas enregistrée.",
-  "Most you will carry (USD)": "Maximum que vous transportez (USD)",
-  "A parcel declared above this is refused before payment, whether or not you cover loss. It says what you are willing to carry, not only what you insure.":
-    "Un colis déclaré au-dessus de ce montant est refusé avant le paiement, que vous couvriez la perte ou non. Cela indique ce que vous acceptez de transporter, pas seulement ce que vous assurez.",
-  "0 means no ceiling of your own. The platform never accepts a single parcel declared above $10,000.":
-    "0 signifie aucun plafond de votre part. La plateforme n’accepte jamais un colis déclaré au-dessus de 10 000 $.",
+  "Yes, I pay back the full published amount":
+    "Oui, je rembourse la totalité du montant publié",
+  // Delivering the parcel to the receiver's own address at the destination.
+  "Do you deliver to the receiver at the destination?":
+    "Livrez-vous au destinataire à l’arrivée ?",
+  "By default the receiver collects the parcel from you at the destination. If you deliver, customers of yours can choose that at booking and give the receiver’s address.":
+    "Par défaut, le destinataire récupère le colis chez vous à l’arrivée. Si vous livrez, vos clients peuvent le choisir à la réservation et indiquer l’adresse du destinataire.",
+  "The fee is flat - the same wherever in that city you take it - and is added to what the customer pays at booking. It is not recalculated when you confirm the weight.":
+    "Le tarif est forfaitaire — le même où que vous alliez dans cette ville — et s’ajoute à ce que le client paie à la réservation. Il n’est pas recalculé lorsque vous confirmez le poids.",
+  "The receiver collects it from us": "Le destinataire le récupère chez nous",
+  "We can deliver to their address": "Nous pouvons livrer à son adresse",
+  "Delivery fee at the destination (USD)":
+    "Frais de livraison à l’arrivée (USD)",
+  "Set a delivery fee, or turn destination delivery off.":
+    "Fixez des frais de livraison, ou désactivez la livraison à l’arrivée.",
+  "The delivery fee must be between $0 and $500.":
+    "Les frais de livraison doivent être compris entre 0 $ et 500 $.",
   // Refusals the settings form raises before the server can.
   "You can add up to 6 categories of your own.":
     "Vous pouvez ajouter jusqu’à 6 catégories qui vous sont propres.",
@@ -3815,55 +3819,48 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Une catégorie que vous ajoutez ne peut pas reprendre le nom d’une catégorie standard.",
   "Two of the categories you added have the same name. Give each one its own.":
     "Deux des catégories que vous avez ajoutées portent le même nom. Donnez-en un propre à chacune.",
-  "The coverage rate must be between 0% and 10%.":
-    "Le taux de couverture doit être compris entre 0 % et 10 %.",
-  "The most you will carry must be between $0 and $10,000.":
-    "Le maximum que vous transportez doit être compris entre 0 $ et 10 000 $.",
-  "Set a coverage rate above 0%, or turn off cover for lost parcels. Cover at no price is money you never collected for.":
-    "Fixez un taux de couverture supérieur à 0 %, ou désactivez la couverture des colis perdus. Une couverture gratuite est de l’argent que vous n’avez jamais encaissé.",
+  "If you cover lost parcels, the amount here is what you owe in full - a $400 iPhone pays back $400. The customer is charged nothing for that, so price each item above for what it is worth to you to carry.":
+    "Si vous couvrez les colis perdus, le montant indiqué ici est ce que vous devez intégralement : un iPhone à 400 $ rembourse 400 $. Le client ne paie rien pour cela, alors fixez le prix de chaque article ci-dessus selon ce qu’il vaut à transporter pour vous.",
   // The freight booking form.
   "What are you sending?": "Qu’envoyez-vous ?",
   "The price per kilo depends on what is in the parcel.":
     "Le prix au kilo dépend du contenu du colis.",
   "does not pay for a lost parcel.": "ne rembourse pas un colis perdu.",
-  "Nothing is charged for cover, and nothing is owed if the parcel goes missing.":
-    "Rien n’est facturé pour la couverture, et rien n’est dû si le colis disparaît.",
-  "It will not carry a parcel worth more than":
-    "Elle ne transporte pas de colis valant plus de",
-  "Is anything in this parcel worth more than":
-    "Y a-t-il dans ce colis un article valant plus de",
-  "The business pays you back, not Laawol. Cover costs":
-    "C’est l’entreprise qui vous rembourse, pas Laawol. La couverture coûte",
-  "% of the value you declare.": "% de la valeur que vous déclarez.",
-  "What would it cost to replace? (USD)":
-    "Combien coûterait son remplacement ? (USD)",
-  "This business does not carry parcels worth more than":
-    "Cette entreprise ne transporte pas de colis valant plus de",
-  "The most any business carries on one parcel is $10,000.":
-    "Le maximum qu’une entreprise transporte sur un seul colis est de 10 000 $.",
-  "Cover for loss": "Couverture en cas de perte",
+  "Nothing is charged for protection, and nothing is owed if the parcel goes missing.":
+    "Rien n’est facturé pour la protection, et rien n’est dû si le colis disparaît.",
   "We pay up to": "Nous remboursons jusqu’à",
-  "if it is lost — the value you declared, never more. The business pays you back, not Laawol.":
-    "s’il est perdu — la valeur que vous avez déclarée, jamais plus. C’est l’entreprise qui vous rembourse, pas Laawol.",
+  "if it is lost — the full amount this business publishes for this item. The business pays you back, not Laawol.":
+    "s’il est perdu — la totalité du montant que cette entreprise publie pour cet article. C’est l’entreprise qui vous rembourse, pas Laawol.",
   "What you are sending": "Ce que vous envoyez",
-  "Declared value": "Valeur déclarée",
-  "Paid back up to": "Remboursé jusqu’à",
-  "This business does not pay for a lost parcel. The value you declared is recorded as what it agreed to carry, and nothing was charged for cover.":
-    "Cette entreprise ne rembourse pas un colis perdu. La valeur que vous avez déclarée est enregistrée comme ce qu’elle a accepté de transporter, et rien n’a été facturé pour la couverture.",
-  // Refusals the server throws on a declared value, shown word for word.
-  "This business does not carry parcels worth that much":
-    "Cette entreprise ne transporte pas de colis d’une telle valeur",
-  "That declared value is too high to ship":
-    "Cette valeur déclarée est trop élevée pour être expédiée",
+  "Paid back if lost": "Remboursé en cas de perte",
+  // Where the parcel ends up at the destination.
+  "Where does the receiver get it?": "Où le destinataire le récupère-t-il ?",
+  "The receiver collects it": "Le destinataire le récupère",
+  "Deliver it to their address": "Le livrer à son adresse",
+  "The business takes the parcel to the receiver once it arrives.":
+    "L’entreprise apporte le colis au destinataire dès son arrivée.",
+  "The receiver picks the parcel up from the business at the destination.":
+    "Le destinataire récupère le colis auprès de l’entreprise à l’arrivée.",
+  "Receiver’s address": "Adresse du destinataire",
+  "Include the neighbourhood and a landmark nearby, so the driver can find it by asking.":
+    "Indiquez le quartier et un point de repère proche, pour que le chauffeur puisse le trouver en demandant.",
+  "At the destination": "À l’arrivée",
+  "Delivery to the receiver": "Livraison au destinataire",
+  "Deliver to the receiver": "Livrer au destinataire",
+  "Address not provided": "Adresse non fournie",
+  "collected at booking": "encaissé à la réservation",
+  "Out for delivery": "En cours de livraison",
+  "Landed, and on its way to the receiver's address":
+    "Arrivé, et en route vers l’adresse du destinataire",
+  "Delivered to the receiver's address":
+    "Livré à l’adresse du destinataire",
   // The one line that lets a customer compare cover before choosing.
-  "If your parcel is lost": "Si votre colis est perdu",
-  "No coverage": "Aucune couverture",
-  "Covers up to": "Couvre jusqu’à",
   "Protection": "Protection",
+  "Protection included · up to": "Protection incluse · jusqu’à",
   "Protection included": "Protection incluse",
-  "of the item's covered amount": "du montant couvert de l’article",
-  "No protection offered": "Aucune protection proposée",
-  "Covers what you declare": "Couvre ce que vous déclarez",
+  "This business does not pay for a lost parcel":
+    "Cette entreprise ne rembourse pas un colis perdu",
+  "Free": "Offert",
 });
 
 // "<category>: enter a price multiplier between 0.5 and 10." - the settings

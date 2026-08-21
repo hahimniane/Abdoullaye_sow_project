@@ -79,41 +79,37 @@ describe("what a parcel actually costs at each business", () => {
     assert.deepEqual(ids(sorted), ["dear-per-kg", "cheap-per-kg"]);
   });
 
-  it("counts the coverage fee, because the customer pays it", () => {
-    const withCover = option("covers", {
-      airRate: 10, coversLoss: true, ratePct: 2, maxDeclaredValue: 2000,
-    });
-    const args = {weightKg: 1, mode: "air", declaredValue: 1000};
-    // 1kg at $10 = $10, plus 2% of $1,000 = $20, so $30.
+  it("never adds a coverage charge, because there is none", () => {
+    // Cover costs the customer nothing: the business already priced the item
+    // for what it is worth to carry. What a parcel costs is what it costs to
+    // ship it, whether or not the business stands behind it.
+    const withCover = option("covers", {airRate: 10, coversLoss: true});
+    const without = option("bare", {airRate: 10});
+    const args = {weightKg: 1, mode: "air"};
     assert.equal(
         serviceOptionTotalCents({
           service: "freight", option: withCover, ...args,
         }),
-        3000,
+        1000,
+    );
+    assert.equal(
+        serviceOptionTotalCents({service: "freight", option: without, ...args}),
+        1000,
     );
   });
 
-  it("does not rank a business first when it would refuse the parcel", () => {
-    // Declaring $3,000 at a business capped at $1,000 is a booking the server
-    // rejects. Cheapest-first must not walk the customer into that.
-    const capped = option("capped", {
-      airRate: 1, coversLoss: true, ratePct: 1, maxDeclaredValue: 1000,
-    });
-    const args = {weightKg: 1, mode: "air", declaredValue: 3000};
-    assert.equal(
-        serviceOptionTotalCents({service: "freight", option: capped, ...args}),
-        UNKNOWN_SORT_VALUE,
-    );
-
+  it("ranks cheapest on the shipping price alone", () => {
     const sorted = sortServiceOptions({
       service: "freight",
-      options: [capped, option("dearer-but-takes-it", {
-        airRate: 50, coversLoss: true, ratePct: 1, maxDeclaredValue: 5000,
-      })],
+      options: [
+        option("dearer-covers", {airRate: 50, coversLoss: true}),
+        option("cheaper-bare", {airRate: 1}),
+      ],
       sort: "cheapest",
-      ...args,
+      weightKg: 1,
+      mode: "air",
     });
-    assert.deepEqual(ids(sorted), ["dearer-but-takes-it", "capped"]);
+    assert.deepEqual(ids(sorted), ["cheaper-bare", "dearer-covers"]);
   });
 
   it("cannot price a route the business does not serve", () => {
@@ -220,56 +216,42 @@ describe("best coverage", () => {
     assert.deepEqual(ids(sorted), ["covers", "bare"]);
   });
 
-  it("prefers a higher ceiling, then a cheaper rate", () => {
-    const sorted = sortServiceOptions({
-      service: "freight",
-      options: [
-        option("low-ceiling", {coversLoss: true, ratePct: 1,
-          maxDeclaredValue: 500}),
-        option("high-ceiling", {coversLoss: true, ratePct: 3,
-          maxDeclaredValue: 5000}),
-        option("same-ceiling-cheaper", {coversLoss: true, ratePct: 1,
-          maxDeclaredValue: 5000}),
-      ],
-      sort: "coverage",
-      weightKg: 1,
-      mode: "air",
-    });
-    assert.deepEqual(
-        ids(sorted),
-        ["same-ceiling-cheaper", "high-ceiling", "low-ceiling"],
-    );
-  });
+  it("is one question, so covering businesses keep the list's own order",
+      () => {
+        // There is no rate or ceiling to break ties on: a covering business
+        // pays the full payback it published for the item. Among businesses
+        // that cover, the list's remaining tie-breaks decide.
+        const sorted = sortServiceOptions({
+          service: "freight",
+          options: [
+            option("covers-a", {coversLoss: true}),
+            option("bare", {}),
+            option("covers-b", {coversLoss: true}),
+          ],
+          sort: "coverage",
+          weightKg: 1,
+          mode: "air",
+        });
+        assert.equal(ids(sorted)[2], "bare");
+        assert.deepEqual(ids(sorted).slice(0, 2).sort(),
+            ["covers-a", "covers-b"]);
+      });
 
-  it("treats no stated ceiling as the highest, not the lowest", () => {
-    // A business with no ceiling has set no limit on what it will carry.
+  it("counts a business that ticks cover, because that is the promise", () => {
+    // Ticking the box used to mean nothing without a rate beside it. There
+    // is no rate now: a business that says it pays for a lost parcel pays
+    // the full payback it published, and ranks above one that pays nothing.
     const sorted = sortServiceOptions({
       service: "freight",
       options: [
-        option("capped", {coversLoss: true, ratePct: 1,
-          maxDeclaredValue: 2000}),
-        option("uncapped", {coversLoss: true, ratePct: 1}),
+        option("bare", {}),
+        option("covers", {coversLoss: true}),
       ],
       sort: "coverage",
       weightKg: 1,
       mode: "air",
     });
-    assert.deepEqual(ids(sorted), ["uncapped", "capped"]);
-  });
-
-  it("does not count a business that ticks cover but sets no rate", () => {
-    const sorted = sortServiceOptions({
-      service: "freight",
-      options: [
-        option("hollow-promise", {coversLoss: true, ratePct: 0}),
-        option("real-cover", {coversLoss: true, ratePct: 2,
-          maxDeclaredValue: 100}),
-      ],
-      sort: "coverage",
-      weightKg: 1,
-      mode: "air",
-    });
-    assert.deepEqual(ids(sorted), ["real-cover", "hollow-promise"]);
+    assert.deepEqual(ids(sorted), ["covers", "bare"]);
   });
 });
 

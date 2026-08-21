@@ -1,16 +1,18 @@
 /**
- * What is in the parcel, what it is worth, and who stands behind it.
+ * What is in the parcel, and who stands behind it.
  *
  * Two separate questions, deliberately kept apart:
  *
- * - **Category** answers "what is it, will you carry it, how likely is it to
- *   go missing". The platform owns the list so a customer can compare two
+ * - **Category** answers "what is it, will you carry it, what does a kilo of
+ *   it cost". The platform owns the list so a customer can compare two
  *   businesses on the same words; the business sets what each row is worth to
  *   it.
- * - **Declared value** answers "what does it cost to replace". Only the sender
- *   knows - an iPhone 17 and an old Samsung are the same category and the same
- *   weight. The declared value is also the cap on any payout, which is what
- *   makes the answer trustworthy without anyone checking it.
+ * - **Cover** answers "if you lose it, do you make me whole". One yes/no per
+ *   business, and the amount is the business's own published payback for that
+ *   item. Nothing is charged for it: a business already prices each item
+ *   according to what it is worth to carry - which is why freight is priced
+ *   per item at all - so the risk is inside the shipping rate, and a separate
+ *   percentage billed the same risk twice.
  *
  * The platform is not the insurer: the business pays the customer back. This
  * module's job on the client is to mirror the server's arithmetic exactly, so
@@ -22,6 +24,7 @@
  * exist so the screen can explain the price, not so the client can set it.
  */
 
+import { deliverySettingsError } from "./freight-delivery.ts";
 import type { FirestoreRow } from "@/types/admin";
 
 /**
@@ -84,15 +87,6 @@ export const MAX_CATEGORY_MULTIPLIER = 10;
 /** A business may not drown the customer in choices. */
 export const MAX_CUSTOM_FREIGHT_CATEGORIES = 6;
 
-/** Coverage priced above this would be a business nobody should be running. */
-export const MAX_COVERAGE_RATE_PCT = 10;
-
-/** Most any business may accept, whatever it sets for itself. */
-export const PLATFORM_MAX_DECLARED_VALUE = 10000;
-
-/** Below this the value question is not worth asking. */
-export const DECLARATION_THRESHOLD = 200;
-
 export type FreightCategoryOption = {
   id: string;
   label: string;
@@ -101,12 +95,13 @@ export type FreightCategoryOption = {
   custom: boolean;
 };
 
+/**
+ * One question, one answer. Mirrors what `freightCoveragePolicy` sends from
+ * functions/freight_coverage.js: a business either makes good on a parcel it
+ * loses or it does not, and what it pays is its own published payback.
+ */
 export type FreightCoveragePolicy = {
   coversLoss: boolean;
-  ratePct: number;
-  /** 0 means "no stated ceiling", not "unlimited". */
-  maxDeclaredValue: number;
-  declarationThreshold: number;
 };
 
 /* -------------------------------------------------------------------------
@@ -163,28 +158,16 @@ export function freightCategoryOptionsFrom(
 /**
  * A business's loss policy, or null when it does not offer freight at all.
  *
- * Mirrors the server's guard that ticking "covers loss" without a rate is not
- * coverage: otherwise a business appears to stand behind a parcel it never
- * charged to stand behind.
+ * Anything the document carries beyond the flag is ignored rather than
+ * merged: the flag is the whole policy, and reading a second field would let
+ * a stale document narrow a promise the business is making today.
  */
 export function freightCoveragePolicyFrom(
   value: unknown,
 ): FreightCoveragePolicy | null {
   if (!value || typeof value !== "object") return null;
   const row = value as Record<string, unknown>;
-  const rawRate = finiteNumber(row.ratePct);
-  const ratePct = rawRate > 0 ? Math.min(MAX_COVERAGE_RATE_PCT, rawRate) : 0;
-  const rawMax = finiteNumber(row.maxDeclaredValue);
-  const maxDeclaredValue =
-    rawMax > 0 ? Math.min(PLATFORM_MAX_DECLARED_VALUE, rawMax) : 0;
-  const threshold = finiteNumber(row.declarationThreshold);
-  return {
-    coversLoss: row.coversLoss === true && ratePct > 0,
-    ratePct,
-    maxDeclaredValue,
-    declarationThreshold:
-      threshold > 0 ? threshold : DECLARATION_THRESHOLD,
-  };
+  return { coversLoss: row.coversLoss === true };
 }
 
 /**
@@ -269,74 +252,8 @@ export function freightCategoryPricing({
 }
 
 /* -------------------------------------------------------------------------
- * Declared value and cover
+ * Cover
  * ---------------------------------------------------------------------- */
-
-export type FreightCoverageQuote =
-  | {
-      ok: true;
-      declaredValue: number;
-      coverageFee: number;
-      covered: boolean;
-      /** The most that can be paid back. Never more than what was declared. */
-      payoutCap: number;
-    }
-  | { ok: false; message: string };
-
-/**
- * Prices a declared value against a business's policy.
- *
- * The refusal sentences are the server's, word for word, so a customer who
- * trips the same rule twice reads the same sentence both times.
- */
-export function quoteFreightCoverage({
-  policy,
-  declaredValue,
-}: {
-  policy: FreightCoveragePolicy | null;
-  declaredValue: unknown;
-}): FreightCoverageQuote {
-  const raw = finiteNumber(declaredValue);
-  const declared = raw > 0 ? raw : 0;
-  const nothingDeclared = {
-    ok: true as const,
-    declaredValue: 0,
-    coverageFee: 0,
-    covered: false,
-    payoutCap: 0,
-  };
-  if (declared <= 0 || !policy) return nothingDeclared;
-
-  // The ceiling applies whether or not the business sells cover: it is a
-  // statement about what it is willing to carry, not about what it insures.
-  if (policy.maxDeclaredValue > 0 && declared > policy.maxDeclaredValue) {
-    return {
-      ok: false,
-      message: "This business does not carry parcels worth that much",
-    };
-  }
-  if (declared > PLATFORM_MAX_DECLARED_VALUE) {
-    return { ok: false, message: "That declared value is too high to ship" };
-  }
-  if (!policy.coversLoss) {
-    // The value is still recorded - it is what the business agreed to carry -
-    // but nothing is charged and nothing is promised.
-    return {
-      ok: true,
-      declaredValue: declared,
-      coverageFee: 0,
-      covered: false,
-      payoutCap: 0,
-    };
-  }
-  return {
-    ok: true,
-    declaredValue: declared,
-    coverageFee: roundMoney(declared * (policy.ratePct / 100)),
-    covered: true,
-    payoutCap: declared,
-  };
-}
 
 /** "2" rather than "2.0", and "1.5" rather than "1.50". */
 export function formatMultiplier(value: number): string {
@@ -348,24 +265,24 @@ export function formatMultiplier(value: number): string {
  * before choosing either. Money is formatted by the caller so this stays
  * pure and the customer's locale still decides how a dollar looks.
  *
- * A business with a payback table protects at ITS published amounts - the
- * customer declares nothing, so "covers what you declare" would describe a
- * flow that no longer exists for them. The declared-value wording survives
- * only for businesses still on the old model.
+ * The amount is the business's published payback for the item the customer
+ * already picked, stated in full: a covering business owes all of it, so
+ * anything vaguer than the number would understate the promise. A business
+ * that stands behind nothing says so here, in the sentence a customer reads
+ * while the parcel is still in the room.
  */
 export function freightCoverageComparisonLine(
   policy: FreightCoveragePolicy | null,
   money: (value: number) => string,
-  hasPaybackTable = false,
+  paybackAmount = 0,
 ): string {
-  if (!policy || !policy.coversLoss) return "No protection offered";
-  const rate = `${formatMultiplier(policy.ratePct)}%`;
-  if (hasPaybackTable) {
-    return `Protection included · ${rate} of the item's covered amount`;
+  if (!policy || !policy.coversLoss) {
+    return "This business does not pay for a lost parcel";
   }
-  return policy.maxDeclaredValue > 0
-    ? `Covers up to ${money(policy.maxDeclaredValue)} · ${rate}`
-    : `Covers what you declare · ${rate}`;
+  const payback = finiteNumber(paybackAmount);
+  return payback > 0
+    ? `Protection included · up to ${money(payback)}`
+    : "Protection included";
 }
 
 /* -------------------------------------------------------------------------
@@ -395,11 +312,23 @@ export type FreightSettingsDraft = {
   /** Only the standard rows the business has actually moved. */
   categoryRates: Record<string, string>;
   customCategories: FreightCustomCategoryDraft[];
+  /** Whether this business makes good on a parcel it loses. */
   coversLoss: boolean;
-  coverageRatePct: string;
-  maxDeclaredValue: string;
   /** What each item pays back if lost - the business's numbers, per row. */
   payback: Record<string, FreightPaybackCategoryDraft>;
+  /**
+   * Whether this business accepts being paid after the parcel reaches the
+   * destination. Opting in shows customers a pay-on-arrival choice at
+   * booking: the card is saved and verified up front, charged on arrival.
+   */
+  payOnArrival: boolean;
+  /**
+   * Whether this business will take the parcel to the receiver's own address
+   * at the destination, and the flat fee for doing so. Off means the
+   * receiver collects it, which is what every business did before.
+   */
+  destinationDelivery: boolean;
+  destinationDeliveryFee: string;
 };
 
 function recordValue(value: unknown): Record<string, unknown> {
@@ -459,9 +388,14 @@ export function freightSettingsFromRow(
         };
       }),
     coversLoss: business?.freightCoverageEnabled === true,
-    coverageRatePct: numberText(business?.freightCoverageRatePct, "0"),
-    maxDeclaredValue: numberText(business?.freightMaxDeclaredValue, "0"),
     payback: paybackDraftFrom(business?.freightPaybackTable),
+    payOnArrival: business?.freightPayOnArrival === true,
+    destinationDelivery:
+      business?.freightDestinationDeliveryAvailable === true,
+    destinationDeliveryFee: numberText(
+      business?.freightDestinationDeliveryFee,
+      "",
+    ),
   };
 }
 
@@ -545,21 +479,13 @@ export function validateFreightSettings(
     }
   }
 
-  const ratePct = Number(draft.coverageRatePct || 0);
-  if (!Number.isFinite(ratePct) || ratePct < 0 || ratePct > MAX_COVERAGE_RATE_PCT) {
-    return "The coverage rate must be between 0% and 10%.";
-  }
-  const maxValue = Number(draft.maxDeclaredValue || 0);
-  if (
-    !Number.isFinite(maxValue) ||
-    maxValue < 0 ||
-    maxValue > PLATFORM_MAX_DECLARED_VALUE
-  ) {
-    return "The most you will carry must be between $0 and $10,000.";
-  }
-  if (draft.coversLoss && ratePct <= 0) {
-    return "Set a coverage rate above 0%, or turn off cover for lost parcels. Cover at no price is money you never collected for.";
-  }
+  // Cover has nothing left to validate: it is one yes/no, and the amount it
+  // promises comes from the payback rows this business already priced.
+  const deliveryError = deliverySettingsError({
+    available: draft.destinationDelivery,
+    fee: Number(draft.destinationDeliveryFee || 0),
+  });
+  if (deliveryError) return deliveryError;
   return null;
 }
 
@@ -571,11 +497,7 @@ export type FreightSettingsPayload = {
     hint: string;
     multiplier: number;
   }>;
-  freightCoverage: {
-    coversLoss: boolean;
-    ratePct: number;
-    maxDeclaredValue: number;
-  };
+  freightCoverage: { coversLoss: boolean };
   freightPaybackTable: Record<
     string,
     {
@@ -583,6 +505,8 @@ export type FreightSettingsPayload = {
       otherPaybackAmount: number;
     }
   >;
+  freightPayOnArrival: boolean;
+  freightDestinationDelivery: {available: boolean; fee: number};
 };
 
 /**
@@ -612,11 +536,7 @@ export function buildFreightSettingsPayload(
         hint: row.hint.trim(),
         multiplier: Number(row.multiplier) || 1,
       })),
-    freightCoverage: {
-      coversLoss: draft.coversLoss,
-      ratePct: Number(draft.coverageRatePct || 0) || 0,
-      maxDeclaredValue: Number(draft.maxDeclaredValue || 0) || 0,
-    },
+    freightCoverage: { coversLoss: draft.coversLoss },
     freightPaybackTable: Object.fromEntries(
       Object.entries(draft.payback)
         .map(([categoryId, entry]) => [
@@ -641,5 +561,10 @@ export function buildFreightSettingsPayload(
             (entry as {otherPaybackAmount: number}).otherPaybackAmount > 0,
         ),
     ),
+    freightPayOnArrival: draft.payOnArrival,
+    freightDestinationDelivery: {
+      available: draft.destinationDelivery,
+      fee: Number(draft.destinationDeliveryFee || 0) || 0,
+    },
   };
 }

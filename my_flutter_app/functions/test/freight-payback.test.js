@@ -19,7 +19,7 @@ const TABLE = {
   clothing: {items: [], otherPaybackAmount: 0},
 };
 
-const POLICY = {coversLoss: true, ratePct: 2};
+const POLICY = {coversLoss: true};
 
 describe("what an item pays back", () => {
   it("prices the exact row the business published", () => {
@@ -57,23 +57,36 @@ describe("what an item pays back", () => {
   });
 });
 
-describe("pricing coverage from the table", () => {
+describe("what the table promises", () => {
   const business = {freightPaybackTable: TABLE};
 
-  it("derives the fee from the business's payback, never a claim", () => {
+  it("promises the business's full published payback, free", () => {
     const quote = quoteFreightItemCoverage({
       business, policy: POLICY, categoryId: "electronics", itemId: "iphone",
     });
-    // 2% of $400 = $8. The customer never typed a number anywhere.
-    assert.equal(quote.coverageFeeCents, 800);
+    // The whole promise, not a proportion of it - and it costs nothing,
+    // because the business already priced this item for what it is worth to
+    // carry. The customer never typed a number anywhere.
     assert.equal(quote.payoutCapCents, 40000);
     assert.equal(quote.covered, true);
+    assert.equal(quote.coverageFeeCents, 0);
+    assert.equal(quote.coverageFee, 0);
+  });
+
+  it("never charges for cover, whatever the item is worth", () => {
+    // An iPhone and a Samsung differ in what they pay back, never in price.
+    for (const itemId of ["iphone", "samsung-phone", "walkman"]) {
+      const quote = quoteFreightItemCoverage({
+        business, policy: POLICY, categoryId: "electronics", itemId,
+      });
+      assert.equal(quote.coverageFeeCents, 0, itemId);
+    }
   });
 
   it("carries-but-does-not-cover when the business does not cover", () => {
     const quote = quoteFreightItemCoverage({
       business,
-      policy: {coversLoss: false, ratePct: 0},
+      policy: {coversLoss: false},
       categoryId: "electronics",
       itemId: "iphone",
     });

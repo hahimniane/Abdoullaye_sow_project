@@ -146,12 +146,19 @@ export type FreightShipmentFields = {
   weightKg: number;
   pickup: PickupDetails;
   officeLocationId?: string;
-  // What is in the parcel, and what it would cost to replace. Both optional:
-  // a client that sends neither is priced exactly as freight was before
-  // categories existed, which is what makes them safe to add here.
+  // What is in the parcel. Both optional: a client that sends neither is
+  // priced exactly as freight was without categories, which is what makes
+  // them safe to add here.
   itemCategoryId?: string;
   itemId?: string;
-  declaredValue?: number;
+  // "arrival" only when the chosen business opted in to being paid after
+  // the parcel lands; the server refuses it from anyone else.
+  paymentTiming?: "now" | "arrival";
+  // How the parcel ends its journey. The server re-prices delivery from the
+  // business document and refuses it from a business that does not offer it,
+  // so these carry the customer's choice, never a fee.
+  destinationDelivery?: boolean;
+  receiverAddress?: string;
 };
 
 export type TransportRequestFields = {
@@ -685,12 +692,17 @@ export function buildFreightShipmentPayload(
     // The business's payback row, when one was picked - the server prices
     // protection from its own table and refuses to trust anything else.
     ...(fields.itemId?.trim() && {itemId: trimmed(fields.itemId)}),
-    // Sent only when the customer actually declared something. Zero and "not
-    // asked" mean the same thing to the server, and omitting the key keeps
-    // that visible in the request rather than implied by a 0.
-    ...(Number(fields.declaredValue) > 0 && {
-      declaredValue: Number(fields.declaredValue),
+    // Sent only when the customer asked for delivery to the receiver, so
+    // "the receiver collects it" stays what the server assumes from silence.
+    // The address rides with it because a delivery without one is refused.
+    ...(fields.destinationDelivery === true && {
+      destinationDelivery: true,
+      receiverAddress: trimmed(fields.receiverAddress ?? ""),
     }),
+    // Sent only when the customer chose to pay after arrival - "pay now"
+    // is the default the server assumes from silence, same as every client
+    // built before this choice existed.
+    ...(fields.paymentTiming === "arrival" && {paymentTiming: "arrival"}),
     ...pickupPayload(fields.pickup),
     ...(!fields.pickup.requested &&
       fields.officeLocationId && { officeLocationId: fields.officeLocationId }),

@@ -2,168 +2,116 @@ const assert = require("node:assert/strict");
 const {describe, it} = require("node:test");
 
 const {
-  MAX_COVERAGE_RATE_PCT,
   PLATFORM_MAX_DECLARED_VALUE,
   freightCoveragePolicy,
   quoteFreightCoverage,
   validateFreightCoverageSettings,
 } = require("../freight_coverage");
 
-const covering = {
-  freightCoverageEnabled: true,
-  freightCoverageRatePct: 2,
-  freightMaxDeclaredValue: 2000,
-};
+const covering = {freightCoverageEnabled: true};
 
 describe("a business's policy", () => {
   it("covers nothing until a business says otherwise", () => {
     // A business that has never opened these settings must behave exactly as
     // freight did before coverage existed.
-    const policy = freightCoveragePolicy({});
-    assert.equal(policy.coversLoss, false);
-    assert.equal(policy.ratePct, 0);
-    assert.equal(policy.maxDeclaredValue, 0);
+    assert.equal(freightCoveragePolicy({}).coversLoss, false);
+    assert.equal(freightCoveragePolicy(null).coversLoss, false);
   });
 
-  it("does not claim to cover when the rate is zero", () => {
-    // Otherwise a business that ticks the box and never sets a price appears
-    // to the customer as though it were standing behind the parcel.
-    const policy = freightCoveragePolicy({
-      freightCoverageEnabled: true,
-      freightCoverageRatePct: 0,
-    });
-    assert.equal(policy.coversLoss, false);
+  it("is one yes-or-no answer with no price attached", () => {
+    // A business either makes good on a lost parcel or it does not. There is
+    // no rate to qualify that with: the item's own price already carries the
+    // risk, so covering costs the customer nothing.
+    const policy = freightCoveragePolicy(covering);
+    assert.equal(policy.coversLoss, true);
+    assert.deepEqual(Object.keys(policy), ["coversLoss"]);
   });
 
-  it("cannot promise more than the platform allows", () => {
+  it("ignores a rate left behind by an older setting", () => {
+    // A business that once set 2% must not read as uncovered now, nor carry
+    // a number that nothing prices from.
     const policy = freightCoveragePolicy({
       freightCoverageEnabled: true,
-      freightCoverageRatePct: 99,
-      freightMaxDeclaredValue: 999999,
+      freightCoverageRatePct: 2,
+      freightMaxDeclaredValue: 2000,
     });
-    assert.equal(policy.ratePct, MAX_COVERAGE_RATE_PCT);
-    assert.equal(policy.maxDeclaredValue, PLATFORM_MAX_DECLARED_VALUE);
+    assert.equal(policy.coversLoss, true);
+    assert.equal(policy.ratePct, undefined);
+    assert.equal(policy.maxDeclaredValue, undefined);
   });
 });
 
-describe("declaring nothing", () => {
-  it("costs nothing and promises nothing", () => {
-    const quote = quoteFreightCoverage({business: covering, declaredValue: 0});
+describe("a legacy client that still declares a value", () => {
+  it("is never charged for cover", () => {
+    // App builds predating the item picker still send a number. It is
+    // recorded, and it buys nothing - the business's published payback is
+    // what stands behind the parcel, whichever build booked it.
+    const quote = quoteFreightCoverage({
+      business: covering,
+      declaredValue: 1400,
+    });
     assert.equal(quote.ok, true);
     assert.equal(quote.coverageFeeCents, 0);
-    assert.equal(quote.covered, false);
-    assert.equal(quote.payoutCapCents, 0);
+    assert.equal(quote.coverageFee, 0);
+    assert.equal(quote.declaredValueCents, 140000);
   });
 
-  it("is what an older app sending no value gets", () => {
-    // Build 26 knows nothing about declared value. It must still quote.
-    for (const value of [undefined, null, "", "abc", -50]) {
+  it("quotes for a build that sends nothing at all", () => {
+    for (const value of [undefined, null, "", "abc", -50, 0]) {
       const quote = quoteFreightCoverage({
         business: covering,
         declaredValue: value,
       });
       assert.equal(quote.ok, true, String(value));
       assert.equal(quote.coverageFeeCents, 0);
+      assert.equal(quote.declaredValueCents, 0);
     }
   });
-});
 
-describe("declaring a value", () => {
-  it("charges the rate and caps the payout at what was declared", () => {
-    // The rule that makes the declaration honest: understate it and you have
-    // capped your own compensation.
+  it("still refuses a parcel above the platform's ceiling", () => {
+    // Worth more than this belongs with a real freight forwarder.
     const quote = quoteFreightCoverage({
       business: covering,
-      declaredValue: 1400,
-    });
-    assert.equal(quote.ok, true);
-    assert.equal(quote.covered, true);
-    assert.equal(quote.coverageFeeCents, 2800);
-    assert.equal(quote.payoutCapCents, 140000);
-  });
-
-  it("prices an old phone far below a new one, as it should", () => {
-    // The case categories could never answer: same category, same weight.
-    const newPhone = quoteFreightCoverage({
-      business: covering,
-      declaredValue: 1400,
-    });
-    const oldPhone = quoteFreightCoverage({
-      business: covering,
-      declaredValue: 150,
-    });
-    assert.equal(newPhone.coverageFeeCents, 2800);
-    assert.equal(oldPhone.coverageFeeCents, 300);
-  });
-
-  it("refuses anything above what the business will carry", () => {
-    const quote = quoteFreightCoverage({
-      business: covering,
-      declaredValue: 5000,
+      declaredValue: PLATFORM_MAX_DECLARED_VALUE + 1,
     });
     assert.equal(quote.ok, false);
-    assert.equal(quote.error, "above_max_declared_value");
-  });
-
-  it("applies the ceiling even to a business that sells no coverage", () => {
-    // The ceiling says what it is willing to carry, not what it insures.
-    const quote = quoteFreightCoverage({
-      business: {freightMaxDeclaredValue: 500},
-      declaredValue: 900,
-    });
-    assert.equal(quote.error, "above_max_declared_value");
-  });
-
-  it("records the value but promises nothing when there is no coverage", () => {
-    const quote = quoteFreightCoverage({
-      business: {},
-      declaredValue: 800,
-    });
-    assert.equal(quote.ok, true);
-    assert.equal(quote.declaredValueCents, 80000);
-    assert.equal(quote.covered, false);
-    assert.equal(quote.coverageFeeCents, 0);
-    assert.equal(quote.payoutCapCents, 0);
+    assert.equal(quote.error, "above_platform_maximum");
   });
 });
 
 describe("saving a policy", () => {
-  it("accepts a sensible one", () => {
-    const result = validateFreightCoverageSettings({
-      coversLoss: true,
-      ratePct: 2,
-      maxDeclaredValue: 2000,
-    });
+  it("stores the one answer there is to store", () => {
+    const result = validateFreightCoverageSettings({coversLoss: true});
     assert.equal(result.ok, true);
-    assert.equal(result.freightCoverageRatePct, 2);
+    assert.equal(result.freightCoverageEnabled, true);
   });
 
-  it("refuses to promise cover at no price", () => {
-    // How a business ends up owing money it never collected for.
-    assert.equal(
-        validateFreightCoverageSettings({coversLoss: true, ratePct: 0}).error,
-        "rate_required_when_covering",
-    );
+  it("cannot be refused for a missing price", () => {
+    // Covering at no charge is the model now, so the save that used to be
+    // rejected for it has to go through.
+    const result = validateFreightCoverageSettings({coversLoss: true});
+    assert.equal(result.ok, true);
+    assert.equal(result.error, undefined);
   });
 
-  it("refuses a rate or ceiling outside the allowed band", () => {
-    assert.equal(
-        validateFreightCoverageSettings({ratePct: 50}).error,
-        "rate_out_of_range",
-    );
-    assert.equal(
-        validateFreightCoverageSettings({maxDeclaredValue: 999999}).error,
-        "max_out_of_range",
-    );
+  it("zeroes a rate a business set under the old settings", () => {
+    // Left in place it would be a number the business believes it charges
+    // and nothing collects.
+    const result = validateFreightCoverageSettings({coversLoss: true});
+    assert.equal(result.freightCoverageRatePct, 0);
+    assert.equal(result.freightMaxDeclaredValue, 0);
   });
 
   it("lets a business carry things without covering them", () => {
-    const result = validateFreightCoverageSettings({
-      coversLoss: false,
-      maxDeclaredValue: 500,
-    });
+    const result = validateFreightCoverageSettings({coversLoss: false});
     assert.equal(result.ok, true);
     assert.equal(result.freightCoverageEnabled, false);
-    assert.equal(result.freightMaxDeclaredValue, 500);
+  });
+
+  it("defaults to not covering when asked nothing", () => {
+    assert.equal(
+        validateFreightCoverageSettings().freightCoverageEnabled,
+        false,
+    );
   });
 });

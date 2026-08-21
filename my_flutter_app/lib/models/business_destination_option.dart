@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../services/freight_categories.dart';
 import '../services/freight_coverage.dart';
+import '../utils/freight_delivery.dart';
 import 'business_profile.dart';
 import 'business_service.dart';
 import 'destination_country.dart';
@@ -21,6 +22,9 @@ class BusinessDestinationOption {
     this.serviceNote,
     this.businessStatus = 'approved',
     this.freightPickupAvailable = false,
+    this.freightPayOnArrival = false,
+    this.freightDestinationDeliveryAvailable = false,
+    this.freightDestinationDeliveryFee = 0,
     this.freightPickupModel = 'distance',
     this.freightCategories = const <FreightCategory>[],
     this.freightCoverage,
@@ -55,6 +59,20 @@ class BusinessDestinationOption {
   final bool freightPickupAvailable;
   final String freightPickupModel;
 
+  /// Whether this business accepts being paid after the parcel reaches the
+  /// destination. When true, the booking form offers pay now / pay on
+  /// arrival; the server re-checks the business doc at booking regardless.
+  final bool freightPayOnArrival;
+
+  /// Whether the receiver can have the parcel brought to their own address at
+  /// the destination instead of collecting it, and the flat fee for that. Flat
+  /// rather than distance-priced: the addresses this serves do not geocode
+  /// well enough to price a radius from, so a number the business chose is one
+  /// it can actually honour. Read through [freightDelivery], which treats an
+  /// opted-in business with no fee as an unfinished setting.
+  final bool freightDestinationDeliveryAvailable;
+  final double freightDestinationDeliveryFee;
+
   /// What this business will carry and what each kind of parcel is worth to
   /// it. Priced per business, not per destination: a business charges the same
   /// for electronics wherever it is sending them. Empty when it does not offer
@@ -66,13 +84,21 @@ class BusinessDestinationOption {
   /// same as offering freight and covering nothing.
   final FreightCoveragePolicy? freightCoverage;
 
-  /// What the business pays back per item type - the reason customers no
-  /// longer declare a value. Raw wire shape; read through freight_payback.
+  /// What the business pays back per item type: the customer says what the
+  /// item is and this table says what it is worth. Raw wire shape; read
+  /// through freight_payback.
   final Map<String, dynamic>? freightPaybackTable;
 
   /// The one line the option card shows about who stands behind the parcel.
   FreightCoverageSummary get freightCoverageSummary =>
       freightCoverageSummaryOf(freightCoverage);
+
+  /// This business's destination-delivery offer, with an unpriced opt-in
+  /// resolved to "not offered".
+  FreightDeliveryPolicy get freightDelivery => freightDeliveryPolicy(
+    available: freightDestinationDeliveryAvailable,
+    fee: freightDestinationDeliveryFee,
+  );
 
   bool get isApprovedActive => businessStatus == 'approved' && country.isActive;
 
@@ -123,6 +149,11 @@ class BusinessDestinationOption {
       serviceNote: data['serviceNote'] as String?,
       businessStatus: (data['businessStatus'] ?? 'approved') as String,
       freightPickupAvailable: data['freightPickupAvailable'] == true,
+      freightPayOnArrival: data['freightPayOnArrival'] == true,
+      freightDestinationDeliveryAvailable:
+          data['freightDestinationDeliveryAvailable'] == true,
+      freightDestinationDeliveryFee:
+          (data['freightDestinationDeliveryFee'] as num?)?.toDouble() ?? 0,
       freightPickupModel: (data['freightPickupModel'] as String?) == 'borough'
           ? 'borough'
           : 'distance',

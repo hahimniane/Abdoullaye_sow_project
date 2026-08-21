@@ -725,6 +725,268 @@ describe("freight service callable lifecycle", () => {
         assert.equal(shipment.price, 150);
       });
 
+  it("never charges for cover, however much the item pays back",
+      async () => {
+        // The business prices each item for what it is worth to carry, so
+        // the risk is already in the shipping rate. A percentage on top
+        // billed the same risk twice.
+        const businessId = "freight-free-cover-business";
+        await seedBusiness(businessId);
+        await db.collection("businesses").doc(businessId).set({
+          freightCoverageEnabled: true,
+          freightPaybackTable: {
+            electronics: {
+              items: [{id: "iphone", label: "iPhone", paybackAmount: 400}],
+              otherPaybackAmount: 0,
+            },
+          },
+        }, {merge: true});
+
+        const booking = await functions.createFreightShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: freightInput(businessId, {
+            weightKg: 10,
+            itemCategoryId: "electronics",
+            itemId: "iphone",
+          }),
+        });
+        const shipment = await freightData(booking.shipmentId);
+        // 10kg x $12.50 air x 2 (electronics) = $250, and not a cent more.
+        assert.equal(shipment.coverageFeeCents, 0);
+        assert.equal(shipment.price, 250);
+        assert.equal(shipment.estimatedTotalCents, 25000);
+        // Covered means the FULL published payback, free of charge.
+        assert.equal(shipment.coverageCovered, true);
+        assert.equal(shipment.coveragePayoutCapCents, 40000);
+        assert.equal(shipment.paybackAmountCents, 40000);
+      });
+
+  it("promises nothing when the business does not cover loss",
+      async () => {
+        const businessId = "freight-uncovered-business";
+        await seedBusiness(businessId);
+        await db.collection("businesses").doc(businessId).set({
+          freightPaybackTable: {
+            electronics: {
+              items: [{id: "iphone", label: "iPhone", paybackAmount: 400}],
+              otherPaybackAmount: 0,
+            },
+          },
+        }, {merge: true});
+
+        const booking = await functions.createFreightShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: freightInput(businessId, {
+            itemCategoryId: "electronics",
+            itemId: "iphone",
+          }),
+        });
+        const shipment = await freightData(booking.shipmentId);
+        assert.equal(shipment.coverageCovered, false);
+        assert.equal(shipment.coveragePayoutCapCents, 0);
+        assert.equal(shipment.coverageFeeCents, 0);
+        // The parcel is still carried, and its payback is still recorded -
+        // it is the promise that is absent, not the item.
+        assert.equal(shipment.paybackAmountCents, 40000);
+      });
+
+  it("delivers to the receiver's address for the business's flat fee",
+      async () => {
+        const businessId = "freight-delivery-business";
+        await seedBusiness(businessId);
+        await db.collection("businesses").doc(businessId).set({
+          freightDestinationDeliveryAvailable: true,
+          freightDestinationDeliveryFee: 15,
+        }, {merge: true});
+
+        const booking = await functions.createFreightShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: freightInput(businessId, {
+            weightKg: 10,
+            destinationDelivery: true,
+            receiverAddress: "  Quartier Almamya, Conakry  ",
+          }),
+        });
+        const shipment = await freightData(booking.shipmentId);
+        // 10kg x $12.50 = $125 shipping, plus the flat $15 delivery.
+        assert.equal(shipment.destinationDelivery, true);
+        assert.equal(shipment.destinationDeliveryFeeCents, 1500);
+        assert.equal(shipment.receiverAddress, "Quartier Almamya, Conakry");
+        assert.equal(shipment.price, 140);
+        assert.equal(shipment.estimatedTotalCents, 14000);
+      });
+
+  it("refuses delivery from a business that does not offer it",
+      async () => {
+        // Silently downgrading to office collection would only surface as a
+        // parcel that never arrived at the address they paid for.
+        const businessId = "freight-no-delivery-business";
+        await seedBusiness(businessId);
+        await assert.rejects(
+            () => functions.createFreightShipmentPaymentIntent.run({
+              auth: {uid: CUSTOMER_UID},
+              data: freightInput(businessId, {
+                destinationDelivery: true,
+                receiverAddress: "Kaloum, Conakry",
+              }),
+            }),
+            /does not deliver to the receiver/,
+        );
+      });
+
+  it("refuses delivery with no address to deliver to", async () => {
+    const businessId = "freight-delivery-no-address-business";
+    await seedBusiness(businessId);
+    await db.collection("businesses").doc(businessId).set({
+      freightDestinationDeliveryAvailable: true,
+      freightDestinationDeliveryFee: 15,
+    }, {merge: true});
+    await assert.rejects(
+        () => functions.createFreightShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: freightInput(businessId, {
+            destinationDelivery: true,
+            receiverAddress: "   ",
+          }),
+        }),
+        /delivery address is required/,
+    );
+  });
+
+  it("keeps the delivery fee whole when the weight is corrected",
+      async () => {
+        // Delivering to an address costs the same whatever the parcel
+        // weighs; settling without it would refund the delivery.
+        const businessId = "freight-delivery-settle-business";
+        await seedBusiness(businessId);
+        await db.collection("businesses").doc(businessId).set({
+          freightDestinationDeliveryAvailable: true,
+          freightDestinationDeliveryFee: 15,
+        }, {merge: true});
+        const manager = await seedFreightManager(businessId);
+
+        const booking = await functions.createFreightShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: freightInput(businessId, {
+            weightKg: 10,
+            destinationDelivery: true,
+            receiverAddress: "Quartier Almamya, Conakry",
+          }),
+        });
+        const confirmed = await functions.confirmFreightShipmentWeight.run({
+          auth: manager,
+          data: {shipmentId: booking.shipmentId, verifiedWeightKg: 12},
+        });
+        // 12kg x $12.50 = $150, plus the unchanged $15 delivery = $165.
+        assert.equal(confirmed.finalTotal, 165);
+        assert.equal(confirmed.balanceDue, 25);
+      });
+
+  it("books pay-on-arrival without charging, when the business opted in",
+      async () => {
+        const businessId = "freight-pay-on-arrival-business";
+        await seedBusiness(businessId);
+        await db.collection("businesses").doc(businessId)
+            .set({freightPayOnArrival: true}, {merge: true});
+
+        const booking = await functions.createFreightShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: freightInput(businessId, {
+            weightKg: 10,
+            paymentTiming: "arrival",
+          }),
+        });
+        assert.equal(booking.payOnArrival, true);
+        assert.equal(booking.cardChargeAmount, 0);
+
+        const shipment = await freightData(booking.shipmentId);
+        assert.equal(shipment.payOnArrival, true);
+        assert.equal(shipment.paymentTiming, "arrival");
+        // Nothing charged at booking - the card is saved and verified, and
+        // the estimate fields keep the price for display.
+        assert.equal(shipment.cardChargeAmountCents, 0);
+        assert.equal(shipment.paymentStatus, "card_saved");
+        assert.equal(shipment.status, "awaiting_weight_confirmation");
+        assert.equal(shipment.priceSettlementStatus, "awaiting_weight");
+        assert.equal(shipment.estimatedTotalCents, 12500);
+        assert.ok(shipment.stripePaymentMethodId);
+      });
+
+  it("refuses pay-on-arrival from a business that did not opt in",
+      async () => {
+        const businessId = "freight-no-arrival-optin-business";
+        await seedBusiness(businessId);
+        await assert.rejects(
+            () => functions.createFreightShipmentPaymentIntent.run({
+              auth: {uid: CUSTOMER_UID},
+              data: freightInput(businessId, {paymentTiming: "arrival"}),
+            }),
+            /does not accept payment on arrival/,
+        );
+      });
+
+  it("defers a pay-on-arrival balance to arrival, then charges the " +
+      "saved card and keeps the shipment arrived", async () => {
+    const businessId = "freight-arrival-charge-business";
+    await seedBusiness(businessId);
+    await db.collection("businesses").doc(businessId)
+        .set({freightPayOnArrival: true}, {merge: true});
+    const manager = await seedFreightManager(businessId);
+
+    const booking = await functions.createFreightShipmentPaymentIntent.run({
+      auth: {uid: CUSTOMER_UID},
+      data: freightInput(businessId, {
+        weightKg: 10,
+        paymentTiming: "arrival",
+      }),
+    });
+
+    // Weight confirmation must not charge: the whole verified price is
+    // owed, but the deal is payment on ARRIVAL, and fulfillment may
+    // progress unpaid.
+    const confirmed = await functions.confirmFreightShipmentWeight.run({
+      auth: manager,
+      data: {shipmentId: booking.shipmentId, verifiedWeightKg: 12},
+    });
+    assert.equal(confirmed.balanceDue, 150);
+    let shipment = await freightData(booking.shipmentId);
+    assert.equal(shipment.priceSettlementStatus, "due_on_arrival");
+    assert.equal(shipment.status, "pending");
+    assert.equal(shipment.balanceDueCents, 15000);
+    assert.notEqual(shipment.balancePaymentStatus, "succeeded");
+
+    // A repeated confirmation stays idempotent and still does not charge.
+    await functions.confirmFreightShipmentWeight.run({
+      auth: manager,
+      data: {shipmentId: booking.shipmentId, verifiedWeightKg: 12},
+    });
+    shipment = await freightData(booking.shipmentId);
+    assert.equal(shipment.priceSettlementStatus, "due_on_arrival");
+
+    // The business marks it arrived - the trigger flips the shipment to
+    // balance_due and charges the saved card off-session.
+    const shipmentRef = db.collection("freightShipments")
+        .doc(booking.shipmentId);
+    const before = {data: () => shipment};
+    await shipmentRef.update({status: "ready_for_pickup"});
+    const afterData = await freightData(booking.shipmentId);
+    await functions.chargeFreightPayOnArrival.run({
+      data: {
+        before,
+        after: {data: () => afterData, ref: shipmentRef},
+      },
+      params: {shipmentId: booking.shipmentId},
+    });
+
+    shipment = await freightData(booking.shipmentId);
+    assert.equal(shipment.priceSettlementStatus, "settled");
+    assert.equal(shipment.balancePaymentStatus, "succeeded");
+    assert.equal(shipment.price, 150);
+    assert.equal(shipment.balanceDueCents, 0);
+    // Settling the arrival charge must not un-arrive the shipment.
+    assert.equal(shipment.status, "ready_for_pickup");
+  });
+
   it("converges simultaneous freight balance payment requests",
       async () => {
         const businessId = "freight-concurrent-settlement-business";

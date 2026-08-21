@@ -7,6 +7,7 @@ import {
   deliveryWindowLabel,
   eventDetail,
   journeyStageFor,
+  journeyStagesFor,
   relativeTime,
   statusBucket,
   statusLabel,
@@ -114,6 +115,31 @@ test("the status pill speaks to the customer, not to staff", () => {
   assert.equal(statusLabel("awaiting_balance_payment"), "Balance due");
   assert.equal(statusLabel("completed"), "Delivered");
   assert.equal(statusLabel("cancelled"), "Cancelled");
+});
+
+test("a parcel being delivered is never told to go and collect it", () => {
+  // Same stored statuses, different ending. "Ready for pickup" on a parcel
+  // a driver is bringing to the door sends the receiver to a counter that
+  // is not expecting them - and inventing a status for it would have to be
+  // added to every hardcoded status list in both consoles.
+  assert.equal(statusLabel("ready_for_pickup", true), "Out for delivery");
+  assert.equal(statusLabel("ready_for_pickup"), "Ready for pickup");
+  assert.equal(statusLabel("ready_for_pickup", false), "Ready for pickup");
+  // Everything else reads the same either way.
+  for (const status of ["in_transit", "completed", "cancelled", ""]) {
+    assert.equal(statusLabel(status, true), statusLabel(status), status);
+  }
+  // The stage ids are shared, so every caller that maps a status keeps
+  // working; only the wording the customer reads changes.
+  const collect = journeyStagesFor();
+  const deliver = journeyStagesFor(true);
+  assert.deepEqual(
+    deliver.map((stage) => stage.id),
+    collect.map((stage) => stage.id),
+  );
+  assert.deepEqual(collect, JOURNEY_STAGES);
+  assert.match(deliver[3].hint, /receiver/);
+  assert.doesNotMatch(deliver[2].hint, /pickup|collect/i);
 });
 
 test("an unmapped status degrades to something readable", () => {

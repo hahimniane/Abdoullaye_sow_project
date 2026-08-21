@@ -7012,6 +7012,23 @@ class AppLocalizationsFr extends AppLocalizations {
   String get somethingElseInCategory => 'Autre chose dans cette catégorie';
 
   @override
+  String get whenDoYouPay => 'Quand payez-vous ?';
+
+  @override
+  String get payNowOption => 'Payer maintenant';
+
+  @override
+  String get payOnArrivalOption => 'Payer à l\'arrivée';
+
+  @override
+  String payOnArrivalExplainer(Object business) {
+    return 'Rien n\'est débité aujourd\'hui. Votre carte est enregistrée et vérifiée maintenant, puis débitée automatiquement lorsque $business marque votre colis comme arrivé. Si ce débit échoue, il vous sera demandé de finaliser le paiement dans l\'application.';
+  }
+
+  @override
+  String get saveCardAndBook => 'Enregistrer la carte et réserver';
+
+  @override
   String get noBusinessTakesItem =>
       'Aucune entreprise approuvée n’accepte cet article vers cette destination pour le moment. Essayez un autre article ou revenez bientôt.';
 
@@ -7081,45 +7098,24 @@ class AppLocalizationsFr extends AppLocalizations {
   String get freightCoverageNone => 'Aucune couverture';
 
   @override
-  String freightCoverageCoversUpTo(Object amount, Object rate) {
-    return 'Couvre jusqu’à $amount · $rate';
-  }
-
-  @override
-  String freightCoverageCoversLoss(Object rate) {
-    return 'Couvre la perte · $rate';
-  }
+  String get freightCoverageCoversLoss => 'Couvre la perte';
 
   @override
   String get freightCoverageSectionTitle => 'En cas de perte';
 
   @override
-  String freightCoverageQuestion(Object amount) {
-    return 'Y a-t-il quelque chose valant plus de $amount ?';
-  }
-
-  @override
-  String get freightCoverageQuestionHelp =>
-      'Vous seul savez ce qu’il y a dans le colis, donc vous seul pouvez dire ce qu’il coûterait à remplacer.';
-
-  @override
-  String get freightDeclaredValueLabel => 'Valeur de remplacement';
-
-  @override
-  String get freightDeclaredValueHelper =>
-      'Ce que vous déclarez est aussi le maximum qui peut être remboursé : déclarez-le honnêtement.';
-
-  @override
-  String get freightCoverageFeeLabel => 'Frais de couverture';
-
-  @override
-  String get freightCoverageEnterValue =>
-      'Indiquez la valeur pour voir les frais de couverture.';
-
-  @override
   String freightCoveragePaysUpTo(Object businessName, Object amount) {
-    return '$businessName vous rembourse jusqu’à $amount si ce colis est perdu.';
+    return '$businessName vous rembourse $amount si ce colis est perdu.';
   }
+
+  @override
+  String freightCoveragePaysForLoss(Object businessName) {
+    return '$businessName vous rembourse si ce colis est perdu.';
+  }
+
+  @override
+  String get freightCoverageNoExtraCharge =>
+      'Compris dans le prix, sans frais supplémentaires.';
 
   @override
   String freightCoverageWhoPays(Object businessName) {
@@ -7132,7 +7128,48 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String freightCoverageCarriesUpTo(Object businessName, Object amount) {
-    return '$businessName accepte les colis d’une valeur maximale de $amount.';
+  String get freightDestinationDeliveryTitle =>
+      'Comment le destinataire le reçoit';
+
+  @override
+  String get freightDestinationDeliveryCollect =>
+      'Le destinataire vient le chercher';
+
+  @override
+  String freightDestinationDeliveryCollectHelp(Object businessName) {
+    return 'Il récupère le colis chez $businessName à destination.';
   }
+
+  @override
+  String freightDestinationDeliveryToAddress(Object amount) {
+    return 'Livrer à son adresse · $amount';
+  }
+
+  @override
+  String get freightDestinationDeliveryFeeLabel => 'Livraison à destination';
+
+  @override
+  String get freightReceiverAddressLabel => 'Adresse du destinataire';
+
+  @override
+  String get freightReceiverAddressHint => 'Quartier, point de repère, ville';
+
+  @override
+  String get freightReceiverAddressHelper =>
+      'Indiquez le quartier et un point de repère proche, pour que le livreur trouve l’adresse.';
+
+  @override
+  String get freightReceiverAddressRequired =>
+      'Indiquez l’adresse où le colis doit être livré.';
+
+  @override
+  String get freightReceiverAddressTooLong =>
+      'Cette adresse est trop longue. Limitez-vous au quartier, à un point de repère et à la ville.';
+
+  @override
+  String get outForDelivery => 'En cours de livraison';
+
+  @override
+  String get freightNextOutForDelivery =>
+      'Votre colis est arrivé et est en route vers l’adresse du destinataire.';
 }
