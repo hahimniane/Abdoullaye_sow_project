@@ -333,14 +333,6 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   bool get _usesItemPricing =>
       (_selected?.freightPaybackTable?.isNotEmpty ?? false);
 
-  FreightPaybackLookup get _itemPayback => freightPaybackFor(
-    table: _selected?.freightPaybackTable,
-    categoryId: _activeFunnelCategoryId.isNotEmpty
-        ? _activeFunnelCategoryId
-        : _categoryId,
-    itemId: _activeFunnelItemId == otherItemId ? '' : _activeFunnelItemId,
-  );
-
   /// The choice only survives while the chosen business actually offers it -
   /// a business switch submits pay-now, whatever the toggle said before.
   bool get _payOnArrivalChosen =>
@@ -1341,9 +1333,10 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     final policy = option.freightCoverage;
     if (policy == null) return const SizedBox.shrink();
 
-    final lookup = _itemPayback;
+    // The published amount settles a claim; it is deliberately not read here,
+    // because this card states whether the business stands behind the parcel
+    // and never quotes a sum for it.
     final covers = policy.coversLoss;
-    final payback = covers && lookup.listed ? lookup.paybackAmount : 0.0;
     return Card(
       margin: EdgeInsets.zero,
       elevation: 0,
@@ -1363,9 +1356,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    covers && payback > 0
-                        ? l10n.protectionIncludedUpTo(freightMoney(payback))
-                        : l10n.freightCoverageSectionTitle,
+                    l10n.freightCoverageSectionTitle,
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),
@@ -1385,12 +1376,12 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
               )
             else ...[
               Text(
-                payback > 0
-                    ? l10n.freightCoveragePaysUpTo(
-                        option.businessName,
-                        freightMoney(payback),
-                      )
-                    : l10n.freightCoveragePaysForLoss(option.businessName),
+                // No sum. Losing a parcel is rare, and a figure on the
+                // booking screen turns a reassurance into a headline - and
+                // into the number a customer expects to argue over. What
+                // they need before choosing is whether this business stands
+                // behind the parcel at all.
+                l10n.freightCoveragePaysForLoss(option.businessName),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),

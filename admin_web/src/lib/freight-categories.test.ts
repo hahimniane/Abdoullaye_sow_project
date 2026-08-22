@@ -154,37 +154,24 @@ test("the price shown is the price the server computes", () => {
 
 test("the comparison line says what a customer is choosing between", () => {
   const covers = freightCoveragePolicyFrom({coversLoss: true});
-  // A promise, not a ceiling: "up to" reads as a limit the customer will be
-  // argued down to, when the business owes this whole amount for this item.
+  // Whether the business stands behind the parcel - no figure. Losing one is
+  // rare, and a number on the card turns a reassurance into a headline, and
+  // into the amount a customer expects to argue over.
   assert.equal(
-    freightCoverageComparisonLine(covers, money, 400),
-    "Pays you $400 if it is lost",
-  );
-  assert.doesNotMatch(
-    freightCoverageComparisonLine(covers, money, 400),
-    /up to/,
-  );
-  // No amount to state yet: still a promise, and never a price.
-  assert.equal(
-    freightCoverageComparisonLine(covers, money, 0),
+    freightCoverageComparisonLine(covers),
     "Pays you back if it is lost",
   );
-  assert.equal(
-    freightCoverageComparisonLine(covers, money),
-    "Pays you back if it is lost",
-  );
+  assert.doesNotMatch(freightCoverageComparisonLine(covers), /up to|\d/);
   // The business that stands behind nothing has to say so on the same card,
   // before the choice, not after the parcel is gone.
   assert.equal(
     freightCoverageComparisonLine(
       freightCoveragePolicyFrom({coversLoss: false}),
-      money,
-      400,
     ),
     "This business does not pay for a lost parcel",
   );
   assert.equal(
-    freightCoverageComparisonLine(null, money),
+    freightCoverageComparisonLine(null),
     "This business does not pay for a lost parcel",
   );
   assert.equal(formatMultiplier(2), "2");
@@ -193,11 +180,11 @@ test("the comparison line says what a customer is choosing between", () => {
 
 test("no line the customer reads ever prices cover", () => {
   const covers = freightCoveragePolicyFrom({coversLoss: true});
-  for (const amount of [0, 1, 250, 10000]) {
-    const line = freightCoverageComparisonLine(covers, money, amount);
-    assert.doesNotMatch(line, /%/);
-    assert.doesNotMatch(line, /fee|rate|charge/i);
-  }
+  const line = freightCoverageComparisonLine(covers);
+  assert.doesNotMatch(line, /%/);
+  assert.doesNotMatch(line, /fee|rate|charge/i);
+  // Nor any sum at all - the promise is stated, never quantified here.
+  assert.doesNotMatch(line, /\$|\d/);
   // And nothing about the policy can produce a number to charge: the type
   // carries one boolean, so there is nothing for a price to be derived from.
   assert.deepEqual(Object.keys(covers ?? {}), ["coversLoss"]);
@@ -426,7 +413,11 @@ test("both consoles are wired to the freight category and coverage contract", ()
   // The amount is on the screen, not behind an "i": UI convention 1 forbids
   // hiding anything the reader needs to avoid a mistake, and what a business
   // owes on a lost parcel is exactly that.
-  assert.match(customer, /pays you<\/span> \{formatMoney\(paybackAmount\)\}/);
+  // The card says whether the business stands behind the parcel; it never
+  // quotes the sum, because a lost parcel is rare and a figure invites an
+  // argument rather than a decision.
+  assert.match(customer, /pays you back for it/);
+  assert.doesNotMatch(customer, /pays you<\/span> \{formatMoney\(paybackAmount\)\}/);
   assert.doesNotMatch(customer, /<FieldInfo[\s\S]{0,400}We pay up to/);
 
   const business = readFileSync(

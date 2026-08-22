@@ -12318,12 +12318,6 @@ abstract class AppLocalizations {
   /// **'Send'**
   String get viewingSendProposal;
 
-  /// No description provided for @protectionIncludedUpTo.
-  ///
-  /// In en, this message translates to:
-  /// **'Protection included · pays you {amount} if lost'**
-  String protectionIncludedUpTo(Object amount);
-
   /// No description provided for @whatIsTheItem.
   ///
   /// In en, this message translates to:
@@ -12497,12 +12491,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'If it goes missing'**
   String get freightCoverageSectionTitle;
-
-  /// No description provided for @freightCoveragePaysUpTo.
-  ///
-  /// In en, this message translates to:
-  /// **'{businessName} pays you {amount} if this parcel is lost.'**
-  String freightCoveragePaysUpTo(Object businessName, Object amount);
 
   /// No description provided for @freightCoveragePaysForLoss.
   ///

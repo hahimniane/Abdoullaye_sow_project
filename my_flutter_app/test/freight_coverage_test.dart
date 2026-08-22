@@ -75,8 +75,6 @@ void main() {
         'freightCoverageNone',
         'freightCoverageCoversLoss',
         'freightCoverageSectionTitle',
-        'protectionIncludedUpTo',
-        'freightCoveragePaysUpTo',
         'freightCoveragePaysForLoss',
         'freightCoverageNoExtraCharge',
         'freightCoverageWhoPays',
@@ -97,6 +95,8 @@ void main() {
       for (final locale in ['en', 'fr']) {
         final catalog = arb(locale);
         for (final key in const [
+          'protectionIncludedUpTo',
+          'freightCoveragePaysUpTo',
           'freightCoverageCoversUpTo',
           'freightCoverageQuestion',
           'freightCoverageQuestionHelp',
@@ -167,11 +167,19 @@ void main() {
       );
     });
 
-    test('a covering business states the full payback, free of charge', () {
-      expect(screen, contains('protectionIncludedUpTo'));
+    test('a covering business says so, without quoting a sum', () {
+      // Losing a parcel is rare. A figure on the booking screen turns a
+      // reassurance into a headline, and into the number a customer expects
+      // to argue over - the published amount settles a claim instead.
+      expect(screen, contains('freightCoveragePaysForLoss'));
       expect(screen, contains('freightCoverageNoExtraCharge'));
-      // The full published amount, not a proportion of it.
-      expect(screen, contains('lookup.paybackAmount'));
+      for (final gone in const [
+        'protectionIncludedUpTo',
+        'freightCoveragePaysUpTo',
+        'lookup.paybackAmount',
+      ]) {
+        expect(screen, isNot(contains(gone)), reason: gone);
+      }
     });
 
     test('a payback business asks for the item, never a value', () {

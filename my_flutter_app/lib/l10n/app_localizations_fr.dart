@@ -6999,11 +6999,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get viewingSendProposal => 'Envoyer';
 
   @override
-  String protectionIncludedUpTo(Object amount) {
-    return 'Protection incluse · vous rembourse $amount en cas de perte';
-  }
-
-  @override
   String get whatIsTheItem => 'Quel est l’article ?';
 
   @override
@@ -7100,11 +7095,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get freightCoverageSectionTitle => 'En cas de perte';
-
-  @override
-  String freightCoveragePaysUpTo(Object businessName, Object amount) {
-    return '$businessName vous rembourse $amount si ce colis est perdu.';
-  }
 
   @override
   String freightCoveragePaysForLoss(Object businessName) {

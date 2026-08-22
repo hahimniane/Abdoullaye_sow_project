@@ -265,26 +265,23 @@ export function formatMultiplier(value: number): string {
  * before choosing either. Money is formatted by the caller so this stays
  * pure and the customer's locale still decides how a dollar looks.
  *
- * The amount is the business's published payback for the item the customer
- * already picked, stated in full: a covering business owes all of it, so
- * anything vaguer than the number would understate the promise. A business
- * that stands behind nothing says so here, in the sentence a customer reads
- * while the parcel is still in the room.
+ * Whether this business stands behind the parcel, in the sentence a
+ * customer reads while it is still in the room. No amount: the business
+ * that stands behind nothing is the thing worth knowing here, and a figure
+ * on a card turns a rare event into a headline.
  */
 export function freightCoverageComparisonLine(
   policy: FreightCoveragePolicy | null,
-  money: (value: number) => string,
-  paybackAmount = 0,
 ): string {
   if (!policy || !policy.coversLoss) {
     return "This business does not pay for a lost parcel";
   }
-  // A promise, not a ceiling. "Up to" reads as a limit the customer will be
-  // argued down to; the business owes this amount for this item, full stop.
-  const payback = finiteNumber(paybackAmount);
-  return payback > 0
-    ? `Pays you ${money(payback)} if it is lost`
-    : "Pays you back if it is lost";
+  // No figure. Losing a parcel is rare, and putting a number on the card
+  // turns a reassurance into a headline - and into the number a customer
+  // expects to argue over. What they need to know is whether this business
+  // stands behind the parcel at all; the published amount is what settles a
+  // claim on the rare day there is one.
+  return "Pays you back if it is lost";
 }
 
 /* -------------------------------------------------------------------------

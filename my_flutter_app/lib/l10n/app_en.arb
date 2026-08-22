@@ -2895,12 +2895,6 @@
     }
   },
   "viewingSendProposal": "Send",
-  "protectionIncludedUpTo": "Protection included · pays you {amount} if lost",
-  "@protectionIncludedUpTo": {
-    "placeholders": {
-      "amount": {}
-    }
-  },
   "whatIsTheItem": "What is the item?",
   "somethingElseInCategory": "Something else in this category",
   "whenDoYouPay": "When do you pay?",
@@ -2940,13 +2934,6 @@
   "freightCoverageNone": "No coverage",
   "freightCoverageCoversLoss": "Covers loss",
   "freightCoverageSectionTitle": "If it goes missing",
-  "freightCoveragePaysUpTo": "{businessName} pays you {amount} if this parcel is lost.",
-  "@freightCoveragePaysUpTo": {
-    "placeholders": {
-      "businessName": {},
-      "amount": {}
-    }
-  },
   "freightCoveragePaysForLoss": "{businessName} pays you back if this parcel is lost.",
   "@freightCoveragePaysForLoss": {
     "placeholders": {

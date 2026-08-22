@@ -2895,12 +2895,6 @@
     }
   },
   "viewingSendProposal": "Envoyer",
-  "protectionIncludedUpTo": "Protection incluse · vous rembourse {amount} en cas de perte",
-  "@protectionIncludedUpTo": {
-    "placeholders": {
-      "amount": {}
-    }
-  },
   "whatIsTheItem": "Quel est l’article ?",
   "somethingElseInCategory": "Autre chose dans cette catégorie",
   "whenDoYouPay": "Quand payez-vous ?",
@@ -2940,13 +2934,6 @@
   "freightCoverageNone": "Aucune couverture",
   "freightCoverageCoversLoss": "Couvre la perte",
   "freightCoverageSectionTitle": "En cas de perte",
-  "freightCoveragePaysUpTo": "{businessName} vous rembourse {amount} si ce colis est perdu.",
-  "@freightCoveragePaysUpTo": {
-    "placeholders": {
-      "businessName": {},
-      "amount": {}
-    }
-  },
   "freightCoveragePaysForLoss": "{businessName} vous rembourse si ce colis est perdu.",
   "@freightCoveragePaysForLoss": {
     "placeholders": {

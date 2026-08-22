@@ -2797,8 +2797,8 @@ function FreightShipmentForm({
               />
               {paybackAmount > 0 && (
                 <ReviewDetail
-                  label="Paid back if lost"
-                  value={formatMoney(paybackAmount)}
+                  label="If it is lost"
+                  value={`${destination?.businessName ?? "The business"} pays you back`}
                 />
               )}
               <ReviewDetail
@@ -3186,9 +3186,7 @@ function FreightShipmentForm({
                           // Insurance language, not loss-talk: the promise
                           // reads as something the customer has, and the
                           // price column says outright that it is free.
-                          label:
-                            `Protection included · pays you ` +
-                            `${formatMoney(paybackAmount)} if lost`,
+                          label: "Protection included · paid back if lost",
                           value: "Free",
                         },
                       ]
@@ -3322,10 +3320,8 @@ function FreightProtectionNote({
         <strong>Protection included</strong>
         <small>
           <span>If this is lost,</span> {businessName}{" "}
-          <span>pays you</span> {formatMoney(paybackAmount)}
           <span>
-            {" "}— the amount it publishes for this item. The business pays
-            you back, not Laawol.
+            pays you back for it. The business pays you, not Laawol.
           </span>
         </small>
       </div>
@@ -4690,16 +4686,6 @@ function DestinationPicker({
                     <strong>
                       {freightCoverageComparisonLine(
                         freightCoveragePolicyFrom(option.freightCoverage),
-                        (amount) => formatMoney(amount),
-                        // The item is already chosen by the time this list
-                        // renders, so the promise can be the real number for
-                        // this parcel rather than a range nobody can act on.
-                        freightPaybackFor({
-                          table: option.freightPaybackTable,
-                          categoryId: itemCategoryId,
-                          itemId:
-                            itemId === OTHER_ITEM_ID ? "" : itemId,
-                        }).paybackAmount,
                       )}
                     </strong>
                   </span>
