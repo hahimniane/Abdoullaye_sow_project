@@ -154,19 +154,25 @@ test("the price shown is the price the server computes", () => {
 
 test("the comparison line says what a customer is choosing between", () => {
   const covers = freightCoveragePolicyFrom({coversLoss: true});
-  // The promise is the business's whole published payback for the item the
-  // customer already picked, stated in full - a proportion of it would
-  // understate what is actually owed.
+  // A promise, not a ceiling: "up to" reads as a limit the customer will be
+  // argued down to, when the business owes this whole amount for this item.
   assert.equal(
     freightCoverageComparisonLine(covers, money, 400),
-    "Protection included · up to $400",
+    "Pays you $400 if it is lost",
   );
-  // No amount to state yet: still protected, and never a price.
+  assert.doesNotMatch(
+    freightCoverageComparisonLine(covers, money, 400),
+    /up to/,
+  );
+  // No amount to state yet: still a promise, and never a price.
   assert.equal(
     freightCoverageComparisonLine(covers, money, 0),
-    "Protection included",
+    "Pays you back if it is lost",
   );
-  assert.equal(freightCoverageComparisonLine(covers, money), "Protection included");
+  assert.equal(
+    freightCoverageComparisonLine(covers, money),
+    "Pays you back if it is lost",
+  );
   // The business that stands behind nothing has to say so on the same card,
   // before the choice, not after the parcel is gone.
   assert.equal(
@@ -371,8 +377,8 @@ test("everything the two screens say has French", () => {
     "Protection incluse",
   );
   assert.equal(
-    translateValue("Protection included · up to", "fr"),
-    "Protection incluse · jusqu’à",
+    translateValue("Pays you back if it is lost", "fr"),
+    "Vous rembourse en cas de perte",
   );
   // What protection costs, said in the price column of the estimate.
   assert.equal(translateValue("Free", "fr"), "Offert");
@@ -420,7 +426,7 @@ test("both consoles are wired to the freight category and coverage contract", ()
   // The amount is on the screen, not behind an "i": UI convention 1 forbids
   // hiding anything the reader needs to avoid a mistake, and what a business
   // owes on a lost parcel is exactly that.
-  assert.match(customer, /We pay up to/);
+  assert.match(customer, /pays you<\/span> \{formatMoney\(paybackAmount\)\}/);
   assert.doesNotMatch(customer, /<FieldInfo[\s\S]{0,400}We pay up to/);
 
   const business = readFileSync(

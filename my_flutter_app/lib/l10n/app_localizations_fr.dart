@@ -7000,7 +7000,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String protectionIncludedUpTo(Object amount) {
-    return 'Protection incluse · jusqu’à $amount';
+    return 'Protection incluse · vous rembourse $amount en cas de perte';
   }
 
   @override

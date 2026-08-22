@@ -6880,7 +6880,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String protectionIncludedUpTo(Object amount) {
-    return 'Protection included · up to $amount';
+    return 'Protection included · pays you $amount if lost';
   }
 
   @override

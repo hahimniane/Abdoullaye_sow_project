@@ -279,10 +279,12 @@ export function freightCoverageComparisonLine(
   if (!policy || !policy.coversLoss) {
     return "This business does not pay for a lost parcel";
   }
+  // A promise, not a ceiling. "Up to" reads as a limit the customer will be
+  // argued down to; the business owes this amount for this item, full stop.
   const payback = finiteNumber(paybackAmount);
   return payback > 0
-    ? `Protection included · up to ${money(payback)}`
-    : "Protection included";
+    ? `Pays you ${money(payback)} if it is lost`
+    : "Pays you back if it is lost";
 }
 
 /* -------------------------------------------------------------------------

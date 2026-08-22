@@ -3186,7 +3186,9 @@ function FreightShipmentForm({
                           // Insurance language, not loss-talk: the promise
                           // reads as something the customer has, and the
                           // price column says outright that it is free.
-                          label: `Protection included · up to ${formatMoney(paybackAmount)}`,
+                          label:
+                            `Protection included · pays you ` +
+                            `${formatMoney(paybackAmount)} if lost`,
                           value: "Free",
                         },
                       ]
@@ -3319,10 +3321,11 @@ function FreightProtectionNote({
       <div>
         <strong>Protection included</strong>
         <small>
-          <span>We pay up to</span> {formatMoney(paybackAmount)}{" "}
+          <span>If this is lost,</span> {businessName}{" "}
+          <span>pays you</span> {formatMoney(paybackAmount)}
           <span>
-            if it is lost — the full amount this business publishes for this
-            item. The business pays you back, not Laawol.
+            {" "}— the amount it publishes for this item. The business pays
+            you back, not Laawol.
           </span>
         </small>
       </div>

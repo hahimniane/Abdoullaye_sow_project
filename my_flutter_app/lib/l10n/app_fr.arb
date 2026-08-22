@@ -2895,7 +2895,7 @@
     }
   },
   "viewingSendProposal": "Envoyer",
-  "protectionIncludedUpTo": "Protection incluse · jusqu’à {amount}",
+  "protectionIncludedUpTo": "Protection incluse · vous rembourse {amount} en cas de perte",
   "@protectionIncludedUpTo": {
     "placeholders": {
       "amount": {}

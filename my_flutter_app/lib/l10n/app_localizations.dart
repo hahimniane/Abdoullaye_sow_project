@@ -12321,7 +12321,7 @@ abstract class AppLocalizations {
   /// No description provided for @protectionIncludedUpTo.
   ///
   /// In en, this message translates to:
-  /// **'Protection included · up to {amount}'**
+  /// **'Protection included · pays you {amount} if lost'**
   String protectionIncludedUpTo(Object amount);
 
   /// No description provided for @whatIsTheItem.

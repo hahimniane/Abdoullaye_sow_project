@@ -59,7 +59,10 @@ test("the payback is what the customer is promised, and it costs nothing", () =>
     new URL("../components/customer-shipping-services.tsx", import.meta.url),
     "utf8",
   );
-  assert.match(customer, /Protection included · up to \$\{formatMoney\(paybackAmount\)\}/);
+  assert.match(customer, /Protection included · pays you /);
+  assert.match(customer, /\$\{formatMoney\(paybackAmount\)\} if lost/);
+  // Never a ceiling the customer can be argued down from.
+  assert.doesNotMatch(customer, /Protection included · up to/);
   assert.match(customer, /value: "Free"/);
   assert.doesNotMatch(customer, /label:\s*"Cover for loss"/);
   // Nothing anywhere in the estimate adds a cover line to the total.

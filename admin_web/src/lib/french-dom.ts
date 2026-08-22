@@ -3838,7 +3838,8 @@ Object.assign(TEXT_TRANSLATIONS, {
   "does not pay for a lost parcel.": "ne rembourse pas un colis perdu.",
   "Nothing is charged for protection, and nothing is owed if the parcel goes missing.":
     "Rien n’est facturé pour la protection, et rien n’est dû si le colis disparaît.",
-  "We pay up to": "Nous remboursons jusqu’à",
+  "If this is lost,": "En cas de perte,",
+  "pays you": "vous rembourse",
   "if it is lost — the full amount this business publishes for this item. The business pays you back, not Laawol.":
     "s’il est perdu — la totalité du montant que cette entreprise publie pour cet article. C’est l’entreprise qui vous rembourse, pas Laawol.",
   "What you are sending": "Ce que vous envoyez",
@@ -3866,8 +3867,8 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Livré à l’adresse du destinataire",
   // The one line that lets a customer compare cover before choosing.
   "Protection": "Protection",
-  "Protection included · up to": "Protection incluse · jusqu’à",
   "Protection included": "Protection incluse",
+  "Pays you back if it is lost": "Vous rembourse en cas de perte",
   "This business does not pay for a lost parcel":
     "Cette entreprise ne rembourse pas un colis perdu",
   "Free": "Offert",
