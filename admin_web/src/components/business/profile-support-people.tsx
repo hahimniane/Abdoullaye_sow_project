@@ -67,6 +67,9 @@ import {
   PICKUP_PLAN_SERVICES,
   PICKUP_SERVICE_BY_BUSINESS_SERVICE,
   PICKUP_SERVICE_LABELS,
+  pickupPlanFieldErrors,
+  pickupPlanSummary,
+  pickupServiceState,
   validateBusinessServiceSettings,
   type BusinessServiceId,
   type BusinessServiceSettingsDraft,
@@ -660,6 +663,10 @@ export function BusinessServicesPanel({
     ),
   );
   const offersPickup = enabledPickupServices.length > 0;
+  const pickupSummary = pickupPlanSummary(draft, enabledPickupServices);
+  const pickupErrors = pickupPlanFieldErrors(draft, {
+    isNewYorkBusiness: businessIsNewYork,
+  });
 
   // Built from what the business offers, so a tab never appears for a service
   // that is switched off, and turning one on makes its rules reachable without
@@ -933,46 +940,91 @@ export function BusinessServicesPanel({
                 <header className="service-config-card-head">
                   <span className="service-config-icon"><Truck size={21} /></span>
                   <div>
-                    <strong>Home pickup · all services</strong>
+                    <strong>Home pickup</strong>
                     <span>
-                      One pickup plan applies to every service you offer.
-                      Any service can use its own settings below.
+                      Collecting items from the customer&rsquo;s address
+                      instead of them bringing it to you. Each service either
+                      follows your shared plan or sets its own.
                     </span>
                   </div>
-                  <button
-                    aria-pressed={draft.pickupEnabled}
-                    className={`service-rule-toggle ${draft.pickupEnabled ? "active" : ""}`}
-                    onClick={() => update("pickupEnabled", !draft.pickupEnabled)}
-                    type="button"
-                  >
-                    {draft.pickupEnabled ? "Pickup on" : "Pickup off"}
-                  </button>
                 </header>
-                {draft.pickupEnabled ? (
-                  <div className="lst-form-grid service-config-fields">
-                    <PickupConfigEditor
-                      config={draft.pickupShared}
-                      isNewYork={businessIsNewYork}
-                      onBorough={updatePickupSharedBorough}
-                      onChange={updatePickupShared}
-                    />
-                  </div>
-                ) : (
-                  <p className="service-config-empty">
-                    Customers bring items to your business. Turn pickup on to
-                    offer collection from their address, priced by your own
-                    plan.
+
+                {/* What the server will actually do, stated once. Working it
+                    out otherwise means cross-referencing the shared toggle
+                    against four dropdowns - and getting it wrong in the one
+                    direction that matters, since a service with its own
+                    settings keeps taking pickups whatever the shared plan
+                    says. */}
+                <div className="lst-form-grid service-config-fields">
+                  <p className="customer-inline-note wide">
+                    {pickupSummary.taking.length > 0 ? (
+                      <>
+                        <strong>Taking pickups:</strong>{" "}
+                        {pickupSummary.taking.join(", ")}.{" "}
+                      </>
+                    ) : (
+                      <>
+                        <strong>No service is taking pickups.</strong>{" "}
+                        Customers bring everything to you.{" "}
+                      </>
+                    )}
+                    {pickupSummary.notTaking.length > 0 && (
+                      <>
+                        Customers bring these to you:{" "}
+                        {pickupSummary.notTaking.join(", ")}.
+                      </>
+                    )}
                   </p>
-                )}
+                </div>
+
+                <div className="lst-form-grid service-config-fields">
+                  <div className="wide">
+                    <label className="customer-choice-row">
+                      <input
+                        checked={draft.pickupEnabled}
+                        onChange={() =>
+                          update("pickupEnabled", !draft.pickupEnabled)
+                        }
+                        type="checkbox"
+                      />
+                      <span>
+                        <strong>Use one shared plan</strong>
+                        <small>
+                          Services set to &ldquo;follow the shared
+                          plan&rdquo; below are priced by these settings.
+                        </small>
+                      </span>
+                    </label>
+                  </div>
+                  {draft.pickupEnabled && (
+                    <>
+                      <PickupConfigEditor
+                        config={draft.pickupShared}
+                        isNewYork={businessIsNewYork}
+                        onBorough={updatePickupSharedBorough}
+                        onChange={updatePickupShared}
+                      />
+                      {pickupErrors.shared && (
+                        <p className="customer-inline-note error wide">
+                          {pickupErrors.shared}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+
                 <div className="lst-form-grid service-config-fields">
                   <p className="service-config-note wide">
-                    Per-service pickup: each service uses the shared plan
-                    unless you give it custom settings or turn its pickup off.
+                    Each service, one at a time
                   </p>
                   {enabledPickupServices.map((service) => {
                     const entry = draft.pickupServices[service];
+                    const state = pickupServiceState(draft, service);
                     return (
-                      <div className="lst-form-grid wide" key={service}>
+                      <div
+                        className="lst-form-grid wide pickup-service-block"
+                        key={service}
+                      >
                         <label className="lst-field">
                           <span>{PICKUP_SERVICE_LABELS[service]}</span>
                           <select
@@ -988,26 +1040,54 @@ export function BusinessServicesPanel({
                             }
                             value={entry.choice}
                           >
-                            <option value="inherit">Use shared plan</option>
-                            <option value="custom">Custom settings</option>
-                            <option value="off">No pickup</option>
+                            <option value="inherit">
+                              Follow the shared plan
+                            </option>
+                            <option value="custom">
+                              Set its own pickup fees
+                            </option>
+                            <option value="off">
+                              No pickup for this service
+                            </option>
                           </select>
+                          {/* Following a plan that is switched off reads as
+                              "configured" but means no pickup at all. */}
+                          {state.reason === "shared-plan-off" && (
+                            <small className="field-error">
+                              No pickup: the shared plan above is off. Turn
+                              it on, or give this service its own fees.
+                            </small>
+                          )}
+                          {state.reason === "own-settings" &&
+                            !draft.pickupEnabled && (
+                            <small>
+                              Takes pickups on these fees, whether or not the
+                              shared plan is on.
+                            </small>
+                          )}
                         </label>
                         {entry.choice === "custom" && (
-                          <PickupConfigEditor
-                            config={entry.config}
-                            isNewYork={businessIsNewYork}
-                            onBorough={(borough, value) =>
-                              updatePickupServiceBorough(
-                                service,
-                                borough,
-                                value,
-                              )
-                            }
-                            onChange={(patch) =>
-                              updatePickupServiceConfig(service, patch)
-                            }
-                          />
+                          <>
+                            <PickupConfigEditor
+                              config={entry.config}
+                              isNewYork={businessIsNewYork}
+                              onBorough={(borough, value) =>
+                                updatePickupServiceBorough(
+                                  service,
+                                  borough,
+                                  value,
+                                )
+                              }
+                              onChange={(patch) =>
+                                updatePickupServiceConfig(service, patch)
+                              }
+                            />
+                            {pickupErrors.services[service] && (
+                              <p className="customer-inline-note error wide">
+                                {pickupErrors.services[service]}
+                              </p>
+                            )}
+                          </>
                         )}
                       </div>
                     );

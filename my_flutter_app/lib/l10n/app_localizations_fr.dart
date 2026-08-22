@@ -5637,19 +5637,18 @@ class AppLocalizationsFr extends AppLocalizations {
       'La collecte n\'est pas disponible pour cette adresse. Vérifiez l\'adresse ou choisissez le dépôt au bureau.';
 
   @override
-  String get pickupPlanSectionTitle =>
-      'Collecte à domicile · tous les services';
+  String get pickupPlanSectionTitle => 'Collecte à domicile';
 
   @override
   String get pickupPlanSectionSubtitle =>
-      'Un seul plan de collecte s\'applique à tous les services que vous proposez. Chaque service peut utiliser ses propres réglages ci-dessous.';
+      'Enlever les articles à l\'adresse du client au lieu qu\'il vous les apporte. Chaque service suit votre plan partagé ou définit le sien.';
 
   @override
-  String get pickupPlanOfferToggle => 'Proposer la collecte à domicile';
+  String get pickupPlanOfferToggle => 'Utiliser un plan partagé';
 
   @override
   String get pickupPlanDisabledHint =>
-      'Les clients apportent leurs articles à votre entreprise. Activez la collecte pour proposer un enlèvement à leur adresse, tarifé selon votre plan.';
+      'Les services réglés sur « suivre le plan partagé » ci-dessous sont tarifés selon ces réglages.';
 
   @override
   String get pickupPlanModeLabel => 'Mode de tarification';
@@ -5697,17 +5696,16 @@ class AppLocalizationsFr extends AppLocalizations {
       'Un tarif fixe par arrondissement desservi. Laissez un arrondissement vide pour ne pas le desservir — l\'adresse du client détermine le tarif appliqué.';
 
   @override
-  String get pickupPlanPerServiceHint =>
-      'Collecte par service : chaque service utilise le plan partagé, sauf si vous lui donnez des réglages personnalisés ou désactivez sa collecte.';
+  String get pickupPlanPerServiceHint => 'Chaque service, un par un';
 
   @override
-  String get pickupPlanChoiceInherit => 'Utiliser le plan partagé';
+  String get pickupPlanChoiceInherit => 'Suivre le plan partagé';
 
   @override
-  String get pickupPlanChoiceCustom => 'Réglages personnalisés';
+  String get pickupPlanChoiceCustom => 'Définir ses propres frais de collecte';
 
   @override
-  String get pickupPlanChoiceOff => 'Pas de collecte';
+  String get pickupPlanChoiceOff => 'Pas de collecte pour ce service';
 
   @override
   String get pickupPlanSharedSectionLabel => 'le plan de collecte partagé';
@@ -7172,4 +7170,26 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get freightNextOutForDelivery =>
       'Votre colis est arrivé et est en route vers l’adresse du destinataire.';
+
+  @override
+  String pickupPlanTakingPickups(String services) {
+    return 'Collectes assurées : $services.';
+  }
+
+  @override
+  String get pickupPlanNoPickups =>
+      'Aucun service n\'assure de collecte. Les clients vous apportent tout sur place.';
+
+  @override
+  String pickupPlanBringToYou(String services) {
+    return 'Les clients vous apportent ceux-ci : $services.';
+  }
+
+  @override
+  String get pickupPlanSharedOffWarning =>
+      'Pas de collecte : le plan partagé ci-dessus est désactivé. Activez-le ou donnez à ce service ses propres frais.';
+
+  @override
+  String get pickupPlanOwnFeesNote =>
+      'Assure les collectes à ces frais, que le plan partagé soit activé ou non.';
 }

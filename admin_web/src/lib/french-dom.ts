@@ -57,12 +57,24 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Pickup on": "Collecte activée",
   "Pickup off": "Collecte désactivée",
   "Home pickup · all services": "Collecte à domicile · tous les services",
-  "One pickup plan applies to every service you offer. Any service can use its own settings below.":
-    "Un seul plan de collecte s’applique à tous les services que vous proposez. Chaque service peut utiliser ses propres réglages ci-dessous.",
-  "Customers bring items to your business. Turn pickup on to offer collection from their address, priced by your own plan.":
-    "Les clients apportent leurs articles à votre entreprise. Activez la collecte pour proposer un enlèvement à leur adresse, tarifé selon votre plan.",
-  "Per-service pickup: each service uses the shared plan unless you give it custom settings or turn its pickup off.":
-    "Collecte par service : chaque service utilise le plan partagé, sauf si vous lui donnez des réglages personnalisés ou désactivez sa collecte.",
+  "Collecting items from the customer’s address instead of them bringing it to you. Each service either follows your shared plan or sets its own.":
+    "Enlever les articles à l’adresse du client au lieu qu’il vous les apporte. Chaque service suit votre plan partagé ou définit le sien.",
+  "Use one shared plan": "Utiliser un plan partagé",
+  "Services set to “follow the shared plan” below are priced by these settings.":
+    "Les services réglés sur « suivre le plan partagé » ci-dessous sont tarifés selon ces réglages.",
+  "Each service, one at a time": "Chaque service, un par un",
+  "Taking pickups:": "Collectes assurées :",
+  "No service is taking pickups.": "Aucun service n’assure de collecte.",
+  "Customers bring everything to you.":
+    "Les clients vous apportent tout sur place.",
+  "Customers bring these to you:": "Les clients vous apportent ceux-ci :",
+  "Follow the shared plan": "Suivre le plan partagé",
+  "Set its own pickup fees": "Définir ses propres frais de collecte",
+  "No pickup for this service": "Pas de collecte pour ce service",
+  "No pickup: the shared plan above is off. Turn it on, or give this service its own fees.":
+    "Pas de collecte : le plan partagé ci-dessus est désactivé. Activez-le ou donnez à ce service ses propres frais.",
+  "Takes pickups on these fees, whether or not the shared plan is on.":
+    "Assure les collectes à ces frais, que le plan partagé soit activé ou non.",
   "Use shared plan": "Utiliser le plan partagé",
   "Custom settings": "Réglages personnalisés",
   "No pickup": "Pas de collecte",

@@ -57,6 +57,58 @@ export type PickupConfigDraft = {
 
 export type PickupServiceChoice = "inherit" | "custom" | "off";
 
+/**
+ * Whether a service actually takes pickups, and why.
+ *
+ * Mirrors `resolveServicePickup` in functions/pickup_plan.js exactly,
+ * including the part that surprises people: a service with its own settings
+ * keeps taking pickups even when the shared plan is switched off, because
+ * the server checks the override first and never consults the shared flag.
+ * The console has to say what the server will do, not what its own toggle
+ * appears to say.
+ */
+export type PickupServiceState = {
+  service: PickupPlanServiceId;
+  label: string;
+  active: boolean;
+  /** Why it is on or off, in the business's own terms. */
+  reason: "own-settings" | "shared-plan" | "turned-off" | "shared-plan-off";
+};
+
+export function pickupServiceState(
+  draft: BusinessServiceSettingsDraft,
+  service: PickupPlanServiceId,
+): PickupServiceState {
+  const label = PICKUP_SERVICE_LABELS[service];
+  const choice = draft.pickupServices[service].choice;
+  if (choice === "custom") {
+    return {service, label, active: true, reason: "own-settings"};
+  }
+  if (choice === "off") {
+    return {service, label, active: false, reason: "turned-off"};
+  }
+  return draft.pickupEnabled
+    ? {service, label, active: true, reason: "shared-plan"}
+    : {service, label, active: false, reason: "shared-plan-off"};
+}
+
+/**
+ * The one-line answer to "so who is actually taking pickups?" - the question
+ * a business has to scroll and cross-reference four dropdowns to answer.
+ */
+export function pickupPlanSummary(
+  draft: BusinessServiceSettingsDraft,
+  services: readonly PickupPlanServiceId[],
+): {taking: string[]; notTaking: string[]} {
+  const taking: string[] = [];
+  const notTaking: string[] = [];
+  for (const service of services) {
+    const state = pickupServiceState(draft, service);
+    (state.active ? taking : notTaking).push(state.label);
+  }
+  return {taking, notTaking};
+}
+
 export type PickupServiceDraft = {
   choice: PickupServiceChoice;
   config: PickupConfigDraft;
@@ -278,6 +330,39 @@ function validatePickupConfig(
     return `${label}: enter the pickup origin address.`;
   }
   return null;
+}
+
+/**
+ * Every pickup problem at once, keyed to the block that owns it.
+ *
+ * The save-blocking check below returns only the first message and shows it
+ * at the top of a long page, which leaves the business hunting for which of
+ * four collapsible service blocks it meant. These render in place.
+ */
+export function pickupPlanFieldErrors(
+  draft: BusinessServiceSettingsDraft,
+  options: { isNewYorkBusiness: boolean },
+): {
+  shared: string | null;
+  services: Partial<Record<PickupPlanServiceId, string>>;
+} {
+  const shared = draft.pickupEnabled
+    ? validatePickupConfig(draft.pickupShared, {
+        isNewYorkBusiness: options.isNewYorkBusiness,
+        label: "Shared plan",
+      })
+    : null;
+  const services: Partial<Record<PickupPlanServiceId, string>> = {};
+  for (const service of PICKUP_PLAN_SERVICES) {
+    const entry = draft.pickupServices[service];
+    if (entry.choice !== "custom") continue;
+    const error = validatePickupConfig(entry.config, {
+      isNewYorkBusiness: options.isNewYorkBusiness,
+      label: PICKUP_SERVICE_LABELS[service],
+    });
+    if (error) services[service] = error;
+  }
+  return {shared, services};
 }
 
 export function validatePickupPlanDraft(

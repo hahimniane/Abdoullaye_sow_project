@@ -324,16 +324,72 @@ class PickupPlanEditorState extends State<PickupPlanEditor> {
     }
   }
 
+  /// Whether a service actually takes pickups. Mirrors
+  /// `resolveServicePickup` in functions/pickup_plan.js, including the part
+  /// that surprises people: a service with its own settings keeps taking
+  /// pickups even when the shared plan is off, because the server reads the
+  /// override first and never consults the shared flag. This editor has to
+  /// say what the server will do, not what its own switch appears to say.
+  bool _serviceTakesPickups(String service) {
+    switch (_serviceChoices[service]) {
+      case 'custom':
+        return true;
+      case 'off':
+        return false;
+      default:
+        return _enabled;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final hintStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
       color: Theme.of(context).hintColor,
     );
+    final theme = Theme.of(context);
+    final taking = <String>[];
+    final notTaking = <String>[];
+    for (final service in _visibleServices) {
+      (_serviceTakesPickups(service) ? taking : notTaking)
+          .add(_serviceLabel(l10n, service));
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(l10n.pickupPlanSectionSubtitle, style: hintStyle),
+        const SizedBox(height: 12),
+        // What the server will actually do, stated once. Working it out
+        // otherwise means holding the shared switch and four dropdowns in
+        // your head at the same time.
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                taking.isEmpty
+                    ? l10n.pickupPlanNoPickups
+                    : l10n.pickupPlanTakingPickups(taking.join(', ')),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (taking.isNotEmpty && notTaking.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  l10n.pickupPlanBringToYou(notTaking.join(', ')),
+                  style: hintStyle,
+                ),
+              ],
+            ],
+          ),
+        ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           value: _enabled,
@@ -341,41 +397,74 @@ class PickupPlanEditorState extends State<PickupPlanEditor> {
               ? (value) => setState(() => _enabled = value)
               : null,
           title: Text(l10n.pickupPlanOfferToggle),
+          subtitle: Text(l10n.pickupPlanDisabledHint, style: hintStyle),
         ),
         if (_enabled) ...[
           ..._configFields(context, l10n, _shared),
           if (_sharedError != null) _errorText(_sharedError!),
-        ] else
-          Text(l10n.pickupPlanDisabledHint, style: hintStyle),
+        ],
         const SizedBox(height: 16),
         Text(l10n.pickupPlanPerServiceHint, style: hintStyle),
         const SizedBox(height: 8),
         for (final service in _visibleServices) ...[
-          DropdownButtonFormField<String>(
-            initialValue: _serviceChoices[service],
-            decoration: InputDecoration(
-              labelText: _serviceLabel(l10n, service),
+          // Indented and ruled so a service's own fees read as belonging to
+          // that service. Flat, they sat at the same level as the shared
+          // plan's and looked like settings for everything.
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.only(left: 12),
+            decoration: BoxDecoration(
+              border: Border(
+                left: BorderSide(color: theme.dividerColor, width: 2),
+              ),
             ),
-            items: [
-              for (final choice in const ['inherit', 'custom', 'off'])
-                DropdownMenuItem(
-                  value: choice,
-                  child: Text(_choiceLabel(l10n, choice)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: _serviceChoices[service],
+                  decoration: InputDecoration(
+                    labelText: _serviceLabel(l10n, service),
+                  ),
+                  items: [
+                    for (final choice in const ['inherit', 'custom', 'off'])
+                      DropdownMenuItem(
+                        value: choice,
+                        child: Text(_choiceLabel(l10n, choice)),
+                      ),
+                  ],
+                  onChanged: widget.canEdit
+                      ? (value) => setState(
+                          () => _serviceChoices[service] = value ?? 'inherit',
+                        )
+                      : null,
                 ),
-            ],
-            onChanged: widget.canEdit
-                ? (value) => setState(
-                    () => _serviceChoices[service] = value ?? 'inherit',
-                  )
-                : null,
+                // Following a plan that is switched off reads as configured
+                // and means no pickup at all.
+                if (_serviceChoices[service] != 'custom' &&
+                    _serviceChoices[service] != 'off' &&
+                    !_enabled) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    l10n.pickupPlanSharedOffWarning,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.error,
+                    ),
+                  ),
+                ],
+                if (_serviceChoices[service] == 'custom' && !_enabled) ...[
+                  const SizedBox(height: 6),
+                  Text(l10n.pickupPlanOwnFeesNote, style: hintStyle),
+                ],
+                if (_serviceChoices[service] == 'custom') ...[
+                  const SizedBox(height: 12),
+                  ..._configFields(context, l10n, _serviceConfigs[service]!),
+                ],
+                if (_serviceErrors[service] != null)
+                  _errorText(_serviceErrors[service]!),
+              ],
+            ),
           ),
-          if (_serviceChoices[service] == 'custom') ...[
-            const SizedBox(height: 12),
-            ..._configFields(context, l10n, _serviceConfigs[service]!),
-          ],
-          if (_serviceErrors[service] != null)
-            _errorText(_serviceErrors[service]!),
-          const SizedBox(height: 12),
         ],
       ],
     );

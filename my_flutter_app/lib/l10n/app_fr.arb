@@ -510,7 +510,7 @@
   "myPurchases": "Mes achats",
   "hubViewingsSubtitle": "Rendez-vous pour voir une voiture",
   "myCarViewings": "Visites de voitures",
-  "noCarViewingsYet": "Aucune visite pour le moment. Demandez \u00e0 voir une voiture depuis son annonce.",
+  "noCarViewingsYet": "Aucune visite pour le moment. Demandez à voir une voiture depuis son annonce.",
   "noPurchasesYet": "Aucun achat de voiture pour le moment.",
   "purchaseHistoryUnavailable": "Nous n'avons pas pu charger votre historique d'achats pour le moment. Veuillez réessayer après la synchronisation de votre compte.",
   "depositPaid": "Paiement : {amount} ({status})",
@@ -1510,7 +1510,7 @@
   "orderCancelledFree": "Commande annulée. Votre carte n’a jamais été débitée.",
   "orderRefunded": "Commande annulée. Votre remboursement arrive, moins les frais bancaires.",
   "genericError": "Une erreur est survenue. Veuillez réessayer.",
-  "paymentHoldNotice": "Aucun d\u00e9bit aujourd\u2019hui \u2014 le montant est r\u00e9serv\u00e9 sur votre carte et d\u00e9bit\u00e9 \u00e0 la fin de la p\u00e9riode de r\u00e9servation (5 \u00e0 7 jours pour la plupart des cartes). Annulation gratuite avant le d\u00e9bit ; ensuite, les remboursements perdent les frais bancaires.",
+  "paymentHoldNotice": "Aucun débit aujourd’hui — le montant est réservé sur votre carte et débité à la fin de la période de réservation (5 à 7 jours pour la plupart des cartes). Annulation gratuite avant le débit ; ensuite, les remboursements perdent les frais bancaires.",
   "freightSortBestRated": "Mieux noté",
   "freightSortCheapest": "Moins cher",
   "freightSortBestCover": "Meilleure couverture",
@@ -2360,10 +2360,10 @@
   "marketplaceDestinationChangeSummary": "Modification payante de la destination",
   "pickupBusinessUnavailable": "Cette entreprise ne propose pas encore la collecte à domicile. Choisissez le dépôt au bureau ou un autre prestataire.",
   "pickupAddressQuoteFailed": "La collecte n'est pas disponible pour cette adresse. Vérifiez l'adresse ou choisissez le dépôt au bureau.",
-  "pickupPlanSectionTitle": "Collecte à domicile · tous les services",
-  "pickupPlanSectionSubtitle": "Un seul plan de collecte s'applique à tous les services que vous proposez. Chaque service peut utiliser ses propres réglages ci-dessous.",
-  "pickupPlanOfferToggle": "Proposer la collecte à domicile",
-  "pickupPlanDisabledHint": "Les clients apportent leurs articles à votre entreprise. Activez la collecte pour proposer un enlèvement à leur adresse, tarifé selon votre plan.",
+  "pickupPlanSectionTitle": "Collecte à domicile",
+  "pickupPlanSectionSubtitle": "Enlever les articles à l'adresse du client au lieu qu'il vous les apporte. Chaque service suit votre plan partagé ou définit le sien.",
+  "pickupPlanOfferToggle": "Utiliser un plan partagé",
+  "pickupPlanDisabledHint": "Les services réglés sur « suivre le plan partagé » ci-dessous sont tarifés selon ces réglages.",
   "pickupPlanModeLabel": "Mode de tarification",
   "pickupPlanModeFlat": "Frais fixe",
   "pickupPlanModeDistance": "Par distance",
@@ -2378,10 +2378,10 @@
   "pickupPlanPerMile": "Par mile (USD)",
   "pickupPlanMinFee": "Frais minimum (USD)",
   "pickupPlanBoroughHint": "Un tarif fixe par arrondissement desservi. Laissez un arrondissement vide pour ne pas le desservir — l'adresse du client détermine le tarif appliqué.",
-  "pickupPlanPerServiceHint": "Collecte par service : chaque service utilise le plan partagé, sauf si vous lui donnez des réglages personnalisés ou désactivez sa collecte.",
-  "pickupPlanChoiceInherit": "Utiliser le plan partagé",
-  "pickupPlanChoiceCustom": "Réglages personnalisés",
-  "pickupPlanChoiceOff": "Pas de collecte",
+  "pickupPlanPerServiceHint": "Chaque service, un par un",
+  "pickupPlanChoiceInherit": "Suivre le plan partagé",
+  "pickupPlanChoiceCustom": "Définir ses propres frais de collecte",
+  "pickupPlanChoiceOff": "Pas de collecte pour ce service",
   "pickupPlanSharedSectionLabel": "le plan de collecte partagé",
   "pickupPlanServiceBarrels": "Expédition de barils",
   "pickupPlanServiceFreight": "Fret",
@@ -2612,15 +2612,25 @@
   "paymentLinkLabel": "Lien de paiement",
   "copyPaymentLink": "Copier le lien de paiement",
   "sharePaymentLink": "Partager le lien de paiement",
-  "paymentLinkShareFailed": "Impossible d\u2019ouvrir le partage",
-  "paymentLinkShareMessage": "{business} a gar\u00e9 votre {car}. Suivi {code}. Montant d\u00fb {amount}. Payez ici : {link}",
+  "paymentLinkShareFailed": "Impossible d’ouvrir le partage",
+  "paymentLinkShareMessage": "{business} a garé votre {car}. Suivi {code}. Montant dû {amount}. Payez ici : {link}",
   "@paymentLinkShareMessage": {
     "placeholders": {
-      "business": {"type": "String"},
-      "car": {"type": "String"},
-      "code": {"type": "String"},
-      "amount": {"type": "String"},
-      "link": {"type": "String"}
+      "business": {
+        "type": "String"
+      },
+      "car": {
+        "type": "String"
+      },
+      "code": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "link": {
+        "type": "String"
+      }
     }
   },
   "paymentLinkCopied": "Lien de paiement copié",
@@ -2977,5 +2987,24 @@
   "freightReceiverAddressRequired": "Indiquez l’adresse où le colis doit être livré.",
   "freightReceiverAddressTooLong": "Cette adresse est trop longue. Limitez-vous au quartier, à un point de repère et à la ville.",
   "outForDelivery": "En cours de livraison",
-  "freightNextOutForDelivery": "Votre colis est arrivé et est en route vers l’adresse du destinataire."
+  "freightNextOutForDelivery": "Votre colis est arrivé et est en route vers l’adresse du destinataire.",
+  "pickupPlanTakingPickups": "Collectes assurées : {services}.",
+  "@pickupPlanTakingPickups": {
+    "placeholders": {
+      "services": {
+        "type": "String"
+      }
+    }
+  },
+  "pickupPlanNoPickups": "Aucun service n'assure de collecte. Les clients vous apportent tout sur place.",
+  "pickupPlanBringToYou": "Les clients vous apportent ceux-ci : {services}.",
+  "@pickupPlanBringToYou": {
+    "placeholders": {
+      "services": {
+        "type": "String"
+      }
+    }
+  },
+  "pickupPlanSharedOffWarning": "Pas de collecte : le plan partagé ci-dessus est désactivé. Activez-le ou donnez à ce service ses propres frais.",
+  "pickupPlanOwnFeesNote": "Assure les collectes à ces frais, que le plan partagé soit activé ou non."
 }

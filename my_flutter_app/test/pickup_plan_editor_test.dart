@@ -125,4 +125,64 @@ void main() {
     final plan = state.buildPlan();
     expect(plan?['shared'], containsPair('flatFee', 30));
   });
+
+  /// The editor has to describe what the SERVER will do, not what its own
+  /// switch appears to say. A service with its own fees keeps taking pickups
+  /// when the shared plan is off, because `resolveServicePickup` reads the
+  /// override first and never consults the shared flag - so a screen that
+  /// called that "off" would be describing a business that is still
+  /// collecting parcels.
+  testWidgets('says who is taking pickups when only one service is set up', (
+    tester,
+  ) async {
+    await pumpEditor(
+      tester,
+      plan: {
+        'shared': {'enabled': false},
+        'services': {
+          'barrels': {
+            'inherit': false,
+            'enabled': true,
+            'mode': 'distance',
+            'maxPickupMiles': 30,
+            'baseFee': 10,
+            'perMileFee': 2,
+            'minimumFee': 15,
+            'originAddress': '100 Test Avenue, Bronx, NY',
+          },
+        },
+      },
+    );
+
+    expect(find.textContaining('Taking pickups: Barrel shipping'), findsOne);
+    expect(
+      find.textContaining('Customers bring these to you'),
+      findsOne,
+    );
+  });
+
+  testWidgets('warns a service that follows a switched-off shared plan', (
+    tester,
+  ) async {
+    await pumpEditor(tester, plan: {
+      'shared': {'enabled': false},
+      'services': const <String, dynamic>{},
+    });
+
+    // The silent dead end: the dropdown reads "follow the shared plan" and
+    // means no pickup at all while that plan is off.
+    expect(
+      find.textContaining('the shared plan above is off'),
+      findsWidgets,
+    );
+    expect(find.textContaining('No service is taking pickups'), findsOne);
+  });
+
+  testWidgets('never labels the shared switch as if it governed everything', (
+    tester,
+  ) async {
+    await pumpEditor(tester, plan: null);
+    expect(find.text('Use one shared plan'), findsOne);
+    expect(find.text('Offer home pickup'), findsNothing);
+  });
 }

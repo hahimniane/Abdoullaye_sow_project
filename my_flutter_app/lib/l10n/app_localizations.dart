@@ -9939,25 +9939,25 @@ abstract class AppLocalizations {
   /// No description provided for @pickupPlanSectionTitle.
   ///
   /// In en, this message translates to:
-  /// **'Home pickup · all services'**
+  /// **'Home pickup'**
   String get pickupPlanSectionTitle;
 
   /// No description provided for @pickupPlanSectionSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'One pickup plan applies to every service you offer. Any service can use its own settings below.'**
+  /// **'Collecting items from the customer\'s address instead of them bringing it to you. Each service either follows your shared plan or sets its own.'**
   String get pickupPlanSectionSubtitle;
 
   /// No description provided for @pickupPlanOfferToggle.
   ///
   /// In en, this message translates to:
-  /// **'Offer home pickup'**
+  /// **'Use one shared plan'**
   String get pickupPlanOfferToggle;
 
   /// No description provided for @pickupPlanDisabledHint.
   ///
   /// In en, this message translates to:
-  /// **'Customers bring items to your business. Turn pickup on to offer collection from their address, priced by your own plan.'**
+  /// **'Services set to “follow the shared plan” below are priced by these settings.'**
   String get pickupPlanDisabledHint;
 
   /// No description provided for @pickupPlanModeLabel.
@@ -10047,25 +10047,25 @@ abstract class AppLocalizations {
   /// No description provided for @pickupPlanPerServiceHint.
   ///
   /// In en, this message translates to:
-  /// **'Per-service pickup: each service uses the shared plan unless you give it custom settings or turn its pickup off.'**
+  /// **'Each service, one at a time'**
   String get pickupPlanPerServiceHint;
 
   /// No description provided for @pickupPlanChoiceInherit.
   ///
   /// In en, this message translates to:
-  /// **'Use shared plan'**
+  /// **'Follow the shared plan'**
   String get pickupPlanChoiceInherit;
 
   /// No description provided for @pickupPlanChoiceCustom.
   ///
   /// In en, this message translates to:
-  /// **'Custom settings'**
+  /// **'Set its own pickup fees'**
   String get pickupPlanChoiceCustom;
 
   /// No description provided for @pickupPlanChoiceOff.
   ///
   /// In en, this message translates to:
-  /// **'No pickup'**
+  /// **'No pickup for this service'**
   String get pickupPlanChoiceOff;
 
   /// No description provided for @pickupPlanSharedSectionLabel.
@@ -12599,6 +12599,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your parcel has arrived and is on its way to the receiver\'s address.'**
   String get freightNextOutForDelivery;
+
+  /// No description provided for @pickupPlanTakingPickups.
+  ///
+  /// In en, this message translates to:
+  /// **'Taking pickups: {services}.'**
+  String pickupPlanTakingPickups(String services);
+
+  /// No description provided for @pickupPlanNoPickups.
+  ///
+  /// In en, this message translates to:
+  /// **'No service is taking pickups. Customers bring everything to you.'**
+  String get pickupPlanNoPickups;
+
+  /// No description provided for @pickupPlanBringToYou.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers bring these to you: {services}.'**
+  String pickupPlanBringToYou(String services);
+
+  /// No description provided for @pickupPlanSharedOffWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'No pickup: the shared plan above is off. Turn it on, or give this service its own fees.'**
+  String get pickupPlanSharedOffWarning;
+
+  /// No description provided for @pickupPlanOwnFeesNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Takes pickups on these fees, whether or not the shared plan is on.'**
+  String get pickupPlanOwnFeesNote;
 }
 
 class _AppLocalizationsDelegate

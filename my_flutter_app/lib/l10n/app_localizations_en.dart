@@ -5538,18 +5538,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'Pickup is not available for this address. Check the address or choose office drop-off.';
 
   @override
-  String get pickupPlanSectionTitle => 'Home pickup · all services';
+  String get pickupPlanSectionTitle => 'Home pickup';
 
   @override
   String get pickupPlanSectionSubtitle =>
-      'One pickup plan applies to every service you offer. Any service can use its own settings below.';
+      'Collecting items from the customer\'s address instead of them bringing it to you. Each service either follows your shared plan or sets its own.';
 
   @override
-  String get pickupPlanOfferToggle => 'Offer home pickup';
+  String get pickupPlanOfferToggle => 'Use one shared plan';
 
   @override
   String get pickupPlanDisabledHint =>
-      'Customers bring items to your business. Turn pickup on to offer collection from their address, priced by your own plan.';
+      'Services set to “follow the shared plan” below are priced by these settings.';
 
   @override
   String get pickupPlanModeLabel => 'Pricing mode';
@@ -5597,17 +5597,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'One flat fee per borough you serve. Leave a borough blank to not serve it — the customer\'s address decides which fee applies.';
 
   @override
-  String get pickupPlanPerServiceHint =>
-      'Per-service pickup: each service uses the shared plan unless you give it custom settings or turn its pickup off.';
+  String get pickupPlanPerServiceHint => 'Each service, one at a time';
 
   @override
-  String get pickupPlanChoiceInherit => 'Use shared plan';
+  String get pickupPlanChoiceInherit => 'Follow the shared plan';
 
   @override
-  String get pickupPlanChoiceCustom => 'Custom settings';
+  String get pickupPlanChoiceCustom => 'Set its own pickup fees';
 
   @override
-  String get pickupPlanChoiceOff => 'No pickup';
+  String get pickupPlanChoiceOff => 'No pickup for this service';
 
   @override
   String get pickupPlanSharedSectionLabel => 'the shared pickup plan';
@@ -7048,4 +7047,26 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get freightNextOutForDelivery =>
       'Your parcel has arrived and is on its way to the receiver\'s address.';
+
+  @override
+  String pickupPlanTakingPickups(String services) {
+    return 'Taking pickups: $services.';
+  }
+
+  @override
+  String get pickupPlanNoPickups =>
+      'No service is taking pickups. Customers bring everything to you.';
+
+  @override
+  String pickupPlanBringToYou(String services) {
+    return 'Customers bring these to you: $services.';
+  }
+
+  @override
+  String get pickupPlanSharedOffWarning =>
+      'No pickup: the shared plan above is off. Turn it on, or give this service its own fees.';
+
+  @override
+  String get pickupPlanOwnFeesNote =>
+      'Takes pickups on these fees, whether or not the shared plan is on.';
 }

@@ -1510,7 +1510,7 @@
   "orderCancelledFree": "Order cancelled. Your card was never charged.",
   "orderRefunded": "Order cancelled. Your refund is on its way, minus the card fee.",
   "genericError": "Something went wrong. Please try again.",
-  "paymentHoldNotice": "No charge today \u2014 the amount is reserved on your card and charged when the reservation window ends (5\u20137 days for most cards). Cancelling before then is free; after that, refunds lose the card processing fee.",
+  "paymentHoldNotice": "No charge today — the amount is reserved on your card and charged when the reservation window ends (5–7 days for most cards). Cancelling before then is free; after that, refunds lose the card processing fee.",
   "freightSortBestRated": "Best rated",
   "freightSortCheapest": "Cheapest",
   "freightSortBestCover": "Best cover",
@@ -2360,10 +2360,10 @@
   "marketplaceDestinationChangeSummary": "Paid destination change",
   "pickupBusinessUnavailable": "This business does not offer home pickup yet. Choose office drop-off or another provider.",
   "pickupAddressQuoteFailed": "Pickup is not available for this address. Check the address or choose office drop-off.",
-  "pickupPlanSectionTitle": "Home pickup · all services",
-  "pickupPlanSectionSubtitle": "One pickup plan applies to every service you offer. Any service can use its own settings below.",
-  "pickupPlanOfferToggle": "Offer home pickup",
-  "pickupPlanDisabledHint": "Customers bring items to your business. Turn pickup on to offer collection from their address, priced by your own plan.",
+  "pickupPlanSectionTitle": "Home pickup",
+  "pickupPlanSectionSubtitle": "Collecting items from the customer's address instead of them bringing it to you. Each service either follows your shared plan or sets its own.",
+  "pickupPlanOfferToggle": "Use one shared plan",
+  "pickupPlanDisabledHint": "Services set to “follow the shared plan” below are priced by these settings.",
   "pickupPlanModeLabel": "Pricing mode",
   "pickupPlanModeFlat": "Flat fee",
   "pickupPlanModeDistance": "By distance",
@@ -2378,10 +2378,10 @@
   "pickupPlanPerMile": "Per mile (USD)",
   "pickupPlanMinFee": "Minimum fee (USD)",
   "pickupPlanBoroughHint": "One flat fee per borough you serve. Leave a borough blank to not serve it — the customer's address decides which fee applies.",
-  "pickupPlanPerServiceHint": "Per-service pickup: each service uses the shared plan unless you give it custom settings or turn its pickup off.",
-  "pickupPlanChoiceInherit": "Use shared plan",
-  "pickupPlanChoiceCustom": "Custom settings",
-  "pickupPlanChoiceOff": "No pickup",
+  "pickupPlanPerServiceHint": "Each service, one at a time",
+  "pickupPlanChoiceInherit": "Follow the shared plan",
+  "pickupPlanChoiceCustom": "Set its own pickup fees",
+  "pickupPlanChoiceOff": "No pickup for this service",
   "pickupPlanSharedSectionLabel": "the shared pickup plan",
   "pickupPlanServiceBarrels": "Barrel shipping",
   "pickupPlanServiceFreight": "Freight",
@@ -2616,11 +2616,21 @@
   "paymentLinkShareMessage": "{business} parked your {car}. Tracking {code}. Amount due {amount}. Pay here: {link}",
   "@paymentLinkShareMessage": {
     "placeholders": {
-      "business": {"type": "String"},
-      "car": {"type": "String"},
-      "code": {"type": "String"},
-      "amount": {"type": "String"},
-      "link": {"type": "String"}
+      "business": {
+        "type": "String"
+      },
+      "car": {
+        "type": "String"
+      },
+      "code": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "link": {
+        "type": "String"
+      }
     }
   },
   "paymentLinkCopied": "Payment link copied",
@@ -2977,5 +2987,24 @@
   "freightReceiverAddressRequired": "Enter the address where the parcel should be delivered.",
   "freightReceiverAddressTooLong": "That address is too long. Keep it to the neighbourhood, a landmark and the city.",
   "outForDelivery": "Out for delivery",
-  "freightNextOutForDelivery": "Your parcel has arrived and is on its way to the receiver's address."
+  "freightNextOutForDelivery": "Your parcel has arrived and is on its way to the receiver's address.",
+  "pickupPlanTakingPickups": "Taking pickups: {services}.",
+  "@pickupPlanTakingPickups": {
+    "placeholders": {
+      "services": {
+        "type": "String"
+      }
+    }
+  },
+  "pickupPlanNoPickups": "No service is taking pickups. Customers bring everything to you.",
+  "pickupPlanBringToYou": "Customers bring these to you: {services}.",
+  "@pickupPlanBringToYou": {
+    "placeholders": {
+      "services": {
+        "type": "String"
+      }
+    }
+  },
+  "pickupPlanSharedOffWarning": "No pickup: the shared plan above is off. Turn it on, or give this service its own fees.",
+  "pickupPlanOwnFeesNote": "Takes pickups on these fees, whether or not the shared plan is on."
 }
