@@ -43,6 +43,34 @@ function run(command, args, options = {}) {
   return result;
 }
 
+/**
+ * rsync, retried, because the link to Hostinger drops mid-transfer.
+ *
+ * A dropped transfer is not a neutral failure: it has already replaced some
+ * of the tree. The console console once ended up serving an index.html whose
+ * hashed chunk had never finished uploading, which is a 404 on a live site
+ * for every visitor until someone notices. Retrying in place is what turns
+ * that from an outage into a slow deploy.
+ */
+function rsyncWithRetry(args, {attempts = 3} = {}) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const result = spawnSync("rsync", args, {
+      cwd: ROOT,
+      encoding: "utf8",
+      stdio: "inherit",
+    });
+    if (result.status === 0) return;
+    if (attempt === attempts) {
+      console.error(`\nrsync failed after ${attempts} attempts.`);
+      process.exit(result.status || 1);
+    }
+    console.warn(
+      `\nrsync attempt ${attempt} failed - retrying (the tree on the ` +
+        "server is mid-update until one succeeds).",
+    );
+  }
+}
+
 if (!fs.existsSync(cfg.key)) {
   console.error(`Missing SSH key: ${cfg.key}`);
   process.exit(1);
@@ -63,6 +91,9 @@ try {
   process.exit(1);
 }
 
+// Keepalives because the shared host drops an idle-looking connection
+// mid-transfer ("ssh_packet_write_poll: Result too large"), which is how a
+// deploy gets to publish half a console.
 const ssh = [
   "ssh",
   "-i",
@@ -73,6 +104,10 @@ const ssh = [
   "BatchMode=yes",
   "-o",
   "StrictHostKeyChecking=accept-new",
+  "-o",
+  "ServerAliveInterval=15",
+  "-o",
+  "ServerAliveCountMax=8",
 ].join(" ");
 
 const dest = `${cfg.user}@${cfg.host}:${cfg.remoteRoot}`;
@@ -84,12 +119,36 @@ const customerDest = `${cfg.user}@${cfg.host}:${cfg.remoteCustomer}`;
 // and tiny: protect them from deletion and let deploys accumulate them.
 const common = [
   "-rtz", "--delete", "--omit-dir-times", "--no-perms",
+  // Keep a dropped transfer's progress so a retry finishes it rather than
+  // starting the whole console again.
+  "--partial", "--timeout=120",
   "--filter=P _next/static/**",
   "-e", ssh,
 ];
 
+/**
+ * One console, published so that a failure mid-way cannot break it.
+ *
+ * Assets first, HTML second. The hashed chunks are additive - nothing points
+ * at them until the HTML that names them lands - so a transfer that dies
+ * after pass one leaves the site untouched and serving the previous build.
+ * Publishing in one pass meant a drop could replace index.html while the
+ * chunk it references was still uploading, and every visitor got a 404.
+ */
+function publishConsole(label, target) {
+  console.log(`\nPublishing ${label} assets -> ${target}/_next/static/`);
+  rsyncWithRetry([
+    "-rtz", "--omit-dir-times", "--no-perms", "--partial", "--timeout=120",
+    "-e", ssh,
+    `${ADMIN_DIR}/_next/static/`,
+    `${target}/_next/static/`,
+  ]);
+  console.log(`\nPublishing ${label} -> ${target}/`);
+  rsyncWithRetry([...common, `${ADMIN_DIR}/`, `${target}/`]);
+}
+
 console.log(`\nPublishing marketing site -> ${dest}/`);
-run("rsync", [
+rsyncWithRetry([
   ...common,
   "--exclude",
   "admin/",
@@ -101,14 +160,9 @@ run("rsync", [
   `${dest}/`,
 ]);
 
-console.log(`\nPublishing admin console -> ${dest}/admin/`);
-run("rsync", [...common, `${ADMIN_DIR}/`, `${dest}/admin/`]);
-
-console.log(`\nPublishing business console -> ${dest}/business/`);
-run("rsync", [...common, `${ADMIN_DIR}/`, `${dest}/business/`]);
-
-console.log(`\nPublishing customer console -> ${customerDest}/`);
-run("rsync", [...common, `${ADMIN_DIR}/`, `${customerDest}/`]);
+publishConsole("admin console", `${dest}/admin`);
+publishConsole("business console", `${dest}/business`);
+publishConsole("customer console", customerDest.replace(/\/$/, ""));
 
 console.log("\nRunning read-only static smoke checks...");
 run("node", [path.join(__dirname, "post-deploy-smoke.mjs")], {

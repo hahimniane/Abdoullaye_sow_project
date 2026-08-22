@@ -54,8 +54,6 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
   "Freight · customer pickup": "Fret · collecte chez le client",
   "Offer collection from a customer address and calculate the fee consistently.":
     "Proposez la collecte à l’adresse du client et calculez les frais de manière cohérente.",
-  "Pickup on": "Collecte activée",
-  "Pickup off": "Collecte désactivée",
   "Home pickup · all services": "Collecte à domicile · tous les services",
   "Collecting items from the customer’s address instead of them bringing it to you. Each service either follows your shared plan or sets its own.":
     "Enlever les articles à l’adresse du client au lieu qu’il vous les apporte. Chaque service suit votre plan partagé ou définit le sien.",
