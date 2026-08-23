@@ -3021,5 +3021,7 @@
     }
   },
   "pickupPlanSharedOffWarning": "Pas de collecte : le plan partagé ci-dessus est désactivé. Activez-le ou donnez à ce service ses propres frais.",
-  "pickupPlanOwnFeesNote": "Assure les collectes à ces frais, que le plan partagé soit activé ou non."
+  "pickupPlanOwnFeesNote": "Assure les collectes à ces frais, que le plan partagé soit activé ou non.",
+  "freightDestinationDeliveryToAddressByArea": "Livrer à son adresse",
+  "freightDeliveryAreaLabel": "Où doit-il être livré ?"
 }

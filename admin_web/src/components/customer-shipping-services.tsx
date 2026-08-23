@@ -87,7 +87,9 @@ import {
 import {
   MAX_RECEIVER_ADDRESS_LENGTH,
   deliveryChoiceIsComplete,
+  deliveryFeeFor,
   freightDeliveryPolicy,
+  type DeliveryArea,
 } from "@/lib/freight-delivery";
 import {
   SERVICE_SORT_LABELS,
@@ -180,6 +182,7 @@ type DestinationOption = {
   // instead of collecting it, and the flat fee for that.
   freightDestinationDeliveryAvailable?: boolean;
   freightDestinationDeliveryFee?: number;
+  freightDestinationDeliveryAreas?: unknown;
   country: DestinationCountry;
 };
 
@@ -2308,6 +2311,7 @@ function FreightShipmentForm({
   // what a business does without opting in to anything.
   const [wantsDelivery, setWantsDelivery] = useState(false);
   const [receiverAddress, setReceiverAddress] = useState("");
+  const [deliveryAreaId, setDeliveryAreaId] = useState("");
   // When the chosen business accepts payment after arrival, the customer
   // picks WHEN they pay. "now" is the only value a business that has not
   // opted in ever submits.
@@ -2495,7 +2499,14 @@ function FreightShipmentForm({
     coversLoss && itemLookup?.listed ? itemLookup.paybackAmount : 0;
   const deliveryPolicy = freightDeliveryPolicy(destination);
   const deliveryChosen = deliveryPolicy.offered && wantsDelivery;
-  const deliveryFee = deliveryChosen ? deliveryPolicy.fee : 0;
+  // Where the parcel is going decides the fee wherever the business named
+  // its places, so the fee follows the pick rather than the country.
+  const deliveryFee = deliveryChosen
+    ? deliveryFeeFor(deliveryPolicy, deliveryAreaId)
+    : 0;
+  const deliveryArea = deliveryPolicy.areas.find(
+    (area) => area.id === deliveryAreaId,
+  );
   // Ranked on the parcel as described so far. The weight and category fields
   // sit below this picker, so a first pass ranks on the per-kg rate and the
   // cover; filling them in re-ranks on the real quote.
@@ -2628,7 +2639,12 @@ function FreightShipmentForm({
     quoteReady &&
     // A delivery without somewhere to take it is refused by the server, so
     // the form refuses it here rather than letting the payment step do it.
-    deliveryChoiceIsComplete({wantsDelivery: deliveryChosen, receiverAddress}) &&
+    deliveryChoiceIsComplete({
+      wantsDelivery: deliveryChosen,
+      receiverAddress,
+      areas: deliveryPolicy.areas,
+      areaId: deliveryAreaId,
+    }) &&
     accepted;
 
   async function requestQuote() {
@@ -2702,6 +2718,7 @@ function FreightShipmentForm({
             ...(deliveryChosen && {
               destinationDelivery: true,
               receiverAddress,
+              ...(deliveryPolicy.areas.length > 0 && {deliveryAreaId}),
             }),
             pickup: {
               ...pickup,
@@ -2860,7 +2877,11 @@ function FreightShipmentForm({
                 label="At the destination"
                 value={
                   deliveryChosen
-                    ? receiverAddress
+                    ? // The place is what the fee below was priced on, so it
+                      // is named beside the address it was picked for.
+                      [deliveryArea?.name, receiverAddress]
+                        .filter(Boolean)
+                        .join(" · ")
                     : "The receiver collects it"
                 }
               />
@@ -3182,11 +3203,17 @@ function FreightShipmentForm({
             {destination && deliveryPolicy.offered && (
               <FreightDestinationDeliveryField
                 address={receiverAddress}
+                areaId={deliveryAreaId}
+                areas={deliveryPolicy.areas}
                 fee={deliveryPolicy.fee}
                 onAddressChange={setReceiverAddress}
+                onAreaChange={setDeliveryAreaId}
                 onChoose={(next) => {
                   setWantsDelivery(next);
-                  if (!next) setReceiverAddress("");
+                  if (!next) {
+                    setReceiverAddress("");
+                    setDeliveryAreaId("");
+                  }
                 }}
                 wantsDelivery={wantsDelivery}
               />
@@ -3458,17 +3485,26 @@ function FreightProtectionNote({
  */
 function FreightDestinationDeliveryField({
   address,
+  areaId,
+  areas,
   fee,
   onAddressChange,
+  onAreaChange,
   onChoose,
   wantsDelivery,
 }: {
   address: string;
+  areaId: string;
+  areas: readonly DeliveryArea[];
   fee: number;
   onAddressChange: (value: string) => void;
+  onAreaChange: (value: string) => void;
   onChoose: (wantsDelivery: boolean) => void;
   wantsDelivery: boolean;
 }) {
+  // A business that named its places charges a different fee for each, so
+  // the choice above cannot quote one: the place picker below does.
+  const pricedByArea = areas.length > 0;
   return (
     <>
       <label className="customer-form-span">
@@ -3479,7 +3515,9 @@ function FreightDestinationDeliveryField({
         >
           <option value="collect">The receiver collects it</option>
           <option value="delivery">
-            {`Deliver it to their address · ${formatMoney(fee)}`}
+            {pricedByArea
+              ? "Deliver it to their address"
+              : `Deliver it to their address · ${formatMoney(fee)}`}
           </option>
         </select>
         <small>
@@ -3488,6 +3526,26 @@ function FreightDestinationDeliveryField({
             : "The receiver picks the parcel up from the business at the destination."}
         </small>
       </label>
+      {wantsDelivery && pricedByArea && (
+        <label className="customer-form-span">
+          Where is it being delivered to?
+          <select
+            onChange={(event) => onAreaChange(event.target.value)}
+            required
+            value={areaId}
+          >
+            <option value="">Choose a place</option>
+            {areas.map((area) => (
+              <option key={area.id} value={area.id}>
+                {`${area.name} · ${formatMoney(area.fee)}`}
+              </option>
+            ))}
+          </select>
+          <small>
+            The business delivers to these places, and each has its own fee.
+          </small>
+        </label>
+      )}
       {wantsDelivery && (
         <label className="customer-form-span">
           Receiver&rsquo;s address

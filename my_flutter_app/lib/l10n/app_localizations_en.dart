@@ -7092,4 +7092,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get pickupPlanOwnFeesNote =>
       'Takes pickups on these fees, whether or not the shared plan is on.';
+
+  @override
+  String get freightDestinationDeliveryToAddressByArea =>
+      'Deliver to their address';
+
+  @override
+  String get freightDeliveryAreaLabel => 'Where is it going?';
 }

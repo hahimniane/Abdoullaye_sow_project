@@ -25,6 +25,7 @@ class BusinessDestinationOption {
     this.freightPayOnArrival = false,
     this.freightDestinationDeliveryAvailable = false,
     this.freightDestinationDeliveryFee = 0,
+    this.freightDestinationDeliveryAreas = const [],
     this.freightPickupModel = 'distance',
     this.freightCategories = const <FreightCategory>[],
     this.freightCoverage,
@@ -73,6 +74,11 @@ class BusinessDestinationOption {
   final bool freightDestinationDeliveryAvailable;
   final double freightDestinationDeliveryFee;
 
+  /// The quartiers this business delivers to on THIS route, priced. Per
+  /// destination because crossing Dakar and crossing Conakry are different
+  /// jobs at different costs.
+  final List<dynamic> freightDestinationDeliveryAreas;
+
   /// What this business will carry and what each kind of parcel is worth to
   /// it. Priced per business, not per destination: a business charges the same
   /// for electronics wherever it is sending them. Empty when it does not offer
@@ -98,6 +104,7 @@ class BusinessDestinationOption {
   FreightDeliveryPolicy get freightDelivery => freightDeliveryPolicy(
     available: freightDestinationDeliveryAvailable,
     fee: freightDestinationDeliveryFee,
+    areas: freightDestinationDeliveryAreas,
   );
 
   bool get isApprovedActive => businessStatus == 'approved' && country.isActive;
@@ -152,6 +159,10 @@ class BusinessDestinationOption {
       freightPayOnArrival: data['freightPayOnArrival'] == true,
       freightDestinationDeliveryAvailable:
           data['freightDestinationDeliveryAvailable'] == true,
+      freightDestinationDeliveryAreas:
+          data['freightDestinationDeliveryAreas'] is List
+          ? data['freightDestinationDeliveryAreas'] as List<dynamic>
+          : const [],
       freightDestinationDeliveryFee:
           (data['freightDestinationDeliveryFee'] as num?)?.toDouble() ?? 0,
       freightPickupModel: (data['freightPickupModel'] as String?) == 'borough'

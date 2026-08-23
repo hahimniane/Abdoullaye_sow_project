@@ -7215,4 +7215,11 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get pickupPlanOwnFeesNote =>
       'Assure les collectes à ces frais, que le plan partagé soit activé ou non.';
+
+  @override
+  String get freightDestinationDeliveryToAddressByArea =>
+      'Livrer à son adresse';
+
+  @override
+  String get freightDeliveryAreaLabel => 'Où doit-il être livré ?';
 }

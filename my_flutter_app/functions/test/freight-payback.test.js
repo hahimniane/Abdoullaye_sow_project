@@ -178,17 +178,16 @@ describe("how a business prices what it carries", () => {
           id: "sim", label: "SIM card", paybackAmount: 5,
           pricingMode: "flat", flatPrice: 10,
         },
-        // Goods that vary, priced by the scale at this row's own factor.
+        // Goods that vary, priced by the scale at the route rate.
         {
           id: "mixed-tech", label: "Assorted tech", paybackAmount: 100,
-          pricingMode: "per_kg", weightFactor: 2.5,
+          pricingMode: "per_kg",
         },
         // A row saved before pricing existed.
         {id: "legacy", label: "Legacy row", paybackAmount: 90},
       ],
       otherPaybackAmount: 60,
       otherPricingMode: "per_kg",
-      otherWeightFactor: 1.8,
     },
     clothing: {items: [], otherPaybackAmount: 40},
   };
@@ -219,13 +218,15 @@ describe("how a business prices what it carries", () => {
     assert.equal(p.weighsAtDropOff, false);
   });
 
-  it("weighs goods that vary, at the row's own factor", () => {
+  it("weighs goods that vary, at the business's own route rate", () => {
+    // No factor to reason about: a kilo costs what this business charges
+    // for a kilo on this route.
     const p = freightItemPricing({
       table: TABLE_PRICED, categoryId: "electronics", itemId: "mixed-tech",
       categoryMultiplier: 2,
     });
     assert.equal(p.mode, "per_kg");
-    assert.equal(p.weightFactor, 2.5);
+    assert.equal(p.weightFactor, 1);
     assert.equal(p.needsWeightAtBooking, true);
     assert.equal(p.weighsAtDropOff, true);
   });
@@ -254,7 +255,7 @@ describe("how a business prices what it carries", () => {
       categoryMultiplier: 2,
     });
     assert.equal(p.source, "other");
-    assert.equal(p.weightFactor, 1.8);
+    assert.equal(p.weightFactor, 1);
   });
 
   it("prices a business with no table at the category multiplier", () => {
@@ -304,10 +305,6 @@ describe("saving a priced row", () => {
       id: "a", label: "A", paybackAmount: 1,
       pricingMode: "flat", flatPrice: 50, includedKg: 5000,
     }).error, "included_kg_out_of_range");
-    assert.equal(priced({
-      id: "a", label: "A", paybackAmount: 1,
-      pricingMode: "per_kg", weightFactor: 99,
-    }).error, "weight_factor_out_of_range");
     assert.equal(priced({
       id: "a", label: "A", paybackAmount: 1, pricingMode: "sometimes",
     }).error, "pricing_mode_invalid");

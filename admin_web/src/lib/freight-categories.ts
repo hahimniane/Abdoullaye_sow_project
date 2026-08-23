@@ -24,12 +24,9 @@
  * exist so the screen can explain the price, not so the client can set it.
  */
 
-import { deliverySettingsError } from "./freight-delivery.ts";
 import {
   MAX_INCLUDED_KG,
   MAX_ITEM_FLAT_PRICE,
-  MAX_WEIGHT_FACTOR,
-  MIN_WEIGHT_FACTOR,
   type FreightPricingMode,
 } from "./freight-payback.ts";
 import type { FirestoreRow } from "@/types/admin";
@@ -322,8 +319,6 @@ export type FreightPaybackItemDraft = {
   flatPrice: string;
   /** How much weight the set price covers. Blank covers any weight. */
   includedKg: string;
-  /** What a kilo of this costs, as a factor of the route's rate. */
-  weightFactor: string;
 };
 
 export type FreightPaybackCategoryDraft = {
@@ -332,7 +327,6 @@ export type FreightPaybackCategoryDraft = {
   otherPricingMode: FreightPaybackPricingMode;
   otherFlatPrice: string;
   otherIncludedKg: string;
-  otherWeightFactor: string;
 };
 
 export function emptyFreightPaybackItem(
@@ -346,7 +340,6 @@ export function emptyFreightPaybackItem(
     pricingMode: "per_kg",
     flatPrice: "",
     includedKg: "",
-    weightFactor: "",
   };
 }
 
@@ -357,7 +350,6 @@ export function emptyFreightPaybackCategory(): FreightPaybackCategoryDraft {
     otherPricingMode: "per_kg",
     otherFlatPrice: "",
     otherIncludedKg: "",
-    otherWeightFactor: "",
   };
 }
 
@@ -375,13 +367,6 @@ export type FreightSettingsDraft = {
    * booking: the card is saved and verified up front, charged on arrival.
    */
   payOnArrival: boolean;
-  /**
-   * Whether this business will take the parcel to the receiver's own address
-   * at the destination, and the flat fee for doing so. Off means the
-   * receiver collects it, which is what every business did before.
-   */
-  destinationDelivery: boolean;
-  destinationDeliveryFee: string;
 };
 
 function recordValue(value: unknown): Record<string, unknown> {
@@ -443,12 +428,6 @@ export function freightSettingsFromRow(
     coversLoss: business?.freightCoverageEnabled === true,
     payback: paybackDraftFrom(business?.freightPaybackTable),
     payOnArrival: business?.freightPayOnArrival === true,
-    destinationDelivery:
-      business?.freightDestinationDeliveryAvailable === true,
-    destinationDeliveryFee: numberText(
-      business?.freightDestinationDeliveryFee,
-      "",
-    ),
   };
 }
 
@@ -482,14 +461,12 @@ function paybackDraftFrom(
           pricingMode: pricingModeText(row.pricingMode),
           flatPrice: numberText(row.flatPrice, ""),
           includedKg: numberText(row.includedKg, ""),
-          weightFactor: numberText(row.weightFactor, ""),
         };
       }),
       otherAmount: numberText(entry.otherPaybackAmount, "0"),
       otherPricingMode: pricingModeText(entry.otherPricingMode),
       otherFlatPrice: numberText(entry.otherFlatPrice, ""),
       otherIncludedKg: numberText(entry.otherIncludedKg, ""),
-      otherWeightFactor: numberText(entry.otherWeightFactor, ""),
     };
   }
   return draft;
@@ -534,8 +511,9 @@ function blankNumber(value: string): boolean {
  * Refuses a priced row the callable would refuse, in the owner's own words.
  *
  * The bands are the server's (`freight_payback.js`): a set price above zero
- * and no higher than $10,000, an allowance of at most 200 kg, and a weight
- * factor inside the same band a category multiplier lives in.
+ * and no higher than $10,000, and an allowance of at most 200 kg. A row
+ * priced by weight states nothing to refuse - it is charged at this
+ * business's own per-kg rate for the route.
  */
 function paybackPricingError(draft: FreightSettingsDraft): string | null {
   const labels = paybackCategoryLabels(draft);
@@ -546,7 +524,6 @@ function paybackPricingError(draft: FreightSettingsDraft): string | null {
       mode: FreightPaybackPricingMode;
       flatPrice: string;
       includedKg: string;
-      weightFactor: string;
     }> = entry.items
       .filter((item) => item.label.trim())
       .map((item) => ({
@@ -554,7 +531,6 @@ function paybackPricingError(draft: FreightSettingsDraft): string | null {
         mode: item.pricingMode,
         flatPrice: item.flatPrice,
         includedKg: item.includedKg,
-        weightFactor: item.weightFactor,
       }));
     // The catch-all only prices what it can also carry: a category that pays
     // back nothing for an unlisted item cannot be instant-booked at all.
@@ -564,7 +540,6 @@ function paybackPricingError(draft: FreightSettingsDraft): string | null {
         mode: entry.otherPricingMode,
         flatPrice: entry.otherFlatPrice,
         includedKg: entry.otherIncludedKg,
-        weightFactor: entry.otherWeightFactor,
       });
     }
     for (const row of rows) {
@@ -587,17 +562,6 @@ function paybackPricingError(draft: FreightSettingsDraft): string | null {
           ) {
             return `${row.name}: the weight the price covers must be between 0 and 200 kg.`;
           }
-        }
-        continue;
-      }
-      if (row.mode === "per_kg" && !blankNumber(row.weightFactor)) {
-        const factor = Number(row.weightFactor);
-        if (
-          !Number.isFinite(factor) ||
-          factor < MIN_WEIGHT_FACTOR ||
-          factor > MAX_WEIGHT_FACTOR
-        ) {
-          return `${row.name}: enter a weight factor between 0.5 and 10.`;
         }
       }
     }
@@ -656,11 +620,6 @@ export function validateFreightSettings(
 
   // Cover has nothing left to validate: it is one yes/no, and the amount it
   // promises comes from the payback rows this business already priced.
-  const deliveryError = deliverySettingsError({
-    available: draft.destinationDelivery,
-    fee: Number(draft.destinationDeliveryFee || 0),
-  });
-  if (deliveryError) return deliveryError;
   return null;
 }
 
@@ -668,14 +627,12 @@ export type FreightItemPricingPayload = {
   pricingMode?: FreightPricingMode;
   flatPrice?: number;
   includedKg?: number;
-  weightFactor?: number;
 };
 
 export type FreightOtherPricingPayload = {
   otherPricingMode?: FreightPricingMode;
   otherFlatPrice?: number;
   otherIncludedKg?: number;
-  otherWeightFactor?: number;
 };
 
 export type FreightSettingsPayload = {
@@ -698,7 +655,6 @@ export type FreightSettingsPayload = {
     } & FreightOtherPricingPayload
   >;
   freightPayOnArrival: boolean;
-  freightDestinationDelivery: {available: boolean; fee: number};
 };
 
 /**
@@ -712,7 +668,6 @@ function pricingPayload(row: {
   pricingMode: FreightPaybackPricingMode;
   flatPrice: string;
   includedKg: string;
-  weightFactor: string;
 }): FreightItemPricingPayload {
   if (row.pricingMode === "flat") {
     const included = Number(row.includedKg);
@@ -725,13 +680,7 @@ function pricingPayload(row: {
     };
   }
   if (row.pricingMode === "per_kg") {
-    const factor = Number(row.weightFactor);
-    return {
-      pricingMode: "per_kg",
-      ...(!blankNumber(row.weightFactor) &&
-        Number.isFinite(factor) &&
-        factor > 0 && {weightFactor: factor}),
-    };
+    return {pricingMode: "per_kg"};
   }
   return {};
 }
@@ -743,16 +692,12 @@ function otherPricingPayload(
     pricingMode: entry.otherPricingMode,
     flatPrice: entry.otherFlatPrice,
     includedKg: entry.otherIncludedKg,
-    weightFactor: entry.otherWeightFactor,
   });
   return {
     ...(pricing.pricingMode && {otherPricingMode: pricing.pricingMode}),
     ...(pricing.flatPrice !== undefined && {otherFlatPrice: pricing.flatPrice}),
     ...(pricing.includedKg !== undefined && {
       otherIncludedKg: pricing.includedKg,
-    }),
-    ...(pricing.weightFactor !== undefined && {
-      otherWeightFactor: pricing.weightFactor,
     }),
   };
 }
@@ -812,9 +757,5 @@ export function buildFreightSettingsPayload(
         ),
     ),
     freightPayOnArrival: draft.payOnArrival,
-    freightDestinationDelivery: {
-      available: draft.destinationDelivery,
-      fee: Number(draft.destinationDeliveryFee || 0) || 0,
-    },
   };
 }

@@ -85,7 +85,6 @@ import {
   type FreightPaybackCategoryDraft,
   type FreightPaybackItemDraft,
   type FreightPaybackPricingMode,
-  formatMultiplier,
   resolvedFreightCategoryId,
   emptyFreightCustomCategory,
   emptyFreightPaybackCategory,
@@ -94,14 +93,8 @@ import {
   type FreightSettingsDraft,
 } from "@/lib/freight-categories";
 import {
-  MAX_DESTINATION_DELIVERY_FEE,
-  deliverySettingsError,
-} from "@/lib/freight-delivery";
-import {
   MAX_INCLUDED_KG,
   MAX_ITEM_FLAT_PRICE,
-  MAX_WEIGHT_FACTOR,
-  MIN_WEIGHT_FACTOR,
   STANDARD_FREIGHT_ITEMS,
 } from "@/lib/freight-payback";
 import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
@@ -1330,10 +1323,6 @@ function FreightGoodsEditor({
   ) => void;
   onRemoveCategory: (index: number) => void;
 }) {
-  const deliveryFeeError = deliverySettingsError({
-    available: draft.destinationDelivery,
-    fee: Number(draft.destinationDeliveryFee || 0),
-  });
   const roomForMore =
     draft.customCategories.length < MAX_CUSTOM_FREIGHT_CATEGORIES;
 
@@ -1497,51 +1486,6 @@ function FreightGoodsEditor({
             <option value="yes">They may also pay on arrival</option>
           </select>
         </label>
-        <label className="lst-field wide">
-          <span className="label-with-info">
-            Do you deliver to the receiver at the destination?
-            <FieldInfo label="how destination delivery works">
-              <p>
-                By default the receiver collects the parcel from you at the
-                destination. If you deliver, customers of yours can choose
-                that at booking and give the receiver&rsquo;s address.
-              </p>
-              <p>
-                The fee is flat - the same wherever in that city you take it
-                - and is added to what the customer pays at booking. It is
-                not recalculated when you confirm the weight.
-              </p>
-            </FieldInfo>
-          </span>
-          <select
-            onChange={(event) =>
-              onChange({destinationDelivery: event.target.value === "yes"})
-            }
-            value={draft.destinationDelivery ? "yes" : "no"}
-          >
-            <option value="no">The receiver collects it from us</option>
-            <option value="yes">We can deliver to their address</option>
-          </select>
-        </label>
-        {draft.destinationDelivery && (
-          <label className="lst-field wide">
-            Delivery fee at the destination (USD)
-            <input
-              inputMode="decimal"
-              max={MAX_DESTINATION_DELIVERY_FEE}
-              min="0"
-              onChange={(event) =>
-                onChange({destinationDeliveryFee: event.target.value})
-              }
-              step="1"
-              type="number"
-              value={draft.destinationDeliveryFee}
-            />
-            {deliveryFeeError && (
-              <small className="field-error">{deliveryFeeError}</small>
-            )}
-          </label>
-        )}
         <div className="wide">
           <p className="service-config-note">
             <span className="label-with-info">
@@ -1584,27 +1528,22 @@ function FreightGoodsEditor({
  * runs exactly as it does for every other parcel.
  */
 function FreightRowPricingFields({
-  categoryFactor,
   onPatch,
   row,
 }: {
-  categoryFactor: number;
   onPatch: (patch: {
     pricingMode?: FreightPaybackPricingMode;
     flatPrice?: string;
     includedKg?: string;
-    weightFactor?: string;
   }) => void;
   row: {
     pricingMode: FreightPaybackPricingMode;
     flatPrice: string;
     includedKg: string;
-    weightFactor: string;
   };
 }) {
-  // A row that names no pricing of its own is charged at its category's
-  // factor, so that is what it shows - as a placeholder, not a value, because
-  // typing nothing here has to keep saving nothing.
+  // By weight is the business's own per-kg rate for the route, so choosing it
+  // leaves nothing else to fill in.
   const flat = row.pricingMode === "flat";
   return (
     <div className="payback-pricing-row">
@@ -1664,34 +1603,7 @@ function FreightRowPricingFields({
             />
           </label>
         </>
-      ) : (
-        <label className="lst-field">
-          <span className="label-with-info">
-            Weight factor
-            <FieldInfo label="what the weight factor does">
-              <p>
-                What a kilo of this costs, as a multiple of your per-kg rate
-                for the destination. 2 means a kilo of it costs twice a kilo
-                of general goods.
-              </p>
-              <p>
-                Leave it blank to charge what the rest of this category
-                charges.
-              </p>
-            </FieldInfo>
-          </span>
-          <input
-            inputMode="decimal"
-            max={MAX_WEIGHT_FACTOR}
-            min={MIN_WEIGHT_FACTOR}
-            onChange={(event) => onPatch({weightFactor: event.target.value})}
-            placeholder={formatMultiplier(categoryFactor)}
-            step="0.1"
-            type="number"
-            value={row.weightFactor}
-          />
-        </label>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -1713,16 +1625,12 @@ function FreightPaybackEditor({
     ...STANDARD_FREIGHT_CATEGORIES.map((category) => ({
       id: category.id,
       label: category.label,
-      // What a row with no pricing of its own is charged at today.
-      factor:
-        Number(draft.categoryRates[category.id]) || category.defaultMultiplier,
     })),
     ...draft.customCategories
       .filter((row) => row.label.trim())
       .map((row) => ({
         id: resolvedFreightCategoryId(row),
         label: row.label.trim(),
-        factor: Number(row.multiplier) || 1,
       })),
   ];
 
@@ -1799,11 +1707,7 @@ function FreightPaybackEditor({
                       <X size={15} />
                     </button>
                   </div>
-                  <FreightRowPricingFields
-                    categoryFactor={category.factor}
-                    onPatch={patchItem}
-                    row={item}
-                  />
+                  <FreightRowPricingFields onPatch={patchItem} row={item} />
                 </div>
               );
             })}
@@ -1870,7 +1774,6 @@ function FreightPaybackEditor({
                   the customer to a quote, where you price it yourself. */}
               {(Number(entry.otherAmount || 0) || 0) > 0 && (
                 <FreightRowPricingFields
-                  categoryFactor={category.factor}
                   onPatch={(patch) =>
                     patchCategory(category.id, {
                       ...(patch.pricingMode !== undefined && {
@@ -1882,16 +1785,12 @@ function FreightPaybackEditor({
                       ...(patch.includedKg !== undefined && {
                         otherIncludedKg: patch.includedKg,
                       }),
-                      ...(patch.weightFactor !== undefined && {
-                        otherWeightFactor: patch.weightFactor,
-                      }),
                     })
                   }
                   row={{
                     pricingMode: entry.otherPricingMode,
                     flatPrice: entry.otherFlatPrice,
                     includedKg: entry.otherIncludedKg,
-                    weightFactor: entry.otherWeightFactor,
                   }}
                 />
               )}

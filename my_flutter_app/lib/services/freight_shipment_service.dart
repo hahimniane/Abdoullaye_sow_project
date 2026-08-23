@@ -43,6 +43,7 @@ class FreightShipmentService {
     /// publishes the offer; the server re-prices the flat fee from the live
     /// business document and refuses a delivery nobody offered.
     bool destinationDelivery = false,
+    String? deliveryAreaId,
     String? receiverAddress,
     bool useWalletBalance = false,
     bool pickupRequested = false,
@@ -72,6 +73,10 @@ class FreightShipmentService {
           // resolves '' to the business's other-payback row.
           if (itemId != null) 'itemId': itemId.trim(),
           if (destinationDelivery) 'destinationDelivery': true,
+          if (destinationDelivery &&
+              deliveryAreaId != null &&
+              deliveryAreaId.trim().isNotEmpty)
+            'deliveryAreaId': deliveryAreaId.trim(),
           'receiverAddress': ?receiverAddress,
           'pickupRequested': pickupRequested,
           'pickupAddress': ?pickupAddress,

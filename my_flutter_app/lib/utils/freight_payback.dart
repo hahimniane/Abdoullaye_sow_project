@@ -127,7 +127,9 @@ FreightItemPricing _byWeight(double weightFactor, String? source) =>
 /// category catch-all - so the price and the promise always come from the
 /// same place. A row that names no pricing falls through to the category
 /// multiplier, which is how every booking was priced before rows could carry
-/// a price of their own.
+/// a price of their own. A row that DOES state by-weight pricing is charged
+/// at the business's own per-kg rate for the route - there is no per-row
+/// factor to reason about.
 FreightItemPricing freightItemPricing({
   required Map<String, dynamic>? table,
   required String categoryId,
@@ -154,7 +156,6 @@ FreightItemPricing freightItemPricing({
     Object? mode,
     Object? flat,
     Object? included,
-    Object? factor,
   ) {
     if (mode == 'flat') {
       final includedKg = _numberOr(included, 0);
@@ -173,8 +174,10 @@ FreightItemPricing freightItemPricing({
         source: source,
       );
     }
-    final resolved = _numberOr(factor, 0);
-    return _byWeight(resolved > 0 ? resolved : categoryMultiplier, source);
+    // A by-weight row is charged at the route rate. The category multiplier
+    // survives only for rows saved before pricing moved onto the row, so
+    // nothing anyone is charged moved the day this shipped.
+    return _byWeight(1, source);
   }
 
   if (row != null) {
@@ -184,13 +187,7 @@ FreightItemPricing freightItemPricing({
     // would silently reprice every legacy row the day this ships.
     final rowMode = row['pricingMode'];
     return rowMode != null && '$rowMode'.isNotEmpty
-        ? read(
-            'item',
-            rowMode,
-            row['flatPrice'],
-            row['includedKg'],
-            row['weightFactor'],
-          )
+        ? read('item', rowMode, row['flatPrice'], row['includedKg'])
         : _byWeight(categoryMultiplier, 'item');
   }
   final otherMode = entry['otherPricingMode'];
@@ -200,7 +197,6 @@ FreightItemPricing freightItemPricing({
       otherMode,
       entry['otherFlatPrice'],
       entry['otherIncludedKg'],
-      entry['otherWeightFactor'],
     );
   }
   return _byWeight(categoryMultiplier, null);

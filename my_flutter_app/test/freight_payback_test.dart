@@ -2,11 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_flutter_app/utils/freight_delivery.dart';
 import 'package:my_flutter_app/utils/freight_payback.dart';
 
 // Twin of functions/test/freight-payback.test.js and the web mirror -
 // three clients, one price.
 void main() {
+  _deliveryAreaTests();
   const table = <String, dynamic>{
     'electronics': {
       'items': [
@@ -111,7 +113,7 @@ void main() {
           // Goods that vary, priced by the scale at this row's own factor.
           {
             'id': 'mixed-tech', 'label': 'Assorted tech', 'paybackAmount': 100,
-            'pricingMode': 'per_kg', 'weightFactor': 2.5,
+            'pricingMode': 'per_kg',
           },
           // A row saved before a row could carry a price.
           {'id': 'legacy', 'label': 'Legacy row', 'paybackAmount': 90},
@@ -155,7 +157,7 @@ void main() {
       expect(p.weighsAtDropOff, false);
     });
 
-    test("weighs goods that vary, at the row's own factor", () {
+    test("weighs goods that vary, at the business's own route rate", () {
       final p = freightItemPricing(
         table: priced,
         categoryId: 'electronics',
@@ -163,7 +165,9 @@ void main() {
         categoryMultiplier: 2,
       );
       expect(p.mode, 'per_kg');
-      expect(p.weightFactor, 2.5);
+      // No factor to reason about: a kilo costs what this business charges
+      // for a kilo on this route.
+      expect(p.weightFactor, 1);
       expect(p.needsWeightAtBooking, true);
       expect(p.weighsAtDropOff, true);
     });
@@ -199,7 +203,7 @@ void main() {
         categoryMultiplier: 2,
       );
       expect(p.source, 'other');
-      expect(p.weightFactor, 1.8);
+      expect(p.weightFactor, 1);
     });
 
     test('prices a business with no table at the category multiplier', () {
@@ -223,7 +227,6 @@ void main() {
             {
               'id': 'mixed-tech', 'label': 'Assorted tech',
               'paybackAmount': 100, 'pricingMode': 'per_kg',
-              'weightFactor': 2.5,
             },
             {'id': 'legacy', 'label': 'Legacy row', 'paybackAmount': 90},
           ],
@@ -252,7 +255,7 @@ void main() {
         categoryMultiplier: 2,
       );
       expect(row.mode, 'per_kg');
-      expect(row.weightFactor, 2.5);
+      expect(row.weightFactor, 1);
 
       final catchAll = freightItemPricing(
         table: catchAllIsFlat,
@@ -365,6 +368,99 @@ void main() {
           reason: 'app_fr.arb has an empty $key',
         );
       }
+    });
+  });
+}
+
+/// Delivery is priced per quartier, per destination. Crossing Dakar and
+/// crossing Conakry are different jobs at different costs, and one fee for a
+/// whole country either overcharges the neighbourhood next to the office or
+/// loses money on the one an hour away.
+void _deliveryAreaTests() {
+  group('what it costs to deliver there', () {
+    const conakry = [
+      {'id': 'cosa', 'name': 'Cosa', 'fee': 20},
+      {'id': 'koloma', 'name': 'Koloma', 'fee': 10},
+    ];
+
+    test('each place carries its own price', () {
+      final policy = freightDeliveryPolicy(
+        available: true,
+        fee: 0,
+        areas: conakry,
+      );
+      expect(policy.offered, isTrue);
+      expect(policy.pricesByArea, isTrue);
+      expect(policy.areas.map((a) => a.feeCents), [2000, 1000]);
+    });
+
+    test('one price for the whole country is still an answer', () {
+      final policy = freightDeliveryPolicy(available: true, fee: 15);
+      expect(policy.pricesByArea, isFalse);
+      expect(policy.feeCents, 1500);
+    });
+
+    test('opted in with nowhere listed offers nothing', () {
+      expect(
+        freightDeliveryPolicy(available: true, fee: 0, areas: const []).offered,
+        isFalse,
+      );
+    });
+
+    test('a row nobody could be charged for is dropped', () {
+      final areas = freightDeliveryAreas(const [
+        {'id': 'cosa', 'name': 'Cosa', 'fee': 20},
+        {'id': 'blank', 'name': '', 'fee': 10},
+        {'id': 'free', 'name': 'Free', 'fee': 0},
+        {'id': 'cosa', 'name': 'Cosa again', 'fee': 30},
+      ]);
+      expect(areas.map((a) => a.id), ['cosa']);
+    });
+
+    test('a booking priced by place needs the place named', () {
+      final policy = freightDeliveryPolicy(
+        available: true,
+        fee: 0,
+        areas: conakry,
+      );
+      // Guessing a fee for an unlisted quartier is how a business ends up
+      // driving somewhere it never priced.
+      expect(
+        deliveryChoiceIsComplete(
+          wantsDelivery: true,
+          receiverAddress: 'Rue KA-020',
+          policy: policy,
+          areaId: '',
+        ),
+        isFalse,
+      );
+      expect(
+        deliveryChoiceIsComplete(
+          wantsDelivery: true,
+          receiverAddress: 'Rue KA-020',
+          policy: policy,
+          areaId: 'ratoma',
+        ),
+        isFalse,
+      );
+      expect(
+        deliveryChoiceIsComplete(
+          wantsDelivery: true,
+          receiverAddress: 'Rue KA-020',
+          policy: policy,
+          areaId: 'cosa',
+        ),
+        isTrue,
+      );
+    });
+
+    test('the screen asks where before it asks the address', () {
+      final screen = File(
+        'lib/screens/send_freight_screen.dart',
+      ).readAsStringSync();
+      expect(screen, contains('freightDeliveryAreaLabel'));
+      expect(screen, contains('_deliveryAreaId'));
+      expect(screen, contains('deliveryAreaId: _deliveryChosen'));
     });
   });
 }

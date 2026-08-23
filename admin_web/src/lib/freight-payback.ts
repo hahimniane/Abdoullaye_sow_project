@@ -25,10 +25,6 @@ export const MAX_ITEM_FLAT_PRICE = 10000;
 /** Past this an "allowance" is really a by-weight parcel wearing a hat. */
 export const MAX_INCLUDED_KG = 200;
 
-/** The same band a category multiplier lives in, for the same reasons. */
-export const MIN_WEIGHT_FACTOR = 0.5;
-export const MAX_WEIGHT_FACTOR = 10;
-
 /**
  * How one row is priced. A set price for a known object, or the route's
  * per-kg rate for goods that vary. The business picks per row because only
@@ -43,7 +39,6 @@ export type PaybackItem = {
   pricingMode?: FreightPricingMode;
   flatPrice?: number;
   includedKg?: number;
-  weightFactor?: number;
 };
 
 export type PaybackCategoryEntry = {
@@ -52,7 +47,6 @@ export type PaybackCategoryEntry = {
   otherPricingMode?: FreightPricingMode;
   otherFlatPrice?: number;
   otherIncludedKg?: number;
-  otherWeightFactor?: number;
 };
 
 export type PaybackTable = Record<string, PaybackCategoryEntry>;
@@ -73,7 +67,6 @@ export const FREIGHT_PAYBACK_ERRORS: Record<string, string> = {
   pricing_mode_invalid: "Say whether an item has a set price or is priced by weight",
   flat_price_out_of_range: "A set price must be between $0.01 and $10,000",
   included_kg_out_of_range: "An included weight must be between 0 and 200 kg",
-  weight_factor_out_of_range: "A weight factor must be between 0.5 and 10",
 };
 
 export function freightPaybackErrorMessage(code: unknown): string {
@@ -212,7 +205,6 @@ export function freightItemPricing({
     mode: unknown,
     flat: unknown,
     included: unknown,
-    factor: unknown,
   ): FreightItemPricing => {
     if (mode === "flat") {
       const includedKg = Number(included) || 0;
@@ -233,21 +225,20 @@ export function freightItemPricing({
         source,
       };
     }
-    const resolved = Number(factor);
-    return byWeight(
-      Number.isFinite(resolved) && resolved > 0 ? resolved : categoryMultiplier,
-      source,
-    );
+    // A by-weight row is charged at the route rate. The category multiplier
+    // survives only for rows saved before pricing moved onto the row, so
+    // nothing anyone is charged moved the day this shipped.
+    return byWeight(1, source);
   };
 
-  if (row && row.pricingMode) {
-    return read(
-      "item",
-      row.pricingMode,
-      row.flatPrice,
-      row.includedKg,
-      row.weightFactor,
-    );
+  if (row) {
+    // A listed row that states no pricing is one saved before pricing
+    // existed. It keeps the category multiplier it has always been charged
+    // at - NOT the catch-all's price, which is for things nobody listed and
+    // would silently reprice every legacy row the day this shipped.
+    return row.pricingMode
+      ? read("item", row.pricingMode, row.flatPrice, row.includedKg)
+      : byWeight(categoryMultiplier, "item");
   }
   if (entry.otherPricingMode) {
     return read(
@@ -255,10 +246,9 @@ export function freightItemPricing({
       entry.otherPricingMode,
       entry.otherFlatPrice,
       entry.otherIncludedKg,
-      entry.otherWeightFactor,
     );
   }
-  return byWeight(categoryMultiplier, row ? "item" : null);
+  return byWeight(categoryMultiplier, null);
 }
 
 /** The funnel's synthetic id for "something not on anyone's list". */

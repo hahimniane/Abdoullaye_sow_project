@@ -84,6 +84,11 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   /// business change, like every other per-business choice on this screen.
   bool _destinationDelivery = false;
 
+  /// Which quartier the parcel is going to, when the business prices them
+  /// separately. The fee follows this, so it is reset with every other
+  /// per-business choice.
+  String _deliveryAreaId = '';
+
   /// What is in the parcel, as the funnel answered it. It is what the business
   /// charges by, and what its published table pays back by.
   String _categoryId = '';
@@ -204,6 +209,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
 
   void _resetDestinationDelivery() {
     _destinationDelivery = false;
+    _deliveryAreaId = '';
     _receiverAddressController.clear();
   }
 
@@ -370,7 +376,12 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
 
   FreightDeliveryPolicy get _deliveryPolicy =>
       _selected?.freightDelivery ??
-      const FreightDeliveryPolicy(offered: false, fee: 0, feeCents: 0);
+      const FreightDeliveryPolicy(
+        offered: false,
+        areas: [],
+        fee: 0,
+        feeCents: 0,
+      );
 
   /// Same rule as pay-on-arrival: a business that does not deliver gets a
   /// booking with no delivery on it, whatever the radio said before the swap.
@@ -379,7 +390,16 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   String get _receiverAddress => _receiverAddressController.text.trim();
 
   double get _appliedPickupFee => _pickupRequested ? (_pickupFee ?? 0) : 0;
-  double get _appliedDeliveryFee => _deliveryChosen ? _deliveryPolicy.fee : 0;
+  /// What this delivery costs: the quartier's own price where the business
+  /// lists them, or its single price for the whole country where it does not.
+  double get _appliedDeliveryFee {
+    if (!_deliveryChosen) return 0;
+    if (!_deliveryPolicy.pricesByArea) return _deliveryPolicy.fee;
+    for (final area in _deliveryPolicy.areas) {
+      if (area.id == _deliveryAreaId) return area.fee;
+    }
+    return 0;
+  }
 
   /// Cover is not a line here: the business already priced the risk into what
   /// it charges to carry this item.
@@ -402,6 +422,8 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   bool get _deliveryBlocksSubmit => !deliveryChoiceIsComplete(
     wantsDelivery: _deliveryChosen,
     receiverAddress: _receiverAddress,
+    policy: _deliveryPolicy,
+    areaId: _deliveryAreaId,
   );
 
   void _select(BusinessDestinationOption o) {
@@ -635,6 +657,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         itemCategoryId: _categoryId,
         itemId: _submittedItemId,
         destinationDelivery: _deliveryChosen,
+        deliveryAreaId: _deliveryChosen ? _deliveryAreaId : null,
         receiverAddress: _deliveryChosen ? _receiverAddress : null,
         pickupRequested: _pickupRequested,
         pickupAddress: _pickupRequested ? _pickupAddress.composeLine() : null,
@@ -1562,15 +1585,44 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
               groupValue: _destinationDelivery,
               dense: true,
               title: Text(
-                l10n.freightDestinationDeliveryToAddress(
-                  freightMoney(_deliveryPolicy.fee),
-                ),
+                _deliveryPolicy.pricesByArea
+                    ? l10n.freightDestinationDeliveryToAddressByArea
+                    : l10n.freightDestinationDeliveryToAddress(
+                        freightMoney(_deliveryPolicy.fee),
+                      ),
               ),
               // ignore: deprecated_member_use
               onChanged: _busy
                   ? null
                   : (value) => setState(() => _destinationDelivery = value ?? false),
             ),
+            // Where it is going decides what it costs, so the quartier is
+            // asked before the address rather than left for the business to
+            // work out from a street name.
+            if (_destinationDelivery && _deliveryPolicy.pricesByArea)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                child: DropdownButtonFormField<String>(
+                  initialValue:
+                      _deliveryAreaId.isEmpty ? null : _deliveryAreaId,
+                  decoration: InputDecoration(
+                    labelText: l10n.freightDeliveryAreaLabel,
+                  ),
+                  items: [
+                    for (final area in _deliveryPolicy.areas)
+                      DropdownMenuItem(
+                        value: area.id,
+                        child: Text(
+                          '${area.name} · ${freightMoney(area.fee)}',
+                        ),
+                      ),
+                  ],
+                  onChanged: _busy
+                      ? null
+                      : (value) =>
+                            setState(() => _deliveryAreaId = value ?? ''),
+                ),
+              ),
             if (_destinationDelivery)
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),

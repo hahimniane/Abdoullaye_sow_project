@@ -130,10 +130,7 @@ void main() {
     test('the fee reaches the total and the price breakdown', () {
       expect(
         screen,
-        contains(
-          'double get _appliedDeliveryFee => _deliveryChosen ? '
-          '_deliveryPolicy.fee : 0;',
-        ),
+        contains('double get _appliedDeliveryFee {'),
       );
       expect(
         screen,

@@ -223,7 +223,6 @@ const {
   cancellationOutcome,
   newHoldRecord,
   captureDeadlineMs,
-  estimateProcessingFeeCents,
 } = require("./payment_hold");
 const {
   publicOpenBarrelOption,
@@ -3087,10 +3086,14 @@ exports.listActiveBarrelDestinationOptions = onCall(
             // address instead of collecting it, and what that costs. An
             // opted-in business with no fee set is not offering it yet.
             freightDestinationDeliveryAvailable: offersFreight &&
-              freightDeliveryPolicy(business).offered,
+              freightDeliveryPolicy(country, business).offered,
             freightDestinationDeliveryFee: offersFreight ?
-              freightDeliveryPolicy(business).fee :
+              freightDeliveryPolicy(country, business).fee :
               0,
+            // The places this business delivers to on this route, priced.
+            freightDestinationDeliveryAreas: offersFreight ?
+              freightDeliveryPolicy(country, business).areas :
+              [],
             // What is in the parcel changes the price, and the customer has
             // to be able to see how before choosing a business. Per business
             // rather than per destination: a business charges the same for
@@ -8222,15 +8225,16 @@ exports.captureExpiringPaymentHolds = onSchedule(
         try {
           if (decision.action === "notify") {
             const amount = (Number(hold.amountCents || 0) / 100).toFixed(2);
-            const fee = (estimateProcessingFeeCents(
-                Number(hold.amountCents || 0)) / 100).toFixed(2);
+            // A reminder, not an invitation to back out. The terms were on
+            // screen when they booked; leading with "cancel now and it is
+            // free" reads as the platform talking the customer out of an
+            // order they already agreed to.
             await sendPreferenceNotification({
               uid: hold.customerUid,
               preferenceKey: holdNoticePreferenceKey(hold.orderType),
               title: "Your card will be charged tomorrow",
               body: `The $${amount} you reserved will be charged in about ` +
-                "24 hours. Cancelling before then is free; after that, " +
-                `refunds lose the card fee (about $${fee}).`,
+                "24 hours.",
               data: {
                 type: "payment_hold_capture_notice",
                 paymentIntentId: hold.paymentIntentId,
@@ -21184,6 +21188,7 @@ exports.createFreightShipmentPaymentIntent = onCall(
         paymentTiming,
         destinationDelivery,
         receiverAddress,
+        deliveryAreaId,
       } = request.data || {};
       const payOnArrival = paymentTiming === "arrival";
       const wantsDestinationDelivery = destinationDelivery === true;
@@ -21260,8 +21265,10 @@ exports.createFreightShipmentPaymentIntent = onCall(
       // fails loudly rather than silently becoming office collection.
       const deliveryQuote = quoteFreightDelivery({
         business,
+        country,
         wantsDelivery: wantsDestinationDelivery,
         receiverAddress,
+        deliveryAreaId,
       });
       if (!deliveryQuote.ok) {
         throw new HttpsError(
@@ -21270,7 +21277,9 @@ exports.createFreightShipmentPaymentIntent = onCall(
               "This business does not deliver to the receiver's address" :
               deliveryQuote.error === "receiver_address_too_long" ?
                 "The receiver address is too long" :
-                "The receiver's delivery address is required",
+                deliveryQuote.error === "delivery_area_required" ?
+                  "Choose where the parcel is being delivered to" :
+                  "The receiver's delivery address is required",
         );
       }
 
@@ -21476,6 +21485,10 @@ exports.createFreightShipmentPaymentIntent = onCall(
           destinationDeliveryFeeCents,
           destinationDeliveryFee: destinationDeliveryFeeCents / 100,
           receiverAddress: deliveryQuote.address,
+          // Which quartier it is going to, so the business reads the round
+          // it is being paid for rather than an address it has to place.
+          destinationDeliveryAreaId: deliveryQuote.areaId || "",
+          destinationDeliveryAreaName: deliveryQuote.areaName || "",
           shippingFee,
           estimatedShippingFee: shippingFee,
           estimatedShippingFeeCents: shippingFeeCents,

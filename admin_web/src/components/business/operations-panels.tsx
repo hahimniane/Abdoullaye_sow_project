@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 
 import { AddressAutocomplete } from "@/components/address-autocomplete";
+import { FieldInfo } from "@/components/field-info";
 import { ContainerTrackingCard } from "@/components/business/container-tracking-card";
 import { TrackingUpdatesSection } from "@/components/business/tracking-updates-section";
 import { SearchableSelect } from "@/components/searchable-select";
@@ -101,6 +102,16 @@ import {
   type DestinationDepartureDay,
   type DestinationServiceAvailability,
 } from "@/lib/destination-pricing";
+import {
+  MAX_AREA_NAME_LENGTH,
+  MAX_DELIVERY_AREAS,
+  MAX_DESTINATION_DELIVERY_FEE,
+  deliveryAreaDraftsFrom,
+  deliveryAreasPayload,
+  deliverySettingsError,
+  emptyDeliveryArea,
+  type DeliveryAreaDraft,
+} from "@/lib/freight-delivery";
 import {
   VIEWING_BLOCK_MESSAGES,
   VIEWING_SLOT_ERROR_MESSAGES,
@@ -163,6 +174,14 @@ type DestinationDraft = {
   freightSeaMaxDays: string;
   freightAirDepartureDays: DestinationDepartureDay[];
   freightSeaDepartureDays: DestinationDepartureDay[];
+  // Crossing Dakar and crossing Conakry are different jobs at different
+  // costs, and a business may do one and not the other - so the offer and
+  // its prices belong to the route, next to that route's rates. The named
+  // places are how this trade quotes it; the single fee is the answer for a
+  // business that charges the same anywhere in the country.
+  destinationDelivery: boolean;
+  destinationDeliveryAreas: DeliveryAreaDraft[];
+  destinationDeliveryFee: string;
   note: string;
   barrelShipping: boolean;
   freightAir: boolean;
@@ -423,6 +442,9 @@ const emptyDestinationDraft: DestinationDraft = {
   freightSeaMaxDays: "",
   freightAirDepartureDays: [],
   freightSeaDepartureDays: [],
+  destinationDelivery: false,
+  destinationDeliveryAreas: [],
+  destinationDeliveryFee: "",
   note: "",
   barrelShipping: false,
   freightAir: false,
@@ -651,6 +673,11 @@ export function DestinationsPanel({
       freightSeaDepartureDays: destinationDepartureDays(
         row.freightSeaDepartureDays,
       ),
+      destinationDelivery: row.freightDestinationDeliveryAvailable === true,
+      destinationDeliveryAreas: deliveryAreaDraftsFrom(
+        row.freightDestinationDeliveryAreas,
+      ),
+      destinationDeliveryFee: numberString(row.freightDestinationDeliveryFee),
       note: text(row.destinationNote, ""),
       barrelShipping: availability.barrelShipping,
       freightAir: availability.freightAir,
@@ -714,6 +741,20 @@ export function DestinationsPanel({
       rates,
     );
     if (rateError) throw new Error(rateError);
+    // Delivery is a freight offer, so a route that carries no freight cannot
+    // publish one however the form was left before the switches moved.
+    const carriesFreight = availability.freightAir || availability.freightSea;
+    const deliveryAvailable = carriesFreight && draft.destinationDelivery;
+    const deliveryFee = Number(draft.destinationDeliveryFee || 0);
+    const deliveryError = deliverySettingsError({
+      available: deliveryAvailable,
+      areas: draft.destinationDeliveryAreas,
+      fee: deliveryFee,
+    });
+    if (deliveryError) throw new Error(deliveryError);
+    const deliveryAreas = deliveryAvailable
+      ? deliveryAreasPayload(draft.destinationDeliveryAreas)
+      : [];
     await setDoc(
       doc(db, "businesses", businessId, "destinationCountries", country.id),
       {
@@ -736,6 +777,14 @@ export function DestinationsPanel({
           ? draft.freightSeaDepartureDays
           : [],
         carTransportAvailable: availability.carTransport,
+        freightDestinationDeliveryAvailable: deliveryAvailable,
+        freightDestinationDeliveryAreas: deliveryAreas,
+        // A named list is what a booking is priced against, so the single
+        // price is stored only while the list is empty.
+        freightDestinationDeliveryFee:
+          deliveryAvailable && deliveryAreas.length === 0
+            ? Math.round(deliveryFee * 100) / 100
+            : 0,
         barrelShippingDeliveryEstimateMinDays: barrelEstimate
           ? barrelEstimate.minDays
           : deleteField(),
@@ -786,12 +835,31 @@ export function DestinationsPanel({
     );
   }
 
-  const visibleServiceCount = Object.values(
-    canonicalDestinationServiceAvailability(
-      enabledServices,
-      destinationDraftAvailability(draft),
-    ),
-  ).filter(Boolean).length;
+  const draftAvailability = canonicalDestinationServiceAvailability(
+    enabledServices,
+    destinationDraftAvailability(draft),
+  );
+  const visibleServiceCount =
+    Object.values(draftAvailability).filter(Boolean).length;
+  // Only a route that carries freight can be asked about delivering it.
+  const draftCarriesFreight =
+    draftAvailability.freightAir || draftAvailability.freightSea;
+  const deliveryFeeError = deliverySettingsError({
+    available: draftCarriesFreight && draft.destinationDelivery,
+    areas: draft.destinationDeliveryAreas,
+    fee: Number(draft.destinationDeliveryFee || 0),
+  });
+  const listedDeliveryAreas = draft.destinationDeliveryAreas.length;
+
+  function patchDeliveryArea(index: number, patch: Partial<DeliveryAreaDraft>) {
+    setDraft((value) => ({
+      ...value,
+      destinationDeliveryAreas: value.destinationDeliveryAreas.map(
+        (area, position) =>
+          position === index ? {...area, ...patch} : area,
+      ),
+    }));
+  }
 
   return (
     <section className="lst destination-coverage">
@@ -1145,6 +1213,148 @@ export function DestinationsPanel({
                     />
                   )}
                 </div>
+                {draftCarriesFreight && (
+                  <>
+                    <label className="lst-field wide">
+                      <span className="label-with-info">
+                        Do you deliver to the receiver at the destination?
+                        <FieldInfo label="how destination delivery works">
+                          <p>
+                            By default the receiver collects the parcel from
+                            you at the destination. If you deliver, customers
+                            of yours can choose that at booking and give the
+                            receiver&rsquo;s address.
+                          </p>
+                          <p>
+                            Each fee is flat - the same wherever in that
+                            place you take it - and is added to what the
+                            customer pays at booking. It is not recalculated
+                            when you confirm the weight.
+                          </p>
+                        </FieldInfo>
+                      </span>
+                      <select
+                        onChange={(event) =>
+                          setDraft((value) => ({
+                            ...value,
+                            destinationDelivery: event.target.value === "yes",
+                          }))
+                        }
+                        value={draft.destinationDelivery ? "yes" : "no"}
+                      >
+                        <option value="no">The receiver collects it from us</option>
+                        <option value="yes">We can deliver to their address</option>
+                      </select>
+                    </label>
+                    {draft.destinationDelivery && (
+                      <div className="lst-field wide">
+                        <span className="label-with-info">
+                          Places you deliver to, and what each costs
+                          <FieldInfo label="how delivery places are priced">
+                            <p>
+                              List the quartiers you serve and the fee for
+                              each: Cosa $20, Koloma $10. The customer picks
+                              one at booking and pays that fee.
+                            </p>
+                            <p>
+                              Leave the list empty to charge one price
+                              anywhere in this country instead.
+                            </p>
+                          </FieldInfo>
+                        </span>
+                        {draft.destinationDeliveryAreas.map((area, index) => (
+                          <div
+                            className="destination-delivery-area"
+                            key={`delivery-area-${index}`}
+                          >
+                            <input
+                              aria-label="Place name"
+                              maxLength={MAX_AREA_NAME_LENGTH}
+                              onChange={(event) =>
+                                patchDeliveryArea(index, {
+                                  name: event.target.value,
+                                })
+                              }
+                              placeholder="e.g. Cosa"
+                              value={area.name}
+                            />
+                            <input
+                              aria-label="Delivery fee (USD)"
+                              inputMode="decimal"
+                              max={MAX_DESTINATION_DELIVERY_FEE}
+                              min="0"
+                              onChange={(event) =>
+                                patchDeliveryArea(index, {
+                                  fee: event.target.value,
+                                })
+                              }
+                              placeholder="20"
+                              step="1"
+                              type="number"
+                              value={area.fee}
+                            />
+                            <button
+                              aria-label={`Remove ${area.name || "place"}`}
+                              className="lst-icon-btn"
+                              onClick={() =>
+                                setDraft((value) => ({
+                                  ...value,
+                                  destinationDeliveryAreas:
+                                    value.destinationDeliveryAreas.filter(
+                                      (_, position) => position !== index,
+                                    ),
+                                }))
+                              }
+                              type="button"
+                            >
+                              <X size={15} />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          className="lst-btn ghost"
+                          disabled={listedDeliveryAreas >= MAX_DELIVERY_AREAS}
+                          onClick={() =>
+                            setDraft((value) => ({
+                              ...value,
+                              destinationDeliveryAreas: [
+                                ...value.destinationDeliveryAreas,
+                                emptyDeliveryArea(),
+                              ],
+                            }))
+                          }
+                          type="button"
+                        >
+                          <Plus size={15} /> Add a place
+                        </button>
+                        {listedDeliveryAreas === 0 && (
+                          <label className="lst-field">
+                            <span>
+                              Delivery fee anywhere in this country (USD)
+                            </span>
+                            <input
+                              inputMode="decimal"
+                              max={MAX_DESTINATION_DELIVERY_FEE}
+                              min="0"
+                              onChange={(event) =>
+                                setDraft((value) => ({
+                                  ...value,
+                                  destinationDeliveryFee: event.target.value,
+                                }))
+                              }
+                              step="1"
+                              type="number"
+                              value={draft.destinationDeliveryFee}
+                            />
+                          </label>
+                        )}
+                        {deliveryFeeError && (
+                          <small className="field-error">{deliveryFeeError}</small>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
                 <label className="lst-field wide"><span>Customer route note (optional)</span>
                   <textarea rows={2} value={draft.note} onChange={(event) => setDraft((value) => ({ ...value, note: event.target.value }))} placeholder="e.g. Door-to-door delivery in Conakry included" />
                 </label>

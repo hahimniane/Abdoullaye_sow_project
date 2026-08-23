@@ -73,30 +73,44 @@ test("the payback is what the customer is promised, and it costs nothing", () =>
   assert.doesNotMatch(customer, /\+ coverageFee/);
 });
 
+const businessSettingsSource = readFileSync(
+  new URL("../components/business/profile-support-people.tsx", import.meta.url),
+  "utf8",
+);
+const operationsSource = readFileSync(
+  new URL("../components/business/operations-panels.tsx", import.meta.url),
+  "utf8",
+);
+
 test("the form follows its own answer, and never narrates history", () => {
   // A form that ignores the answer it just received reads as broken: the
   // obligation warning belongs to businesses that said yes, and the delivery
-  // fee to businesses that said they deliver. And pre-launch copy never
-  // frames a feature against a previous version nobody ever saw.
-  const business = readFileSync(
-    new URL(
-      "../components/business/profile-support-people.tsx",
-      import.meta.url,
-    ),
-    "utf8",
-  );
+  // fee to routes whose owner said they deliver there. And pre-launch copy
+  // never frames a feature against a previous version nobody ever saw.
   assert.match(
-    business,
+    businessSettingsSource,
     /\{draft\.coversLoss && \(\s*<div className="customer-inline-note wide">/,
   );
   assert.match(
-    business,
-    /\{draft\.destinationDelivery && \(\s*<label className="lst-field wide">/,
+    operationsSource,
+    /\{draft\.destinationDelivery && \(\s*<div className="lst-field wide">/,
   );
-  assert.doesNotMatch(business, /no longer type/);
-  for (const source of [business]) {
-    assert.doesNotMatch(source, /no longer|previously|we['’]ve changed/i);
+  assert.doesNotMatch(businessSettingsSource, /no longer type/);
+  assert.doesNotMatch(
+    businessSettingsSource,
+    /no longer|previously|we['’]ve changed/i,
+  );
+});
+
+test("nothing anywhere asks a business to type a weight factor", () => {
+  // By weight is this business's own per-kg rate for the route, full stop.
+  // A factor was the category multiplier wearing a different hat: a number
+  // with no unit, which an owner had to reason about rather than price.
+  for (const source of [businessSettingsSource, operationsSource]) {
+    assert.doesNotMatch(source, /weightFactor|[Ww]eight factor/);
   }
+  // The by-weight branch of the row editor holds no field at all now.
+  assert.match(businessSettingsSource, /\) : null\}\s*<\/div>/);
 });
 
 test("the funnel unions items across providers and matches honestly", () => {
@@ -232,7 +246,6 @@ const PRICED = {
         label: "Cables",
         paybackAmount: 20,
         pricingMode: "per_kg",
-        weightFactor: 1.4,
       },
       // Saved before pricing moved onto the row.
       {id: "laptop", label: "Laptop", paybackAmount: 800},
@@ -272,7 +285,8 @@ test("a set price is published, and never asks the customer for a weight", () =>
   assert.equal(tv.weighsAtDropOff, false);
 });
 
-test("a by-weight row uses its own factor, or its category's", () => {
+test("a by-weight row is the route's own rate, and legacy rows are not", () => {
+  // By weight means this business's per-kg rate for the route, full stop.
   assert.equal(
     freightItemPricing({
       table: PRICED,
@@ -280,7 +294,7 @@ test("a by-weight row uses its own factor, or its category's", () => {
       itemId: "cables",
       categoryMultiplier: 2,
     }).weightFactor,
-    1.4,
+    1,
   );
   // The migration promise: a row saved before per-row pricing existed keeps
   // being charged at its category's factor, so saving it unchanged cannot
@@ -295,6 +309,9 @@ test("a by-weight row uses its own factor, or its category's", () => {
   assert.equal(legacy.weightFactor, 2);
   assert.equal(legacy.needsWeightAtBooking, true);
   assert.equal(legacy.weighsAtDropOff, true);
+  // Its own row, never the catch-all: reading the catch-all here would
+  // reprice every legacy row the day a business prices "anything else".
+  assert.equal(legacy.source, "item");
   // And a whole table that has never been priced behaves exactly the same.
   const untouched = freightItemPricing({
     table: TABLE,
@@ -325,7 +342,8 @@ test("an unlisted item falls through to the category's own pricing", () => {
   });
   assert.equal(unlisted.source, "other");
   assert.equal(unlisted.mode, "per_kg");
-  assert.equal(unlisted.weightFactor, 2);
+  // A catch-all that states by-weight pricing states the route rate.
+  assert.equal(unlisted.weightFactor, 1);
   // A category whose catch-all names no pricing prices like it always did.
   assert.equal(
     freightItemPricing({
@@ -345,10 +363,6 @@ test("a refusal from the callable reads as a sentence, not a code", () => {
   assert.equal(
     freightPaybackErrorMessage("included_kg_out_of_range"),
     "An included weight must be between 0 and 200 kg",
-  );
-  assert.equal(
-    freightPaybackErrorMessage("weight_factor_out_of_range"),
-    "A weight factor must be between 0.5 and 10",
   );
   assert.equal(
     freightPaybackErrorMessage("pricing_mode_invalid"),

@@ -12665,6 +12665,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Takes pickups on these fees, whether or not the shared plan is on.'**
   String get pickupPlanOwnFeesNote;
+
+  /// No description provided for @freightDestinationDeliveryToAddressByArea.
+  ///
+  /// In en, this message translates to:
+  /// **'Deliver to their address'**
+  String get freightDestinationDeliveryToAddressByArea;
+
+  /// No description provided for @freightDeliveryAreaLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Where is it going?'**
+  String get freightDeliveryAreaLabel;
 }
 
 class _AppLocalizationsDelegate

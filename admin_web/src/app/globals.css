@@ -9104,6 +9104,12 @@ button[data-loading="true"]::before {
   color: var(--muted);
   font-size: 11px;
 }
+.destination-delivery-area {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 120px 34px;
+  margin-bottom: 8px;
+}
 .destination-delivery-row {
   align-items: baseline;
   display: flex;

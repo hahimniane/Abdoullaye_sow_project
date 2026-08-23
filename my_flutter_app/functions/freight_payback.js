@@ -69,10 +69,6 @@ const MAX_ITEM_FLAT_PRICE = 10000;
 /** Past this an "allowance" is really a by-weight parcel wearing a hat. */
 const MAX_INCLUDED_KG = 200;
 
-/** The same band a category multiplier lives in, for the same reasons. */
-const MIN_WEIGHT_FACTOR = 0.5;
-const MAX_WEIGHT_FACTOR = 10;
-
 /**
  * How one row is priced, cleaned.
  *
@@ -131,24 +127,11 @@ function cleanItemPricing(source, scope) {
       },
     };
   }
-  const raw = source?.[key("weightFactor")];
-  // Absent factor on a by-weight row means "whatever this category
-  // charges", which is what every row does today.
-  if (raw === undefined || raw === null || raw === "") {
-    return {ok: true, pricing: {[key("pricingMode")]: "per_kg"}};
-  }
-  const factor = Number(raw);
-  if (!Number.isFinite(factor) ||
-      factor < MIN_WEIGHT_FACTOR || factor > MAX_WEIGHT_FACTOR) {
-    return {ok: false, error: "weight_factor_out_of_range"};
-  }
-  return {
-    ok: true,
-    pricing: {
-      [key("pricingMode")]: "per_kg",
-      [key("weightFactor")]: Math.round(factor * 1000) / 1000,
-    },
-  };
+  // By weight means this business's own per-kg rate for the route, and
+  // nothing else. A per-row factor was the category multiplier wearing a
+  // different hat: a number with no unit that a business had to reason
+  // about rather than a price it could state.
+  return {ok: true, pricing: {[key("pricingMode")]: "per_kg"}};
 }
 
 /**
@@ -300,7 +283,7 @@ function freightItemPricing({
     (Array.isArray(entry.items) ? entry.items : [])
         .find((item) => item?.id === wanted) :
     undefined;
-  const read = (source, mode, flat, included, factor) => {
+  const read = (source, mode, flat, included) => {
     if (mode === "flat") {
       const includedKg = Number(included) || 0;
       return {
@@ -322,13 +305,10 @@ function freightItemPricing({
         source,
       };
     }
-    const resolved = Number(factor);
-    return byWeight(
-        Number.isFinite(resolved) && resolved > 0 ?
-          resolved :
-          categoryMultiplier,
-        source,
-    );
+    // A by-weight row is charged at the route rate. The category
+    // multiplier survives only for rows saved before pricing moved onto
+    // the row, so nothing anyone is charged moved the day this shipped.
+    return byWeight(1, source);
   };
 
   if (row) {
@@ -337,16 +317,13 @@ function freightItemPricing({
     // at - NOT the catch-all's price, which is for things nobody listed and
     // would silently reprice every legacy row the day this shipped.
     return row.pricingMode ?
-      read(
-          "item", row.pricingMode, row.flatPrice, row.includedKg,
-          row.weightFactor,
-      ) :
+      read("item", row.pricingMode, row.flatPrice, row.includedKg) :
       byWeight(categoryMultiplier, "item");
   }
   if (entry.otherPricingMode) {
     return read(
         "other", entry.otherPricingMode, entry.otherFlatPrice,
-        entry.otherIncludedKg, entry.otherWeightFactor,
+        entry.otherIncludedKg,
     );
   }
   return byWeight(categoryMultiplier, null);
@@ -397,8 +374,6 @@ function quoteFreightItemCoverage({business, policy, categoryId, itemId}) {
 module.exports = {
   MAX_ITEM_FLAT_PRICE,
   MAX_INCLUDED_KG,
-  MIN_WEIGHT_FACTOR,
-  MAX_WEIGHT_FACTOR,
   freightItemPricing,
   MAX_ITEMS_PER_CATEGORY,
   MAX_ITEM_LABEL_LENGTH,

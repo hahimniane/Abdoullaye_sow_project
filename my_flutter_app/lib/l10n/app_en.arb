@@ -3021,5 +3021,7 @@
     }
   },
   "pickupPlanSharedOffWarning": "No pickup: the shared plan above is off. Turn it on, or give this service its own fees.",
-  "pickupPlanOwnFeesNote": "Takes pickups on these fees, whether or not the shared plan is on."
+  "pickupPlanOwnFeesNote": "Takes pickups on these fees, whether or not the shared plan is on.",
+  "freightDestinationDeliveryToAddressByArea": "Deliver to their address",
+  "freightDeliveryAreaLabel": "Where is it going?"
 }

@@ -201,8 +201,6 @@ test("a business's stored settings round-trip into the form", () => {
       {id: "auto-parts", label: "Auto parts", hint: "Brakes", multiplier: 1.4},
     ],
     freightCoverageEnabled: true,
-    freightDestinationDeliveryAvailable: true,
-    freightDestinationDeliveryFee: 15,
   });
   assert.equal(settings.categoryRates.electronics, "2.5");
   // A row it never touched shows the platform's starting number, not a blank.
@@ -211,17 +209,17 @@ test("a business's stored settings round-trip into the form", () => {
     {id: "auto-parts", label: "Auto parts", hint: "Brakes", multiplier: "1.4"},
   ]);
   assert.equal(settings.coversLoss, true);
-  assert.equal(settings.destinationDelivery, true);
-  assert.equal(settings.destinationDeliveryFee, "15");
   // Cover is one answer: there is no rate or ceiling left for the form to
   // round-trip, and reading one would put a price back on the screen.
   assert.ok(!("coverageRatePct" in settings));
   assert.ok(!("maxDeclaredValue" in settings));
-  // A business that has set nothing covers nothing, holds the parcel for
-  // collection, and accepts anything.
+  // Delivering to the receiver is a property of the route, so the freight
+  // settings form neither reads it nor offers it.
+  assert.ok(!("destinationDelivery" in settings));
+  assert.ok(!("destinationDeliveryFee" in settings));
+  // A business that has set nothing covers nothing and accepts anything.
   const untouched = freightSettingsFromRow(null);
   assert.equal(untouched.coversLoss, false);
-  assert.equal(untouched.destinationDelivery, false);
   assert.deepEqual(untouched.customCategories, []);
   assert.deepEqual(buildFreightSettingsPayload(untouched).freightCategoryRates, {});
 });
@@ -237,8 +235,6 @@ test("only the rows a business actually moved are saved", () => {
         {id: "", label: " Auto Parts ", hint: " Brakes ", multiplier: "1.4"},
       ],
       coversLoss: true,
-      destinationDelivery: true,
-      destinationDeliveryFee: "15",
     }),
   );
   // Storing a row that equals today's default would pin this business to it
@@ -250,10 +246,12 @@ test("only the rows a business actually moved are saved", () => {
   // One key, because there is one question. A rate or a ceiling reaching the
   // callable would be a fee the customer never agreed to.
   assert.deepEqual(payload.freightCoverage, {coversLoss: true});
-  assert.deepEqual(payload.freightDestinationDelivery, {
-    available: true,
-    fee: 15,
-  });
+  // The delivery offer belongs to a route, so nothing about it may ride out
+  // on the business document and quietly outrank what a country says.
+  assert.doesNotMatch(
+    JSON.stringify(payload),
+    /freightDestinationDelivery|destinationDeliveryFee/,
+  );
   assert.equal(freightCategorySlug("Building materials!"), "building-materials");
   assert.equal(freightCategorySlug("   "), "");
   assert.deepEqual(emptyFreightCustomCategory(), {
@@ -288,7 +286,6 @@ test("each row carries its own pricing, and an untouched row carries none", () =
               ...emptyFreightPaybackItem("cables", "Cables"),
               amount: "20",
               pricingMode: "per_kg",
-              weightFactor: "1.4",
             },
             // Saved before pricing moved onto the row. It must reach the
             // callable with no pricing keys at all: the category factor is
@@ -324,17 +321,18 @@ test("each row carries its own pricing, and an untouched row carries none", () =
       pricingMode: "flat",
       flatPrice: 120,
     },
+    // By weight states the mode and nothing else: it is this business's own
+    // per-kg rate for the route, so there is no second number to send.
     {
       id: "cables",
       label: "Cables",
       paybackAmount: 20,
       pricingMode: "per_kg",
-      weightFactor: 1.4,
     },
     {id: "laptop", label: "Laptop", paybackAmount: 800},
   ]);
   assert.equal(electronics.otherPricingMode, "per_kg");
-  assert.equal("otherWeightFactor" in electronics, false);
+  assert.doesNotMatch(JSON.stringify(payload), /eightFactor/);
   // Category factors still ride along untouched - they are what a row with
   // no pricing of its own is charged at.
   assert.deepEqual(
@@ -389,18 +387,9 @@ test("a priced row is refused here on the bands the server refuses on", () => {
     ),
     null,
   );
-  assert.equal(
-    validateFreightSettings(
-      priced({pricingMode: "per_kg", weightFactor: "40"}),
-    ),
-    "iPhone: enter a weight factor between 0.5 and 10.",
-  );
-  // Blank again means "whatever this category charges", which is what a row
-  // saved before per-row pricing is charged at.
-  assert.equal(
-    validateFreightSettings(priced({pricingMode: "per_kg", weightFactor: ""})),
-    null,
-  );
+  // A by-weight row states no number of its own, so there is nothing left to
+  // refuse: it is charged at this business's per-kg rate for the route.
+  assert.equal(validateFreightSettings(priced({pricingMode: "per_kg"})), null);
   assert.equal(validateFreightSettings(priced({pricingMode: ""})), null);
 });
 
@@ -464,26 +453,6 @@ test("the settings form refuses what the server would refuse", () => {
   // Cover is savable on its own answer: it is free, so there is no number to
   // be out of range and no reason to refuse a business that says yes.
   assert.equal(validateFreightSettings(draft({coversLoss: true})), null);
-  // Delivery, unlike cover, does cost money - and an opted-in business with
-  // no fee is an unfinished setting rather than free delivery.
-  assert.equal(
-    validateFreightSettings(
-      draft({destinationDelivery: true, destinationDeliveryFee: ""}),
-    ),
-    "Set a delivery fee, or turn destination delivery off.",
-  );
-  assert.equal(
-    validateFreightSettings(
-      draft({destinationDelivery: true, destinationDeliveryFee: "900"}),
-    ),
-    "The delivery fee must be between $0 and $500.",
-  );
-  assert.equal(
-    validateFreightSettings(
-      draft({destinationDelivery: true, destinationDeliveryFee: "15"}),
-    ),
-    null,
-  );
 });
 
 test("everything the two screens say has French", () => {
@@ -520,13 +489,6 @@ test("everything the two screens say has French", () => {
     ),
     "Électronique : saisissez un multiplicateur de prix entre 0,5 et 10.",
   );
-  assert.equal(
-    translateValue(
-      "Set a delivery fee, or turn destination delivery off.",
-      "fr",
-    ),
-    "Fixez des frais de livraison, ou désactivez la livraison à l’arrivée.",
-  );
   // A category a business invented is left alone; the sentence around it is
   // still translated, so the refusal is readable either way.
   assert.match(
@@ -542,7 +504,6 @@ test("how a row is priced reads in French on both screens", () => {
   assert.equal(translateValue("By weight", "fr"), "Au poids");
   assert.equal(translateValue("Price (USD)", "fr"), "Prix (USD)");
   assert.equal(translateValue("Covers up to (kg)", "fr"), "Couvre jusqu’à (kg)");
-  assert.equal(translateValue("Weight factor", "fr"), "Facteur de poids");
   // What the customer reads instead of a weight field.
   assert.equal(translateValue("Set price", "fr"), "Prix fixe");
   assert.equal(translateValue("Covers up to", "fr"), "Couvre jusqu’à");
@@ -567,10 +528,6 @@ test("how a row is priced reads in French on both screens", () => {
       "fr",
     ),
     /le poids couvert par le prix doit être compris entre 0 et 200 kg\.$/,
-  );
-  assert.match(
-    translateValue("iPhone: enter a weight factor between 0.5 and 10.", "fr"),
-    /saisissez un facteur de poids entre 0,5 et 10\.$/,
   );
 });
 

@@ -3807,16 +3807,34 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Livrez-vous au destinataire à l’arrivée ?",
   "By default the receiver collects the parcel from you at the destination. If you deliver, customers of yours can choose that at booking and give the receiver’s address.":
     "Par défaut, le destinataire récupère le colis chez vous à l’arrivée. Si vous livrez, vos clients peuvent le choisir à la réservation et indiquer l’adresse du destinataire.",
-  "The fee is flat - the same wherever in that city you take it - and is added to what the customer pays at booking. It is not recalculated when you confirm the weight.":
-    "Le tarif est forfaitaire — le même où que vous alliez dans cette ville — et s’ajoute à ce que le client paie à la réservation. Il n’est pas recalculé lorsque vous confirmez le poids.",
+  "Each fee is flat - the same wherever in that place you take it - and is added to what the customer pays at booking. It is not recalculated when you confirm the weight.":
+    "Chaque tarif est forfaitaire — le même où que vous alliez dans cet endroit — et s’ajoute à ce que le client paie à la réservation. Il n’est pas recalculé lorsque vous confirmez le poids.",
   "The receiver collects it from us": "Le destinataire le récupère chez nous",
   "We can deliver to their address": "Nous pouvons livrer à son adresse",
-  "Delivery fee at the destination (USD)":
-    "Frais de livraison à l’arrivée (USD)",
-  "Set a delivery fee, or turn destination delivery off.":
-    "Fixez des frais de livraison, ou désactivez la livraison à l’arrivée.",
-  "The delivery fee must be between $0 and $500.":
-    "Les frais de livraison doivent être compris entre 0 $ et 500 $.",
+  // The places a business delivers to at one destination, priced one by one.
+  "Places you deliver to, and what each costs":
+    "Les endroits où vous livrez, et le prix de chacun",
+  "List the quartiers you serve and the fee for each: Cosa $20, Koloma $10. The customer picks one at booking and pays that fee.":
+    "Listez les quartiers que vous desservez et le tarif de chacun : Cosa 20 $, Koloma 10 $. Le client en choisit un à la réservation et paie ce tarif.",
+  "Leave the list empty to charge one price anywhere in this country instead.":
+    "Laissez la liste vide pour appliquer un seul tarif partout dans ce pays.",
+  "Place name": "Nom de l’endroit",
+  "Delivery fee (USD)": "Frais de livraison (USD)",
+  "Add a place": "Ajouter un endroit",
+  "Delivery fee anywhere in this country (USD)":
+    "Frais de livraison partout dans ce pays (USD)",
+  "Add somewhere you deliver to, or turn delivery off.":
+    "Ajoutez un endroit où vous livrez, ou désactivez la livraison.",
+  "A delivery fee must be between $0 and $500.":
+    "Des frais de livraison doivent être compris entre 0 $ et 500 $.",
+  "Every place you deliver to needs a name.":
+    "Chaque endroit où vous livrez a besoin d’un nom.",
+  "You can list up to 40 places.":
+    "Vous pouvez lister jusqu’à 40 endroits.",
+  "Two places on the list share the same name.":
+    "Deux endroits de la liste portent le même nom.",
+  "Choose where the parcel is being delivered to.":
+    "Choisissez où le colis est livré.",
   // Refusals the settings form raises before the server can.
   "You can add up to 6 categories of your own.":
     "Vous pouvez ajouter jusqu’à 6 catégories qui vous sont propres.",
@@ -3845,11 +3863,6 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Give a weight and you weigh it at drop-off: anything over that is charged at your per-kg rate for the destination, on top of the price.":
     "Indiquez un poids et vous le pesez au dépôt : tout ce qui dépasse est facturé à votre tarif au kilo pour la destination, en plus du prix.",
   "Any weight": "Quel que soit le poids",
-  "Weight factor": "Facteur de poids",
-  "What a kilo of this costs, as a multiple of your per-kg rate for the destination. 2 means a kilo of it costs twice a kilo of general goods.":
-    "Ce que coûte un kilo de cette chose, en multiple de votre tarif au kilo pour la destination. 2 signifie qu’un kilo coûte deux fois un kilo de marchandises générales.",
-  "Leave it blank to charge what the rest of this category charges.":
-    "Laissez-le vide pour facturer ce que facture le reste de cette catégorie.",
   "Anything else in this category pays back (USD)":
     "Tout le reste de cette catégorie rembourse (USD)",
   "Add an item": "Ajouter un article",
@@ -3899,6 +3912,10 @@ Object.assign(TEXT_TRANSLATIONS, {
     "L’entreprise apporte le colis au destinataire dès son arrivée.",
   "The receiver picks the parcel up from the business at the destination.":
     "Le destinataire récupère le colis auprès de l’entreprise à l’arrivée.",
+  "Where is it being delivered to?": "Où est-il livré ?",
+  "Choose a place": "Choisissez un endroit",
+  "The business delivers to these places, and each has its own fee.":
+    "L’entreprise livre à ces endroits, et chacun a son propre tarif.",
   "Receiver’s address": "Adresse du destinataire",
   "Include the neighbourhood and a landmark nearby, so the driver can find it by asking.":
     "Indiquez le quartier et un point de repère proche, pour que le chauffeur puisse le trouver en demandant.",
@@ -3952,8 +3969,6 @@ Object.assign(TEXT_TRANSLATIONS, {
     "saisissez un prix fixe entre 0,01 $ et 10 000 $.",
   "the weight the price covers must be between 0 and 200 kg.":
     "le poids couvert par le prix doit être compris entre 0 et 200 kg.",
-  "enter a weight factor between 0.5 and 10.":
-    "saisissez un facteur de poids entre 0,5 et 10.",
   "anything else": "tout le reste",
   // The fulfillment queue, where a set-price parcel never meets a scale.
   Pricing: "Tarification",
