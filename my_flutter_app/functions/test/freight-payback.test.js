@@ -3,6 +3,7 @@ const {describe, it} = require("node:test");
 
 const {
   STANDARD_FREIGHT_ITEMS,
+  freightItemPricing,
   freightPaybackFor,
   quoteFreightItemCoverage,
   validateFreightPaybackTable,
@@ -159,5 +160,162 @@ describe("saving the table", () => {
         assert.equal("paybackAmount" in item, false, item.id);
       }
     }
+  });
+});
+
+describe("how a business prices what it carries", () => {
+  const TABLE_PRICED = {
+    electronics: {
+      items: [
+        // A known object: one price, and an allowance so the retail box and
+        // charger do not come out of the business's pocket.
+        {
+          id: "iphone", label: "iPhone 16", paybackAmount: 400,
+          pricingMode: "flat", flatPrice: 50, includedKg: 2,
+        },
+        // A set price covering the parcel however heavy it is.
+        {
+          id: "sim", label: "SIM card", paybackAmount: 5,
+          pricingMode: "flat", flatPrice: 10,
+        },
+        // Goods that vary, priced by the scale at this row's own factor.
+        {
+          id: "mixed-tech", label: "Assorted tech", paybackAmount: 100,
+          pricingMode: "per_kg", weightFactor: 2.5,
+        },
+        // A row saved before pricing existed.
+        {id: "legacy", label: "Legacy row", paybackAmount: 90},
+      ],
+      otherPaybackAmount: 60,
+      otherPricingMode: "per_kg",
+      otherWeightFactor: 1.8,
+    },
+    clothing: {items: [], otherPaybackAmount: 40},
+  };
+
+  it("prices a known object once, and never weighs it at booking", () => {
+    const p = freightItemPricing({
+      table: TABLE_PRICED, categoryId: "electronics", itemId: "iphone",
+      categoryMultiplier: 2,
+    });
+    assert.equal(p.mode, "flat");
+    assert.equal(p.flatPrice, 50);
+    assert.equal(p.includedKg, 2);
+    // The customer picks the item and sees the price - nobody guesses the
+    // weight of an iPhone at their kitchen table.
+    assert.equal(p.needsWeightAtBooking, false);
+    // The counter still weighs it, because the price covers only 2kg.
+    assert.equal(p.weighsAtDropOff, true);
+  });
+
+  it("never weighs a set price that covers any weight", () => {
+    const p = freightItemPricing({
+      table: TABLE_PRICED, categoryId: "electronics", itemId: "sim",
+      categoryMultiplier: 2,
+    });
+    assert.equal(p.flatPrice, 10);
+    assert.equal(p.includedKg, 0);
+    assert.equal(p.needsWeightAtBooking, false);
+    assert.equal(p.weighsAtDropOff, false);
+  });
+
+  it("weighs goods that vary, at the row's own factor", () => {
+    const p = freightItemPricing({
+      table: TABLE_PRICED, categoryId: "electronics", itemId: "mixed-tech",
+      categoryMultiplier: 2,
+    });
+    assert.equal(p.mode, "per_kg");
+    assert.equal(p.weightFactor, 2.5);
+    assert.equal(p.needsWeightAtBooking, true);
+    assert.equal(p.weighsAtDropOff, true);
+  });
+
+  it("prices a row saved before this existed exactly as before", () => {
+    // The migration promise: nothing anyone is charged moves on the day
+    // item pricing ships.
+    for (const itemId of ["legacy", "nothing-listed"]) {
+      const p = freightItemPricing({
+        table: TABLE_PRICED, categoryId: "clothing", itemId,
+        categoryMultiplier: 1.5,
+      });
+      assert.equal(p.mode, "per_kg", itemId);
+      assert.equal(p.weightFactor, 1.5, itemId);
+    }
+    const legacy = freightItemPricing({
+      table: TABLE_PRICED, categoryId: "electronics", itemId: "legacy",
+      categoryMultiplier: 2,
+    });
+    assert.equal(legacy.weightFactor, 2);
+  });
+
+  it("falls through to the category's catch-all pricing", () => {
+    const p = freightItemPricing({
+      table: TABLE_PRICED, categoryId: "electronics", itemId: "not-a-row",
+      categoryMultiplier: 2,
+    });
+    assert.equal(p.source, "other");
+    assert.equal(p.weightFactor, 1.8);
+  });
+
+  it("prices a business with no table at the category multiplier", () => {
+    const p = freightItemPricing({
+      table: undefined, categoryId: "electronics", itemId: "iphone",
+      categoryMultiplier: 2,
+    });
+    assert.equal(p.mode, "per_kg");
+    assert.equal(p.weightFactor, 2);
+  });
+});
+
+describe("saving a priced row", () => {
+  const priced = (item) => validateFreightPaybackTable({
+    electronics: {items: [item], otherPaybackAmount: 0},
+  });
+
+  it("keeps a set price and its allowance", () => {
+    const r = priced({
+      id: "iphone", label: "iPhone", paybackAmount: 400,
+      pricingMode: "flat", flatPrice: 50.005, includedKg: 2.5,
+    });
+    assert.equal(r.ok, true);
+    const row = r.table.electronics.items[0];
+    assert.equal(row.flatPrice, 50.01);
+    assert.equal(row.includedKg, 2.5);
+  });
+
+  it("drops an allowance of zero rather than storing a false limit", () => {
+    const r = priced({
+      id: "sim", label: "SIM", paybackAmount: 5,
+      pricingMode: "flat", flatPrice: 10, includedKg: 0,
+    });
+    assert.equal("includedKg" in r.table.electronics.items[0], false);
+  });
+
+  it("refuses a price or allowance outside the band", () => {
+    assert.equal(priced({
+      id: "a", label: "A", paybackAmount: 1,
+      pricingMode: "flat", flatPrice: 0,
+    }).error, "flat_price_out_of_range");
+    assert.equal(priced({
+      id: "a", label: "A", paybackAmount: 1,
+      pricingMode: "flat", flatPrice: 999999,
+    }).error, "flat_price_out_of_range");
+    assert.equal(priced({
+      id: "a", label: "A", paybackAmount: 1,
+      pricingMode: "flat", flatPrice: 50, includedKg: 5000,
+    }).error, "included_kg_out_of_range");
+    assert.equal(priced({
+      id: "a", label: "A", paybackAmount: 1,
+      pricingMode: "per_kg", weightFactor: 99,
+    }).error, "weight_factor_out_of_range");
+    assert.equal(priced({
+      id: "a", label: "A", paybackAmount: 1, pricingMode: "sometimes",
+    }).error, "pricing_mode_invalid");
+  });
+
+  it("leaves a row that states no pricing alone", () => {
+    const r = priced({id: "a", label: "A", paybackAmount: 1});
+    assert.equal(r.ok, true);
+    assert.equal("pricingMode" in r.table.electronics.items[0], false);
   });
 });

@@ -184,7 +184,11 @@ void main() {
 
     test('a payback business asks for the item, never a value', () {
       expect(screen, contains('_usesItemPricing'));
-      expect(screen, contains('itemId: _usesItemPricing'));
+      expect(screen, contains('itemId: _submittedItemId'));
+      expect(
+        screen,
+        contains('String? get _submittedItemId => _usesItemPricing'),
+      );
     });
 
     test('the funnel never offers a category nobody would take', () {

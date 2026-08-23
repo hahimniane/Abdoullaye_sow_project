@@ -25,6 +25,13 @@
  */
 
 import { deliverySettingsError } from "./freight-delivery.ts";
+import {
+  MAX_INCLUDED_KG,
+  MAX_ITEM_FLAT_PRICE,
+  MAX_WEIGHT_FACTOR,
+  MIN_WEIGHT_FACTOR,
+  type FreightPricingMode,
+} from "./freight-payback.ts";
 import type { FirestoreRow } from "@/types/admin";
 
 /**
@@ -296,16 +303,63 @@ export type FreightCustomCategoryDraft = {
   multiplier: string;
 };
 
+/**
+ * How the business charges for one row it carries.
+ *
+ * Empty is not "unanswered": it is every row saved before pricing moved onto
+ * the row, and it keeps being charged at its category's factor. The editor
+ * shows it as by-weight and, left alone, saves nothing - so no live price
+ * moves the day this ships.
+ */
+export type FreightPaybackPricingMode = "" | "flat" | "per_kg";
+
 export type FreightPaybackItemDraft = {
   id: string;
   label: string;
   amount: string;
+  pricingMode: FreightPaybackPricingMode;
+  /** What this item costs to carry, whatever it weighs. */
+  flatPrice: string;
+  /** How much weight the set price covers. Blank covers any weight. */
+  includedKg: string;
+  /** What a kilo of this costs, as a factor of the route's rate. */
+  weightFactor: string;
 };
 
 export type FreightPaybackCategoryDraft = {
   items: FreightPaybackItemDraft[];
   otherAmount: string;
+  otherPricingMode: FreightPaybackPricingMode;
+  otherFlatPrice: string;
+  otherIncludedKg: string;
+  otherWeightFactor: string;
 };
+
+export function emptyFreightPaybackItem(
+  id = "",
+  label = "",
+): FreightPaybackItemDraft {
+  return {
+    id,
+    label,
+    amount: "0",
+    pricingMode: "per_kg",
+    flatPrice: "",
+    includedKg: "",
+    weightFactor: "",
+  };
+}
+
+export function emptyFreightPaybackCategory(): FreightPaybackCategoryDraft {
+  return {
+    items: [],
+    otherAmount: "0",
+    otherPricingMode: "per_kg",
+    otherFlatPrice: "",
+    otherIncludedKg: "",
+    otherWeightFactor: "",
+  };
+}
 
 export type FreightSettingsDraft = {
   /** Only the standard rows the business has actually moved. */
@@ -398,6 +452,18 @@ export function freightSettingsFromRow(
   };
 }
 
+/**
+ * The stored mode, or empty for a row that predates per-row pricing.
+ *
+ * Empty is carried through the form untouched so saving an untouched row
+ * writes no pricing keys at all - the one guarantee that stops this from
+ * repricing parcels a business already quoted.
+ */
+function pricingModeText(value: unknown): FreightPaybackPricingMode {
+  const mode = trimmedString(value);
+  return mode === "flat" || mode === "per_kg" ? mode : "";
+}
+
 function paybackDraftFrom(
   table: unknown,
 ): Record<string, FreightPaybackCategoryDraft> {
@@ -413,9 +479,17 @@ function paybackDraftFrom(
           id: trimmedString(row.id),
           label: trimmedString(row.label),
           amount: numberText(row.paybackAmount, "0"),
+          pricingMode: pricingModeText(row.pricingMode),
+          flatPrice: numberText(row.flatPrice, ""),
+          includedKg: numberText(row.includedKg, ""),
+          weightFactor: numberText(row.weightFactor, ""),
         };
       }),
       otherAmount: numberText(entry.otherPaybackAmount, "0"),
+      otherPricingMode: pricingModeText(entry.otherPricingMode),
+      otherFlatPrice: numberText(entry.otherFlatPrice, ""),
+      otherIncludedKg: numberText(entry.otherIncludedKg, ""),
+      otherWeightFactor: numberText(entry.otherWeightFactor, ""),
     };
   }
   return draft;
@@ -430,6 +504,105 @@ export function resolvedFreightCategoryId(
   row: FreightCustomCategoryDraft,
 ): string {
   return row.id.trim() || freightCategorySlug(row.label);
+}
+
+/**
+ * The name of every category the payback editor can show a row under, so a
+ * refusal names the row the owner is looking at rather than an id.
+ */
+function paybackCategoryLabels(
+  draft: FreightSettingsDraft,
+): Record<string, string> {
+  const labels: Record<string, string> = {};
+  for (const category of STANDARD_FREIGHT_CATEGORIES) {
+    labels[category.id] = category.label;
+  }
+  for (const row of draft.customCategories) {
+    const id = resolvedFreightCategoryId(row);
+    if (id) labels[id] = row.label.trim() || id;
+  }
+  return labels;
+}
+
+/** Blank is an answer here: it means "however heavy" or "whatever the
+ * category charges", so it is checked separately from a typo. */
+function blankNumber(value: string): boolean {
+  return value.trim() === "";
+}
+
+/**
+ * Refuses a priced row the callable would refuse, in the owner's own words.
+ *
+ * The bands are the server's (`freight_payback.js`): a set price above zero
+ * and no higher than $10,000, an allowance of at most 200 kg, and a weight
+ * factor inside the same band a category multiplier lives in.
+ */
+function paybackPricingError(draft: FreightSettingsDraft): string | null {
+  const labels = paybackCategoryLabels(draft);
+  for (const [categoryId, entry] of Object.entries(draft.payback)) {
+    const categoryLabel = labels[categoryId] ?? categoryId;
+    const rows: Array<{
+      name: string;
+      mode: FreightPaybackPricingMode;
+      flatPrice: string;
+      includedKg: string;
+      weightFactor: string;
+    }> = entry.items
+      .filter((item) => item.label.trim())
+      .map((item) => ({
+        name: item.label.trim(),
+        mode: item.pricingMode,
+        flatPrice: item.flatPrice,
+        includedKg: item.includedKg,
+        weightFactor: item.weightFactor,
+      }));
+    // The catch-all only prices what it can also carry: a category that pays
+    // back nothing for an unlisted item cannot be instant-booked at all.
+    if ((Number(entry.otherAmount || 0) || 0) > 0) {
+      rows.push({
+        name: `${categoryLabel} · anything else`,
+        mode: entry.otherPricingMode,
+        flatPrice: entry.otherFlatPrice,
+        includedKg: entry.otherIncludedKg,
+        weightFactor: entry.otherWeightFactor,
+      });
+    }
+    for (const row of rows) {
+      if (row.mode === "flat") {
+        const price = Number(row.flatPrice);
+        if (
+          blankNumber(row.flatPrice) ||
+          !Number.isFinite(price) ||
+          price <= 0 ||
+          price > MAX_ITEM_FLAT_PRICE
+        ) {
+          return `${row.name}: enter a set price between $0.01 and $10,000.`;
+        }
+        if (!blankNumber(row.includedKg)) {
+          const included = Number(row.includedKg);
+          if (
+            !Number.isFinite(included) ||
+            included < 0 ||
+            included > MAX_INCLUDED_KG
+          ) {
+            return `${row.name}: the weight the price covers must be between 0 and 200 kg.`;
+          }
+        }
+        continue;
+      }
+      if (row.mode === "per_kg" && !blankNumber(row.weightFactor)) {
+        const factor = Number(row.weightFactor);
+        if (
+          !Number.isFinite(factor) ||
+          factor < MIN_WEIGHT_FACTOR ||
+          factor > MAX_WEIGHT_FACTOR
+        ) {
+          return `${row.name}: enter a weight factor between 0.5 and 10.`;
+        }
+      }
+    }
+  }
+  return null;
 }
 
 /**
@@ -478,6 +651,9 @@ export function validateFreightSettings(
     }
   }
 
+  const pricingError = paybackPricingError(draft);
+  if (pricingError) return pricingError;
+
   // Cover has nothing left to validate: it is one yes/no, and the amount it
   // promises comes from the payback rows this business already priced.
   const deliveryError = deliverySettingsError({
@@ -487,6 +663,20 @@ export function validateFreightSettings(
   if (deliveryError) return deliveryError;
   return null;
 }
+
+export type FreightItemPricingPayload = {
+  pricingMode?: FreightPricingMode;
+  flatPrice?: number;
+  includedKg?: number;
+  weightFactor?: number;
+};
+
+export type FreightOtherPricingPayload = {
+  otherPricingMode?: FreightPricingMode;
+  otherFlatPrice?: number;
+  otherIncludedKg?: number;
+  otherWeightFactor?: number;
+};
 
 export type FreightSettingsPayload = {
   freightCategoryRates: Record<string, number>;
@@ -500,13 +690,72 @@ export type FreightSettingsPayload = {
   freightPaybackTable: Record<
     string,
     {
-      items: Array<{id: string; label: string; paybackAmount: number}>;
+      items: Array<
+        {id: string; label: string; paybackAmount: number} &
+          FreightItemPricingPayload
+      >;
       otherPaybackAmount: number;
-    }
+    } & FreightOtherPricingPayload
   >;
   freightPayOnArrival: boolean;
   freightDestinationDelivery: {available: boolean; fee: number};
 };
+
+/**
+ * The pricing keys for one row, cleaned the way the callable cleans them.
+ *
+ * An untouched legacy row answers with nothing at all: no `pricingMode`
+ * means the category multiplier still prices it, which is what every parcel
+ * booked before this existed was charged.
+ */
+function pricingPayload(row: {
+  pricingMode: FreightPaybackPricingMode;
+  flatPrice: string;
+  includedKg: string;
+  weightFactor: string;
+}): FreightItemPricingPayload {
+  if (row.pricingMode === "flat") {
+    const included = Number(row.includedKg);
+    return {
+      pricingMode: "flat",
+      flatPrice: Number(row.flatPrice) || 0,
+      ...(!blankNumber(row.includedKg) &&
+        Number.isFinite(included) &&
+        included > 0 && {includedKg: included}),
+    };
+  }
+  if (row.pricingMode === "per_kg") {
+    const factor = Number(row.weightFactor);
+    return {
+      pricingMode: "per_kg",
+      ...(!blankNumber(row.weightFactor) &&
+        Number.isFinite(factor) &&
+        factor > 0 && {weightFactor: factor}),
+    };
+  }
+  return {};
+}
+
+function otherPricingPayload(
+  entry: FreightPaybackCategoryDraft,
+): FreightOtherPricingPayload {
+  const pricing = pricingPayload({
+    pricingMode: entry.otherPricingMode,
+    flatPrice: entry.otherFlatPrice,
+    includedKg: entry.otherIncludedKg,
+    weightFactor: entry.otherWeightFactor,
+  });
+  return {
+    ...(pricing.pricingMode && {otherPricingMode: pricing.pricingMode}),
+    ...(pricing.flatPrice !== undefined && {otherFlatPrice: pricing.flatPrice}),
+    ...(pricing.includedKg !== undefined && {
+      otherIncludedKg: pricing.includedKg,
+    }),
+    ...(pricing.weightFactor !== undefined && {
+      otherWeightFactor: pricing.weightFactor,
+    }),
+  };
+}
 
 /**
  * What updateBusinessProfile receives.
@@ -549,8 +798,10 @@ export function buildFreightSettingsPayload(
                   item.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"),
                 label: item.label.trim(),
                 paybackAmount: Number(item.amount || 0) || 0,
+                ...pricingPayload(item),
               })),
             otherPaybackAmount: Number(entry.otherAmount || 0) || 0,
+            ...otherPricingPayload(entry),
           },
         ])
         // An untouched category is not sent as an empty promise.

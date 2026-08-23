@@ -3778,19 +3778,16 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Price each kind of goods, and say whether you pay for a parcel you lose.":
     "Tarifez chaque type de marchandise et indiquez si vous remboursez un colis perdu.",
   "Item categories": "Catégories d’articles",
-  "A multiplier rides on top of your per-kg rate for the destination. 2 means a kilo of that costs twice a kilo of general goods; 1 means it costs the same.":
-    "Un multiplicateur s’ajoute à votre tarif au kilo pour la destination. 2 signifie qu’un kilo de cette catégorie coûte deux fois un kilo de marchandises générales ; 1 signifie le même prix.",
-  "The list is the platform’s, so a customer can compare you with another business on the same words. You set what each row is worth to you.":
-    "La liste appartient à la plateforme, afin qu’un client puisse vous comparer à une autre entreprise avec les mêmes mots. Vous fixez ce que chaque ligne vaut pour vous.",
-  "Leave a row at the number it starts on and nothing about your prices changes.":
-    "Laissez une ligne sur son nombre de départ et rien ne change à vos tarifs.",
+  "Categories are how a customer finds the thing they are sending. The list is the platform’s, so a customer can compare you with another business on the same words.":
+    "Les catégories permettent au client de retrouver ce qu’il envoie. La liste appartient à la plateforme, afin qu’un client puisse vous comparer à une autre entreprise avec les mêmes mots.",
+  "What each thing costs is set on the item itself, under “What you carry, and what it costs” below.":
+    "Le prix de chaque chose se règle sur l’article lui-même, sous « Ce que vous transportez, et ce que cela coûte » ci-dessous.",
   "Your own categories": "Vos propres catégories",
   "Add one only for goods the standard list genuinely misses - auto parts, building materials, live plants.":
     "N’en ajoutez que pour des marchandises que la liste standard oublie vraiment : pièces auto, matériaux de construction, plantes vivantes.",
   "Customers see your extra rows after the standard ones. Up to 6.":
     "Les clients voient vos lignes supplémentaires après les lignes standard. Jusqu’à 6.",
   "Category name": "Nom de la catégorie",
-  "Price multiplier": "Multiplicateur de prix",
   "What it covers": "Ce qu’elle couvre",
   "Remove this category": "Supprimer cette catégorie",
   "Add a category": "Ajouter une catégorie",
@@ -3829,8 +3826,34 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Une catégorie que vous ajoutez ne peut pas reprendre le nom d’une catégorie standard.",
   "Two of the categories you added have the same name. Give each one its own.":
     "Deux des catégories que vous avez ajoutées portent le même nom. Donnez-en un propre à chacune.",
-  "If you cover lost parcels, the amount here is what you owe in full - a $400 iPhone pays back $400. The customer is charged nothing for that, so price each item above for what it is worth to you to carry.":
-    "Si vous couvrez les colis perdus, le montant indiqué ici est ce que vous devez intégralement : un iPhone à 400 $ rembourse 400 $. Le client ne paie rien pour cela, alors fixez le prix de chaque article ci-dessus selon ce qu’il vaut à transporter pour vous.",
+  // Each row: what it costs to carry, and what it pays back if lost.
+  "What you carry, and what it costs":
+    "Ce que vous transportez, et ce que cela coûte",
+  "Each row answers two questions: what you charge to carry that thing, and what you pay the customer if you lose it. An item you have not listed cannot be booked instantly; the customer asks you for a quote instead.":
+    "Chaque ligne répond à deux questions : ce que vous facturez pour transporter cette chose, et ce que vous versez au client si vous la perdez. Un article que vous n’avez pas listé ne peut pas être réservé immédiatement ; le client vous demande alors un devis.",
+  "A known object can have a set price - “iPhone 16, $50” - and the customer is never asked what it weighs. Goods that vary every time are priced by weight at your rate for the destination.":
+    "Un objet connu peut avoir un prix fixe — « iPhone 16, 50 $ » — et on ne demande jamais au client ce qu’il pèse. Les marchandises qui varient à chaque fois sont tarifées au poids, à votre tarif pour la destination.",
+  "If you cover lost parcels, the payback is what you owe in full - a $400 iPhone pays back $400. The customer is charged nothing for that, so price each row for what it is worth to you to carry.":
+    "Si vous couvrez les colis perdus, le remboursement est ce que vous devez intégralement : un iPhone à 400 $ rembourse 400 $. Le client ne paie rien pour cela, alors tarifez chaque ligne selon ce qu’elle vaut à transporter pour vous.",
+  "How is this priced?": "Comment est-ce tarifé ?",
+  "A set price": "Un prix fixe",
+  "By weight": "Au poids",
+  "Price (USD)": "Prix (USD)",
+  "Covers up to (kg)": "Couvre jusqu’à (kg)",
+  "Leave this blank and your price covers the parcel however heavy it is.":
+    "Laissez ce champ vide et votre prix couvre le colis quel que soit son poids.",
+  "Give a weight and you weigh it at drop-off: anything over that is charged at your per-kg rate for the destination, on top of the price.":
+    "Indiquez un poids et vous le pesez au dépôt : tout ce qui dépasse est facturé à votre tarif au kilo pour la destination, en plus du prix.",
+  "Any weight": "Quel que soit le poids",
+  "Weight factor": "Facteur de poids",
+  "What a kilo of this costs, as a multiple of your per-kg rate for the destination. 2 means a kilo of it costs twice a kilo of general goods.":
+    "Ce que coûte un kilo de cette chose, en multiple de votre tarif au kilo pour la destination. 2 signifie qu’un kilo coûte deux fois un kilo de marchandises générales.",
+  "Leave it blank to charge what the rest of this category charges.":
+    "Laissez-le vide pour facturer ce que facture le reste de cette catégorie.",
+  "Anything else in this category pays back (USD)":
+    "Tout le reste de cette catégorie rembourse (USD)",
+  "Add an item": "Ajouter un article",
+  "No items yet": "Aucun article pour l’instant",
   // The freight booking form.
   "What are you sending?": "Qu’envoyez-vous ?",
   "The price per kilo depends on what is in the parcel.":
@@ -3843,6 +3866,30 @@ Object.assign(TEXT_TRANSLATIONS, {
   "if it is lost — the full amount this business publishes for this item. The business pays you back, not Laawol.":
     "s’il est perdu — la totalité du montant que cette entreprise publie pour cet article. C’est l’entreprise qui vous rembourse, pas Laawol.",
   "What you are sending": "Ce que vous envoyez",
+  // A known object has one published price, so no weight is ever asked for.
+  "Set price": "Prix fixe",
+  "is the set price for this item.": "est le prix fixe pour cet article.",
+  // The same sentence when the row has a name the business typed.
+  "is the set price for": "est le prix fixe pour",
+  "It covers up to": "Il couvre jusqu’à",
+  "kg. The business weighs it at drop-off, and anything over that is charged at":
+    "kg. L’entreprise le pèse au dépôt, et tout ce qui dépasse est facturé à",
+  "It covers the parcel whatever it weighs.":
+    "Il couvre le colis quel que soit son poids.",
+  "Covers up to": "Couvre jusqu’à",
+  "Over that, per kg": "Au-delà, par kg",
+  "This price is final for this item.":
+    "Ce prix est définitif pour cet article.",
+  "The business weighs it at drop-off and charges per kg for anything over the included weight.":
+    "L’entreprise le pèse au dépôt et facture au kilo tout ce qui dépasse le poids inclus.",
+  "This item has a set price that covers up to":
+    "Cet article a un prix fixe qui couvre jusqu’à",
+  "kg. The business weighs the parcel at drop-off, and if it comes in heavier, Laawol will try to automatically charge the card you use today for the extra kilos at":
+    "kg. L’entreprise pèse le colis au dépôt, et s’il est plus lourd, Laawol tentera de débiter automatiquement la carte utilisée aujourd’hui pour les kilos supplémentaires à",
+  "/ kg. If that charge doesn’t go through, you’ll need to open the app to complete payment before your shipment can continue.":
+    "/ kg. Si ce débit échoue, vous devrez ouvrir l’application pour finaliser le paiement avant que votre expédition puisse continuer.",
+  "This item has a set price that covers the parcel whatever it weighs. Nothing is weighed and nothing is settled afterwards - what you pay today is the whole price.":
+    "Cet article a un prix fixe qui couvre le colis quel que soit son poids. Rien n’est pesé et rien n’est régularisé ensuite : ce que vous payez aujourd’hui est le prix complet.",
   "Paid back if lost": "Remboursé en cas de perte",
   // Where the parcel ends up at the destination.
   "Where does the receiver get it?": "Où le destinataire le récupère-t-il ?",
@@ -3896,6 +3943,23 @@ for (const [label, frLabel] of Object.entries({
   TEXT_TRANSLATIONS[`${label}: ${FREIGHT_MULTIPLIER_MESSAGE}`] =
     `${frLabel} : ${FREIGHT_MULTIPLIER_MESSAGE_FR}`;
 }
+
+// The same shape for the refusals a priced row raises. The row name is
+// whatever the business typed into it, so only the sentence around the name
+// is known ahead of time and substring translation carries the rest.
+Object.assign(TEXT_TRANSLATIONS, {
+  "enter a set price between $0.01 and $10,000.":
+    "saisissez un prix fixe entre 0,01 $ et 10 000 $.",
+  "the weight the price covers must be between 0 and 200 kg.":
+    "le poids couvert par le prix doit être compris entre 0 et 200 kg.",
+  "enter a weight factor between 0.5 and 10.":
+    "saisissez un facteur de poids entre 0,5 et 10.",
+  "anything else": "tout le reste",
+  // The fulfillment queue, where a set-price parcel never meets a scale.
+  Pricing: "Tarification",
+  "This shipment has a set price. Fulfillment unlocks once payment settles.":
+    "Cette expédition a un prix fixe. Le traitement se débloque dès que le paiement est régularisé.",
+});
 
 const PICKUP_ERROR_LABELS: Record<string, string> = {
   "Shared pickup plan": "Plan de collecte partagé",

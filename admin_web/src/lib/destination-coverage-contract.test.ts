@@ -86,7 +86,14 @@ describe("business destination service coverage", () => {
     // that drops a flat fee quotes a refund of a service still being given.
     assert.match(
       operationsSource,
-      /const finalTotal =\s*\n?\s*verifiedWeightKg \* rate \+ pickup \+ coverage \+ destinationDelivery;/,
+      /const finalTotal =\s*\n?\s*shippingFee \+ pickup \+ coverage \+ destinationDelivery;/,
+    );
+    // A set-price parcel is not repriced by the scale: the scale only says
+    // whether it outgrew the weight the price covers, and the excess is
+    // charged at the route's rate - the same arithmetic settlement runs.
+    assert.match(
+      operationsSource,
+      /flatPrice \+ Math\.max\(0, verifiedWeightKg - includedKg\) \* rate/,
     );
     // Coverage is read off the row, not assumed zero: it is zero on anything
     // booked under the published-payback model and non-zero on older rows.

@@ -63,6 +63,94 @@ function cleanAmount(value) {
   return Math.round(amount * 100) / 100;
 }
 
+/** A single parcel priced above this belongs with a freight forwarder. */
+const MAX_ITEM_FLAT_PRICE = 10000;
+
+/** Past this an "allowance" is really a by-weight parcel wearing a hat. */
+const MAX_INCLUDED_KG = 200;
+
+/** The same band a category multiplier lives in, for the same reasons. */
+const MIN_WEIGHT_FACTOR = 0.5;
+const MAX_WEIGHT_FACTOR = 10;
+
+/**
+ * How one row is priced, cleaned.
+ *
+ * Two ways, and the business picks per row because only it knows which of
+ * its goods are which. An iPhone 16 is always the same phone - known size,
+ * known weight - so it gets one price and never sees a scale. A bag of
+ * clothes is different every time, so it is weighed, and the existing
+ * weigh-and-confirm settlement runs exactly as before.
+ *
+ * A row with no pricing at all is not an error: it is every row saved
+ * before this existed, and it keeps being priced by its category's
+ * multiplier so no live price moves the day this ships.
+ *
+ * @param {object} source The item row, or the category entry for "other".
+ * @param {string} [scope] "other" to read the category catch-all's keys.
+ * @return {object} {ok, pricing} or {ok: false, error}.
+ */
+function cleanItemPricing(source, scope) {
+  const prefix = scope === "other" ? "other" : "";
+  const key = (name) => prefix ?
+    prefix + name[0].toUpperCase() + name.slice(1) :
+    name;
+  const rawMode = String(source?.[key("pricingMode")] || "").trim();
+  if (!rawMode) return {ok: true, pricing: {}};
+  if (rawMode !== "flat" && rawMode !== "per_kg") {
+    return {ok: false, error: "pricing_mode_invalid"};
+  }
+  if (rawMode === "flat") {
+    const price = Number(source?.[key("flatPrice")]);
+    if (!Number.isFinite(price) || price <= 0 ||
+        price > MAX_ITEM_FLAT_PRICE) {
+      return {ok: false, error: "flat_price_out_of_range"};
+    }
+    // What the set price covers by weight. A phone in its retail box with a
+    // charger weighs several times a bare phone, and without an allowance
+    // the business eats that difference and stops offering set prices.
+    // Blank means the price covers the parcel however heavy it is, which is
+    // the right answer for a business that does not want to think about it.
+    const rawIncluded = source?.[key("includedKg")];
+    const blank = rawIncluded === undefined || rawIncluded === null ||
+      rawIncluded === "";
+    const includedKg = blank ? 0 : Number(rawIncluded);
+    if (!blank &&
+        (!Number.isFinite(includedKg) || includedKg < 0 ||
+          includedKg > MAX_INCLUDED_KG)) {
+      return {ok: false, error: "included_kg_out_of_range"};
+    }
+    return {
+      ok: true,
+      pricing: {
+        [key("pricingMode")]: "flat",
+        [key("flatPrice")]: Math.round(price * 100) / 100,
+        ...(includedKg > 0 && {
+          [key("includedKg")]: Math.round(includedKg * 1000) / 1000,
+        }),
+      },
+    };
+  }
+  const raw = source?.[key("weightFactor")];
+  // Absent factor on a by-weight row means "whatever this category
+  // charges", which is what every row does today.
+  if (raw === undefined || raw === null || raw === "") {
+    return {ok: true, pricing: {[key("pricingMode")]: "per_kg"}};
+  }
+  const factor = Number(raw);
+  if (!Number.isFinite(factor) ||
+      factor < MIN_WEIGHT_FACTOR || factor > MAX_WEIGHT_FACTOR) {
+    return {ok: false, error: "weight_factor_out_of_range"};
+  }
+  return {
+    ok: true,
+    pricing: {
+      [key("pricingMode")]: "per_kg",
+      [key("weightFactor")]: Math.round(factor * 1000) / 1000,
+    },
+  };
+}
+
 /**
  * Validates the payback table a business is trying to save.
  *
@@ -108,13 +196,25 @@ function validateFreightPaybackTable(table) {
       if (paybackAmount === null) {
         return {ok: false, error: "payback_out_of_range", categoryId};
       }
-      cleanedItems.push({id, label, paybackAmount});
+      const pricing = cleanItemPricing(item);
+      if (!pricing.ok) {
+        return {ok: false, error: pricing.error, categoryId};
+      }
+      cleanedItems.push({id, label, paybackAmount, ...pricing.pricing});
     }
     const otherPaybackAmount = cleanAmount(entry.otherPaybackAmount ?? 0);
     if (otherPaybackAmount === null) {
       return {ok: false, error: "payback_out_of_range", categoryId};
     }
-    cleaned[categoryId] = {items: cleanedItems, otherPaybackAmount};
+    const otherPricing = cleanItemPricing(entry, "other");
+    if (!otherPricing.ok) {
+      return {ok: false, error: otherPricing.error, categoryId};
+    }
+    cleaned[categoryId] = {
+      items: cleanedItems,
+      otherPaybackAmount,
+      ...otherPricing.pricing,
+    };
   }
   return {ok: true, table: cleaned};
 }
@@ -155,6 +255,101 @@ function freightPaybackFor({table, categoryId, itemId}) {
     return {listed: true, paybackAmount: other, source: "other"};
   }
   return {listed: false, paybackAmount: 0, source: null};
+}
+
+/**
+ * How to charge for one item: a set price, or by weight.
+ *
+ * Resolves in the same order the payback does - the exact row, then the
+ * category catch-all - so the price and the promise always come from the
+ * same place. A row that names no pricing falls through to the category
+ * multiplier, which is how every booking is priced today and how a client
+ * that has never heard of item pricing keeps working.
+ *
+ * @param {object} params Inputs.
+ * @param {object} params.table The business's saved payback table.
+ * @param {string} params.categoryId The category being shipped.
+ * @param {string} [params.itemId] The item row, when one was picked.
+ * @param {number} [params.categoryMultiplier] The category's own factor,
+ *   used when a row states no pricing of its own.
+ * @return {object} {mode, flatPrice, includedKg, weightFactor,
+ *   needsWeightAtBooking, weighsAtDropOff, source}.
+ */
+function freightItemPricing({
+  table,
+  categoryId,
+  itemId,
+  categoryMultiplier = 1,
+}) {
+  const entry = table && typeof table === "object" ?
+    table[String(categoryId || "").trim()] :
+    undefined;
+  const byWeight = (weightFactor, source) => ({
+    mode: "per_kg",
+    flatPrice: 0,
+    includedKg: 0,
+    weightFactor,
+    needsWeightAtBooking: true,
+    weighsAtDropOff: true,
+    source,
+  });
+  if (!entry) return byWeight(categoryMultiplier, null);
+
+  const wanted = String(itemId || "").trim();
+  const row = wanted ?
+    (Array.isArray(entry.items) ? entry.items : [])
+        .find((item) => item?.id === wanted) :
+    undefined;
+  const read = (source, mode, flat, included, factor) => {
+    if (mode === "flat") {
+      const includedKg = Number(included) || 0;
+      return {
+        mode: "flat",
+        flatPrice: Number(flat) || 0,
+        includedKg,
+        weightFactor: 0,
+        // The customer is never asked to guess the weight of a known
+        // object. They pick "iPhone 16", see the price, and that is the
+        // transaction.
+        needsWeightAtBooking: false,
+        // But the business still puts it on the scale when the price
+        // covers only so much: a phone in a carton packed out with shoes
+        // is not the parcel that was priced, and without this the business
+        // absorbs the packaging and stops offering set prices. No
+        // allowance means the price covers it however heavy it is, and
+        // nothing is weighed at all.
+        weighsAtDropOff: includedKg > 0,
+        source,
+      };
+    }
+    const resolved = Number(factor);
+    return byWeight(
+        Number.isFinite(resolved) && resolved > 0 ?
+          resolved :
+          categoryMultiplier,
+        source,
+    );
+  };
+
+  if (row) {
+    // A listed row that states no pricing is one saved before pricing
+    // existed. It keeps the category multiplier it has always been charged
+    // at - NOT the catch-all's price, which is for things nobody listed and
+    // would silently reprice every legacy row the day this shipped.
+    return row.pricingMode ?
+      read(
+          "item", row.pricingMode, row.flatPrice, row.includedKg,
+          row.weightFactor,
+      ) :
+      byWeight(categoryMultiplier, "item");
+  }
+  if (entry.otherPricingMode) {
+    return read(
+        "other", entry.otherPricingMode, entry.otherFlatPrice,
+        entry.otherIncludedKg, entry.otherWeightFactor,
+    );
+  }
+  return byWeight(categoryMultiplier, null);
 }
 
 /**
@@ -200,6 +395,11 @@ function quoteFreightItemCoverage({business, policy, categoryId, itemId}) {
 }
 
 module.exports = {
+  MAX_ITEM_FLAT_PRICE,
+  MAX_INCLUDED_KG,
+  MIN_WEIGHT_FACTOR,
+  MAX_WEIGHT_FACTOR,
+  freightItemPricing,
   MAX_ITEMS_PER_CATEGORY,
   MAX_ITEM_LABEL_LENGTH,
   STANDARD_FREIGHT_ITEMS,

@@ -28,6 +28,8 @@ function calculateFreightSettlement({
   pickupFeeCents = 0,
   coverageFeeCents = 0,
   destinationDeliveryFeeCents = 0,
+  flatPriceCents = 0,
+  includedKg = 0,
 }) {
   const estimatedCents = positiveMoneyCents(
       estimatedTotalCents,
@@ -60,7 +62,26 @@ function calculateFreightSettlement({
     throw new Error("pricePerKg must be greater than zero");
   }
 
-  const finalShippingFeeCents = Math.round(weight * rate * 100);
+  // A set-price parcel is not repriced by the scale. Its price is what the
+  // business published for that item; the scale only answers whether the
+  // parcel outgrew the weight that price covers. Charging the excess at the
+  // route's per-kg rate keeps the two things the price is made of separate:
+  // the set price is the item's value and handling, the excess is the extra
+  // mass and nothing else.
+  const flatCents = positiveMoneyCents(flatPriceCents, "flatPriceCents");
+  const allowance = Number(includedKg);
+  if (!Number.isFinite(allowance) || allowance < 0) {
+    throw new Error("includedKg must be zero or greater");
+  }
+  // No allowance means the set price covers the parcel however heavy it is,
+  // so there is no excess to find. Treating a blank allowance as a limit of
+  // zero would bill every gram on top of a price the customer was told was
+  // final - the exact opposite of what a set price promises.
+  const finalShippingFeeCents = flatCents > 0 ?
+    flatCents + (allowance > 0 ?
+      Math.round(Math.max(0, weight - allowance) * rate * 100) :
+      0) :
+    Math.round(weight * rate * 100);
   const finalTotalCents =
     finalShippingFeeCents + pickupCents + coverageCents + deliveryCents;
   const adjustmentCents = finalTotalCents - estimatedCents;

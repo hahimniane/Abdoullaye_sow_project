@@ -6506,11 +6506,25 @@ button[data-loading="true"]::before {
   font-size: 12px;
   font-weight: 600;
 }
+.payback-item {
+  border-bottom: 1px solid var(--rule, #dceae7);
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+}
+.payback-item:last-of-type { border-bottom: 0; }
 .payback-item-row {
   display: grid;
   gap: 8px;
   grid-template-columns: 1fr 120px 34px;
   margin-bottom: 8px;
+}
+.payback-pricing-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+@media (max-width: 640px) {
+  .payback-pricing-row { grid-template-columns: 1fr; }
 }
 .payback-category-actions {
   display: flex;

@@ -3146,8 +3146,22 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
     const coverage = Number(row.coverageFeeCents ?? 0) / 100;
     const destinationDelivery =
       Number(row.destinationDeliveryFeeCents ?? 0) / 100;
+    // A set-price parcel is not repriced by the scale. Its price is what the
+    // business published for that item; the scale only answers whether the
+    // parcel outgrew the weight that price covers, and the excess is charged
+    // at the route's rate for the extra mass and nothing else. Mirrors
+    // calculateFreightSettlement, which is what actually moves the money.
+    const flatPrice =
+      text(row.pricingMode, "") === "flat"
+        ? Number(row.itemFlatPrice ?? 0) || 0
+        : 0;
+    const includedKg = Number(row.itemIncludedKg ?? 0) || 0;
+    const shippingFee =
+      flatPrice > 0
+        ? flatPrice + Math.max(0, verifiedWeightKg - includedKg) * rate
+        : verifiedWeightKg * rate;
     const finalTotal =
-      verifiedWeightKg * rate + pickup + coverage + destinationDelivery;
+      shippingFee + pickup + coverage + destinationDelivery;
     const estimatedTotal = Number(row.estimatedTotal ?? row.price ?? 0);
     const difference = finalTotal - estimatedTotal;
     const adjustment = Math.abs(difference) < 0.005
@@ -3212,13 +3226,20 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
           const settlementReady = !versionTwo || settlementStatus === "settled";
           const estimatedWeight = Number(row.estimatedWeightKg ?? row.weightKg ?? 0);
           const verifiedWeight = Number(row.verifiedWeightKg ?? 0);
+          // A set price with no weight allowance covers the parcel however
+          // heavy it is, so there is nothing a scale could change and the
+          // callable refuses one. Offering the action would be offering a
+          // button that only produces an error.
+          const weighs = row.weightVerificationRequired !== false;
           return (
             <article className="pur-card" key={row.id}>
               <div className="pur-head"><div className="pur-title"><strong>{text(row.trackingCode, row.id)}</strong><span className="pur-kind">{statusLabel(text(row.mode ?? row.freightMode, "freight"))}</span></div><span className={`lst-badge ${barrelTone(status)}`}>{statusLabel(status)}</span></div>
               <div className="pur-info">
                 <div><span>Sender</span><b>{text(row.senderName, "—")}</b></div><div><span>Receiver</span><b>{text(row.receiverName, "—")}</b></div>
                 <div><span>Receiver phone</span><b>{text(row.receiverPhone, "—")}</b></div><div><span>Destination</span><b>{text(row.destinationCountryName, "—")}</b></div>
-                <div><span>Estimated weight</span><b>{estimatedWeight.toLocaleString()} kg</b></div><div><span>Verified weight</span><b>{verifiedWeight > 0 ? `${verifiedWeight.toLocaleString()} kg` : "—"}</b></div>
+                {weighs
+                  ? (<><div><span>Estimated weight</span><b>{estimatedWeight.toLocaleString()} kg</b></div><div><span>Verified weight</span><b>{verifiedWeight > 0 ? `${verifiedWeight.toLocaleString()} kg` : "—"}</b></div></>)
+                  : (<><div><span>Pricing</span><b>Set price</b></div><div><span>Set price</span><b>{formatMoney(row.itemFlatPrice)}</b></div></>)}
                 <div><span>Rate locked at booking</span><b>{formatMoney(row.pricePerKg ?? row.ratePerKg)} / kg</b></div><div><span>Estimated total</span><b>{formatMoney(row.estimatedTotal ?? row.price ?? row.total)}</b></div>
                 <div><span>Final total</span><b>{row.finalTotal == null ? "—" : formatMoney(row.finalTotal)}</b></div><div><span>Settlement</span><b>{statusLabel(settlementStatus)}</b></div>
                 <div><span>Payment</span><b>{statusLabel(paymentStatus)}</b></div><div><span>Created</span><b>{formatDate(row.createdAt)}</b></div>
@@ -3229,9 +3250,9 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
                 <div className="pur-notice"><Truck size={15} /> <span>Deliver to the receiver</span> · {text(row.receiverAddress, "Address not provided")} · {formatMoney(row.destinationDeliveryFee)} <span>collected at booking</span></div>
               )}
               {!paymentReady && <div className="pur-notice warn"><AlertTriangle size={15} /> Fulfillment is locked until payment succeeds.</div>}
-              {paymentReady && !settlementReady && <div className="pur-notice warn"><AlertTriangle size={15} /> {settlementStatus === "balance_due" || settlementStatus === "balance_payment_pending" ? "Waiting for customer payment. Fulfillment remains locked." : settlementStatus === "needs_attention" ? "Settlement needs attention. Contact support before fulfillment." : "Confirm the parcel weight before fulfillment."}</div>}
+              {paymentReady && !settlementReady && <div className="pur-notice warn"><AlertTriangle size={15} /> {settlementStatus === "balance_due" || settlementStatus === "balance_payment_pending" ? "Waiting for customer payment. Fulfillment remains locked." : settlementStatus === "needs_attention" ? "Settlement needs attention. Contact support before fulfillment." : weighs ? "Confirm the parcel weight before fulfillment." : "This shipment has a set price. Fulfillment unlocks once payment settles."}</div>}
               <div className="pur-actions">
-                {versionTwo && verifiedWeight <= 0 && <label className="bar-field"><span>Enter verified weight</span><input aria-label="Enter verified weight" inputMode="decimal" value={weightDrafts[row.id] ?? ""} onChange={(event) => setWeightDrafts((current) => ({ ...current, [row.id]: event.target.value }))} placeholder="0.0" /><button className="lst-btn primary" type="button" disabled={busy || !paymentReady} onClick={() => confirmWeight(row)}>Confirm weight and final price</button></label>}
+                {versionTwo && weighs && verifiedWeight <= 0 && <label className="bar-field"><span>Enter verified weight</span><input aria-label="Enter verified weight" inputMode="decimal" value={weightDrafts[row.id] ?? ""} onChange={(event) => setWeightDrafts((current) => ({ ...current, [row.id]: event.target.value }))} placeholder="0.0" /><button className="lst-btn primary" type="button" disabled={busy || !paymentReady} onClick={() => confirmWeight(row)}>Confirm weight and final price</button></label>}
                 <label className="bar-field"><span>Update status</span><select value={status} disabled={busy || !paymentReady || !settlementReady} onChange={(event) => updateStatus(row, event.target.value)}>{["pending_payment", "awaiting_weight_confirmation", "awaiting_balance_payment", "settlement_processing", "pending", "in_transit", "ready_for_pickup", "completed", "cancelled"].map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}</select></label>
                 {(() => {
                   const cancel = businessCancelAction(row, "freightShipments");

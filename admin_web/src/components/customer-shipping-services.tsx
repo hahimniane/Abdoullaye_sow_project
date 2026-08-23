@@ -108,6 +108,7 @@ import {
 import {
   OTHER_ITEM_ID,
   freightItemChoicesFor,
+  freightItemPricing,
   freightPaybackFor,
   providerQualifiesForItem,
 } from "@/lib/freight-payback";
@@ -2433,15 +2434,6 @@ function FreightShipmentForm({
             ? "Include the country calling code for a WhatsApp number."
             : "Enter a valid international phone number."
       : "";
-  const pricing = destination
-    ? freightShippingEstimate({
-        country: destination.country,
-        mode,
-        pickupQuote: quote?.fee,
-        pickupRequested: pickup.requested,
-        weightKg,
-      })
-    : null;
   const categories = useMemo(
     () => freightCategoryOptionsFrom(destination?.freightCategories),
     [destination],
@@ -2451,13 +2443,6 @@ function FreightShipmentForm({
     [destination],
   );
   const selectedCategory = freightCategoryById(categories, activeCategoryId);
-  const categoryPricing = pricing
-    ? freightCategoryPricing({
-        baseRatePerKg: pricing.rate,
-        weightKg: pricing.weightKg,
-        multiplier: selectedCategory?.multiplier ?? 1,
-      })
-    : null;
   // Protection is the business's own published payback for the item the
   // customer picked, and it is free: the business priced that item for what
   // it is worth to carry, so the risk already sits in the shipping rate.
@@ -2467,13 +2452,44 @@ function FreightShipmentForm({
   const usesItemPricing = Boolean(
     paybackTable && Object.keys(paybackTable).length > 0,
   );
+  const resolvedItemId = activeItemId === OTHER_ITEM_ID ? "" : activeItemId;
   const itemLookup = usesItemPricing
     ? freightPaybackFor({
         table: paybackTable,
         categoryId: activeCategoryId,
-        itemId: activeItemId === OTHER_ITEM_ID ? "" : activeItemId,
+        itemId: resolvedItemId,
       })
     : null;
+  // How this business charges for the thing that was picked. A known object
+  // has one published price and the customer is never asked to guess what it
+  // weighs; goods that vary are weighed, exactly as every parcel was before.
+  const itemPricing = freightItemPricing({
+    table: paybackTable,
+    categoryId: activeCategoryId,
+    itemId: resolvedItemId,
+    categoryMultiplier: selectedCategory?.multiplier ?? 1,
+  });
+  const setPrice = itemPricing.mode === "flat";
+  // A set price still needs the route's rate resolved: it is what any weight
+  // beyond the allowance is charged at, and it is quoted here so the
+  // customer reads it before paying rather than after the scale.
+  const pricing = destination
+    ? freightShippingEstimate({
+        country: destination.country,
+        mode,
+        pickupQuote: quote?.fee,
+        pickupRequested: pickup.requested,
+        weightKg: setPrice ? 1 : weightKg,
+      })
+    : null;
+  const categoryPricing =
+    pricing && !setPrice
+      ? freightCategoryPricing({
+          baseRatePerKg: pricing.rate,
+          weightKg: pricing.weightKg,
+          multiplier: itemPricing.weightFactor,
+        })
+      : null;
   const coversLoss = coveragePolicy?.coversLoss === true;
   const paybackAmount =
     coversLoss && itemLookup?.listed ? itemLookup.paybackAmount : 0;
@@ -2500,11 +2516,12 @@ function FreightShipmentForm({
       weightKg,
     ],
   );
-  // The subtotal the customer is shown has to be the one the server charges,
-  // so the category multiplier replaces the plain rate × weight rather than
-  // being bolted on beside it.
-  const shippingSubtotal =
-    categoryPricing?.shippingSubtotal ?? pricing?.subtotal ?? 0;
+  // The subtotal the customer is shown has to be the one the server charges:
+  // a published price stands on its own, and a by-weight row's factor
+  // replaces the plain rate × weight rather than being bolted on beside it.
+  const shippingSubtotal = setPrice
+    ? itemPricing.flatPrice
+    : (categoryPricing?.shippingSubtotal ?? pricing?.subtotal ?? 0);
   const estimatedTotal =
     pricing === null || pricing.total === null
       ? null
@@ -2598,8 +2615,10 @@ function FreightShipmentForm({
       senderName.trim() &&
         receiverName.trim() &&
         destination &&
-        Number.isFinite(weightKg) &&
-        weightKg > 0,
+        // A set-price item is never weighed by the customer, so there is no
+        // weight for the form to hold the booking on.
+        (!itemPricing.needsWeightAtBooking ||
+          (Number.isFinite(weightKg) && weightKg > 0)),
     ) &&
     // The funnel's answers, in the funnel's order: a booking without a
     // category (and an item, when any provider lists one) never reaches
@@ -2670,7 +2689,11 @@ function FreightShipmentForm({
             destinationCountryId: destination.country.id,
             businessId: destination.businessId,
             mode,
-            weightKg,
+            // A set price covers the parcel at whatever it weighs, so no
+            // weight is sent: the server prices the published row, and the
+            // business puts it on the scale only when the price has an
+            // allowance to check it against.
+            weightKg: itemPricing.needsWeightAtBooking ? weightKg : 0,
             itemCategoryId: activeCategoryId,
             paymentTiming: payOnArrivalChosen ? "arrival" : "now",
             ...(usesItemPricing && {
@@ -2773,12 +2796,19 @@ function FreightShipmentForm({
               )}
               {pricing && (
                 <>
-                  <ReviewDetail
-                    label="Rate per kg"
-                    value={formatMoney(
-                      categoryPricing?.categoryRatePerKg ?? pricing.rate,
-                    )}
-                  />
+                  {setPrice ? (
+                    <ReviewDetail
+                      label="Set price"
+                      value={formatMoney(itemPricing.flatPrice)}
+                    />
+                  ) : (
+                    <ReviewDetail
+                      label="Rate per kg"
+                      value={formatMoney(
+                        categoryPricing?.categoryRatePerKg ?? pricing.rate,
+                      )}
+                    />
+                  )}
                   <ReviewDetail
                     label="Estimated freight"
                     value={formatMoney(shippingSubtotal)}
@@ -2791,10 +2821,25 @@ function FreightShipmentForm({
                   )}
                 </>
               )}
-              <ReviewDetail
-                label="Estimated weight"
-                value={`${weightKg} kg`}
-              />
+              {setPrice ? (
+                itemPricing.includedKg > 0 && (
+                  <>
+                    <ReviewDetail
+                      label="Covers up to"
+                      value={`${itemPricing.includedKg} kg`}
+                    />
+                    <ReviewDetail
+                      label="Over that, per kg"
+                      value={formatMoney(pricing?.rate ?? 0)}
+                    />
+                  </>
+                )
+              ) : (
+                <ReviewDetail
+                  label="Estimated weight"
+                  value={`${weightKg} kg`}
+                />
+              )}
               {paybackAmount > 0 && (
                 <ReviewDetail
                   label="If it is lost"
@@ -2843,6 +2888,26 @@ function FreightShipmentForm({
                   shipment arrived. If that charge doesn&rsquo;t go through,
                   you&rsquo;ll be asked to complete payment in the app.
                 </div>
+              ) : setPrice ? (
+                itemPricing.includedKg > 0 ? (
+                  <div className="customer-inline-note">
+                    This item has a set price that covers up to{" "}
+                    {itemPricing.includedKg} kg. The business weighs the
+                    parcel at drop-off, and if it comes in heavier, Laawol
+                    will try to automatically charge the card you use today
+                    for the extra kilos at{" "}
+                    {formatMoney(pricing?.rate ?? 0)} / kg. If that charge
+                    doesn&rsquo;t go through, you&rsquo;ll need to open the
+                    app to complete payment before your shipment can
+                    continue.
+                  </div>
+                ) : (
+                  <div className="customer-inline-note">
+                    This item has a set price that covers the parcel whatever
+                    it weighs. Nothing is weighed and nothing is settled
+                    afterwards - what you pay today is the whole price.
+                  </div>
+                )
               ) : (
                 <div className="customer-inline-note">
                   The weight you enter is an estimate. If the business
@@ -3071,19 +3136,42 @@ function FreightShipmentForm({
                 </span>
               </label>
             )}
-            <label>
-              Estimated weight (kg)
-              <input
-                min="0.1"
-                onChange={(event) =>
-                  setWeightKg(Number(event.target.value || 0))
-                }
-                required
-                step="0.1"
-                type="number"
-                value={weightKg}
-              />
-            </label>
+            {itemPricing.needsWeightAtBooking ? (
+              <label>
+                Estimated weight (kg)
+                <input
+                  min="0.1"
+                  onChange={(event) =>
+                    setWeightKg(Number(event.target.value || 0))
+                  }
+                  required
+                  step="0.1"
+                  type="number"
+                  value={weightKg}
+                />
+              </label>
+            ) : (
+              /* A published price for a known object. Asking what an
+                 iPhone weighs would be asking the customer to guess at a
+                 number that changes nothing. */
+              <div className="customer-inline-note customer-form-span">
+                <strong>{formatMoney(itemPricing.flatPrice)}</strong>{" "}
+                <span>
+                  {itemLookup?.label
+                    ? `is the set price for ${itemLookup.label}.`
+                    : "is the set price for this item."}
+                </span>{" "}
+                {itemPricing.includedKg > 0 ? (
+                  <span>
+                    It covers up to {itemPricing.includedKg} kg. The business
+                    weighs it at drop-off, and anything over that is charged
+                    at {formatMoney(pricing?.rate ?? 0)} / kg.
+                  </span>
+                ) : (
+                  <span>It covers the parcel whatever it weighs.</span>
+                )}
+              </div>
+            )}
             {destination && (
               <FreightProtectionNote
                 businessName={destination.businessName}
@@ -3158,12 +3246,20 @@ function FreightShipmentForm({
             {destination && pricing && (
               <ShippingPriceSummary
                 details={[
-                  {
-                    label: mode === "air" ? "Air freight rate" : "Sea freight rate",
-                    value: `${formatMoney(
-                      categoryPricing?.categoryRatePerKg ?? pricing.rate,
-                    )} / kg`,
-                  },
+                  setPrice
+                    ? {
+                        label: "Set price",
+                        value: formatMoney(itemPricing.flatPrice),
+                      }
+                    : {
+                        label:
+                          mode === "air"
+                            ? "Air freight rate"
+                            : "Sea freight rate",
+                        value: `${formatMoney(
+                          categoryPricing?.categoryRatePerKg ?? pricing.rate,
+                        )} / kg`,
+                      },
                   ...(selectedCategory
                     ? [
                         {
@@ -3172,10 +3268,25 @@ function FreightShipmentForm({
                         },
                       ]
                     : []),
-                  {
-                    label: "Estimated weight",
-                    value: `${pricing.weightKg} kg`,
-                  },
+                  ...(setPrice
+                    ? itemPricing.includedKg > 0
+                      ? [
+                          {
+                            label: "Covers up to",
+                            value: `${itemPricing.includedKg} kg`,
+                          },
+                          {
+                            label: "Over that, per kg",
+                            value: formatMoney(pricing.rate),
+                          },
+                        ]
+                      : []
+                    : [
+                        {
+                          label: "Estimated weight",
+                          value: `${pricing.weightKg} kg`,
+                        },
+                      ]),
                   {
                     label: "Shipping subtotal",
                     value: formatMoney(shippingSubtotal),
@@ -3211,7 +3322,11 @@ function FreightShipmentForm({
                 note={
                   pricing.pickupPending
                     ? "Pickup quote pending. Sign in to calculate the full estimate."
-                    : "Final weight is verified by the selected business before settlement."
+                    : setPrice
+                      ? itemPricing.includedKg > 0
+                        ? "The business weighs it at drop-off and charges per kg for anything over the included weight."
+                        : "This price is final for this item."
+                      : "Final weight is verified by the selected business before settlement."
                 }
                 provider={destination.businessName}
                 total={formatMoney(estimatedTotal ?? shippingSubtotal)}

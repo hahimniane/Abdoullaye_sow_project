@@ -22,6 +22,8 @@ import {
   buildFreightSettingsPayload,
   defaultFreightCategoryId,
   emptyFreightCustomCategory,
+  emptyFreightPaybackCategory,
+  emptyFreightPaybackItem,
   formatMultiplier,
   freightCategoryMultiplier,
   freightCategoryOptionsFrom,
@@ -31,6 +33,7 @@ import {
   freightCoveragePolicyFrom,
   freightSettingsFromRow,
   validateFreightSettings,
+  type FreightPaybackItemDraft,
   type FreightSettingsDraft,
 } from "./freight-categories.ts";
 
@@ -261,6 +264,146 @@ test("only the rows a business actually moved are saved", () => {
   });
 });
 
+test("each row carries its own pricing, and an untouched row carries none", () => {
+  const payload = buildFreightSettingsPayload(
+    draft({
+      payback: {
+        electronics: {
+          ...emptyFreightPaybackCategory(),
+          items: [
+            {
+              ...emptyFreightPaybackItem("iphone-16", "iPhone 16"),
+              amount: "400",
+              pricingMode: "flat",
+              flatPrice: "50",
+              includedKg: "2",
+            },
+            {
+              ...emptyFreightPaybackItem("tv", "Television"),
+              amount: "300",
+              pricingMode: "flat",
+              flatPrice: "120",
+            },
+            {
+              ...emptyFreightPaybackItem("cables", "Cables"),
+              amount: "20",
+              pricingMode: "per_kg",
+              weightFactor: "1.4",
+            },
+            // Saved before pricing moved onto the row. It must reach the
+            // callable with no pricing keys at all: the category factor is
+            // what priced it yesterday and has to price it tomorrow.
+            {
+              ...emptyFreightPaybackItem("laptop", "Laptop"),
+              amount: "800",
+              pricingMode: "",
+            },
+          ],
+          otherAmount: "100",
+          otherPricingMode: "per_kg",
+        },
+      },
+    }),
+  );
+  const electronics = payload.freightPaybackTable.electronics;
+  assert.deepEqual(electronics.items, [
+    {
+      id: "iphone-16",
+      label: "iPhone 16",
+      paybackAmount: 400,
+      pricingMode: "flat",
+      flatPrice: 50,
+      includedKg: 2,
+    },
+    // No allowance is not zero allowance: the key is left off entirely, and
+    // the server reads that as "covers it however heavy it is".
+    {
+      id: "tv",
+      label: "Television",
+      paybackAmount: 300,
+      pricingMode: "flat",
+      flatPrice: 120,
+    },
+    {
+      id: "cables",
+      label: "Cables",
+      paybackAmount: 20,
+      pricingMode: "per_kg",
+      weightFactor: 1.4,
+    },
+    {id: "laptop", label: "Laptop", paybackAmount: 800},
+  ]);
+  assert.equal(electronics.otherPricingMode, "per_kg");
+  assert.equal("otherWeightFactor" in electronics, false);
+  // Category factors still ride along untouched - they are what a row with
+  // no pricing of its own is charged at.
+  assert.deepEqual(
+    buildFreightSettingsPayload(
+      draft({
+        categoryRates: {
+          ...freightSettingsFromRow(null).categoryRates,
+          electronics: "2.5",
+        },
+      }),
+    ).freightCategoryRates,
+    {electronics: 2.5},
+  );
+});
+
+test("a priced row is refused here on the bands the server refuses on", () => {
+  function priced(patch: Partial<FreightPaybackItemDraft>) {
+    return draft({
+      payback: {
+        electronics: {
+          ...emptyFreightPaybackCategory(),
+          items: [
+            {...emptyFreightPaybackItem("iphone", "iPhone"), ...patch},
+          ],
+          otherAmount: "0",
+        },
+      },
+    });
+  }
+  assert.equal(
+    validateFreightSettings(priced({pricingMode: "flat", flatPrice: ""})),
+    "iPhone: enter a set price between $0.01 and $10,000.",
+  );
+  assert.equal(
+    validateFreightSettings(priced({pricingMode: "flat", flatPrice: "0"})),
+    "iPhone: enter a set price between $0.01 and $10,000.",
+  );
+  assert.equal(
+    validateFreightSettings(priced({pricingMode: "flat", flatPrice: "50000"})),
+    "iPhone: enter a set price between $0.01 and $10,000.",
+  );
+  assert.equal(
+    validateFreightSettings(
+      priced({pricingMode: "flat", flatPrice: "50", includedKg: "900"}),
+    ),
+    "iPhone: the weight the price covers must be between 0 and 200 kg.",
+  );
+  // Blank is an answer, not a gap: the price covers any weight.
+  assert.equal(
+    validateFreightSettings(
+      priced({pricingMode: "flat", flatPrice: "50", includedKg: ""}),
+    ),
+    null,
+  );
+  assert.equal(
+    validateFreightSettings(
+      priced({pricingMode: "per_kg", weightFactor: "40"}),
+    ),
+    "iPhone: enter a weight factor between 0.5 and 10.",
+  );
+  // Blank again means "whatever this category charges", which is what a row
+  // saved before per-row pricing is charged at.
+  assert.equal(
+    validateFreightSettings(priced({pricingMode: "per_kg", weightFactor: ""})),
+    null,
+  );
+  assert.equal(validateFreightSettings(priced({pricingMode: ""})), null);
+});
+
 test("the settings form refuses what the server would refuse", () => {
   assert.equal(validateFreightSettings(draft()), null);
 
@@ -392,6 +535,45 @@ test("everything the two screens say has French", () => {
   );
 });
 
+test("how a row is priced reads in French on both screens", () => {
+  // The control the whole change hangs on, and both of its answers.
+  assert.equal(translateValue("How is this priced?", "fr"), "Comment est-ce tarifé ?");
+  assert.equal(translateValue("A set price", "fr"), "Un prix fixe");
+  assert.equal(translateValue("By weight", "fr"), "Au poids");
+  assert.equal(translateValue("Price (USD)", "fr"), "Prix (USD)");
+  assert.equal(translateValue("Covers up to (kg)", "fr"), "Couvre jusqu’à (kg)");
+  assert.equal(translateValue("Weight factor", "fr"), "Facteur de poids");
+  // What the customer reads instead of a weight field.
+  assert.equal(translateValue("Set price", "fr"), "Prix fixe");
+  assert.equal(translateValue("Covers up to", "fr"), "Couvre jusqu’à");
+  assert.equal(translateValue("Over that, per kg", "fr"), "Au-delà, par kg");
+  assert.equal(
+    translateValue("It covers the parcel whatever it weighs.", "fr"),
+    "Il couvre le colis quel que soit son poids.",
+  );
+  assert.equal(
+    translateValue("This price is final for this item.", "fr"),
+    "Ce prix est définitif pour cet article.",
+  );
+  // Refusals the settings form raises on a priced row. The row name is
+  // whatever the business typed, so the sentence around it is what carries.
+  assert.match(
+    translateValue("iPhone: enter a set price between $0.01 and $10,000.", "fr"),
+    /saisissez un prix fixe entre 0,01 \$ et 10 000 \$\.$/,
+  );
+  assert.match(
+    translateValue(
+      "iPhone: the weight the price covers must be between 0 and 200 kg.",
+      "fr",
+    ),
+    /le poids couvert par le prix doit être compris entre 0 et 200 kg\.$/,
+  );
+  assert.match(
+    translateValue("iPhone: enter a weight factor between 0.5 and 10.", "fr"),
+    /saisissez un facteur de poids entre 0,5 et 10\.$/,
+  );
+});
+
 test("both consoles are wired to the freight category and coverage contract", () => {
   const customer = readFileSync(
     new URL("../components/customer-shipping-services.tsx", import.meta.url),
@@ -426,8 +608,15 @@ test("both consoles are wired to the freight category and coverage contract", ()
   );
   assert.match(business, /<FreightGoodsEditor/);
   // Explained with an "i" rather than a permanent amber banner.
-  assert.match(business, /FieldInfo label="how item categories change your price"/);
+  assert.match(business, /FieldInfo label="how item categories work"/);
   assert.match(business, /FieldInfo label="how cover for a lost parcel works"/);
+  // Pricing lives on the row the business priced, so a category is a heading
+  // and offers nothing to type. The stored factors still ride in the payload
+  // untouched, which is what keeps a row that names no pricing of its own
+  // charging exactly what it charged yesterday.
+  assert.doesNotMatch(business, /onCategoryRate/);
+  assert.doesNotMatch(business, /<span>Price multiplier<\/span>/);
+  assert.match(business, /How is this priced\?/);
   // What a business owes on a lost parcel is money moving, so it stays on the
   // screen whether or not anyone presses the "i".
   assert.match(business, /You pay the customer back, not Laawol/);

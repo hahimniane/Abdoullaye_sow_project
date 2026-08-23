@@ -869,6 +869,13 @@ class _FreightNextStepCallout extends StatelessWidget {
               : l10n.freightNextReadyForPickup)
         : shipment.status == 'awaiting_weight_confirmation'
         ? l10n.freightNextWeightReview
+        // A set price with no weight allowance never meets a scale, so the
+        // drop-off step must not promise a weight confirmation this parcel
+        // does not get.
+        : !shipment.weighsAtDropOff
+        ? (businessName.isEmpty
+              ? l10n.freightNextDropOffAtBusinessSetPrice
+              : l10n.freightNextDropOffAtProviderSetPrice(businessName))
         : businessName.isEmpty
         ? l10n.freightNextDropOffAtBusiness
         : l10n.freightNextDropOffAtProvider(businessName);

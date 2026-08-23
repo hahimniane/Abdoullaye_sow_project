@@ -37,6 +37,7 @@ const {
   validateFreightCoverageSettings,
 } = require("./freight_coverage");
 const {
+  freightItemPricing,
   quoteFreightItemCoverage,
   validateFreightPaybackTable,
 } = require("./freight_payback");
@@ -56,6 +57,14 @@ const FREIGHT_PAYBACK_ERRORS = {
   item_duplicated: "Two items in one category share the same id",
   payback_out_of_range:
     "Payback amounts must be between $0 and $10,000",
+  pricing_mode_invalid:
+    "Say whether that item has a set price or is priced by weight",
+  flat_price_out_of_range:
+    "A set price must be between $0 and $10,000",
+  included_kg_out_of_range:
+    "The weight a set price covers must be between 0 and 200 kg",
+  weight_factor_out_of_range:
+    "A by-weight item must be between 0.5x and 10x your per-kilo rate",
 };
 const {
   VIEWING_REQUESTED,
@@ -21193,10 +21202,14 @@ exports.createFreightShipmentPaymentIntent = onCall(
       requireValidPhoneNumber(receiverPhone, "Receiver phone");
       const freightMode = normalizeFreightMode(mode);
       const parcelWeightKg = Number(weightKg || 0);
-      if (!Number.isFinite(parcelWeightKg) || parcelWeightKg <= 0) {
+      // Whether a weight is REQUIRED depends on how the business prices
+      // this item, which is not known until its document is read - so a
+      // negative or unreadable number is refused here and the "must be
+      // greater than zero" rule is applied once the pricing is resolved.
+      if (!Number.isFinite(parcelWeightKg) || parcelWeightKg < 0) {
         throw new HttpsError(
             "invalid-argument",
-            "Parcel weight must be greater than zero",
+            "Parcel weight cannot be negative",
         );
       }
 
@@ -21290,9 +21303,29 @@ exports.createFreightShipmentPaymentIntent = onCall(
           business,
           itemCategoryId,
       );
-      const shippingFee =
-        Math.round(parcelWeightKg * pricePerKg * categoryMultiplier * 100) /
-        100;
+      // A business prices each thing it carries the way that thing works.
+      // An iPhone 16 is a known object: one price, no scale, nothing to
+      // settle afterwards. A bag of clothes is different every time, so it
+      // is weighed and the existing confirm-and-settle flow runs. A row
+      // that names no pricing falls back to the category multiplier, which
+      // is how every booking was priced before this existed.
+      const itemPricing = freightItemPricing({
+        table: business.freightPaybackTable,
+        categoryId: itemCategoryId,
+        itemId,
+        categoryMultiplier,
+      });
+      if (itemPricing.needsWeightAtBooking && parcelWeightKg <= 0) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Parcel weight must be greater than zero",
+        );
+      }
+      const shippingFee = itemPricing.mode === "flat" ?
+        itemPricing.flatPrice :
+        Math.round(
+            parcelWeightKg * pricePerKg * itemPricing.weightFactor * 100,
+        ) / 100;
       // The payback is the BUSINESS's number, published per item type -
       // the first real freight partner refused sender-declared values on
       // sight, because the sender's number is a lie in whichever direction
@@ -21397,6 +21430,17 @@ exports.createFreightShipmentPaymentIntent = onCall(
           pricePerKgCents: Math.round(pricePerKg * 100),
           itemCategoryId: String(itemCategoryId || ""),
           itemCategoryMultiplier: categoryMultiplier,
+          // How this parcel was priced, frozen at booking. A set-price
+          // shipment has no weight to verify, so nothing downstream may
+          // reprice it against a scale.
+          pricingMode: itemPricing.mode,
+          ...(itemPricing.mode === "flat" ? {
+            itemFlatPrice: itemPricing.flatPrice,
+            itemIncludedKg: itemPricing.includedKg,
+          } : {itemWeightFactor: itemPricing.weightFactor}),
+          // A set price with an allowance is still weighed at the counter -
+          // only to see whether the parcel outgrew what the price covers.
+          weightVerificationRequired: itemPricing.weighsAtDropOff,
           ...(itemSnapshot ? {
             itemId: String(itemId || ""),
             paybackAmountCents: itemSnapshot.paybackAmountCents,
@@ -21462,12 +21506,19 @@ exports.createFreightShipmentPaymentIntent = onCall(
             status: "pending_payment",
           } : {
             paymentStatus: chargeCents === 0 ? "succeeded" : "pending",
-            priceSettlementStatus: chargeCents === 0 ?
-              FreightSettlementStatus.AWAITING_WEIGHT :
-              FreightSettlementStatus.AWAITING_ESTIMATE_PAYMENT,
-            weightVerificationStatus: "awaiting_business",
-            status: chargeCents === 0 ?
-              "awaiting_weight_confirmation" : "pending_payment",
+            priceSettlementStatus: chargeCents !== 0 ?
+              FreightSettlementStatus.AWAITING_ESTIMATE_PAYMENT :
+              itemPricing.weighsAtDropOff ?
+                FreightSettlementStatus.AWAITING_WEIGHT :
+                FreightSettlementStatus.SETTLED,
+            weightVerificationStatus: itemPricing.weighsAtDropOff ?
+              "awaiting_business" :
+              "not_required",
+            status: chargeCents !== 0 ?
+              "pending_payment" :
+              itemPricing.weighsAtDropOff ?
+                "awaiting_weight_confirmation" :
+                "pending",
             ...(chargeCents === 0 && {paidAt: now}),
           }),
           createdAt: now,
@@ -21479,8 +21530,12 @@ exports.createFreightShipmentPaymentIntent = onCall(
         if (SIMULATE_PAYMENTS) {
           await shipmentRef.update({
             paymentStatus: "card_saved",
-            priceSettlementStatus: FreightSettlementStatus.AWAITING_WEIGHT,
-            status: "awaiting_weight_confirmation",
+            priceSettlementStatus: itemPricing.weighsAtDropOff ?
+              FreightSettlementStatus.AWAITING_WEIGHT :
+              FreightSettlementStatus.DUE_ON_ARRIVAL,
+            status: itemPricing.weighsAtDropOff ?
+              "awaiting_weight_confirmation" :
+              "pending",
             stripeSetupIntentId: `simulated_setup_${shipmentRef.id}`,
             stripePaymentMethodId: `simulated_pm_${shipmentRef.id}`,
             cardSavedAt: FirestoreFieldValue.serverTimestamp(),
@@ -21707,11 +21762,19 @@ exports.completeFreightShipmentPayment = onCall(
       }
       const pricingVersion = Number(shipment.freightPricingVersion || 1);
       const versionTwo = pricingVersion >= 2;
-      const paidStatus = versionTwo ?
+      // A set-price parcel is fully paid the moment it is paid: there is no
+      // weight to verify and nothing left to settle, so it joins the
+      // fulfillment queue instead of the scale queue.
+      const weighs = shipment.weightVerificationRequired !== false;
+      const paidStatus = versionTwo && weighs ?
         "awaiting_weight_confirmation" : "pending";
-      const settlementUpdate = versionTwo ? {
+      const settlementUpdate = !versionTwo ? {} : weighs ? {
         priceSettlementStatus: FreightSettlementStatus.AWAITING_WEIGHT,
-      } : {};
+      } : {
+        priceSettlementStatus: FreightSettlementStatus.SETTLED,
+        weightVerificationStatus: "not_required",
+        settledAt: FirestoreFieldValue.serverTimestamp(),
+      };
 
       if (SIMULATE_PAYMENTS) {
         await shipmentRef.update({
@@ -22693,6 +22756,15 @@ exports.confirmFreightShipmentWeight = onCall(
               "The estimate must be paid before weight confirmation",
           );
         }
+        // A set price with no weight allowance covers the parcel however
+        // heavy it is, so there is nothing a scale could change. Repricing
+        // it would invent a balance the customer never agreed to.
+        if (shipment.weightVerificationRequired === false) {
+          throw new HttpsError(
+              "failed-precondition",
+              "This shipment has a set price and is not weighed",
+          );
+        }
         if (existingSettlementDoc.exists) {
           const existing = existingSettlementDoc.data() || {};
           if (Math.abs(Number(existing.verifiedWeightKg) - verifiedWeightKg) >
@@ -22772,6 +22844,13 @@ exports.confirmFreightShipmentWeight = onCall(
                 shipment.destinationDeliveryFeeCents ??
                   centsFromDollars(shipment.destinationDeliveryFee) ?? 0,
             ) || 0,
+            // A set-price parcel settles at its price plus whatever it
+            // weighed over the allowance; a by-weight one sends zero here
+            // and is priced by the scale exactly as before.
+            flatPriceCents: shipment.pricingMode === "flat" ?
+              centsFromDollars(shipment.itemFlatPrice) || 0 :
+              0,
+            includedKg: Number(shipment.itemIncludedKg || 0) || 0,
           });
         } catch (error) {
           throw new HttpsError("failed-precondition", error.message);

@@ -1559,6 +1559,13 @@
     }
   },
   "freightNextDropOffAtBusiness": "Déposez votre colis à l’adresse de l’entreprise. L’entreprise confirmera le poids après le dépôt.",
+  "freightNextDropOffAtProviderSetPrice": "Déposez votre colis chez {businessName}. Le prix de cet article est fixé, il n’y a plus rien à payer.",
+  "@freightNextDropOffAtProviderSetPrice": {
+    "placeholders": {
+      "businessName": {}
+    }
+  },
+  "freightNextDropOffAtBusinessSetPrice": "Déposez votre colis à l’adresse de l’entreprise. Le prix de cet article est fixé, il n’y a plus rien à payer.",
   "freightNextWeightReview": "L’entreprise confirme le poids final. Tout solde ou remboursement apparaîtra ici.",
   "freightNextInTransit": "Votre colis est en route. Gardez ce numéro de suivi pour les mises à jour.",
   "freightNextReadyForPickup": "Votre colis est prêt à être récupéré.",
@@ -2967,6 +2974,27 @@
       "amount": {}
     }
   },
+  "freightSetPriceTitle": "Prix pour cet article",
+  "freightSetPriceLine": "Prix fixe de {amount}",
+  "@freightSetPriceLine": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "freightSetPriceCoversUpTo": "Comprend jusqu'à {kilograms} kg, puis {rate} par kg au-delà",
+  "@freightSetPriceCoversUpTo": {
+    "placeholders": {
+      "kilograms": {
+        "type": "String"
+      },
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "freightSetPriceCoversAnyWeight": "Comprend cet article quel que soit son poids",
+  "freightSetPriceFinal": "C'est le prix complet pour cet article.",
+  "freightSetPriceOverAllowanceNote": "L'entreprise pèse le colis au dépôt et facture le poids qui dépasse ce que ce prix comprend.",
   "freightDestinationDeliveryFeeLabel": "Livraison à destination",
   "freightReceiverAddressLabel": "Adresse du destinataire",
   "freightReceiverAddressHint": "Quartier, point de repère, ville",

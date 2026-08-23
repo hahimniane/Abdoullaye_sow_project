@@ -83,8 +83,13 @@ import {
   MAX_CUSTOM_FREIGHT_CATEGORIES,
   STANDARD_FREIGHT_CATEGORIES,
   type FreightPaybackCategoryDraft,
+  type FreightPaybackItemDraft,
+  type FreightPaybackPricingMode,
+  formatMultiplier,
   resolvedFreightCategoryId,
   emptyFreightCustomCategory,
+  emptyFreightPaybackCategory,
+  emptyFreightPaybackItem,
   type FreightCustomCategoryDraft,
   type FreightSettingsDraft,
 } from "@/lib/freight-categories";
@@ -92,7 +97,13 @@ import {
   MAX_DESTINATION_DELIVERY_FEE,
   deliverySettingsError,
 } from "@/lib/freight-delivery";
-import { STANDARD_FREIGHT_ITEMS } from "@/lib/freight-payback";
+import {
+  MAX_INCLUDED_KG,
+  MAX_ITEM_FLAT_PRICE,
+  MAX_WEIGHT_FACTOR,
+  MIN_WEIGHT_FACTOR,
+  STANDARD_FREIGHT_ITEMS,
+} from "@/lib/freight-payback";
 import { useSharedBarrelsEnabled } from "@/lib/feature-flags";
 import { db, functions, storage } from "@/lib/firebase";
 import { formatDate, text } from "@/lib/format";
@@ -594,16 +605,6 @@ export function BusinessServicesPanel({
 
   function updateFreight(patch: Partial<FreightSettingsDraft>) {
     setDraft((current) => ({...current, freight: {...current.freight, ...patch}}));
-  }
-
-  function updateCategoryRate(categoryId: string, value: string) {
-    setDraft((current) => ({
-      ...current,
-      freight: {
-        ...current.freight,
-        categoryRates: {...current.freight.categoryRates, [categoryId]: value},
-      },
-    }));
   }
 
   function updateCustomCategory(
@@ -1108,7 +1109,6 @@ export function BusinessServicesPanel({
                   })
                 }
                 onChange={updateFreight}
-                onCategoryRate={updateCategoryRate}
                 onCustomCategory={updateCustomCategory}
                 onRemoveCategory={(index) =>
                   updateFreight({
@@ -1318,14 +1318,12 @@ function FreightGoodsEditor({
   draft,
   onAddCategory,
   onChange,
-  onCategoryRate,
   onCustomCategory,
   onRemoveCategory,
 }: {
   draft: FreightSettingsDraft;
   onAddCategory: () => void;
   onChange: (patch: Partial<FreightSettingsDraft>) => void;
-  onCategoryRate: (categoryId: string, value: string) => void;
   onCustomCategory: (
     index: number,
     patch: Partial<FreightCustomCategoryDraft>,
@@ -1355,42 +1353,19 @@ function FreightGoodsEditor({
         <p className="service-config-note wide">
           <span className="label-with-info">
             Item categories
-            <FieldInfo label="how item categories change your price">
+            <FieldInfo label="how item categories work">
               <p>
-                A multiplier rides on top of your per-kg rate for the
-                destination. 2 means a kilo of that costs twice a kilo of
-                general goods; 1 means it costs the same.
+                Categories are how a customer finds the thing they are
+                sending. The list is the platform&rsquo;s, so a customer can
+                compare you with another business on the same words.
               </p>
               <p>
-                The list is the platform&rsquo;s, so a customer can compare you
-                with another business on the same words. You set what each row
-                is worth to you.
-              </p>
-              <p>
-                Leave a row at the number it starts on and nothing about your
-                prices changes.
+                What each thing costs is set on the item itself, under
+                &ldquo;What you carry, and what it costs&rdquo; below.
               </p>
             </FieldInfo>
           </span>
         </p>
-        {STANDARD_FREIGHT_CATEGORIES.map((category) => (
-          <label className="lst-field" key={category.id}>
-            <span>{category.label}</span>
-            <small>{category.hint}</small>
-            <input
-              inputMode="decimal"
-              max="10"
-              min="0.5"
-              onChange={(event) =>
-                onCategoryRate(category.id, event.target.value)
-              }
-              step="0.1"
-              type="number"
-              value={draft.categoryRates[category.id] ?? ""}
-            />
-          </label>
-        ))}
-
         <p className="service-config-note wide">
           <span className="label-with-info">
             Your own categories
@@ -1417,20 +1392,6 @@ function FreightGoodsEditor({
                 placeholder="e.g. Auto parts"
                 type="text"
                 value={row.label}
-              />
-            </label>
-            <label className="lst-field">
-              <span>Price multiplier</span>
-              <input
-                inputMode="decimal"
-                max="10"
-                min="0.5"
-                onChange={(event) =>
-                  onCustomCategory(index, {multiplier: event.target.value})
-                }
-                step="0.1"
-                type="number"
-                value={row.multiplier}
               />
             </label>
             <label className="lst-field wide">
@@ -1584,19 +1545,25 @@ function FreightGoodsEditor({
         <div className="wide">
           <p className="service-config-note">
             <span className="label-with-info">
-              What each item pays back
-              <FieldInfo label="how the payback list works">
+              What you carry, and what it costs
+              <FieldInfo label="how the item list works">
                 <p>
-                  You publish what each item pays back if it is lost, and
-                  that number is the promise the customer sees. An item you
-                  have not listed cannot be booked instantly; the customer
-                  asks you for a quote instead.
+                  Each row answers two questions: what you charge to carry
+                  that thing, and what you pay the customer if you lose it.
+                  An item you have not listed cannot be booked instantly;
+                  the customer asks you for a quote instead.
                 </p>
                 <p>
-                  If you cover lost parcels, the amount here is what you owe
-                  in full - a $400 iPhone pays back $400. The customer is
-                  charged nothing for that, so price each item above for what
-                  it is worth to you to carry.
+                  A known object can have a set price - &ldquo;iPhone 16,
+                  $50&rdquo; - and the customer is never asked what it
+                  weighs. Goods that vary every time are priced by weight at
+                  your rate for the destination.
+                </p>
+                <p>
+                  If you cover lost parcels, the payback is what you owe in
+                  full - a $400 iPhone pays back $400. The customer is
+                  charged nothing for that, so price each row for what it is
+                  worth to you to carry.
                 </p>
               </FieldInfo>
             </span>
@@ -1609,9 +1576,131 @@ function FreightGoodsEditor({
 }
 
 /**
- * The payback list: per category, the items this business will stand behind
- * and what each pays back if lost. The same rows double as the customer's
- * item picker, so an empty list here is an item nobody can instant-book.
+ * How this business prices one row, and what it pays back if it loses it.
+ *
+ * Two ways to charge, and the business picks per row because only it knows
+ * which of its goods are which. A known object gets one price and never sees
+ * a scale; goods that vary are weighed, and the weigh-and-confirm settlement
+ * runs exactly as it does for every other parcel.
+ */
+function FreightRowPricingFields({
+  categoryFactor,
+  onPatch,
+  row,
+}: {
+  categoryFactor: number;
+  onPatch: (patch: {
+    pricingMode?: FreightPaybackPricingMode;
+    flatPrice?: string;
+    includedKg?: string;
+    weightFactor?: string;
+  }) => void;
+  row: {
+    pricingMode: FreightPaybackPricingMode;
+    flatPrice: string;
+    includedKg: string;
+    weightFactor: string;
+  };
+}) {
+  // A row that names no pricing of its own is charged at its category's
+  // factor, so that is what it shows - as a placeholder, not a value, because
+  // typing nothing here has to keep saving nothing.
+  const flat = row.pricingMode === "flat";
+  return (
+    <div className="payback-pricing-row">
+      <label className="lst-field">
+        <span>How is this priced?</span>
+        <select
+          onChange={(event) =>
+            onPatch({
+              pricingMode: event.target.value === "flat" ? "flat" : "per_kg",
+            })
+          }
+          value={flat ? "flat" : "per_kg"}
+        >
+          <option value="flat">A set price</option>
+          <option value="per_kg">By weight</option>
+        </select>
+      </label>
+      {flat ? (
+        <>
+          <label className="lst-field">
+            <span>Price (USD)</span>
+            <input
+              inputMode="decimal"
+              max={MAX_ITEM_FLAT_PRICE}
+              min="0"
+              onChange={(event) => onPatch({flatPrice: event.target.value})}
+              placeholder="e.g. 50"
+              step="0.01"
+              type="number"
+              value={row.flatPrice}
+            />
+          </label>
+          <label className="lst-field">
+            <span className="label-with-info">
+              Covers up to (kg)
+              <FieldInfo label="what the included weight does">
+                <p>
+                  Leave this blank and your price covers the parcel however
+                  heavy it is.
+                </p>
+                <p>
+                  Give a weight and you weigh it at drop-off: anything over
+                  that is charged at your per-kg rate for the destination, on
+                  top of the price.
+                </p>
+              </FieldInfo>
+            </span>
+            <input
+              inputMode="decimal"
+              max={MAX_INCLUDED_KG}
+              min="0"
+              onChange={(event) => onPatch({includedKg: event.target.value})}
+              placeholder="Any weight"
+              step="0.1"
+              type="number"
+              value={row.includedKg}
+            />
+          </label>
+        </>
+      ) : (
+        <label className="lst-field">
+          <span className="label-with-info">
+            Weight factor
+            <FieldInfo label="what the weight factor does">
+              <p>
+                What a kilo of this costs, as a multiple of your per-kg rate
+                for the destination. 2 means a kilo of it costs twice a kilo
+                of general goods.
+              </p>
+              <p>
+                Leave it blank to charge what the rest of this category
+                charges.
+              </p>
+            </FieldInfo>
+          </span>
+          <input
+            inputMode="decimal"
+            max={MAX_WEIGHT_FACTOR}
+            min={MIN_WEIGHT_FACTOR}
+            onChange={(event) => onPatch({weightFactor: event.target.value})}
+            placeholder={formatMultiplier(categoryFactor)}
+            step="0.1"
+            type="number"
+            value={row.weightFactor}
+          />
+        </label>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The item list: per category, the things this business carries, what each
+ * costs and what each pays back if lost. The same rows double as the
+ * customer's item picker, so an empty list here is an item nobody can
+ * instant-book.
  */
 function FreightPaybackEditor({
   draft,
@@ -1624,12 +1713,16 @@ function FreightPaybackEditor({
     ...STANDARD_FREIGHT_CATEGORIES.map((category) => ({
       id: category.id,
       label: category.label,
+      // What a row with no pricing of its own is charged at today.
+      factor:
+        Number(draft.categoryRates[category.id]) || category.defaultMultiplier,
     })),
     ...draft.customCategories
       .filter((row) => row.label.trim())
       .map((row) => ({
         id: resolvedFreightCategoryId(row),
         label: row.label.trim(),
+        factor: Number(row.multiplier) || 1,
       })),
   ];
 
@@ -1637,7 +1730,8 @@ function FreightPaybackEditor({
     categoryId: string,
     patch: Partial<FreightPaybackCategoryDraft>,
   ) {
-    const current = draft.payback[categoryId] ?? {items: [], otherAmount: "0"};
+    const current =
+      draft.payback[categoryId] ?? emptyFreightPaybackCategory();
     onChange({
       payback: {
         ...draft.payback,
@@ -1649,10 +1743,8 @@ function FreightPaybackEditor({
   return (
     <div className="payback-editor">
       {categories.map((category) => {
-        const entry = draft.payback[category.id] ?? {
-          items: [],
-          otherAmount: "0",
-        };
+        const entry =
+          draft.payback[category.id] ?? emptyFreightPaybackCategory();
         const suggestions = (STANDARD_FREIGHT_ITEMS[category.id] ?? []).filter(
           (suggestion) =>
             !entry.items.some((item) => item.id === suggestion.id),
@@ -1667,50 +1759,60 @@ function FreightPaybackEditor({
                   : "No items yet"}
               </span>
             </summary>
-            {entry.items.map((item, index) => (
-              <div className="payback-item-row" key={`${category.id}-${index}`}>
-                <input
-                  aria-label="Item name"
-                  onChange={(event) => {
-                    const items = [...entry.items];
-                    items[index] = {...item, label: event.target.value};
-                    patchCategory(category.id, {items});
-                  }}
-                  placeholder="e.g. iPhone"
-                  value={item.label}
-                />
-                <input
-                  aria-label="Payback amount (USD)"
-                  inputMode="decimal"
-                  min="0"
-                  onChange={(event) => {
-                    const items = [...entry.items];
-                    items[index] = {...item, amount: event.target.value};
-                    patchCategory(category.id, {items});
-                  }}
-                  type="number"
-                  value={item.amount}
-                />
-                <button
-                  aria-label={`Remove ${item.label || "item"}`}
-                  className="lst-icon-btn"
-                  onClick={() =>
-                    patchCategory(category.id, {
-                      items: entry.items.filter((_, i) => i !== index),
-                    })
-                  }
-                  type="button"
-                >
-                  <X size={15} />
-                </button>
-              </div>
-            ))}
+            {entry.items.map((item, index) => {
+              function patchItem(patch: Partial<FreightPaybackItemDraft>) {
+                const items = [...entry.items];
+                items[index] = {...item, ...patch};
+                patchCategory(category.id, {items});
+              }
+              return (
+                <div className="payback-item" key={`${category.id}-${index}`}>
+                  <div className="payback-item-row">
+                    <input
+                      aria-label="Item name"
+                      onChange={(event) =>
+                        patchItem({label: event.target.value})
+                      }
+                      placeholder="e.g. iPhone"
+                      value={item.label}
+                    />
+                    <input
+                      aria-label="Payback amount (USD)"
+                      inputMode="decimal"
+                      min="0"
+                      onChange={(event) =>
+                        patchItem({amount: event.target.value})
+                      }
+                      type="number"
+                      value={item.amount}
+                    />
+                    <button
+                      aria-label={`Remove ${item.label || "item"}`}
+                      className="lst-icon-btn"
+                      onClick={() =>
+                        patchCategory(category.id, {
+                          items: entry.items.filter((_, i) => i !== index),
+                        })
+                      }
+                      type="button"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                  <FreightRowPricingFields
+                    categoryFactor={category.factor}
+                    onPatch={patchItem}
+                    row={item}
+                  />
+                </div>
+              );
+            })}
             <div className="payback-category-actions">
               <button
                 className="lst-btn ghost"
                 onClick={() =>
                   patchCategory(category.id, {
-                    items: [...entry.items, {id: "", label: "", amount: "0"}],
+                    items: [...entry.items, emptyFreightPaybackItem()],
                   })
                 }
                 type="button"
@@ -1725,7 +1827,10 @@ function FreightPaybackEditor({
                     patchCategory(category.id, {
                       items: [
                         ...entry.items,
-                        {id: suggestion.id, label: suggestion.label, amount: "0"},
+                        emptyFreightPaybackItem(
+                          suggestion.id,
+                          suggestion.label,
+                        ),
                       ],
                     })
                   }
@@ -1735,28 +1840,62 @@ function FreightPaybackEditor({
                 </button>
               ))}
             </div>
-            <label className="lst-field payback-other">
-              <span className="label-with-info">
-                Anything else in this category pays back (USD)
-                <FieldInfo label="what the catch-all amount does">
-                  <p>
-                    0 means an item you have not listed cannot be booked
-                    instantly - the customer asks you for a quote instead.
-                    Any other number covers everything in this category you
-                    did not name.
-                  </p>
-                </FieldInfo>
-              </span>
-              <input
-                inputMode="decimal"
-                min="0"
-                onChange={(event) =>
-                  patchCategory(category.id, {otherAmount: event.target.value})
-                }
-                type="number"
-                value={entry.otherAmount}
-              />
-            </label>
+            <div className="payback-other">
+              <label className="lst-field">
+                <span className="label-with-info">
+                  Anything else in this category pays back (USD)
+                  <FieldInfo label="what the catch-all amount does">
+                    <p>
+                      0 means an item you have not listed cannot be booked
+                      instantly - the customer asks you for a quote instead.
+                      Any other number covers everything in this category you
+                      did not name.
+                    </p>
+                  </FieldInfo>
+                </span>
+                <input
+                  inputMode="decimal"
+                  min="0"
+                  onChange={(event) =>
+                    patchCategory(category.id, {
+                      otherAmount: event.target.value,
+                    })
+                  }
+                  type="number"
+                  value={entry.otherAmount}
+                />
+              </label>
+              {/* The catch-all is priced only when it can be booked: a
+                  category that pays back nothing for an unlisted item sends
+                  the customer to a quote, where you price it yourself. */}
+              {(Number(entry.otherAmount || 0) || 0) > 0 && (
+                <FreightRowPricingFields
+                  categoryFactor={category.factor}
+                  onPatch={(patch) =>
+                    patchCategory(category.id, {
+                      ...(patch.pricingMode !== undefined && {
+                        otherPricingMode: patch.pricingMode,
+                      }),
+                      ...(patch.flatPrice !== undefined && {
+                        otherFlatPrice: patch.flatPrice,
+                      }),
+                      ...(patch.includedKg !== undefined && {
+                        otherIncludedKg: patch.includedKg,
+                      }),
+                      ...(patch.weightFactor !== undefined && {
+                        otherWeightFactor: patch.weightFactor,
+                      }),
+                    })
+                  }
+                  row={{
+                    pricingMode: entry.otherPricingMode,
+                    flatPrice: entry.otherFlatPrice,
+                    includedKg: entry.otherIncludedKg,
+                    weightFactor: entry.otherWeightFactor,
+                  }}
+                />
+              )}
+            </div>
           </details>
         );
       })}

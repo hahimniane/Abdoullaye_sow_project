@@ -3685,6 +3685,15 @@ class AppLocalizationsEn extends AppLocalizations {
       'Drop off your parcel at the business location. The business will confirm the weight after drop-off.';
 
   @override
+  String freightNextDropOffAtProviderSetPrice(Object businessName) {
+    return 'Drop off your parcel at $businessName. The price for this item is set, so there is nothing left to pay.';
+  }
+
+  @override
+  String get freightNextDropOffAtBusinessSetPrice =>
+      'Drop off your parcel at the business location. The price for this item is set, so there is nothing left to pay.';
+
+  @override
   String get freightNextWeightReview =>
       'The business is confirming the final weight. We will show any balance or refund here.';
 
@@ -7009,6 +7018,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String freightDestinationDeliveryToAddress(Object amount) {
     return 'Deliver to their address · $amount';
   }
+
+  @override
+  String get freightSetPriceTitle => 'Price for this item';
+
+  @override
+  String freightSetPriceLine(Object amount) {
+    return '$amount set price';
+  }
+
+  @override
+  String freightSetPriceCoversUpTo(String kilograms, String rate) {
+    return 'Covers up to $kilograms kg, then $rate per kg over';
+  }
+
+  @override
+  String get freightSetPriceCoversAnyWeight =>
+      'Covers this item whatever it weighs';
+
+  @override
+  String get freightSetPriceFinal => 'This is the full price for this item.';
+
+  @override
+  String get freightSetPriceOverAllowanceNote =>
+      'The business weighs the parcel at drop-off and charges for any weight over what this price covers.';
 
   @override
   String get freightDestinationDeliveryFeeLabel => 'Delivery at destination';

@@ -1559,6 +1559,13 @@
     }
   },
   "freightNextDropOffAtBusiness": "Drop off your parcel at the business location. The business will confirm the weight after drop-off.",
+  "freightNextDropOffAtProviderSetPrice": "Drop off your parcel at {businessName}. The price for this item is set, so there is nothing left to pay.",
+  "@freightNextDropOffAtProviderSetPrice": {
+    "placeholders": {
+      "businessName": {}
+    }
+  },
+  "freightNextDropOffAtBusinessSetPrice": "Drop off your parcel at the business location. The price for this item is set, so there is nothing left to pay.",
   "freightNextWeightReview": "The business is confirming the final weight. We will show any balance or refund here.",
   "freightNextInTransit": "Your parcel is on the way. Keep this tracking code for updates.",
   "freightNextReadyForPickup": "Your parcel is ready for pickup.",
@@ -2967,6 +2974,27 @@
       "amount": {}
     }
   },
+  "freightSetPriceTitle": "Price for this item",
+  "freightSetPriceLine": "{amount} set price",
+  "@freightSetPriceLine": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "freightSetPriceCoversUpTo": "Covers up to {kilograms} kg, then {rate} per kg over",
+  "@freightSetPriceCoversUpTo": {
+    "placeholders": {
+      "kilograms": {
+        "type": "String"
+      },
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "freightSetPriceCoversAnyWeight": "Covers this item whatever it weighs",
+  "freightSetPriceFinal": "This is the full price for this item.",
+  "freightSetPriceOverAllowanceNote": "The business weighs the parcel at drop-off and charges for any weight over what this price covers.",
   "freightDestinationDeliveryFeeLabel": "Delivery at destination",
   "freightReceiverAddressLabel": "Receiver's address",
   "freightReceiverAddressHint": "Neighbourhood, landmark, city",

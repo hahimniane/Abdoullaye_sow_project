@@ -3,8 +3,11 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  FREIGHT_PAYBACK_ERRORS,
   freightItemChoicesFor,
+  freightItemPricing,
   freightPaybackFor,
+  freightPaybackErrorMessage,
   providerQualifiesForItem,
 } from "./freight-payback.ts";
 
@@ -201,4 +204,198 @@ test("the freight form reveals itself one answered question at a time", () => {
     customer,
     /itemStepSatisfied &&\s*\n\s*qualifiedProviderOptions\.length === 1/,
   );
+});
+
+// Twin of the pricing half of functions/test/freight-payback.test.js. Each row
+// answers two questions at once - what it costs to carry, and what it pays
+// back if lost - so both come from the same place and can never disagree.
+const PRICED = {
+  electronics: {
+    items: [
+      {
+        id: "iphone-16",
+        label: "iPhone 16",
+        paybackAmount: 400,
+        pricingMode: "flat",
+        flatPrice: 50,
+        includedKg: 2,
+      },
+      {
+        id: "tv",
+        label: "Television",
+        paybackAmount: 300,
+        pricingMode: "flat",
+        flatPrice: 120,
+      },
+      {
+        id: "cables",
+        label: "Cables",
+        paybackAmount: 20,
+        pricingMode: "per_kg",
+        weightFactor: 1.4,
+      },
+      // Saved before pricing moved onto the row.
+      {id: "laptop", label: "Laptop", paybackAmount: 800},
+    ],
+    otherPaybackAmount: 100,
+    otherPricingMode: "per_kg",
+  },
+  clothing: {items: [], otherPaybackAmount: 40},
+};
+
+test("a set price is published, and never asks the customer for a weight", () => {
+  const phone = freightItemPricing({
+    table: PRICED,
+    categoryId: "electronics",
+    itemId: "iphone-16",
+    categoryMultiplier: 2,
+  });
+  assert.equal(phone.mode, "flat");
+  assert.equal(phone.flatPrice, 50);
+  assert.equal(phone.includedKg, 2);
+  assert.equal(phone.needsWeightAtBooking, false);
+  // An allowance is the only reason a set-price parcel meets a scale: the
+  // business checks whether the parcel outgrew what the price covers.
+  assert.equal(phone.weighsAtDropOff, true);
+  assert.equal(phone.source, "item");
+
+  // No allowance means the price covers it however heavy it is, so nothing
+  // is weighed at all and there is nothing left to settle.
+  const tv = freightItemPricing({
+    table: PRICED,
+    categoryId: "electronics",
+    itemId: "tv",
+    categoryMultiplier: 2,
+  });
+  assert.equal(tv.includedKg, 0);
+  assert.equal(tv.needsWeightAtBooking, false);
+  assert.equal(tv.weighsAtDropOff, false);
+});
+
+test("a by-weight row uses its own factor, or its category's", () => {
+  assert.equal(
+    freightItemPricing({
+      table: PRICED,
+      categoryId: "electronics",
+      itemId: "cables",
+      categoryMultiplier: 2,
+    }).weightFactor,
+    1.4,
+  );
+  // The migration promise: a row saved before per-row pricing existed keeps
+  // being charged at its category's factor, so saving it unchanged cannot
+  // move what anyone is charged.
+  const legacy = freightItemPricing({
+    table: PRICED,
+    categoryId: "electronics",
+    itemId: "laptop",
+    categoryMultiplier: 2,
+  });
+  assert.equal(legacy.mode, "per_kg");
+  assert.equal(legacy.weightFactor, 2);
+  assert.equal(legacy.needsWeightAtBooking, true);
+  assert.equal(legacy.weighsAtDropOff, true);
+  // And a whole table that has never been priced behaves exactly the same.
+  const untouched = freightItemPricing({
+    table: TABLE,
+    categoryId: "electronics",
+    itemId: "iphone",
+    categoryMultiplier: 2,
+  });
+  assert.equal(untouched.weightFactor, 2);
+  assert.equal(untouched.mode, "per_kg");
+  // Unknown category, no table at all: the price freight had before any of
+  // this existed.
+  assert.equal(
+    freightItemPricing({
+      table: undefined,
+      categoryId: "electronics",
+      categoryMultiplier: 1.5,
+    }).weightFactor,
+    1.5,
+  );
+});
+
+test("an unlisted item falls through to the category's own pricing", () => {
+  const unlisted = freightItemPricing({
+    table: PRICED,
+    categoryId: "electronics",
+    itemId: "walkman",
+    categoryMultiplier: 2,
+  });
+  assert.equal(unlisted.source, "other");
+  assert.equal(unlisted.mode, "per_kg");
+  assert.equal(unlisted.weightFactor, 2);
+  // A category whose catch-all names no pricing prices like it always did.
+  assert.equal(
+    freightItemPricing({
+      table: PRICED,
+      categoryId: "clothing",
+      categoryMultiplier: 1,
+    }).source,
+    null,
+  );
+});
+
+test("a refusal from the callable reads as a sentence, not a code", () => {
+  assert.equal(
+    FREIGHT_PAYBACK_ERRORS.flat_price_out_of_range,
+    "A set price must be between $0.01 and $10,000",
+  );
+  assert.equal(
+    freightPaybackErrorMessage("included_kg_out_of_range"),
+    "An included weight must be between 0 and 200 kg",
+  );
+  assert.equal(
+    freightPaybackErrorMessage("weight_factor_out_of_range"),
+    "A weight factor must be between 0.5 and 10",
+  );
+  assert.equal(
+    freightPaybackErrorMessage("pricing_mode_invalid"),
+    "Say whether an item has a set price or is priced by weight",
+  );
+  // Anything the server invents later still says something readable.
+  assert.equal(
+    freightPaybackErrorMessage("something_new"),
+    "Those payback settings are not valid",
+  );
+});
+
+test("a set-price booking asks for no weight and sends none", () => {
+  const customer = readFileSync(
+    "src/components/customer-shipping-services.tsx",
+    "utf8",
+  );
+  // The price of a known object does not depend on the customer's guess at
+  // what it weighs, so the field is not on the screen at all.
+  assert.match(
+    customer,
+    /\{itemPricing\.needsWeightAtBooking \? \(\s*\n\s*<label>\s*\n\s*Estimated weight \(kg\)/,
+  );
+  assert.match(
+    customer,
+    /weightKg: itemPricing\.needsWeightAtBooking \? weightKg : 0,/,
+  );
+  // And the form cannot be held open waiting for a weight that is never
+  // asked for.
+  assert.match(customer, /!itemPricing\.needsWeightAtBooking \|\|/);
+  // The allowance and what excess costs both reach the estimate, because
+  // they are the whole of what the customer might still be charged.
+  assert.match(customer, /label: "Covers up to"/);
+  assert.match(customer, /label: "Over that, per kg"/);
+  assert.match(customer, /label: "Set price"/);
+  // The client prices with the same function the server does.
+  assert.match(customer, /freightItemPricing\(\{/);
+});
+
+test("a shipment nobody weighs is never offered a weigh action", () => {
+  const operations = readFileSync(
+    "src/components/business/operations-panels.tsx",
+    "utf8",
+  );
+  assert.match(
+    operations,
+    /const weighs = row\.weightVerificationRequired !== false;/,
+  );
+  assert.match(operations, /versionTwo && weighs && verifiedWeight <= 0/);
 });

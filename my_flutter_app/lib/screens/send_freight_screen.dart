@@ -317,21 +317,51 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   FreightCategory? get _category =>
       freightCategoryLookup(_categories, _categoryId);
 
-  /// The per-kg rate the customer is actually paying, category included. The
-  /// destination's rate never changes; the category rides on top of it.
-  double get _effectiveRatePerKg =>
-      _ratePerKg * freightCategoryMultiplier(_categories, _categoryId);
+  double get _categoryMultiplier =>
+      freightCategoryMultiplier(_categories, _categoryId);
 
-  double get _price => freightShippingFee(
-    weightKg: _weightKg,
-    ratePerKg: _ratePerKg,
-    multiplier: freightCategoryMultiplier(_categories, _categoryId),
+  /// How this business charges for the thing the funnel picked: one set
+  /// price, or the scale at some factor. Same resolution the callable prices
+  /// with, so the figure on the button is the figure on the card statement.
+  FreightItemPricing get _itemPricing => freightItemPricing(
+    table: _selected?.freightPaybackTable,
+    categoryId: _categoryId,
+    itemId: _submittedItemId ?? '',
+    categoryMultiplier: _categoryMultiplier,
   );
+
+  /// A known object, priced once by the business. Nothing here is weighed.
+  bool get _setPrice => _itemPricing.isFlat;
+
+  /// The category's multiplier prices this parcel only while the row it
+  /// belongs to states no pricing of its own - otherwise the card would
+  /// announce a factor nobody is charging.
+  bool get _categoryPricesParcel =>
+      !_setPrice && _itemPricing.weightFactor == _categoryMultiplier;
+
+  /// The per-kg rate the customer is actually paying, item factor included.
+  /// The destination's rate never changes; the factor rides on top of it.
+  double get _effectiveRatePerKg => _ratePerKg * _itemPricing.weightFactor;
+
+  double get _price => _setPrice
+      ? _itemPricing.flatPrice
+      : freightShippingFee(
+          weightKg: _weightKg,
+          ratePerKg: _ratePerKg,
+          multiplier: _itemPricing.weightFactor,
+        );
 
   /// The business publishes what each item pays back; the customer only says
   /// what the item is. Mirrors the web console exactly - see freight_payback.
   bool get _usesItemPricing =>
       (_selected?.freightPaybackTable?.isNotEmpty ?? false);
+
+  /// The item as the callable takes it: null for a business that publishes no
+  /// table at all, and empty for the category catch-all the funnel offers as
+  /// "Something else".
+  String? get _submittedItemId => _usesItemPricing
+      ? (_activeFunnelItemId == otherItemId ? '' : _activeFunnelItemId)
+      : null;
 
   /// The choice only survives while the chosen business actually offers it -
   /// a business switch submits pay-now, whatever the toggle said before.
@@ -536,7 +566,8 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       _snack(phoneError);
       return;
     }
-    if (_weightKg <= 0) {
+    // Only a parcel the business charges by the kilo has a weight to give.
+    if (!_setPrice && _weightKg <= 0) {
       _snack(l10n.enterParcelWeightKg);
       return;
     }
@@ -600,11 +631,9 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         destinationCountryId: option.country.id,
         businessId: option.businessId,
         mode: _mode,
-        weightKg: _weightKg,
+        weightKg: _setPrice ? 0 : _weightKg,
         itemCategoryId: _categoryId,
-        itemId: _usesItemPricing
-            ? (_activeFunnelItemId == otherItemId ? '' : _activeFunnelItemId)
-            : null,
+        itemId: _submittedItemId,
         destinationDelivery: _deliveryChosen,
         receiverAddress: _deliveryChosen ? _receiverAddress : null,
         pickupRequested: _pickupRequested,
@@ -1233,7 +1262,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    selected.changesPrice
+                    selected.changesPrice && _categoryPricesParcel
                         ? '${freightCategoryLabel(l10n, selected)} · '
                               '${freightMultiplierText(selected.multiplier)}'
                         : freightCategoryLabel(l10n, selected),
@@ -1253,13 +1282,81 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                 ),
               ),
             ],
-            const SizedBox(height: 4),
+            // A set price is stated on its own card, in dollars. Quoting a
+            // per-kg rate alongside it would offer the customer two prices
+            // for one parcel and let them pick the wrong one.
+            if (!_setPrice) ...[
+              const SizedBox(height: 4),
+              Text(
+                _categoryPricesParcel
+                    ? '${freightCategoryRateText(l10n, selected)} · '
+                          '${l10n.pricePerKg('\$${_effectiveRatePerKg.toStringAsFixed(2)}')}'
+                    : l10n.pricePerKg(
+                        '\$${_effectiveRatePerKg.toStringAsFixed(2)}',
+                      ),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// What a known object costs: one price the business published for this
+  /// item, and what that price covers by weight.
+  Widget _setPriceSection(ThemeData theme, AppLocalizations l10n) {
+    final pricing = _itemPricing;
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.sell_outlined,
+                  size: 18,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.freightSetPriceTitle,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                Text(
+                  freightMoney(pricing.flatPrice),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
             Text(
-              '${freightCategoryRateText(l10n, selected)} · '
-              '${l10n.pricePerKg('\$${_effectiveRatePerKg.toStringAsFixed(2)}')}',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: theme.colorScheme.primary,
+              // An allowance is the one thing that can still move this price
+              // at the counter, so it is said here rather than discovered
+              // when the parcel is on the scale.
+              pricing.includedKg > 0
+                  ? l10n.freightSetPriceCoversUpTo(
+                      _kgText(pricing.includedKg),
+                      '\$${_ratePerKg.toStringAsFixed(2)}',
+                    )
+                  : l10n.freightSetPriceCoversAnyWeight,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.hintColor,
               ),
             ),
           ],
@@ -1267,6 +1364,11 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       ),
     );
   }
+
+  /// An allowance the way a business writes it: `2 kg`, `1.5 kg`.
+  static String _kgText(double kg) => kg == kg.roundToDouble()
+      ? kg.toStringAsFixed(0)
+      : kg.toStringAsFixed(1);
 
   /// When the customer pays - only shown for a business that opted in to
   /// being paid after the parcel reaches the destination.
@@ -1550,15 +1652,21 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
           ),
         ),
         const SizedBox(height: 14),
-        TextField(
-          controller: _weightController,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(
-            labelText: l10n.estimatedWeightKg,
-            prefixIcon: const Icon(Icons.scale_outlined),
+        // A known object has a price, not a weight: asking the customer to
+        // guess what an iPhone weighs would put a number in the booking that
+        // nothing is ever charged against.
+        if (_setPrice)
+          _setPriceSection(theme, l10n)
+        else
+          TextField(
+            controller: _weightController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: l10n.estimatedWeightKg,
+              prefixIcon: const Icon(Icons.scale_outlined),
+            ),
           ),
-        ),
         if (_categories.isNotEmpty) ...[
           const SizedBox(height: 14),
           _categorySection(theme, l10n),
@@ -1644,7 +1752,11 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                         style: theme.textTheme.labelMedium,
                       ),
                       Text(
-                        _weightKg > 0
+                        _setPrice
+                            ? l10n.freightSetPriceLine(
+                                freightMoney(_itemPricing.flatPrice),
+                              )
+                            : _weightKg > 0
                             ? '${_weightKg.toStringAsFixed(1)} kg × '
                                   '\$${_effectiveRatePerKg.toStringAsFixed(2)}'
                             : l10n.enterWeightToSeePrice,
@@ -1652,6 +1764,16 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                           color: theme.hintColor,
                         ),
                       ),
+                      if (_setPrice && _itemPricing.includedKg > 0)
+                        Text(
+                          l10n.freightSetPriceCoversUpTo(
+                            _kgText(_itemPricing.includedKg),
+                            '\$${_ratePerKg.toStringAsFixed(2)}',
+                          ),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.hintColor,
+                          ),
+                        ),
                       if (_appliedPickupFee > 0)
                         Text(
                           '+ \$${_appliedPickupFee.toStringAsFixed(2)} '
@@ -1683,7 +1805,14 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
         ),
         const SizedBox(height: 10),
         Text(
-          l10n.freightEstimateExplanation,
+          // A set price is settled at booking unless an allowance leaves the
+          // excess to be weighed, so promising a weight confirmation would
+          // describe a step that does not happen to this parcel.
+          !_setPrice
+              ? l10n.freightEstimateExplanation
+              : _itemPricing.includedKg > 0
+              ? l10n.freightSetPriceOverAllowanceNote
+              : l10n.freightSetPriceFinal,
           style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
           textAlign: TextAlign.center,
         ),
@@ -1702,7 +1831,11 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                 )
               : const Icon(Icons.local_shipping_outlined),
           label: Text(
-            _payOnArrivalChosen ? l10n.saveCardAndBook : l10n.payEstimate,
+            _payOnArrivalChosen
+                ? l10n.saveCardAndBook
+                : _setPrice
+                ? l10n.bookAndPay
+                : l10n.payEstimate,
           ),
         ),
         const SizedBox(height: 8),

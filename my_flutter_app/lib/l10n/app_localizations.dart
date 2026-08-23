@@ -6740,6 +6740,18 @@ abstract class AppLocalizations {
   /// **'Drop off your parcel at the business location. The business will confirm the weight after drop-off.'**
   String get freightNextDropOffAtBusiness;
 
+  /// No description provided for @freightNextDropOffAtProviderSetPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop off your parcel at {businessName}. The price for this item is set, so there is nothing left to pay.'**
+  String freightNextDropOffAtProviderSetPrice(Object businessName);
+
+  /// No description provided for @freightNextDropOffAtBusinessSetPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop off your parcel at the business location. The price for this item is set, so there is nothing left to pay.'**
+  String get freightNextDropOffAtBusinessSetPrice;
+
   /// No description provided for @freightNextWeightReview.
   ///
   /// In en, this message translates to:
@@ -12539,6 +12551,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Deliver to their address · {amount}'**
   String freightDestinationDeliveryToAddress(Object amount);
+
+  /// No description provided for @freightSetPriceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Price for this item'**
+  String get freightSetPriceTitle;
+
+  /// No description provided for @freightSetPriceLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} set price'**
+  String freightSetPriceLine(Object amount);
+
+  /// No description provided for @freightSetPriceCoversUpTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Covers up to {kilograms} kg, then {rate} per kg over'**
+  String freightSetPriceCoversUpTo(String kilograms, String rate);
+
+  /// No description provided for @freightSetPriceCoversAnyWeight.
+  ///
+  /// In en, this message translates to:
+  /// **'Covers this item whatever it weighs'**
+  String get freightSetPriceCoversAnyWeight;
+
+  /// No description provided for @freightSetPriceFinal.
+  ///
+  /// In en, this message translates to:
+  /// **'This is the full price for this item.'**
+  String get freightSetPriceFinal;
+
+  /// No description provided for @freightSetPriceOverAllowanceNote.
+  ///
+  /// In en, this message translates to:
+  /// **'The business weighs the parcel at drop-off and charges for any weight over what this price covers.'**
+  String get freightSetPriceOverAllowanceNote;
 
   /// No description provided for @freightDestinationDeliveryFeeLabel.
   ///

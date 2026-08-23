@@ -28,7 +28,11 @@ class FreightShipmentService {
     required String destinationCountryId,
     required String businessId,
     required String mode,
-    required double weightKg,
+    /// What the parcel weighs, when the business charges this item by weight.
+    /// A set-price item is quoted from the business's published row, so there
+    /// is nothing to weigh and nothing to send - the server asks for a weight
+    /// only when the item it resolves is priced by the scale.
+    double weightKg = 0,
     /// What is in the parcel. The server re-derives the multiplier from the
     /// business's own settings; sending nothing prices the parcel exactly as
     /// freight was priced before categories existed.
@@ -61,7 +65,7 @@ class FreightShipmentService {
           'destinationCountryId': destinationCountryId,
           'businessId': businessId,
           'mode': mode,
-          'weightKg': weightKg,
+          if (weightKg > 0) 'weightKg': weightKg,
           if ((itemCategoryId ?? '').trim().isNotEmpty)
             'itemCategoryId': itemCategoryId!.trim(),
           // Present-but-empty means "the category catch-all": the server

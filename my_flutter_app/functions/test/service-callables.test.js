@@ -725,6 +725,171 @@ describe("freight service callable lifecycle", () => {
         assert.equal(shipment.price, 150);
       });
 
+  it("books a set-price item without asking for a weight", async () => {
+    // The customer picks "iPhone 16" and sees $50. Nobody guesses the
+    // weight of a known object at their kitchen table.
+    const businessId = "freight-flat-price-business";
+    await seedBusiness(businessId);
+    await db.collection("businesses").doc(businessId).set({
+      freightPaybackTable: {
+        electronics: {
+          items: [{
+            id: "iphone", label: "iPhone 16", paybackAmount: 400,
+            pricingMode: "flat", flatPrice: 50, includedKg: 2,
+          }],
+          otherPaybackAmount: 0,
+        },
+      },
+    }, {merge: true});
+
+    const booking = await functions.createFreightShipmentPaymentIntent.run({
+      auth: {uid: CUSTOMER_UID},
+      data: freightInput(businessId, {
+        weightKg: 0,
+        itemCategoryId: "electronics",
+        itemId: "iphone",
+      }),
+    });
+    const shipment = await freightData(booking.shipmentId);
+    // The set price, not 10kg x $12.50 x 2 that the category would charge.
+    assert.equal(shipment.price, 50);
+    assert.equal(shipment.pricingMode, "flat");
+    assert.equal(shipment.itemFlatPrice, 50);
+    assert.equal(shipment.itemIncludedKg, 2);
+    // It still gets weighed at the counter, because the price covers 2kg.
+    assert.equal(shipment.weightVerificationRequired, true);
+  });
+
+  it("charges only the weight a set price did not cover", async () => {
+    // The box case: priced at $50 for 2kg, handed over inside a carton at
+    // 6kg. The business is owed the 4kg it never priced for, at its route
+    // rate - and the set price itself is never recalculated.
+    const businessId = "freight-flat-excess-business";
+    await seedBusiness(businessId);
+    await db.collection("businesses").doc(businessId).set({
+      freightPaybackTable: {
+        electronics: {
+          items: [{
+            id: "iphone", label: "iPhone 16", paybackAmount: 400,
+            pricingMode: "flat", flatPrice: 50, includedKg: 2,
+          }],
+          otherPaybackAmount: 0,
+        },
+      },
+    }, {merge: true});
+    const manager = await seedFreightManager(businessId);
+
+    const booking = await functions.createFreightShipmentPaymentIntent.run({
+      auth: {uid: CUSTOMER_UID},
+      data: freightInput(businessId, {
+        weightKg: 0,
+        itemCategoryId: "electronics",
+        itemId: "iphone",
+      }),
+    });
+    const confirmed = await functions.confirmFreightShipmentWeight.run({
+      auth: manager,
+      data: {shipmentId: booking.shipmentId, verifiedWeightKg: 6},
+    });
+    // $50 + 4kg x $12.50 air = $100.
+    assert.equal(confirmed.finalTotal, 100);
+    assert.equal(confirmed.balanceDue, 50);
+  });
+
+  it("never weighs a set price that covers any weight", async () => {
+    const businessId = "freight-flat-unlimited-business";
+    await seedBusiness(businessId);
+    await db.collection("businesses").doc(businessId).set({
+      freightPaybackTable: {
+        electronics: {
+          items: [{
+            id: "sim", label: "SIM card", paybackAmount: 5,
+            pricingMode: "flat", flatPrice: 10,
+          }],
+          otherPaybackAmount: 0,
+        },
+      },
+    }, {merge: true});
+    const manager = await seedFreightManager(businessId);
+
+    const booking = await functions.createFreightShipmentPaymentIntent.run({
+      auth: {uid: CUSTOMER_UID},
+      data: freightInput(businessId, {
+        weightKg: 0,
+        itemCategoryId: "electronics",
+        itemId: "sim",
+      }),
+    });
+    const shipment = await freightData(booking.shipmentId);
+    assert.equal(shipment.price, 10);
+    assert.equal(shipment.weightVerificationRequired, false);
+    // Nothing a scale could change, so the scale is refused outright rather
+    // than inventing a balance the customer never agreed to.
+    await assert.rejects(
+        () => functions.confirmFreightShipmentWeight.run({
+          auth: manager,
+          data: {shipmentId: booking.shipmentId, verifiedWeightKg: 40},
+        }),
+        /set price and is not weighed/,
+    );
+  });
+
+  it("still refuses a by-weight booking with no weight", async () => {
+    const businessId = "freight-needs-weight-business";
+    await seedBusiness(businessId);
+    await db.collection("businesses").doc(businessId).set({
+      freightPaybackTable: {
+        electronics: {
+          items: [{
+            id: "mixed", label: "Assorted", paybackAmount: 100,
+            pricingMode: "per_kg", weightFactor: 2,
+          }],
+          otherPaybackAmount: 0,
+        },
+      },
+    }, {merge: true});
+    await assert.rejects(
+        () => functions.createFreightShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: freightInput(businessId, {
+            weightKg: 0,
+            itemCategoryId: "electronics",
+            itemId: "mixed",
+          }),
+        }),
+        /weight must be greater than zero/,
+    );
+  });
+
+  it("prices a row saved before item pricing exactly as before", async () => {
+    // The migration promise, end to end: a listed row with no pricing of
+    // its own is charged at its category multiplier, as it always was.
+    const businessId = "freight-legacy-row-business";
+    await seedBusiness(businessId);
+    await db.collection("businesses").doc(businessId).set({
+      freightPaybackTable: {
+        electronics: {
+          items: [{id: "iphone", label: "iPhone", paybackAmount: 400}],
+          otherPaybackAmount: 0,
+        },
+      },
+    }, {merge: true});
+
+    const booking = await functions.createFreightShipmentPaymentIntent.run({
+      auth: {uid: CUSTOMER_UID},
+      data: freightInput(businessId, {
+        weightKg: 10,
+        itemCategoryId: "electronics",
+        itemId: "iphone",
+      }),
+    });
+    const shipment = await freightData(booking.shipmentId);
+    // 10kg x $12.50 air x 2 (electronics) = $250, unchanged.
+    assert.equal(shipment.price, 250);
+    assert.equal(shipment.pricingMode, "per_kg");
+    assert.equal(shipment.weightVerificationRequired, true);
+  });
+
   it("never charges for cover, however much the item pays back",
       async () => {
         // The business prices each item for what it is worth to carry, so

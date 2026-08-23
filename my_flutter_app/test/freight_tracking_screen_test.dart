@@ -117,6 +117,69 @@ void main() {
     expect(shipment.verifiedWeightKg, 20);
     expect(shipment.finalTotal, 265);
     expect(shipment.balanceDue, 20);
+    // A shipment booked by weight says nothing about the scale, and the
+    // scale is exactly where it is going.
+    expect(shipment.weighsAtDropOff, isTrue);
+  });
+
+  test('a set price with no allowance is not waiting on a scale', () {
+    final setPrice = CustomerTrackingShipment.fromFreightData('freight-flat', {
+      'trackingCode': 'FRT-FLAT-001',
+      'status': 'pending',
+      'paymentStatus': 'succeeded',
+      'price': 50,
+      'weightVerificationRequired': false,
+    });
+    expect(setPrice.weighsAtDropOff, isFalse);
+    // An allowance puts it back on the scale: the counter checks whether the
+    // parcel outgrew what the price covers.
+    final withAllowance = CustomerTrackingShipment.fromFreightData(
+      'freight-allowance',
+      {'status': 'pending', 'weightVerificationRequired': true},
+    );
+    expect(withAllowance.weighsAtDropOff, isTrue);
+  });
+
+  testWidgets('a set-price parcel is never promised a weight confirmation', (
+    tester,
+  ) async {
+    final repository = _FakeTrackingRepository([
+      CustomerTrackingShipment.fromFreightData('freight-flat', {
+        'trackingCode': 'FRT-FLAT-001',
+        'receiverName': 'Aissatou Diallo',
+        'destinationCountryName': 'Guinea',
+        'businessName': 'Laawol Freight',
+        'price': 50,
+        'estimatedTotal': 50,
+        'status': 'pending',
+        'paymentStatus': 'succeeded',
+        'priceSettlementStatus': 'settled',
+        'mode': 'air',
+        'weightVerificationRequired': false,
+      }),
+    ]);
+
+    await _pumpTracking(tester, repository, focusShipmentId: 'freight-flat');
+    expect(tester.takeException(), isNull);
+    expect(
+      find.textContaining('The price for this item is set'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('will confirm the weight after drop-off'),
+      findsNothing,
+    );
+
+    await _pumpTracking(
+      tester,
+      repository,
+      locale: const Locale('fr'),
+      focusShipmentId: 'freight-flat',
+    );
+    expect(
+      find.textContaining('Le prix de cet article est fixé'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('freight shipment is visible on tracking in English and French', (

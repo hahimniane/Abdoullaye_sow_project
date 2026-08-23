@@ -3766,6 +3766,15 @@ class AppLocalizationsFr extends AppLocalizations {
       'Déposez votre colis à l’adresse de l’entreprise. L’entreprise confirmera le poids après le dépôt.';
 
   @override
+  String freightNextDropOffAtProviderSetPrice(Object businessName) {
+    return 'Déposez votre colis chez $businessName. Le prix de cet article est fixé, il n’y a plus rien à payer.';
+  }
+
+  @override
+  String get freightNextDropOffAtBusinessSetPrice =>
+      'Déposez votre colis à l’adresse de l’entreprise. Le prix de cet article est fixé, il n’y a plus rien à payer.';
+
+  @override
   String get freightNextWeightReview =>
       'L’entreprise confirme le poids final. Tout solde ou remboursement apparaîtra ici.';
 
@@ -7132,6 +7141,30 @@ class AppLocalizationsFr extends AppLocalizations {
   String freightDestinationDeliveryToAddress(Object amount) {
     return 'Livrer à son adresse · $amount';
   }
+
+  @override
+  String get freightSetPriceTitle => 'Prix pour cet article';
+
+  @override
+  String freightSetPriceLine(Object amount) {
+    return 'Prix fixe de $amount';
+  }
+
+  @override
+  String freightSetPriceCoversUpTo(String kilograms, String rate) {
+    return 'Comprend jusqu\'à $kilograms kg, puis $rate par kg au-delà';
+  }
+
+  @override
+  String get freightSetPriceCoversAnyWeight =>
+      'Comprend cet article quel que soit son poids';
+
+  @override
+  String get freightSetPriceFinal => 'C\'est le prix complet pour cet article.';
+
+  @override
+  String get freightSetPriceOverAllowanceNote =>
+      'L\'entreprise pèse le colis au dépôt et facture le poids qui dépasse ce que ce prix comprend.';
 
   @override
   String get freightDestinationDeliveryFeeLabel => 'Livraison à destination';
