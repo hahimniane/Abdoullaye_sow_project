@@ -45,9 +45,9 @@ void main() {
         'clothing': 1,
         'food': 1,
         'documents': 1,
-        'cosmetics': 1.2,
-        'electronics': 2,
-        'fragile': 1.5,
+        'cosmetics': 1,
+        'electronics': 1,
+        'fragile': 1,
       });
     });
 
@@ -99,14 +99,14 @@ void main() {
         'freightCategoryRates': {'electronics': 3},
       });
       expect(freightCategoryMultiplier(categories, 'electronics'), 3);
-      expect(freightCategoryMultiplier(categories, 'fragile'), 1.5);
+      expect(freightCategoryMultiplier(categories, 'fragile'), 1);
     });
 
     test('an unreadable multiplier falls back to the platform default', () {
       final categories = freightCategoriesFromBusinessData({
         'freightCategoryRates': {'electronics': 'a lot'},
       });
-      expect(freightCategoryMultiplier(categories, 'electronics'), 2);
+      expect(freightCategoryMultiplier(categories, 'electronics'), 1);
     });
 
     test('a multiplier outside the band is clamped, not honoured', () {
@@ -302,14 +302,12 @@ void main() {
       }
     });
 
-    test('the picker and its price copy exist in both catalogs', () {
+    test('the picker copy exists in both catalogs', () {
       final en = arb('en');
       final fr = arb('fr');
       const keys = <String>[
         'freightCategoryQuestion',
         'freightCategoryHelp',
-        'freightCategoryStandardRate',
-        'freightCategoryRateMultiplier',
       ];
       for (final key in keys) {
         expect(en[key], isNotNull, reason: 'app_en.arb is missing $key');
@@ -338,8 +336,13 @@ void main() {
     ).readAsStringSync();
     expect(screen, contains('itemCategoryId: _categoryId'));
     expect(service, contains("'itemCategoryId'"));
-    // The rate on the estimate line has to be the one the category produced,
-    // or the customer is quoted a price nobody charges.
-    expect(screen, contains('_effectiveRatePerKg'));
+    // The category names the row the business priced and pays back by; it
+    // moves no price of its own, so the estimate line quotes the
+    // destination's own rate and nothing on top of it.
+    expect(screen, isNot(contains('_effectiveRatePerKg')));
+    expect(
+      screen,
+      contains("'\\\$\${_ratePerKg.toStringAsFixed(2)}'"),
+    );
   });
 }

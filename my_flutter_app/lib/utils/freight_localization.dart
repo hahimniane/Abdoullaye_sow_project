@@ -28,13 +28,6 @@ String freightMoney(num amount) {
   return format.format(value);
 }
 
-/// A multiplier the way a customer can act on it: `1.2x`, `2x`.
-String freightMultiplierText(double multiplier) {
-  return multiplier == multiplier.roundToDouble()
-      ? '${multiplier.toStringAsFixed(0)}×'
-      : '${multiplier.toStringAsFixed(1)}×';
-}
-
 /// The name a customer reads for one category.
 ///
 /// The platform owns the standard rows, so they are translated by id. A
@@ -65,19 +58,6 @@ String freightCategoryHint(AppLocalizations l10n, FreightCategory category) =>
       'fragile' => l10n.freightCategoryFragileHint,
       _ => category.hint,
     };
-
-/// What choosing this row does to the price, said out loud.
-///
-/// A row at 1 says so rather than staying silent: "standard rate" is what
-/// makes the rows that cost more legible as the exception.
-String freightCategoryRateText(
-  AppLocalizations l10n,
-  FreightCategory category,
-) => category.changesPrice
-    ? l10n.freightCategoryRateMultiplier(
-        freightMultiplierText(category.multiplier),
-      )
-    : l10n.freightCategoryStandardRate;
 
 /// The one line about coverage on an option card, before a business is
 /// chosen: "Covers loss" against "No coverage".

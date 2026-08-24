@@ -20,6 +20,7 @@ import '../services/freight_shipment_service.dart';
 import '../services/office_location_service.dart';
 import '../utils/freight_localization.dart';
 import '../utils/receiver_phone_rules.dart';
+import 'freight_quote_request_screen.dart';
 import '../widgets/business_reviews_sheet.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
@@ -198,9 +199,9 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     // A business can withdraw destination delivery while this screen is open;
     // the address goes with it so a stale one cannot reach the callable.
     if (!fresh.freightDelivery.offered) _resetDestinationDelivery();
-    // The category is the funnel's answer - it survives a refresh verbatim
-    // (the server prices an unknown category at 1x); only a flow with no
-    // funnel answer falls back to the default.
+    // The category is the funnel's answer and survives a refresh verbatim -
+    // it is what names the row the business priced and pays back by. Only a
+    // flow with no funnel answer falls back to the default.
     if (_activeFunnelCategoryId.isEmpty &&
         freightCategoryLookup(fresh.freightCategories, _categoryId) == null) {
       _categoryId = defaultFreightCategoryId(fresh.freightCategories);
@@ -227,23 +228,17 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
       ? const <BusinessDestinationOption>[]
       : _options.where((o) => o.country.id == _funnelCountryId).toList();
 
-  /// Categories worth offering: someone on the route would actually take an
-  /// item in them. `freightItemChoicesFor` already speaks for catch-alls and
-  /// legacy no-table businesses ("Something else"), so an empty choice list
-  /// means nobody takes anything in that category - a guaranteed dead end
-  /// the customer must never be offered.
+  /// Every category anyone on the route sorts parcels into. None of them is a
+  /// dead end: an item nobody has priced becomes a question the businesses
+  /// answer, so there is nothing to filter out here.
   List<FreightCategory> get _funnelCategoryChoices {
-    final tables = [for (final o in _countryOptions) o.freightPaybackTable];
     final seen = <String, FreightCategory>{};
     for (final o in _countryOptions) {
       for (final category in o.freightCategories) {
         seen.putIfAbsent(category.id, () => category);
       }
     }
-    return [
-      for (final category in seen.values)
-        if (freightItemChoicesFor(tables, category.id).isNotEmpty) category,
-    ];
+    return seen.values.toList();
   }
 
   /// The stored selection, unless a data refresh withdrew it from the
@@ -323,39 +318,27 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
   FreightCategory? get _category =>
       freightCategoryLookup(_categories, _categoryId);
 
-  double get _categoryMultiplier =>
-      freightCategoryMultiplier(_categories, _categoryId);
-
   /// How this business charges for the thing the funnel picked: one set
-  /// price, or the scale at some factor. Same resolution the callable prices
+  /// price, the scale, or nothing at all. Same resolution the callable prices
   /// with, so the figure on the button is the figure on the card statement.
   FreightItemPricing get _itemPricing => freightItemPricing(
     table: _selected?.freightPaybackTable,
     categoryId: _categoryId,
     itemId: _submittedItemId ?? '',
-    categoryMultiplier: _categoryMultiplier,
   );
+
+  /// Whether this business has put a number on this item at all. When it has
+  /// not, the customer asks it for one instead of being shown a guess.
+  bool get _itemPriced => _itemPricing.priced;
 
   /// A known object, priced once by the business. Nothing here is weighed.
   bool get _setPrice => _itemPricing.isFlat;
 
-  /// The category's multiplier prices this parcel only while the row it
-  /// belongs to states no pricing of its own - otherwise the card would
-  /// announce a factor nobody is charging.
-  bool get _categoryPricesParcel =>
-      !_setPrice && _itemPricing.weightFactor == _categoryMultiplier;
-
-  /// The per-kg rate the customer is actually paying, item factor included.
-  /// The destination's rate never changes; the factor rides on top of it.
-  double get _effectiveRatePerKg => _ratePerKg * _itemPricing.weightFactor;
-
-  double get _price => _setPrice
+  double get _price => !_itemPriced
+      ? 0
+      : _setPrice
       ? _itemPricing.flatPrice
-      : freightShippingFee(
-          weightKg: _weightKg,
-          ratePerKg: _ratePerKg,
-          multiplier: _itemPricing.weightFactor,
-        );
+      : freightShippingFee(weightKg: _weightKg, ratePerKg: _ratePerKg);
 
   /// The business publishes what each item pays back; the customer only says
   /// what the item is. Mirrors the web console exactly - see freight_payback.
@@ -436,11 +419,10 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
           ? _mode
           : (modes.isNotEmpty ? modes.first : 'sea');
       // The funnel already answered what is being sent, and the server
-      // resolves BOTH the payback row and the multiplier from the submitted
-      // category (unknown prices at 1x). Substituting the business's default
-      // here moved a listed item under the wrong category and got the
-      // booking refused at payment - the funnel's answer travels verbatim,
-      // exactly as on web.
+      // resolves both the price and the payback row from the submitted
+      // category. Substituting the business's default here moved a listed
+      // item under the wrong category and got the booking refused at payment
+      // - the funnel's answer travels verbatim, exactly as on web.
       _categoryId = _activeFunnelCategoryId.isNotEmpty
           ? _activeFunnelCategoryId
           : defaultFreightCategoryId(o.freightCategories);
@@ -569,6 +551,9 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     }
     final option = _selected;
     if (option == null) return;
+    // A price nobody set cannot be charged. The button is already hidden for
+    // this; the callable would refuse it too.
+    if (!_itemPriced) return;
     if (_senderController.text.trim().isEmpty ||
         _receiverController.text.trim().isEmpty) {
       _snack(l10n.fillSenderReceiverPhone);
@@ -705,6 +690,112 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
     if (error.code != 'failed-precondition') return null;
     final message = (error.message ?? '').trim();
     return message.isEmpty ? null : message;
+  }
+
+  /// Air, sea, or both - whichever the businesses on this route offer between
+  /// them. A request has to name one, and offering a mode nobody flies is how
+  /// a customer waits a week for an answer that was never coming.
+  List<String> get _routeModes {
+    final modes = <String>[];
+    for (final o in _countryOptions) {
+      if (o.country.freightAvailable('air') && !modes.contains('air')) {
+        modes.add('air');
+      }
+      if (o.country.freightAvailable('sea') && !modes.contains('sea')) {
+        modes.add('sea');
+      }
+    }
+    return modes;
+  }
+
+  /// What the funnel called the thing, so the businesses answering see the
+  /// parcel the customer was looking at. Empty for the catch-all, which names
+  /// nothing in particular.
+  String get _funnelItemLabel {
+    final id = _activeFunnelItemId;
+    if (id.isEmpty || id == otherItemId) return '';
+    for (final item in _funnelItems) {
+      if (item.id == id) return item.label;
+    }
+    return '';
+  }
+
+  /// Hands the parcel to the businesses on the route to price themselves.
+  void _askForPrice() {
+    if (FirebaseAuth.instance.currentUser == null) {
+      Navigator.pushNamed(context, '/login');
+      return;
+    }
+    final options = _countryOptions;
+    final country =
+        _selected?.country ?? (options.isEmpty ? null : options.first.country);
+    if (country == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => FreightQuoteRequestScreen(
+          destinationCountryId: country.id,
+          destinationCountryName: country.name,
+          availableModes: _selected != null
+              ? _availableModes(_selected)
+              : _routeModes,
+          itemCategoryId: _activeFunnelCategoryId,
+          itemLabel: _funnelItemLabel,
+        ),
+      ),
+    );
+  }
+
+  /// Said wherever a price would otherwise be: this business, or nobody on
+  /// this route, has quoted the thing the customer picked.
+  Widget _askForPriceCard(
+    ThemeData theme,
+    AppLocalizations l10n, {
+    required String message,
+  }) {
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.price_change_outlined,
+                  size: 18,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.freightNoPriceForItemTitle,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.hintColor,
+              ),
+            ),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: _busy ? null : _askForPrice,
+              icon: const Icon(Icons.forum_outlined),
+              label: Text(l10n.freightAskForPriceCta),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _snack(String m) =>
@@ -854,12 +945,17 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                   setState(() => _funnelItemId = value ?? ''),
             ),
           ],
+          // Nobody has a price for this, which is a question rather than a
+          // refusal: the businesses on the route answer it themselves.
           if (_funnelSatisfied && _filtered.isEmpty && _query.isEmpty) ...[
-            const SizedBox(height: 12),
-            Text(
-              l10n.noBusinessTakesItem,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.hintColor,
+            const SizedBox(height: 14),
+            _askForPriceCard(
+              theme,
+              l10n,
+              message: l10n.freightNoBusinessPricedItem(
+                _countryOptions.isEmpty
+                    ? ''
+                    : _countryOptions.first.country.name,
               ),
             ),
           ],
@@ -1285,10 +1381,7 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    selected.changesPrice && _categoryPricesParcel
-                        ? '${freightCategoryLabel(l10n, selected)} · '
-                              '${freightMultiplierText(selected.multiplier)}'
-                        : freightCategoryLabel(l10n, selected),
+                    freightCategoryLabel(l10n, selected),
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),
@@ -1307,16 +1400,12 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
             ],
             // A set price is stated on its own card, in dollars. Quoting a
             // per-kg rate alongside it would offer the customer two prices
-            // for one parcel and let them pick the wrong one.
-            if (!_setPrice) ...[
+            // for one parcel and let them pick the wrong one - and an item
+            // this business has not quoted has no rate to state at all.
+            if (!_setPrice && _itemPriced) ...[
               const SizedBox(height: 4),
               Text(
-                _categoryPricesParcel
-                    ? '${freightCategoryRateText(l10n, selected)} · '
-                          '${l10n.pricePerKg('\$${_effectiveRatePerKg.toStringAsFixed(2)}')}'
-                    : l10n.pricePerKg(
-                        '\$${_effectiveRatePerKg.toStringAsFixed(2)}',
-                      ),
+                l10n.pricePerKg('\$${_ratePerKg.toStringAsFixed(2)}'),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                   color: theme.colorScheme.primary,
@@ -1681,33 +1770,45 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        Text(l10n.shippingMode, style: theme.textTheme.labelLarge),
-        const SizedBox(height: 10),
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (var i = 0; i < modes.length; i++) ...[
-                if (i > 0) const SizedBox(width: 12),
-                Expanded(
-                  child: _ModeCard(
-                    mode: modes[i],
-                    rate: o.country.freightRatePerKg(modes[i]),
-                    selected: modes[i] == _mode,
-                    onTap: _busy
-                        ? null
-                        : () => setState(() => _mode = modes[i]),
+        // The mode cards quote this route's per-kg rates, so they only
+        // belong on a form that is going to charge one of them. An
+        // unpriced item names its mode on the request instead.
+        if (_itemPriced) ...[
+          Text(l10n.shippingMode, style: theme.textTheme.labelLarge),
+          const SizedBox(height: 10),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < modes.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 12),
+                  Expanded(
+                    child: _ModeCard(
+                      mode: modes[i],
+                      rate: o.country.freightRatePerKg(modes[i]),
+                      selected: modes[i] == _mode,
+                      onTap: _busy
+                          ? null
+                          : () => setState(() => _mode = modes[i]),
+                    ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
+        ],
         const SizedBox(height: 14),
         // A known object has a price, not a weight: asking the customer to
         // guess what an iPhone weighs would put a number in the booking that
-        // nothing is ever charged against.
-        if (_setPrice)
+        // nothing is ever charged against. An item this business has never
+        // quoted has neither, and gets a question instead.
+        if (!_itemPriced)
+          _askForPriceCard(
+            theme,
+            l10n,
+            message: l10n.freightBusinessHasNotPricedItem(o.businessName),
+          )
+        else if (_setPrice)
           _setPriceSection(theme, l10n)
         else
           TextField(
@@ -1786,110 +1887,115 @@ class _SendFreightScreenState extends State<SendFreightScreen> {
           const SizedBox(height: 8),
           _destinationDeliverySection(theme, l10n),
         ],
-        const SizedBox(height: 18),
-        Card(
-          elevation: 0,
-          color: theme.colorScheme.surfaceContainerHighest,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l10n.estimatedTotal,
-                        style: theme.textTheme.labelMedium,
-                      ),
-                      Text(
-                        _setPrice
-                            ? l10n.freightSetPriceLine(
-                                freightMoney(_itemPricing.flatPrice),
-                              )
-                            : _weightKg > 0
-                            ? '${_weightKg.toStringAsFixed(1)} kg × '
-                                  '\$${_effectiveRatePerKg.toStringAsFixed(2)}'
-                            : l10n.enterWeightToSeePrice,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.hintColor,
-                        ),
-                      ),
-                      if (_setPrice && _itemPricing.includedKg > 0)
+        // Nothing here can be shown for an item this business has not
+        // put a number on: a total, a per-kg line and a Book button all
+        // assert a price nobody set.
+        if (_itemPriced) ...[
+          const SizedBox(height: 18),
+          Card(
+            elevation: 0,
+            color: theme.colorScheme.surfaceContainerHighest,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          l10n.freightSetPriceCoversUpTo(
-                            _kgText(_itemPricing.includedKg),
-                            '\$${_ratePerKg.toStringAsFixed(2)}',
-                          ),
+                          l10n.estimatedTotal,
+                          style: theme.textTheme.labelMedium,
+                        ),
+                        Text(
+                          _setPrice
+                              ? l10n.freightSetPriceLine(
+                                  freightMoney(_itemPricing.flatPrice),
+                                )
+                              : _weightKg > 0
+                              ? '${_weightKg.toStringAsFixed(1)} kg × '
+                                    '\$${_ratePerKg.toStringAsFixed(2)}'
+                              : l10n.enterWeightToSeePrice,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.hintColor,
                           ),
                         ),
-                      if (_appliedPickupFee > 0)
-                        Text(
-                          '+ \$${_appliedPickupFee.toStringAsFixed(2)} '
-                          '${l10n.freightPickupFeeLabel}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.hintColor,
+                        if (_setPrice && _itemPricing.includedKg > 0)
+                          Text(
+                            l10n.freightSetPriceCoversUpTo(
+                              _kgText(_itemPricing.includedKg),
+                              '\$${_ratePerKg.toStringAsFixed(2)}',
+                            ),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.hintColor,
+                            ),
                           ),
-                        ),
-                      if (_appliedDeliveryFee > 0)
-                        Text(
-                          '+ \$${_appliedDeliveryFee.toStringAsFixed(2)} '
-                          '${l10n.freightDestinationDeliveryFeeLabel}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.hintColor,
+                        if (_appliedPickupFee > 0)
+                          Text(
+                            '+ \$${_appliedPickupFee.toStringAsFixed(2)} '
+                            '${l10n.freightPickupFeeLabel}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.hintColor,
+                            ),
                           ),
-                        ),
-                    ],
+                        if (_appliedDeliveryFee > 0)
+                          Text(
+                            '+ \$${_appliedDeliveryFee.toStringAsFixed(2)} '
+                            '${l10n.freightDestinationDeliveryFeeLabel}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.hintColor,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-                Text(
-                  '\$${_totalPrice.toStringAsFixed(2)}',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
+                  Text(
+                    '\$${_totalPrice.toStringAsFixed(2)}',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          // A set price is settled at booking unless an allowance leaves the
-          // excess to be weighed, so promising a weight confirmation would
-          // describe a step that does not happen to this parcel.
-          !_setPrice
-              ? l10n.freightEstimateExplanation
-              : _itemPricing.includedKg > 0
-              ? l10n.freightSetPriceOverAllowanceNote
-              : l10n.freightSetPriceFinal,
-          style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 18),
-        FilledButton.icon(
-          onPressed:
-              _busy || _price <= 0 || _pickupBlocksSubmit ||
-                  _deliveryBlocksSubmit
-              ? null
-              : _submit,
-          icon: _busy
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.local_shipping_outlined),
-          label: Text(
-            _payOnArrivalChosen
-                ? l10n.saveCardAndBook
-                : _setPrice
-                ? l10n.bookAndPay
-                : l10n.payEstimate,
+          const SizedBox(height: 10),
+          Text(
+            // A set price is settled at booking unless an allowance leaves the
+            // excess to be weighed, so promising a weight confirmation would
+            // describe a step that does not happen to this parcel.
+            !_setPrice
+                ? l10n.freightEstimateExplanation
+                : _itemPricing.includedKg > 0
+                ? l10n.freightSetPriceOverAllowanceNote
+                : l10n.freightSetPriceFinal,
+            style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+            textAlign: TextAlign.center,
           ),
-        ),
+          const SizedBox(height: 18),
+          FilledButton.icon(
+            onPressed:
+                _busy || _price <= 0 || _pickupBlocksSubmit ||
+                    _deliveryBlocksSubmit
+                ? null
+                : _submit,
+            icon: _busy
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.local_shipping_outlined),
+            label: Text(
+              _payOnArrivalChosen
+                  ? l10n.saveCardAndBook
+                  : _setPrice
+                  ? l10n.bookAndPay
+                  : l10n.payEstimate,
+            ),
+          ),
+        ],
         const SizedBox(height: 8),
         Text(
           l10n.freightDropOffNote,

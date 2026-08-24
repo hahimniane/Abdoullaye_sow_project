@@ -28,7 +28,6 @@ const FREIGHT_CATEGORY_ERRORS = {
 const FREIGHT_COVERAGE_ERRORS = {};
 const {
   freightCategoriesForBusiness,
-  freightCategoryMultiplier,
   validateFreightCategorySettings,
 } = require("./freight_categories");
 const {
@@ -41,6 +40,15 @@ const {
   quoteFreightItemCoverage,
   validateFreightPaybackTable,
 } = require("./freight_payback");
+const {
+  FREIGHT_QUOTE_ERRORS,
+  FREIGHT_QUOTE_STATUS,
+  FREIGHT_QUOTE_WINDOW_DAYS,
+  MAX_FREIGHT_QUOTE_PROVIDERS,
+  freightQuoteDocumentId,
+  validateFreightQuote,
+  validateFreightQuoteRequest,
+} = require("./freight_quote");
 const {
   FREIGHT_DELIVERY_ERRORS,
   freightDeliveryPolicy,
@@ -3277,7 +3285,11 @@ function transportQuoteBusinessId(data, requestId) {
   );
 }
 
-async function requireTransportManagerBusinessId(uid, requestedBusinessId) {
+async function requireTransportManagerBusinessId(
+    uid,
+    requestedBusinessId,
+    permission = "transport",
+) {
   const user = await getUserProfile(uid);
   const provided = String(requestedBusinessId || "").trim();
   const businessId = user.role === "admin" ?
@@ -3291,10 +3303,10 @@ async function requireTransportManagerBusinessId(uid, requestedBusinessId) {
         "Business transport manager access required",
     );
   }
-  if (!hasBusinessPermission(user, "transport")) {
+  if (!hasBusinessPermission(user, permission)) {
     throw new HttpsError(
         "permission-denied",
-        "Transport permission is required for this staff account",
+        `${permission} permission is required for this staff account`,
     );
   }
   return businessId;
@@ -21303,27 +21315,41 @@ exports.createFreightShipmentPaymentIntent = onCall(
           key: googleMapsApiKey.value(),
         }) :
         {fee: 0, model: null, distanceKm: null, borough: null};
-      // A kilo of phones and a kilo of cloth used to cost the same, which
-      // meant the parcel that is expensive to replace paid nothing extra
-      // toward replacing it. The multiplier rides on top of the destination's
-      // per-kg rate; an unknown or absent category resolves to 1, so a client
-      // that does not send one is priced exactly as before.
-      const categoryMultiplier = freightCategoryMultiplier(
-          business,
-          itemCategoryId,
-      );
       // A business prices each thing it carries the way that thing works.
       // An iPhone 16 is a known object: one price, no scale, nothing to
       // settle afterwards. A bag of clothes is different every time, so it
-      // is weighed and the existing confirm-and-settle flow runs. A row
-      // that names no pricing falls back to the category multiplier, which
-      // is how every booking was priced before this existed.
-      const itemPricing = freightItemPricing({
+      // is weighed and the existing confirm-and-settle flow runs. Nothing
+      // is priced by category any more - a number a business never chose is
+      // not a price, and the goods it has not quoted go to a request.
+      const resolvedPricing = freightItemPricing({
         table: business.freightPaybackTable,
         categoryId: itemCategoryId,
         itemId,
-        categoryMultiplier,
       });
+      // An app build that predates item pricing sends no item at all. It is
+      // still owed a quote, so it gets the plainest one there is: this
+      // business's own per-kg rate for the route, with nothing added. That
+      // is not an invented price - it is the rate the business set - and it
+      // keeps every phone already in a customer's hand working.
+      const clientPickedAnItem = Boolean(String(itemId || "").trim());
+      const itemPricing = resolvedPricing.priced || clientPickedAnItem ?
+        resolvedPricing :
+        {
+          priced: true,
+          mode: "per_kg",
+          flatPrice: 0,
+          includedKg: 0,
+          weightFactor: 1,
+          needsWeightAtBooking: true,
+          weighsAtDropOff: true,
+          source: null,
+        };
+      // A price this business never set is not one to invent. A customer who
+      // picked an item it has not quoted gets a request it answers with a
+      // number of its own.
+      if (!itemPricing.priced) {
+        throw new HttpsError("failed-precondition", "item_not_priced");
+      }
       if (itemPricing.needsWeightAtBooking && parcelWeightKg <= 0) {
         throw new HttpsError(
             "invalid-argument",
@@ -21438,7 +21464,7 @@ exports.createFreightShipmentPaymentIntent = onCall(
           pricePerKg,
           pricePerKgCents: Math.round(pricePerKg * 100),
           itemCategoryId: String(itemCategoryId || ""),
-          itemCategoryMultiplier: categoryMultiplier,
+          itemCategoryMultiplier: 1,
           // How this parcel was priced, frozen at booking. A set-price
           // shipment has no weight to verify, so nothing downstream may
           // reprice it against a scale.
@@ -22429,6 +22455,352 @@ exports.cancelSecuredCustomerOrder = onCall(
         refundCents: outcome.refundCents,
         feeCents,
       };
+    },
+);
+
+/**
+ * The businesses that could carry this parcel on this route.
+ *
+ * Approved, offering freight, and serving that destination by air or sea.
+ * Deliberately not filtered by what they have priced: the whole point of a
+ * request is that nobody priced it.
+ *
+ * @param {object} db Firestore.
+ * @param {string} destinationCountryId Where it is going.
+ * @return {Promise<Array<object>>} One entry per eligible business.
+ */
+async function eligibleFreightProviders(db, destinationCountryId) {
+  const businesses = await db.collection("businesses")
+      .where("status", "==", "approved")
+      .get();
+  const candidates = businesses.docs.filter((businessDoc) =>
+    normalizeBusinessServices(
+        businessDoc.data().enabledServices,
+    ).includes("freight"),
+  );
+  const destinations = await Promise.all(candidates.map((businessDoc) =>
+    businessDoc.ref.collection("destinationCountries")
+        .doc(destinationCountryId)
+        .get(),
+  ));
+  return candidates.flatMap((businessDoc, index) => {
+    const destinationDoc = destinations[index];
+    if (!destinationDoc.exists) return [];
+    const country = destinationDoc.data();
+    if (country?.isActive === false) return [];
+    if (!freightDestinationAvailable(country, "air") &&
+        !freightDestinationAvailable(country, "sea")) {
+      return [];
+    }
+    return [{
+      businessId: businessDoc.id,
+      business: businessDoc.data(),
+      country,
+    }];
+  });
+}
+
+// A customer asking what it costs to send something nobody has priced.
+// Fans the question out to every business on the route; each answers with
+// its own number, and the customer picks.
+exports.createFreightQuoteRequest = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const {destinationCountryId, mode} = request.data || {};
+      if (!destinationCountryId) {
+        throw new HttpsError("invalid-argument", "Destination is required");
+      }
+      const validated = validateFreightQuoteRequest(request.data || {});
+      if (!validated.ok) {
+        throw new HttpsError(
+            "invalid-argument",
+            FREIGHT_QUOTE_ERRORS[validated.error] ||
+              "That request could not be read",
+        );
+      }
+
+      const db = admin.firestore();
+      const providers =
+        await eligibleFreightProviders(db, destinationCountryId);
+      if (providers.length === 0) {
+        throw new HttpsError(
+            "failed-precondition",
+            "No approved business currently ships to this destination",
+        );
+      }
+      if (providers.length > MAX_FREIGHT_QUOTE_PROVIDERS) {
+        throw new HttpsError(
+            "resource-exhausted",
+            "Too many businesses serve this destination to ask at once",
+        );
+      }
+
+      const userRecord = await admin.auth().getUser(customerUid);
+      const requestRef = db.collection("freightQuoteRequests").doc();
+      const trackingCode =
+        await generateTrackingCode("FQ", "freightQuoteRequests");
+      const now = FirestoreFieldValue.serverTimestamp();
+      const deadline = new Date(
+          Date.now() + FREIGHT_QUOTE_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+      );
+      const countryName = providers[0].country?.name || "";
+
+      const batch = db.batch();
+      batch.set(requestRef, {
+        trackingCode,
+        customerUid,
+        customerEmail: userRecord.email || "",
+        destinationCountryId,
+        destinationCountryName: countryName,
+        mode: normalizeFreightMode(mode),
+        ...validated.request,
+        quoteStatus: FREIGHT_QUOTE_STATUS.COLLECTING,
+        status: "quote_requested",
+        eligibleBusinessIds: providers.map((p) => p.businessId),
+        eligibleBusinessCount: providers.length,
+        quoteDeadlineAt: deadline,
+        quoteCount: 0,
+        selectedQuoteId: "",
+        selectedBusinessId: "",
+        createdAt: now,
+        updatedAt: now,
+      });
+      await batch.commit();
+
+      // Each business hears about it in its own console feed.
+      await Promise.all(providers.map((provider) =>
+        safeSendPreferenceNotification({
+          uid: provider.business?.ownerUid,
+          preferenceKey: "businessActivity",
+          title: "Someone is asking for a price",
+          body: `${validated.request.description.slice(0, 80)} to ` +
+            `${countryName}`.trim(),
+          data: {
+            type: "freight_quote_request",
+            requestId: requestRef.id,
+            businessId: provider.businessId,
+            trackingCode,
+          },
+        }),
+      ));
+
+      return {
+        id: requestRef.id,
+        trackingCode,
+        eligibleBusinessCount: providers.length,
+      };
+    },
+);
+
+// A business answering with its price and what it pays back if it loses it.
+exports.submitFreightQuote = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const {requestId} = request.data || {};
+      if (!requestId) {
+        throw new HttpsError("invalid-argument", "Request ID is required");
+      }
+      const businessId = await requireTransportManagerBusinessId(
+          uid,
+          request.data?.businessId,
+          "freight",
+      );
+      const validated = validateFreightQuote(request.data || {});
+      if (!validated.ok) {
+        throw new HttpsError(
+            "invalid-argument",
+            FREIGHT_QUOTE_ERRORS[validated.error] ||
+              "That quote could not be read",
+        );
+      }
+
+      const db = admin.firestore();
+      const requestRef = db.collection("freightQuoteRequests").doc(requestId);
+      const requestDoc = await requestRef.get();
+      if (!requestDoc.exists) {
+        throw new HttpsError("not-found", "Request not found");
+      }
+      const requestData = requestDoc.data() || {};
+      if (requestData.quoteStatus !== FREIGHT_QUOTE_STATUS.COLLECTING) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This request is no longer taking prices",
+        );
+      }
+      if (!(requestData.eligibleBusinessIds || []).includes(businessId)) {
+        throw new HttpsError(
+            "permission-denied",
+            "This request was not sent to your business",
+        );
+      }
+
+      const businessDoc = await db.collection("businesses")
+          .doc(businessId).get();
+      const quoteRef = db.collection("freightQuotes")
+          .doc(freightQuoteDocumentId(requestId, businessId));
+      const now = FirestoreFieldValue.serverTimestamp();
+      const existing = await quoteRef.get();
+      await quoteRef.set({
+        requestId,
+        businessId,
+        businessName: businessDoc.data()?.name || DEFAULT_BUSINESS_NAME,
+        ...validated.quote,
+        currency: SHIPMENT_CURRENCY,
+        status: "submitted",
+        // One quote per business: a second answer revises the first rather
+        // than presenting the customer with two prices from one business.
+        revision: Number(existing.data()?.revision || 0) + 1,
+        expiresAt: requestData.quoteDeadlineAt || null,
+        ...(existing.exists ? {} : {createdAt: now}),
+        submittedAt: now,
+        updatedAt: now,
+      }, {merge: true});
+
+      if (!existing.exists) {
+        await requestRef.update({
+          quoteCount: FirestoreFieldValue.increment(1),
+          updatedAt: now,
+        });
+      }
+
+      // Transport never tells the customer a quote arrived, which is the
+      // one thing they are waiting for. This does.
+      await safeSendPreferenceNotification({
+        uid: requestData.customerUid,
+        preferenceKey: "shipmentActivity",
+        title: "You have a price",
+        body: `${businessDoc.data()?.name || "A business"} answered your ` +
+          `request to send ${requestData.description || "your parcel"}`,
+        data: {
+          type: "freight_quote_received",
+          requestId,
+          trackingCode: requestData.trackingCode || "",
+        },
+      });
+
+      return {success: true, quoteId: quoteRef.id};
+    },
+);
+
+// The customer picking one price.
+//
+// Selecting fixes the price and closes the other answers, so every business
+// that quoted learns where it went. It does NOT create the shipment: the
+// parcel still needs a receiver, an address and a pickup choice, none of
+// which a price request asks for. The customer completes those and pays
+// through the ordinary booking path, quoting selectedQuoteId.
+exports.selectFreightQuote = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const customerUid = requireAuth(request);
+      const {requestId, quoteId} = request.data || {};
+      if (!requestId || !quoteId) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Request and quote are required",
+        );
+      }
+
+      const db = admin.firestore();
+      const requestRef = db.collection("freightQuoteRequests").doc(requestId);
+      const quoteRef = db.collection("freightQuotes").doc(quoteId);
+      const [requestDoc, quoteDoc] = await Promise.all([
+        requestRef.get(),
+        quoteRef.get(),
+      ]);
+      if (!requestDoc.exists || !quoteDoc.exists) {
+        throw new HttpsError("not-found", "Request or quote not found");
+      }
+      const requestData = requestDoc.data() || {};
+      const quote = quoteDoc.data() || {};
+      if (requestData.customerUid !== customerUid) {
+        throw new HttpsError("permission-denied", "Request access denied");
+      }
+      if (quote.requestId !== requestId) {
+        throw new HttpsError(
+            "permission-denied",
+            "That quote belongs to a different request",
+        );
+      }
+      // Choosing the same one twice is the customer tapping again, not an
+      // error; choosing a different one after committing is.
+      if (requestData.quoteStatus === FREIGHT_QUOTE_STATUS.SELECTED) {
+        if (requestData.selectedQuoteId === quoteId) {
+          return {success: true, requestId, quoteId, alreadySelected: true};
+        }
+        throw new HttpsError(
+            "failed-precondition",
+            "A price has already been chosen for this request",
+        );
+      }
+      if (requestData.quoteStatus !== FREIGHT_QUOTE_STATUS.COLLECTING) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This request is no longer open",
+        );
+      }
+
+      const now = FirestoreFieldValue.serverTimestamp();
+      await db.runTransaction(async (transaction) => {
+        const fresh = await transaction.get(requestRef);
+        if (fresh.data()?.quoteStatus !== FREIGHT_QUOTE_STATUS.COLLECTING) {
+          throw new HttpsError(
+              "failed-precondition",
+              "A price has already been chosen for this request",
+          );
+        }
+        transaction.update(requestRef, {
+          quoteStatus: FREIGHT_QUOTE_STATUS.SELECTED,
+          status: "pending_payment",
+          selectedQuoteId: quoteId,
+          selectedBusinessId: quote.businessId,
+          selectedBusinessName: quote.businessName || "",
+          selectedAmountCents: quote.amountCents,
+          selectedPaybackAmountCents: quote.paybackAmountCents || 0,
+          selectedCoversLoss: quote.coversLoss === true,
+          selectedAt: now,
+          updatedAt: now,
+        });
+        transaction.update(quoteRef, {status: "selected", updatedAt: now});
+      });
+
+      // Everyone who answered learns where it went, so a business is not
+      // left holding a price it will never hear about again.
+      const others = await db.collection("freightQuotes")
+          .where("requestId", "==", requestId).get();
+      await Promise.all(others.docs.map(async (doc) => {
+        const row = doc.data() || {};
+        if (doc.id === quoteId) return;
+        await doc.ref.update({status: "closed", updatedAt: now});
+        const business = await db.collection("businesses")
+            .doc(String(row.businessId || "")).get();
+        await safeSendPreferenceNotification({
+          uid: business.data()?.ownerUid,
+          preferenceKey: "businessActivity",
+          title: "A quote went elsewhere",
+          body: "The customer chose another price for that parcel.",
+          data: {type: "freight_quote_lost", requestId},
+        });
+      }));
+
+      const winner = await db.collection("businesses")
+          .doc(String(quote.businessId || "")).get();
+      await safeSendPreferenceNotification({
+        uid: winner.data()?.ownerUid,
+        preferenceKey: "businessActivity",
+        title: "Your price was accepted",
+        body: `${requestData.description || "A parcel"} to ` +
+          `${requestData.destinationCountryName || ""}`.trim(),
+        data: {
+          type: "freight_quote_won",
+          requestId,
+          trackingCode: requestData.trackingCode || "",
+        },
+      });
+
+      return {success: true, requestId, quoteId};
     },
 );
 

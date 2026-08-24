@@ -17,6 +17,11 @@ android {
     ndkVersion flutter.ndkVersion
 
     compileOptions {
+        // flutter_local_notifications compiles against java.time, which is
+        // newer than the oldest Android this app supports. Desugaring is
+        // what backports those APIs; without it the release build refuses
+        // the dependency outright.
+        coreLibraryDesugaringEnabled true
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
     }
@@ -53,4 +58,8 @@ android {
 
 flutter {
     source '../..'
+}
+
+dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
 } 

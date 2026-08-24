@@ -3869,8 +3869,6 @@ Object.assign(TEXT_TRANSLATIONS, {
   "No items yet": "Aucun article pour l’instant",
   // The freight booking form.
   "What are you sending?": "Qu’envoyez-vous ?",
-  "The price per kilo depends on what is in the parcel.":
-    "Le prix au kilo dépend du contenu du colis.",
   "does not pay for a lost parcel.": "ne rembourse pas un colis perdu.",
   "Nothing is charged for protection, and nothing is owed if the parcel goes missing.":
     "Rien n’est facturé pour la protection, et rien n’est dû si le colis disparaît.",
@@ -3936,32 +3934,89 @@ Object.assign(TEXT_TRANSLATIONS, {
   "This business does not pay for a lost parcel":
     "Cette entreprise ne rembourse pas un colis perdu",
   "Free": "Offert",
+  // The item picker's last row, and the one that always leads somewhere.
+  "What is the item?": "Quel est l’article ?",
+  "Choose the item": "Choisissez l’article",
+  "Something else": "Autre chose",
+  // Asking the businesses on the route what they charge, when nobody has
+  // published a price for this parcel.
+  "Ask for a price": "Demander un prix",
+  "No business on this route has priced this parcel.":
+    "Aucune entreprise sur cet itinéraire n’a tarifé ce colis.",
+  "Describe it and every approved business on this route can answer with what it charges and what it pays back if it is lost.":
+    "Décrivez-le et chaque entreprise approuvée sur cet itinéraire peut répondre avec son tarif et ce qu’elle rembourse en cas de perte.",
+  "The more the business knows, the closer the price it can give you.":
+    "Plus l’entreprise en sait, plus le prix qu’elle vous donne sera juste.",
+  "Weight (kg), if you know it": "Poids (kg), si vous le connaissez",
+  "Sign in to ask for a price": "Connectez-vous pour demander un prix",
+  "Sending your request...": "Envoi de votre demande...",
+  "The price request could not be sent. Try again.":
+    "La demande de prix n’a pas pu être envoyée. Réessayez.",
+  "We couldn’t load your price requests. Try again.":
+    "Nous n’avons pas pu charger vos demandes de prix. Réessayez.",
+  "Some prices could not be loaded. Try again.":
+    "Certains prix n’ont pas pu être chargés. Réessayez.",
+  "You chose a price": "Vous avez choisi un prix",
+  "Waiting for prices": "En attente de prix",
+  Reference: "Référence",
+  "Your parcel": "Votre colis",
+  "The businesses on this route have your request. Each one that answers appears here, and you will be told when a price arrives.":
+    "Les entreprises de cet itinéraire ont votre demande. Chacune qui répond apparaît ici, et vous serez prévenu dès qu’un prix arrive.",
+  "Price to send it": "Prix pour l’envoyer",
+  "Pays back": "Rembourse",
+  "if it is lost": "en cas de perte",
+  "Pays nothing back if it is lost":
+    "Ne rembourse rien en cas de perte",
+  "Accept this price": "Accepter ce prix",
+  "Accepting...": "Acceptation...",
+  Chosen: "Choisi",
+  "Not chosen": "Non retenu",
+  "That price could not be accepted. Try again.":
+    "Ce prix n’a pas pu être accepté. Réessayez.",
+  // The business side of the same conversation.
+  "Booked shipments": "Expéditions réservées",
+  "Price requests": "Demandes de prix",
+  "No one is waiting on a price": "Personne n’attend de prix",
+  "When a customer asks what you charge for something you have not listed, it arrives here and you answer with a number.":
+    "Quand un client demande votre tarif pour une chose que vous n’avez pas listée, la demande arrive ici et vous répondez par un montant.",
+  "You answered": "Vous avez répondu",
+  "Waiting on you": "En attente de votre réponse",
+  "Weight given": "Poids indiqué",
+  "Not given": "Non indiqué",
+  Asked: "Demandé le",
+  "No description given": "Aucune description fournie",
+  "What you charge (USD)": "Ce que vous facturez (USD)",
+  "What you pay back if it is lost (USD)":
+    "Ce que vous remboursez en cas de perte (USD)",
+  "This parcel is not in your item list, so this price carries its own promise. Enter 0 and the customer is told plainly that you pay nothing back if it is lost.":
+    "Ce colis ne figure pas dans votre liste d’articles, donc ce prix porte son propre engagement. Saisissez 0 et le client est clairement informé que vous ne remboursez rien en cas de perte.",
+  "The customer is charged nothing for it, so price the parcel for what it is worth to you to carry.":
+    "Le client ne paie rien pour cela, alors tarifez le colis selon ce qu’il vaut à transporter pour vous.",
+  "Note for the customer (optional)": "Note pour le client (facultatif)",
+  "Send your price": "Envoyer votre prix",
+  "Change your price": "Modifier votre prix",
+  "Sending your price...": "Envoi de votre prix...",
+  "Your price was sent to the customer.":
+    "Votre prix a été envoyé au client.",
+  "The price could not be sent. Try again.":
+    "Le prix n’a pas pu être envoyé. Réessayez.",
+  // What the callable refuses a quote for, in the same words it uses.
+  "Enter what you charge to send this":
+    "Saisissez ce que vous facturez pour envoyer cela",
+  "That price is outside what this platform handles":
+    "Ce prix dépasse ce que cette plateforme traite",
+  "Say what you pay back if this is lost, or zero":
+    "Indiquez ce que vous remboursez en cas de perte, ou zéro",
+  "Keep the note under 1000 characters":
+    "Limitez la note à 1000 caractères",
+  "Describe what is being sent": "Décrivez ce qui est envoyé",
+  "Keep the description under 2000 characters":
+    "Limitez la description à 2000 caractères",
+  "That request could not be read":
+    "Cette demande n’a pas pu être lue",
 });
 
-// "<category>: enter a price multiplier between 0.5 and 10." - the settings
-// form names the row it is complaining about, and the standard names are the
-// platform's, so both halves are known ahead of time. A name the business
-// invented itself falls through to substring translation, which leaves the
-// name alone and translates the sentence around it.
-const FREIGHT_MULTIPLIER_MESSAGE =
-  "enter a price multiplier between 0.5 and 10.";
-const FREIGHT_MULTIPLIER_MESSAGE_FR =
-  "saisissez un multiplicateur de prix entre 0,5 et 10.";
-TEXT_TRANSLATIONS[FREIGHT_MULTIPLIER_MESSAGE] = FREIGHT_MULTIPLIER_MESSAGE_FR;
-for (const [label, frLabel] of Object.entries({
-  "General goods": "Marchandises générales",
-  "Clothes and fabric": "Vêtements et tissus",
-  Food: "Alimentation",
-  Documents: "Documents",
-  "Cosmetics and liquids": "Cosmétiques et liquides",
-  Electronics: "Électronique",
-  "Fragile items": "Objets fragiles",
-})) {
-  TEXT_TRANSLATIONS[`${label}: ${FREIGHT_MULTIPLIER_MESSAGE}`] =
-    `${frLabel} : ${FREIGHT_MULTIPLIER_MESSAGE_FR}`;
-}
-
-// The same shape for the refusals a priced row raises. The row name is
+// The refusals a priced row raises. The row name is
 // whatever the business typed into it, so only the sentence around the name
 // is known ahead of time and substring translation carries the rest.
 Object.assign(TEXT_TRANSLATIONS, {
@@ -4015,7 +4070,13 @@ const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "Copy tracking code": "Copier le code de suivi",
   "Customer name": "Nom du client",
   "Delivery status": "Statut de livraison",
+  "Describe the parcel: what it is, how many, how it is packed.":
+    "Décrivez le colis : ce que c’est, combien, comment il est emballé.",
   "Email address": "Adresse courriel",
+  "what the payback on a quote means":
+    "ce que signifie le remboursement sur un devis",
+  "Leave blank if you are not sure": "Laissez vide si vous n’êtes pas sûr",
+  "Note for the customer": "Note pour le client",
   "Explain missing documents, expiry issues, or why a document is not applicable.":
     "Expliquez les documents manquants, les problèmes d’expiration ou pourquoi un document est sans objet.",
   "Expand navigation": "Développer la navigation",

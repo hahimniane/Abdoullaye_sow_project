@@ -117,17 +117,29 @@ test("the funnel unions items across providers and matches honestly", () => {
   const withTable = {
     freightPaybackTable: {
       electronics: {
-        items: [{id: "iphone", label: "iPhone", paybackAmount: 400}],
+        items: [
+          {
+            id: "iphone",
+            label: "iPhone",
+            paybackAmount: 400,
+            pricingMode: "flat",
+            flatPrice: 50,
+          },
+        ],
         otherPaybackAmount: 0,
       },
     },
   };
   const withCatchAll = {
     freightPaybackTable: {
-      electronics: {items: [], otherPaybackAmount: 50},
+      electronics: {
+        items: [],
+        otherPaybackAmount: 50,
+        otherPricingMode: "per_kg",
+      },
     },
   };
-  const legacy = {};
+  const noTable = {};
 
   const choices = freightItemChoicesFor(
     [withTable, withCatchAll],
@@ -139,28 +151,45 @@ test("the funnel unions items across providers and matches honestly", () => {
   );
 
   // One provider listing the row is enough for the item to be pickable;
-  // matching then filters to who can actually take it.
+  // matching then filters to who can actually take it, at a price.
   assert.equal(
     providerQualifiesForItem(withTable, "electronics", "iphone"),
     true,
   );
   assert.equal(
     providerQualifiesForItem(withCatchAll, "electronics", "iphone"),
-    true, // its catch-all covers unlisted rows
+    true, // its catch-all covers and prices unlisted rows
   );
   assert.equal(
     providerQualifiesForItem(withTable, "electronics", "__other"),
     false, // no catch-all: it takes only what it listed
   );
   assert.equal(
-    providerQualifiesForItem(legacy, "electronics", "anything"),
-    true, // no table means it carries anything
+    providerQualifiesForItem(noTable, "electronics", "anything"),
+    false, // nothing priced, so nothing to book - it answers a request
   );
-  // "Something else" disappears when nobody would take it.
-  assert.deepEqual(
-    freightItemChoicesFor([withTable], "clothing"),
-    [],
+  // A row this business lists but has never put a number on cannot be
+  // booked either: the payback is a promise, not a price.
+  assert.equal(
+    providerQualifiesForItem(
+      {
+        freightPaybackTable: {
+          electronics: {
+            items: [{id: "iphone", label: "iPhone", paybackAmount: 400}],
+            otherPaybackAmount: 0,
+          },
+        },
+      },
+      "electronics",
+      "iphone",
+    ),
+    false,
   );
+  // "Something else" is always offered, because a parcel nobody listed is
+  // exactly what the price-request path answers.
+  assert.deepEqual(freightItemChoicesFor([withTable], "clothing"), [
+    {id: "__other", label: "Something else"},
+  ]);
 });
 
 test("nothing snaps the funnel's category back to a default", () => {
@@ -176,43 +205,42 @@ test("nothing snaps the funnel's category back to a default", () => {
   assert.match(customer, /The funnel owns the category now/);
 });
 
-test("the funnel never offers a category nobody would take", () => {
-  // Canada offered "Clothes and fabric" because a provider PRICES that
-  // category - but every provider on the route had a payback table and none
-  // listed anything under it. The customer picked it and was told "no
-  // business takes this" without ever being asked what the item was, over a
-  // search box with nothing to search. A category with no item choices
-  // anywhere (no rows, no catch-all, no legacy business) is a guaranteed
-  // dead end and must never appear; and the funnel is answered only by an
-  // actual item choice - there is no empty-items shortcut.
+test("every category the funnel offers leads to a price or to a request", () => {
+  // The funnel is answered only by an actual item choice - there is no
+  // empty-items shortcut - and no category is withheld, because the parcel
+  // nobody priced now leads somewhere: the customer asks, and the businesses
+  // on the route answer with a number.
   const customer = readFileSync(
     "src/components/customer-shipping-services.tsx",
     "utf8",
-  );
-  assert.match(
-    customer,
-    /\[\.\.\.seen\.values\(\)\]\.filter\(/,
   );
   assert.match(
     customer,
     /itemStepSatisfied = Boolean\(activeCategoryId\) && Boolean\(activeItemId\)/,
   );
   assert.doesNotMatch(customer, /funnelItems\.length === 0 \|\|/);
+  // No category is filtered out of the picker.
+  assert.doesNotMatch(customer, /\[\.\.\.seen\.values\(\)\]\.filter\(/);
+  // And the note that used to end the journey is gone.
+  assert.doesNotMatch(customer, /more businesses are joining/);
 });
 
 test("the freight form reveals itself one answered question at a time", () => {
   // With no category chosen, the customer saw receiver fields, a weight, a
   // pickup choice, an auto-selected provider and a Review button - half a
-  // form for a booking that could still dead-end at "no business takes
-  // this". Each block now waits for the answer before it.
+  // form for a booking that had no number behind it. Each block waits for
+  // the answer before it, and for a price.
   const customer = readFileSync(
     "src/components/customer-shipping-services.tsx",
     "utf8",
   );
-  // Receiver/weight/pickup live behind the chosen business.
-  assert.match(customer, /\{destination && \(<>/);
+  // Receiver/weight/pickup live behind the chosen business AND its price.
+  assert.match(customer, /\{destination && itemPricing\.priced && \(<>/);
   // The shared footer hides until then too.
-  assert.match(customer, /footerVisible=\{Boolean\(destination\)\}/);
+  assert.match(
+    customer,
+    /footerVisible=\{Boolean\(destination\) && itemPricing\.priced\}/,
+  );
   // And the single-provider auto-select waits for the funnel.
   assert.match(
     customer,
@@ -247,7 +275,7 @@ const PRICED = {
         paybackAmount: 20,
         pricingMode: "per_kg",
       },
-      // Saved before pricing moved onto the row.
+      // Listed, promised, never priced.
       {id: "laptop", label: "Laptop", paybackAmount: 800},
     ],
     otherPaybackAmount: 100,
@@ -261,8 +289,8 @@ test("a set price is published, and never asks the customer for a weight", () =>
     table: PRICED,
     categoryId: "electronics",
     itemId: "iphone-16",
-    categoryMultiplier: 2,
   });
+  assert.equal(phone.priced, true);
   assert.equal(phone.mode, "flat");
   assert.equal(phone.flatPrice, 50);
   assert.equal(phone.includedKg, 2);
@@ -278,58 +306,55 @@ test("a set price is published, and never asks the customer for a weight", () =>
     table: PRICED,
     categoryId: "electronics",
     itemId: "tv",
-    categoryMultiplier: 2,
   });
   assert.equal(tv.includedKg, 0);
   assert.equal(tv.needsWeightAtBooking, false);
   assert.equal(tv.weighsAtDropOff, false);
 });
 
-test("a by-weight row is the route's own rate, and legacy rows are not", () => {
-  // By weight means this business's per-kg rate for the route, full stop.
-  assert.equal(
-    freightItemPricing({
-      table: PRICED,
-      categoryId: "electronics",
-      itemId: "cables",
-      categoryMultiplier: 2,
-    }).weightFactor,
-    1,
-  );
-  // The migration promise: a row saved before per-row pricing existed keeps
-  // being charged at its category's factor, so saving it unchanged cannot
-  // move what anyone is charged.
-  const legacy = freightItemPricing({
+test("a by-weight row is the route's own rate, and nothing on top", () => {
+  const cables = freightItemPricing({
+    table: PRICED,
+    categoryId: "electronics",
+    itemId: "cables",
+  });
+  assert.equal(cables.priced, true);
+  assert.equal(cables.mode, "per_kg");
+  // The plain route rate. There is no factor left anywhere to multiply by.
+  assert.equal(cables.weightFactor, 1);
+  assert.equal(cables.needsWeightAtBooking, true);
+  assert.equal(cables.weighsAtDropOff, true);
+});
+
+test("a row nobody priced is not priced, and never guesses", () => {
+  // A payback is a promise, not a price. A listed row with no pricing of its
+  // own is an item this business has never quoted, and it takes its own
+  // answer rather than the catch-all's - which is for things nobody listed.
+  const unpriced = freightItemPricing({
     table: PRICED,
     categoryId: "electronics",
     itemId: "laptop",
-    categoryMultiplier: 2,
   });
-  assert.equal(legacy.mode, "per_kg");
-  assert.equal(legacy.weightFactor, 2);
-  assert.equal(legacy.needsWeightAtBooking, true);
-  assert.equal(legacy.weighsAtDropOff, true);
-  // Its own row, never the catch-all: reading the catch-all here would
-  // reprice every legacy row the day a business prices "anything else".
-  assert.equal(legacy.source, "item");
-  // And a whole table that has never been priced behaves exactly the same.
-  const untouched = freightItemPricing({
-    table: TABLE,
-    categoryId: "electronics",
-    itemId: "iphone",
-    categoryMultiplier: 2,
-  });
-  assert.equal(untouched.weightFactor, 2);
-  assert.equal(untouched.mode, "per_kg");
-  // Unknown category, no table at all: the price freight had before any of
-  // this existed.
+  assert.equal(unpriced.priced, false);
+  assert.equal(unpriced.mode, null);
+  assert.equal(unpriced.flatPrice, 0);
+  assert.equal(unpriced.weightFactor, 0);
+  assert.equal(unpriced.needsWeightAtBooking, false);
+  assert.equal(unpriced.source, null);
+
+  // A whole table that has never been priced answers the same way.
   assert.equal(
     freightItemPricing({
-      table: undefined,
+      table: TABLE,
       categoryId: "electronics",
-      categoryMultiplier: 1.5,
-    }).weightFactor,
-    1.5,
+      itemId: "iphone",
+    }).priced,
+    false,
+  );
+  // As does no table at all.
+  assert.equal(
+    freightItemPricing({table: undefined, categoryId: "electronics"}).priced,
+    false,
   );
 });
 
@@ -338,21 +363,18 @@ test("an unlisted item falls through to the category's own pricing", () => {
     table: PRICED,
     categoryId: "electronics",
     itemId: "walkman",
-    categoryMultiplier: 2,
   });
+  assert.equal(unlisted.priced, true);
   assert.equal(unlisted.source, "other");
   assert.equal(unlisted.mode, "per_kg");
-  // A catch-all that states by-weight pricing states the route rate.
   assert.equal(unlisted.weightFactor, 1);
-  // A category whose catch-all names no pricing prices like it always did.
-  assert.equal(
-    freightItemPricing({
-      table: PRICED,
-      categoryId: "clothing",
-      categoryMultiplier: 1,
-    }).source,
-    null,
-  );
+  // A category whose catch-all names no pricing has no price to give.
+  const clothing = freightItemPricing({
+    table: PRICED,
+    categoryId: "clothing",
+  });
+  assert.equal(clothing.priced, false);
+  assert.equal(clothing.source, null);
 });
 
 test("a refusal from the callable reads as a sentence, not a code", () => {
@@ -412,4 +434,31 @@ test("a shipment nobody weighs is never offered a weigh action", () => {
     /const weighs = row\.weightVerificationRequired !== false;/,
   );
   assert.match(operations, /versionTwo && weighs && verifiedWeight <= 0/);
+});
+
+test("an unpriced item shows the request path and never a price", () => {
+  // The whole point of `priced`. A customer who picks something nobody has
+  // put a number on must not be shown a number, must not be shown a way to
+  // pay one, and must be shown where to get one.
+  const customer = readFileSync(
+    "src/components/customer-shipping-services.tsx",
+    "utf8",
+  );
+  // The estimate, the review footer and the receiver/weight/pickup block all
+  // hang off a resolved price.
+  assert.match(customer, /\{destination && itemPricing\.priced && \(<>/);
+  assert.match(
+    customer,
+    /footerVisible=\{Boolean\(destination\) && itemPricing\.priced\}/,
+  );
+  // And checkout cannot be reached without one.
+  assert.match(customer, /itemPricing\.priced &&\s*\n\s*\/\/ A set-price item/);
+  // The request replaces the dead end, both when nobody prices the item and
+  // when the chosen business does not.
+  assert.match(
+    customer,
+    /qualifiedProviderOptions\.length === 0 \|\|\s*\n\s*\(destination !== null && !itemPricing\.priced\)/,
+  );
+  assert.match(customer, /<FreightPriceRequest\b/);
+  assert.match(customer, /createFreightQuoteRequest/);
 });

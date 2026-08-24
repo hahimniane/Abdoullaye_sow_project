@@ -3,10 +3,10 @@
  *
  * Two separate questions, deliberately kept apart:
  *
- * - **Category** answers "what is it, will you carry it, what does a kilo of
- *   it cost". The platform owns the list so a customer can compare two
- *   businesses on the same words; the business sets what each row is worth to
- *   it.
+ * - **Category** answers "what is it, and will you carry it". It is how a
+ *   customer finds the thing they are sending; the platform owns the list so
+ *   two businesses can be compared on the same words. It carries no price of
+ *   its own - what a thing costs is set on the item row, by the business.
  * - **Cover** answers "if you lose it, do you make me whole". One yes/no per
  *   business, and the amount is the business's own published payback for that
  *   item. Nothing is charged for it: a business already prices each item
@@ -35,58 +35,50 @@ import type { FirestoreRow } from "@/types/admin";
  * The rows every business has, in the order a customer sees them. Mirrors
  * functions/freight_categories.js - do not invent rows here, and do not
  * reorder: the order is the shared vocabulary customers compare with.
+ *
+ * A label and a hint, and nothing else. A category is how a customer finds
+ * the thing they are sending, not what it costs.
  */
 export const STANDARD_FREIGHT_CATEGORIES = [
   {
     id: "general",
     label: "General goods",
     hint: "Household items, gifts, anything not listed below",
-    defaultMultiplier: 1,
   },
   {
     id: "clothing",
     label: "Clothes and fabric",
     hint: "Clothing, shoes, cloth, bedding",
-    defaultMultiplier: 1,
   },
   {
     id: "food",
     label: "Food",
     hint: "Dry and packaged food only",
-    defaultMultiplier: 1,
   },
   {
     id: "documents",
     label: "Documents",
     hint: "Papers, certificates, printed matter",
-    defaultMultiplier: 1,
   },
   {
     id: "cosmetics",
     label: "Cosmetics and liquids",
     hint: "Creams, perfumes, hair products",
-    defaultMultiplier: 1.2,
   },
   {
     id: "electronics",
     label: "Electronics",
     hint: "Phones, laptops, tablets, chargers",
-    defaultMultiplier: 2,
   },
   {
     id: "fragile",
     label: "Fragile items",
     hint: "Glass, ceramics, anything breakable",
-    defaultMultiplier: 1.5,
   },
 ] as const;
 
 export const STANDARD_FREIGHT_CATEGORY_IDS: readonly string[] =
   STANDARD_FREIGHT_CATEGORIES.map((category) => category.id);
-
-/** Nothing outside this band. A typo must not make a parcel free or absurd. */
-export const MIN_CATEGORY_MULTIPLIER = 0.5;
-export const MAX_CATEGORY_MULTIPLIER = 10;
 
 /** A business may not drown the customer in choices. */
 export const MAX_CUSTOM_FREIGHT_CATEGORIES = 6;
@@ -95,7 +87,6 @@ export type FreightCategoryOption = {
   id: string;
   label: string;
   hint: string;
-  multiplier: number;
   custom: boolean;
 };
 
@@ -112,22 +103,8 @@ export type FreightCoveragePolicy = {
  * Reading what the callable sent (customer side)
  * ---------------------------------------------------------------------- */
 
-function finiteNumber(value: unknown, fallback = 0): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
 function trimmedString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function boundedMultiplier(value: unknown, fallback = 1): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-  return Math.min(
-    MAX_CATEGORY_MULTIPLIER,
-    Math.max(MIN_CATEGORY_MULTIPLIER, parsed),
-  );
 }
 
 /**
@@ -152,7 +129,6 @@ export function freightCategoryOptionsFrom(
       id,
       label,
       hint: trimmedString(row.hint),
-      multiplier: boundedMultiplier(row.multiplier),
       custom: row.custom === true,
     });
   }
@@ -195,74 +171,39 @@ export function freightCategoryById(
   return options.find((option) => option.id === id) ?? null;
 }
 
-/**
- * What to multiply the per-kg rate by. An unknown or absent category resolves
- * to 1 - the price freight had before categories existed - so a stale screen
- * quotes what it always quoted rather than an error.
- */
-export function freightCategoryMultiplier(
-  options: readonly FreightCategoryOption[],
-  categoryId: string,
-): number {
-  return freightCategoryById(options, categoryId)?.multiplier ?? 1;
-}
-
 /* -------------------------------------------------------------------------
  * The price, exactly as the server computes it
  * ---------------------------------------------------------------------- */
 
-function roundMoney(value: number): number {
-  return Math.round(value * 100) / 100;
-}
-
-export type FreightCategoryPricing = {
-  baseRatePerKg: number;
-  categoryRatePerKg: number;
-  multiplier: number;
-  /** What the parcel costs to ship, before pickup and coverage. */
-  shippingSubtotal: number;
-  /** What the category adds over general goods, for the reader to see. */
-  categorySurcharge: number;
-};
-
 /**
- * The freight line of the bill for one category.
+ * What a by-weight parcel costs to ship with this business.
  *
- * The server computes `round(weight * ratePerKg * multiplier)`, so the same
+ * The server computes `round(weight * ratePerKg)` in one step, so the same
  * rounding happens here rather than rounding the rate first - rounding twice
- * drifts by a cent on exactly the kind of parcel someone would complain about.
+ * drifts by a cent on exactly the kind of parcel someone would complain
+ * about. Null when either side of the multiplication is missing, which is a
+ * route this business has not rated.
  */
-export function freightCategoryPricing({
-  baseRatePerKg,
+export function freightWeightPricing({
+  ratePerKg,
   weightKg,
-  multiplier,
 }: {
-  baseRatePerKg: unknown;
+  ratePerKg: unknown;
   weightKg: unknown;
-  multiplier: unknown;
-}): FreightCategoryPricing | null {
-  const rate = finiteNumber(baseRatePerKg);
-  const weight = finiteNumber(weightKg);
-  const factor = boundedMultiplier(multiplier);
+}): {ratePerKg: number; shippingSubtotal: number} | null {
+  const rate = Number(ratePerKg);
+  const weight = Number(weightKg);
+  if (!Number.isFinite(rate) || !Number.isFinite(weight)) return null;
   if (rate <= 0 || weight <= 0) return null;
-  const shippingSubtotal = roundMoney(weight * rate * factor);
   return {
-    baseRatePerKg: rate,
-    categoryRatePerKg: roundMoney(rate * factor),
-    multiplier: factor,
-    shippingSubtotal,
-    categorySurcharge: roundMoney(shippingSubtotal - roundMoney(weight * rate)),
+    ratePerKg: rate,
+    shippingSubtotal: Math.round(weight * rate * 100) / 100,
   };
 }
 
 /* -------------------------------------------------------------------------
  * Cover
  * ---------------------------------------------------------------------- */
-
-/** "2" rather than "2.0", and "1.5" rather than "1.50". */
-export function formatMultiplier(value: number): string {
-  return `${Math.round(value * 100) / 100}`;
-}
 
 /**
  * The one line that lets a customer compare two businesses on protection
@@ -297,16 +238,14 @@ export type FreightCustomCategoryDraft = {
   id: string;
   label: string;
   hint: string;
-  multiplier: string;
 };
 
 /**
  * How the business charges for one row it carries.
  *
- * Empty is not "unanswered": it is every row saved before pricing moved onto
- * the row, and it keeps being charged at its category's factor. The editor
- * shows it as by-weight and, left alone, saves nothing - so no live price
- * moves the day this ships.
+ * Empty is unanswered, and unanswered is a real state: an item this business
+ * has never put a number on. It cannot be booked on the spot - the customer
+ * asks for a price and this business answers with one.
  */
 export type FreightPaybackPricingMode = "" | "flat" | "per_kg";
 
@@ -354,8 +293,13 @@ export function emptyFreightPaybackCategory(): FreightPaybackCategoryDraft {
 }
 
 export type FreightSettingsDraft = {
-  /** Only the standard rows the business has actually moved. */
-  categoryRates: Record<string, string>;
+  /**
+   * Whatever `freightCategoryRates` already holds, carried untouched.
+   *
+   * Nothing reads it and no field writes it - it rides through so that saving
+   * from this form does not erase what a document already stored.
+   */
+  categoryRates: Record<string, number>;
   customCategories: FreightCustomCategoryDraft[];
   /** Whether this business makes good on a parcel it loses. */
   coversLoss: boolean;
@@ -406,14 +350,10 @@ export function freightSettingsFromRow(
     : [];
   return {
     categoryRates: Object.fromEntries(
-      STANDARD_FREIGHT_CATEGORIES.map((category) => [
-        category.id,
-        numberText(
-          rates[category.id],
-          String(category.defaultMultiplier),
-        ),
-      ]),
-    ),
+      Object.entries(rates)
+        .map(([id, value]) => [id, Number(value)])
+        .filter(([, value]) => Number.isFinite(value as number)),
+    ) as Record<string, number>,
     customCategories: stored
       .slice(0, MAX_CUSTOM_FREIGHT_CATEGORIES)
       .map((raw) => {
@@ -422,7 +362,6 @@ export function freightSettingsFromRow(
           id: trimmedString(row.id).toLowerCase(),
           label: trimmedString(row.label),
           hint: trimmedString(row.hint),
-          multiplier: numberText(row.multiplier, "1"),
         };
       }),
     coversLoss: business?.freightCoverageEnabled === true,
@@ -432,11 +371,11 @@ export function freightSettingsFromRow(
 }
 
 /**
- * The stored mode, or empty for a row that predates per-row pricing.
+ * The stored mode, or empty when the row names none.
  *
- * Empty is carried through the form untouched so saving an untouched row
- * writes no pricing keys at all - the one guarantee that stops this from
- * repricing parcels a business already quoted.
+ * Empty is carried through the form rather than defaulted, so a row this
+ * business has never priced is saved back exactly as unpriced. Inventing a
+ * mode here would put a number on the customer's screen that nobody chose.
  */
 function pricingModeText(value: unknown): FreightPaybackPricingMode {
   const mode = trimmedString(value);
@@ -473,7 +412,7 @@ function paybackDraftFrom(
 }
 
 export function emptyFreightCustomCategory(): FreightCustomCategoryDraft {
-  return { id: "", label: "", hint: "", multiplier: "1" };
+  return { id: "", label: "", hint: "" };
 }
 
 /** The id a row will be saved under. */
@@ -501,8 +440,8 @@ function paybackCategoryLabels(
   return labels;
 }
 
-/** Blank is an answer here: it means "however heavy" or "whatever the
- * category charges", so it is checked separately from a typo. */
+/** Blank is an answer here: it means "however heavy", so it is checked
+ * separately from a typo. */
 function blankNumber(value: string): boolean {
   return value.trim() === "";
 }
@@ -533,7 +472,7 @@ function paybackPricingError(draft: FreightSettingsDraft): string | null {
         includedKg: item.includedKg,
       }));
     // The catch-all only prices what it can also carry: a category that pays
-    // back nothing for an unlisted item cannot be instant-booked at all.
+    // back nothing for an unlisted item sends the customer to a request.
     if ((Number(entry.otherAmount || 0) || 0) > 0) {
       rows.push({
         name: `${categoryLabel} · anything else`,
@@ -577,17 +516,6 @@ function paybackPricingError(draft: FreightSettingsDraft): string | null {
 export function validateFreightSettings(
   draft: FreightSettingsDraft,
 ): string | null {
-  for (const category of STANDARD_FREIGHT_CATEGORIES) {
-    const value = Number(draft.categoryRates[category.id]);
-    if (
-      !Number.isFinite(value) ||
-      value < MIN_CATEGORY_MULTIPLIER ||
-      value > MAX_CATEGORY_MULTIPLIER
-    ) {
-      return `${category.label}: enter a price multiplier between 0.5 and 10.`;
-    }
-  }
-
   if (draft.customCategories.length > MAX_CUSTOM_FREIGHT_CATEGORIES) {
     return "You can add up to 6 categories of your own.";
   }
@@ -605,14 +533,6 @@ export function validateFreightSettings(
       return "Two of the categories you added have the same name. Give each one its own.";
     }
     seen.add(id);
-    const value = Number(row.multiplier);
-    if (
-      !Number.isFinite(value) ||
-      value < MIN_CATEGORY_MULTIPLIER ||
-      value > MAX_CATEGORY_MULTIPLIER
-    ) {
-      return `${row.label.trim()}: enter a price multiplier between 0.5 and 10.`;
-    }
   }
 
   const pricingError = paybackPricingError(draft);
@@ -636,12 +556,12 @@ export type FreightOtherPricingPayload = {
 };
 
 export type FreightSettingsPayload = {
+  /** Carried through from the document, not composed from any field. */
   freightCategoryRates: Record<string, number>;
   freightCustomCategories: Array<{
     id: string;
     label: string;
     hint: string;
-    multiplier: number;
   }>;
   freightCoverage: { coversLoss: boolean };
   freightPaybackTable: Record<
@@ -660,9 +580,9 @@ export type FreightSettingsPayload = {
 /**
  * The pricing keys for one row, cleaned the way the callable cleans them.
  *
- * An untouched legacy row answers with nothing at all: no `pricingMode`
- * means the category multiplier still prices it, which is what every parcel
- * booked before this existed was charged.
+ * A row with no mode answers with nothing at all, and the absence is the
+ * point: it is how the server knows this business has never put a number on
+ * this item, and routes the customer to ask for one.
  */
 function pricingPayload(row: {
   pricingMode: FreightPaybackPricingMode;
@@ -705,29 +625,21 @@ function otherPricingPayload(
 /**
  * What updateBusinessProfile receives.
  *
- * A standard row left at the platform's starting number is not sent at all.
- * Storing it would pin this business to today's default forever, and "set
- * nothing, change nothing" is the promise that made categories safe to ship.
+ * `freightCategoryRates` goes back exactly as it came: no field composes it,
+ * so rebuilding it from the form would silently drop whatever a document is
+ * already carrying.
  */
 export function buildFreightSettingsPayload(
   draft: FreightSettingsDraft,
 ): FreightSettingsPayload {
-  const freightCategoryRates: Record<string, number> = {};
-  for (const category of STANDARD_FREIGHT_CATEGORIES) {
-    const value = Number(draft.categoryRates[category.id]);
-    if (!Number.isFinite(value)) continue;
-    if (value === category.defaultMultiplier) continue;
-    freightCategoryRates[category.id] = value;
-  }
   return {
-    freightCategoryRates,
+    freightCategoryRates: {...draft.categoryRates},
     freightCustomCategories: draft.customCategories
       .slice(0, MAX_CUSTOM_FREIGHT_CATEGORIES)
       .map((row) => ({
         id: resolvedFreightCategoryId(row),
         label: row.label.trim(),
         hint: row.hint.trim(),
-        multiplier: Number(row.multiplier) || 1,
       })),
     freightCoverage: { coversLoss: draft.coversLoss },
     freightPaybackTable: Object.fromEntries(

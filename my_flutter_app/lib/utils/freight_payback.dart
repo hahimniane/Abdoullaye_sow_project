@@ -67,6 +67,7 @@ FreightPaybackLookup freightPaybackFor({
 /// for the category catch-all, and null when nothing in the table spoke.
 class FreightItemPricing {
   const FreightItemPricing({
+    required this.priced,
     required this.mode,
     required this.flatPrice,
     required this.includedKg,
@@ -76,7 +77,13 @@ class FreightItemPricing {
     this.source,
   });
 
-  final String mode;
+  /// Whether this business has put a number on this item at all. False sends
+  /// the customer to a price request: a price nobody set is not a price to
+  /// show, and every other field here is meaningless while this is false.
+  final bool priced;
+
+  /// `'flat'`, `'per_kg'`, or null when nothing priced it.
+  final String? mode;
 
   /// What the business charges for this item, whole. Zero when priced by
   /// weight.
@@ -86,7 +93,8 @@ class FreightItemPricing {
   /// parcel however heavy it is.
   final double includedKg;
 
-  /// Applied on top of the destination's per-kg rate. Zero when set-priced.
+  /// One for a by-weight item, so the destination's per-kg rate is what the
+  /// customer pays. Zero when set-priced or unpriced.
   final double weightFactor;
 
   /// Whether the customer must say what the parcel weighs to be quoted.
@@ -100,6 +108,17 @@ class FreightItemPricing {
   bool get isFlat => mode == 'flat';
 }
 
+/// Nothing to charge from, so nothing to show.
+const _unpriced = FreightItemPricing(
+  priced: false,
+  mode: null,
+  flatPrice: 0,
+  includedKg: 0,
+  weightFactor: 0,
+  needsWeightAtBooking: false,
+  weighsAtDropOff: false,
+);
+
 /// Reads a stored number the way the server's `Number(x) || fallback` does:
 /// anything unreadable falls back rather than throwing, because one bad value
 /// in a business's table must not stop a customer being quoted.
@@ -110,34 +129,20 @@ double _numberOr(Object? value, double fallback) {
   return parsed != null && parsed.isFinite ? parsed : fallback;
 }
 
-FreightItemPricing _byWeight(double weightFactor, String? source) =>
-    FreightItemPricing(
-      mode: 'per_kg',
-      flatPrice: 0,
-      includedKg: 0,
-      weightFactor: weightFactor,
-      needsWeightAtBooking: true,
-      weighsAtDropOff: true,
-      source: source,
-    );
-
 /// How to charge for one item: a set price, or by weight.
 ///
 /// Resolves in the same order the payback does - the exact row, then the
 /// category catch-all - so the price and the promise always come from the
-/// same place. A row that names no pricing falls through to the category
-/// multiplier, which is how every booking was priced before rows could carry
-/// a price of their own. A row that DOES state by-weight pricing is charged
-/// at the business's own per-kg rate for the route - there is no per-row
-/// factor to reason about.
+/// same place. Anything the business has not put a number on comes back
+/// unpriced, and the customer asks it for a price instead of being shown one
+/// the platform invented.
 FreightItemPricing freightItemPricing({
   required Map<String, dynamic>? table,
   required String categoryId,
   String itemId = '',
-  double categoryMultiplier = 1,
 }) {
   final entry = table?[categoryId.trim()];
-  if (entry is! Map) return _byWeight(categoryMultiplier, null);
+  if (entry is! Map) return _unpriced;
 
   final wanted = itemId.trim();
   Map? row;
@@ -160,6 +165,7 @@ FreightItemPricing freightItemPricing({
     if (mode == 'flat') {
       final includedKg = _numberOr(included, 0);
       return FreightItemPricing(
+        priced: true,
         mode: 'flat',
         flatPrice: _numberOr(flat, 0),
         includedKg: includedKg,
@@ -174,21 +180,29 @@ FreightItemPricing freightItemPricing({
         source: source,
       );
     }
-    // A by-weight row is charged at the route rate. The category multiplier
-    // survives only for rows saved before pricing moved onto the row, so
-    // nothing anyone is charged moved the day this shipped.
-    return _byWeight(1, source);
+    // By weight is this business's own per-kg rate for the route, plain. A
+    // unitless factor was a number the business had to reason about instead
+    // of a price it could state.
+    return FreightItemPricing(
+      priced: true,
+      mode: 'per_kg',
+      flatPrice: 0,
+      includedKg: 0,
+      weightFactor: 1,
+      needsWeightAtBooking: true,
+      weighsAtDropOff: true,
+      source: source,
+    );
   }
 
   if (row != null) {
-    // A listed row that states no pricing is one saved before pricing
-    // existed. It keeps the category multiplier it has always been charged
-    // at - NOT the catch-all's price, which is for things nobody listed and
-    // would silently reprice every legacy row the day this ships.
+    // A listed row that names no pricing has never been quoted by this
+    // business. It goes to a price request rather than inheriting a number
+    // from its category or from the catch-all.
     final rowMode = row['pricingMode'];
     return rowMode != null && '$rowMode'.isNotEmpty
         ? read('item', rowMode, row['flatPrice'], row['includedKg'])
-        : _byWeight(categoryMultiplier, 'item');
+        : _unpriced;
   }
   final otherMode = entry['otherPricingMode'];
   if (otherMode != null && '$otherMode'.isNotEmpty) {
@@ -199,7 +213,7 @@ FreightItemPricing freightItemPricing({
       entry['otherIncludedKg'],
     );
   }
-  return _byWeight(categoryMultiplier, null);
+  return _unpriced;
 }
 
 /// The funnel's synthetic id for "something not on anyone's list".
@@ -220,18 +234,18 @@ class FreightItemChoice {
 /// The item choices for a category, across every provider serving the
 /// route. Mirror of `freightItemChoicesFor` in the web lib and the
 /// functions authority - the funnel asks WHAT before WHO on every client.
+///
+/// Every row any provider lists is offered, priced or not, and the catch-all
+/// closes the list: an item nobody has quoted is a question the customer can
+/// still ask, so no answer here is a dead end.
 List<FreightItemChoice> freightItemChoicesFor(
   List<Map<String, dynamic>?> tables,
   String categoryId,
 ) {
   final seen = <String, String>{};
-  var anyCatchAll = false;
   for (final raw in tables) {
     final table = _providerTable(raw);
-    if (table == null) {
-      anyCatchAll = true;
-      continue;
-    }
+    if (table == null) continue;
     final entry = table[categoryId.trim()];
     if (entry is! Map) continue;
     final items = entry['items'];
@@ -245,34 +259,35 @@ List<FreightItemChoice> freightItemChoicesFor(
         }
       }
     }
-    if (((entry['otherPaybackAmount'] as num?)?.toDouble() ?? 0) > 0) {
-      anyCatchAll = true;
-    }
   }
-  final choices = seen.entries
-      .map((e) => FreightItemChoice(id: e.key, label: e.value))
-      .toList()
-    ..sort((a, b) => a.label.compareTo(b.label));
-  if (anyCatchAll) {
-    choices.add(
-      const FreightItemChoice(id: otherItemId, label: 'Something else'),
-    );
-  }
-  return choices;
+  return [
+    ...(seen.entries
+        .map((e) => FreightItemChoice(id: e.key, label: e.value))
+        .toList()
+      ..sort((a, b) => a.label.compareTo(b.label))),
+    const FreightItemChoice(id: otherItemId, label: 'Something else'),
+  ];
 }
 
-/// Whether one provider can instant-book this item - the same resolution
-/// the server prices with.
+/// Whether one provider can be booked for this item on the spot - the same
+/// resolution the server prices and covers with, so a business only reaches
+/// the booking form when its own table answers both questions.
 bool providerQualifiesForItem(
   Map<String, dynamic>? table,
   String categoryId,
   String itemId,
 ) {
   final resolved = _providerTable(table);
-  if (resolved == null) return true;
-  return freightPaybackFor(
-    table: resolved,
-    categoryId: categoryId,
-    itemId: itemId == otherItemId ? '' : itemId,
-  ).listed;
+  if (resolved == null) return false;
+  final wanted = itemId == otherItemId ? '' : itemId;
+  return freightItemPricing(
+        table: resolved,
+        categoryId: categoryId,
+        itemId: wanted,
+      ).priced &&
+      freightPaybackFor(
+        table: resolved,
+        categoryId: categoryId,
+        itemId: wanted,
+      ).listed;
 }

@@ -36,16 +36,21 @@ describe("the standard list", () => {
 });
 
 describe("what a business charges", () => {
-  it("uses the platform default when the business has set nothing", () => {
-    assert.equal(freightCategoryMultiplier({}, "electronics"), 2);
-    assert.equal(freightCategoryMultiplier({}, "clothing"), 1);
+  it("charges nothing extra for a row the business never touched", () => {
+    // The platform used to ship Electronics at 2x, so every business
+    // charged double for a number it had never chosen and could not see.
+    // A price a business did not set is not a price.
+    for (const id of ["electronics", "fragile", "cosmetics", "clothing"]) {
+      assert.equal(freightCategoryMultiplier({}, id), 1, id);
+    }
   });
 
   it("uses the business's own rate when it has one", () => {
+    // A rate a business chose is still honoured; only the default it never
+    // chose is gone.
     const business = {freightCategoryRates: {electronics: 1.5}};
     assert.equal(freightCategoryMultiplier(business, "electronics"), 1.5);
-    // A row it did not touch still carries the platform default.
-    assert.equal(freightCategoryMultiplier(business, "fragile"), 1.5);
+    assert.equal(freightCategoryMultiplier(business, "fragile"), 1);
   });
 
   it("prices a no-category parcel exactly as before categories existed", () => {
@@ -59,7 +64,7 @@ describe("what a business charges", () => {
   it("survives a nonsense value in one business's settings", () => {
     // A bad number in settings must not stop a customer getting a quote.
     const business = {freightCategoryRates: {electronics: "abc"}};
-    assert.equal(freightCategoryMultiplier(business, "electronics"), 2);
+    assert.equal(freightCategoryMultiplier(business, "electronics"), 1);
   });
 
   it("clamps a multiplier that would make a parcel absurd", () => {
@@ -95,7 +100,9 @@ describe("a business's own categories", () => {
       freightCustomCategories: [
         {id: "electronics", label: "My electronics", multiplier: 9},
       ],
-    }, "electronics"), 2);
+      // The standard row wins, and it is neutral: a business cannot smuggle
+      // a 9x surcharge in by redefining a row everyone else shares.
+    }, "electronics"), 1);
   });
 
   it("is capped so the customer is not drowned in choices", () => {

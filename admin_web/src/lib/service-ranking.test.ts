@@ -18,9 +18,13 @@ import {
 
 /**
  * A business option shaped like the one listActiveBarrelDestinationOptions
- * sends - freightCategories already resolved to this business's multipliers,
- * which is what the response actually carries.
+ * sends. The payback table is what decides a freight price now: a set price
+ * stands on its own, and everything else is the route rate times the weight.
  */
+const BY_WEIGHT_TABLE = {
+  general: {items: [], otherPaybackAmount: 50, otherPricingMode: "per_kg"},
+};
+
 function option(
   businessId: string,
   {
@@ -28,20 +32,18 @@ function option(
     airDays,
     airMaxDays,
     coversLoss = false,
-    categoryRates = {},
+    paybackTable = BY_WEIGHT_TABLE,
   }: {
     airRate?: number;
     airDays?: number;
     airMaxDays?: number;
     coversLoss?: boolean;
-    categoryRates?: Record<string, number>;
+    paybackTable?: unknown;
   } = {},
 ): RankableServiceOption & { businessId: string } {
   return {
     businessId,
-    freightCategories: Object.entries(categoryRates).map(
-      ([id, multiplier]) => ({ id, label: id, multiplier }),
-    ),
+    freightPaybackTable: paybackTable,
     freightCoverage: { coversLoss },
     country: {
       freightAirPricePerKg: airRate,
@@ -57,28 +59,63 @@ const air: ServiceSortInputs = {
   service: "freight",
   mode: "air",
   weightKg: 1,
+  itemCategoryId: "general",
 };
 const ids = (rows: { businessId: string }[]) =>
   rows.map((row) => row.businessId);
 
 test("ranks on the real quote, not the headline rate", () => {
-  // The business cheaper per kilo can be dearer for electronics. Ranking on
-  // the rate alone would name the wrong winner.
-  const inputs = { ...air, weightKg: 5, itemCategoryId: "electronics" };
+  // A business cheaper per kilo can be dearer for the thing the customer
+  // actually picked: a published set price ignores the rate entirely, so
+  // ranking on the rate alone would name the wrong winner.
+  const inputs = {
+    ...air,
+    weightKg: 5,
+    itemCategoryId: "electronics",
+    itemId: "iphone",
+  };
   const cheapPerKg = option("cheap-per-kg", {
     airRate: 10,
-    categoryRates: { electronics: 3 },
+    paybackTable: {
+      electronics: {
+        items: [
+          {id: "iphone", label: "iPhone", paybackAmount: 400,
+            pricingMode: "flat", flatPrice: 150},
+        ],
+        otherPaybackAmount: 0,
+      },
+    },
   });
   const dearPerKg = option("dear-per-kg", {
     airRate: 12,
-    categoryRates: { electronics: 1 },
+    paybackTable: {
+      electronics: {
+        items: [
+          {id: "iphone", label: "iPhone", paybackAmount: 400,
+            pricingMode: "per_kg"},
+        ],
+        otherPaybackAmount: 0,
+      },
+    },
+  });
+  // A business that has never priced this has no number to be ordered by,
+  // and sinks rather than tying with the cheapest.
+  const unpriced = option("unpriced", {
+    airRate: 1,
+    paybackTable: {
+      electronics: {
+        items: [{id: "iphone", label: "iPhone", paybackAmount: 400}],
+        otherPaybackAmount: 0,
+      },
+    },
   });
 
   assert.equal(serviceOptionTotal(cheapPerKg, inputs), 150);
   assert.equal(serviceOptionTotal(dearPerKg, inputs), 60);
+  assert.equal(serviceOptionTotal(unpriced, inputs), UNKNOWN_SORT_VALUE);
   assert.deepEqual(
-    ids(sortServiceOptions([cheapPerKg, dearPerKg], inputs)),
-    ["dear-per-kg", "cheap-per-kg"],
+    ids(sortServiceOptions([cheapPerKg, dearPerKg, unpriced], inputs)),
+    ["dear-per-kg", "cheap-per-kg", "unpriced"],
   );
 });
 

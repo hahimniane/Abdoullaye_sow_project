@@ -3,6 +3,9 @@
  *
  * Mirrors `functions/service_ranking.js`. Keep the two in step: the rules are
  * stated there in full, and the tests on both sides encode the same cases.
+ * The one place they must be read together is freight cheapest, which prices
+ * the picked item from the business's own table - `freightOptionTotalCents`
+ * needs the same treatment or the two sides will order a route differently.
  *
  * Sorts, not filters. With two or three businesses on a route, filtering to
  * "cheapest" would hide the alternative - including the one that stands behind
@@ -14,11 +17,10 @@
  */
 
 import {
-  freightCategoryMultiplier,
-  freightCategoryOptionsFrom,
-  freightCategoryPricing,
   freightCoveragePolicyFrom,
+  freightWeightPricing,
 } from "./freight-categories.ts";
+import { OTHER_ITEM_ID, freightItemPricing } from "./freight-payback.ts";
 
 export const SERVICE_SORTS = [
   "cheapest",
@@ -75,6 +77,8 @@ export type RankableServiceOption = {
   businessId?: string;
   reviewWeightedScore?: unknown;
   freightCategories?: unknown;
+  /** What this business charges per item, and what it pays back if lost. */
+  freightPaybackTable?: unknown;
   freightCoverage?: unknown;
   /** Shared barrels price a share; parking prices a term. */
   pricePerShare?: unknown;
@@ -102,6 +106,7 @@ export type ServiceSortInputs = {
   mode?: "air" | "sea";
   weightKg?: unknown;
   itemCategoryId?: string;
+  itemId?: string;
   /** Barrels and shares. */
   quantity?: unknown;
   /** Parking. */
@@ -200,29 +205,35 @@ function serviceSpeedRank(
 
 function freightTotal(
   option: RankableServiceOption,
-  { weightKg, mode, itemCategoryId }: ServiceSortInputs,
+  { weightKg, mode, itemCategoryId, itemId }: ServiceSortInputs,
 ): number {
-  const ratePerKg = Number(
-    mode === "sea"
-      ? option.country?.freightSeaPricePerKg
-      : option.country?.freightAirPricePerKg,
-  );
-  if (!Number.isFinite(ratePerKg) || ratePerKg <= 0) return UNKNOWN_SORT_VALUE;
-
-  // The resolved list the callable sends, which already has this business's
-  // own multipliers - including any category it invented itself.
-  const categories = freightCategoryOptionsFrom(option.freightCategories);
-  const pricing = freightCategoryPricing({
-    baseRatePerKg: ratePerKg,
-    weightKg,
-    multiplier: freightCategoryMultiplier(categories, itemCategoryId ?? ""),
+  // Cheapest has to mean what this business would actually charge for the
+  // thing the customer picked. A set price stands on its own and ignores the
+  // route rate entirely, so ranking on the rate alone would name the wrong
+  // winner for every published item.
+  const pricing = freightItemPricing({
+    table: option.freightPaybackTable,
+    categoryId: itemCategoryId ?? "",
+    itemId: itemId === OTHER_ITEM_ID ? "" : itemId,
   });
-  if (!pricing) return UNKNOWN_SORT_VALUE;
+  // A business that has not priced this has no number to be ordered by. It
+  // sinks rather than ties, the same as a business with no stated rate.
+  if (!pricing.priced) return UNKNOWN_SORT_VALUE;
+  if (pricing.mode === "flat") return pricing.flatPrice;
+
+  const byWeight = freightWeightPricing({
+    ratePerKg:
+      mode === "sea"
+        ? option.country?.freightSeaPricePerKg
+        : option.country?.freightAirPricePerKg,
+    weightKg,
+  });
+  if (!byWeight) return UNKNOWN_SORT_VALUE;
 
   // Cover adds nothing to the bill, so cheapest is the shipping line alone.
   // A business that stands behind the parcel is not therefore dearer, which
   // is why cover has its own sort rather than a thumb on this one.
-  return pricing.shippingSubtotal;
+  return byWeight.shippingSubtotal;
 }
 
 /**

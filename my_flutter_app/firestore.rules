@@ -202,6 +202,14 @@ service cloud.firestore {
       return data.get('flowVersion', 1) != 2;
     }
 
+    function ownsFreightQuoteRequest(userId, requestId) {
+      return request.auth != null &&
+        request.auth.uid == userId &&
+        exists(/databases/$(database)/documents/freightQuoteRequests/$(requestId)) &&
+        get(/databases/$(database)/documents/freightQuoteRequests/$(requestId))
+          .data.customerUid == userId;
+    }
+
     function ownsTransportRequest(userId, requestId) {
       return request.auth != null &&
         request.auth.uid == userId &&
@@ -836,6 +844,38 @@ service cloud.firestore {
             'transport'
           ) ||
           ownsTransportRequest(request.auth.uid, resource.data.requestId)
+        );
+      allow create, update, delete: if false;
+    }
+
+    // Asking what it costs to send something nobody has priced. Written only
+    // by callables, like every other quote collection - the price a business
+    // states and the one the customer is charged must be the same number.
+    match /freightQuoteRequests/{requestId} {
+      allow read: if request.auth != null &&
+        (
+          isAdmin(request.auth.uid) ||
+          request.auth.uid == resource.data.customerUid ||
+          // A business can read a request it was actually asked, and no
+          // other: the fan-out list is the permission.
+          (resource.data.eligibleBusinessIds is list &&
+           resource.data.eligibleBusinessIds.hasAny(
+             [userBusinessId(request.auth.uid)]
+           ))
+        );
+      allow create, update, delete: if false;
+    }
+
+    match /freightQuotes/{quoteId} {
+      allow read: if request.auth != null &&
+        (
+          isAdmin(request.auth.uid) ||
+          canManageBusinessSection(
+            request.auth.uid,
+            resource.data.businessId,
+            'freight'
+          ) ||
+          ownsFreightQuoteRequest(request.auth.uid, resource.data.requestId)
         );
       allow create, update, delete: if false;
     }

@@ -144,7 +144,9 @@ export function freightPaybackFor({
 }
 
 export type FreightItemPricing = {
-  mode: FreightPricingMode;
+  /** Whether the business named a price for this at all. */
+  priced: boolean;
+  mode: FreightPricingMode | null;
   flatPrice: number;
   includedKg: number;
   weightFactor: number;
@@ -158,40 +160,37 @@ export type FreightItemPricing = {
  *
  * Resolves in the same order the payback does - the exact row, then the
  * category catch-all - so the price and the promise always come from the
- * same place. A row that names no pricing falls through to the category
- * multiplier, which is how every booking is priced today and how a business
- * that has never opened this editor keeps charging what it charges.
+ * same place. A row nobody priced answers `priced: false`, and the customer
+ * is sent to ask this business for a number instead of being quoted one it
+ * never chose.
  */
 export function freightItemPricing({
   table,
   categoryId,
   itemId,
-  categoryMultiplier = 1,
 }: {
   table: unknown;
   categoryId: string;
   itemId?: string;
-  categoryMultiplier?: number;
 }): FreightItemPricing {
   const record =
     table && typeof table === "object"
       ? (table as Record<string, unknown>)[String(categoryId || "").trim()]
       : undefined;
-  const byWeight = (
-    weightFactor: number,
-    source: "item" | "other" | null,
-  ): FreightItemPricing => ({
-    mode: "per_kg",
+  // A price nobody set is not a price to guess at. Every other answer here
+  // is a number the business typed; this one is the absence of one, and it
+  // routes the booking to a request rather than to a checkout.
+  const unpriced: FreightItemPricing = {
+    priced: false,
+    mode: null,
     flatPrice: 0,
     includedKg: 0,
-    weightFactor,
-    needsWeightAtBooking: true,
-    weighsAtDropOff: true,
-    source,
-  });
-  if (!record || typeof record !== "object") {
-    return byWeight(categoryMultiplier, null);
-  }
+    weightFactor: 0,
+    needsWeightAtBooking: false,
+    weighsAtDropOff: false,
+    source: null,
+  };
+  if (!record || typeof record !== "object") return unpriced;
   const entry = record as PaybackCategoryEntry;
 
   const wanted = String(itemId || "").trim();
@@ -209,6 +208,7 @@ export function freightItemPricing({
     if (mode === "flat") {
       const includedKg = Number(included) || 0;
       return {
+        priced: true,
         mode: "flat",
         flatPrice: Number(flat) || 0,
         includedKg,
@@ -225,20 +225,28 @@ export function freightItemPricing({
         source,
       };
     }
-    // A by-weight row is charged at the route rate. The category multiplier
-    // survives only for rows saved before pricing moved onto the row, so
-    // nothing anyone is charged moved the day this shipped.
-    return byWeight(1, source);
+    // By weight is this business's own per-kg rate for the route, plain.
+    // There is no factor on top: a unitless number was something an owner
+    // had to reason about rather than a price it could state.
+    return {
+      priced: true,
+      mode: "per_kg",
+      flatPrice: 0,
+      includedKg: 0,
+      weightFactor: 1,
+      needsWeightAtBooking: true,
+      weighsAtDropOff: true,
+      source,
+    };
   };
 
   if (row) {
-    // A listed row that states no pricing is one saved before pricing
-    // existed. It keeps the category multiplier it has always been charged
-    // at - NOT the catch-all's price, which is for things nobody listed and
-    // would silently reprice every legacy row the day this shipped.
+    // A listed row that states no pricing has never been quoted by this
+    // business. It asks for a price rather than inheriting one from the
+    // catch-all, which is for things nobody listed.
     return row.pricingMode
       ? read("item", row.pricingMode, row.flatPrice, row.includedKg)
-      : byWeight(categoryMultiplier, "item");
+      : unpriced;
   }
   if (entry.otherPricingMode) {
     return read(
@@ -248,7 +256,7 @@ export function freightItemPricing({
       entry.otherIncludedKg,
     );
   }
-  return byWeight(categoryMultiplier, null);
+  return unpriced;
 }
 
 /** The funnel's synthetic id for "something not on anyone's list". */
@@ -271,22 +279,18 @@ function providerTable(option: ProviderLike): Record<string, unknown> | null {
  *
  * The funnel asks what the customer is sending BEFORE showing businesses, so
  * the choices are the union of every provider's rows - one provider listing
- * "iPhone" is enough for it to be pickable. "Something else" appears when any
- * provider would still take an unlisted item: a category catch-all, or a
- * business with no table at all (which carries anything).
+ * "iPhone" is enough for it to be pickable. "Something else" is always last,
+ * because a parcel nobody has a row for is exactly what the price-request
+ * path exists to answer.
  */
 export function freightItemChoicesFor(
   options: ReadonlyArray<ProviderLike>,
   categoryId: string,
 ): Array<{id: string; label: string}> {
   const seen = new Map<string, string>();
-  let anyCatchAll = false;
   for (const option of options) {
     const table = providerTable(option);
-    if (!table) {
-      anyCatchAll = true;
-      continue;
-    }
+    if (!table) continue;
     const entry = table[String(categoryId || "").trim()] as
       | {items?: unknown; otherPaybackAmount?: unknown}
       | undefined;
@@ -297,22 +301,21 @@ export function freightItemChoicesFor(
       const label = String(row?.label || "").trim();
       if (id && label && !seen.has(id)) seen.set(id, label);
     }
-    if ((Number(entry.otherPaybackAmount) || 0) > 0) anyCatchAll = true;
   }
   const choices = [...seen.entries()].map(([id, label]) => ({id, label}));
   choices.sort((a, b) => a.label.localeCompare(b.label));
-  if (anyCatchAll) {
-    choices.push({id: OTHER_ITEM_ID, label: "Something else"});
-  }
+  choices.push({id: OTHER_ITEM_ID, label: "Something else"});
   return choices;
 }
 
 /**
- * Whether one provider can instant-book this item.
+ * Whether one provider can book this item on the spot.
  *
- * A provider with no table carries anything; a provider with a table
- * qualifies through the exact row or its category catch-all - the same
- * resolution the server prices with.
+ * Two conditions, and both are the server's: the item resolves to a payback
+ * row (exact row, then the category catch-all) AND that same row names a
+ * price. A provider that lists an item without pricing it, or that has no
+ * table at all, answers the request path instead - it has a number to give,
+ * it has simply never given it.
  */
 export function providerQualifiesForItem(
   option: ProviderLike,
@@ -320,10 +323,10 @@ export function providerQualifiesForItem(
   itemId: string,
 ): boolean {
   const table = providerTable(option);
-  if (!table) return true;
-  return freightPaybackFor({
-    table,
-    categoryId,
-    itemId: itemId === OTHER_ITEM_ID ? "" : itemId,
-  }).listed;
+  if (!table) return false;
+  const resolved = itemId === OTHER_ITEM_ID ? "" : itemId;
+  if (!freightPaybackFor({table, categoryId, itemId: resolved}).listed) {
+    return false;
+  }
+  return freightItemPricing({table, categoryId, itemId: resolved}).priced;
 }

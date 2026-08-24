@@ -6911,10 +6911,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get saveCardAndBook => 'Save card & book';
 
   @override
-  String get noBusinessTakesItem =>
-      'No approved business currently takes this item to this destination. Try a different item, or check back soon.';
-
-  @override
   String get freightCategoryQuestion => 'What\'s in the parcel?';
 
   @override
@@ -6966,14 +6962,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get freightCategoryFragileHint =>
       'Glass, ceramics, anything breakable';
-
-  @override
-  String get freightCategoryStandardRate => 'Standard rate';
-
-  @override
-  String freightCategoryRateMultiplier(Object multiplier) {
-    return '$multiplier the per-kg rate';
-  }
 
   @override
   String get freightCoverageNone => 'No coverage';
@@ -7099,4 +7087,130 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get freightDeliveryAreaLabel => 'Where is it going?';
+
+  @override
+  String get freightNoPriceForItemTitle => 'No set price for this';
+
+  @override
+  String freightNoBusinessPricedItem(String country) {
+    return 'No business shipping to $country has set a price for this. Describe it and they can each answer with their own.';
+  }
+
+  @override
+  String freightBusinessHasNotPricedItem(String business) {
+    return '$business has not set a price for this item. Ask, and it will answer with one.';
+  }
+
+  @override
+  String get freightAskForPriceCta => 'Ask for a price';
+
+  @override
+  String get freightAskForPriceTitle => 'Ask for a price';
+
+  @override
+  String freightAskForPriceIntro(String country) {
+    return 'Describe what you are sending to $country. Every business on this route can answer with its own price and say what it pays back if the parcel is lost.';
+  }
+
+  @override
+  String get freightAskForPriceNote =>
+      'You are not committing to anything. You choose which price to take, or none of them.';
+
+  @override
+  String get freightQuoteDescriptionLabel => 'What are you sending?';
+
+  @override
+  String get freightQuoteDescriptionHint =>
+      'Two suitcases of clothes and a small microwave';
+
+  @override
+  String get freightQuoteDescriptionRequired => 'Describe what you are sending';
+
+  @override
+  String get freightQuoteWeightLabel => 'Weight in kg';
+
+  @override
+  String get freightQuoteWeightHelper =>
+      'Optional. A weight helps a business answer faster.';
+
+  @override
+  String get freightQuoteSendRequest => 'Ask for a price';
+
+  @override
+  String get freightQuoteSending => 'Sending…';
+
+  @override
+  String get freightQuoteRequestFailed =>
+      'Your request could not be sent. Try again.';
+
+  @override
+  String get freightQuotesTitle => 'Prices for your parcel';
+
+  @override
+  String get freightQuotesIntro =>
+      'Each price is one business\'s own. Choose the one you want to send with.';
+
+  @override
+  String freightQuoteRequestReference(String code) {
+    return 'Request $code';
+  }
+
+  @override
+  String freightQuoteAskedBusinesses(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count businesses can answer',
+      one: '1 business can answer',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get waitingForFreightQuotes => 'Waiting for prices';
+
+  @override
+  String get waitingForFreightQuotesSubtitle =>
+      'The businesses on this route can see your parcel now. Prices appear here as they answer.';
+
+  @override
+  String freightQuotePaysBackIfLost(String amount) {
+    return 'Pays back $amount if the parcel is lost';
+  }
+
+  @override
+  String freightQuoteNoPaybackIfLost(String business) {
+    return '$business pays back nothing if the parcel is lost';
+  }
+
+  @override
+  String get selectFreightQuote => 'Choose this price';
+
+  @override
+  String get selectingFreightQuote => 'Choosing…';
+
+  @override
+  String confirmFreightQuoteTitle(String business) {
+    return 'Send with $business?';
+  }
+
+  @override
+  String confirmFreightQuoteMessage(String business, String price) {
+    return '$business charges $price to send this parcel.';
+  }
+
+  @override
+  String get couldNotSelectFreightQuote =>
+      'That price could not be chosen. Try again.';
+
+  @override
+  String get couldNotLoadFreightQuotes => 'Prices could not be loaded.';
+
+  @override
+  String get freightQuoteChosenTitle => 'Price chosen';
+
+  @override
+  String freightQuoteChosenMessage(String business, String price) {
+    return '$business will send your parcel for $price.';
+  }
 }

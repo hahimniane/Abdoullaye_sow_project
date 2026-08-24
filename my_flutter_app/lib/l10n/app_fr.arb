@@ -2914,7 +2914,6 @@
     }
   },
   "saveCardAndBook": "Enregistrer la carte et réserver",
-  "noBusinessTakesItem": "Aucune entreprise approuvée n’accepte cet article vers cette destination pour le moment. Essayez un autre article ou revenez bientôt.",
   "freightCategoryQuestion": "Que contient le colis ?",
   "freightCategoryHelp": "Les entreprises facturent plus cher ce qui coûte plus cher à remplacer.",
   "freightCategoryGeneral": "Marchandises générales",
@@ -2931,13 +2930,6 @@
   "freightCategoryElectronicsHint": "Téléphones, ordinateurs portables, tablettes, chargeurs",
   "freightCategoryFragile": "Objets fragiles",
   "freightCategoryFragileHint": "Verre, céramique, tout ce qui est cassable",
-  "freightCategoryStandardRate": "Tarif standard",
-  "freightCategoryRateMultiplier": "{multiplier} le tarif au kilo",
-  "@freightCategoryRateMultiplier": {
-    "placeholders": {
-      "multiplier": {}
-    }
-  },
   "freightCoverageNone": "Aucune couverture",
   "freightCoverageCoversLoss": "Couvre la perte",
   "freightCoverageSectionTitle": "En cas de perte",
@@ -3023,5 +3015,112 @@
   "pickupPlanSharedOffWarning": "Pas de collecte : le plan partagé ci-dessus est désactivé. Activez-le ou donnez à ce service ses propres frais.",
   "pickupPlanOwnFeesNote": "Assure les collectes à ces frais, que le plan partagé soit activé ou non.",
   "freightDestinationDeliveryToAddressByArea": "Livrer à son adresse",
-  "freightDeliveryAreaLabel": "Où doit-il être livré ?"
+  "freightDeliveryAreaLabel": "Où doit-il être livré ?",
+  "freightNoPriceForItemTitle": "Aucun prix fixé pour cela",
+  "freightNoBusinessPricedItem": "Aucune entreprise expédiant vers {country} n'a fixé de prix pour cela. Décrivez-le et chacune pourra vous répondre avec le sien.",
+  "@freightNoBusinessPricedItem": {
+    "placeholders": {
+      "country": {
+        "type": "String"
+      }
+    }
+  },
+  "freightBusinessHasNotPricedItem": "{business} n'a pas fixé de prix pour cet article. Demandez-le et elle vous en donnera un.",
+  "@freightBusinessHasNotPricedItem": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "freightAskForPriceCta": "Demander un prix",
+  "freightAskForPriceTitle": "Demander un prix",
+  "freightAskForPriceIntro": "Décrivez ce que vous envoyez vers {country}. Chaque entreprise sur cet itinéraire peut répondre avec son propre prix et indiquer ce qu'elle rembourse si le colis est perdu.",
+  "@freightAskForPriceIntro": {
+    "placeholders": {
+      "country": {
+        "type": "String"
+      }
+    }
+  },
+  "freightAskForPriceNote": "Vous ne vous engagez à rien. Vous choisissez le prix que vous acceptez, ou aucun.",
+  "freightQuoteDescriptionLabel": "Qu'envoyez-vous ?",
+  "freightQuoteDescriptionHint": "Deux valises de vêtements et un petit micro-ondes",
+  "freightQuoteDescriptionRequired": "Décrivez ce que vous envoyez",
+  "freightQuoteWeightLabel": "Poids en kg",
+  "freightQuoteWeightHelper": "Facultatif. Un poids aide l'entreprise à répondre plus vite.",
+  "freightQuoteSendRequest": "Demander un prix",
+  "freightQuoteSending": "Envoi…",
+  "freightQuoteRequestFailed": "Votre demande n'a pas pu être envoyée. Réessayez.",
+  "freightQuotesTitle": "Prix pour votre colis",
+  "freightQuotesIntro": "Chaque prix est celui d'une entreprise. Choisissez celle avec qui vous voulez envoyer.",
+  "freightQuoteRequestReference": "Demande {code}",
+  "@freightQuoteRequestReference": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "freightQuoteAskedBusinesses": "{count, plural, =1{1 entreprise peut répondre} other{{count} entreprises peuvent répondre}}",
+  "@freightQuoteAskedBusinesses": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "waitingForFreightQuotes": "En attente des prix",
+  "waitingForFreightQuotesSubtitle": "Les entreprises de cet itinéraire voient votre colis. Les prix s'affichent ici dès qu'elles répondent.",
+  "freightQuotePaysBackIfLost": "Rembourse {amount} si le colis est perdu",
+  "@freightQuotePaysBackIfLost": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "freightQuoteNoPaybackIfLost": "{business} ne rembourse rien si le colis est perdu",
+  "@freightQuoteNoPaybackIfLost": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "selectFreightQuote": "Choisir ce prix",
+  "selectingFreightQuote": "Choix en cours…",
+  "confirmFreightQuoteTitle": "Envoyer avec {business} ?",
+  "@confirmFreightQuoteTitle": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "confirmFreightQuoteMessage": "{business} facture {price} pour envoyer ce colis.",
+  "@confirmFreightQuoteMessage": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      },
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotSelectFreightQuote": "Ce prix n'a pas pu être choisi. Réessayez.",
+  "couldNotLoadFreightQuotes": "Les prix n'ont pas pu être chargés.",
+  "freightQuoteChosenTitle": "Prix choisi",
+  "freightQuoteChosenMessage": "{business} enverra votre colis pour {price}.",
+  "@freightQuoteChosenMessage": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      },
+      "price": {
+        "type": "String"
+      }
+    }
+  }
 }

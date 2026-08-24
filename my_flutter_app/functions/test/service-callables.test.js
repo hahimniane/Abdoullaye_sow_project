@@ -861,10 +861,10 @@ describe("freight service callable lifecycle", () => {
     );
   });
 
-  it("prices a row saved before item pricing exactly as before", async () => {
-    // The migration promise, end to end: a listed row with no pricing of
-    // its own is charged at its category multiplier, as it always was.
-    const businessId = "freight-legacy-row-business";
+  it("sends an item nobody priced to a request, not to a guess", async () => {
+    // The platform used to charge Electronics at 2x - its own default, set
+    // by nobody at this business - on a row the business had never quoted.
+    const businessId = "freight-unpriced-row-business";
     await seedBusiness(businessId);
     await db.collection("businesses").doc(businessId).set({
       freightPaybackTable: {
@@ -875,19 +875,32 @@ describe("freight service callable lifecycle", () => {
       },
     }, {merge: true});
 
+    await assert.rejects(
+        () => functions.createFreightShipmentPaymentIntent.run({
+          auth: {uid: CUSTOMER_UID},
+          data: freightInput(businessId, {
+            weightKg: 10,
+            itemCategoryId: "electronics",
+            itemId: "iphone",
+          }),
+        }),
+        /item_not_priced/,
+    );
+  });
+
+  it("still quotes an app build that knows nothing about items", async () => {
+    // Builds already in customers' hands send no item. They get the plainest
+    // quote there is - this business's own per-kg rate, nothing added.
+    const businessId = "freight-legacy-client-business";
+    await seedBusiness(businessId);
     const booking = await functions.createFreightShipmentPaymentIntent.run({
       auth: {uid: CUSTOMER_UID},
-      data: freightInput(businessId, {
-        weightKg: 10,
-        itemCategoryId: "electronics",
-        itemId: "iphone",
-      }),
+      data: freightInput(businessId, {weightKg: 10}),
     });
     const shipment = await freightData(booking.shipmentId);
-    // 10kg x $12.50 air x 2 (electronics) = $250, unchanged.
-    assert.equal(shipment.price, 250);
-    assert.equal(shipment.pricingMode, "per_kg");
-    assert.equal(shipment.weightVerificationRequired, true);
+    // 10kg x $12.50 air, with no multiplier of any kind.
+    assert.equal(shipment.price, 125);
+    assert.equal(shipment.itemCategoryMultiplier, 1);
   });
 
   it("never charges for cover, however much the item pays back",
@@ -901,7 +914,10 @@ describe("freight service callable lifecycle", () => {
           freightCoverageEnabled: true,
           freightPaybackTable: {
             electronics: {
-              items: [{id: "iphone", label: "iPhone", paybackAmount: 400}],
+              items: [{
+                id: "iphone", label: "iPhone", paybackAmount: 400,
+                pricingMode: "per_kg",
+              }],
               otherPaybackAmount: 0,
             },
           },
@@ -916,10 +932,10 @@ describe("freight service callable lifecycle", () => {
           }),
         });
         const shipment = await freightData(booking.shipmentId);
-        // 10kg x $12.50 air x 2 (electronics) = $250, and not a cent more.
+        // 10kg x $12.50 air, the business's own rate and nothing added.
         assert.equal(shipment.coverageFeeCents, 0);
-        assert.equal(shipment.price, 250);
-        assert.equal(shipment.estimatedTotalCents, 25000);
+        assert.equal(shipment.price, 125);
+        assert.equal(shipment.estimatedTotalCents, 12500);
         // Covered means the FULL published payback, free of charge.
         assert.equal(shipment.coverageCovered, true);
         assert.equal(shipment.coveragePayoutCapCents, 40000);
@@ -933,7 +949,10 @@ describe("freight service callable lifecycle", () => {
         await db.collection("businesses").doc(businessId).set({
           freightPaybackTable: {
             electronics: {
-              items: [{id: "iphone", label: "iPhone", paybackAmount: 400}],
+              items: [{
+                id: "iphone", label: "iPhone", paybackAmount: 400,
+                pricingMode: "per_kg",
+              }],
               otherPaybackAmount: 0,
             },
           },

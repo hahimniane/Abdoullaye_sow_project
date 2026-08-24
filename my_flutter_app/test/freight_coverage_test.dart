@@ -191,19 +191,14 @@ void main() {
       );
     });
 
-    test('the funnel never offers a category nobody would take', () {
-      // Canada offered "Clothes and fabric" because a provider PRICES that
-      // category, while no provider's payback table would take anything in
-      // it - the customer was told "no business takes this" without ever
-      // being asked what the item was, over a search box with nothing to
-      // search. Categories are filtered to ones with item choices, the
-      // funnel is answered only by an actual item pick, and a withdrawn
+    test('no answer in the funnel is a dead end', () {
+      // Canada offered "Clothes and fabric" and then told the customer "no
+      // business takes this" over a search box with nothing to search. Every
+      // category is offered now because none of them ends nowhere: an item
+      // nobody has priced becomes a question the businesses answer. The
+      // funnel is still answered only by an actual item pick, and a withdrawn
       // selection counts as unanswered rather than dangling.
       expect(screen, contains('_funnelCategoryChoices'));
-      expect(
-        screen,
-        contains('if (freightItemChoicesFor(tables, category.id).isNotEmpty)'),
-      );
       expect(
         screen,
         contains(
@@ -211,6 +206,16 @@ void main() {
         ),
       );
       expect(screen, isNot(contains('_funnelItems.isEmpty ||')));
+      // An empty result list is the offer to ask for a price, not a note
+      // saying the customer is out of luck.
+      expect(screen, isNot(contains('noBusinessTakesItem')));
+      expect(
+        screen,
+        contains(
+          'if (_funnelSatisfied && _filtered.isEmpty && _query.isEmpty) ...[',
+        ),
+      );
+      expect(screen, contains('_askForPriceCard('));
       // No stacked empty-states: the search box hides when there is nothing
       // to narrow.
       expect(
@@ -225,8 +230,8 @@ void main() {
       // route takes - and the form kept quoting. The category question is
       // asked once, in the funnel; the sheet only states the price effect,
       // and the funnel's answer reaches the server verbatim (the server
-      // resolves payback AND multiplier from the submitted category, so a
-      // default substituted here misfiles the item).
+      // resolves both the price and the payback row from the submitted
+      // category, so a default substituted here misfiles the item).
       expect(
         screen,
         isNot(contains('setState(() => _categoryId = category.id)')),

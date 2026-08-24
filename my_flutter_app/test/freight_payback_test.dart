@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_flutter_app/models/freight_quote.dart';
 import 'package:my_flutter_app/utils/freight_delivery.dart';
 import 'package:my_flutter_app/utils/freight_payback.dart';
 
@@ -63,23 +64,38 @@ void main() {
     expect(listed.label, 'iPhone');
   });
 
-  test('the funnel unions items and matches like the web', () {
+  test('the funnel offers every listed item, and a way past the list', () {
     const withTable = <String, dynamic>{
       'electronics': {
         'items': [
-          {'id': 'iphone', 'label': 'iPhone', 'paybackAmount': 400},
+          {
+            'id': 'iphone', 'label': 'iPhone', 'paybackAmount': 400,
+            'pricingMode': 'flat', 'flatPrice': 50,
+          },
         ],
         'otherPaybackAmount': 0,
       },
     };
     const withCatchAll = <String, dynamic>{
-      'electronics': {'items': <Object>[], 'otherPaybackAmount': 50},
+      'electronics': {
+        'items': <Object>[],
+        'otherPaybackAmount': 50,
+        'otherPricingMode': 'per_kg',
+      },
     };
 
+    // The catch-all always closes the list: an item nobody has priced is a
+    // question the businesses answer, so no choice here is a dead end.
     final choices =
         freightItemChoicesFor([withTable, withCatchAll], 'electronics');
     expect(choices.map((c) => c.id).toList(), ['iphone', otherItemId]);
+    expect(
+      freightItemChoicesFor([withTable], 'clothing').map((c) => c.id).toList(),
+      [otherItemId],
+    );
 
+    // Booking on the spot needs BOTH a price and a payback row from the same
+    // business - the pair the callable checks before it charges anything.
     expect(providerQualifiesForItem(withTable, 'electronics', 'iphone'), true);
     expect(
       providerQualifiesForItem(withCatchAll, 'electronics', 'iphone'),
@@ -89,8 +105,38 @@ void main() {
       providerQualifiesForItem(withTable, 'electronics', otherItemId),
       false,
     );
-    expect(providerQualifiesForItem(null, 'electronics', 'anything'), true);
-    expect(freightItemChoicesFor([withTable], 'clothing'), isEmpty);
+    // A business that publishes no table has quoted nothing, so it cannot be
+    // booked on the spot - it can only answer a price request.
+    expect(providerQualifiesForItem(null, 'electronics', 'anything'), false);
+  });
+
+  test('a row with a payback but no price cannot be booked', () {
+    // The sharp edge: the business stands behind this item but has never said
+    // what it charges to carry it. Half an answer is not a booking.
+    const paybackOnly = <String, dynamic>{
+      'electronics': {
+        'items': [
+          {'id': 'legacy', 'label': 'Legacy row', 'paybackAmount': 90},
+        ],
+        'otherPaybackAmount': 0,
+      },
+    };
+    expect(
+      freightPaybackFor(
+        table: paybackOnly, categoryId: 'electronics', itemId: 'legacy',
+      ).listed,
+      true,
+    );
+    expect(
+      freightItemPricing(
+        table: paybackOnly, categoryId: 'electronics', itemId: 'legacy',
+      ).priced,
+      false,
+    );
+    expect(
+      providerQualifiesForItem(paybackOnly, 'electronics', 'legacy'),
+      false,
+    );
   });
 
   group('how a business prices what it carries', () {
@@ -110,17 +156,16 @@ void main() {
             'id': 'sim', 'label': 'SIM card', 'paybackAmount': 5,
             'pricingMode': 'flat', 'flatPrice': 10,
           },
-          // Goods that vary, priced by the scale at this row's own factor.
+          // Goods that vary, priced by the scale at the route rate.
           {
             'id': 'mixed-tech', 'label': 'Assorted tech', 'paybackAmount': 100,
             'pricingMode': 'per_kg',
           },
-          // A row saved before a row could carry a price.
+          // A row this business has never put a number on.
           {'id': 'legacy', 'label': 'Legacy row', 'paybackAmount': 90},
         ],
         'otherPaybackAmount': 60,
         'otherPricingMode': 'per_kg',
-        'otherWeightFactor': 1.8,
       },
       'clothing': {'items': <Object>[], 'otherPaybackAmount': 40},
     };
@@ -130,8 +175,8 @@ void main() {
         table: priced,
         categoryId: 'electronics',
         itemId: 'iphone',
-        categoryMultiplier: 2,
       );
+      expect(p.priced, true);
       expect(p.mode, 'flat');
       expect(p.isFlat, true);
       expect(p.flatPrice, 50);
@@ -149,7 +194,6 @@ void main() {
         table: priced,
         categoryId: 'electronics',
         itemId: 'sim',
-        categoryMultiplier: 2,
       );
       expect(p.flatPrice, 10);
       expect(p.includedKg, 0);
@@ -162,8 +206,8 @@ void main() {
         table: priced,
         categoryId: 'electronics',
         itemId: 'mixed-tech',
-        categoryMultiplier: 2,
       );
+      expect(p.priced, true);
       expect(p.mode, 'per_kg');
       // No factor to reason about: a kilo costs what this business charges
       // for a kilo on this route.
@@ -172,27 +216,17 @@ void main() {
       expect(p.weighsAtDropOff, true);
     });
 
-    test('prices a row saved before this existed exactly as before', () {
-      // The migration promise: nothing anyone is charged moves on the day
-      // item pricing ships.
-      for (final itemId in const ['legacy', 'nothing-listed']) {
-        final p = freightItemPricing(
-          table: priced,
-          categoryId: 'clothing',
-          itemId: itemId,
-          categoryMultiplier: 1.5,
-        );
-        expect(p.mode, 'per_kg', reason: itemId);
-        expect(p.weightFactor, 1.5, reason: itemId);
-      }
-      final legacy = freightItemPricing(
+    test('sends a row nobody priced to a request, never to a guess', () {
+      final p = freightItemPricing(
         table: priced,
         categoryId: 'electronics',
         itemId: 'legacy',
-        categoryMultiplier: 2,
       );
-      expect(legacy.weightFactor, 2);
-      expect(legacy.source, 'item');
+      expect(p.priced, false);
+      expect(p.mode, isNull);
+      expect(p.flatPrice, 0);
+      expect(p.weightFactor, 0);
+      expect(p.source, isNull);
     });
 
     test("falls through to the category's catch-all pricing", () {
@@ -200,27 +234,34 @@ void main() {
         table: priced,
         categoryId: 'electronics',
         itemId: 'not-a-row',
-        categoryMultiplier: 2,
       );
+      expect(p.priced, true);
       expect(p.source, 'other');
+      expect(p.mode, 'per_kg');
       expect(p.weightFactor, 1);
     });
 
-    test('prices a business with no table at the category multiplier', () {
-      final p = freightItemPricing(
-        table: null,
-        categoryId: 'electronics',
-        itemId: 'iphone',
-        categoryMultiplier: 2,
-      );
-      expect(p.mode, 'per_kg');
-      expect(p.weightFactor, 2);
-      expect(p.source, isNull);
+    test('sends everything to a request when there is no table at all', () {
+      // A catch-all payback without a catch-all price is not a price either.
+      for (final query in const <(Map<String, dynamic>?, String, String)>[
+        (null, 'electronics', 'iphone'),
+        (priced, 'clothing', 'boubou'),
+      ]) {
+        expect(
+          freightItemPricing(
+            table: query.$1,
+            categoryId: query.$2,
+            itemId: query.$3,
+          ).priced,
+          false,
+          reason: '${query.$2}/${query.$3}',
+        );
+      }
     });
 
     test('resolves in the order the functions authority documents', () {
-      // Item row before catch-all, and a priced row wins over the catch-all
-      // even when the catch-all names a different mode entirely.
+      // A listed row that names no pricing must NOT reach the catch-all: the
+      // business would be charging a set price it never chose for that row.
       const catchAllIsFlat = <String, dynamic>{
         'electronics': {
           'items': [
@@ -236,32 +277,27 @@ void main() {
           'otherIncludedKg': 3,
         },
       };
-      // The sharp edge of the migration: a LISTED row that states no pricing
-      // keeps its category multiplier. Letting it reach the catch-all would
-      // hand every legacy row a set price nobody set for it.
-      final legacy = freightItemPricing(
-        table: catchAllIsFlat,
-        categoryId: 'electronics',
-        itemId: 'legacy',
-        categoryMultiplier: 2,
+      expect(
+        freightItemPricing(
+          table: catchAllIsFlat,
+          categoryId: 'electronics',
+          itemId: 'legacy',
+        ).priced,
+        false,
       );
-      expect(legacy.mode, 'per_kg');
-      expect(legacy.weightFactor, 2);
-      expect(legacy.source, 'item');
       final row = freightItemPricing(
         table: catchAllIsFlat,
         categoryId: 'electronics',
         itemId: 'mixed-tech',
-        categoryMultiplier: 2,
       );
       expect(row.mode, 'per_kg');
       expect(row.weightFactor, 1);
+      expect(row.source, 'item');
 
       final catchAll = freightItemPricing(
         table: catchAllIsFlat,
         categoryId: 'electronics',
         itemId: '',
-        categoryMultiplier: 2,
       );
       expect(catchAll.mode, 'flat');
       expect(catchAll.flatPrice, 25);
@@ -283,7 +319,7 @@ void main() {
       // Asking what an iPhone weighs would put a number in the booking that
       // nothing is ever charged against.
       expect(screen, contains('bool get _setPrice => _itemPricing.isFlat;'));
-      expect(screen, contains('if (_setPrice)\n          _setPriceSection('));
+      expect(screen, contains('else if (_setPrice)\n          _setPriceSection('));
       expect(screen, contains('weightKg: _setPrice ? 0 : _weightKg'));
       // And the guard on the button must not hold the order for a weight
       // this parcel has no reason to carry.
@@ -299,8 +335,7 @@ void main() {
       expect(screen, contains('freightSetPriceCoversAnyWeight'));
       expect(screen, contains('freightSetPriceOverAllowanceNote'));
       expect(screen, contains('freightSetPriceFinal'));
-      // The excess rides on the route's own per-kg rate, not the item factor
-      // (which a set-price row does not have).
+      // The excess rides on the route's own per-kg rate.
       expect(
         screen,
         contains("'\\\$\${_ratePerKg.toStringAsFixed(2)}',"),
@@ -311,7 +346,9 @@ void main() {
       expect(
         screen,
         contains(
-          'double get _price => _setPrice\n'
+          'double get _price => !_itemPriced\n'
+          '      ? 0\n'
+          '      : _setPrice\n'
           '      ? _itemPricing.flatPrice',
         ),
       );
@@ -324,34 +361,48 @@ void main() {
       );
     });
 
-    test("a by-weight row is priced at the row's factor", () {
-      // The category multiplier is the fallback, not the knob: a row with its
-      // own factor must not be quoted at the category's.
-      expect(
-        screen,
-        contains('multiplier: _itemPricing.weightFactor,'),
-      );
+    test('a by-weight item is charged the route rate, with no factor', () {
+      // A unitless multiplier was a number the business had to reason about
+      // instead of a price it could state, so nothing on this screen applies
+      // one to the destination's rate.
       expect(
         screen,
         contains(
-          'double get _effectiveRatePerKg => _ratePerKg * '
-          '_itemPricing.weightFactor;',
+          'freightShippingFee(weightKg: _weightKg, ratePerKg: _ratePerKg)',
         ),
       );
-      // The category card only claims to price the parcel while it actually
-      // does.
-      expect(screen, contains('_categoryPricesParcel'));
+      expect(screen, isNot(contains('_effectiveRatePerKg')));
+      expect(screen, isNot(contains('_categoryPricesParcel')));
+      expect(screen, isNot(contains('freightMultiplierText')));
+      expect(screen, isNot(contains('freightCategoryRateText')));
+    });
+
+    test('an unpriced item shows the request path and never a price', () {
+      // A price nobody set is not a price to show: the total, the per-kg
+      // line and the Book button all assert one, so all three are gone and
+      // the customer is offered the question instead.
+      expect(screen, contains('bool get _itemPriced => _itemPricing.priced;'));
+      expect(
+        screen,
+        contains(
+          'if (!_itemPriced)\n'
+          '          _askForPriceCard(',
+        ),
+      );
+      expect(screen, contains('if (_itemPriced) ...['));
+      expect(screen, contains("if (!_setPrice && _itemPriced) ...["));
+      // Nobody on the route has priced it either - the same offer, made
+      // before a business has even been chosen.
+      expect(screen, contains('freightNoBusinessPricedItem'));
+      expect(screen, contains('freightBusinessHasNotPricedItem'));
+      expect(screen, contains('FreightQuoteRequestScreen('));
+      // And the callable is never reached with an item it would refuse.
+      expect(screen, contains('if (!_itemPriced) return;'));
     });
 
     test('the set-price copy exists in both catalogs', () {
-      Map<String, dynamic> arb(String locale) =>
-          Map<String, dynamic>.from(
-            jsonDecode(
-              File('lib/l10n/app_$locale.arb').readAsStringSync(),
-            ) as Map,
-          );
-      final en = arb('en');
-      final fr = arb('fr');
+      final en = _arb('en');
+      final fr = _arb('fr');
       for (final key in const [
         'freightSetPriceTitle',
         'freightSetPriceLine',
@@ -370,7 +421,141 @@ void main() {
       }
     });
   });
+
+  group('asking a business what it charges', () {
+    final service = File(
+      'lib/services/freight_quote_service.dart',
+    ).readAsStringSync();
+    final details = File(
+      'lib/screens/freight_quote_details_screen.dart',
+    ).readAsStringSync();
+
+    test('the request says what, where and how - and nothing else', () {
+      // The customer is here because nobody could price the parcel; demanding
+      // a taxonomy would be asking for the answer they came for.
+      expect(service, contains("httpsCallable('createFreightQuoteRequest')"));
+      expect(service, contains("'destinationCountryId': destinationCountryId"));
+      expect(service, contains("'mode': mode,"));
+      expect(service, contains("'description': description,"));
+      // A weight the customer does not have must not be sent as zero.
+      expect(service, contains("if (weightKg > 0) 'weightKg': weightKg"));
+      expect(
+        service,
+        contains("if (itemCategoryId.trim().isNotEmpty)"),
+      );
+      expect(service, contains("if (itemLabel.trim().isNotEmpty)"));
+    });
+
+    test('all three callables are reachable from one service', () {
+      expect(service, contains("httpsCallable('submitFreightQuote')"));
+      expect(service, contains("httpsCallable('selectFreightQuote')"));
+      expect(
+        service,
+        contains("collection('freightQuotes')\n"
+            "        .where('requestId', isEqualTo: requestId)"),
+      );
+    });
+
+    test("a quote carries its own payback into the comparison", () {
+      // The item is not in the business's table, so the promise travels on
+      // the quote - and a business that will not make good says so where the
+      // customer is still choosing.
+      final quote = FreightQuote.fromMap(
+        id: 'req__biz',
+        data: const {
+          'requestId': 'req',
+          'businessId': 'biz',
+          'businessName': 'Ndiaye Cargo',
+          'amountCents': 12500,
+          'paybackAmountCents': 40000,
+          'coversLoss': true,
+          'currency': 'usd',
+          'status': 'submitted',
+          'revision': 1,
+        },
+      );
+      expect(quote.amount, 125);
+      expect(quote.paybackAmount, 400);
+      expect(quote.coversLoss, true);
+      expect(quote.isSubmitted, true);
+
+      final bare = FreightQuote.fromMap(
+        id: 'req__other',
+        data: const {
+          'requestId': 'req',
+          'businessName': 'Sow Freight',
+          'amountCents': 9000,
+          'status': 'submitted',
+        },
+      );
+      expect(bare.paybackAmountCents, 0);
+      expect(bare.coversLoss, false);
+
+      // Both halves reach the card the customer compares on.
+      expect(details, contains('freightQuotePaysBackIfLost'));
+      expect(details, contains('freightQuoteNoPaybackIfLost'));
+      expect(details, contains('quote.coversLoss'));
+      expect(details, contains('freightMoney(quote.amount)'));
+      expect(details, contains('_service.selectQuote('));
+    });
+
+    test('the request-and-quote copy exists in both catalogs', () {
+      final en = _arb('en');
+      final fr = _arb('fr');
+      for (final key in const [
+        'freightNoPriceForItemTitle',
+        'freightNoBusinessPricedItem',
+        'freightBusinessHasNotPricedItem',
+        'freightAskForPriceCta',
+        'freightAskForPriceTitle',
+        'freightAskForPriceIntro',
+        'freightAskForPriceNote',
+        'freightQuoteDescriptionLabel',
+        'freightQuoteDescriptionHint',
+        'freightQuoteDescriptionRequired',
+        'freightQuoteWeightLabel',
+        'freightQuoteWeightHelper',
+        'freightQuoteSendRequest',
+        'freightQuoteSending',
+        'freightQuoteRequestFailed',
+        'freightQuotesTitle',
+        'freightQuotesIntro',
+        'freightQuoteRequestReference',
+        'freightQuoteAskedBusinesses',
+        'waitingForFreightQuotes',
+        'waitingForFreightQuotesSubtitle',
+        'freightQuotePaysBackIfLost',
+        'freightQuoteNoPaybackIfLost',
+        'selectFreightQuote',
+        'selectingFreightQuote',
+        'confirmFreightQuoteTitle',
+        'confirmFreightQuoteMessage',
+        'couldNotSelectFreightQuote',
+        'couldNotLoadFreightQuotes',
+        'freightQuoteChosenTitle',
+        'freightQuoteChosenMessage',
+      ]) {
+        expect(en[key], isNotNull, reason: 'app_en.arb is missing $key');
+        expect(fr[key], isNotNull, reason: 'app_fr.arb is missing $key');
+        expect(
+          (fr[key] as String).trim(),
+          isNotEmpty,
+          reason: 'app_fr.arb has an empty $key',
+        );
+        expect(
+          fr[key],
+          isNot(en[key]),
+          reason: 'app_fr.arb left $key in English',
+        );
+      }
+    });
+  });
 }
+
+/// One catalog, read as the customer's phone reads it.
+Map<String, dynamic> _arb(String locale) => Map<String, dynamic>.from(
+  jsonDecode(File('lib/l10n/app_$locale.arb').readAsStringSync()) as Map,
+);
 
 /// Delivery is priced per quartier, per destination. Crossing Dakar and
 /// crossing Conakry are different jobs at different costs, and one fee for a

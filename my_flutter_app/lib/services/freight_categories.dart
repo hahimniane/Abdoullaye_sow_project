@@ -1,17 +1,14 @@
-/// What is in the parcel, and what that does to the price. App side.
+/// What is in the parcel. App side.
 ///
 /// A deliberate mirror of the server's pure module,
-/// `functions/freight_categories.js`. The
-/// `createFreightShipmentPaymentIntent` callable is still the authority - it
-/// re-derives the multiplier from the business document it has just read - and
-/// this exists so the customer sees what a category costs *before* paying for
-/// it. A price that appears only on the receipt is not a price the customer
-/// agreed to.
+/// `functions/freight_categories.js`.
 ///
 /// The server's split is kept here on purpose: the **platform owns the list**,
 /// so a customer holding a phone finds "Electronics" at every business and can
-/// compare two quotes; the **business owns the price**. A business that has set
-/// nothing keeps today's prices exactly, because every default is 1.
+/// compare two quotes; the **business owns the price**. The category sorts the
+/// parcel and names the payback row to look in; what the parcel costs comes
+/// from the item row the business priced (`utils/freight_payback.dart`), so
+/// every default here is 1 and no category moves a price on its own.
 ///
 /// Everything in this file is pure: no Firebase, no widgets, so
 /// `test/freight_category_test.dart` drives it directly. The words a customer
@@ -84,19 +81,19 @@ const List<StandardFreightCategory> standardFreightCategories =
         id: 'cosmetics',
         englishLabel: 'Cosmetics and liquids',
         englishHint: 'Creams, perfumes, hair products',
-        defaultMultiplier: 1.2,
+        defaultMultiplier: 1,
       ),
       StandardFreightCategory(
         id: 'electronics',
         englishLabel: 'Electronics',
         englishHint: 'Phones, laptops, tablets, chargers',
-        defaultMultiplier: 2,
+        defaultMultiplier: 1,
       ),
       StandardFreightCategory(
         id: 'fragile',
         englishLabel: 'Fragile items',
         englishHint: 'Glass, ceramics, anything breakable',
-        defaultMultiplier: 1.5,
+        defaultMultiplier: 1,
       ),
     ];
 

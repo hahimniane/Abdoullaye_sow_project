@@ -14,7 +14,8 @@
  * business sets what each one is worth to it, and may add extras of its own
  * for things the standard list genuinely misses.
  *
- * A multiplier applies on top of the existing per-kg rate for the destination
+ * A category is how a customer finds what they are sending. It carries no
+ * price: what a thing costs is set on the item row, by the business
  * and mode. Nothing about that rate changes, which is what makes this safe to
  * ship: a business that sets nothing keeps today's prices exactly.
  */
@@ -55,19 +56,19 @@ const STANDARD_FREIGHT_CATEGORIES = Object.freeze([
     id: "cosmetics",
     label: "Cosmetics and liquids",
     hint: "Creams, perfumes, hair products",
-    defaultMultiplier: 1.2,
+    defaultMultiplier: 1,
   },
   {
     id: "electronics",
     label: "Electronics",
     hint: "Phones, laptops, tablets, chargers",
-    defaultMultiplier: 2,
+    defaultMultiplier: 1,
   },
   {
     id: "fragile",
     label: "Fragile items",
     hint: "Glass, ceramics, anything breakable",
-    defaultMultiplier: 1.5,
+    defaultMultiplier: 1,
   },
 ]);
 

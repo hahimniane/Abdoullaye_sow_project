@@ -12372,12 +12372,6 @@ abstract class AppLocalizations {
   /// **'Save card & book'**
   String get saveCardAndBook;
 
-  /// No description provided for @noBusinessTakesItem.
-  ///
-  /// In en, this message translates to:
-  /// **'No approved business currently takes this item to this destination. Try a different item, or check back soon.'**
-  String get noBusinessTakesItem;
-
   /// No description provided for @freightCategoryQuestion.
   ///
   /// In en, this message translates to:
@@ -12473,18 +12467,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Glass, ceramics, anything breakable'**
   String get freightCategoryFragileHint;
-
-  /// No description provided for @freightCategoryStandardRate.
-  ///
-  /// In en, this message translates to:
-  /// **'Standard rate'**
-  String get freightCategoryStandardRate;
-
-  /// No description provided for @freightCategoryRateMultiplier.
-  ///
-  /// In en, this message translates to:
-  /// **'{multiplier} the per-kg rate'**
-  String freightCategoryRateMultiplier(Object multiplier);
 
   /// No description provided for @freightCoverageNone.
   ///
@@ -12677,6 +12659,192 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Where is it going?'**
   String get freightDeliveryAreaLabel;
+
+  /// No description provided for @freightNoPriceForItemTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No set price for this'**
+  String get freightNoPriceForItemTitle;
+
+  /// No description provided for @freightNoBusinessPricedItem.
+  ///
+  /// In en, this message translates to:
+  /// **'No business shipping to {country} has set a price for this. Describe it and they can each answer with their own.'**
+  String freightNoBusinessPricedItem(String country);
+
+  /// No description provided for @freightBusinessHasNotPricedItem.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} has not set a price for this item. Ask, and it will answer with one.'**
+  String freightBusinessHasNotPricedItem(String business);
+
+  /// No description provided for @freightAskForPriceCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask for a price'**
+  String get freightAskForPriceCta;
+
+  /// No description provided for @freightAskForPriceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask for a price'**
+  String get freightAskForPriceTitle;
+
+  /// No description provided for @freightAskForPriceIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Describe what you are sending to {country}. Every business on this route can answer with its own price and say what it pays back if the parcel is lost.'**
+  String freightAskForPriceIntro(String country);
+
+  /// No description provided for @freightAskForPriceNote.
+  ///
+  /// In en, this message translates to:
+  /// **'You are not committing to anything. You choose which price to take, or none of them.'**
+  String get freightAskForPriceNote;
+
+  /// No description provided for @freightQuoteDescriptionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'What are you sending?'**
+  String get freightQuoteDescriptionLabel;
+
+  /// No description provided for @freightQuoteDescriptionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Two suitcases of clothes and a small microwave'**
+  String get freightQuoteDescriptionHint;
+
+  /// No description provided for @freightQuoteDescriptionRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Describe what you are sending'**
+  String get freightQuoteDescriptionRequired;
+
+  /// No description provided for @freightQuoteWeightLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Weight in kg'**
+  String get freightQuoteWeightLabel;
+
+  /// No description provided for @freightQuoteWeightHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional. A weight helps a business answer faster.'**
+  String get freightQuoteWeightHelper;
+
+  /// No description provided for @freightQuoteSendRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask for a price'**
+  String get freightQuoteSendRequest;
+
+  /// No description provided for @freightQuoteSending.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending…'**
+  String get freightQuoteSending;
+
+  /// No description provided for @freightQuoteRequestFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Your request could not be sent. Try again.'**
+  String get freightQuoteRequestFailed;
+
+  /// No description provided for @freightQuotesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Prices for your parcel'**
+  String get freightQuotesTitle;
+
+  /// No description provided for @freightQuotesIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Each price is one business\'s own. Choose the one you want to send with.'**
+  String get freightQuotesIntro;
+
+  /// No description provided for @freightQuoteRequestReference.
+  ///
+  /// In en, this message translates to:
+  /// **'Request {code}'**
+  String freightQuoteRequestReference(String code);
+
+  /// No description provided for @freightQuoteAskedBusinesses.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 business can answer} other{{count} businesses can answer}}'**
+  String freightQuoteAskedBusinesses(int count);
+
+  /// No description provided for @waitingForFreightQuotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for prices'**
+  String get waitingForFreightQuotes;
+
+  /// No description provided for @waitingForFreightQuotesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The businesses on this route can see your parcel now. Prices appear here as they answer.'**
+  String get waitingForFreightQuotesSubtitle;
+
+  /// No description provided for @freightQuotePaysBackIfLost.
+  ///
+  /// In en, this message translates to:
+  /// **'Pays back {amount} if the parcel is lost'**
+  String freightQuotePaysBackIfLost(String amount);
+
+  /// No description provided for @freightQuoteNoPaybackIfLost.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} pays back nothing if the parcel is lost'**
+  String freightQuoteNoPaybackIfLost(String business);
+
+  /// No description provided for @selectFreightQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose this price'**
+  String get selectFreightQuote;
+
+  /// No description provided for @selectingFreightQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Choosing…'**
+  String get selectingFreightQuote;
+
+  /// No description provided for @confirmFreightQuoteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send with {business}?'**
+  String confirmFreightQuoteTitle(String business);
+
+  /// No description provided for @confirmFreightQuoteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} charges {price} to send this parcel.'**
+  String confirmFreightQuoteMessage(String business, String price);
+
+  /// No description provided for @couldNotSelectFreightQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'That price could not be chosen. Try again.'**
+  String get couldNotSelectFreightQuote;
+
+  /// No description provided for @couldNotLoadFreightQuotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Prices could not be loaded.'**
+  String get couldNotLoadFreightQuotes;
+
+  /// No description provided for @freightQuoteChosenTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Price chosen'**
+  String get freightQuoteChosenTitle;
+
+  /// No description provided for @freightQuoteChosenMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} will send your parcel for {price}.'**
+  String freightQuoteChosenMessage(String business, String price);
 }
 
 class _AppLocalizationsDelegate

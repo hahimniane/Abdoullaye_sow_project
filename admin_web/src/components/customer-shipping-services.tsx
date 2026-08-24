@@ -79,11 +79,14 @@ import { marketplaceDisclosure } from "@/lib/disclosures";
 import {
   freightCategoryById,
   freightCategoryOptionsFrom,
-  freightCategoryPricing,
   freightCoverageComparisonLine,
   freightCoveragePolicyFrom,
-  type FreightCategoryOption,
 } from "@/lib/freight-categories";
+import {
+  freightQuoteErrorMessage,
+  freightQuotePaybackParts,
+  validateFreightQuoteRequest,
+} from "@/lib/freight-quote";
 import {
   MAX_RECEIVER_ADDRESS_LENGTH,
   deliveryChoiceIsComplete,
@@ -2348,6 +2351,10 @@ function FreightShipmentForm({
   // route - deliberately without prices, because at this stage no business
   // has been chosen and every price would be a guess about a decision the
   // customer has not made yet.
+  //
+  // Every category on the route is offered. Nothing here can dead-end any
+  // more: a category nobody has priced leads to a request the businesses
+  // answer with a number, which is a better answer than hiding the row.
   const funnelCategories = useMemo(() => {
     const seen = new Map<string, {id: string; label: string; hint: string}>();
     for (const option of providerOptions) {
@@ -2363,18 +2370,7 @@ function FreightShipmentForm({
         }
       }
     }
-    // Only categories someone would actually take. freightItemChoicesFor
-    // already speaks for catch-alls and legacy no-table businesses
-    // ("Something else"), so an empty choice list means nobody on the route
-    // takes anything in that category - a guaranteed dead end the customer
-    // must never be offered.
-    return [...seen.values()].filter(
-      (category) =>
-        freightItemChoicesFor(
-          providerOptions as Array<{freightPaybackTable?: unknown}>,
-          category.id,
-        ).length > 0,
-    );
+    return [...seen.values()];
   }, [providerOptions]);
   // The stored answers, unless a data refresh withdrew them from the offered
   // lists - then they count as unanswered rather than dangling.
@@ -2466,14 +2462,19 @@ function FreightShipmentForm({
     : null;
   // How this business charges for the thing that was picked. A known object
   // has one published price and the customer is never asked to guess what it
-  // weighs; goods that vary are weighed, exactly as every parcel was before.
+  // weighs; goods that vary are weighed at this business's rate for the route.
   const itemPricing = freightItemPricing({
     table: paybackTable,
     categoryId: activeCategoryId,
     itemId: resolvedItemId,
-    categoryMultiplier: selectedCategory?.multiplier ?? 1,
   });
   const setPrice = itemPricing.mode === "flat";
+  // Nobody here has a number for this parcel, so there is no price to show
+  // and nothing to book. The customer asks, and the businesses answer.
+  const needsPriceRequest =
+    itemStepSatisfied &&
+    (qualifiedProviderOptions.length === 0 ||
+      (destination !== null && !itemPricing.priced));
   // A set price still needs the route's rate resolved: it is what any weight
   // beyond the allowance is charged at, and it is quoted here so the
   // customer reads it before paying rather than after the scale.
@@ -2486,14 +2487,6 @@ function FreightShipmentForm({
         weightKg: setPrice ? 1 : weightKg,
       })
     : null;
-  const categoryPricing =
-    pricing && !setPrice
-      ? freightCategoryPricing({
-          baseRatePerKg: pricing.rate,
-          weightKg: pricing.weightKg,
-          multiplier: itemPricing.weightFactor,
-        })
-      : null;
   const coversLoss = coveragePolicy?.coversLoss === true;
   const paybackAmount =
     coversLoss && itemLookup?.listed ? itemLookup.paybackAmount : 0;
@@ -2514,6 +2507,7 @@ function FreightShipmentForm({
     () =>
       sortServiceOptions(qualifiedProviderOptions, {
         itemCategoryId: activeCategoryId,
+        itemId: activeItemId,
         mode,
         service: "freight",
         sort: providerSort,
@@ -2521,6 +2515,7 @@ function FreightShipmentForm({
       }),
     [
       activeCategoryId,
+      activeItemId,
       mode,
       qualifiedProviderOptions,
       providerSort,
@@ -2528,11 +2523,11 @@ function FreightShipmentForm({
     ],
   );
   // The subtotal the customer is shown has to be the one the server charges:
-  // a published price stands on its own, and a by-weight row's factor
-  // replaces the plain rate × weight rather than being bolted on beside it.
+  // a published price stands on its own, and a by-weight row is the route's
+  // rate times the weight and nothing else.
   const shippingSubtotal = setPrice
     ? itemPricing.flatPrice
-    : (categoryPricing?.shippingSubtotal ?? pricing?.subtotal ?? 0);
+    : (pricing?.subtotal ?? 0);
   const estimatedTotal =
     pricing === null || pricing.total === null
       ? null
@@ -2626,6 +2621,8 @@ function FreightShipmentForm({
       senderName.trim() &&
         receiverName.trim() &&
         destination &&
+        // A price this business never set is not one to check out against.
+        itemPricing.priced &&
         // A set-price item is never weighed by the customer, so there is no
         // weight for the form to hold the booking on.
         (!itemPricing.needsWeightAtBooking ||
@@ -2776,7 +2773,7 @@ function FreightShipmentForm({
         />
       ) : (
         <ServiceRequestForm
-          footerVisible={Boolean(destination)}
+          footerVisible={Boolean(destination) && itemPricing.priced}
           canReview={valid}
           error={error}
           intro="Choose air or sea freight. The approved business verifies the final weight before settlement."
@@ -2821,9 +2818,7 @@ function FreightShipmentForm({
                   ) : (
                     <ReviewDetail
                       label="Rate per kg"
-                      value={formatMoney(
-                        categoryPricing?.categoryRatePerKg ?? pricing.rate,
-                      )}
+                      value={formatMoney(pricing.rate)}
                     />
                   )}
                   <ReviewDetail
@@ -3050,15 +3045,27 @@ function FreightShipmentForm({
                 </select>
               </label>
             )}
-            {itemStepSatisfied && qualifiedProviderOptions.length === 0 && (
-              <div className="customer-inline-note customer-form-span">
-                <span>
-                  No approved business currently takes this item to this
-                  destination. Try a different item, or check back soon -
-                  more businesses are joining.
-                </span>
-              </div>
+            {needsPriceRequest && (
+              <FreightPriceRequest
+                authenticated={authenticated}
+                customerUid={text(profile.id, "")}
+                destinationCountryId={destinationCountryId}
+                destinationCountryName={
+                  selectedCountry
+                    ? shippingCountryDisplayName(selectedCountry, language)
+                    : ""
+                }
+                itemCategoryId={activeCategoryId}
+                itemLabel={
+                  funnelItems.find((item) => item.id === activeItemId)?.label ??
+                  ""
+                }
+                mode={mode}
+                onAuthenticationRequired={onAuthenticationRequired}
+              />
             )}
+            {/* Kept alongside a price request: a business that has priced
+                this is still a choice the customer can make today. */}
             {itemStepSatisfied && qualifiedProviderOptions.length > 0 && (
               <DestinationPicker
                 label="Choose a shipping business"
@@ -3077,11 +3084,11 @@ function FreightShipmentForm({
                 value={destinationOptionId}
               />
             )}
-            {/* Nothing below exists until a business is chosen: a receiver,
-                a weight and a pickup all describe a booking WITH someone,
-                and showing them first walked the customer through half a
-                form that could still dead-end at "no business takes this". */}
-            {destination && (<>
+            {/* Nothing below exists until a business is chosen AND it has a
+                price for this parcel: a receiver, a weight and a pickup all
+                describe a booking WITH someone, at a number. Without both
+                there is nothing to fill this in for. */}
+            {destination && itemPricing.priced && (<>
             {destination.freightPayOnArrival === true && (
               <label className="customer-form-span">
                 When do you pay?
@@ -3283,9 +3290,7 @@ function FreightShipmentForm({
                           mode === "air"
                             ? "Air freight rate"
                             : "Sea freight rate",
-                        value: `${formatMoney(
-                          categoryPricing?.categoryRatePerKg ?? pricing.rate,
-                        )} / kg`,
+                        value: `${formatMoney(pricing.rate)} / kg`,
                       },
                   ...(selectedCategory
                     ? [
@@ -3373,55 +3378,6 @@ function FreightShipmentForm({
       )}
       {authenticated && <FreightSettlements shipments={freightShipments} />}
     </div>
-  );
-}
-
-/**
- * What is in the parcel.
- *
- * A kilo of phones and a kilo of cloth used to cost the same, so the parcel
- * that is expensive to replace paid nothing toward replacing it. Each row
- * carries the price it produces, because a customer choosing between
- * "Electronics" and "General goods" is choosing between two prices and should
- * be able to see both without picking one to find out.
- */
-function FreightCategoryField({
-  baseRatePerKg,
-  categories,
-  onChange,
-  value,
-}: {
-  baseRatePerKg: number | null;
-  categories: readonly FreightCategoryOption[];
-  onChange: (value: string) => void;
-  value: string;
-}) {
-  const selected = freightCategoryById(categories, value);
-  function rateFor(category: FreightCategoryOption) {
-    if (!baseRatePerKg) return "";
-    const pricing = freightCategoryPricing({
-      baseRatePerKg,
-      weightKg: 1,
-      multiplier: category.multiplier,
-    });
-    return pricing ? ` — ${formatMoney(pricing.categoryRatePerKg)} / kg` : "";
-  }
-
-  return (
-    <label className="customer-form-span">
-      What are you sending?
-      <select onChange={(event) => onChange(event.target.value)} value={value}>
-        {categories.map((category) => (
-          <option key={category.id} value={category.id}>
-            {`${category.label}${rateFor(category)}`}
-          </option>
-        ))}
-      </select>
-      <small>
-        {selected?.hint ||
-          "The price per kilo depends on what is in the parcel."}
-      </small>
-    </label>
   );
 }
 
@@ -3563,6 +3519,435 @@ function FreightDestinationDeliveryField({
         </label>
       )}
     </>
+  );
+}
+
+type FreightQuoteRequestRow = FirestoreRow & {
+  trackingCode?: string;
+  description?: string;
+  weightKg?: number;
+  itemLabel?: string;
+  destinationCountryName?: string;
+  mode?: string;
+  quoteStatus?: string;
+  quoteCount?: number;
+  eligibleBusinessCount?: number;
+  selectedQuoteId?: string;
+  selectedBusinessName?: string;
+  selectedAmountCents?: number;
+  selectedPaybackAmountCents?: number;
+};
+
+type FreightQuoteRow = FirestoreRow & {
+  requestId?: string;
+  businessId?: string;
+  businessName?: string;
+  amountCents?: number;
+  paybackAmountCents?: number;
+  coversLoss?: boolean;
+  currency?: string;
+  terms?: string;
+  status?: string;
+  expiresAt?: unknown;
+};
+
+function useCustomerFreightQuoteRequests(
+  customerUid: string,
+  enabled: boolean,
+) {
+  const [rows, setRows] = useState<FreightQuoteRequestRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!enabled || !customerUid) {
+      setRows([]);
+      setLoading(false);
+      setError("");
+      return;
+    }
+    setLoading(true);
+    return onSnapshot(
+      query(
+        collection(db, "freightQuoteRequests"),
+        where("customerUid", "==", customerUid),
+      ),
+      (snapshot) => {
+        setRows(
+          snapshot.docs
+            .map((item): FreightQuoteRequestRow => ({
+              id: item.id,
+              ...item.data(),
+            }))
+            .sort(
+              (left, right) =>
+                transportTimestamp(right.updatedAt ?? right.createdAt) -
+                transportTimestamp(left.updatedAt ?? left.createdAt),
+            ),
+        );
+        setLoading(false);
+        setError("");
+      },
+      () => {
+        setRows([]);
+        setLoading(false);
+        setError("We couldn’t load your price requests. Try again.");
+      },
+    );
+  }, [customerUid, enabled]);
+
+  return { rows, loading, error };
+}
+
+function useFreightQuotes(requestId: string, enabled: boolean) {
+  const [rows, setRows] = useState<FreightQuoteRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!enabled || !requestId) {
+      setRows([]);
+      setLoading(false);
+      setError("");
+      return;
+    }
+    setLoading(true);
+    return onSnapshot(
+      query(
+        collection(db, "freightQuotes"),
+        where("requestId", "==", requestId),
+      ),
+      (snapshot) => {
+        setRows(
+          snapshot.docs
+            .map((item): FreightQuoteRow => ({id: item.id, ...item.data()}))
+            .sort(
+              (left, right) =>
+                Number(left.amountCents ?? Number.MAX_SAFE_INTEGER) -
+                Number(right.amountCents ?? Number.MAX_SAFE_INTEGER),
+            ),
+        );
+        setLoading(false);
+        setError("");
+      },
+      () => {
+        setLoading(false);
+        setError("Some prices could not be loaded. Try again.");
+      },
+    );
+  }, [enabled, requestId]);
+
+  return { rows, loading, error };
+}
+
+/**
+ * Asking the businesses on this route what they charge.
+ *
+ * A price nobody set is not a price, so this screen never invents one. The
+ * customer describes the parcel, every approved business on the route is
+ * asked, and each answers with its own number AND what it pays back if it
+ * loses it - the two things the customer is choosing between.
+ */
+function FreightPriceRequest({
+  authenticated,
+  customerUid,
+  destinationCountryId,
+  destinationCountryName,
+  itemCategoryId,
+  itemLabel,
+  mode,
+  onAuthenticationRequired,
+}: {
+  authenticated: boolean;
+  customerUid: string;
+  destinationCountryId: string;
+  destinationCountryName: string;
+  itemCategoryId: string;
+  itemLabel: string;
+  mode: "air" | "sea";
+  onAuthenticationRequired?: () => void;
+}) {
+  const [description, setDescription] = useState("");
+  const [weightKg, setWeightKg] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [createdId, setCreatedId] = useState("");
+  const requests = useCustomerFreightQuoteRequests(
+    authenticated ? customerUid : "",
+    authenticated,
+  );
+  // The one just sent, or the newest open one - a customer who reloads the
+  // page is still waiting for the same answers.
+  const activeRequest =
+    requests.rows.find((row) => row.id === createdId) ??
+    requests.rows.find(
+      (row) =>
+        text(row.itemCategoryId, "") === itemCategoryId &&
+        text(row.destinationCountryId, "") === destinationCountryId &&
+        text(row.quoteStatus, "") !== "cancelled",
+    ) ??
+    null;
+
+  async function submit() {
+    if (submitting) return;
+    if (!authenticated) {
+      onAuthenticationRequired?.();
+      return;
+    }
+    const validated = validateFreightQuoteRequest({
+      destinationCountryId,
+      mode,
+      description,
+      weightKg,
+      itemCategoryId,
+      itemLabel,
+    });
+    if (!validated.ok) {
+      setError(freightQuoteErrorMessage(validated.error));
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      const result = await callFunction<{
+        id: string;
+        trackingCode: string;
+        eligibleBusinessCount: number;
+      }>("createFreightQuoteRequest", {...validated.request});
+      setCreatedId(result.id);
+      setDescription("");
+      setWeightKg("");
+    } catch (caught) {
+      setError(
+        caught instanceof Error && caught.message
+          ? caught.message
+          : "The price request could not be sent. Try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="customer-form-span customer-freight-price-request">
+      <div className="customer-inline-note">
+        <strong>Ask for a price</strong>{" "}
+        <span>No business on this route has priced this parcel.</span>{" "}
+        <span>
+          Describe it and every approved business on this route can answer
+          with what it charges and what it pays back if it is lost.
+        </span>
+        {destinationCountryName && (
+          <span className="customer-quote-value">
+            {destinationCountryName}
+          </span>
+        )}
+      </div>
+      {error && (
+        <div className="customer-inline-note error" role="alert">
+          {error}
+        </div>
+      )}
+      <label className="customer-form-span">
+        What are you sending?
+        <textarea
+          maxLength={2000}
+          onChange={(event) => setDescription(event.target.value)}
+          placeholder="Describe the parcel: what it is, how many, how it is packed."
+          rows={3}
+          value={description}
+        />
+        <small>
+          The more the business knows, the closer the price it can give you.
+        </small>
+      </label>
+      <label>
+        Weight (kg), if you know it
+        <input
+          inputMode="decimal"
+          min="0"
+          onChange={(event) => setWeightKg(event.target.value)}
+          placeholder="Leave blank if you are not sure"
+          step="0.1"
+          type="number"
+          value={weightKg}
+        />
+      </label>
+      <div className="customer-form-span">
+        <button
+          className="primary-button"
+          data-loading={submitting}
+          disabled={submitting || !description.trim()}
+          onClick={() => void submit()}
+          type="button"
+        >
+          {!authenticated
+            ? "Sign in to ask for a price"
+            : submitting
+              ? "Sending your request..."
+              : "Ask for a price"}
+        </button>
+      </div>
+      {authenticated && activeRequest && (
+        <CustomerFreightQuotes request={activeRequest} />
+      )}
+      {requests.error && (
+        <div className="customer-inline-note error" role="alert">
+          {requests.error}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The answers, side by side.
+ *
+ * Price and payback sit on the same card because they are one decision: a
+ * cheaper business that pays nothing back and a dearer one that makes good
+ * are not comparable on price alone, and the customer has to be able to see
+ * both before choosing either.
+ */
+function CustomerFreightQuotes({
+  request,
+}: {
+  request: FreightQuoteRequestRow;
+}) {
+  const quotes = useFreightQuotes(request.id, true);
+  const [busyId, setBusyId] = useState("");
+  const [error, setError] = useState("");
+  const selectedQuoteId = text(request.selectedQuoteId, "");
+  const chosen = selectedQuoteId !== "";
+  const open = quotes.rows.filter((quote) => quote.status !== "withdrawn");
+
+  async function accept(quote: FreightQuoteRow) {
+    if (busyId) return;
+    const amount = formatMoney(
+      Number(quote.amountCents ?? 0) / 100,
+      text(quote.currency, "USD"),
+    );
+    const confirmed = await confirmImportantAction(
+      `Accept ${text(quote.businessName, "this business")} at ${amount}? ` +
+        "The other businesses are told their price was not chosen.",
+      `Accepter ${text(quote.businessName, "cette entreprise")} à ${amount} ? ` +
+        "Les autres entreprises sont informées que leur prix n’a pas été retenu.",
+    );
+    if (!confirmed) return;
+    setBusyId(quote.id);
+    setError("");
+    try {
+      await callFunction("selectFreightQuote", {
+        requestId: request.id,
+        quoteId: quote.id,
+      });
+    } catch (caught) {
+      setError(
+        caught instanceof Error && caught.message
+          ? caught.message
+          : "That price could not be accepted. Try again.",
+      );
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  return (
+    <div className="customer-freight-quotes">
+      <div className="customer-quote-row">
+        <div>
+          <strong>
+            {chosen ? "You chose a price" : "Waiting for prices"}
+          </strong>
+          <small>
+            Reference {text(request.trackingCode, request.id)} ·{" "}
+            {text(request.description, "Your parcel")}
+          </small>
+        </div>
+        <span className="customer-quote-value">{open.length}</span>
+      </div>
+      {(error || quotes.error) && (
+        <div className="customer-inline-note error" role="alert">
+          {error || quotes.error}
+        </div>
+      )}
+      {open.length === 0 ? (
+        <div className="customer-inline-note">
+          <Clock3 aria-hidden="true" size={17} />{" "}
+          <span>
+            The businesses on this route have your request. Each one that
+            answers appears here, and you will be told when a price arrives.
+          </span>
+        </div>
+      ) : (
+        <div className="customer-freight-quote-grid">
+          {open.map((quote) => {
+            const selected = quote.id === selectedQuoteId;
+            const payback = freightQuotePaybackParts(quote.paybackAmountCents);
+            const paysBack = payback.paysBack;
+            return (
+              <article
+                className={`customer-freight-quote-card${selected ? " selected" : ""}`}
+                key={quote.id}
+              >
+                <header>
+                  <strong>{text(quote.businessName, "Approved business")}</strong>
+                  {selected && <span className="lst-badge ok">Chosen</span>}
+                </header>
+                <div className="customer-transport-quote-price">
+                  <small>Price to send it</small>
+                  <strong>
+                    {formatMoney(
+                      Number(quote.amountCents ?? 0) / 100,
+                      text(quote.currency, "USD"),
+                    )}
+                  </strong>
+                </div>
+                {/* Price and promise on one card: a cheaper business that
+                    pays nothing back is not cheaper in the way that matters,
+                    and the customer can only see that if both are here. */}
+                <p className={paysBack ? "quote-payback" : "quote-payback none"}>
+                  {paysBack ? (
+                    <>
+                      <ShieldCheck aria-hidden="true" size={15} />{" "}
+                      <span>Pays back</span>{" "}
+                      <strong>
+                        {formatMoney(payback.amount, text(quote.currency, "USD"))}
+                      </strong>{" "}
+                      <span>if it is lost</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle aria-hidden="true" size={15} />{" "}
+                      <span>Pays nothing back if it is lost</span>
+                    </>
+                  )}
+                </p>
+                {text(quote.terms, "") && (
+                  <p className="customer-transport-quote-terms">
+                    {text(quote.terms, "")}
+                  </p>
+                )}
+                <button
+                  className={selected ? "secondary-button" : "primary-button"}
+                  data-loading={busyId === quote.id}
+                  disabled={Boolean(busyId) || (chosen && !selected)}
+                  onClick={() => void accept(quote)}
+                  type="button"
+                >
+                  {busyId === quote.id
+                    ? "Accepting..."
+                    : selected
+                      ? "Chosen"
+                      : chosen
+                        ? "Not chosen"
+                        : "Accept this price"}
+                </button>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 

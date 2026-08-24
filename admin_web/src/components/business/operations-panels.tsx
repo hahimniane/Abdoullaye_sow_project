@@ -113,6 +113,10 @@ import {
   type DeliveryAreaDraft,
 } from "@/lib/freight-delivery";
 import {
+  freightQuoteErrorMessage,
+  validateFreightQuote,
+} from "@/lib/freight-quote";
+import {
   VIEWING_BLOCK_MESSAGES,
   VIEWING_SLOT_ERROR_MESSAGES,
   formatViewingSlot,
@@ -3263,12 +3267,35 @@ export function BarrelsPanel({ businessId, previewMode = false, onOpenDestinatio
 }
 
 export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
-  const freight = useBusinessRows("freightShipments", businessId, Boolean(businessId && !previewMode), 500);
+  const enabled = Boolean(businessId && !previewMode);
+  const freight = useBusinessRows("freightShipments", businessId, enabled, 500);
+  const priceRequests = useFreightQuoteRequests(businessId, enabled);
+  const ownQuotes = useBusinessRows("freightQuotes", businessId, enabled, 500);
+  const [view, setView] = useState<"shipments" | "requests">("shipments");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [message, setMessage] = useState("");
   const [busyId, setBusyId] = useState("");
   const [weightDrafts, setWeightDrafts] = useState<Record<string, string>>({});
+  const [quoteDrafts, setQuoteDrafts] = useState<
+    Record<string, FreightQuoteDraft>
+  >({});
+
+  // Only the requests still taking prices. A request whose customer has
+  // chosen is finished business, and leaving it in the feed would invite a
+  // price the callable refuses.
+  const openPriceRequests = useMemo(
+    () =>
+      priceRequests.rows.filter(
+        (row) => text(row.quoteStatus, "collecting") === "collecting",
+      ),
+    [priceRequests.rows],
+  );
+  const quoteByRequestId = useMemo(
+    () =>
+      new Map(ownQuotes.rows.map((quote) => [text(quote.requestId, ""), quote])),
+    [ownQuotes.rows],
+  );
 
   const searched = useMemo(
     () => filterRows(freight.rows, search, ["trackingCode", "senderName", "receiverName", "receiverPhone", "destinationCountryName", "freightMode", "status", "paymentStatus"]),
@@ -3398,6 +3425,50 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
     }
   }
 
+  // What this business charges for a parcel it has never listed, and what it
+  // pays back if that parcel is lost. Both belong to the quote rather than to
+  // the payback table: the table has no row for this, which is the whole
+  // reason the customer had to ask.
+  async function sendQuote(request: FirestoreRow) {
+    const draft = quoteDrafts[request.id] ?? emptyFreightQuoteDraft();
+    const price = Number(draft.price);
+    const payback = draft.payback.trim() === "" ? 0 : Number(draft.payback);
+    const validated = validateFreightQuote({
+      amountCents: Number.isFinite(price) ? Math.round(price * 100) : Number.NaN,
+      paybackAmountCents: Number.isFinite(payback)
+        ? Math.round(payback * 100)
+        : Number.NaN,
+      terms: draft.terms,
+    });
+    if (!validated.ok) {
+      setMessage(freightQuoteErrorMessage(validated.error));
+      return;
+    }
+    setBusyId(`quote:${request.id}`);
+    setMessage("");
+    try {
+      await httpsCallable(functions, "submitFreightQuote")({
+        requestId: request.id,
+        businessId,
+        amountCents: validated.quote.amountCents,
+        paybackAmountCents: validated.quote.paybackAmountCents,
+        terms: validated.quote.terms,
+      });
+      setMessage("Your price was sent to the customer.");
+    } catch (error) {
+      // The callable names the reason - the request stopped taking prices,
+      // this business was not asked. A generic line sends the owner hunting
+      // through a form that is not the problem.
+      setMessage(
+        error instanceof Error && error.message
+          ? error.message
+          : "The price could not be sent. Try again.",
+      );
+    } finally {
+      setBusyId("");
+    }
+  }
+
   return (
     <section className="lst">
       <header className="lst-head">
@@ -3411,7 +3482,50 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
         </div>
         <StatusText busy={Boolean(busyId)} message={message} />
       </header>
+      <div className="transport-marketplace-tabs" role="tablist">
+        <button
+          aria-selected={view === "shipments"}
+          className={view === "shipments" ? "active" : ""}
+          onClick={() => setView("shipments")}
+          role="tab"
+          type="button"
+        >
+          Booked shipments
+          <span>{freight.rows.length}</span>
+        </button>
+        <button
+          aria-selected={view === "requests"}
+          className={view === "requests" ? "active" : ""}
+          onClick={() => setView("requests")}
+          role="tab"
+          type="button"
+        >
+          Price requests
+          <span>{openPriceRequests.length}</span>
+        </button>
+      </div>
       {freight.error && <div className="error-box">{freight.error}</div>}
+      {view === "requests" && (
+        <FreightPriceRequestsFeed
+          busyId={busyId}
+          drafts={quoteDrafts}
+          error={priceRequests.error || ownQuotes.error}
+          loading={priceRequests.loading}
+          onDraft={(requestId, patch) =>
+            setQuoteDrafts((current) => ({
+              ...current,
+              [requestId]: {
+                ...(current[requestId] ?? emptyFreightQuoteDraft()),
+                ...patch,
+              },
+            }))
+          }
+          onSend={sendQuote}
+          quoteByRequestId={quoteByRequestId}
+          requests={openPriceRequests}
+        />
+      )}
+      {view === "shipments" && (<>
       <div className="lst-toolbar">
         <div className="lst-search"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search freight tracking, sender, receiver…" /></div>
         <select className="lst-status-select" style={{ flex: "0 0 auto", minWidth: 150 }} value={filter} onChange={(event) => setFilter(event.target.value)}>
@@ -3493,7 +3607,178 @@ export function FreightPanel({ businessId, previewMode = false }: PanelProps) {
           );
         })}
       </div>
+      </>)}
     </section>
+  );
+}
+
+/** What a business is offering for a parcel it has never listed. */
+type FreightQuoteDraft = {
+  price: string;
+  payback: string;
+  terms: string;
+};
+
+function emptyFreightQuoteDraft(): FreightQuoteDraft {
+  return { price: "", payback: "", terms: "" };
+}
+
+/**
+ * Customers asking this business what it charges.
+ *
+ * Everything here is a parcel with no row in this business's table, so the
+ * price and the payback both come from the answer rather than from settings.
+ * A business that has already answered sees its own number and can change it:
+ * one price per request, revised, never stacked.
+ */
+function FreightPriceRequestsFeed({
+  busyId,
+  drafts,
+  error,
+  loading,
+  onDraft,
+  onSend,
+  quoteByRequestId,
+  requests,
+}: {
+  busyId: string;
+  drafts: Record<string, FreightQuoteDraft>;
+  error: string;
+  loading: boolean;
+  onDraft: (requestId: string, patch: Partial<FreightQuoteDraft>) => void;
+  onSend: (request: FirestoreRow) => void;
+  quoteByRequestId: Map<string, FirestoreRow>;
+  requests: FirestoreRow[];
+}) {
+  if (error) {
+    return <div className="error-box" role="alert">{error}</div>;
+  }
+  if (loading) return <LoadingState />;
+  if (requests.length === 0) {
+    return (
+      <div className="lst-empty">
+        <div className="lst-empty-icon"><Package size={30} /></div>
+        <h3>No one is waiting on a price</h3>
+        <p>
+          When a customer asks what you charge for something you have not
+          listed, it arrives here and you answer with a number.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pur-grid">
+      {requests.map((request) => {
+        const existing = quoteByRequestId.get(request.id);
+        const answered = Boolean(existing);
+        const draft = drafts[request.id] ?? {
+          price:
+            Number(existing?.amountCents ?? 0) > 0
+              ? String(Number(existing?.amountCents) / 100)
+              : "",
+          payback:
+            Number(existing?.paybackAmountCents ?? 0) > 0
+              ? String(Number(existing?.paybackAmountCents) / 100)
+              : "",
+          terms: text(existing?.terms, ""),
+        };
+        const weightKg = Number(request.weightKg ?? 0);
+        const busy = busyId === `quote:${request.id}`;
+        return (
+          <article className="pur-card" key={request.id}>
+            <div className="pur-head">
+              <div className="pur-title">
+                <strong>{text(request.trackingCode, request.id)}</strong>
+                <span className="pur-kind">
+                  {statusLabel(text(request.mode, "freight"))}
+                </span>
+              </div>
+              <span className={`lst-badge ${answered ? "ok" : "warn"}`}>
+                {answered ? "You answered" : "Waiting on you"}
+              </span>
+            </div>
+            <div className="pur-info">
+              <div><span>Destination</span><b>{text(request.destinationCountryName, "—")}</b></div>
+              <div><span>Category</span><b>{text(request.itemLabel ?? request.itemCategoryId, "—")}</b></div>
+              <div>
+                <span>Weight given</span>
+                <b>{weightKg > 0 ? `${weightKg.toLocaleString()} kg` : "Not given"}</b>
+              </div>
+              <div><span>Asked</span><b>{formatDate(request.createdAt)}</b></div>
+            </div>
+            <div className="pur-notice">
+              <ClipboardList size={15} />{" "}
+              <span>{text(request.description, "No description given")}</span>
+            </div>
+            <div className="pur-actions">
+              <label className="bar-field">
+                <span>What you charge (USD)</span>
+                <input
+                  aria-label="What you charge (USD)"
+                  inputMode="decimal"
+                  onChange={(event) =>
+                    onDraft(request.id, { price: event.target.value })
+                  }
+                  placeholder="0.00"
+                  value={draft.price}
+                />
+              </label>
+              <label className="bar-field">
+                <span className="label-with-info">
+                  What you pay back if it is lost (USD)
+                  <FieldInfo label="what the payback on a quote means">
+                    <p>
+                      This parcel is not in your item list, so this price
+                      carries its own promise. Enter 0 and the customer is
+                      told plainly that you pay nothing back if it is lost.
+                    </p>
+                    <p>
+                      The customer is charged nothing for it, so price the
+                      parcel for what it is worth to you to carry.
+                    </p>
+                  </FieldInfo>
+                </span>
+                <input
+                  aria-label="What you pay back if it is lost (USD)"
+                  inputMode="decimal"
+                  onChange={(event) =>
+                    onDraft(request.id, { payback: event.target.value })
+                  }
+                  placeholder="0"
+                  value={draft.payback}
+                />
+              </label>
+              <label className="bar-field">
+                <span>Note for the customer (optional)</span>
+                <input
+                  aria-label="Note for the customer"
+                  maxLength={1000}
+                  onChange={(event) =>
+                    onDraft(request.id, { terms: event.target.value })
+                  }
+                  placeholder="What is included, how long it takes"
+                  value={draft.terms}
+                />
+              </label>
+              <button
+                className="lst-btn primary"
+                disabled={busy}
+                onClick={() => onSend(request)}
+                type="button"
+              >
+                <Send size={15} />{" "}
+                {busy
+                  ? "Sending your price..."
+                  : answered
+                    ? "Change your price"
+                    : "Send your price"}
+              </button>
+            </div>
+          </article>
+        );
+      })}
+    </div>
   );
 }
 
@@ -5615,6 +5900,50 @@ function useBusinessRows(
       },
     );
   }, [businessId, collectionName, enabled, maxRows]);
+
+  return { rows, loading, error };
+}
+
+/**
+ * The price requests this business was asked to answer.
+ *
+ * Only the fan-out field is queried; whether a request is still taking prices
+ * is decided in the panel. Pairing the two in one query would demand a
+ * composite index for a list this small, and an index a deploy forgot is an
+ * empty feed nobody can explain.
+ */
+function useFreightQuoteRequests(businessId: string, enabled: boolean) {
+  const [rows, setRows] = useState<FirestoreRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const scopedBusinessId = businessId.trim();
+    if (!enabled || !scopedBusinessId) {
+      setRows([]);
+      setLoading(false);
+      setError("");
+      return;
+    }
+    setLoading(true);
+    return onSnapshot(
+      query(
+        collection(db, "freightQuoteRequests"),
+        where("eligibleBusinessIds", "array-contains", scopedBusinessId),
+        limit(200),
+      ),
+      (snapshot) => {
+        setRows(sortByUpdated(snapshot.docs.map((item) => rowFromSnapshot(item))));
+        setLoading(false);
+        setError("");
+      },
+      (snapshotError) => {
+        setRows([]);
+        setLoading(false);
+        setError(snapshotError.message);
+      },
+    );
+  }, [businessId, enabled]);
 
   return { rows, loading, error };
 }

@@ -78,9 +78,10 @@ const MAX_INCLUDED_KG = 200;
  * clothes is different every time, so it is weighed, and the existing
  * weigh-and-confirm settlement runs exactly as before.
  *
- * A row with no pricing at all is not an error: it is every row saved
- * before this existed, and it keeps being priced by its category's
- * multiplier so no live price moves the day this ships.
+ * A row with no pricing at all is not an error and not a price: it is a
+ * row this business has never quoted, and it goes to a price request. It
+ * used to inherit its category's multiplier, which meant the platform
+ * charging a number nobody at that business had chosen.
  *
  * @param {object} source The item row, or the category entry for "other".
  * @param {string} [scope] "other" to read the category catch-all's keys.
@@ -253,30 +254,27 @@ function freightPaybackFor({table, categoryId, itemId}) {
  * @param {object} params.table The business's saved payback table.
  * @param {string} params.categoryId The category being shipped.
  * @param {string} [params.itemId] The item row, when one was picked.
- * @param {number} [params.categoryMultiplier] The category's own factor,
- *   used when a row states no pricing of its own.
- * @return {object} {mode, flatPrice, includedKg, weightFactor,
+ * @return {object} {priced, mode, flatPrice, includedKg, weightFactor,
  *   needsWeightAtBooking, weighsAtDropOff, source}.
  */
-function freightItemPricing({
-  table,
-  categoryId,
-  itemId,
-  categoryMultiplier = 1,
-}) {
+function freightItemPricing({table, categoryId, itemId}) {
   const entry = table && typeof table === "object" ?
     table[String(categoryId || "").trim()] :
     undefined;
-  const byWeight = (weightFactor, source) => ({
-    mode: "per_kg",
+  // Nothing to charge from. A price nobody set is not a price to guess at:
+  // the booking becomes a request the business answers with a number, which
+  // is the only honest thing to do with an item it has never quoted.
+  const unpriced = {
+    priced: false,
+    mode: null,
     flatPrice: 0,
     includedKg: 0,
-    weightFactor,
-    needsWeightAtBooking: true,
-    weighsAtDropOff: true,
-    source,
-  });
-  if (!entry) return byWeight(categoryMultiplier, null);
+    weightFactor: 0,
+    needsWeightAtBooking: false,
+    weighsAtDropOff: false,
+    source: null,
+  };
+  if (!entry) return unpriced;
 
   const wanted = String(itemId || "").trim();
   const row = wanted ?
@@ -287,38 +285,43 @@ function freightItemPricing({
     if (mode === "flat") {
       const includedKg = Number(included) || 0;
       return {
+        priced: true,
         mode: "flat",
         flatPrice: Number(flat) || 0,
         includedKg,
         weightFactor: 0,
         // The customer is never asked to guess the weight of a known
-        // object. They pick "iPhone 16", see the price, and that is the
-        // transaction.
+        // object. They pick "iPhone 16", see the price, and that is it.
         needsWeightAtBooking: false,
-        // But the business still puts it on the scale when the price
-        // covers only so much: a phone in a carton packed out with shoes
-        // is not the parcel that was priced, and without this the business
-        // absorbs the packaging and stops offering set prices. No
-        // allowance means the price covers it however heavy it is, and
-        // nothing is weighed at all.
+        // The counter still weighs it when the price covers only so much:
+        // a phone in a carton packed out with shoes is not the parcel that
+        // was priced. No allowance means nothing is weighed at all.
         weighsAtDropOff: includedKg > 0,
         source,
       };
     }
-    // A by-weight row is charged at the route rate. The category
-    // multiplier survives only for rows saved before pricing moved onto
-    // the row, so nothing anyone is charged moved the day this shipped.
-    return byWeight(1, source);
+    // By weight is this business's own per-kg rate for the route, plain.
+    // There is no factor to apply: a unitless multiplier was a number the
+    // business had to reason about instead of a price it could state.
+    return {
+      priced: true,
+      mode: "per_kg",
+      flatPrice: 0,
+      includedKg: 0,
+      weightFactor: 1,
+      needsWeightAtBooking: true,
+      weighsAtDropOff: true,
+      source,
+    };
   };
 
   if (row) {
-    // A listed row that states no pricing is one saved before pricing
-    // existed. It keeps the category multiplier it has always been charged
-    // at - NOT the catch-all's price, which is for things nobody listed and
-    // would silently reprice every legacy row the day this shipped.
+    // A listed row that names no pricing has never been quoted by this
+    // business. It goes to a price request rather than inheriting a number
+    // from its category or from the catch-all.
     return row.pricingMode ?
       read("item", row.pricingMode, row.flatPrice, row.includedKg) :
-      byWeight(categoryMultiplier, "item");
+      unpriced;
   }
   if (entry.otherPricingMode) {
     return read(
@@ -326,7 +329,7 @@ function freightItemPricing({
         entry.otherIncludedKg,
     );
   }
-  return byWeight(categoryMultiplier, null);
+  return unpriced;
 }
 
 /**

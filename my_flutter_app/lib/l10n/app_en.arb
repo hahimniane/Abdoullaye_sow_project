@@ -2914,7 +2914,6 @@
     }
   },
   "saveCardAndBook": "Save card & book",
-  "noBusinessTakesItem": "No approved business currently takes this item to this destination. Try a different item, or check back soon.",
   "freightCategoryQuestion": "What's in the parcel?",
   "freightCategoryHelp": "Businesses charge more for what costs more to replace.",
   "freightCategoryGeneral": "General goods",
@@ -2931,13 +2930,6 @@
   "freightCategoryElectronicsHint": "Phones, laptops, tablets, chargers",
   "freightCategoryFragile": "Fragile items",
   "freightCategoryFragileHint": "Glass, ceramics, anything breakable",
-  "freightCategoryStandardRate": "Standard rate",
-  "freightCategoryRateMultiplier": "{multiplier} the per-kg rate",
-  "@freightCategoryRateMultiplier": {
-    "placeholders": {
-      "multiplier": {}
-    }
-  },
   "freightCoverageNone": "No coverage",
   "freightCoverageCoversLoss": "Covers loss",
   "freightCoverageSectionTitle": "If it goes missing",
@@ -3023,5 +3015,112 @@
   "pickupPlanSharedOffWarning": "No pickup: the shared plan above is off. Turn it on, or give this service its own fees.",
   "pickupPlanOwnFeesNote": "Takes pickups on these fees, whether or not the shared plan is on.",
   "freightDestinationDeliveryToAddressByArea": "Deliver to their address",
-  "freightDeliveryAreaLabel": "Where is it going?"
+  "freightDeliveryAreaLabel": "Where is it going?",
+  "freightNoPriceForItemTitle": "No set price for this",
+  "freightNoBusinessPricedItem": "No business shipping to {country} has set a price for this. Describe it and they can each answer with their own.",
+  "@freightNoBusinessPricedItem": {
+    "placeholders": {
+      "country": {
+        "type": "String"
+      }
+    }
+  },
+  "freightBusinessHasNotPricedItem": "{business} has not set a price for this item. Ask, and it will answer with one.",
+  "@freightBusinessHasNotPricedItem": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "freightAskForPriceCta": "Ask for a price",
+  "freightAskForPriceTitle": "Ask for a price",
+  "freightAskForPriceIntro": "Describe what you are sending to {country}. Every business on this route can answer with its own price and say what it pays back if the parcel is lost.",
+  "@freightAskForPriceIntro": {
+    "placeholders": {
+      "country": {
+        "type": "String"
+      }
+    }
+  },
+  "freightAskForPriceNote": "You are not committing to anything. You choose which price to take, or none of them.",
+  "freightQuoteDescriptionLabel": "What are you sending?",
+  "freightQuoteDescriptionHint": "Two suitcases of clothes and a small microwave",
+  "freightQuoteDescriptionRequired": "Describe what you are sending",
+  "freightQuoteWeightLabel": "Weight in kg",
+  "freightQuoteWeightHelper": "Optional. A weight helps a business answer faster.",
+  "freightQuoteSendRequest": "Ask for a price",
+  "freightQuoteSending": "Sending…",
+  "freightQuoteRequestFailed": "Your request could not be sent. Try again.",
+  "freightQuotesTitle": "Prices for your parcel",
+  "freightQuotesIntro": "Each price is one business's own. Choose the one you want to send with.",
+  "freightQuoteRequestReference": "Request {code}",
+  "@freightQuoteRequestReference": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "freightQuoteAskedBusinesses": "{count, plural, =1{1 business can answer} other{{count} businesses can answer}}",
+  "@freightQuoteAskedBusinesses": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "waitingForFreightQuotes": "Waiting for prices",
+  "waitingForFreightQuotesSubtitle": "The businesses on this route can see your parcel now. Prices appear here as they answer.",
+  "freightQuotePaysBackIfLost": "Pays back {amount} if the parcel is lost",
+  "@freightQuotePaysBackIfLost": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "freightQuoteNoPaybackIfLost": "{business} pays back nothing if the parcel is lost",
+  "@freightQuoteNoPaybackIfLost": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "selectFreightQuote": "Choose this price",
+  "selectingFreightQuote": "Choosing…",
+  "confirmFreightQuoteTitle": "Send with {business}?",
+  "@confirmFreightQuoteTitle": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "confirmFreightQuoteMessage": "{business} charges {price} to send this parcel.",
+  "@confirmFreightQuoteMessage": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      },
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotSelectFreightQuote": "That price could not be chosen. Try again.",
+  "couldNotLoadFreightQuotes": "Prices could not be loaded.",
+  "freightQuoteChosenTitle": "Price chosen",
+  "freightQuoteChosenMessage": "{business} will send your parcel for {price}.",
+  "@freightQuoteChosenMessage": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      },
+      "price": {
+        "type": "String"
+      }
+    }
+  }
 }

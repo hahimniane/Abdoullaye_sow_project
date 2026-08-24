@@ -219,52 +219,44 @@ describe("how a business prices what it carries", () => {
   });
 
   it("weighs goods that vary, at the business's own route rate", () => {
-    // No factor to reason about: a kilo costs what this business charges
-    // for a kilo on this route.
     const p = freightItemPricing({
       table: TABLE_PRICED, categoryId: "electronics", itemId: "mixed-tech",
-      categoryMultiplier: 2,
     });
+    assert.equal(p.priced, true);
     assert.equal(p.mode, "per_kg");
-    assert.equal(p.weightFactor, 1);
     assert.equal(p.needsWeightAtBooking, true);
     assert.equal(p.weighsAtDropOff, true);
   });
 
-  it("prices a row saved before this existed exactly as before", () => {
-    // The migration promise: nothing anyone is charged moves on the day
-    // item pricing ships.
-    for (const itemId of ["legacy", "nothing-listed"]) {
-      const p = freightItemPricing({
-        table: TABLE_PRICED, categoryId: "clothing", itemId,
-        categoryMultiplier: 1.5,
-      });
-      assert.equal(p.mode, "per_kg", itemId);
-      assert.equal(p.weightFactor, 1.5, itemId);
-    }
-    const legacy = freightItemPricing({
+  it("sends a row nobody priced to a request, never to a guess", () => {
+    // A business that has never quoted this item has no number to charge.
+    // Inheriting one from its category was the platform inventing a price
+    // on the business's behalf - electronics at 2x, chosen by nobody.
+    const p = freightItemPricing({
       table: TABLE_PRICED, categoryId: "electronics", itemId: "legacy",
-      categoryMultiplier: 2,
     });
-    assert.equal(legacy.weightFactor, 2);
+    assert.equal(p.priced, false);
+    assert.equal(p.mode, null);
+    assert.equal(p.flatPrice, 0);
+    assert.equal(p.weightFactor, 0);
   });
 
   it("falls through to the category's catch-all pricing", () => {
     const p = freightItemPricing({
       table: TABLE_PRICED, categoryId: "electronics", itemId: "not-a-row",
-      categoryMultiplier: 2,
     });
+    assert.equal(p.priced, true);
     assert.equal(p.source, "other");
-    assert.equal(p.weightFactor, 1);
+    assert.equal(p.mode, "per_kg");
   });
 
-  it("prices a business with no table at the category multiplier", () => {
-    const p = freightItemPricing({
-      table: undefined, categoryId: "electronics", itemId: "iphone",
-      categoryMultiplier: 2,
-    });
-    assert.equal(p.mode, "per_kg");
-    assert.equal(p.weightFactor, 2);
+  it("sends everything to a request when there is no table at all", () => {
+    for (const query of [
+      {table: undefined, categoryId: "electronics", itemId: "iphone"},
+      {table: TABLE_PRICED, categoryId: "clothing", itemId: "boubou"},
+    ]) {
+      assert.equal(freightItemPricing(query).priced, false);
+    }
   });
 });
 

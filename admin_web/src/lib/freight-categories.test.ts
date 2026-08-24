@@ -24,14 +24,12 @@ import {
   emptyFreightCustomCategory,
   emptyFreightPaybackCategory,
   emptyFreightPaybackItem,
-  formatMultiplier,
-  freightCategoryMultiplier,
   freightCategoryOptionsFrom,
-  freightCategoryPricing,
   freightCategorySlug,
   freightCoverageComparisonLine,
   freightCoveragePolicyFrom,
   freightSettingsFromRow,
+  freightWeightPricing,
   validateFreightSettings,
   type FreightPaybackItemDraft,
   type FreightSettingsDraft,
@@ -46,57 +44,59 @@ function draft(patch: Partial<FreightSettingsDraft> = {}): FreightSettingsDraft 
   };
 }
 
-test("the standard list mirrors the platform's, ids and defaults alike", () => {
+test("the standard list mirrors the platform's, ids and order alike", () => {
   assert.deepEqual(
-    STANDARD_FREIGHT_CATEGORIES.map((category) => [
-      category.id,
-      category.defaultMultiplier,
-    ]),
+    STANDARD_FREIGHT_CATEGORIES.map((category) => category.id),
     [
-      ["general", 1],
-      ["clothing", 1],
-      ["food", 1],
-      ["documents", 1],
-      ["cosmetics", 1.2],
-      ["electronics", 2],
-      ["fragile", 1.5],
+      "general",
+      "clothing",
+      "food",
+      "documents",
+      "cosmetics",
+      "electronics",
+      "fragile",
     ],
   );
+  // A label and a hint, and nothing else. A category is how a customer finds
+  // the thing they are sending; what it costs is set on the item row.
+  for (const category of STANDARD_FREIGHT_CATEGORIES) {
+    assert.deepEqual(Object.keys(category), ["id", "label", "hint"]);
+  }
 });
 
 test("category rows from the callable are read defensively", () => {
   const options = freightCategoryOptionsFrom([
-    {id: "General", label: "General goods", hint: "Anything", multiplier: 1},
+    {id: "General", label: "General goods", hint: "Anything"},
     // A duplicate, a nameless row, and junk: none of them may reach a picker.
-    {id: "general", label: "Copy", multiplier: 3},
+    {id: "general", label: "Copy"},
     {id: "broken", label: "   "},
     "nonsense",
-    // Out of band on both sides: clamped, never trusted as sent.
-    {id: "cheap", label: "Cheap", multiplier: 0.01, custom: true},
-    {id: "silly", label: "Silly", multiplier: 999, custom: true},
-    {id: "unreadable", label: "Unreadable", multiplier: "abc"},
+    {id: "auto-parts", label: "Auto parts", custom: true},
   ]);
   assert.deepEqual(
-    options.map((option) => [option.id, option.multiplier, option.custom]),
+    options.map((option) => [option.id, option.custom]),
     [
-      ["general", 1, false],
-      ["cheap", 0.5, true],
-      ["silly", 10, true],
-      ["unreadable", 1, false],
+      ["general", false],
+      ["auto-parts", true],
     ],
   );
+  // Nothing a document carries beyond the name and the hint reaches a picker:
+  // there is no number here for a screen to quote.
+  for (const option of options) {
+    assert.deepEqual(Object.keys(option).sort(), [
+      "custom",
+      "hint",
+      "id",
+      "label",
+    ]);
+  }
   assert.deepEqual(freightCategoryOptionsFrom(undefined), []);
-  // An unknown or absent category prices exactly as freight did before
-  // categories existed, so a stale screen quotes rather than errors.
-  assert.equal(freightCategoryMultiplier(options, "missing"), 1);
-  assert.equal(freightCategoryMultiplier(options, ""), 1);
-  assert.equal(freightCategoryMultiplier(options, "GENERAL"), 1);
 });
 
 test("the picker starts on general, or on whatever is first", () => {
   const options = freightCategoryOptionsFrom([
-    {id: "auto-parts", label: "Auto parts", multiplier: 1.4, custom: true},
-    {id: "general", label: "General goods", multiplier: 1},
+    {id: "auto-parts", label: "Auto parts", custom: true},
+    {id: "general", label: "General goods"},
   ]);
   assert.equal(defaultFreightCategoryId(options), "general");
   assert.equal(
@@ -128,29 +128,18 @@ test("the coverage policy is one flag, and it never narrows a promise", () => {
 });
 
 test("the price shown is the price the server computes", () => {
-  // The server rounds weight x rate x multiplier once. Rounding the rate first
-  // and multiplying after drifts by a cent, which is exactly the difference a
+  // The server rounds weight x rate once. Rounding the rate first and
+  // multiplying after drifts by a cent, which is exactly the difference a
   // customer notices between the estimate and the card statement.
   assert.deepEqual(
-    freightCategoryPricing({baseRatePerKg: 8.33, weightKg: 3, multiplier: 2}),
-    {
-      baseRatePerKg: 8.33,
-      categoryRatePerKg: 16.66,
-      multiplier: 2,
-      shippingSubtotal: 49.98,
-      categorySurcharge: 24.99,
-    },
+    freightWeightPricing({ratePerKg: 8.33, weightKg: 3}),
+    {ratePerKg: 8.33, shippingSubtotal: 24.99},
   );
+  // Nothing sits between the rate and the weight: a business charges what it
+  // says it charges for a kilo on this route.
+  assert.equal(freightWeightPricing({ratePerKg: 0, weightKg: 3}), null);
   assert.equal(
-    freightCategoryPricing({baseRatePerKg: 0, weightKg: 3, multiplier: 1}),
-    null,
-  );
-  assert.equal(
-    freightCategoryPricing({
-      baseRatePerKg: 5,
-      weightKg: Number.NaN,
-      multiplier: 1,
-    }),
+    freightWeightPricing({ratePerKg: 5, weightKg: Number.NaN}),
     null,
   );
 });
@@ -177,8 +166,6 @@ test("the comparison line says what a customer is choosing between", () => {
     freightCoverageComparisonLine(null),
     "This business does not pay for a lost parcel",
   );
-  assert.equal(formatMultiplier(2), "2");
-  assert.equal(formatMultiplier(1.5), "1.5");
 });
 
 test("no line the customer reads ever prices cover", () => {
@@ -202,11 +189,11 @@ test("a business's stored settings round-trip into the form", () => {
     ],
     freightCoverageEnabled: true,
   });
-  assert.equal(settings.categoryRates.electronics, "2.5");
-  // A row it never touched shows the platform's starting number, not a blank.
-  assert.equal(settings.categoryRates.fragile, "1.5");
+  // Read verbatim and never invented: no field on this form shows it, so a
+  // row the document does not carry is simply absent.
+  assert.deepEqual(settings.categoryRates, {electronics: 2.5});
   assert.deepEqual(settings.customCategories, [
-    {id: "auto-parts", label: "Auto parts", hint: "Brakes", multiplier: "1.4"},
+    {id: "auto-parts", label: "Auto parts", hint: "Brakes"},
   ]);
   assert.equal(settings.coversLoss, true);
   // Cover is one answer: there is no rate or ceiling left for the form to
@@ -224,25 +211,18 @@ test("a business's stored settings round-trip into the form", () => {
   assert.deepEqual(buildFreightSettingsPayload(untouched).freightCategoryRates, {});
 });
 
-test("only the rows a business actually moved are saved", () => {
+test("a category a business added is saved by its name alone", () => {
   const payload = buildFreightSettingsPayload(
     draft({
-      categoryRates: {
-        ...freightSettingsFromRow(null).categoryRates,
-        electronics: "2.5",
-      },
-      customCategories: [
-        {id: "", label: " Auto Parts ", hint: " Brakes ", multiplier: "1.4"},
-      ],
+      customCategories: [{id: "", label: " Auto Parts ", hint: " Brakes "}],
       coversLoss: true,
     }),
   );
-  // Storing a row that equals today's default would pin this business to it
-  // forever; "set nothing, change nothing" is what made categories safe.
-  assert.deepEqual(payload.freightCategoryRates, {electronics: 2.5});
   assert.deepEqual(payload.freightCustomCategories, [
-    {id: "auto-parts", label: "Auto Parts", hint: "Brakes", multiplier: 1.4},
+    {id: "auto-parts", label: "Auto Parts", hint: "Brakes"},
   ]);
+  // No number anywhere in a category. What a thing costs is on its item row.
+  assert.doesNotMatch(JSON.stringify(payload.freightCustomCategories), /ultiplier/);
   // One key, because there is one question. A rate or a ceiling reaching the
   // callable would be a fee the customer never agreed to.
   assert.deepEqual(payload.freightCoverage, {coversLoss: true});
@@ -258,8 +238,27 @@ test("only the rows a business actually moved are saved", () => {
     id: "",
     label: "",
     hint: "",
-    multiplier: "1",
   });
+});
+
+test("what a document already stores rides through untouched", () => {
+  // Nothing on this form composes `freightCategoryRates`, so rebuilding it
+  // from the fields would erase whatever a document is already carrying.
+  const stored = freightSettingsFromRow({
+    id: "b",
+    freightCategoryRates: {electronics: 2.5, fragile: 1.5},
+  });
+  assert.deepEqual(stored.categoryRates, {electronics: 2.5, fragile: 1.5});
+  assert.deepEqual(
+    buildFreightSettingsPayload(stored).freightCategoryRates,
+    {electronics: 2.5, fragile: 1.5},
+  );
+  // And a business that has never stored one sends none.
+  assert.deepEqual(
+    buildFreightSettingsPayload(freightSettingsFromRow(null))
+      .freightCategoryRates,
+    {},
+  );
 });
 
 test("each row carries its own pricing, and an untouched row carries none", () => {
@@ -333,19 +332,10 @@ test("each row carries its own pricing, and an untouched row carries none", () =
   ]);
   assert.equal(electronics.otherPricingMode, "per_kg");
   assert.doesNotMatch(JSON.stringify(payload), /eightFactor/);
-  // Category factors still ride along untouched - they are what a row with
-  // no pricing of its own is charged at.
-  assert.deepEqual(
-    buildFreightSettingsPayload(
-      draft({
-        categoryRates: {
-          ...freightSettingsFromRow(null).categoryRates,
-          electronics: "2.5",
-        },
-      }),
-    ).freightCategoryRates,
-    {electronics: 2.5},
-  );
+  // A row with no mode sends no pricing keys at all. The absence is what
+  // tells the server this business has never put a number on it.
+  const laptop = electronics.items.find((item) => item.id === "laptop");
+  assert.deepEqual(laptop, {id: "laptop", label: "Laptop", paybackAmount: 800});
 });
 
 test("a priced row is refused here on the bands the server refuses on", () => {
@@ -398,28 +388,13 @@ test("the settings form refuses what the server would refuse", () => {
 
   assert.equal(
     validateFreightSettings(
-      draft({
-        categoryRates: {
-          ...freightSettingsFromRow(null).categoryRates,
-          electronics: "40",
-        },
-      }),
-    ),
-    "Electronics: enter a price multiplier between 0.5 and 10.",
-  );
-  assert.equal(
-    validateFreightSettings(
-      draft({customCategories: [{id: "", label: "  ", hint: "", multiplier: "1"}]}),
+      draft({customCategories: [{id: "", label: "  ", hint: ""}]}),
     ),
     "Give every item category you add a name.",
   );
   assert.equal(
     validateFreightSettings(
-      draft({
-        customCategories: [
-          {id: "", label: "Electronics", hint: "", multiplier: "1"},
-        ],
-      }),
+      draft({customCategories: [{id: "", label: "Electronics", hint: ""}]}),
     ),
     "A category you add cannot reuse the name of a standard category.",
   );
@@ -427,8 +402,8 @@ test("the settings form refuses what the server would refuse", () => {
     validateFreightSettings(
       draft({
         customCategories: [
-          {id: "", label: "Auto parts", hint: "", multiplier: "1"},
-          {id: "", label: "Auto Parts", hint: "", multiplier: "1"},
+          {id: "", label: "Auto parts", hint: ""},
+          {id: "", label: "Auto Parts", hint: ""},
         ],
       }),
     ),
@@ -443,7 +418,6 @@ test("the settings form refuses what the server would refuse", () => {
             id: "",
             label: `Extra ${index}`,
             hint: "",
-            multiplier: "1",
           }),
         ),
       }),
@@ -481,19 +455,11 @@ test("everything the two screens say has French", () => {
   );
   // What protection costs, said in the price column of the estimate.
   assert.equal(translateValue("Free", "fr"), "Offert");
-  // Refusals the settings form raises itself.
-  assert.equal(
-    translateValue(
-      "Electronics: enter a price multiplier between 0.5 and 10.",
-      "fr",
-    ),
-    "Électronique : saisissez un multiplicateur de prix entre 0,5 et 10.",
-  );
-  // A category a business invented is left alone; the sentence around it is
-  // still translated, so the refusal is readable either way.
+  // The refusals the settings form raises are all about item rows now: a
+  // category carries a name and a hint, and neither can be out of range.
   assert.match(
-    translateValue("Auto parts: enter a price multiplier between 0.5 and 10.", "fr"),
-    /saisissez un multiplicateur de prix entre 0,5 et 10\.$/,
+    translateValue("Auto parts: enter a set price between $0.01 and $10,000.", "fr"),
+    /saisissez un prix fixe entre 0,01 \$ et 10 000 \$\.$/,
   );
 });
 
@@ -541,7 +507,10 @@ test("both consoles are wired to the freight category and coverage contract", ()
   // what a lost parcel pays back.
   assert.match(customer, /What are you sending\?/);
   assert.match(customer, /funnelItems\.map/);
-  assert.match(customer, /itemStepSatisfied && qualifiedProviderOptions/);
+  assert.match(
+    customer,
+    /itemStepSatisfied &&\s*\n?\s*qualifiedProviderOptions\.length > 0/,
+  );
   assert.match(
     customer,
     /usesItemPricing && \{\s*itemId: activeItemId === OTHER_ITEM_ID \? "" : activeItemId,/,
