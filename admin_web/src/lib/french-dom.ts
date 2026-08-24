@@ -3853,6 +3853,8 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Un objet connu peut avoir un prix fixe — « iPhone 16, 50 $ » — et on ne demande jamais au client ce qu’il pèse. Les marchandises qui varient à chaque fois sont tarifées au poids, à votre tarif pour la destination.",
   "If you cover lost parcels, the payback is what you owe in full - a $400 iPhone pays back $400. The customer is charged nothing for that, so price each row for what it is worth to you to carry.":
     "Si vous couvrez les colis perdus, le remboursement est ce que vous devez intégralement : un iPhone à 400 $ rembourse 400 $. Le client ne paie rien pour cela, alors tarifez chaque ligne selon ce qu’elle vaut à transporter pour vous.",
+  "A row you list but never price behaves the same way as one you never listed: the customer asks you for a price, and you answer it under Price requests.":
+    "Une ligne que vous listez sans jamais la tarifer se comporte comme une ligne jamais listée : le client vous demande un prix, et vous y répondez sous Demandes de prix.",
   "How is this priced?": "Comment est-ce tarifé ?",
   "A set price": "Un prix fixe",
   "By weight": "Au poids",
@@ -3981,6 +3983,7 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Quand un client demande votre tarif pour une chose que vous n’avez pas listée, la demande arrive ici et vous répondez par un montant.",
   "You answered": "Vous avez répondu",
   "Waiting on you": "En attente de votre réponse",
+  Category: "Catégorie",
   "Weight given": "Poids indiqué",
   "Not given": "Non indiqué",
   Asked: "Demandé le",
@@ -4107,6 +4110,8 @@ const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "Signed-in account": "Compte connecté",
   Unpin: "Désépingler",
   "Verification document summary": "Résumé des documents de vérification",
+  "What is included, how long it takes":
+    "Ce qui est inclus, le délai",
   "What your business is known for…":
     "Ce pour quoi votre entreprise est connue…",
 };

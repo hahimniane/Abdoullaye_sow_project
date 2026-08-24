@@ -7,9 +7,10 @@
  *
  * Four rules shaped this, all learned from the data rather than assumed:
  *
- * 1. **Cheapest means the real quote.** Category multipliers and coverage fees
- *    move the total, so a business cheaper per kilo can be dearer for a phone.
- *    Ranking on the headline rate would name the wrong winner.
+ * 1. **Cheapest means the real quote.** A business prices each item it
+ *    carries, so one cheaper per kilo can be dearer for a phone - and a set
+ *    price does not move with weight at all. Ranking on the headline rate
+ *    would name the wrong winner.
  * 2. **Missing data sinks, never ties.** Only some businesses have stated a
  *    delivery estimate. One that has not said how long it takes must never
  *    appear fastest by accident, so blank sorts last rather than as zero.
@@ -30,6 +31,7 @@ const {
   freightCoveragePolicy,
   quoteFreightCoverage,
 } = require("./freight_coverage");
+const {freightItemPricing} = require("./freight_payback");
 const {BAYESIAN_PRIOR_MEAN} = require("./business_review");
 
 /**
@@ -114,25 +116,6 @@ const MIN_OPTIONS_FOR_SORT = 3;
 const UNKNOWN = Number.POSITIVE_INFINITY;
 
 /**
- * The multiplier this business charges for a chosen category.
- *
- * @param {object} option A business option row.
- * @param {string} [categoryId] The category the customer picked.
- * @return {number} The multiplier, or 1 when unknown - which is what the
- *     price was before categories existed.
- */
-function freightCategoryMultiplierFor(option, categoryId) {
-  const id = String(categoryId || "").trim().toLowerCase();
-  if (!id) return 1;
-  const rows = Array.isArray(option?.freightCategories) ?
-    option.freightCategories :
-    [];
-  const match = rows.find((row) => String(row?.id || "") === id);
-  const multiplier = Number(match?.multiplier);
-  return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1;
-}
-
-/**
  * What one business would charge for this exact parcel.
  *
  * @param {object} params Inputs.
@@ -148,6 +131,7 @@ function freightOptionTotalCents({
   weightKg,
   mode,
   itemCategoryId,
+  itemId,
   declaredValue,
 }) {
   const ratePerKg = Number(
@@ -159,12 +143,20 @@ function freightOptionTotalCents({
   if (!Number.isFinite(ratePerKg) || ratePerKg <= 0) return UNKNOWN;
   if (!Number.isFinite(kg) || kg <= 0) return UNKNOWN;
 
-  // Taken from the resolved list the options response already carries, which
-  // has each category's final multiplier for this business. Rebuilding it from
-  // raw settings would be wrong twice over: those fields are not sent, and a
-  // business's own categories only exist in the resolved form.
-  const multiplier = freightCategoryMultiplierFor(option, itemCategoryId);
-  const shippingCents = Math.round(kg * ratePerKg * multiplier * 100);
+  // Priced from the business's own row for the item the customer picked -
+  // the same resolution the booking uses - so the order of the list and the
+  // bill cannot disagree. A set price is the price whatever it weighs; by
+  // weight is this business's rate and nothing on top. An item nobody
+  // priced has no place in a cheapest ordering, so it sinks.
+  const pricing = freightItemPricing({
+    table: option?.freightPaybackTable,
+    categoryId: itemCategoryId,
+    itemId,
+  });
+  if (!pricing.priced) return UNKNOWN;
+  const shippingCents = pricing.mode === "flat" ?
+    Math.round(pricing.flatPrice * 100) :
+    Math.round(kg * ratePerKg * 100);
 
   // Priced through the same quote the booking will use, so the order of the
   // list and the bill can never disagree. Cover adds nothing to either - the
@@ -319,6 +311,7 @@ function serviceOptionTotalCents({
   mode,
   weightKg,
   itemCategoryId,
+  itemId,
   declaredValue,
   quantity,
   term,
@@ -326,7 +319,7 @@ function serviceOptionTotalCents({
 }) {
   if (service === "freight") {
     return freightOptionTotalCents({
-      option, weightKg, mode, itemCategoryId, declaredValue,
+      option, weightKg, mode, itemCategoryId, itemId, declaredValue,
     });
   }
 

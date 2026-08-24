@@ -8,8 +8,8 @@
 //
 // So the properties locked in here are agreement with
 // functions/freight_categories.js and functions/freight_coverage.js: the same
-// default multipliers, the same rounding, and the same one-question coverage
-// policy that charges the customer nothing.
+// rows in the same order, the same rounding, and the same one-question
+// coverage policy that charges the customer nothing.
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -537,9 +537,7 @@ test("both consoles are wired to the freight category and coverage contract", ()
   assert.match(business, /FieldInfo label="how item categories work"/);
   assert.match(business, /FieldInfo label="how cover for a lost parcel works"/);
   // Pricing lives on the row the business priced, so a category is a heading
-  // and offers nothing to type. The stored factors still ride in the payload
-  // untouched, which is what keeps a row that names no pricing of its own
-  // charging exactly what it charged yesterday.
+  // and offers nothing to type: a name and what it covers, and that is all.
   assert.doesNotMatch(business, /onCategoryRate/);
   assert.doesNotMatch(business, /<span>Price multiplier<\/span>/);
   assert.match(business, /How is this priced\?/);

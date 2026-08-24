@@ -1504,6 +1504,11 @@ function FreightGoodsEditor({
                   your rate for the destination.
                 </p>
                 <p>
+                  A row you list but never price behaves the same way as one
+                  you never listed: the customer asks you for a price, and
+                  you answer it under Price requests.
+                </p>
+                <p>
                   If you cover lost parcels, the payback is what you owe in
                   full - a $400 iPhone pays back $400. The customer is
                   charged nothing for that, so price each row for what it is

@@ -33,11 +33,16 @@ const option = (id, {
   ratePct = 0,
   maxDeclaredValue = 0,
   categoryRates,
+  paybackTable,
 } = {}) => ({
   businessId: id,
   freightCategories: Object.entries(categoryRates || {}).map(
-      ([categoryId, multiplier]) => ({id: categoryId, multiplier}),
+      ([categoryId]) => ({id: categoryId}),
   ),
+  // What this business charges for each thing it carries. Ranking reads the
+  // same table the booking prices from, so the order of the list and the
+  // bill cannot disagree.
+  freightPaybackTable: paybackTable,
   freightCoverage: {coversLoss, ratePct, maxDeclaredValue},
   country: {
     freightAirPricePerKg: airRate,
@@ -54,19 +59,36 @@ const ids = (rows) => rows.map((row) => row.businessId);
 
 describe("what a parcel actually costs at each business", () => {
   it("prices on the real quote, not the headline rate", () => {
-    // The business cheaper per kilo can be dearer for electronics. Ranking on
-    // the rate alone would name the wrong winner.
+    // The business cheaper per kilo can be dearer for a phone, because it
+    // charges a set price for one. Ranking on the rate alone would name the
+    // wrong winner.
+    const priced = (mode, flatPrice) => ({
+      electronics: {
+        items: [{
+          id: "iphone", label: "iPhone", paybackAmount: 400,
+          pricingMode: mode,
+          ...(flatPrice ? {flatPrice} : {}),
+        }],
+        otherPaybackAmount: 0,
+      },
+    });
     const cheapPerKg = option("cheap-per-kg", {
       airRate: 10,
-      categoryRates: {electronics: 3},
+      paybackTable: priced("flat", 150),
     });
     const dearPerKg = option("dear-per-kg", {
       airRate: 12,
-      categoryRates: {electronics: 1},
+      paybackTable: priced("per_kg"),
     });
-    const args = {weightKg: 5, mode: "air", itemCategoryId: "electronics"};
+    const args = {
+      weightKg: 5,
+      mode: "air",
+      itemCategoryId: "electronics",
+      itemId: "iphone",
+    };
     const cents = (option) =>
       serviceOptionTotalCents({service: "freight", option, ...args});
+    // A set price does not move with weight; the other is 5kg x $12.
     assert.equal(cents(cheapPerKg), 15000);
     assert.equal(cents(dearPerKg), 6000);
 
@@ -79,13 +101,46 @@ describe("what a parcel actually costs at each business", () => {
     assert.deepEqual(ids(sorted), ["dear-per-kg", "cheap-per-kg"]);
   });
 
+  it("sinks a business that has not priced the item", () => {
+    // An item nobody quoted has no place in a cheapest ordering: it is a
+    // price request, not a cheaper option.
+    const unpriced = option("unpriced", {airRate: 5});
+    assert.equal(
+        serviceOptionTotalCents({
+          service: "freight",
+          option: unpriced,
+          weightKg: 5,
+          mode: "air",
+          itemCategoryId: "electronics",
+          itemId: "iphone",
+        }),
+        UNKNOWN_SORT_VALUE,
+    );
+  });
+
   it("never adds a coverage charge, because there is none", () => {
     // Cover costs the customer nothing: the business already priced the item
     // for what it is worth to carry. What a parcel costs is what it costs to
     // ship it, whether or not the business stands behind it.
-    const withCover = option("covers", {airRate: 10, coversLoss: true});
-    const without = option("bare", {airRate: 10});
-    const args = {weightKg: 1, mode: "air"};
+    const byWeight = {
+      general: {
+        items: [{
+          id: "box", label: "Box", paybackAmount: 100,
+          pricingMode: "per_kg",
+        }],
+        otherPaybackAmount: 0,
+      },
+    };
+    const withCover = option("covers", {
+      airRate: 10, coversLoss: true, paybackTable: byWeight,
+    });
+    const without = option("bare", {airRate: 10, paybackTable: byWeight});
+    const args = {
+      weightKg: 1,
+      mode: "air",
+      itemCategoryId: "general",
+      itemId: "box",
+    };
     assert.equal(
         serviceOptionTotalCents({
           service: "freight", option: withCover, ...args,

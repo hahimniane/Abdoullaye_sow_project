@@ -3777,7 +3777,9 @@ function FreightPriceRequest({
         <button
           className="primary-button"
           data-loading={submitting}
-          disabled={submitting || !description.trim()}
+          // Signing in comes first, so it is not held behind a description
+          // the customer would have to retype after the round trip.
+          disabled={submitting || (authenticated && !description.trim())}
           onClick={() => void submit()}
           type="button"
         >
