@@ -3779,8 +3779,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bookAndPay => 'Book & pay';
 
   @override
-  String get freightDropOffNote =>
-      'Drop your parcel at the business location. Pickup coming soon.';
+  String get freightDropOffNote => 'Drop your parcel at the business location.';
 
   @override
   String freightDropOffAddress(Object address) {

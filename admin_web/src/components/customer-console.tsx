@@ -498,13 +498,8 @@ function CustomerHome({
       <div className="metric-grid">
         <Metric label="Open orders" value={loading ? "…" : String(openOrders)} />
         <Metric label="All activity" value={loading ? "…" : String(orders.length)} />
-        <Metric label="Account access" value="Web + mobile" />
       </div>
       <OrderPanel loading={loading} orders={orders.slice(0, 5)} title="Recent activity" uid={uid} />
-      <section className="info-band customer-parity-note">
-        New service requests and web payments are being added service by service. Your existing orders,
-        purchases, tracking, and account remain shared with the mobile app.
-      </section>
     </div>
   );
 }

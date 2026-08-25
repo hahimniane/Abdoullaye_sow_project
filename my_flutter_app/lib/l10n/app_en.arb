@@ -1610,7 +1610,7 @@
   "couldNotPayBalance": "Could not pay the balance. Try again.",
   "enterWeightToSeePrice": "Enter a weight to see the price",
   "bookAndPay": "Book & pay",
-  "freightDropOffNote": "Drop your parcel at the business location. Pickup coming soon.",
+  "freightDropOffNote": "Drop your parcel at the business location.",
   "freightDropOffAddress": "Drop-off: {address}",
   "@freightDropOffAddress": {
     "placeholders": {

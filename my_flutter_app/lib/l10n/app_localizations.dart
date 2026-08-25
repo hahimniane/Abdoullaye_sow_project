@@ -6899,7 +6899,7 @@ abstract class AppLocalizations {
   /// No description provided for @freightDropOffNote.
   ///
   /// In en, this message translates to:
-  /// **'Drop your parcel at the business location. Pickup coming soon.'**
+  /// **'Drop your parcel at the business location.'**
   String get freightDropOffNote;
 
   /// No description provided for @freightDropOffAddress.

@@ -1177,10 +1177,6 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "View orders": "Voir les commandes",
   "Open orders": "Commandes en cours",
   "All activity": "Toute l’activité",
-  "Account access": "Accès au compte",
-  "Web + mobile": "Web + mobile",
-  "New service requests and web payments are being added service by service. Your existing orders, purchases, tracking, and account remain shared with the mobile app.":
-    "Les nouvelles demandes de service et les paiements web sont ajoutés service par service. Vos commandes, achats, suivis et compte existants restent partagés avec l’application mobile.",
   "Loading car listings...": "Chargement des annonces de voitures...",
   "Car listings could not be loaded.": "Les annonces de voitures n’ont pas pu être chargées.",
   "No active car listings are available right now.":

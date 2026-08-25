@@ -3863,7 +3863,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get freightDropOffNote =>
-      'Déposez votre colis à l’adresse de l’entreprise. Le ramassage arrive bientôt.';
+      'Déposez votre colis à l’adresse de l’entreprise.';
 
   @override
   String freightDropOffAddress(Object address) {

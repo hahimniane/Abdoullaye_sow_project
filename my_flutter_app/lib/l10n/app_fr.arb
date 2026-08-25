@@ -1610,7 +1610,7 @@
   "couldNotPayBalance": "Impossible de payer le solde. Réessayez.",
   "enterWeightToSeePrice": "Entrez un poids pour voir le prix",
   "bookAndPay": "Réserver et payer",
-  "freightDropOffNote": "Déposez votre colis à l’adresse de l’entreprise. Le ramassage arrive bientôt.",
+  "freightDropOffNote": "Déposez votre colis à l’adresse de l’entreprise.",
   "freightDropOffAddress": "Dépôt : {address}",
   "@freightDropOffAddress": {
     "placeholders": {
