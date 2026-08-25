@@ -171,7 +171,7 @@ describe("how a business prices what it carries", () => {
       ],
       otherPricingMode: "per_kg",
     },
-    clothing: {items: [], },
+    clothing: {items: []},
   };
 
   it("prices a known object once, and never weighs it at booking", () => {
@@ -244,7 +244,7 @@ describe("how a business prices what it carries", () => {
 
 describe("saving a priced row", () => {
   const priced = (item) => validateFreightPaybackTable({
-    electronics: {items: [item], },
+    electronics: {items: [item]},
   });
 
   it("keeps a set price and its allowance", () => {
