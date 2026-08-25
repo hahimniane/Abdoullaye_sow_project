@@ -1681,24 +1681,33 @@ function FreightPaybackEditor({
               return (
                 <div className="payback-item" key={`${category.id}-${index}`}>
                   <div className="payback-item-row">
-                    <input
-                      aria-label="Item name"
-                      onChange={(event) =>
-                        patchItem({label: event.target.value})
-                      }
-                      placeholder="e.g. iPhone"
-                      value={item.label}
-                    />
-                    <input
-                      aria-label="Payback amount (USD)"
-                      inputMode="decimal"
-                      min="0"
-                      onChange={(event) =>
-                        patchItem({amount: event.target.value})
-                      }
-                      type="number"
-                      value={item.amount}
-                    />
+                    <label className="payback-item-field">
+                      <span>What it is</span>
+                      <input
+                        onChange={(event) =>
+                          patchItem({label: event.target.value})
+                        }
+                        placeholder="e.g. iPhone"
+                        value={item.label}
+                      />
+                    </label>
+                    {/* An unlabelled number beside the name reads as the
+                        price. It is the opposite: what this business owes
+                        if it loses the parcel, and it is never charged to
+                        anyone. What the customer pays is set below. */}
+                    <label className="payback-item-field">
+                      <span>You pay back if lost (USD)</span>
+                      <input
+                        inputMode="decimal"
+                        min="0"
+                        onChange={(event) =>
+                          patchItem({amount: event.target.value})
+                        }
+                        placeholder="0 = you pay nothing back"
+                        type="number"
+                        value={item.amount}
+                      />
+                    </label>
                     <button
                       aria-label={`Remove ${item.label || "item"}`}
                       className="lst-icon-btn"

@@ -6515,8 +6515,26 @@ button[data-loading="true"]::before {
 .payback-item-row {
   display: grid;
   gap: 8px;
-  grid-template-columns: 1fr 120px 34px;
+  /* The payback column is wider than its number needs, because the label
+     above it is the only thing telling a business that this is what it
+     owes on a lost parcel rather than what it charges. */
+  grid-template-columns: 1fr 190px 34px;
+  align-items: end;
   margin-bottom: 8px;
+}
+.payback-item-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.payback-item-field > span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+@media (max-width: 640px) {
+  .payback-item-row { grid-template-columns: 1fr 1fr 34px; }
 }
 .payback-pricing-row {
   display: grid;

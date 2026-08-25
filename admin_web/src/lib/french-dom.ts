@@ -3863,6 +3863,9 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Any weight": "Quel que soit le poids",
   "Anything else in this category pays back (USD)":
     "Tout le reste de cette catégorie rembourse (USD)",
+  "What it is": "Ce que c'est",
+  "You pay back if lost (USD)": "Vous remboursez en cas de perte (USD)",
+  "0 = you pay nothing back": "0 = vous ne remboursez rien",
   "Add an item": "Ajouter un article",
   "No items yet": "Aucun article pour l’instant",
   // The freight booking form.
